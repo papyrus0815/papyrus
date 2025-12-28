@@ -3,13 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Civilization Service Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <title>Papyrus Service Manager</title>
     <style>
       * {
         margin: 0;
@@ -18,39 +12,20 @@
       }
 
       body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-          sans-serif;
-        background: #0f1419;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #1a1a1a;
         color: #e4e6eb;
         overflow: hidden;
         height: 100vh;
         font-size: 14px;
-        -webkit-font-smoothing: antialiased;
       }
 
       .container {
-        max-width: 100%;
-        margin: 0 auto;
         padding: 20px;
         height: 100vh;
         display: flex;
         flex-direction: column;
         gap: 20px;
-      }
-
-      /* 반응형 미디어 쿼리 */
-      @media (max-width: 1400px) {
-        .container {
-          padding: 16px;
-          gap: 16px;
-        }
-      }
-
-      @media (max-width: 1024px) {
-        .container {
-          padding: 12px;
-          gap: 12px;
-        }
       }
 
       /* 헤더 */
@@ -59,60 +34,13 @@
         align-items: center;
         justify-content: space-between;
         padding-bottom: 20px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      }
-
-      .header-left {
-        display: flex;
-        align-items: center;
-        gap: 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       }
 
       .logo {
         font-size: 20px;
         font-weight: 700;
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        letter-spacing: -0.5px;
-      }
-
-      .status-badge {
-        padding: 6px 14px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 500;
-        background: rgba(34, 197, 94, 0.15);
-        color: #22c55e;
-        border: 1px solid rgba(34, 197, 94, 0.3);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .status-badge.loading {
-        background: rgba(59, 130, 246, 0.15);
-        color: #3b82f6;
-        border-color: rgba(59, 130, 246, 0.3);
-      }
-
-      .status-badge .dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: currentColor;
-        animation: pulse 2s ease-in-out infinite;
-      }
-
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.5;
-        }
+        color: #6366f1;
       }
 
       .header-actions {
@@ -120,99 +48,121 @@
         gap: 10px;
       }
 
-      /* 버튼 스타일 */
+      /* 버튼 */
       .btn {
         padding: 10px 20px;
-        border-radius: 10px;
+        border-radius: 8px;
         border: none;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 500;
         cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        transition: all 0.2s;
         font-family: inherit;
       }
 
       .btn-primary {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        background: #6366f1;
         color: white;
       }
 
       .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
-      }
-
-      .btn-secondary {
-        background: rgba(255, 255, 255, 0.05);
-        color: #e4e6eb;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-      }
-
-      .btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.15);
+        background: #5558e3;
       }
 
       .btn-danger {
-        background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.3);
+        background: #ef4444;
+        color: white;
       }
 
       .btn-danger:hover {
-        background: rgba(239, 68, 68, 0.25);
+        background: #dc2626;
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: #e4e6eb;
+      }
+
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      .btn-sm {
+        padding: 6px 12px;
+        font-size: 12px;
       }
 
       .btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
-        transform: none !important;
       }
 
-      /* 메인 그리드 */
-      .main-grid {
+      /* 탭 */
+      .tabs {
+        display: flex;
+        gap: 8px;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .tab-btn {
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.5);
+        padding: 12px 24px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+
+      .tab-btn:hover {
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      .tab-btn.active {
+        color: #6366f1;
+        border-bottom-color: #6366f1;
+      }
+
+      /* 탭 콘텐츠 */
+      .tab-content {
+        display: none;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      .tab-content.active {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      /* 서비스 탭 */
+      #tab-services.active {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 20px;
-        flex: 1;
-        min-height: 0;
-      }
-
-      /* 반응형: 태블릿 */
-      @media (max-width: 1024px) {
-        .main-grid {
-          grid-template-columns: 1fr;
-          gap: 16px;
-        }
       }
 
       /* 카드 */
       .card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
         padding: 20px;
         display: flex;
         flex-direction: column;
-        backdrop-filter: blur(10px);
         overflow: hidden;
-      }
-
-      @media (max-width: 1024px) {
-        .card {
-          padding: 16px;
-          border-radius: 12px;
-        }
       }
 
       .card-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
       }
 
       .card-title {
@@ -227,29 +177,13 @@
         flex-direction: column;
         gap: 12px;
         overflow-y: auto;
-        padding-right: 8px;
-      }
-
-      .services-list::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .services-list::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 3px;
       }
 
       .service-item {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
         padding: 16px;
-        transition: all 0.2s ease;
-      }
-
-      .service-item:hover {
-        background: rgba(255, 255, 255, 0.04);
-        border-color: rgba(99, 102, 241, 0.3);
       }
 
       .service-header {
@@ -261,13 +195,6 @@
 
       .service-icon {
         font-size: 24px;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 10px;
       }
 
       .service-info {
@@ -277,8 +204,7 @@
       .service-name {
         font-size: 14px;
         font-weight: 600;
-        color: #f3f4f6;
-        margin-bottom: 2px;
+        margin-bottom: 4px;
       }
 
       .service-port {
@@ -287,42 +213,20 @@
       }
 
       .service-status {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
         padding: 4px 12px;
-        border-radius: 20px;
+        border-radius: 12px;
         font-size: 11px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        font-weight: 600;
       }
 
       .service-status.running {
-        background: rgba(34, 197, 94, 0.15);
+        background: rgba(34, 197, 94, 0.2);
         color: #22c55e;
       }
 
       .service-status.stopped {
-        background: rgba(156, 163, 175, 0.15);
+        background: rgba(156, 163, 175, 0.2);
         color: #9ca3af;
-      }
-
-      .service-status.loading {
-        background: rgba(59, 130, 246, 0.15);
-        color: #3b82f6;
-      }
-
-      .service-status.error {
-        background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-      }
-
-      .service-status .status-dot {
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-        background: currentColor;
       }
 
       .service-actions {
@@ -331,224 +235,445 @@
         margin-top: 12px;
       }
 
-      .btn-sm {
-        padding: 6px 12px;
-        font-size: 12px;
-        border-radius: 8px;
+      .service-actions .btn {
         flex: 1;
       }
 
-      .btn-icon {
-        padding: 8px;
+      /* 콘솔 */
+      .console-output {
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 16px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 12px;
+        color: #d1d5db;
+        overflow-y: auto;
+        height: 100%;
+        min-height: 200px;
+        white-space: pre-wrap;
+      }
+
+      /* 패키지 탭 */
+      .package-section {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .package-controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .search-input {
+        flex: 1;
+        padding: 10px 16px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: #e4e6eb;
+        font-size: 13px;
+        font-family: inherit;
+      }
+
+      .search-input:focus {
+        outline: none;
+        border-color: #6366f1;
+      }
+
+      .filter-buttons {
+        display: flex;
+        gap: 8px;
+      }
+
+      .filter-btn {
+        padding: 8px 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 12px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+
+      .filter-btn.active {
+        background: rgba(99, 102, 241, 0.2);
+        border-color: #6366f1;
+        color: #6366f1;
+      }
+
+      .package-stats {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+        display: flex;
+        gap: 12px;
+      }
+
+      /* 패키지 테이블 */
+      .package-table-container {
+        flex: 1;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        max-height: 500px;
+        min-height: 300px;
+      }
+
+      .package-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .package-table th {
+        position: sticky;
+        top: 0;
+        background: rgba(0, 0, 0, 0.9);
+        backdrop-filter: blur(10px);
+        text-align: left;
+        padding: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.7);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s;
+      }
+
+      .package-table th:hover {
+        background: rgba(99, 102, 241, 0.2);
+        color: #6366f1;
+      }
+
+      .package-table th.sortable::after {
+        content: ' ⇅';
+        opacity: 0.3;
+        font-size: 10px;
+      }
+
+      .package-table th.sort-asc::after {
+        content: ' ▲';
+        opacity: 1;
+        color: #6366f1;
+      }
+
+      .package-table th.sort-desc::after {
+        content: ' ▼';
+        opacity: 1;
+        color: #6366f1;
+      }
+
+      .package-table td {
+        padding: 12px;
+        font-size: 13px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .package-table tr:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .package-name-col {
+        font-weight: 500;
+      }
+
+      .package-version-col {
+        font-family: 'Consolas', 'Monaco', monospace;
+        color: #60a5fa;
+        font-size: 12px;
+      }
+
+      .type-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 600;
+      }
+
+      .type-badge.prod {
+        background: rgba(52, 211, 153, 0.2);
+        color: #34d399;
+      }
+
+      .type-badge.dev {
+        background: rgba(148, 163, 184, 0.2);
+        color: #94a3b8;
+      }
+
+      /* 업데이트 패키지 */
+      .update-list {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .update-item {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .update-info {
+        flex: 1;
+      }
+
+      .update-name {
+        font-weight: 600;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+
+      .update-versions {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+      }
+
+      .version-current {
+        color: #60a5fa;
+      }
+
+      .version-latest {
+        color: #34d399;
+      }
+
+      .update-badge {
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .update-badge.major {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+      }
+
+      .update-badge.minor {
+        background: rgba(251, 191, 36, 0.2);
+        color: #fbbf24;
+      }
+
+      .update-badge.patch {
+        background: rgba(52, 211, 153, 0.2);
+        color: #34d399;
+      }
+
+      /* 스크롤바 */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      /* 빈 상태 */
+      .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      .empty-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
+
+      /* 모달 */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-overlay.active {
+        display: flex;
+      }
+
+      .modal {
+        background: #2a2a2a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        animation: modalSlideIn 0.2s ease;
+      }
+
+      @keyframes modalSlideIn {
+        from {
+          transform: translateY(-20px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      .modal-header {
+        padding: 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .modal-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #f3f4f6;
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 24px;
+        cursor: pointer;
+        padding: 0;
         width: 32px;
         height: 32px;
         display: flex;
         align-items: center;
         justify-content: center;
+        border-radius: 6px;
+        transition: all 0.2s;
       }
 
-      /* 로그 패널 */
-      .log-panel {
-        grid-column: 1 / -1;
-        min-height: 150px;
-        resize: vertical;
-        overflow: auto;
-      }
-
-      @media (max-width: 1024px) {
-        .log-panel {
-          min-height: 120px;
-        }
-      }
-
-      .log-output {
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 10px;
-        padding: 16px;
-        font-family: 'Consolas', 'Monaco', monospace;
-        font-size: 12px;
-        line-height: 1.6;
-        color: #d1d5db;
-        overflow-y: auto;
-        height: 100%;
-        min-height: 120px;
-        white-space: pre-wrap;
-        word-break: break-all;
-      }
-
-      @media (max-width: 1024px) {
-        .log-output {
-          font-size: 11px;
-          padding: 12px;
-          min-height: 100px;
-        }
-      }
-
-      .log-output::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .log-output::-webkit-scrollbar-thumb {
+      .modal-close:hover {
         background: rgba(255, 255, 255, 0.1);
-        border-radius: 3px;
+        color: #fff;
       }
 
-      .log-output:empty::before {
-        content: '로그가 없습니다. 서버를 시작하면 로그가 표시됩니다.';
-        color: #6b7280;
-        font-style: italic;
-      }
-
-      /* 실시간 콘솔 로그 */
-      .console-log-panel {
-        grid-column: 1 / -1;
-        min-height: 150px;
-        resize: vertical;
-        overflow: auto;
-      }
-
-      .console-output {
-        background: rgba(0, 0, 0, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 10px;
-        padding: 12px;
-        font-family: 'Consolas', 'Monaco', monospace;
-        font-size: 11px;
-        line-height: 1.5;
-        color: #d1d5db;
+      .modal-body {
+        padding: 20px;
         overflow-y: auto;
-        height: 100%;
-        min-height: 120px;
-        white-space: pre-wrap;
-        word-break: break-all;
+        flex: 1;
       }
 
-      .console-output::-webkit-scrollbar {
-        width: 6px;
+      .modal-loading {
+        text-align: center;
+        padding: 40px;
+        color: rgba(255, 255, 255, 0.5);
       }
 
-      .console-output::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 3px;
-      }
-
-      .console-output:empty::before {
-        content: '실시간 콘솔 로그가 여기에 표시됩니다.';
-        color: #6b7280;
-        font-style: italic;
-      }
-
-      /* 포트 상태 */
-      .port-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-        overflow-y: auto;
-      }
-
-      .port-item {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 10px;
-        padding: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        transition: all 0.2s ease;
-      }
-
-      .port-item:hover {
-        background: rgba(255, 255, 255, 0.04);
-      }
-
-      .port-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .port-number {
-        font-size: 16px;
-        font-weight: 600;
-        color: #6366f1;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .port-name {
-        font-size: 12px;
-        color: #9ca3af;
-      }
-
-      .port-status {
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 500;
-      }
-
-      .port-status.open {
-        background: rgba(34, 197, 94, 0.15);
-        color: #22c55e;
-      }
-
-      .port-status.closed {
-        background: rgba(156, 163, 175, 0.15);
-        color: #9ca3af;
-      }
-
-      .port-status.checking {
-        background: rgba(59, 130, 246, 0.15);
-        color: #3b82f6;
-      }
-
-      /* 탭 메뉴 */
-      .tab-menu {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 16px;
-        background: rgba(0, 0, 0, 0.2);
-        padding: 4px;
-        border-radius: 10px;
-      }
-
-      .tab {
-        padding: 8px 16px;
-        border-radius: 8px;
-        border: none;
-        background: transparent;
-        color: #9ca3af;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-family: inherit;
-      }
-
-      .tab.active {
-        background: rgba(99, 102, 241, 0.2);
-        color: #6366f1;
-      }
-
-      .tab:hover:not(.active) {
-        background: rgba(255, 255, 255, 0.05);
-        color: #e4e6eb;
-      }
-
-      /* 로딩 스피너 */
-      .spinner {
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(255, 255, 255, 0.1);
-        border-top-color: currentColor;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
+      .modal-spinner {
+        font-size: 32px;
+        animation: spin 1s linear infinite;
       }
 
       @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
+        to { transform: rotate(360deg); }
+      }
+
+      .package-detail-section {
+        margin-bottom: 24px;
+      }
+
+      .package-detail-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+      }
+
+      .package-detail-value {
+        font-size: 14px;
+        color: #e4e6eb;
+        line-height: 1.6;
+      }
+
+      .package-detail-value a {
+        color: #6366f1;
+        text-decoration: none;
+      }
+
+      .package-detail-value a:hover {
+        text-decoration: underline;
+      }
+
+      .package-detail-badge {
+        display: inline-block;
+        padding: 4px 10px;
+        background: rgba(99, 102, 241, 0.2);
+        color: #6366f1;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-right: 8px;
+        margin-bottom: 4px;
+      }
+
+      .package-detail-description {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .package-detail-links {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .package-detail-link {
+        padding: 8px 16px;
+        background: rgba(99, 102, 241, 0.1);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 8px;
+        color: #6366f1;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .package-detail-link:hover {
+        background: rgba(99, 102, 241, 0.2);
+        border-color: #6366f1;
+      }
+
+      .package-table tbody tr {
+        cursor: pointer;
       }
     </style>
   </head>
@@ -556,13 +681,7 @@
     <div class="container">
       <!-- 헤더 -->
       <div class="header">
-        <div class="header-left">
-          <div class="logo">🏛️ CIVILIZATION</div>
-          <div class="status-badge" id="globalStatus">
-            <span class="dot"></span>
-            <span id="statusText">초기화 중...</span>
-          </div>
-        </div>
+        <div class="logo">🏛️ Papyrus Service Manager</div>
         <div class="header-actions">
           <button class="btn btn-primary" id="startAllBtn" disabled>
             ▶ 모두 시작
@@ -573,8 +692,18 @@
         </div>
       </div>
 
-      <!-- 메인 그리드 -->
-      <div class="main-grid">
+      <!-- 탭 메뉴 -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('services')">
+          🔧 서비스
+        </button>
+        <button class="tab-btn" onclick="switchTab('packages')">
+          📦 패키지
+        </button>
+      </div>
+
+      <!-- 서비스 탭 -->
+      <div id="tab-services" class="tab-content active">
         <!-- 서비스 목록 -->
         <div class="card">
           <div class="card-header">
@@ -583,25 +712,8 @@
           <div class="services-list" id="servicesList"></div>
         </div>
 
-        <!-- 포트 상태 -->
+        <!-- 실시간 콘솔 -->
         <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">포트 상태</h2>
-          </div>
-          <div class="port-grid" id="portGrid"></div>
-        </div>
-
-        <!-- 로그 패널 -->
-        <div class="card log-panel">
-          <div class="card-header">
-            <h2 class="card-title">서비스 로그</h2>
-            <div class="tab-menu" id="logTabs"></div>
-          </div>
-          <div class="log-output" id="logOutput"></div>
-        </div>
-
-        <!-- 실시간 콘솔 로그 -->
-        <div class="card console-log-panel">
           <div class="card-header">
             <h2 class="card-title">🖥️ 실시간 콘솔</h2>
             <button class="btn btn-secondary btn-sm" onclick="clearConsoleLog()">
@@ -611,26 +723,121 @@
           <div class="console-output" id="consoleOutput"></div>
         </div>
       </div>
+
+      <!-- 패키지 탭 -->
+      <div id="tab-packages" class="tab-content">
+        <!-- 패키지 업데이트 -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">📦 패키지 업데이트</h2>
+            <button class="btn btn-secondary btn-sm" onclick="checkPackageUpdates()">
+              확인
+            </button>
+          </div>
+          <div class="update-list" id="updateList">
+            <div class="empty-state">
+              <div class="empty-icon">📦</div>
+              <div>"확인" 버튼을 클릭하여 업데이트 확인</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 설치된 패키지 -->
+        <div class="card" style="flex: 1; min-height: 0;">
+          <div class="card-header">
+            <h2 class="card-title">📚 설치된 패키지</h2>
+            <div class="package-stats" id="packageStats">
+              <span>Total: 0</span>
+            </div>
+          </div>
+
+          <div class="package-section">
+            <!-- 검색 및 필터 -->
+            <div class="package-controls">
+              <input
+                type="text"
+                class="search-input"
+                id="packageSearch"
+                placeholder="패키지 이름으로 검색..."
+                onkeyup="filterPackages()"
+              />
+              <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all" onclick="setPackageFilter('all')">
+                  전체
+                </button>
+                <button class="filter-btn" data-filter="prod" onclick="setPackageFilter('prod')">
+                  Prod
+                </button>
+                <button class="filter-btn" data-filter="dev" onclick="setPackageFilter('dev')">
+                  Dev
+                </button>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="loadInstalledPackages()">
+                새로고침
+              </button>
+            </div>
+
+            <!-- 패키지 테이블 -->
+            <div class="package-table-container">
+              <table class="package-table">
+                <thead>
+                  <tr>
+                    <th class="sortable" style="width: 50%;" onclick="sortPackages('name')">패키지 이름</th>
+                    <th class="sortable" style="width: 30%;" onclick="sortPackages('version')">버전</th>
+                    <th class="sortable" style="width: 20%; text-align: center;" onclick="sortPackages('type')">타입</th>
+                  </tr>
+                </thead>
+                <tbody id="packageTableBody">
+                  <tr>
+                    <td colspan="3">
+                      <div class="empty-state">
+                        <div class="empty-icon">📦</div>
+                        <div>"새로고침" 버튼을 클릭하여 패키지 목록 확인</div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 패키지 상세 모달 -->
+    <div class="modal-overlay" id="packageModal" onclick="closePackageModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h2 class="modal-title" id="modalPackageName">패키지 정보</h2>
+          <button class="modal-close" onclick="closePackageModal()">×</button>
+        </div>
+        <div class="modal-body" id="modalPackageBody">
+          <div class="modal-loading">
+            <div class="modal-spinner">⏳</div>
+            <div>로딩 중...</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
-      // 실시간 콘솔 로그 저장
+      // 전역 변수
       let consoleLogBuffer = []
+      let allPackages = []
+      let currentPackageFilter = 'all'
+      let currentSortColumn = 'name'
+      let currentSortDirection = 'asc'
       const MAX_CONSOLE_LOGS = 100
 
       // 콘솔 로그 수신
       window.electronAPI.onConsoleLog((log) => {
         consoleLogBuffer.push(`[${new Date().toLocaleTimeString()}] ${log}`)
-        
-        // 최대 로그 수 제한
         if (consoleLogBuffer.length > MAX_CONSOLE_LOGS) {
           consoleLogBuffer.shift()
         }
-        
         updateConsoleOutput()
       })
 
-      // 콘솔 출력 업데이트
       function updateConsoleOutput() {
         const consoleOutput = document.getElementById('consoleOutput')
         if (consoleOutput) {
@@ -639,86 +846,41 @@
         }
       }
 
-      // 콘솔 로그 지우기
       function clearConsoleLog() {
         consoleLogBuffer = []
         updateConsoleOutput()
       }
+
       // 서비스 설정
       const services = [
-        {
-          id: 'docker',
-          name: 'Docker Desktop',
-          icon: '🐳',
-          type: 'docker',
-          canControl: true,
-        },
-        {
-          id: 'mysql',
-          name: 'MySQL Database',
-          icon: '🗄️',
-          type: 'container',
-          port: 3307,
-          canControl: false,
-        },
-        {
-          id: 'nginx',
-          name: 'Nginx Proxy',
-          icon: '🌐',
-          type: 'container',
-          port: 443,
-          canControl: false,
-        },
-        {
-          id: 'api',
-          name: 'API Server',
-          icon: '⚡',
-          type: 'api',
-          port: 8000,
-          canControl: true,
-        },
-        {
-          id: 'web-admin',
-          name: '관리자 앱',
-          icon: '🔧',
-          type: 'web-admin',
-          port: 3000,
-          canControl: true,
-          url: 'https://app.civilization.zone',
-        },
-        {
-          id: 'web-user',
-          name: '사용자 앱',
-          icon: '👥',
-          type: 'web-user',
-          port: 4200,
-          canControl: true,
-          url: 'https://user.civilization.zone',
-        },
+        { id: 'docker', name: 'Docker Desktop', icon: '🐳', type: 'docker', canControl: true },
+        { id: 'mysql', name: 'MySQL Database', icon: '🗄️', type: 'container', port: 3307, canControl: false },
+        { id: 'nginx', name: 'Nginx Proxy', icon: '🌐', type: 'container', port: 443, canControl: false },
+        { id: 'api', name: 'API Server', icon: '⚡', type: 'api', port: 8000, canControl: true },
+        { id: 'web-admin', name: '관리자 앱', icon: '🔧', type: 'web-admin', port: 3000, canControl: true, url: 'https://app.civilization.zone' },
+        { id: 'web-user', name: '사용자 앱', icon: '👥', type: 'web-user', port: 4200, canControl: true, url: 'https://user.civilization.zone' },
       ]
 
-      // 포트 설정
-      const ports = [
-        { port: 3000, name: '관리자 웹', index: 0 },
-        { port: 4200, name: '사용자 웹', index: 1 },
-        { port: 8000, name: 'API Server', index: 2 },
-        { port: 3307, name: 'MySQL', index: 3 },
-        { port: 443, name: 'Nginx', index: 4 },
-        { port: 5555, name: 'Prisma Studio', index: 5 },
-      ]
+      // 탭 전환
+      function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'))
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'))
+        
+        event.target.classList.add('active')
+        document.getElementById(`tab-${tabName}`).classList.add('active')
+        
+        console.log(`탭 전환: ${tabName}`)
+      }
 
-      let currentLogService = 'api'
-
-      // 서비스 목록 렌더링
+      // 서비스 렌더링
       function renderServices() {
         const servicesList = document.getElementById('servicesList')
-        servicesList.innerHTML = services
-          .map((service) => {
-            const status = getServiceStatus(service.id)
-            const statusClass = status.toLowerCase()
-            const canControl = service.canControl !== false
+        servicesList.innerHTML = services.map(service => {
+          const status = getServiceStatus(service.id)
+          const statusClass = status.toLowerCase()
+          const canControl = service.canControl !== false
 
-            return `
+          return `
             <div class="service-item">
               <div class="service-header">
                 <div class="service-icon">${service.icon}</div>
@@ -726,111 +888,23 @@
                   <div class="service-name">${service.name}</div>
                   <div class="service-port">${service.port ? `포트: ${service.port}` : '시스템 서비스'}</div>
                 </div>
-                <div class="service-status ${statusClass}">
-                  <span class="status-dot"></span>
-                  ${status}
+                <div class="service-status ${statusClass}">${status}</div>
+              </div>
+              ${canControl ? `
+                <div class="service-actions">
+                  <button class="btn btn-secondary btn-sm" onclick="handleStart('${service.id}')" id="start-${service.id}">시작</button>
+                  <button class="btn btn-secondary btn-sm" onclick="handleStop('${service.id}')" id="stop-${service.id}">중지</button>
+                  ${service.url ? `<button class="btn btn-secondary btn-sm" onclick="openUrl('${service.url}')">웹 열기</button>` : ''}
                 </div>
-              </div>
-              ${
-                canControl
-                  ? `
-              <div class="service-actions">
-                <button class="btn btn-secondary btn-sm" onclick="handleStart('${service.id}')" id="start-${service.id}">시작</button>
-                <button class="btn btn-secondary btn-sm" onclick="handleStop('${service.id}')" id="stop-${service.id}">중지</button>
-                <button class="btn btn-secondary btn-sm" onclick="handleRestart('${service.id}')" id="restart-${service.id}">재시작</button>
-                ${service.url ? `<button class="btn btn-secondary btn-sm" onclick="openUrl('${service.url}')">웹 열기</button>` : ''}
-                <button class="btn btn-secondary btn-icon" onclick="handleViewLog('${service.id}')" title="로그 보기">📋</button>
-              </div>
-              `
-                  : ''
-              }
+              ` : ''}
             </div>
           `
-          })
-          .join('')
+        }).join('')
 
         updateServiceButtons()
       }
 
-      // 포트 상태 렌더링
-      function renderPorts() {
-        const portGrid = document.getElementById('portGrid')
-        portGrid.innerHTML = ports
-          .map((port) => {
-            return `
-            <div class="port-item">
-              <div class="port-info">
-                <div class="port-number">${port.port}</div>
-                <div class="port-name">${port.name}</div>
-              </div>
-              <div class="port-status checking" id="port-${port.port}">확인 중...</div>
-            </div>
-          `
-          })
-          .join('')
-      }
-
-      // 로그 탭 렌더링
-      function renderLogTabs() {
-        const logTabs = document.getElementById('logTabs')
-        const controllableServices = services.filter(
-          (s) => s.canControl !== false,
-        )
-        logTabs.innerHTML = controllableServices
-          .map((service) => {
-            return `
-            <button class="tab ${service.id === currentLogService ? 'active' : ''}" 
-                    onclick="switchLogTab('${service.id}')">
-              ${service.name}
-            </button>
-          `
-          })
-          .join('')
-      }
-
-      // 로그 탭 전환
-      function switchLogTab(serviceId) {
-        currentLogService = serviceId
-        renderLogTabs()
-        updateLogs()
-      }
-
-      // 로그 업데이트
-      async function updateLogs() {
-        const logOutput = document.getElementById('logOutput')
-        let logs = ''
-
-        try {
-          if (currentLogService === 'api') {
-            logs = await window.electronAPI.getApiLogs()
-          } else if (currentLogService === 'web-admin') {
-            logs = await window.electronAPI.getWebAdminLogs()
-          } else if (currentLogService === 'web-user') {
-            logs = await window.electronAPI.getWebUserLogs()
-          }
-          
-          // 로그가 있으면 표시
-          if (logs && logs.trim()) {
-            logOutput.textContent = logs
-            logOutput.scrollTop = logOutput.scrollHeight
-          } else {
-            logOutput.textContent = `${currentLogService.toUpperCase()} 로그가 없거나 서버가 시작되지 않았습니다.`
-          }
-        } catch (error) {
-          console.error('로그 불러오기 실패:', error)
-          logOutput.textContent = `로그를 불러올 수 없습니다: ${error.message}`
-        }
-      }
-
-      // URL 열기
-      function openUrl(url) {
-        window.electronAPI.openExternal(url)
-      }
-
-      // 서비스 상태 가져오기
       function getServiceStatus(serviceId) {
-        // 여기서 실제 상태를 가져와야 함
-        // 임시로 'stopped' 반환
         if (!window.cachedStatus) return 'stopped'
         
         const status = window.cachedStatus
@@ -843,145 +917,298 @@
           case 'nginx':
             return status.docker?.containers?.nginx ? 'running' : 'stopped'
           case 'api':
-            return status.evolutionServer?.apiServer?.isRunning ? 'running' : 'stopped'
+            return status.papyrusServer?.apiServer?.isRunning ? 'running' : 'stopped'
           case 'web-admin':
-            return status.evolutionServer?.webAdminServer?.isRunning ? 'running' : 'stopped'
+            return status.papyrusServer?.webAdminServer?.isRunning ? 'running' : 'stopped'
           case 'web-user':
-            return status.evolutionServer?.webUserServer?.isRunning ? 'running' : 'stopped'
+            return status.papyrusServer?.webUserServer?.isRunning ? 'running' : 'stopped'
           default:
             return 'stopped'
         }
       }
 
-      // 서비스 컨트롤
-      async function handleStart(serviceId) {
-        console.log('Starting:', serviceId)
-        const statusText = document.getElementById('statusText')
-        statusText.textContent = `${serviceId} 시작 중...`
-        
-        try {
-          if (serviceId === 'docker') {
-            await window.electronAPI.startDocker()
-          } else if (serviceId === 'api') {
-            await window.electronAPI.startApi()
-          } else if (serviceId === 'web-admin') {
-            await window.electronAPI.startWebAdmin()
-          } else if (serviceId === 'web-user') {
-            await window.electronAPI.startWebUser()
-          }
-          console.log(`${serviceId} 시작 명령 전송 완료`)
-          setTimeout(updateStatus, 2000)
-        } catch (error) {
-          console.error(`${serviceId} 시작 실패:`, error)
-          statusText.textContent = `${serviceId} 시작 실패`
-        }
-      }
-
-      async function handleStop(serviceId) {
-        console.log('Stopping:', serviceId)
-        const statusText = document.getElementById('statusText')
-        statusText.textContent = `${serviceId} 중지 중...`
-        
-        try {
-          if (serviceId === 'docker') {
-            await window.electronAPI.stopDocker()
-          } else if (serviceId === 'api') {
-            await window.electronAPI.stopApi()
-          } else if (serviceId === 'web-admin') {
-            await window.electronAPI.stopWebAdmin()
-          } else if (serviceId === 'web-user') {
-            await window.electronAPI.stopWebUser()
-          }
-          console.log(`${serviceId} 중지 명령 전송 완료`)
-          setTimeout(updateStatus, 2000)
-        } catch (error) {
-          console.error(`${serviceId} 중지 실패:`, error)
-          statusText.textContent = `${serviceId} 중지 실패`
-        }
-      }
-
-      async function handleRestart(serviceId) {
-        await handleStop(serviceId)
-        setTimeout(() => handleStart(serviceId), 1000)
-      }
-
-      async function handleViewLog(serviceId) {
-        currentLogService = serviceId
-        renderLogTabs()
-        await updateLogs()
-      }
-
-      // 버튼 상태 업데이트
       function updateServiceButtons() {
-        services.forEach((service) => {
+        services.forEach(service => {
           if (service.canControl === false) return
 
           const status = getServiceStatus(service.id)
           const startBtn = document.getElementById(`start-${service.id}`)
           const stopBtn = document.getElementById(`stop-${service.id}`)
-          const restartBtn = document.getElementById(`restart-${service.id}`)
 
-          if (startBtn && stopBtn && restartBtn) {
+          if (startBtn && stopBtn) {
             if (status === 'running') {
               startBtn.disabled = true
               stopBtn.disabled = false
-              restartBtn.disabled = false
             } else {
               startBtn.disabled = false
               stopBtn.disabled = true
-              restartBtn.disabled = true
             }
           }
         })
       }
 
-      // 전역 상태 업데이트
+      async function handleStart(serviceId) {
+        console.log('Starting:', serviceId)
+        try {
+          if (serviceId === 'docker') await window.electronAPI.startDocker()
+          else if (serviceId === 'api') await window.electronAPI.startApi()
+          else if (serviceId === 'web-admin') await window.electronAPI.startWebAdmin()
+          else if (serviceId === 'web-user') await window.electronAPI.startWebUser()
+          setTimeout(updateStatus, 2000)
+        } catch (error) {
+          console.error(`${serviceId} 시작 실패:`, error)
+        }
+      }
+
+      async function handleStop(serviceId) {
+        console.log('Stopping:', serviceId)
+        try {
+          if (serviceId === 'docker') await window.electronAPI.stopDocker()
+          else if (serviceId === 'api') await window.electronAPI.stopApi()
+          else if (serviceId === 'web-admin') await window.electronAPI.stopWebAdmin()
+          else if (serviceId === 'web-user') await window.electronAPI.stopWebUser()
+          setTimeout(updateStatus, 2000)
+        } catch (error) {
+          console.error(`${serviceId} 중지 실패:`, error)
+        }
+      }
+
+      function openUrl(url) {
+        window.electronAPI.openExternal(url)
+      }
+
       async function updateStatus() {
         try {
           const status = await window.electronAPI.getStatus()
-          window.cachedStatus = status // 캐시에 저장
+          window.cachedStatus = status
           
-          const globalStatus = document.getElementById('globalStatus')
-          const statusText = document.getElementById('statusText')
           const startAllBtn = document.getElementById('startAllBtn')
           const stopAllBtn = document.getElementById('stopAllBtn')
 
           if (status.allReady) {
-            globalStatus.classList.remove('loading')
-            statusText.textContent = '모든 서비스 실행 중'
             startAllBtn.disabled = true
             stopAllBtn.disabled = false
           } else {
-            globalStatus.classList.add('loading')
-            statusText.textContent = '일부 서비스 중지됨'
             startAllBtn.disabled = false
             stopAllBtn.disabled = true
           }
 
           renderServices()
-          await updatePortStatus()
-          await updateLogs()
         } catch (error) {
           console.error('Status update failed:', error)
-          const statusText = document.getElementById('statusText')
-          statusText.textContent = '상태 업데이트 실패'
         }
       }
 
-      // 포트 상태 업데이트
-      async function updatePortStatus() {
-        for (const port of ports) {
-          try {
-            const isOpen = await window.electronAPI.checkPort(port.port)
-            const statusEl = document.getElementById(`port-${port.port}`)
-            if (statusEl) {
-              statusEl.textContent = isOpen ? '열림' : '닫힘'
-              statusEl.className = `port-status ${isOpen ? 'open' : 'closed'}`
-            }
-          } catch (error) {
-            console.error(`Port ${port.port} check failed:`, error)
+      // 패키지 업데이트 확인
+      async function checkPackageUpdates() {
+        const updateList = document.getElementById('updateList')
+        updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>확인 중...</div></div>'
+
+        try {
+          console.log('📦 패키지 업데이트 확인 시작...')
+          const updates = await window.electronAPI.checkPackageUpdates()
+          console.log('📦 업데이트 결과:', updates)
+          
+          if (!updates || updates.length === 0) {
+            updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div>모든 패키지가 최신 버전입니다!</div></div>'
+            return
           }
+
+          updateList.innerHTML = updates.map(pkg => {
+            let badgeClass = 'patch'
+            let badgeText = 'Patch'
+            
+            if (pkg.updateType === 'major') {
+              badgeClass = 'major'
+              badgeText = 'Major'
+            } else if (pkg.updateType === 'minor') {
+              badgeClass = 'minor'
+              badgeText = 'Minor'
+            }
+
+            return `
+              <div class="update-item">
+                <div class="update-info">
+                  <div class="update-name">${pkg.name}</div>
+                  <div class="update-versions">
+                    <span class="version-current">${pkg.current}</span>
+                    <span style="color: rgba(255,255,255,0.3);"> → </span>
+                    <span class="version-latest">${pkg.latest}</span>
+                  </div>
+                </div>
+                <div class="update-badge ${badgeClass}">${badgeText}</div>
+              </div>
+            `
+          }).join('')
+        } catch (error) {
+          console.error('패키지 업데이트 확인 실패:', error)
+          updateList.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>업데이트 확인 실패: ${error.message}</div></div>`
         }
+      }
+
+      // 설치된 패키지 목록 로드
+      async function loadInstalledPackages() {
+        const packageTableBody = document.getElementById('packageTableBody')
+        packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">⏳</div><div>로딩 중...</div></div></td></tr>'
+
+        try {
+          console.log('📚 설치된 패키지 목록 로딩...')
+          const packages = await window.electronAPI.getInstalledPackages()
+          console.log('📚 패키지 목록:', packages)
+          
+          allPackages = packages || []
+          
+          if (allPackages.length === 0) {
+            packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">📦</div><div>패키지가 없습니다.</div></div></td></tr>'
+            updatePackageStats([])
+            return
+          }
+
+          // 정렬 적용
+          const sortedPackages = applySorting([...allPackages])
+          renderPackageTable(sortedPackages)
+          updatePackageStats(allPackages)
+          updateSortHeaders()
+        } catch (error) {
+          console.error('패키지 목록 로딩 실패:', error)
+          packageTableBody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">❌</div><div>목록 로딩 실패: ${error.message}</div></div></td></tr>`
+        }
+      }
+
+      function renderPackageTable(packages) {
+        const packageTableBody = document.getElementById('packageTableBody')
+        
+        if (!packages || packages.length === 0) {
+          packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">🔍</div><div>검색 결과가 없습니다.</div></div></td></tr>'
+          return
+        }
+
+        packageTableBody.innerHTML = packages.map(pkg => `
+          <tr onclick="showPackageDetail('${pkg.name}', '${pkg.version}', '${pkg.type}')">
+            <td class="package-name-col">${pkg.name}</td>
+            <td class="package-version-col">${pkg.version}</td>
+            <td style="text-align: center;">
+              <span class="type-badge ${pkg.type}">${pkg.type === 'dev' ? 'Dev' : 'Prod'}</span>
+            </td>
+          </tr>
+        `).join('')
+      }
+
+      function updatePackageStats(packages) {
+        const packageStats = document.getElementById('packageStats')
+        const prodCount = packages.filter(p => p.type === 'prod').length
+        const devCount = packages.filter(p => p.type === 'dev').length
+        
+        packageStats.innerHTML = `
+          <span>Total: ${packages.length}</span>
+          <span style="color: #34d399;">Prod: ${prodCount}</span>
+          <span style="color: #94a3b8;">Dev: ${devCount}</span>
+        `
+      }
+
+      function setPackageFilter(filter) {
+        currentPackageFilter = filter
+        
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+          btn.classList.remove('active')
+          if (btn.getAttribute('data-filter') === filter) {
+            btn.classList.add('active')
+          }
+        })
+        
+        filterPackages()
+      }
+
+      function filterPackages() {
+        const searchTerm = document.getElementById('packageSearch').value.toLowerCase()
+        
+        let filteredPackages = allPackages
+        
+        if (currentPackageFilter !== 'all') {
+          filteredPackages = filteredPackages.filter(pkg => pkg.type === currentPackageFilter)
+        }
+        
+        if (searchTerm) {
+          filteredPackages = filteredPackages.filter(pkg => pkg.name.toLowerCase().includes(searchTerm))
+        }
+        
+        // 현재 정렬 적용
+        filteredPackages = applySorting(filteredPackages)
+        
+        renderPackageTable(filteredPackages)
+        updatePackageStats(filteredPackages)
+      }
+
+      function sortPackages(column) {
+        // 같은 컬럼 클릭시 방향 변경, 다른 컬럼 클릭시 오름차순
+        if (currentSortColumn === column) {
+          currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc'
+        } else {
+          currentSortColumn = column
+          currentSortDirection = 'asc'
+        }
+        
+        // 헤더 UI 업데이트
+        updateSortHeaders()
+        
+        // 필터링 + 정렬 적용
+        filterPackages()
+      }
+
+      function updateSortHeaders() {
+        // 모든 헤더에서 정렬 클래스 제거
+        document.querySelectorAll('.package-table th').forEach(th => {
+          th.classList.remove('sort-asc', 'sort-desc')
+        })
+        
+        // 현재 정렬 컬럼에 클래스 추가
+        const headers = document.querySelectorAll('.package-table th')
+        const columnIndex = currentSortColumn === 'name' ? 0 : currentSortColumn === 'version' ? 1 : 2
+        
+        if (headers[columnIndex]) {
+          headers[columnIndex].classList.add(`sort-${currentSortDirection}`)
+        }
+      }
+
+      function applySorting(packages) {
+        return packages.sort((a, b) => {
+          let aVal, bVal
+          
+          if (currentSortColumn === 'name') {
+            aVal = a.name.toLowerCase()
+            bVal = b.name.toLowerCase()
+          } else if (currentSortColumn === 'version') {
+            // 버전 정렬 (숫자 기반)
+            aVal = a.version.replace(/[^0-9.]/g, '')
+            bVal = b.version.replace(/[^0-9.]/g, '')
+            
+            // 버전 숫자 비교
+            const aParts = aVal.split('.').map(n => parseInt(n) || 0)
+            const bParts = bVal.split('.').map(n => parseInt(n) || 0)
+            
+            for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+              const aNum = aParts[i] || 0
+              const bNum = bParts[i] || 0
+              if (aNum !== bNum) {
+                return currentSortDirection === 'asc' ? aNum - bNum : bNum - aNum
+              }
+            }
+            return 0
+          } else if (currentSortColumn === 'type') {
+            aVal = a.type
+            bVal = b.type
+          }
+          
+          if (currentSortColumn !== 'version') {
+            if (currentSortDirection === 'asc') {
+              return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
+            } else {
+              return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
+            }
+          }
+          
+          return 0
+        })
       }
 
       // 전체 시작/중지
@@ -995,19 +1222,104 @@
         setTimeout(updateStatus, 1000)
       }
 
+      // 패키지 상세 정보 표시
+      async function showPackageDetail(name, version, type) {
+        const modal = document.getElementById('packageModal')
+        const modalTitle = document.getElementById('modalPackageName')
+        const modalBody = document.getElementById('modalPackageBody')
+        
+        // 모달 열기
+        modal.classList.add('active')
+        modalTitle.textContent = name
+        modalBody.innerHTML = '<div class="modal-loading"><div class="modal-spinner">⏳</div><div>로딩 중...</div></div>'
+        
+        try {
+          console.log(`📦 패키지 정보 가져오기: ${name}`)
+          const packageInfo = await window.electronAPI.getPackageInfo(name)
+          console.log('📦 패키지 정보:', packageInfo)
+          
+          if (!packageInfo) {
+            modalBody.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><div>패키지 정보를 가져올 수 없습니다.</div></div>'
+            return
+          }
+          
+          // 정보 렌더링
+          modalBody.innerHTML = `
+            <div class="package-detail-section">
+              <div class="package-detail-label">버전</div>
+              <div class="package-detail-value">
+                <span class="package-detail-badge">설치됨: ${version}</span>
+                ${packageInfo.latestVersion ? `<span class="package-detail-badge">최신: ${packageInfo.latestVersion}</span>` : ''}
+                <span class="package-detail-badge">${type === 'dev' ? 'Dev' : 'Prod'}</span>
+              </div>
+            </div>
+            
+            ${packageInfo.description ? `
+              <div class="package-detail-section">
+                <div class="package-detail-label">설명</div>
+                <div class="package-detail-description">${packageInfo.description}</div>
+              </div>
+            ` : ''}
+            
+            ${packageInfo.author ? `
+              <div class="package-detail-section">
+                <div class="package-detail-label">작성자</div>
+                <div class="package-detail-value">${packageInfo.author}</div>
+              </div>
+            ` : ''}
+            
+            ${packageInfo.license ? `
+              <div class="package-detail-section">
+                <div class="package-detail-label">라이선스</div>
+                <div class="package-detail-value">${packageInfo.license}</div>
+              </div>
+            ` : ''}
+            
+            ${packageInfo.homepage || packageInfo.repository ? `
+              <div class="package-detail-section">
+                <div class="package-detail-label">링크</div>
+                <div class="package-detail-links">
+                  ${packageInfo.homepage ? `<a href="${packageInfo.homepage}" class="package-detail-link" onclick="window.electronAPI.openExternal('${packageInfo.homepage}'); return false;">🏠 홈페이지</a>` : ''}
+                  ${packageInfo.repository ? `<a href="${packageInfo.repository}" class="package-detail-link" onclick="window.electronAPI.openExternal('${packageInfo.repository}'); return false;">📦 저장소</a>` : ''}
+                  <a href="https://www.npmjs.com/package/${name}" class="package-detail-link" onclick="window.electronAPI.openExternal('https://www.npmjs.com/package/${name}'); return false;">📚 NPM</a>
+                </div>
+              </div>
+            ` : ''}
+            
+            ${packageInfo.keywords && packageInfo.keywords.length > 0 ? `
+              <div class="package-detail-section">
+                <div class="package-detail-label">키워드</div>
+                <div class="package-detail-value">
+                  ${packageInfo.keywords.map(k => `<span class="package-detail-badge">${k}</span>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+          `
+        } catch (error) {
+          console.error('패키지 정보 로딩 실패:', error)
+          modalBody.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>정보 로딩 실패: ${error.message}</div></div>`
+        }
+      }
+
+      function closePackageModal(event) {
+        // 오버레이 클릭 또는 닫기 버튼 클릭 시에만 닫기
+        if (!event || event.target.id === 'packageModal') {
+          document.getElementById('packageModal').classList.remove('active')
+        }
+      }
+
+      // ESC 키로 모달 닫기
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closePackageModal()
+        }
+      })
+
       // 초기화
       window.cachedStatus = null
       renderServices()
-      renderPorts()
-      renderLogTabs()
-      
-      // 초기 상태 로드
       updateStatus()
-
-      // 주기적 업데이트
       setInterval(updateStatus, 3000)
-      setInterval(updateLogs, 2000)
     </script>
   </body>
 </html>
-

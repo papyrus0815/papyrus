@@ -41,6 +41,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openWeb: () => ipcRenderer.invoke('service:openWeb'),
   openExternal: (url: string) => ipcRenderer.invoke('service:openExternal', url),
 
+  // 패키지 업데이트 확인
+  checkPackageUpdates: () => ipcRenderer.invoke('service:checkPackageUpdates'),
+
+  // 설치된 패키지 목록 가져오기
+  getInstalledPackages: () => ipcRenderer.invoke('service:getInstalledPackages'),
+
+  // 패키지 상세 정보 가져오기
+  getPackageInfo: (packageName: string) =>
+    ipcRenderer.invoke('service:getPackageInfo', packageName),
+
   // 포트 체크
   checkPort: (port: number) => ipcRenderer.invoke('service:checkPort', port),
 

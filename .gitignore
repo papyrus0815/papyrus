@@ -1,55 +1,128 @@
-# See http://help.github.com/ignore-files/ for more about ignoring files.
+# ========================================
+# Node.js
+# ========================================
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+package-lock.json
+.npm
+.yarn
 
-# compiled output
-dist
-tmp
-out-tsc
+# ========================================
+# Build Output
+# ========================================
+dist/
+build/
+out/
+.next/
+out-tsc/
+tmp/
 
-# dependencies
-node_modules
+# ========================================
+# Nx
+# ========================================
+.nx/cache
+.nx/workspace-data
 
-# IDEs and editors
-/.idea
+# ========================================
+# Environment Variables
+# ========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# ========================================
+# IDE / Editor
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .project
 .classpath
 .c9/
 *.launch
 .settings/
 *.sublime-workspace
+.history/
 
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
-
-# System Files
+# ========================================
+# OS Files
+# ========================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-.nx/
-.env
-vite.config.*.timestamp*
-vitest.config.*.timestamp*
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
+# ========================================
+# Logs
+# ========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
 
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
+# ========================================
+# Testing
+# ========================================
+coverage/
+.nyc_output/
+.coverage/
+*.lcov
+.cache/
 
-# Local environment files
+# ========================================
+# Database
+# ========================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# ========================================
+# Uploads / User Content
+# ========================================
 uploads/*
+!uploads/.gitkeep
 
-# Generated Prisma schema (built from libs/db/prisma)
+# ========================================
+# Docker
+# ========================================
+.dockerignore
+
+# ========================================
+# Misc
+# ========================================
+.temp/
+.tmp/
+*.pid
+*.seed
+*.pid.lock
+.vscode-test
+
+# ========================================
+# Generated Files
+# ========================================
 apps/api/prisma/schema.prisma
+apps/api/src/api/
+libs/api-sdk/src/api/
+
+# ========================================
+# Service Manager Build
+# ========================================
+apps/service-manager/dist/
+apps/service-manager/out/
+apps/service-manager/node_modules/

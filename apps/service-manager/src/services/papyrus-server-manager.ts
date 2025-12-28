@@ -1,6 +1,6 @@
 /**
- * Evolution Server Manager
- * Evolution (Civilization) 게임 서버 상태를 모니터링하는 서비스
+ * Papyrus Server Manager
+ * Papyrus 서버 상태를 모니터링하는 서비스
  */
 
 import * as http from 'http'
@@ -39,7 +39,7 @@ class LineBuffer {
   }
 }
 
-export interface EvolutionServerStatus {
+export interface PapyrusServerStatus {
   webAdminServer: {
     isRunning: boolean
     port: number
@@ -58,27 +58,27 @@ export interface EvolutionServerStatus {
   allReady: boolean
 }
 
-export class EvolutionServerManager {
-  private static instance: EvolutionServerManager
+export class PapyrusServerManager {
+  private static instance: PapyrusServerManager
   private apiProcess: ChildProcess | null = null
   private webAdminProcess: ChildProcess | null = null
   private webUserProcess: ChildProcess | null = null
   private readonly webAdminPort: number = 3000
   private readonly webUserPort: number = 4200
   private readonly apiPort: number = 8000
-  private projectRoot: string = 'C:\\Users\\1\\Desktop\\project\\evolution'
+  private projectRoot: string = '/Users/yendoo/dev/papyrus'
   private apiLogBuffer: LineBuffer = new LineBuffer()
   private webAdminLogBuffer: LineBuffer = new LineBuffer()
   private webUserLogBuffer: LineBuffer = new LineBuffer()
 
   private constructor() {}
 
-  static getInstance(): EvolutionServerManager {
-    if (!EvolutionServerManager.instance) {
-      EvolutionServerManager.instance = new EvolutionServerManager()
+  static getInstance(): PapyrusServerManager {
+    if (!PapyrusServerManager.instance) {
+      PapyrusServerManager.instance = new PapyrusServerManager()
     }
 
-    return EvolutionServerManager.instance
+    return PapyrusServerManager.instance
   }
 
   /**
@@ -179,10 +179,10 @@ export class EvolutionServerManager {
   }
 
   /**
-   * Evolution 서버 전체 상태 확인
+   * Papyrus 서버 전체 상태 확인
    * HTTP 응답을 우선적으로 확인 (프로세스 객체와 무관하게)
    */
-  async getStatus(): Promise<EvolutionServerStatus> {
+  async getStatus(): Promise<PapyrusServerStatus> {
     // HTTP 응답 여부로 실제 실행 상태 확인
     // (Service Manager 외부에서 시작된 경우에도 올바르게 감지)
     const webAdminRunning = await this.isWebAdminServerRunning()

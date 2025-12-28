@@ -5,13 +5,13 @@
 
 import { DockerManager, DockerStatus } from './docker-manager'
 import {
-  EvolutionServerManager,
-  EvolutionServerStatus,
-} from './evolution-server-manager'
+  PapyrusServerManager,
+  PapyrusServerStatus,
+} from './papyrus-server-manager'
 
 export interface ServiceStatus {
   docker: DockerStatus
-  evolutionServer: EvolutionServerStatus
+  papyrusServer: PapyrusServerStatus
   allReady: boolean
 }
 
@@ -23,12 +23,12 @@ export class ServiceManager {
 
   private constructor() {
     this.dockerManager = DockerManager.getInstance()
-    this.evolutionServerManager = EvolutionServerManager.getInstance()
+    this.papyrusServerManager = PapyrusServerManager.getInstance()
 
     // 프로젝트 루트 자동 감지
     this.projectRoot =
-      process.env.EVOLUTION_PROJECT_ROOT ||
-      'C:\\Users\\1\\Desktop\\project\\evolution'
+      process.env.PAPYRUS_PROJECT_ROOT ||
+      '/Users/yendoo/dev/papyrus'
     console.log('📁 프로젝트 루트:', this.projectRoot)
   }
 
@@ -44,21 +44,21 @@ export class ServiceManager {
    * 전체 서비스 상태 확인
    */
   async getStatus(): Promise<ServiceStatus> {
-    const [docker, evolutionServer] = await Promise.all([
+    const [docker, papyrusServer] = await Promise.all([
       this.dockerManager.getStatus(),
-      this.evolutionServerManager.getStatus(),
+      this.papyrusServerManager.getStatus(),
     ])
 
     const allReady =
       docker.isRunning &&
       docker.containers.mysql &&
-      evolutionServer.webAdminServer.isRunning &&
-      evolutionServer.webUserServer.isRunning &&
-      evolutionServer.apiServer.isRunning
+      papyrusServer.webAdminServer.isRunning &&
+      papyrusServer.webUserServer.isRunning &&
+      papyrusServer.apiServer.isRunning
 
     return {
       docker,
-      evolutionServer,
+      papyrusServer,
       allReady,
     }
   }
@@ -69,7 +69,7 @@ export class ServiceManager {
   async startAll(): Promise<boolean> {
     try {
       console.log('\n┌─────────────────────────────────────────────────────┐')
-      console.log('│  🚀 Evolution 서비스 시작 중...                    │')
+      console.log('│  🚀 Papyrus 서비스 시작 중...                      │')
       console.log('└─────────────────────────────────────────────────────┘\n')
 
       // 1. Docker 확인
@@ -89,11 +89,11 @@ export class ServiceManager {
       console.log('        ✅ Docker Desktop 및 컨테이너 실행 중')
 
       // 3. API 서버 시작
-      console.log('\n  [3/5] Evolution API 서버 시작...')
-      const apiRunning = await this.evolutionServerManager.isApiServerRunning()
+      console.log('\n  [3/5] Papyrus API 서버 시작...')
+      const apiRunning = await this.papyrusServerManager.isApiServerRunning()
       if (!apiRunning) {
         console.log('        🚀 API 서버 시작 중... (최대 60초 소요)')
-        const apiStarted = await this.evolutionServerManager.startApiServer(
+        const apiStarted = await this.papyrusServerManager.startApiServer(
           this.projectRoot,
         )
         if (!apiStarted) {
@@ -104,10 +104,10 @@ export class ServiceManager {
 
       // 4. 관리자 웹 서버 시작
       console.log('\n  [4/5] 관리자 웹 서버 시작...')
-      const webAdminRunning = await this.evolutionServerManager.isWebAdminServerRunning()
+      const webAdminRunning = await this.papyrusServerManager.isWebAdminServerRunning()
       if (!webAdminRunning) {
         console.log('        🌐 관리자 웹 서버 시작 중... (최대 30초 소요)')
-        const webAdminStarted = await this.evolutionServerManager.startWebAdminServer(
+        const webAdminStarted = await this.papyrusServerManager.startWebAdminServer(
           this.projectRoot,
         )
         if (!webAdminStarted) {
@@ -121,10 +121,10 @@ export class ServiceManager {
 
       // 5. 사용자 웹 서버 시작
       console.log('\n  [5/5] 사용자 웹 서버 시작...')
-      const webUserRunning = await this.evolutionServerManager.isWebUserServerRunning()
+      const webUserRunning = await this.papyrusServerManager.isWebUserServerRunning()
       if (!webUserRunning) {
         console.log('        👥 사용자 웹 서버 시작 중... (최대 30초 소요)')
-        const webUserStarted = await this.evolutionServerManager.startWebUserServer(
+        const webUserStarted = await this.papyrusServerManager.startWebUserServer(
           this.projectRoot,
         )
         if (!webUserStarted) {
@@ -161,14 +161,14 @@ export class ServiceManager {
    */
   async stopAll(): Promise<boolean> {
     try {
-      console.log('🛑 Evolution 서비스 중지 중...')
+      console.log('🛑 Papyrus 서비스 중지 중...')
 
       // API 서버 중지
-      await this.evolutionServerManager.stopApiServer()
+      await this.papyrusServerManager.stopApiServer()
 
       // 웹 서버들 중지
-      await this.evolutionServerManager.stopWebAdminServer()
-      await this.evolutionServerManager.stopWebUserServer()
+      await this.papyrusServerManager.stopWebAdminServer()
+      await this.papyrusServerManager.stopWebUserServer()
 
       // Docker 컨테이너는 유지 (다른 프로젝트에서 사용 가능)
       console.log('ℹ️ Docker 컨테이너는 유지됩니다')
@@ -199,7 +199,8 @@ export class ServiceManager {
    */
   setProjectRoot(rootPath: string): void {
     this.projectRoot = rootPath
-    this.evolutionServerManager.setProjectRoot(rootPath)
+    this.dockerManager.setProjectRoot(rootPath)
+    this.papyrusServerManager.setProjectRoot(rootPath)
     console.log('📁 프로젝트 루트 업데이트:', this.projectRoot)
   }
 

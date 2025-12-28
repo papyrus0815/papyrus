@@ -13,7 +13,13 @@ import {
   ipcMain,
 } from 'electron'
 import * as path from 'path'
+import * as fs from 'fs'
 import { ServiceManager } from './services/service-manager'
+
+// macOS에서 Dock에 앱 아이콘 표시
+if (process.platform === 'darwin') {
+  app.dock.show()
+}
 
 let tray: Tray | null = null
 let mainWindow: BrowserWindow | null = null
@@ -80,7 +86,7 @@ function createWindow() {
     height: 800,
     minWidth: 1200,
     minHeight: 700,
-    title: 'Evolution Service Manager',
+    title: 'Papyrus Service Manager',
     icon: nativeImage.createEmpty(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -115,27 +121,47 @@ function createWindow() {
 // 시스템 트레이 생성
 function createTray() {
   // 간단한 텍스트 기반 아이콘 생성
-  // 16x16 크기의 흰색 원 아이콘
-  const canvas = {
-    width: 16,
-    height: 16,
-  }
-
-  // 기본 아이콘 (Windows에서는 시스템 아이콘 사용)
-  let icon: Electron.NativeImage
+  let icon: Electron.NativeImage | null = null
 
   try {
-    // 아이콘 파일이 있으면 로드
-    const iconPath = path.join(__dirname, '../resources/icon.png')
-    icon = nativeImage.createFromPath(iconPath)
+    // 여러 경로에서 아이콘 찾기 (실행 환경에 따라 경로가 다름)
+    const possiblePaths = [
+      path.join(__dirname, 'resources', 'icon.png'), // dist/resources/icon.png
+      path.join(__dirname, '..', 'assets', 'icon.png'), // assets/icon.png (dist 상위)
+      path.join(process.cwd(), 'assets', 'icon.png'), // cwd/assets/icon.png
+      path.join(process.cwd(), 'dist', 'resources', 'icon.png'), // cwd/dist/resources/icon.png
+    ]
 
-    // 아이콘이 비어있으면 기본 아이콘 생성
-    if (icon.isEmpty()) {
-      throw new Error('Icon file not found')
+    let loadedPath: string | null = null
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        const testIcon = nativeImage.createFromPath(p)
+        if (!testIcon.isEmpty()) {
+          icon = testIcon
+          loadedPath = p
+          break
+        }
+      }
+    }
+
+    if (loadedPath) {
+      console.log(`📁 아이콘 로드 성공: ${loadedPath}`)
+    } else {
+      throw new Error('아이콘 파일을 찾을 수 없음')
     }
   } catch (error) {
+    console.log(`⚠️  PNG 아이콘 로드 실패, base64 아이콘 사용: ${error}`)
     // 아이콘 파일이 없으면 간단한 이미지 생성
     // 🎮 이모지를 이미지로 변환
+    const iconData = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAE0SURBVDiNpdPNSsNAFIbh502aJhBbqYKgC8GFIrgQXIgL/wGv1L2/N+BG3AiuXHghLlwI/qBCbW1Tk8nMcZGGpE0T8INZzDnPzJkzhv8UY8wC8ALYBuaBKfAJPAIPWuuPnyALWFJKrQMngAJcIADqwB1wq7V+/hUcADfAEnAKOH8AtgD3QAXYAx6Ac631vTEmAJaBE8D+BY6AY+AN2ATugQvgEqgBG8AecDgIeATsgBU4BtxBgD1wDGyAF+AYsIGDQcAu4AKb4BjYB+wDc0AFqAJzQ4FzwB/gGLgGNoENYBd4A84Au+Db3wRsA0+AS2AR+AZ2gCXAAdY0oE6gHWCqtR7r2DZQBhaGAEuAHce5/k2gtV4Zc+sCK1rrUc8BaK3PgJf0N+jWWq/+r18AVNhp1dmOl2oAAAAASUVORK5CYII=',
+      'base64',
+    )
+    icon = nativeImage.createFromBuffer(iconData)
+  }
+
+  if (!icon) {
+    // 최후의 수단: 기본 아이콘
     const iconData = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAE0SURBVDiNpdPNSsNAFIbh502aJhBbqYKgC8GFIrgQXIgL/wGv1L2/N+BG3AiuXHghLlwI/qBCbW1Tk8nMcZGGpE0T8INZzDnPzJkzhv8UY8wC8ALYBuaBKfAJPAIPWuuPnyALWFJKrQMngAJcIADqwB1wq7V+/hUcADfAEnAKOH8AtgD3QAXYAx6Ac631vTEmAJaBE8D+BY6AY+AN2ATugQvgEqgBG8AecDgIeATsgBU4BtxBgD1wDGyAF+AYsIGDQcAu4AKb4BjYB+wDc0AFqAJzQ4FzwB/gGLgGNoENYBd4A84Au+Db3wRsA0+AS2AR+AZ2gCXAAdY0oE6gHWCqtR7r2DZQBhaGAEuAHce5/k2gtV4Zc+sCK1rrUc8BaK3PgJf0N+jWWq/+r18AVNhp1dmOl2oAAAAASUVORK5CYII=',
       'base64',
@@ -150,10 +176,10 @@ function createTray() {
 
   updateTrayMenu()
 
-  // 3초마다 상태 업데이트
+  // 1.5초마다 상태 업데이트 (더 빠른 반응)
   setInterval(() => {
     updateTrayMenu()
-  }, 3000)
+  }, 1500)
 }
 
 // 트레이 메뉴 업데이트
@@ -167,13 +193,13 @@ async function updateTrayMenu() {
     const dockerStatus = status.docker.isRunning ? '✅' : '❌'
     const mysqlStatus = status.docker.containers.mysql ? '✅' : '❌'
     const nginxStatus = status.docker.containers.nginx ? '✅' : '❌'
-    const webAdminStatus = status.evolutionServer.webAdminServer.isRunning
+    const webAdminStatus = status.papyrusServer.webAdminServer.isRunning
       ? '✅'
       : '❌'
-    const webUserStatus = status.evolutionServer.webUserServer.isRunning
+    const webUserStatus = status.papyrusServer.webUserServer.isRunning
       ? '✅'
       : '❌'
-    const apiStatus = status.evolutionServer.apiServer.isRunning ? '✅' : '❌'
+    const apiStatus = status.papyrusServer.apiServer.isRunning ? '✅' : '❌'
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -220,7 +246,7 @@ async function updateTrayMenu() {
         label: `  ${webAdminStatus} 관리자 웹 (포트: 3000)`,
         type: 'normal',
         click: () => {
-          if (status.evolutionServer.webAdminServer.isRunning) {
+          if (status.papyrusServer.webAdminServer.isRunning) {
             require('electron').shell.openExternal('http://localhost:3000')
           }
         },
@@ -229,7 +255,7 @@ async function updateTrayMenu() {
         label: `  ${webUserStatus} 사용자 웹 (포트: 4200)`,
         type: 'normal',
         click: () => {
-          if (status.evolutionServer.webUserServer.isRunning) {
+          if (status.papyrusServer.webUserServer.isRunning) {
             require('electron').shell.openExternal(
               'https://user.civilization.zone',
             )
@@ -270,9 +296,9 @@ async function updateTrayMenu() {
         label: '🛑 모두 중지',
         type: 'normal',
         enabled:
-          status.evolutionServer.apiServer.isRunning ||
-          status.evolutionServer.webAdminServer.isRunning ||
-          status.evolutionServer.webUserServer.isRunning,
+          status.papyrusServer.apiServer.isRunning ||
+          status.papyrusServer.webAdminServer.isRunning ||
+          status.papyrusServer.webUserServer.isRunning,
         click: async () => {
           await serviceManager.stopAll()
           updateTrayMenu()
@@ -362,7 +388,7 @@ async function updateTrayMenu() {
         type: 'normal',
         click: async () => {
           console.log('🏗️ API 서버 빌드 시작...')
-          const result = await serviceManager.evolutionServerManager.buildApi()
+          const result = await serviceManager.papyrusServerManager.buildApi()
           if (result) {
             dialog.showMessageBox({
               type: 'info',
@@ -389,7 +415,7 @@ async function updateTrayMenu() {
         click: async () => {
           console.log('🔨 Nestia SDK 빌드 시작...')
           const result =
-            await serviceManager.evolutionServerManager.buildNestiaSdk()
+            await serviceManager.papyrusServerManager.buildNestiaSdk()
           if (result) {
             dialog.showMessageBox({
               type: 'info',
@@ -520,14 +546,29 @@ function registerIpcHandlers() {
   // Docker 제어
   ipcMain.handle('service:startDocker', async () => {
     const projectRoot =
-      serviceManager['projectRoot'] ||
-      '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
     console.log(`🐳 [IPC] Docker 시작 요청 (프로젝트 경로: ${projectRoot})`)
-    return await serviceManager.dockerManager.startDocker(projectRoot)
+    const result = await serviceManager.dockerManager.startDocker(projectRoot)
+    // Docker 시작 후 상태 업데이트
+    setTimeout(() => {
+      updateTrayMenu()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('service:status-update')
+      }
+    }, 2000)
+    return result
   })
 
   ipcMain.handle('service:stopDocker', async () => {
-    return await serviceManager.dockerManager.stopDocker()
+    const result = await serviceManager.dockerManager.stopDocker()
+    // Docker 중지 후 상태 즉시 업데이트
+    setTimeout(() => {
+      updateTrayMenu()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('service:status-update')
+      }
+    }, 1000)
+    return result
   })
 
   // API 서버 제어
@@ -536,14 +577,14 @@ function registerIpcHandlers() {
       serviceManager['projectRoot'] ||
       '/Users/yendoo/dev/papyrus'
     console.log(`🚀 [IPC] API 서버 시작 요청 (프로젝트 경로: ${projectRoot})`)
-    return await serviceManager.evolutionServerManager.startApiServer(
+    return await serviceManager.papyrusServerManager.startApiServer(
       projectRoot,
     )
   })
 
   ipcMain.handle('service:stopApi', async () => {
     console.log('🛑 [IPC] API 서버 중지 요청')
-    return await serviceManager.evolutionServerManager.stopApiServer()
+    return await serviceManager.papyrusServerManager.stopApiServer()
   })
 
   // 관리자 웹 서버 제어
@@ -554,14 +595,14 @@ function registerIpcHandlers() {
     console.log(
       `🚀 [IPC] 관리자 웹 서버 시작 요청 (프로젝트 경로: ${projectRoot})`,
     )
-    return await serviceManager.evolutionServerManager.startWebAdminServer(
+    return await serviceManager.papyrusServerManager.startWebAdminServer(
       projectRoot,
     )
   })
 
   ipcMain.handle('service:stopWebAdmin', async () => {
     console.log('🛑 [IPC] 관리자 웹 서버 중지 요청')
-    return await serviceManager.evolutionServerManager.stopWebAdminServer()
+    return await serviceManager.papyrusServerManager.stopWebAdminServer()
   })
 
   // 사용자 웹 서버 제어
@@ -572,34 +613,14 @@ function registerIpcHandlers() {
     console.log(
       `🚀 [IPC] 사용자 웹 서버 시작 요청 (프로젝트 경로: ${projectRoot})`,
     )
-    return await serviceManager.evolutionServerManager.startWebUserServer(
+    return await serviceManager.papyrusServerManager.startWebUserServer(
       projectRoot,
     )
   })
 
   ipcMain.handle('service:stopWebUser', async () => {
     console.log('🛑 [IPC] 사용자 웹 서버 중지 요청')
-    return await serviceManager.evolutionServerManager.stopWebUserServer()
-  })
-
-  // 로그 조회
-  ipcMain.handle(
-    'service:getContainerLogs',
-    async (_event, containerName: string) => {
-      return await serviceManager.dockerManager.getContainerLogs(containerName)
-    },
-  )
-
-  ipcMain.handle('service:getApiLogs', async () => {
-    return await serviceManager.evolutionServerManager.getApiServerLogs()
-  })
-
-  ipcMain.handle('service:getWebAdminLogs', async () => {
-    return await serviceManager.evolutionServerManager.getWebAdminServerLogs()
-  })
-
-  ipcMain.handle('service:getWebUserLogs', async () => {
-    return await serviceManager.evolutionServerManager.getWebUserServerLogs()
+    return await serviceManager.papyrusServerManager.stopWebUserServer()
   })
 
   // 웹 열기
@@ -611,6 +632,176 @@ function registerIpcHandlers() {
   ipcMain.handle('service:openExternal', async (_event, url: string) => {
     const { shell } = require('electron')
     await shell.openExternal(url)
+  })
+
+  // 패키지 업데이트 확인
+  ipcMain.handle('service:checkPackageUpdates', async () => {
+    const { exec } = require('child_process')
+    const { promisify } = require('util')
+    const execAsync = promisify(exec)
+
+    try {
+      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
+      console.log('📦 패키지 업데이트 확인 중...')
+
+      // npm outdated를 사용하여 업데이트 가능한 패키지 확인
+      const { stdout } = await execAsync('npm outdated --json', {
+        cwd: projectRoot,
+        timeout: 30000,
+      })
+
+      if (!stdout || stdout.trim() === '') {
+        console.log('✅ 모든 패키지가 최신 버전입니다')
+        return []
+      }
+
+      const outdated = JSON.parse(stdout)
+      const updates: Array<{
+        name: string
+        current: string
+        latest: string
+        updateType: string
+      }> = []
+
+      for (const [name, info] of Object.entries(outdated)) {
+        const pkg = info as any
+        const current = pkg.current || '알 수 없음'
+        const latest = pkg.latest || pkg.wanted || '알 수 없음'
+
+        // 버전 비교하여 업데이트 타입 결정
+        let updateType = 'patch'
+        if (current && latest && current !== latest) {
+          const currentParts = current.split('.').map(Number)
+          const latestParts = latest.split('.').map(Number)
+
+          if (latestParts[0] > currentParts[0]) {
+            updateType = 'major'
+          } else if (latestParts[1] > currentParts[1]) {
+            updateType = 'minor'
+          }
+        }
+
+        updates.push({
+          name,
+          current,
+          latest,
+          updateType,
+        })
+      }
+
+      console.log(`📦 업데이트 가능한 패키지: ${updates.length}개`)
+      return updates
+    } catch (error: any) {
+      console.error('❌ 패키지 업데이트 확인 실패:', error.message)
+      return []
+    }
+  })
+
+  // 설치된 패키지 목록 가져오기
+  ipcMain.handle('service:getInstalledPackages', async () => {
+    const fs = require('fs')
+    
+    try {
+      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
+      const packageJsonPath = path.join(projectRoot, 'package.json')
+      
+      console.log('📚 package.json 읽기:', packageJsonPath)
+      
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+      const dependencies = packageJson.dependencies || {}
+      const devDependencies = packageJson.devDependencies || {}
+      
+      const packages: Array<{
+        name: string
+        version: string
+        type: string
+      }> = []
+      
+      // 프로덕션 의존성
+      for (const [name, version] of Object.entries(dependencies)) {
+        packages.push({
+          name,
+          version: String(version),
+          type: 'prod',
+        })
+      }
+      
+      // 개발 의존성
+      for (const [name, version] of Object.entries(devDependencies)) {
+        packages.push({
+          name,
+          version: String(version),
+          type: 'dev',
+        })
+      }
+      
+      // 이름순 정렬
+      packages.sort((a, b) => a.name.localeCompare(b.name))
+      
+      console.log(`📚 전체 패키지: ${packages.length}개 (Prod: ${Object.keys(dependencies).length}, Dev: ${Object.keys(devDependencies).length})`)
+      return packages
+    } catch (error: any) {
+      console.error('❌ 패키지 목록 로딩 실패:', error.message)
+      return []
+    }
+  })
+
+  // 패키지 상세 정보 가져오기
+  ipcMain.handle('service:getPackageInfo', async (_event, packageName: string) => {
+    const { exec } = require('child_process')
+    const { promisify } = require('util')
+    const execAsync = promisify(exec)
+
+    try {
+      console.log(`📦 패키지 정보 가져오기: ${packageName}`)
+
+      // npm view 명령어로 패키지 정보 가져오기
+      const { stdout } = await execAsync(
+        `npm view ${packageName} description version author license homepage repository keywords --json`,
+        {
+          timeout: 10000,
+        }
+      )
+
+      const info = JSON.parse(stdout)
+      
+      // repository URL 정리
+      let repositoryUrl = ''
+      if (info.repository) {
+        if (typeof info.repository === 'string') {
+          repositoryUrl = info.repository
+        } else if (info.repository.url) {
+          repositoryUrl = info.repository.url.replace(/^git\+/, '').replace(/\.git$/, '')
+        }
+      }
+
+      // author 정리
+      let authorName = ''
+      if (info.author) {
+        if (typeof info.author === 'string') {
+          authorName = info.author
+        } else if (info.author.name) {
+          authorName = info.author.name
+        }
+      }
+
+      const packageInfo = {
+        name: packageName,
+        description: info.description || '',
+        latestVersion: info.version || '',
+        author: authorName,
+        license: info.license || '',
+        homepage: info.homepage || '',
+        repository: repositoryUrl,
+        keywords: Array.isArray(info.keywords) ? info.keywords.slice(0, 10) : [],
+      }
+
+      console.log(`✅ 패키지 정보 가져오기 성공: ${packageName}`)
+      return packageInfo
+    } catch (error: any) {
+      console.error(`❌ 패키지 정보 가져오기 실패 (${packageName}):`, error.message)
+      return null
+    }
   })
 
   // 포트 체크
@@ -632,12 +823,12 @@ function registerIpcHandlers() {
 
   // API 빌드
   ipcMain.handle('service:buildApi', async () => {
-    return await serviceManager.evolutionServerManager.buildApi()
+    return await serviceManager.papyrusServerManager.buildApi()
   })
 
   // SDK 빌드
   ipcMain.handle('service:buildSdk', async () => {
-    return await serviceManager.evolutionServerManager.buildNestiaSdk()
+    return await serviceManager.papyrusServerManager.buildNestiaSdk()
   })
 
   // 데이터베이스 마이그레이션
@@ -708,27 +899,23 @@ app.whenReady().then(async () => {
 
   createTray()
 
-  // GUI 모드일 때는 자동으로 창 열기
-  if (process.env.ELECTRON_SHOW_DOCK) {
-    createWindow()
-  }
+  // macOS에서는 항상 GUI 창을 열기 (트레이 아이콘이 잘 안 보임)
+  createWindow()
 
-  // 환경 변수에서 프로젝트 경로 읽기
-  const projectRoot = process.env.PAPYRUS_PROJECT_ROOT
-  if (projectRoot) {
-    serviceManager.setProjectRoot(projectRoot)
-    console.log(`📁 프로젝트 루트: ${projectRoot}`)
-  }
+  // 프로젝트 루트 설정 (환경 변수 또는 기본값)
+  const projectRoot =
+    process.env.PAPYRUS_PROJECT_ROOT || '/Users/yendoo/dev/papyrus'
+  serviceManager.setProjectRoot(projectRoot)
+  console.log(`📁 프로젝트 루트: ${projectRoot}`)
 
   logBox('시스템 트레이 준비 완료', [
     '✅ 트레이 아이콘 생성됨',
+    '✅ GUI 창이 열렸습니다',
     '',
     '📍 사용 방법:',
-    '   1. 작업 표시줄 우측 하단',
-    '   2. 숨겨진 아이콘 (▲) 클릭',
-    '   3. 아이콘 우클릭 → "GUI 열기"',
-    '',
-    '💡 GUI에서 모든 서비스를 관리할 수 있습니다',
+    '   • GUI 창에서 모든 서비스 관리',
+    '   • 창을 닫으면 트레이로 이동',
+    '   • 상단 메뉴바 아이콘 클릭하여 다시 열기',
   ])
 })
 
