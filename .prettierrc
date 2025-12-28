@@ -1,0 +1,24 @@
+{
+  "plugins": [
+    "prettier-plugin-prisma",
+    "@trivago/prettier-plugin-sort-imports"
+  ],
+  "semi": false,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "printWidth": 80,
+  "endOfLine": "lf",
+  "importOrder": [
+    "^react$",
+    "^react-dom$",
+    "^@nestjs/(.*)$",
+    "^@prisma/(.*)$",
+    "^@tanstack/(.*)$",
+    "^[a-z]",
+    "^@",
+    "^~",
+    "^[./]"
+  ],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true
+}

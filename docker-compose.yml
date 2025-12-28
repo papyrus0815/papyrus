@@ -1,0 +1,69 @@
+# Docker Compose 서비스 정의
+services:
+  # Nginx 리버스 프록시 서버
+  nginx:
+    # Alpine Linux 기반의 경량 Nginx 이미지 사용
+    image: nginx:alpine
+    # 컨테이너 이름 지정 (네트워크에서 식별용)
+    container_name: papyrus-nginx
+    # 포트 매핑: 호스트:컨테이너 (환경 변수 사용)
+    ports:
+      ## 호스트 포트:컨테이너 포트
+      - '${NGINX_HTTP_PORT:-80}:80' # HTTP 포트 (기본값: 80)
+      - '${NGINX_HTTPS_PORT:-443}:443' # HTTPS 포트 (기본값: 443)
+    # 볼륨 마운트: 호스트 파일을 컨테이너 내부로 연결
+    volumes:
+      # Nginx 메인 설정 파일 (읽기 전용)
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # 추가 설정 파일들 (읽기 전용)
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      # SSL 인증서 파일들 (읽기 전용)
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    # 의존성: MySQL이 먼저 시작되어야 함
+    depends_on:
+      - mysql
+    # 커스텀 네트워크 사용 (서비스 간 통신)
+    networks:
+      - ${DOCKER_NETWORK_NAME:-papyrus-network}
+
+  # MySQL 데이터베이스 서버
+  mysql:
+    # MySQL 8.0 공식 이미지 사용
+    image: mysql:8.0
+    # 컨테이너 이름 지정
+    container_name: mysql
+    # 환경 변수로 데이터베이스 초기 설정
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-papyrus} # root 사용자 비밀번호
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-papyrus} # 생성할 데이터베이스 이름
+      MYSQL_USER: ${MYSQL_USER:-papyrus} # 생성할 사용자 이름
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-papyrus} # 사용자 비밀번호
+
+    # MySQL 인증 플러그인 설정 (호환성을 위해)
+    command: --default-authentication-plugin=mysql_native_password
+
+    # 포트 매핑: 호스트 -> 컨테이너 (환경 변수 사용)
+    ports:
+      - '${MYSQL_PORT:-3307}:3306' # MySQL 포트 (기본값: 3307)
+    # 데이터 영속성을 위한 볼륨 마운트
+    volumes:
+      # 데이터베이스 데이터 영속 저장 (Docker 볼륨 사용)
+      - papyrus_mysql-data:/var/lib/mysql
+      # 초기화 SQL 스크립트 실행 (읽기 전용)
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # 커스텀 네트워크 사용
+    networks:
+      - ${DOCKER_NETWORK_NAME:-papyrus-network}
+
+# Docker 볼륨 정의 (데이터 영속성)
+volumes:
+  # MySQL 데이터베이스 파일 저장용 볼륨
+  # 컨테이너가 삭제되어도 데이터가 보존됨
+  papyrus_mysql-data:
+
+# Docker 네트워크 정의 (서비스 간 통신)
+networks:
+  # 커스텀 브리지 네트워크
+  # 서비스들이 서로 통신할 수 있도록 함
+  papyrus-network:
+    driver: bridge # 기본 브리지 네트워크 드라이버 사용

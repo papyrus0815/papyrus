@@ -1,0 +1,185 @@
+/// ║                           REFERENCE DATA DOMAIN                              ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 시스템 전체에서 공통으로 사용되는 참조 데이터를 관리합니다.
+/// 
+/// 주요 기능:
+/// - 화폐(Currency): 국제 화폐 코드, 심볼, 명칭 관리
+/// - 언어(Language): 언어 코드, 명칭, 원어명 관리  
+/// - 측정단위(Measurement): 길이, 무게 등 물리적 측정 단위
+/// - 기후(Climate): 기후 유형, 평균 온도, 강수량 정보
+/// - 고향(HomeTown): 인물의 출신지 정보 (도시/행정구역)
+/// 
+/// 특징:
+/// - 대부분 정적 마스터 데이터
+/// - 다른 도메인에서 외래키로 참조
+/// - 시스템 초기화 시 시드 데이터로 입력
+
+// ========================
+// Enums
+// ========================
+
+/// 측정 단위 타입
+enum MeasurementType {
+  /// 무게
+  WEIGHT
+  /// 길이
+  LENGTH
+}
+
+/// 고향 유형
+enum HometownType {
+  /// 도시
+  CITY
+  /// 행정구역
+  ADMIN_DIVISION
+}
+
+/// 시설 유형
+enum FacilityType {
+  /// 본사
+  HEADQUARTERS
+  /// 공장
+  FACTORY
+  /// 연구소(R&D)
+  RND
+  /// 사무소/지사
+  OFFICE
+  /// 기타
+  OTHER
+}
+
+// ========================
+// Currency
+// ========================
+model Currency {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 화폐 코드 (예: USD, KRW)
+  code String @unique @db.VarChar(10)
+
+  /// 화폐명
+  name String @db.VarChar(100)
+
+  /// 심볼(기호)
+  symbol String @db.VarChar(10)
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  //--- 관계 필드
+  countries Country[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ref_currency")
+}
+
+// ========================
+// Language
+// ========================
+model Language {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 언어 코드 (예: en, ko)
+  code String @unique @db.VarChar(10)
+
+  /// 언어명
+  name String @db.VarChar(100)
+
+  /// 원어명
+  originalName String? @map("original_name") @db.VarChar(50)
+
+  //--- 관계 필드
+  countries Country[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ref_language")
+}
+
+// ========================
+// Measurement
+// ========================
+model Measurement {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 단위 타입(WEIGHT, LENGTH)
+  type MeasurementType
+
+  /// 단위 코드
+  code String @unique @db.VarChar(10)
+
+  /// 단위명
+  name String @db.VarChar(100)
+
+  /// 심볼
+  symbol String? @db.VarChar(10)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ref_measurement")
+}
+
+// ========================
+// Climate
+// ========================
+model Climate {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 기후명
+  name String @unique @db.VarChar(50)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 평균 온도
+  avgTemp Float?
+
+  /// 강수량
+  rainfall Float?
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ref_climate")
+}
+
+// ========================
+// HomeTown
+// ========================
+model HomeTown {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 고향 유형
+  type HometownType
+
+  //--- 외래키
+  cityId                   String? @map("city_id") @db.Char(36)
+  administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
+
+  //--- 관계 필드
+  city                   City?                   @relation(fields: [cityId], references: [id])
+  administrativeDivision AdministrativeDivision? @relation(fields: [administrativeDivisionId], references: [id])
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ref_hometown")
+}

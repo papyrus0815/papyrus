@@ -1,0 +1,621 @@
+/// ║                           EVENT MILITARY DOMAIN                            ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 군사 사건의 상세 정보를 정규화된 테이블 구조로 관리합니다.
+/// 
+/// 주요 모델:
+/// - BelligerentSide: 교전 세력 (진영)
+/// - CountryInSide: 진영 내 참전 국가
+/// - EventCountryRelationNew: 국가 간 관계
+/// - Treaty: 조약
+/// - Alliance: 동맹
+/// - MilitaryDetailsNorm: 군사 상세 정보
+/// - CasualtiesData: 피해 규모
+
+// ========================
+// 교전 세력 (진영)
+// ========================
+model BelligerentSide {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 진영명 (예: 연합군, 추축국, 제1군단)
+  name String @db.VarChar(100)
+
+  /// 진영 레벨
+  level SideLevel? @default(COALITION)
+
+  /// 지휘관 (텍스트)
+  commander String? @db.VarChar(200)
+
+  /// 지휘관 인물 FK
+  commanderPersonId String? @map("commander_person_id") @db.Char(36)
+  commanderPerson   Person? @relation(fields: [commanderPersonId], references: [id], onDelete: SetNull)
+
+  /// 총 병력 규모
+  forces String? @db.VarChar(100)
+
+  /// 진영 설명
+  description String? @db.Text
+
+  /// 상위 진영 FK (하위 사건인 경우 상위 사건의 진영 참조)
+  parentSideId String?          @map("parent_side_id") @db.Char(36)
+  parentSide   BelligerentSide? @relation("SideHierarchy", fields: [parentSideId], references: [id], onDelete: SetNull)
+  childSides   BelligerentSide[] @relation("SideHierarchy")
+
+  /// 색상 코드 (UI용)
+  color String? @db.VarChar(7)
+
+  /// 참전 국가 목록
+  countries CountryInSide[]
+
+  /// 투입 부대 목록
+  deployedUnits SideDeployedUnit[]
+
+  /// 사용 무기/장비 목록
+  weaponsUsed SideWeapon[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_belligerent_side_eventId")
+  @@index([parentSideId], name: "idx_belligerent_side_parentSideId")
+  @@map("belligerent_side")
+}
+
+// ========================
+// 진영 내 참전 국가
+// ========================
+model CountryInSide {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 진영 FK
+  sideId String          @map("side_id") @db.Char(36)
+  side   BelligerentSide @relation(fields: [sideId], references: [id], onDelete: Cascade)
+
+  /// 현대 국가 FK
+  countryId String?  @map("country_id") @db.Char(36)
+  country   Country? @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  /// 역사적 국가 FK
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  /// 지휘관 (국가별)
+  commander String? @db.VarChar(200)
+
+  /// 지휘관 인물 FK
+  commanderPersonId String? @map("commander_person_id") @db.Char(36)
+  commanderPerson   Person? @relation(fields: [commanderPersonId], references: [id], onDelete: SetNull)
+
+  /// 병력 규모 (국가별)
+  forces String? @db.VarChar(100)
+
+  /// 참전일
+  joinDate DateTime? @map("join_date")
+
+  /// 참전 이유
+  joinReason String? @map("join_reason") @db.Text
+
+  /// 철수일
+  withdrawDate DateTime? @map("withdraw_date")
+
+  /// 철수 이유
+  withdrawReason String? @map("withdraw_reason") @db.Text
+
+  /// 역할 (예: 주도국, 지원국)
+  role String? @db.VarChar(100)
+
+  /// 참여도
+  participation ParticipationType? @default(FULL)
+
+  /// 역할/설명
+  description String? @db.Text
+
+  /// 투입 부대 목록
+  deployedUnits CountryDeployedUnit[]
+
+  /// 사용 무기/장비 목록
+  weaponsUsed CountryWeapon[]
+
+  /// 피해 규모
+  casualties CountryCasualties?
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sideId], name: "idx_country_in_side_sideId")
+  @@index([countryId], name: "idx_country_in_side_countryId")
+  @@index([historicalCountryId], name: "idx_country_in_side_histCountryId")
+  @@map("country_in_side")
+}
+
+// ========================
+// 국가 간 관계 (정규화)
+// ========================
+model EventCountryRelationNew {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 출발 국가 (현대)
+  fromCountryId String?  @map("from_country_id") @db.Char(36)
+  fromCountry   Country? @relation("FromCountry", fields: [fromCountryId], references: [id], onDelete: Cascade)
+
+  /// 출발 국가 (역사적)
+  fromHistoricalCountryId String?            @map("from_historical_country_id") @db.Char(36)
+  fromHistoricalCountry   HistoricalCountry? @relation("FromHistoricalCountry", fields: [fromHistoricalCountryId], references: [id], onDelete: Cascade)
+
+  /// 도착 국가 (현대)
+  toCountryId String?  @map("to_country_id") @db.Char(36)
+  toCountry   Country? @relation("ToCountry", fields: [toCountryId], references: [id], onDelete: Cascade)
+
+  /// 도착 국가 (역사적)
+  toHistoricalCountryId String?            @map("to_historical_country_id") @db.Char(36)
+  toHistoricalCountry   HistoricalCountry? @relation("ToHistoricalCountry", fields: [toHistoricalCountryId], references: [id], onDelete: Cascade)
+
+  /// 관계 타입
+  relationType MilitaryRelationType
+
+  /// 관계 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 관계 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 관계 강도 (1-10)
+  strength Int? @db.TinyInt
+
+  /// 관계 설명
+  description String? @db.Text
+
+  /// 관련 조약 목록
+  treaties EventCountryRelationTreaty[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_event_country_rel_new_eventId")
+  @@index([fromCountryId], name: "idx_event_country_rel_new_fromCountryId")
+  @@index([toCountryId], name: "idx_event_country_rel_new_toCountryId")
+  @@map("event_country_relation_new")
+}
+
+// ========================
+// 조약
+// ========================
+model Treaty {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 조약명
+  name String @db.VarChar(200)
+
+  /// 서명일
+  signDate DateTime @map("sign_date")
+
+  /// 만료일
+  expiryDate DateTime? @map("expiry_date")
+
+  /// 위반일
+  violationDate DateTime? @map("violation_date")
+
+  /// 조약 타입
+  type TreatyType
+
+  /// 조약 조항 (JSON 배열)
+  terms Json @db.Json
+
+  /// 조약 설명
+  description String? @db.Text
+
+  /// 서명국 목록
+  signatories TreatySignatory[]
+
+  /// 관련된 국가 관계 목록
+  countryRelations EventCountryRelationTreaty[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_treaty_eventId")
+  @@map("treaty")
+}
+
+// ========================
+// 조약 서명국
+// ========================
+model TreatySignatory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 조약 FK
+  treatyId String @map("treaty_id") @db.Char(36)
+  treaty   Treaty @relation(fields: [treatyId], references: [id], onDelete: Cascade)
+
+  /// 현대 국가 FK
+  countryId String?  @map("country_id") @db.Char(36)
+  country   Country? @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  /// 역사적 국가 FK
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  /// 서명일 (조약 서명일과 다를 수 있음)
+  signedAt DateTime? @map("signed_at")
+
+  /// 비고
+  note String? @db.Text
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([treatyId], name: "idx_treaty_signatory_treatyId")
+  @@map("treaty_signatory")
+}
+
+// ========================
+// 관계-조약 연결 테이블
+// ========================
+model EventCountryRelationTreaty {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 관계 FK
+  relationId String                   @map("relation_id") @db.Char(36)
+  relation   EventCountryRelationNew @relation(fields: [relationId], references: [id], onDelete: Cascade)
+
+  /// 조약 FK
+  treatyId String @map("treaty_id") @db.Char(36)
+  treaty   Treaty @relation(fields: [treatyId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([relationId, treatyId])
+  @@map("event_country_relation_treaty")
+}
+
+// ========================
+// 동맹
+// ========================
+model Alliance {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 동맹명 (예: NATO, 바르샤바 조약기구)
+  name String @db.VarChar(200)
+
+  /// 결성일
+  formationDate DateTime @map("formation_date")
+
+  /// 해체일
+  dissolutionDate DateTime? @map("dissolution_date")
+
+  /// 동맹 설명
+  description String? @db.Text
+
+  /// 가입국 목록
+  members AllianceMember[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_alliance_eventId")
+  @@map("alliance")
+}
+
+// ========================
+// 동맹 가입국
+// ========================
+model AllianceMember {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 동맹 FK
+  allianceId String   @map("alliance_id") @db.Char(36)
+  alliance   Alliance @relation(fields: [allianceId], references: [id], onDelete: Cascade)
+
+  /// 현대 국가 FK
+  countryId String?  @map("country_id") @db.Char(36)
+  country   Country? @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  /// 역사적 국가 FK
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  /// 가입일
+  joinDate DateTime @map("join_date")
+
+  /// 탈퇴일
+  leaveDate DateTime? @map("leave_date")
+
+  /// 가입 상태
+  status AllianceMemberStatus
+
+  /// 비고
+  note String? @db.Text
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([allianceId], name: "idx_alliance_member_allianceId")
+  @@map("alliance_member")
+}
+
+// ========================
+// 군사 상세 정보 (정규화)
+// ========================
+model MilitaryDetailsNorm {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK (1:1)
+  eventId String @unique @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 전투 유형
+  conflictType ConflictType?
+
+  /// 목표
+  objective String? @db.Text
+
+  /// 전술
+  tactics String? @db.Text
+
+  /// 전략
+  strategy String? @db.Text
+
+  /// 결과
+  outcome String? @db.Text
+
+  /// 영토 변화
+  territoryChanges String? @map("territory_changes") @db.Text
+
+  /// 관련 조약
+  treaty String? @db.Text
+
+  /// 전략적 영향
+  strategicImpact String? @map("strategic_impact") @db.Text
+
+  /// 교전 형태 목록
+  combatTypes MilitaryDetailsCombatType[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("military_details_norm")
+}
+
+// ========================
+// 군사 상세 정보 - 교전 형태 연결
+// ========================
+model MilitaryDetailsCombatType {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 군사 상세 정보 FK
+  militaryDetailsId String              @map("military_details_id") @db.Char(36)
+  militaryDetails   MilitaryDetailsNorm @relation(fields: [militaryDetailsId], references: [id], onDelete: Cascade)
+
+  /// 교전 형태
+  combatType CombatType
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([militaryDetailsId, combatType])
+  @@map("military_details_combat_type")
+}
+
+// ========================
+// 피해 규모 (진영별)
+// ========================
+model CasualtiesData {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 진영 FK
+  sideId String? @map("side_id") @db.Char(36)
+
+  /// 진영명 (텍스트, 역호환용)
+  sideName String? @map("side_name") @db.VarChar(100)
+
+  /// 군사 피해 - 사망
+  militaryKilled String? @map("military_killed") @db.VarChar(100)
+
+  /// 군사 피해 - 부상
+  militaryWounded String? @map("military_wounded") @db.VarChar(100)
+
+  /// 군사 피해 - 실종
+  militaryMissing String? @map("military_missing") @db.VarChar(100)
+
+  /// 군사 피해 - 포로
+  militaryCaptured String? @map("military_captured") @db.VarChar(100)
+
+  /// 민간 피해 - 사망
+  civilianKilled String? @map("civilian_killed") @db.VarChar(100)
+
+  /// 민간 피해 - 부상
+  civilianWounded String? @map("civilian_wounded") @db.VarChar(100)
+
+  /// 민간 피해 - 난민
+  civilianDisplaced String? @map("civilian_displaced") @db.VarChar(100)
+
+  /// 총 피해
+  total String? @db.VarChar(100)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_casualties_data_eventId")
+  @@map("casualties_data")
+}
+
+// ========================
+// 국가별 피해 규모
+// ========================
+model CountryCasualties {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 FK (CountryInSide)
+  countryInSideId String        @unique @map("country_in_side_id") @db.Char(36)
+  countryInSide   CountryInSide @relation(fields: [countryInSideId], references: [id], onDelete: Cascade)
+
+  /// 군사 피해 - 사망
+  militaryKilled String? @map("military_killed") @db.VarChar(100)
+
+  /// 군사 피해 - 부상
+  militaryWounded String? @map("military_wounded") @db.VarChar(100)
+
+  /// 군사 피해 - 실종
+  militaryMissing String? @map("military_missing") @db.VarChar(100)
+
+  /// 군사 피해 - 포로
+  militaryCaptured String? @map("military_captured") @db.VarChar(100)
+
+  /// 민간 피해 - 사망
+  civilianKilled String? @map("civilian_killed") @db.VarChar(100)
+
+  /// 민간 피해 - 부상
+  civilianWounded String? @map("civilian_wounded") @db.VarChar(100)
+
+  /// 민간 피해 - 난민
+  civilianDisplaced String? @map("civilian_displaced") @db.VarChar(100)
+
+  /// 총 피해
+  total String? @db.VarChar(100)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("country_casualties")
+}
+
+// ========================
+// 진영 - 투입 부대 연결
+// ========================
+model SideDeployedUnit {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 진영 FK
+  sideId String          @map("side_id") @db.Char(36)
+  side   BelligerentSide @relation(fields: [sideId], references: [id], onDelete: Cascade)
+
+  /// 군사 유닛 FK
+  militaryUnitId String       @map("military_unit_id") @db.Char(36)
+  militaryUnit   MilitaryUnit @relation(fields: [militaryUnitId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([sideId, militaryUnitId])
+  @@map("side_deployed_unit")
+}
+
+// ========================
+// 국가 - 투입 부대 연결
+// ========================
+model CountryDeployedUnit {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 FK (CountryInSide)
+  countryInSideId String        @map("country_in_side_id") @db.Char(36)
+  countryInSide   CountryInSide @relation(fields: [countryInSideId], references: [id], onDelete: Cascade)
+
+  /// 군사 유닛 FK
+  militaryUnitId String       @map("military_unit_id") @db.Char(36)
+  militaryUnit   MilitaryUnit @relation(fields: [militaryUnitId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([countryInSideId, militaryUnitId])
+  @@map("country_deployed_unit")
+}
+
+// ========================
+// 진영 - 사용 무기 연결
+// ========================
+model SideWeapon {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 진영 FK
+  sideId String          @map("side_id") @db.Char(36)
+  side   BelligerentSide @relation(fields: [sideId], references: [id], onDelete: Cascade)
+
+  /// 무기 FK (확장 가능: Weapon, GroundVehicle, Aircraft, NavalVessel)
+  weaponId String? @map("weapon_id") @db.Char(36)
+  groundVehicleId String? @map("ground_vehicle_id") @db.Char(36)
+  aircraftId String? @map("aircraft_id") @db.Char(36)
+  navalVesselId String? @map("naval_vessel_id") @db.Char(36)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("side_weapon")
+}
+
+// ========================
+// 국가 - 사용 무기 연결
+// ========================
+model CountryWeapon {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 FK (CountryInSide)
+  countryInSideId String        @map("country_in_side_id") @db.Char(36)
+  countryInSide   CountryInSide @relation(fields: [countryInSideId], references: [id], onDelete: Cascade)
+
+  /// 무기 FK (확장 가능: Weapon, GroundVehicle, Aircraft, NavalVessel)
+  weaponId String? @map("weapon_id") @db.Char(36)
+  groundVehicleId String? @map("ground_vehicle_id") @db.Char(36)
+  aircraftId String? @map("aircraft_id") @db.Char(36)
+  navalVesselId String? @map("naval_vessel_id") @db.Char(36)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("country_weapon")
+}
+

@@ -1,0 +1,172 @@
+                    {cityDetailFilter === 'universities' &&
+                      selectedCityDetails.universities.map((uni, index) => {
+                        const categoryColor = {
+                          bg: '#f5f3ff',
+                          text: '#5b21b6',
+                          border: '#8b5cf6',
+                        }
+                        return (
+                          <motion.div
+                            key={index}
+                            initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{
+                              delay: index * 0.08,
+                              type: 'spring',
+                              stiffness: 120,
+                              damping: 15,
+                            }}
+                            whileHover={{ scale: 1.02, x: 4 }}
+                            style={{
+                              padding: '16px',
+                              marginBottom:
+                                index < selectedCityDetails.universities.length - 1
+                                  ? '12px'
+                                  : '0',
+                              cursor: 'pointer',
+                              borderRadius: '12px',
+                              border: '2px solid transparent',
+                              background: '#ffffff',
+                              boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
+                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                              position: 'relative',
+                              overflow: 'hidden',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = categoryColor.border
+                              e.currentTarget.style.boxShadow = `0 6px 20px ${categoryColor.border}30`
+                              e.currentTarget.style.background = `linear-gradient(135deg, #ffffff 0%, ${categoryColor.bg}30 100%)`
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = 'transparent'
+                              e.currentTarget.style.boxShadow =
+                                '0 1px 4px rgba(0, 0, 0, 0.04)'
+                              e.currentTarget.style.background = '#ffffff'
+                            }}
+                          >
+                            {/* 배경 장식 - 작은 원형 */}
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: '-30px',
+                                right: '-30px',
+                                width: '80px',
+                                height: '80px',
+                                borderRadius: '50%',
+                                background: `radial-gradient(circle, ${categoryColor.bg} 0%, transparent 70%)`,
+                                opacity: 0.4,
+                                pointerEvents: 'none',
+                              }}
+                            />
+
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                marginBottom: '10px',
+                                position: 'relative',
+                                zIndex: 1,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  padding: '5px 12px',
+                                  fontSize: '11px',
+                                  background: `linear-gradient(135deg, ${categoryColor.bg} 0%, ${categoryColor.bg}dd 100%)`,
+                                  color: categoryColor.text,
+                                  border: `2px solid ${categoryColor.border}`,
+                                  borderRadius: '8px',
+                                  fontWeight: 800,
+                                  letterSpacing: '-0.01em',
+                                }}
+                              >
+                                {uni.type}
+                              </span>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  padding: '4px 10px',
+                                  background:
+                                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                                  borderRadius: '7px',
+                                  border: '1px solid #cbd5e1',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: '11px',
+                                    color: '#1e293b',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  #{index + 1}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize: '14px',
+                                fontWeight: 800,
+                                color: '#0f172a',
+                                marginBottom: '10px',
+                                lineHeight: '1.6',
+                                letterSpacing: '-0.02em',
+                                position: 'relative',
+                                zIndex: 1,
+                              }}
+                            >
+                              {uni.name}
+                            </div>
+
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                position: 'relative',
+                                zIndex: 1,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: '22px',
+                                  height: '22px',
+                                  borderRadius: '6px',
+                                  background: `linear-gradient(135deg, ${categoryColor.bg} 0%, ${categoryColor.bg}dd 100%)`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  border: `1px solid ${categoryColor.border}`,
+                                }}
+                              >
+                                <svg
+                                  width="11"
+                                  height="11"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke={categoryColor.text}
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+                                  <path d="M6 12v5c3 3 9 3 12 0v-5" />
+                                </svg>
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#64748b',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {uni.students}
+                              </span>
+                            </div>
+                          </motion.div>
+                        )
+                      })}

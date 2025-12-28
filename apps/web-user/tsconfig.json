@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["dom", "es2017"],
+    "allowJs": false,
+    "strict": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@api": ["../api/src/api/index.ts"],
+      "@api/*": ["../api/src/api/*"]
+    }
+  },
+  "include": ["src"]
+}
+

@@ -1,0 +1,175 @@
+/// ║                                SOCIETY DOMAIN                                ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 사회 구조와 문화적 요소들을 관리합니다.
+/// 
+/// 주요 기능:
+/// - 도서(Book): 역사적/현대적 문헌 관리
+///   • 저자, 출간연도, 요약 정보
+///   • 역사적 사건과의 연관성
+///   • 지식 전파와 문화적 영향
+/// 
+/// - 직업(Job): 사회적 역할과 계층
+///   • 계층적 직업 분류 체계
+///   • 시대별 직업의 변화
+///   • 사회적 지위와 역할 정의
+/// 
+/// - 민족(Ethnicity): 민족적 정체성
+///   • 민족 집단의 특성과 문화
+///   • 지리적 분포와 이주 역사
+///   • 국가 형성과의 연관성
+/// 
+/// 특징:
+/// - 사회 구조의 기본 단위들
+/// - 문화와 지식의 전승 매체
+/// - 인물과 국가를 연결하는 사회적 맥락
+/// - 시대적 변화와 지속성 모두 반영
+
+// ========================
+// Book
+// ========================
+model Book {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 책 제목
+  title String @db.VarChar(200)
+
+  /// (주) 저자명(단일 or 복수)
+  authorId String @db.Char(36)
+
+  /// 출간 연도
+  publishedYear Int?
+
+  /// 책 요약
+  summary String? @db.Text
+
+  /// 기타 메모
+  note String?
+
+  //--- 관계 필드
+  author Person      @relation(fields: [authorId], references: [id])
+  events BookEvent[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("book")
+}
+
+// ========================
+// BookEvent
+// ========================
+model BookEvent {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 어느 책?
+  bookId String @db.Char(36)
+
+  /// 어느 사건?
+  eventId String @db.Char(36)
+
+  /// 책-사건 연결 맥락
+  context String? @db.Text
+
+  /// 기타 메모
+  note String?
+
+  //--- 관계 필드
+  book  Book  @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("book_event")
+}
+
+// ========================
+// JobCategory
+// ========================
+model JobCategory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 카테고리명
+  name String @unique @db.VarChar(50)
+
+  /// 썸네일
+  thumbnailUrl String? @db.VarChar(255)
+
+  /// 상위 카테고리 ID
+  parentId String? @db.Char(36)
+
+  //--- 관계 필드
+  parent   JobCategory?  @relation("JobCategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children JobCategory[] @relation("JobCategoryHierarchy")
+  jobs     Job[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId], name: "idx_jobCategory_parentId")
+  @@map("category_job")
+}
+
+// ========================
+// Job
+// ========================
+model Job {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 직업명
+  title String @unique @db.VarChar(100)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 썸네일
+  thumbnailUrl String? @db.VarChar(255)
+
+  /// 카테고리 ID
+  categoryId String @db.Char(36)
+
+  //--- 관계 필드
+  category JobCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  persons  Person[]    @relation("JobToPerson")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([categoryId], name: "idx_job_categoryId")
+  @@map("ref_job")
+}
+
+// ========================
+// Ethnicity
+// ========================
+model Ethnicity {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 민족명
+  name String @unique @db.VarChar(100)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 썸네일
+  thumbnailUrl String? @db.VarChar(255)
+
+  //--- 관계 필드
+  countries Country[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ethnicity")
+}

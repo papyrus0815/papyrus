@@ -1,0 +1,3136 @@
+import React, { useState } from 'react'
+
+import { AnimatePresence, motion } from 'framer-motion'
+
+import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import * as CountryStyles from '@/pages/history/country/country.styles'
+
+import { historicalCountryMockData } from '../mock/historical-country.mock'
+import * as CountryDetailStyles from './CountryDetail.styles'
+import { LoadingOverlay } from './LoadingOverlay'
+
+// ============================================
+// 역사적 국가 전용 탭 타입
+// ============================================
+
+export type HistoricalCountryTab =
+  | 'overview' // 역사 개요
+  | 'events' // 주요 사건 (메인)
+  | 'figures' // 주요 인물
+  | 'succession' // 계승 관계
+  | 'territory' // 영토 변천
+  | 'culture' // 문화 유산
+
+// ============================================
+// 사건 상세 데이터 타입
+// ============================================
+
+interface EventPerson {
+  id: string
+  name: string
+  role: string
+  side: 'ally' | 'enemy' | 'neutral'
+  imageUrl?: string
+  achievements?: string[]
+}
+
+interface MilitaryUnit {
+  id: string
+  name: string
+  type: string
+  size: string
+  commander: string
+  casualties?: string
+}
+
+interface Strategy {
+  id: string
+  name: string
+  description: string
+  outcome: 'success' | 'failure' | 'partial'
+  date?: string
+}
+
+interface SubEvent {
+  id: string
+  date: string
+  name: string
+  description: string
+  location?: string
+  significance: string
+  casualties?: {
+    allies?: string
+    enemies?: string
+    civilians?: string
+  }
+}
+
+interface EventDetailData {
+  // 기본 정보
+  id: string
+  name: string
+  type: string
+  startDate: string
+  endDate?: string
+  location: string
+  description: string
+
+  // 배경 및 결과
+  background: string
+  outcome: string
+  significance: string
+
+  // 관련 세력
+  sides: {
+    name: string
+    countries: string[]
+    leaders: string[]
+  }[]
+
+  // 상세 데이터
+  subEvents: SubEvent[]
+  persons: EventPerson[]
+  militaryUnits: MilitaryUnit[]
+  strategies: Strategy[]
+
+  // 통계
+  statistics: {
+    duration: string
+    totalCasualties?: string
+    territoriesChanged?: string
+    economicImpact?: string
+  }
+
+  // 미디어
+  images?: string[]
+  maps?: string[]
+}
+
+interface HistoricalCountryDetailProps {
+  country: UnifiedCountry
+  isLoading?: boolean
+  onEdit?: (country: UnifiedCountry) => void
+  onDelete?: (id: string) => void
+}
+
+/**
+ * 역사적 국가 상세 페이지
+ */
+export function HistoricalCountryDetail({
+  country,
+  isLoading = false,
+  onEdit,
+  onDelete,
+}: HistoricalCountryDetailProps) {
+  const [activeTab, setActiveTab] = useState<HistoricalCountryTab>('overview')
+
+  // 존속 기간 포맷팅
+  const formatPeriod = () => {
+    const start = country.startYear
+      ? `${country.startEra === 'BC' ? '기원전 ' : ''}${country.startYear}년`
+      : '알 수 없음'
+    const end = country.endYear
+      ? `${country.endEra === 'BC' ? '기원전 ' : ''}${country.endYear}년`
+      : '현재'
+    return `${start} ~ ${end}`
+  }
+
+  // 존속 기간 계산
+  const calculateDuration = () => {
+    if (!country.startYear || !country.endYear) return null
+    const startYear =
+      country.startEra === 'BC' ? -country.startYear : country.startYear
+    const endYear = country.endEra === 'BC' ? -country.endYear : country.endYear
+    const duration = endYear - startYear
+    return duration > 0 ? `${duration}년` : null
+  }
+
+  return (
+    <CountryStyles.DetailPaneRelative>
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <LoadingOverlay key="loading" message="국가 정보를 불러오는 중..." />
+        ) : (
+          <motion.div
+            key={`content-${country.id}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ height: '100%', overflow: 'auto' }}
+          >
+            <CountryStyles.DetailPane
+              as={motion.div}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{ gap: 0 }}
+            >
+              {/* 역사적 국가 헤더 */}
+              <HistoricalCountryHeader
+                country={country}
+                period={formatPeriod()}
+                duration={calculateDuration()}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+
+              {/* 탭 네비게이션 */}
+              <HistoricalCountryTabs
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+              />
+
+              {/* 탭 콘텐츠 */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {activeTab === 'overview' && (
+                    <HistoricalOverviewSection country={country} />
+                  )}
+                  {activeTab === 'events' && (
+                    <HistoricalEventsSection country={country} />
+                  )}
+                  {activeTab === 'figures' && (
+                    <HistoricalFiguresSection country={country} />
+                  )}
+                  {activeTab === 'succession' && (
+                    <SuccessionSection country={country} />
+                  )}
+                  {activeTab === 'territory' && (
+                    <TerritorySection country={country} />
+                  )}
+                  {activeTab === 'culture' && (
+                    <CultureSection country={country} />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </CountryStyles.DetailPane>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </CountryStyles.DetailPaneRelative>
+  )
+}
+
+// ============================================
+// 역사적 국가 헤더
+// ============================================
+
+interface HistoricalCountryHeaderProps {
+  country: UnifiedCountry
+  period: string
+  duration: string | null
+  onEdit?: (country: UnifiedCountry) => void
+  onDelete?: (id: string) => void
+}
+
+function HistoricalCountryHeader({
+  country,
+  period,
+  duration,
+  onEdit,
+  onDelete,
+}: HistoricalCountryHeaderProps) {
+  return (
+    <div
+      style={{
+        padding: '32px 48px',
+        background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+        borderBottom: '2px solid #f1f5f9',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        {/* 국가명 & 액션 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            marginBottom: '24px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              gap: '24px',
+              alignItems: 'center',
+              flex: 1,
+            }}
+          >
+            {country.thumbnailUrl && (
+              <div
+                style={{
+                  width: '100px',
+                  height: '100px',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  border: '2px solid #e2e8f0',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+                  background: 'white',
+                }}
+              >
+                <img
+                  src={country.thumbnailUrl}
+                  alt={country.name}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+              </div>
+            )}
+            <div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginBottom: '8px',
+                }}
+              >
+                <h1
+                  style={{
+                    fontSize: '32px',
+                    fontWeight: 800,
+                    margin: 0,
+                    color: '#0f172a',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {country.name}
+                </h1>
+                {country.stateType && (
+                  <span
+                    style={{
+                      padding: '6px 14px',
+                      background:
+                        'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                      border: '2px solid #3b82f6',
+                      borderRadius: '10px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      color: '#1e40af',
+                      letterSpacing: '-0.01em',
+                    }}
+                  >
+                    {getStateTypeLabel(country.stateType)}
+                  </span>
+                )}
+              </div>
+              {country.enName && (
+                <p
+                  style={{
+                    fontSize: '15px',
+                    color: '#64748b',
+                    margin: 0,
+                    fontWeight: 600,
+                  }}
+                >
+                  {country.enName}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* 액션 버튼 */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {onEdit && (
+              <button
+                onClick={() => onEdit(country)}
+                style={{
+                  padding: '10px 20px',
+                  background: '#fff',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '10px',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f1f5f9'
+                  e.currentTarget.style.borderColor = '#cbd5e1'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#fff'
+                  e.currentTarget.style.borderColor = '#e5e7eb'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                편집
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => {
+                  if (
+                    window.confirm(`${country.name}을(를) 삭제하시겠습니까?`)
+                  ) {
+                    onDelete(country.id)
+                  }
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: '#fff',
+                  border: '2px solid #fee2e2',
+                  borderRadius: '10px',
+                  color: '#dc2626',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fef2f2'
+                  e.currentTarget.style.borderColor = '#fecaca'
+                  e.currentTarget.style.transform = 'translateY(-1px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#fff'
+                  e.currentTarget.style.borderColor = '#fee2e2'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
+              >
+                삭제
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 존속 기간 정보 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: duration ? 'repeat(2, 1fr)' : '1fr',
+            gap: '16px',
+          }}
+        >
+          <div
+            style={{
+              padding: '20px 24px',
+              background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+              border: '2px solid #3b82f6',
+              borderRadius: '14px',
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow =
+                '0 8px 24px rgba(59, 130, 246, 0.2)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
+            }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                color: '#1e40af',
+                marginBottom: '6px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              존속 기간
+            </div>
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 800,
+                color: '#0f172a',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {period}
+            </div>
+          </div>
+          {duration && (
+            <div
+              style={{
+                padding: '20px 24px',
+                background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                border: '2px solid #10b981',
+                borderRadius: '14px',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow =
+                  '0 8px 24px rgba(16, 185, 129, 0.2)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: '#065f46',
+                  marginBottom: '6px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                존속 기간
+              </div>
+              <div
+                style={{
+                  fontSize: '20px',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {duration}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 국가 형태 한글 라벨
+function getStateTypeLabel(stateType: string): string {
+  const labels: Record<string, string> = {
+    EMPIRE: '제국',
+    KINGDOM: '왕국',
+    REPUBLIC: '공화국',
+    DUCHY: '공국',
+    PRINCIPALITY: '공국',
+    CONFEDERATION: '연방',
+    CITY_STATE: '도시국가',
+    TRIBAL_UNION: '부족연합',
+    DYNASTY: '왕조',
+    OTHER: '기타',
+  }
+  return labels[stateType] || stateType
+}
+
+// ============================================
+// 탭 네비게이션
+// ============================================
+
+interface HistoricalCountryTabsProps {
+  activeTab: HistoricalCountryTab
+  onTabChange: (tab: HistoricalCountryTab) => void
+}
+
+function HistoricalCountryTabs({
+  activeTab,
+  onTabChange,
+}: HistoricalCountryTabsProps) {
+  const tabs: { id: HistoricalCountryTab; label: string }[] = [
+    { id: 'overview', label: '개요' },
+    { id: 'events', label: '주요 사건' },
+    { id: 'figures', label: '인물' },
+    { id: 'succession', label: '계승' },
+    { id: 'territory', label: '영토' },
+    { id: 'culture', label: '문화' },
+  ]
+
+  return (
+    <div
+      style={{
+        borderBottom: '2px solid #f3f4f6',
+        background: 'white',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          gap: '8px',
+          padding: '0 48px',
+        }}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            style={{
+              padding: '18px 28px',
+              background: 'transparent',
+              color: activeTab === tab.id ? '#667eea' : '#6b7280',
+              border: 'none',
+              borderBottom:
+                activeTab === tab.id
+                  ? '3px solid #667eea'
+                  : '3px solid transparent',
+              cursor: 'pointer',
+              fontSize: '15px',
+              fontWeight: 700,
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+              letterSpacing: '-0.01em',
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.color = '#111827'
+                e.currentTarget.style.background = '#fafafa'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.color = '#6b7280'
+                e.currentTarget.style.background = 'transparent'
+              }
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 역사 개요 섹션
+// ============================================
+
+function HistoricalOverviewSection({ country }: { country: UnifiedCountry }) {
+  // 국가 이름에서 mock 데이터 키 추출 (조선 → joseon, 고려 → goryeo)
+  const getMockDataKey = (name: string): 'joseon' | 'goryeo' | null => {
+    if (name.includes('조선')) return 'joseon'
+    if (name.includes('고려')) return 'goryeo'
+    return null
+  }
+
+  const dataKey = getMockDataKey(country.name)
+  const mockData = dataKey ? historicalCountryMockData[dataKey] : null
+
+  return (
+    <div
+      style={{
+        padding: '48px',
+        background: '#fafafa',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        {/* 설명 */}
+        {country.description && (
+          <div
+            style={{
+              padding: '40px',
+              background: 'white',
+              border: '1px solid #f0f0f0',
+              borderRadius: '16px',
+            }}
+          >
+            <h3
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                marginBottom: '20px',
+                color: '#111827',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              개요
+            </h3>
+            <p
+              style={{
+                fontSize: '16px',
+                lineHeight: '1.8',
+                color: '#4b5563',
+                whiteSpace: 'pre-wrap',
+                margin: 0,
+              }}
+            >
+              {country.description}
+            </p>
+          </div>
+        )}
+
+        {/* 기본 정보 그리드 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '20px',
+          }}
+        >
+          <InfoCard
+            label="국가 형태"
+            value={
+              country.stateType
+                ? getStateTypeLabel(country.stateType)
+                : '알 수 없음'
+            }
+            color="#667eea"
+          />
+          <InfoCard
+            label="위치"
+            value={
+              country.latitude && country.longitude
+                ? `${Number(country.latitude).toFixed(2)}°N, ${Number(country.longitude).toFixed(2)}°E`
+                : '한반도'
+            }
+            color="#764ba2"
+          />
+          {mockData?.events && (
+            <InfoCard
+              label="주요 사건"
+              value={`${mockData.events.length}건`}
+              color="#8b5cf6"
+            />
+          )}
+          {mockData?.figures && (
+            <InfoCard
+              label="주요 인물"
+              value={`${mockData.figures.length}명`}
+              color="#a78bfa"
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 주요 사건 섹션 - 사건 중심 설계
+// ============================================
+
+function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
+  const [selectedEvent, setSelectedEvent] = useState<string | null>(null)
+  const [selectedEventType, setSelectedEventType] = useState<string>('all')
+  const [eventDetailTab, setEventDetailTab] = useState<
+    'overview' | 'subevents' | 'persons' | 'military' | 'strategy'
+  >('overview')
+
+  const getMockDataKey = (name: string): 'joseon' | 'goryeo' | null => {
+    if (name.includes('조선')) return 'joseon'
+    if (name.includes('고려')) return 'goryeo'
+    return null
+  }
+
+  const dataKey = getMockDataKey(country.name)
+  const events = dataKey ? historicalCountryMockData[dataKey]?.events : null
+
+  // Mock 상세 데이터 (임진왜란 예시)
+  const eventDetails: Record<string, EventDetailData> = {
+    'imjin-war': {
+      id: 'imjin-war',
+      name: '임진왜란',
+      type: 'war',
+      startDate: '1592년 4월 13일',
+      endDate: '1598년 12월 16일',
+      location: '한반도 전역, 일본 규슈',
+      description:
+        '일본의 도요토미 히데요시가 조선을 침략하여 발발한 7년간의 전쟁',
+      background:
+        '도요토미 히데요시는 일본 통일 후 대륙 진출을 꿈꾸며 조선에 명나라 정벌의 길을 빌려달라고 요구했으나 거절당했다. 이에 1592년 4월, 15만 대군을 이끌고 부산포에 상륙하여 전쟁이 시작되었다.',
+      outcome:
+        '조선과 명나라 연합군의 승리로 일본군 철수. 그러나 조선은 국토 전역이 황폐화되고 막대한 인명 피해를 입었다.',
+      significance:
+        '조선의 국력이 크게 약화되었으나, 이순신 장군의 활약으로 제해권을 장악하여 전세를 역전시켰다. 임진왜란은 동아시아 3국의 정치 지형을 크게 변화시켰다.',
+      sides: [
+        {
+          name: '조선-명 연합군',
+          countries: ['조선', '명나라'],
+          leaders: ['선조', '이순신', '권율', '이여송'],
+        },
+        {
+          name: '일본군',
+          countries: ['일본'],
+          leaders: ['도요토미 히데요시', '고니시 유키나가', '가토 기요마사'],
+        },
+      ],
+      subEvents: [
+        {
+          id: 'busan-landing',
+          date: '1592년 4월 13일',
+          name: '부산포 전투',
+          description:
+            '고니시 유키나가가 이끄는 일본군 1군이 부산포에 상륙하여 첫 전투 시작',
+          location: '경상도 부산포',
+          significance:
+            '임진왜란의 시작을 알리는 전투. 조선군은 준비 부족으로 패배',
+          casualties: {
+            allies: '약 3,000명',
+            enemies: '약 500명',
+          },
+        },
+        {
+          id: 'hansan-battle',
+          date: '1592년 7월 8일',
+          name: '한산도 대첩',
+          description: '이순신 장군이 학익진 전법으로 일본 수군을 격파한 해전',
+          location: '한산도 앞바다',
+          significance: '조선 수군의 제해권 장악. 세계 4대 해전 중 하나로 평가',
+          casualties: {
+            allies: '전사 19명, 부상 100여명',
+            enemies: '전사 약 9,000명, 침몰 73척',
+          },
+        },
+        {
+          id: 'haengju-battle',
+          date: '1593년 2월 12일',
+          name: '행주대첩',
+          description: '권율 장군이 이끄는 조선군이 일본군 3만을 격퇴',
+          location: '행주산성',
+          significance:
+            '육전의 3대 대첩 중 하나. 민간인들의 활약이 돋보인 전투',
+          casualties: {
+            allies: '전사 약 130명',
+            enemies: '전사 약 10,000명',
+          },
+        },
+        {
+          id: 'noryang-battle',
+          date: '1598년 11월 19일',
+          name: '노량 해전',
+          description: '이순신 장군의 마지막 전투이자 최종 승리',
+          location: '노량 앞바다',
+          significance: '임진왜란의 마지막 해전. 이순신 장군 전사',
+          casualties: {
+            allies: '전사 약 200명 (이순신 포함)',
+            enemies: '전사 약 5,000명',
+          },
+        },
+      ],
+      persons: [
+        {
+          id: 'yi-sunsin',
+          name: '이순신',
+          role: '삼도수군통제사',
+          side: 'ally',
+          achievements: [
+            '23전 23승 무패 기록',
+            '한산도 대첩으로 제해권 장악',
+            '명량해전에서 13척으로 133척 격파',
+            '노량해전 승리 후 전사',
+          ],
+        },
+        {
+          id: 'gwon-yul',
+          name: '권율',
+          role: '도원수',
+          side: 'ally',
+          achievements: [
+            '행주대첩 승리',
+            '경기도 방어 총지휘',
+            '화약 무기 효과적 활용',
+          ],
+        },
+        {
+          id: 'konishi',
+          name: '고니시 유키나가',
+          role: '1군 총대장',
+          side: 'enemy',
+          achievements: ['부산포 상륙 선봉', '한성 점령', '평양성 주둔'],
+        },
+        {
+          id: 'kato',
+          name: '가토 기요마사',
+          role: '2군 총대장',
+          side: 'enemy',
+          achievements: ['함경도 진격', '두만강까지 북진', '호랑이 사냥 일화'],
+        },
+      ],
+      militaryUnits: [
+        {
+          id: 'joseon-navy',
+          name: '조선 수군',
+          type: '해군',
+          size: '판옥선 약 80척',
+          commander: '이순신',
+          casualties: '약 30척 손실',
+        },
+        {
+          id: 'japan-army-1',
+          name: '일본군 1군',
+          type: '육군',
+          size: '약 18,700명',
+          commander: '고니시 유키나가',
+          casualties: '약 7,000명',
+        },
+        {
+          id: 'righteous-army',
+          name: '의병',
+          type: '민병대',
+          size: '전국 약 50,000명',
+          commander: '곽재우, 조헌 등',
+          casualties: '약 15,000명',
+        },
+        {
+          id: 'ming-army',
+          name: '명나라 원군',
+          type: '육군',
+          size: '약 43,000명',
+          commander: '이여송',
+          casualties: '약 5,000명',
+        },
+      ],
+      strategies: [
+        {
+          id: 'turtle-ship',
+          name: '거북선 활용',
+          description:
+            '세계 최초의 철갑선인 거북선을 전투에 투입하여 적선에 돌진하는 전술',
+          outcome: 'success',
+          date: '1592년 5월',
+        },
+        {
+          id: 'crane-wing',
+          name: '학익진 전법',
+          description:
+            '학이 날개를 펼친 형태로 적을 포위하여 섬멸하는 해전 전술',
+          outcome: 'success',
+          date: '1592년 7월',
+        },
+        {
+          id: 'scorched-earth',
+          name: '청야전술',
+          description:
+            '의병들이 일본군의 보급로를 차단하고 식량을 확보하지 못하도록 하는 전술',
+          outcome: 'success',
+        },
+        {
+          id: 'ambush',
+          name: '매복 게릴라전',
+          description: '산악 지형을 이용한 기습 공격으로 일본군의 진격을 지연',
+          outcome: 'partial',
+        },
+      ],
+      statistics: {
+        duration: '6년 8개월 (1592.4.13 ~ 1598.12.16)',
+        totalCasualties: '조선: 약 100만명, 일본: 약 15만명, 명: 약 2만명',
+        territoriesChanged:
+          '한반도 전역이 전쟁터가 되었으나 최종적으로 원상 복구',
+        economicImpact: '조선 경제 붕괴, 인구 감소, 국가 재정 파탄',
+      },
+      images: [
+        '/images/history/imjin-war-1.jpg',
+        '/images/history/imjin-war-2.jpg',
+        '/images/history/imjin-war-3.jpg',
+      ],
+      maps: [
+        '/images/history/imjin-war-map-1.jpg',
+        '/images/history/imjin-war-map-2.jpg',
+      ],
+    },
+  }
+
+  const getEventTypeColor = (type: string) => {
+    const colors: Record<string, { bg: string; text: string; border: string }> =
+      {
+        war: { bg: '#fef2f2', text: '#991b1b', border: '#ef4444' },
+        reform: { bg: '#f5f3ff', text: '#5b21b6', border: '#8b5cf6' },
+        culture: { bg: '#eff6ff', text: '#1e40af', border: '#3b82f6' },
+        diplomacy: { bg: '#fef3c7', text: '#92400e', border: '#f59e0b' },
+        disaster: { bg: '#fff7ed', text: '#9a3412', border: '#f97316' },
+        achievement: { bg: '#ecfdf5', text: '#065f46', border: '#10b981' },
+      }
+    return colors[type] || { bg: '#f1f5f9', text: '#475569', border: '#64748b' }
+  }
+
+  const getEventTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      war: '전쟁',
+      reform: '개혁',
+      culture: '문화',
+      diplomacy: '외교',
+      disaster: '재난',
+      achievement: '업적',
+    }
+    return labels[type] || type
+  }
+
+  const eventTypes = events
+    ? Array.from(new Set(events.map((e) => e.type)))
+    : []
+
+  const filteredEvents =
+    selectedEventType === 'all'
+      ? events
+      : events?.filter((e) => e.type === selectedEventType)
+
+  const currentEventDetail = selectedEvent ? eventDetails[selectedEvent] : null
+
+  console.log('📊 HistoricalEventsSection State:', {
+    selectedEvent,
+    hasCurrentEventDetail: !!currentEventDetail,
+    availableEventIds: Object.keys(eventDetails),
+  })
+
+  if (!events || events.length === 0) {
+    return (
+      <div
+        style={{
+          padding: '48px',
+          background: '#fafafa',
+          minHeight: 'calc(100vh - 300px)',
+        }}
+      >
+        <EmptyState message="주요 사건 정보가 없습니다" />
+      </div>
+    )
+  }
+
+  // 사건 상세 보기가 열려있을 때
+  if (selectedEvent && currentEventDetail) {
+    return (
+      <EventDetailView
+        event={currentEventDetail}
+        activeTab={eventDetailTab}
+        onTabChange={setEventDetailTab}
+        onBack={() => setSelectedEvent(null)}
+        colorSet={getEventTypeColor(currentEventDetail.type)}
+      />
+    )
+  }
+
+  // 사건 목록 보기
+  return (
+    <div
+      style={{
+        padding: '48px',
+        background: '#fafafa',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      {/* 타임라인 컨테이너 */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+          border: '1px solid #e2e8f0',
+          borderRadius: '14px',
+          overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+          transition: 'all 0.3s ease',
+          position: 'relative',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.borderColor = '#cbd5e1'
+          e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.borderColor = '#e2e8f0'
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
+        }}
+      >
+        {/* 헤더 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '20px 24px',
+            borderBottom: '2px solid #f1f5f9',
+            background: '#ffffff',
+          }}
+        >
+          <h3
+            style={{
+              fontSize: '16px',
+              fontWeight: 800,
+              color: '#0f172a',
+              margin: 0,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            주요 사건 (클릭하여 상세 보기)
+          </h3>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setSelectedEventType('all')}
+              style={{
+                padding: '7px 14px',
+                fontSize: '12px',
+                background:
+                  selectedEventType === 'all'
+                    ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
+                    : '#fff',
+                color: selectedEventType === 'all' ? '#fff' : '#64748b',
+                border: `2px solid ${selectedEventType === 'all' ? '#1e293b' : '#e5e7eb'}`,
+                borderRadius: '10px',
+                cursor: 'pointer',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                fontWeight: 700,
+                boxShadow:
+                  selectedEventType === 'all'
+                    ? '0 4px 12px rgba(30, 41, 59, 0.3)'
+                    : 'none',
+                transform:
+                  selectedEventType === 'all'
+                    ? 'translateY(-1px)'
+                    : 'translateY(0)',
+              }}
+            >
+              전체
+            </button>
+            {eventTypes.map((type) => {
+              const colorSet = getEventTypeColor(type)
+              return (
+                <button
+                  key={type}
+                  onClick={() => setSelectedEventType(type)}
+                  style={{
+                    padding: '7px 14px',
+                    fontSize: '12px',
+                    background:
+                      selectedEventType === type
+                        ? `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`
+                        : '#fff',
+                    color:
+                      selectedEventType === type ? colorSet.text : '#64748b',
+                    border: `2px solid ${selectedEventType === type ? colorSet.border : '#e5e7eb'}`,
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    fontWeight: 700,
+                    boxShadow:
+                      selectedEventType === type
+                        ? `0 4px 12px ${colorSet.border}40`
+                        : 'none',
+                    transform:
+                      selectedEventType === type
+                        ? 'translateY(-1px)'
+                        : 'translateY(0)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedEventType !== type) {
+                      e.currentTarget.style.borderColor = colorSet.border
+                      e.currentTarget.style.backgroundColor = `${colorSet.bg}80`
+                      e.currentTarget.style.transform = 'translateY(-1px)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedEventType !== type) {
+                      e.currentTarget.style.borderColor = '#e5e7eb'
+                      e.currentTarget.style.backgroundColor = '#fff'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                    }
+                  }}
+                >
+                  {getEventTypeLabel(type)}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 타임라인 내용 */}
+        <div
+          style={{
+            position: 'relative',
+            padding: '32px 28px',
+            minHeight: '600px',
+          }}
+        >
+          {/* 타임라인 선 */}
+          <div
+            style={{
+              position: 'absolute',
+              left: '154px',
+              top: '12px',
+              bottom: '12px',
+              width: '2px',
+              background: '#e2e8f0',
+              borderRadius: '1px',
+            }}
+          />
+
+          {filteredEvents && filteredEvents.length > 0 ? (
+            filteredEvents.map((event, index) => {
+              const colorSet = getEventTypeColor(event.type)
+              const hasDetail = eventDetails[event.id]
+
+              return (
+                <motion.div
+                  key={event.id}
+                  initial={{ opacity: 0, x: -30, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  transition={{
+                    delay: index * 0.1,
+                    type: 'spring',
+                    stiffness: 100,
+                    damping: 15,
+                  }}
+                  style={{
+                    position: 'relative',
+                    display: 'grid',
+                    gridTemplateColumns: '140px 1fr',
+                    gap: '28px',
+                    marginBottom:
+                      index < filteredEvents.length - 1 ? '32px' : '0',
+                  }}
+                >
+                  {/* 왼쪽: 날짜 + 타입 */}
+                  <div
+                    style={{
+                      position: 'relative',
+                      paddingTop: '4px',
+                      textAlign: 'right',
+                    }}
+                  >
+                    {/* 타임라인 점 */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: '-21px',
+                        top: '12px',
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: colorSet.border,
+                        border: '3px solid #ffffff',
+                        boxShadow: `0 0 0 2px ${colorSet.border}`,
+                        zIndex: 2,
+                      }}
+                    />
+
+                    {/* 년도 */}
+                    <div
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 800,
+                        color: '#0f172a',
+                        marginBottom: '8px',
+                        letterSpacing: '-0.02em',
+                      }}
+                    >
+                      {event.year}년
+                    </div>
+                    <span
+                      style={{
+                        padding: '5px 12px',
+                        fontSize: '11px',
+                        background: `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`,
+                        color: colorSet.text,
+                        border: `2px solid ${colorSet.border}`,
+                        borderRadius: '8px',
+                        fontWeight: 700,
+                        letterSpacing: '-0.01em',
+                        display: 'inline-block',
+                      }}
+                    >
+                      {getEventTypeLabel(event.type)}
+                    </span>
+                  </div>
+
+                  {/* 오른쪽: 내용 카드 */}
+                  <motion.div
+                    whileHover={{ scale: 1.01, x: 4 }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 300,
+                      damping: 20,
+                    }}
+                    onClick={() => {
+                      console.log(
+                        '🔍 Event clicked:',
+                        event.id,
+                        'hasDetail:',
+                        hasDetail,
+                      )
+                      if (hasDetail) {
+                        console.log('✅ Opening event detail for:', event.id)
+                        setSelectedEvent(event.id)
+                      } else {
+                        console.log('❌ No detail available for:', event.id)
+                      }
+                    }}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: '12px',
+                      padding: '20px 24px',
+                      cursor: hasDetail ? 'pointer' : 'default',
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = colorSet.border
+                      e.currentTarget.style.boxShadow = `0 6px 20px ${colorSet.border}25`
+                      e.currentTarget.style.background = `linear-gradient(135deg, #ffffff 0%, ${colorSet.bg}25 100%)`
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#f1f5f9'
+                      e.currentTarget.style.boxShadow =
+                        '0 1px 3px rgba(0, 0, 0, 0.03)'
+                      e.currentTarget.style.background = '#ffffff'
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: '16px',
+                            fontWeight: 800,
+                            color: '#0f172a',
+                            marginBottom: '10px',
+                            lineHeight: '1.5',
+                            letterSpacing: '-0.02em',
+                          }}
+                        >
+                          {event.title}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '14px',
+                            color: '#64748b',
+                            lineHeight: '1.7',
+                          }}
+                        >
+                          {event.description}
+                        </div>
+                      </div>
+                      {hasDetail && (
+                        <div
+                          style={{
+                            marginLeft: '16px',
+                            padding: '8px 16px',
+                            background: `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`,
+                            color: colorSet.text,
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            border: `2px solid ${colorSet.border}`,
+                          }}
+                        >
+                          상세보기 →
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )
+            })
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '20px',
+                padding: '60px 20px',
+              }}
+            >
+              <div
+                style={{
+                  width: '100px',
+                  height: '100px',
+                  borderRadius: '50%',
+                  background:
+                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
+                }}
+              >
+                <svg
+                  width="44"
+                  height="44"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#64748b"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <h4
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    margin: '0 0 10px 0',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  사건이 없습니다
+                </h4>
+                <p
+                  style={{
+                    fontSize: '14px',
+                    color: '#64748b',
+                    lineHeight: '1.8',
+                    margin: 0,
+                  }}
+                >
+                  선택한 유형의 사건이 없습니다.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 주요 인물 섹션
+// ============================================
+
+function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
+  const getMockDataKey = (name: string): 'joseon' | 'goryeo' | null => {
+    if (name.includes('조선')) return 'joseon'
+    if (name.includes('고려')) return 'goryeo'
+    return null
+  }
+
+  const dataKey = getMockDataKey(country.name)
+  const figures = dataKey ? historicalCountryMockData[dataKey]?.figures : null
+
+  if (!figures || figures.length === 0) {
+    return (
+      <div
+        style={{
+          padding: '48px',
+          background: '#fafafa',
+          minHeight: 'calc(100vh - 300px)',
+        }}
+      >
+        <EmptyState message="주요 인물 정보가 없습니다" />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        padding: '48px',
+        background: '#fafafa',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+          gap: '20px',
+        }}
+      >
+        {figures.map((figure, index) => (
+          <motion.div
+            key={figure.id}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{
+              delay: index * 0.08,
+              type: 'spring',
+              stiffness: 120,
+              damping: 15,
+            }}
+            whileHover={{ scale: 1.02, y: -4 }}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #f1f5f9',
+              borderRadius: '14px',
+              overflow: 'hidden',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = '#cbd5e1'
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '#f1f5f9'
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
+            }}
+          >
+            {/* 인물 이미지 */}
+            {figure.imageUrl && (
+              <div
+                style={{
+                  width: '100%',
+                  height: '240px',
+                  overflow: 'hidden',
+                  background:
+                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  position: 'relative',
+                }}
+              >
+                <img
+                  src={figure.imageUrl}
+                  alt={figure.name}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+              </div>
+            )}
+
+            <div style={{ padding: '24px' }}>
+              {/* 이름 & 생몰년 */}
+              <div style={{ marginBottom: '16px' }}>
+                <h3
+                  style={{
+                    fontSize: '20px',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    margin: '0 0 6px 0',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {figure.name}
+                </h3>
+                {figure.enName && (
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: '#94a3b8',
+                      margin: '0 0 8px 0',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {figure.enName}
+                  </p>
+                )}
+                {(figure.birthYear || figure.deathYear) && (
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: '#3b82f6',
+                      marginBottom: '0',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {figure.birthYear && `${figure.birthYear}년`}
+                    {figure.birthYear && figure.deathYear && ' ~ '}
+                    {figure.deathYear && `${figure.deathYear}년`}
+                  </p>
+                )}
+              </div>
+
+              {/* 역할 */}
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background:
+                    'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                  border: '2px solid #3b82f6',
+                  borderRadius: '10px',
+                  marginBottom: '16px',
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#1e40af',
+                    margin: 0,
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  {figure.role}
+                </p>
+              </div>
+
+              {/* 설명 */}
+              <p
+                style={{
+                  fontSize: '14px',
+                  lineHeight: '1.7',
+                  color: '#64748b',
+                  marginBottom: '18px',
+                }}
+              >
+                {figure.description}
+              </p>
+
+              {/* 업적 */}
+              {figure.achievements && figure.achievements.length > 0 && (
+                <div>
+                  <p
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: '#94a3b8',
+                      marginBottom: '10px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    주요 업적
+                  </p>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    {figure.achievements
+                      .slice(0, 3)
+                      .map((achievement, achIndex) => (
+                        <div
+                          key={achIndex}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '10px',
+                            padding: '10px 12px',
+                            background: '#fafbfc',
+                            borderRadius: '8px',
+                            border: '1px solid #f1f5f9',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '5px',
+                              height: '5px',
+                              borderRadius: '50%',
+                              background: '#3b82f6',
+                              marginTop: '7px',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              color: '#475569',
+                              lineHeight: '1.6',
+                              flex: 1,
+                            }}
+                          >
+                            {achievement}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 계승 관계 섹션
+// ============================================
+
+function SuccessionSection({ country }: { country: UnifiedCountry }) {
+  return (
+    <div
+      style={{
+        padding: '48px',
+        background: '#fafafa',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      <EmptyState
+        message="계승 관계 정보가 준비 중입니다"
+        description="전임 국가 및 후임 국가 관계가 표시됩니다"
+      />
+    </div>
+  )
+}
+
+// ============================================
+// 영토 변천 섹션
+// ============================================
+
+function TerritorySection({ country }: { country: UnifiedCountry }) {
+  return (
+    <div
+      style={{
+        padding: '48px',
+        background: '#fafafa',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      <EmptyState
+        message="영토 변천 정보가 준비 중입니다"
+        description="역사적 지도와 영토 확장/축소 정보가 표시됩니다"
+      />
+    </div>
+  )
+}
+
+// ============================================
+// 문화 유산 섹션
+// ============================================
+
+function CultureSection({ country }: { country: UnifiedCountry }) {
+  const getMockDataKey = (name: string): 'joseon' | 'goryeo' | null => {
+    if (name.includes('조선')) return 'joseon'
+    if (name.includes('고려')) return 'goryeo'
+    return null
+  }
+
+  const dataKey = getMockDataKey(country.name)
+  const culture = dataKey ? historicalCountryMockData[dataKey]?.culture : null
+
+  if (!culture || culture.length === 0) {
+    return (
+      <div
+        style={{
+          padding: '48px',
+          background: '#fafafa',
+          minHeight: 'calc(100vh - 300px)',
+        }}
+      >
+        <EmptyState message="문화 유산 정보가 없습니다" />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        padding: '48px',
+        background: '#fafafa',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+          gap: '20px',
+        }}
+      >
+        {culture.map((item, index) => (
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{
+              delay: index * 0.08,
+              type: 'spring',
+              stiffness: 120,
+              damping: 15,
+            }}
+            whileHover={{ scale: 1.02, y: -4 }}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #f1f5f9',
+              borderRadius: '14px',
+              overflow: 'hidden',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = '#cbd5e1'
+              e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = '#f1f5f9'
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
+            }}
+          >
+            {/* 이미지 */}
+            {item.imageUrl && (
+              <div
+                style={{
+                  width: '100%',
+                  height: '220px',
+                  overflow: 'hidden',
+                  background:
+                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  position: 'relative',
+                }}
+              >
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    padding: '6px 14px',
+                    background: 'rgba(255,255,255,0.95)',
+                    backdropFilter: 'blur(10px)',
+                    border: '2px solid #3b82f6',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: '#1e40af',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                  }}
+                >
+                  {item.category}
+                </div>
+              </div>
+            )}
+
+            <div style={{ padding: '24px' }}>
+              {/* 제목 */}
+              <div style={{ marginBottom: '14px' }}>
+                <h3
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    margin: '0 0 6px 0',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {item.name}
+                </h3>
+                {item.year && (
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: '#3b82f6',
+                      margin: 0,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {item.year}년
+                  </p>
+                )}
+              </div>
+
+              {/* 설명 */}
+              <p
+                style={{
+                  fontSize: '14px',
+                  lineHeight: '1.7',
+                  color: '#64748b',
+                  marginBottom: '16px',
+                }}
+              >
+                {item.description}
+              </p>
+
+              {/* 의의 */}
+              <div
+                style={{
+                  padding: '16px',
+                  background:
+                    'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                  borderRadius: '10px',
+                  border: '2px solid #3b82f6',
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#3b82f6',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  역사적 의의
+                </p>
+                <p
+                  style={{
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                    color: '#1e40af',
+                    margin: 0,
+                  }}
+                >
+                  {item.significance}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 공통 컴포넌트
+// ============================================
+
+function EmptyState({
+  message,
+  description,
+}: {
+  message: string
+  description?: string
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '20px',
+        padding: '80px 40px',
+        background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+        border: '1px solid #e2e8f0',
+        borderRadius: '14px',
+        textAlign: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: '100px',
+          height: '100px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
+        }}
+      >
+        <svg
+          width="44"
+          height="44"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#64748b"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </div>
+      <div>
+        <div
+          style={{
+            fontSize: '18px',
+            fontWeight: 800,
+            color: '#0f172a',
+            marginBottom: '8px',
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {message}
+        </div>
+        {description && (
+          <div style={{ fontSize: '14px', color: '#64748b' }}>
+            {description}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function InfoCard({
+  label,
+  value,
+  color,
+}: {
+  label: string
+  value: string
+  color: string
+}) {
+  return (
+    <div
+      style={{
+        padding: '24px',
+        background: '#ffffff',
+        border: '1px solid #f1f5f9',
+        borderRadius: '14px',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+        position: 'relative',
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = `0 8px 24px ${color}20`
+        e.currentTarget.style.transform = 'translateY(-2px)'
+        e.currentTarget.style.borderColor = '#cbd5e1'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
+        e.currentTarget.style.transform = 'translateY(0)'
+        e.currentTarget.style.borderColor = '#f1f5f9'
+      }}
+    >
+      {/* 좌측 컬러 라인 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '4px',
+          height: '100%',
+          background: color,
+        }}
+      />
+
+      <div style={{ position: 'relative', paddingLeft: '12px' }}>
+        <div
+          style={{
+            fontSize: '12px',
+            color: '#94a3b8',
+            marginBottom: '8px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
+          {label}
+        </div>
+        <div
+          style={{
+            fontSize: '22px',
+            fontWeight: 800,
+            color: '#0f172a',
+            letterSpacing: '-0.02em',
+          }}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// 사건 상세 뷰 컴포넌트
+// ============================================
+
+interface EventDetailViewProps {
+  event: EventDetailData
+  activeTab: 'overview' | 'subevents' | 'persons' | 'military' | 'strategy'
+  onTabChange: (
+    tab: 'overview' | 'subevents' | 'persons' | 'military' | 'strategy',
+  ) => void
+  onBack: () => void
+  colorSet: { bg: string; text: string; border: string }
+}
+
+function EventDetailView({
+  event,
+  activeTab,
+  onTabChange,
+  onBack,
+  colorSet,
+}: EventDetailViewProps) {
+  const tabs = [
+    { id: 'overview' as const, label: '개요' },
+    {
+      id: 'subevents' as const,
+      label: `세부 사건 (${event.subEvents.length})`,
+    },
+    { id: 'persons' as const, label: `인물 (${event.persons.length})` },
+    { id: 'military' as const, label: `군사 (${event.militaryUnits.length})` },
+    { id: 'strategy' as const, label: `전략 (${event.strategies.length})` },
+  ]
+
+  return (
+    <div
+      style={{
+        padding: '48px',
+        background: '#fafafa',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      {/* 뒤로가기 버튼 */}
+      <button
+        onClick={onBack}
+        style={{
+          padding: '10px 20px',
+          background: '#fff',
+          border: '2px solid #e5e7eb',
+          borderRadius: '10px',
+          color: '#64748b',
+          cursor: 'pointer',
+          fontSize: '13px',
+          fontWeight: 700,
+          marginBottom: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          transition: 'all 0.3s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateX(-4px)'
+          e.currentTarget.style.borderColor = colorSet.border
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateX(0)'
+          e.currentTarget.style.borderColor = '#e5e7eb'
+        }}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        목록으로 돌아가기
+      </button>
+
+      {/* 사건 헤더 */}
+      <div
+        style={{
+          background: `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`,
+          border: `2px solid ${colorSet.border}`,
+          borderRadius: '16px',
+          padding: '40px',
+          marginBottom: '32px',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            marginBottom: '24px',
+          }}
+        >
+          <div>
+            <h1
+              style={{
+                fontSize: '36px',
+                fontWeight: 800,
+                color: colorSet.text,
+                margin: '0 0 12px 0',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {event.name}
+            </h1>
+            <div
+              style={{
+                display: 'flex',
+                gap: '16px',
+                fontSize: '14px',
+                color: colorSet.text,
+                fontWeight: 600,
+              }}
+            >
+              <span>
+                {event.startDate} ~ {event.endDate || '진행중'}
+              </span>
+              <span>•</span>
+              <span>{event.location}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 통계 그리드 */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '16px',
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(255,255,255,0.9)',
+              padding: '20px',
+              borderRadius: '12px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                color: colorSet.text,
+                marginBottom: '8px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              }}
+            >
+              기간
+            </div>
+            <div
+              style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}
+            >
+              {event.statistics.duration}
+            </div>
+          </div>
+          <div
+            style={{
+              background: 'rgba(255,255,255,0.9)',
+              padding: '20px',
+              borderRadius: '12px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                color: colorSet.text,
+                marginBottom: '8px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              }}
+            >
+              세부 사건
+            </div>
+            <div
+              style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}
+            >
+              {event.subEvents.length}건
+            </div>
+          </div>
+          <div
+            style={{
+              background: 'rgba(255,255,255,0.9)',
+              padding: '20px',
+              borderRadius: '12px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                color: colorSet.text,
+                marginBottom: '8px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              }}
+            >
+              관련 인물
+            </div>
+            <div
+              style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}
+            >
+              {event.persons.length}명
+            </div>
+          </div>
+          <div
+            style={{
+              background: 'rgba(255,255,255,0.9)',
+              padding: '20px',
+              borderRadius: '12px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                color: colorSet.text,
+                marginBottom: '8px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              }}
+            >
+              전략
+            </div>
+            <div
+              style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}
+            >
+              {event.strategies.length}개
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 탭 네비게이션 */}
+      <div
+        style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '14px',
+          padding: '8px',
+          marginBottom: '24px',
+          display: 'flex',
+          gap: '8px',
+        }}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            style={{
+              flex: 1,
+              padding: '12px 20px',
+              background:
+                activeTab === tab.id
+                  ? `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`
+                  : 'transparent',
+              color: activeTab === tab.id ? colorSet.text : '#64748b',
+              border:
+                activeTab === tab.id
+                  ? `2px solid ${colorSet.border}`
+                  : '2px solid transparent',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: 700,
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.background = '#f1f5f9'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.background = 'transparent'
+              }
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 탭 콘텐츠 */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {activeTab === 'overview' && (
+            <EventOverviewTab event={event} colorSet={colorSet} />
+          )}
+          {activeTab === 'subevents' && (
+            <SubEventsTab subEvents={event.subEvents} colorSet={colorSet} />
+          )}
+          {activeTab === 'persons' && (
+            <PersonsTab persons={event.persons} colorSet={colorSet} />
+          )}
+          {activeTab === 'military' && (
+            <MilitaryTab units={event.militaryUnits} colorSet={colorSet} />
+          )}
+          {activeTab === 'strategy' && (
+            <StrategyTab strategies={event.strategies} colorSet={colorSet} />
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// 개요 탭
+function EventOverviewTab({
+  event,
+  colorSet,
+}: {
+  event: EventDetailData
+  colorSet: { bg: string; text: string; border: string }
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* 배경 */}
+      <Section title="배경" colorSet={colorSet}>
+        <p
+          style={{
+            fontSize: '15px',
+            lineHeight: '1.8',
+            color: '#475569',
+            margin: 0,
+          }}
+        >
+          {event.background}
+        </p>
+      </Section>
+
+      {/* 설명 */}
+      <Section title="경과" colorSet={colorSet}>
+        <p
+          style={{
+            fontSize: '15px',
+            lineHeight: '1.8',
+            color: '#475569',
+            margin: 0,
+          }}
+        >
+          {event.description}
+        </p>
+      </Section>
+
+      {/* 결과 */}
+      <Section title="결과" colorSet={colorSet}>
+        <p
+          style={{
+            fontSize: '15px',
+            lineHeight: '1.8',
+            color: '#475569',
+            margin: 0,
+          }}
+        >
+          {event.outcome}
+        </p>
+      </Section>
+
+      {/* 의의 */}
+      <Section title="역사적 의의" colorSet={colorSet}>
+        <p
+          style={{
+            fontSize: '15px',
+            lineHeight: '1.8',
+            color: '#475569',
+            margin: 0,
+          }}
+        >
+          {event.significance}
+        </p>
+      </Section>
+
+      {/* 교전 세력 */}
+      <Section title="교전 세력" colorSet={colorSet}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '20px',
+          }}
+        >
+          {event.sides.map((side, index) => (
+            <div
+              key={index}
+              style={{
+                padding: '24px',
+                background: '#fafbfc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+              }}
+            >
+              <h4
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  marginBottom: '16px',
+                }}
+              >
+                {side.name}
+              </h4>
+              <div style={{ marginBottom: '12px' }}>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: '#94a3b8',
+                    marginBottom: '6px',
+                    fontWeight: 600,
+                  }}
+                >
+                  참전 국가
+                </div>
+                <div style={{ fontSize: '14px', color: '#475569' }}>
+                  {side.countries.join(', ')}
+                </div>
+              </div>
+              <div>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: '#94a3b8',
+                    marginBottom: '6px',
+                    fontWeight: 600,
+                  }}
+                >
+                  주요 지휘관
+                </div>
+                <div style={{ fontSize: '14px', color: '#475569' }}>
+                  {side.leaders.join(', ')}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {/* 통계 */}
+      {event.statistics.totalCasualties && (
+        <Section title="전쟁 통계" colorSet={colorSet}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            <StatCard
+              label="총 인명 피해"
+              value={event.statistics.totalCasualties}
+            />
+            {event.statistics.territoriesChanged && (
+              <StatCard
+                label="영토 변화"
+                value={event.statistics.territoriesChanged}
+              />
+            )}
+            {event.statistics.economicImpact && (
+              <StatCard
+                label="경제적 영향"
+                value={event.statistics.economicImpact}
+              />
+            )}
+          </div>
+        </Section>
+      )}
+    </div>
+  )
+}
+
+// 세부 사건 탭
+function SubEventsTab({
+  subEvents,
+  colorSet,
+}: {
+  subEvents: SubEvent[]
+  colorSet: { bg: string; text: string; border: string }
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {subEvents.map((subEvent, index) => (
+        <motion.div
+          key={subEvent.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            padding: '28px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '16px',
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  fontSize: '20px',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  margin: '0 0 8px 0',
+                }}
+              >
+                {subEvent.name}
+              </h3>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  fontSize: '13px',
+                  color: '#64748b',
+                  fontWeight: 600,
+                }}
+              >
+                <span>{subEvent.date}</span>
+                {subEvent.location && (
+                  <>
+                    <span>•</span>
+                    <span>{subEvent.location}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div
+              style={{
+                padding: '6px 14px',
+                background: `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`,
+                color: colorSet.text,
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 700,
+                border: `2px solid ${colorSet.border}`,
+              }}
+            >
+              {index + 1}차
+            </div>
+          </div>
+
+          <p
+            style={{
+              fontSize: '15px',
+              lineHeight: '1.8',
+              color: '#475569',
+              marginBottom: '20px',
+            }}
+          >
+            {subEvent.description}
+          </p>
+
+          <div
+            style={{
+              padding: '20px',
+              background: '#fafbfc',
+              borderRadius: '12px',
+              marginBottom: '16px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#94a3b8',
+                marginBottom: '8px',
+                textTransform: 'uppercase',
+              }}
+            >
+              역사적 의의
+            </div>
+            <p
+              style={{
+                fontSize: '14px',
+                lineHeight: '1.7',
+                color: '#475569',
+                margin: 0,
+              }}
+            >
+              {subEvent.significance}
+            </p>
+          </div>
+
+          {subEvent.casualties && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '12px',
+              }}
+            >
+              {subEvent.casualties.allies && (
+                <CasualtyCard
+                  label="아군 피해"
+                  value={subEvent.casualties.allies}
+                />
+              )}
+              {subEvent.casualties.enemies && (
+                <CasualtyCard
+                  label="적군 피해"
+                  value={subEvent.casualties.enemies}
+                />
+              )}
+              {subEvent.casualties.civilians && (
+                <CasualtyCard
+                  label="민간인 피해"
+                  value={subEvent.casualties.civilians}
+                />
+              )}
+            </div>
+          )}
+        </motion.div>
+      ))}
+    </div>
+  )
+}
+
+// 인물 탭
+function PersonsTab({
+  persons,
+  colorSet,
+}: {
+  persons: EventPerson[]
+  colorSet: { bg: string; text: string; border: string }
+}) {
+  const getSideColor = (side: string) => {
+    const colors = {
+      ally: { bg: '#ecfdf5', text: '#065f46', border: '#10b981' },
+      enemy: { bg: '#fef2f2', text: '#991b1b', border: '#ef4444' },
+      neutral: { bg: '#f1f5f9', text: '#475569', border: '#64748b' },
+    }
+    return colors[side as keyof typeof colors] || colors.neutral
+  }
+
+  const getSideLabel = (side: string) => {
+    const labels = { ally: '아군', enemy: '적군', neutral: '중립' }
+    return labels[side as keyof typeof labels] || side
+  }
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+        gap: '20px',
+      }}
+    >
+      {persons.map((person, index) => {
+        const sideColor = getSideColor(person.side)
+        return (
+          <motion.div
+            key={person.id}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: index * 0.08 }}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '14px',
+              overflow: 'hidden',
+            }}
+          >
+            {person.imageUrl && (
+              <div
+                style={{
+                  width: '100%',
+                  height: '200px',
+                  background:
+                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                }}
+              >
+                <img
+                  src={person.imageUrl}
+                  alt={person.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </div>
+            )}
+            <div style={{ padding: '24px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: '16px',
+                }}
+              >
+                <h3
+                  style={{
+                    fontSize: '20px',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    margin: 0,
+                  }}
+                >
+                  {person.name}
+                </h3>
+                <span
+                  style={{
+                    padding: '4px 10px',
+                    background: `linear-gradient(135deg, ${sideColor.bg} 0%, ${sideColor.bg}dd 100%)`,
+                    color: sideColor.text,
+                    border: `2px solid ${sideColor.border}`,
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {getSideLabel(person.side)}
+                </span>
+              </div>
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: '#64748b',
+                  marginBottom: '20px',
+                  fontWeight: 600,
+                }}
+              >
+                {person.role}
+              </p>
+
+              {person.achievements && person.achievements.length > 0 && (
+                <div>
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: '#94a3b8',
+                      marginBottom: '10px',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    주요 업적
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    {person.achievements.map((achievement, achIndex) => (
+                      <div
+                        key={achIndex}
+                        style={{
+                          display: 'flex',
+                          gap: '10px',
+                          padding: '10px',
+                          background: '#fafbfc',
+                          borderRadius: '8px',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '5px',
+                            height: '5px',
+                            borderRadius: '50%',
+                            background: colorSet.border,
+                            marginTop: '7px',
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            color: '#475569',
+                            lineHeight: '1.6',
+                          }}
+                        >
+                          {achievement}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )
+      })}
+    </div>
+  )
+}
+
+// 군사 탭
+function MilitaryTab({
+  units,
+  colorSet,
+}: {
+  units: MilitaryUnit[]
+  colorSet: { bg: string; text: string; border: string }
+}) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+        gap: '20px',
+      }}
+    >
+      {units.map((unit, index) => (
+        <motion.div
+          key={unit.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            padding: '28px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              marginBottom: '20px',
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  fontSize: '20px',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  margin: '0 0 8px 0',
+                }}
+              >
+                {unit.name}
+              </h3>
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: '#64748b',
+                  margin: 0,
+                  fontWeight: 600,
+                }}
+              >
+                {unit.type}
+              </p>
+            </div>
+            <div
+              style={{
+                padding: '6px 14px',
+                background: `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`,
+                color: colorSet.text,
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 700,
+                border: `2px solid ${colorSet.border}`,
+              }}
+            >
+              {unit.type}
+            </div>
+          </div>
+
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+          >
+            <InfoRow label="규모" value={unit.size} />
+            <InfoRow label="지휘관" value={unit.commander} />
+            {unit.casualties && (
+              <InfoRow label="손실" value={unit.casualties} />
+            )}
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  )
+}
+
+// 전략 탭
+function StrategyTab({
+  strategies,
+  colorSet,
+}: {
+  strategies: Strategy[]
+  colorSet: { bg: string; text: string; border: string }
+}) {
+  const getOutcomeColor = (outcome: string) => {
+    const colors = {
+      success: {
+        bg: '#ecfdf5',
+        text: '#065f46',
+        border: '#10b981',
+        label: '성공',
+      },
+      failure: {
+        bg: '#fef2f2',
+        text: '#991b1b',
+        border: '#ef4444',
+        label: '실패',
+      },
+      partial: {
+        bg: '#fef3c7',
+        text: '#92400e',
+        border: '#f59e0b',
+        label: '부분 성공',
+      },
+    }
+    return colors[outcome as keyof typeof colors] || colors.partial
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {strategies.map((strategy, index) => {
+        const outcomeColor = getOutcomeColor(strategy.outcome)
+        return (
+          <motion.div
+            key={strategy.id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.1 }}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '14px',
+              padding: '28px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: '16px',
+              }}
+            >
+              <div>
+                <h3
+                  style={{
+                    fontSize: '20px',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    margin: '0 0 8px 0',
+                  }}
+                >
+                  {strategy.name}
+                </h3>
+                {strategy.date && (
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: '#64748b',
+                      margin: 0,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {strategy.date}
+                  </p>
+                )}
+              </div>
+              <span
+                style={{
+                  padding: '6px 14px',
+                  background: `linear-gradient(135deg, ${outcomeColor.bg} 0%, ${outcomeColor.bg}dd 100%)`,
+                  color: outcomeColor.text,
+                  border: `2px solid ${outcomeColor.border}`,
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                }}
+              >
+                {outcomeColor.label}
+              </span>
+            </div>
+            <p
+              style={{
+                fontSize: '15px',
+                lineHeight: '1.8',
+                color: '#475569',
+                margin: 0,
+              }}
+            >
+              {strategy.description}
+            </p>
+          </motion.div>
+        )
+      })}
+    </div>
+  )
+}
+
+// 헬퍼 컴포넌트들
+function Section({
+  title,
+  children,
+  colorSet,
+}: {
+  title: string
+  children: React.ReactNode
+  colorSet: { bg: string; text: string; border: string }
+}) {
+  return (
+    <div
+      style={{
+        background: '#ffffff',
+        border: '1px solid #e2e8f0',
+        borderRadius: '14px',
+        padding: '28px',
+      }}
+    >
+      <h3
+        style={{
+          fontSize: '18px',
+          fontWeight: 800,
+          color: colorSet.text,
+          marginBottom: '16px',
+          paddingBottom: '12px',
+          borderBottom: `2px solid ${colorSet.border}`,
+        }}
+      >
+        {title}
+      </h3>
+      {children}
+    </div>
+  )
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        padding: '20px',
+        background: '#fafbfc',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '12px',
+          color: '#94a3b8',
+          marginBottom: '6px',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function CasualtyCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        padding: '16px',
+        background: '#fafbfc',
+        borderRadius: '10px',
+        border: '1px solid #e2e8f0',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '11px',
+          color: '#94a3b8',
+          marginBottom: '4px',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '12px',
+        background: '#fafbfc',
+        borderRadius: '8px',
+      }}
+    >
+      <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 700 }}>
+        {label}
+      </span>
+      <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: 600 }}>
+        {value}
+      </span>
+    </div>
+  )
+}

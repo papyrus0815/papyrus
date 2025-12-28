@@ -1,0 +1,239 @@
+/// ║                               POLITICS DOMAIN                                ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 정당과 정치적 조직을 전문적으로 관리합니다.
+/// 
+/// 주요 기능:
+/// - 정당(PoliticalParty): 정치적 집단
+///   • 이념, 강령, 정치적 스펙트럼
+///   • 당 색깔과 상징, 로고 관리
+///   • 설립과 해산, 합당과 분당
+///   • 지역적 기반과 지지층
+/// 
+/// - 정당 별칭(PoliticalPartyAlias): 명칭 관리
+///   • 약칭, 별칭, 과거명, 현지어명
+///   • 언어별/시대별 명칭 변화
+///   • 공식명과 통칭의 구분
+/// 
+/// - 정당 지도부(PoliticalPartyLeadership): 인사 관리
+///   • 당대표, 원내대표, 사무총장 등
+///   • 임기와 선출 과정
+///   • 권력 구조와 파벌 관계
+/// 
+/// - 정당-조직 관계(PoliticalPartyOrganization): 연계 조직
+///   • 당 전국위원회, 산하단체
+///   • 정치자금 조직, 싱크탱크
+///   • 청년회, 여성회 등 계층 조직
+/// 
+/// 활용 사례:
+/// - 미국: 공화당, 민주당과 RNC, DNC
+/// - 영국: 보수당, 노동당
+/// - 독일: CDU, SPD, 녹색당
+/// - 한국: 주요 정당들과 계파
+/// 
+/// 특징:
+/// - 민주주의 체제의 핵심 주체
+/// - 선거와 정책 경쟁의 단위
+/// - 이데올로기와 이익 대표
+/// - 조직(Organization)과 구분된 정치 전문 영역
+
+// ========================
+// Enums
+// ========================
+
+/// 정당의 이념적 스펙트럼(간략 분류)
+enum PoliticalPosition {
+  FAR_LEFT
+  LEFT
+  CENTER_LEFT
+  CENTER
+  CENTER_RIGHT
+  RIGHT
+  FAR_RIGHT
+  BIG_TENT
+}
+
+/// 정당의 별칭 유형
+enum PoliticalPartyAliasType {
+  ACRONYM
+  ALIAS
+  FORMER_NAME
+  LOCAL_NAME
+}
+
+// ========================
+// PoliticalParty
+// ========================
+
+/// 국가 단위의 정당 정보를 저장하는 모델
+model PoliticalParty {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 정당명(공식 명칭)
+  name String @unique @db.VarChar(150)
+
+  /// 약칭/두문자
+  shortName String? @map("short_name") @db.VarChar(50)
+
+  /// 현지어 명칭
+  localName String? @map("local_name") @db.VarChar(150)
+
+  /// 이념(자유 텍스트)
+  ideology String? @db.Text
+
+  /// 이념 스펙트럼(요약)
+  position PoliticalPosition?
+
+  /// 정당 컬러(HEX)
+  color String? @db.VarChar(7)
+
+  /// 설명/개요
+  description String? @db.Text
+
+  /// 설립/해산
+  foundedDate   DateTime? @map("founded_date")
+  dissolvedDate DateTime? @map("dissolved_date")
+
+  /// 웹사이트/로고
+  websiteUrl String? @map("website_url") @db.VarChar(255)
+  logoUrl    String? @map("logo_url") @db.VarChar(255)
+
+  /// 본부 소재 도시
+  headquartersCityId String? @map("headquarters_city_id") @db.Char(36)
+
+  //--- 외래키(국가 맥락)
+  countryId           String? @map("country_id") @db.Char(36)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 자유 확장용 JSON
+  extra Json?
+
+  //--- 관계
+  headquartersCity  City?              @relation("PoliticalPartyHeadquartersCity", fields: [headquartersCityId], references: [id], onDelete: SetNull)
+  country           Country?           @relation("PoliticalPartyCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry? @relation("PoliticalPartyHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  aliases      PoliticalPartyAlias[]
+  leaderships  PoliticalPartyLeadership[]
+  affiliations PoliticalPartyOrganization[]
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_party_countryId")
+  @@index([position], name: "idx_party_position")
+  @@index([headquartersCityId], name: "idx_party_hqCityId")
+  @@map("political_party")
+}
+
+// ========================
+// PoliticalPartyAlias
+// ========================
+
+/// 정당의 별칭/약칭/과거명 등을 저장
+model PoliticalPartyAlias {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 대상 정당
+  partyId String @map("party_id") @db.Char(36)
+
+  /// 별칭/약칭 명칭
+  name String @db.VarChar(150)
+
+  /// 유형
+  type PoliticalPartyAliasType
+
+  /// 언어 코드(예: en, ko)
+  languageCode String? @map("language_code") @db.VarChar(10)
+
+  /// 사용 기간
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  //--- 관계
+  party PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([partyId, name, type, languageCode], name: "uniq_party_alias")
+  @@index([partyId], name: "idx_party_alias_partyId")
+  @@map("political_party_alias")
+}
+
+// ========================
+// PoliticalPartyLeadership (Party ↔ Person)
+// ========================
+
+/// 정당과 인물 간 리더십/직책 관계(예: Chair, Leader)
+model PoliticalPartyLeadership {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 정당/인물
+  partyId  String @map("party_id") @db.Char(36)
+  personId String @map("person_id") @db.Char(36)
+
+  /// 역할명(예: Chair, Leader)
+  roleTitle String @map("role_title") @db.VarChar(100)
+
+  /// 기간
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계
+  party  PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  person Person         @relation("PoliticalPartyLeadership", fields: [personId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([partyId], name: "idx_party_leader_partyId")
+  @@index([personId], name: "idx_party_leader_personId")
+  @@map("political_party_leadership")
+}
+
+// ========================
+// PoliticalPartyOrganization (Party ↔ Organization)
+// ========================
+
+/// 정당과 조직 간 관계(예: 당 전국위원회, 산하/제휴 단체)
+model PoliticalPartyOrganization {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 정당/조직
+  partyId        String @map("party_id") @db.Char(36)
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 관계 유형(조직 스키마의 OrganizationRelationType 재사용)
+  relationType OrganizationRelationType @map("relation_type")
+
+  /// 기간
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계
+  party        PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([partyId, organizationId, relationType], name: "uniq_party_org_relation")
+  @@index([partyId], name: "idx_party_org_partyId")
+  @@index([organizationId], name: "idx_party_org_orgId")
+  @@map("political_party_organization")
+}

@@ -1,0 +1,167 @@
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  padding: 20px;
+}
+
+.auth-container {
+  background: white;
+  border: 1px solid #dbdbdb;
+  border-radius: 3px;
+  padding: 40px;
+  width: 100%;
+  max-width: 350px;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.auth-logo {
+  font-size: 48px;
+  font-weight: 400;
+  font-family: 'Billabong', 'Segoe Script', cursive, system-ui;
+  color: #262626;
+  margin-bottom: 16px;
+  letter-spacing: -1px;
+}
+
+.auth-subtitle {
+  color: #8e8e8e;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 32px;
+  border-bottom: 1px solid #dbdbdb;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  background: none;
+  color: #8e8e8e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+}
+
+.auth-tab.active {
+  color: #262626;
+  border-bottom-color: #262626;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 6px;
+}
+
+.form-group label {
+  display: none;
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 9px 8px 7px;
+  border: 1px solid #dbdbdb;
+  border-radius: 3px;
+  font-size: 12px;
+  transition: border-color 0.2s;
+  font-weight: 400;
+  background: #fafafa;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #a8a8a8;
+  background: white;
+}
+
+.form-group textarea {
+  resize: vertical;
+  font-family: inherit;
+  min-height: 60px;
+}
+
+.auth-error {
+  padding: 10px;
+  background: #fafafa;
+  color: #ed4956;
+  border-radius: 3px;
+  font-size: 12px;
+  text-align: center;
+  font-weight: 400;
+  border: 1px solid #dbdbdb;
+  margin-bottom: 12px;
+}
+
+.auth-submit {
+  padding: 8px;
+  background: #0095f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 16px;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: #1877f2;
+}
+
+.auth-submit:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #dbdbdb;
+  text-align: center;
+}
+
+.test-info {
+  font-size: 12px;
+  color: #8e8e8e;
+  background: none;
+  padding: 0;
+  font-weight: 400;
+  border: none;
+}
+
+@media (max-width: 640px) {
+  .auth-container {
+    padding: 32px 24px;
+    border: none;
+  }
+
+  .auth-logo {
+    font-size: 40px;
+  }
+}
+

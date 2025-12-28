@@ -1,0 +1,595 @@
+/// ║                           SOCIAL PHENOMENON DOMAIN                          ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 사회 현상과 그 관측 데이터를 과학적으로 관리합니다.
+/// 
+/// 주요 기능:
+/// - 사회현상(SocialPhenomenon): 사회적 문제와 현상
+///   • 인구, 경제, 환경, 정치 등 영역별 분류
+///   • 심각도와 진행 상황 추적
+///   • 시작과 종료 시점 (세기/연도 조합)
+///   • 원인 분석과 영향 평가
+/// 
+/// - 현상 지표(SocialPhenomenonMetric): 정량적 측정
+///   • 연도별 지표 데이터 (출생률, 실업률 등)
+///   • 측정값, 단위, 출처 정보
+///   • 시계열 데이터로 변화 추이 분석
+/// 
+/// - 관측 데이터(SocialPhenomenonObservation): 연구 기관별 관측
+///   • 기관별 편향과 방법론 차이 ('하우스 이펙트')
+///   • 표본 설계와 조사 방식
+///   • 다형성 관계로 다양한 대상 관측
+///   • 메타데이터와 방법론 상세 기록
+/// 
+/// - 해결책(Solution): 대응 방안과 정책
+///   • 시행된 정책과 프로그램
+///   • 효과성 평가와 비용 분석
+///   • 성공/실패 사례 축적
+/// 
+/// - 태그 시스템: 유연한 분류와 검색
+///   • 주제별, 지역별, 방법론별 태그
+///   • 다중 태그로 복합적 특성 표현
+/// 
+/// 활용 사례:
+/// - 인구 감소, 고령화 등 인구 문제
+/// - 여론조사의 기관별 편향 분석
+/// - 경제 지표의 시계열 분석
+/// - 정책 효과성 비교 연구
+/// 
+/// 특징:
+/// - 정량적 데이터와 정성적 분석 결합
+/// - 연구 방법론의 투명성 확보
+/// - 시간적 변화와 인과관계 추적
+/// - 증거 기반 정책 수립 지원
+/// 
+/// 세기와 연도 정보를 함께 관리하여 역사적 맥락을 더 정확하게 파악할 수 있습니다.
+/// 정확한 연도를 모를 때는 세기만 입력하고, 알 수 있을 때는 연도도 함께 입력할 수 있습니다.
+/// 예시:
+/// - startCentury: TWENTIETH, startYear: 1989 (20세기 1989년)
+/// - startCentury: NINETEENTH, startYear: 1868 (19세기 1868년)
+/// - startCentury: BC_3RD, startYear: -250 (기원전 3세기 250년)
+/// - startCentury: BC_50TH, startYear: null (기원전 50세기, 정확한 연도 불명)
+/// - startCentury: BC_30TH, startYear: null (기원전 30세기, 정확한 연도 불명)
+
+// ========================
+// Enums for Social Phenomena
+// ========================
+
+/// 사회현상/문제의 카테고리를 정의합니다.
+enum SocialPhenomenonCategory {
+  /// 인구 문제
+  POPULATION
+  /// 경제 문제
+  ECONOMY
+  /// 사회 문제
+  SOCIETY
+  /// 환경 문제
+  ENVIRONMENT
+  /// 정치 문제
+  POLITICS
+  /// 교육 문제
+  EDUCATION
+  /// 보건 문제
+  HEALTHCARE
+  /// 기술 문제
+  TECHNOLOGY
+  /// 문화 문제
+  CULTURE
+  /// 기타
+  OTHER
+}
+
+/// 사회현상/문제의 심각도 수준을 정의합니다.
+enum SeverityLevel {
+  /// 매우 낮음
+  VERY_LOW
+  /// 낮음
+  LOW
+  /// 보통
+  MEDIUM
+  /// 높음
+  HIGH
+  /// 매우 높음
+  VERY_HIGH
+  /// 심각
+  CRITICAL
+}
+
+/// 사회현상/문제의 현재 상태를 정의합니다.
+enum PhenomenonStatus {
+  /// 진행중
+  ONGOING
+  /// 해결됨
+  RESOLVED
+  /// 악화됨
+  WORSENED
+  /// 안정화됨
+  STABILIZED
+  /// 역사적 (과거에만 존재)
+  HISTORICAL
+}
+
+/// 관측된 효과의 방향(부호)을 정의합니다.
+enum PhenomenonDirection {
+  /// 긍정적 영향(값 > 0)
+  POSITIVE
+  /// 부정적 영향(값 < 0)
+  NEGATIVE
+  /// 중립(0 또는 방향성 판단 불가)
+  NEUTRAL
+}
+
+/// 세기 정보를 정의합니다.
+/// 정확한 연도를 모를 때 세기로 "퉁칠" 수 있도록 설계되었습니다.
+enum Century {
+  /// 기원전 50세기 (기원전 5000년~4901년)
+  BC_50TH
+  /// 기원전 49세기 (기원전 4900년~4801년)
+  BC_49TH
+  /// 기원전 48세기 (기원전 4800년~4701년)
+  BC_48TH
+  /// 기원전 47세기 (기원전 4700년~4601년)
+  BC_46TH
+  /// 기원전 46세기 (기원전 4600년~4501년)
+  BC_45TH
+  /// 기원전 45세기 (기원전 4500년~4401년)
+  BC_44TH
+  /// 기원전 44세기 (기원전 4400년~4301년)
+  BC_43RD
+  /// 기원전 43세기 (기원전 4300년~4201년)
+  BC_42ND
+  /// 기원전 42세기 (기원전 4200년~4101년)
+  BC_41ST
+  /// 기원전 40세기 (기원전 4000년~3901년)
+  BC_40TH
+  /// 기원전 39세기 (기원전 3900년~3801년)
+  BC_39TH
+  /// 기원전 38세기 (기원전 3800년~3701년)
+  BC_38TH
+  /// 기원전 37세기 (기원전 3700년~3601년)
+  BC_37TH
+  /// 기원전 36세기 (기원전 3600년~3501년)
+  BC_36TH
+  /// 기원전 35세기 (기원전 3500년~3401년)
+  BC_35TH
+  /// 기원전 34세기 (기원전 3400년~3301년)
+  BC_34TH
+  /// 기원전 33세기 (기원전 3300년~3201년)
+  BC_33RD
+  /// 기원전 32세기 (기원전 3200년~3101년)
+  BC_32ND
+  /// 기원전 31세기 (기원전 3100년~3001년)
+  BC_31ST
+  /// 기원전 30세기 (기원전 3000년~2901년)
+  BC_30TH
+  /// 기원전 29세기 (기원전 2900년~2801년)
+  BC_29TH
+  /// 기원전 28세기 (기원전 2800년~2701년)
+  BC_28TH
+  /// 기원전 27세기 (기원전 2700년~2601년)
+  BC_27TH
+  /// 기원전 26세기 (기원전 2600년~2501년)
+  BC_26TH
+  /// 기원전 25세기 (기원전 2500년~2401년)
+  BC_25TH
+  /// 기원전 24세기 (기원전 2400년~2301년)
+  BC_24TH
+  /// 기원전 23세기 (기원전 2300년~2201년)
+  BC_23RD
+  /// 기원전 22세기 (기원전 2200년~2101년)
+  BC_22ND
+  /// 기원전 21세기 (기원전 2100년~2001년)
+  BC_21ST
+  /// 기원전 20세기 (기원전 2000년~1901년)
+  BC_20TH
+  /// 기원전 19세기 (기원전 1900년~1801년)
+  BC_19TH
+  /// 기원전 18세기 (기원전 1800년~1701년)
+  BC_18TH
+  /// 기원전 17세기 (기원전 1700년~1601년)
+  BC_17TH
+  /// 기원전 16세기 (기원전 1600년~1501년)
+  BC_16TH
+  /// 기원전 15세기 (기원전 1500년~1401년)
+  BC_15TH
+  /// 기원전 14세기 (기원전 1400년~1301년)
+  BC_14TH
+  /// 기원전 13세기 (기원전 1300년~1201년)
+  BC_13TH
+  /// 기원전 12세기 (기원전 1200년~1101년)
+  BC_12TH
+  /// 기원전 11세기 (기원전 1100년~1001년)
+  BC_11TH
+  /// 기원전 10세기 (기원전 1000년~901년)
+  BC_10TH
+  /// 기원전 9세기 (기원전 900년~801년)
+  BC_9TH
+  /// 기원전 8세기 (기원전 800년~701년)
+  BC_8TH
+  /// 기원전 7세기 (기원전 700년~601년)
+  BC_7TH
+  /// 기원전 6세기 (기원전 600년~501년)
+  BC_6TH
+  /// 기원전 5세기 (기원전 500년~401년)
+  BC_5TH
+  /// 기원전 4세기 (기원전 400년~301년)
+  BC_4TH
+  /// 기원전 3세기 (기원전 300년~201년)
+  BC_3RD
+  /// 기원전 2세기 (기원전 200년~101년)
+  BC_2ND
+  /// 기원전 1세기 (기원전 100년~1년)
+  BC_1ST
+  /// 1세기 (1년~100년)
+  FIRST
+  /// 2세기 (101년~200년)
+  SECOND
+  /// 3세기 (201년~300년)
+  THIRD
+  /// 4세기 (301년~400년)
+  FOURTH
+  /// 5세기 (401년~500년)
+  FIFTH
+  /// 6세기 (501년~600년)
+  SIXTH
+  /// 7세기 (601년~700년)
+  SEVENTH
+  /// 8세기 (701년~800년)
+  EIGHTH
+  /// 9세기 (801년~900년)
+  NINTH
+  /// 10세기 (901년~1000년)
+  TENTH
+  /// 11세기 (1001년~1100년)
+  ELEVENTH
+  /// 12세기 (1101년~1200년)
+  TWELFTH
+  /// 13세기 (1201년~1300년)
+  THIRTEENTH
+  /// 14세기 (1301년~1400년)
+  FOURTEENTH
+  /// 15세기 (1401년~1500년)
+  FIFTEENTH
+  /// 16세기 (1501년~1600년)
+  SIXTEENTH
+  /// 17세기 (1601년~1700년)
+  SEVENTEENTH
+  /// 18세기 (1701년~1800년)
+  EIGHTEENTH
+  /// 19세기 (1801년~1900년)
+  NINETEENTH
+  /// 20세기 (1901년~2000년)
+  TWENTIETH
+  /// 21세기 (2001년~2100년)
+  TWENTY_FIRST
+  /// 22세기 (2101년~2200년)
+  TWENTY_SECOND
+}
+
+/// 해결책/대응방안의 상태를 정의합니다.
+enum SolutionStatus {
+  /// 제안됨
+  PROPOSED
+  /// 검토중
+  UNDER_REVIEW
+  /// 시행중
+  IMPLEMENTING
+  /// 완료됨
+  COMPLETED
+  /// 실패함
+  FAILED
+  /// 중단됨
+  DISCONTINUED
+}
+
+// ========================
+// SocialPhenomenon
+// ========================
+
+/// 국가별 사회현상/문제 모델
+model SocialPhenomenon {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 현상/문제 제목
+  title String @db.VarChar(200)
+
+  /// 현상/문제 설명
+  description String? @db.Text
+
+  /// 카테고리
+  category SocialPhenomenonCategory
+
+  /// 심각도 수준
+  severityLevel SeverityLevel @map("severity_level")
+
+  /// 현상이 시작된 세기
+  startCentury Century? @map("start_century")
+
+  /// 현상이 시작된 연도
+  startYear Int? @map("start_year")
+
+  /// 현상이 종료된 세기
+  endCentury Century? @map("end_century")
+
+  /// 현상이 종료된 연도 (NULL이면 현재 진행중)
+  endYear Int? @map("end_year")
+
+  /// 현재 상태
+  status PhenomenonStatus @default(ONGOING)
+
+  /// 사회적 영향에 대한 상세 설명
+  impactDescription String? @map("impact_description") @db.Text
+
+  /// 원인 분석
+  causeAnalysis String? @map("cause_analysis") @db.Text
+
+  /// 썸네일 이미지 URL
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  //--- 외래키
+  /// 국가 ID (현대 국가)
+  countryId           String? @map("country_id") @db.Char(36)
+  /// 역사적 국가 ID (과거 국가)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  //--- 관계 필드
+  country       HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
+  modernCountry Country?           @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  /// 연도별 세부 지표 데이터
+  yearlyMetrics SocialPhenomenonMetric[]
+  /// 해결책/대응방안
+  solutions     Solution[]
+  /// 관련 태그들
+  tags          SocialPhenomenonTagRelation[]
+  /// 현상의 구체적 관측(기관, 맥락, 방법론 등 포함)
+  observations  SocialPhenomenonObservation[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_social_phenomenon_countryId")
+  @@index([historicalCountryId], name: "idx_social_phenomenon_historicalCountryId")
+  @@index([category], name: "idx_social_phenomenon_category")
+  @@index([status], name: "idx_social_phenomenon_status")
+  @@index([startCentury], name: "idx_social_phenomenon_startCentury")
+  @@index([startYear], name: "idx_social_phenomenon_startYear")
+  @@index([endCentury], name: "idx_social_phenomenon_endCentury")
+  @@map("social_phenomenon")
+}
+
+// ========================
+// SocialPhenomenonMetric
+// ========================
+
+/// 사회현상/문제의 연도별 측정 지표 모델
+model SocialPhenomenonMetric {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사회현상/문제 ID
+  phenomenonId String @map("phenomenon_id") @db.Char(36)
+
+  /// 측정 세기
+  century Century? @map("century")
+
+  /// 측정 연도
+  year Int
+
+  /// 측정 지표명 (예: 출생률, 실업률, GDP 성장률)
+  metricName String @map("metric_name") @db.VarChar(100)
+
+  /// 측정값
+  metricValue Decimal? @map("metric_value") @db.Decimal(15, 4)
+
+  /// 측정 단위 (예: %, 명, 달러)
+  metricUnit String? @map("metric_unit") @db.VarChar(50)
+
+  /// 데이터 출처
+  source String? @db.VarChar(200)
+
+  /// 추가 메모
+  notes String? @db.Text
+
+  //--- 관계 필드
+  phenomenon SocialPhenomenon @relation(fields: [phenomenonId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([phenomenonId, year, metricName], name: "uniq_metric_phenomenon_year_name")
+  @@index([phenomenonId], name: "idx_metric_phenomenonId")
+  @@index([year], name: "idx_metric_year")
+  @@map("social_phenomenon_metric")
+}
+
+// ========================
+// SocialPhenomenonObservation
+// ========================
+
+/// 특정 현상에 대한 관측치(예: 여론조사 '하우스 이펙트' 편향치)를 저장하는 모델
+model SocialPhenomenonObservation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 어떤 현상에 대한 관측인가
+  phenomenonId String @map("phenomenon_id") @db.Char(36)
+
+  /// 관측 대상(다형 FK: COUNTRY, PERSON, 등) 타입
+  subjectType AggregateType @map("subject_type")
+
+  /// 관측 대상의 PK (subjectType과 조합하여 식별)
+  subjectId String @map("subject_id") @db.Char(36)
+
+  /// 관측을 수행한 기관명(예: 갤럽, 유고브). 별도 조직 모델이 없으므로 문자열로 보관
+  organizationName String? @map("organization_name") @db.VarChar(100)
+
+  /// 관측 맥락(예: 2024 대선, 특정 문항 등)
+  context String? @db.VarChar(255)
+
+  /// 관측 범위 시작일(기간 기반 관측을 위한 옵션)
+  observedStartAt DateTime? @map("observed_start_at")
+
+  /// 관측 범위 종료일(단일 시점인 경우 NULL 가능)
+  observedEndAt DateTime? @map("observed_end_at")
+
+  /// 지표명(예: house_effect_bias, approval_gap)
+  metricName String @map("metric_name") @db.VarChar(100)
+
+  /// 관측값(예: +1.8, -2.3)
+  metricValue Decimal @map("metric_value") @db.Decimal(15, 4)
+
+  /// 단위(예: pp, %, index)
+  metricUnit String? @map("metric_unit") @db.VarChar(20)
+
+  /// 효과 방향(부호). metricValue로도 유추 가능하지만 검색/필터 용이성을 위해 별도 보관
+  direction PhenomenonDirection? @map("direction")
+
+  /// 표본수(N)
+  sampleSize Int? @map("sample_size")
+
+  /// 표본 모집단(예: LV, RV, A)
+  population String? @db.VarChar(20)
+
+  /// 조사 방식(예: PHONE, ONLINE, MIXED)
+  mode String? @db.VarChar(20)
+
+  /// 방법론 세부(가중치, 문항, 설계 등). JSON으로 유연 저장
+  method Json? @map("method")
+
+  /// 출처(URL 또는 서지)
+  source String? @db.VarChar(255)
+
+  /// 비고 메모
+  notes String? @db.Text
+
+  //--- 관계 필드
+  phenomenon SocialPhenomenon @relation(fields: [phenomenonId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([phenomenonId], name: "idx_observation_phenomenonId")
+  @@index([subjectType, subjectId], name: "idx_observation_subject")
+  @@index([organizationName], name: "idx_observation_orgName")
+  @@index([metricName], name: "idx_observation_metricName")
+  @@map("social_phenomenon_observation")
+}
+
+// ========================
+// Solution
+// ========================
+
+/// 사회현상/문제에 대한 해결책/대응방안 모델
+model Solution {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사회현상/문제 ID
+  phenomenonId String @map("phenomenon_id") @db.Char(36)
+
+  /// 해결책 제목
+  title String @db.VarChar(200)
+
+  /// 해결책 상세 설명
+  description String? @db.Text
+
+  /// 시행 세기
+  implementationCentury Century? @map("implementation_century")
+
+  /// 시행 연도
+  implementationYear Int? @map("implementation_year")
+
+  /// 효과성 평가 (1-10)
+  effectivenessRating Int? @map("effectiveness_rating")
+
+  /// 예상 비용
+  costEstimate Decimal? @map("cost_estimate") @db.Decimal(15, 2)
+
+  /// 비용 통화
+  costCurrency String? @default("USD") @map("cost_currency") @db.VarChar(3)
+
+  /// 현재 상태
+  status SolutionStatus @default(PROPOSED)
+
+  /// 시행 결과 및 평가
+  outcome String? @db.Text
+
+  /// 썸네일 이미지 URL
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  //--- 관계 필드
+  phenomenon SocialPhenomenon @relation(fields: [phenomenonId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([phenomenonId], name: "idx_solution_phenomenonId")
+  @@index([status], name: "idx_solution_status")
+  @@index([implementationYear], name: "idx_solution_implementationYear")
+  @@map("solution")
+}
+
+// ========================
+// SocialPhenomenonTag
+// ========================
+
+/// 사회현상/문제를 분류하는 태그 모델
+model SocialPhenomenonTag {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 태그명
+  name String @unique @db.VarChar(100)
+
+  /// 태그 설명
+  description String? @db.Text
+
+  /// 태그 카테고리
+  category String? @db.VarChar(50)
+
+  /// 태그 색상 (UI에서 사용)
+  color String? @db.VarChar(7) // HEX 색상 코드
+
+  /// 썸네일 이미지 URL
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  //--- 관계 필드
+  phenomena SocialPhenomenonTagRelation[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("social_phenomenon_tag")
+}
+
+// ========================
+// SocialPhenomenonTagRelation
+// ========================
+
+/// 사회현상/문제와 태그 간의 연결 모델
+model SocialPhenomenonTagRelation {
+  /// 사회현상/문제 ID
+  phenomenonId String @map("phenomenon_id") @db.Char(36)
+
+  /// 태그 ID
+  tagId String @map("tag_id") @db.Char(36)
+
+  //--- 관계 필드
+  phenomenon SocialPhenomenon    @relation(fields: [phenomenonId], references: [id], onDelete: Cascade)
+  tag        SocialPhenomenonTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([phenomenonId, tagId])
+  @@index([phenomenonId], name: "idx_phenomenon_tag_phenomenonId")
+  @@index([tagId], name: "idx_phenomenon_tag_tagId")
+  @@map("social_phenomenon_tag_relation")
+}

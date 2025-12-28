@@ -1,0 +1,56 @@
+/// ║                               DYNASTY DOMAIN                                 ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 왕조, 가문, 혈통 등 세습적 집단을 관리합니다.
+/// 
+/// 주요 기능:
+/// - 왕조/가문(Dynasty): 혈통 기반 집단
+///   • 왕실, 귀족 가문, 유명 가계 등
+///   • 가문의 흥망성쇠 기간 추적
+///   • 가문별 특징과 역사적 의미
+///   • 대표 이미지 및 상징 관리
+/// 
+/// 활용 사례:
+/// - 조선 왕조, 이씨 조선 왕가
+/// - 유럽의 합스부르크 가문
+/// - 로마의 율리우스 가문
+/// - 일본의 후지와라 가문
+/// - 중국의 각 왕조별 황실
+/// 
+/// 특징:
+/// - 인물(Person) 도메인과 긴밀한 연관
+/// - 정치적 권력과 혈통의 결합
+/// - 장기간에 걸친 가계 추적
+/// - 문화적/사회적 영향력 기록
+
+// ========================
+// Dynasty (가문)
+// ========================
+model Dynasty {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 가문명
+  name String @unique @db.VarChar(100)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  //--- 관계 필드
+  persons Person[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dynasty")
+}

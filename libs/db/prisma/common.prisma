@@ -1,0 +1,130 @@
+/// ║                               COMMON DOMAIN                                  ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 시스템의 기본적인 사용자 관리와 공통 기능을 담당합니다.
+/// 
+/// 주요 기능:
+/// - 사용자 계정(Account): 로그인, 인증, 권한 관리
+/// - 히어로(Hero): 사용자가 선택할 수 있는 아바타/캐릭터 시스템
+/// - 리프레시 토큰(RefreshToken): JWT 토큰 갱신을 위한 보안 토큰 관리
+/// - 액션 로그(ActionLog): 시스템 전체의 CRUD 작업 기록
+/// - 첨부파일(Attachment): 다양한 엔티티에 연결되는 파일 관리
+/// 
+/// 특징:
+/// - 인증/인가 관련 핵심 기능
+/// - 다형성 관계 활용 (ActionLog, Attachment)
+/// - 보안과 직결되는 민감한 데이터 포함
+
+// ========================
+// User
+// ========================
+
+/// 사용자 정보 테이블
+model Account {
+  id            String         @id @default(uuid()) @db.Char(36)
+  /// 선택한 히어로 (nullable)
+  heroId        String?        @map("hero_id")
+  /// 사용자 계정명 (고유)
+  username      String         @unique @map("user_name") @db.VarChar(50)
+  /// 해시된 비밀번호
+  passwordHash  String         @map("password_hash") @db.VarChar(255)
+  /// 가입 일자
+  createdAt     DateTime       @default(now()) @map("created_at")
+  /// 사용자에 연결된 리프레시 토큰 목록
+  refreshTokens RefreshToken[]
+  hero          Hero?          @relation(fields: [heroId], references: [id])
+
+  @@map("account")
+}
+
+/// 히어로 도감(카탈로그) 테이블
+model Hero {
+  id        String  @id @default(uuid()) @db.Char(36)
+  /// 히어로 이름 (고유)
+  name      String  @unique
+  /// 히어로 설명
+  bio       String?
+  /// 썸네일 이미지 경로
+  thumbnail String?
+
+  /// 이 히어로를 선택한 유저 목록 (1:N 관계)
+  accounts Account[]
+
+  @@map("hero")
+}
+
+/// 리프레시 토큰 저장 테이블
+model RefreshToken {
+  /// 고유 토큰 ID
+  id        String   @id @default(uuid()) @db.Char(36)
+  /// 연결된 사용자 ID (FK)
+  accountId String   @map("account_id") @db.Char(36)
+  /// 토큰 해시 (고유)
+  tokenHash String   @unique @map("token_hash") @db.VarChar(255)
+  /// 만료 시각
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
+  /// 취소 여부 (true = 무효화된 토큰)
+  revoked   Boolean  @default(false) @map("revoked")
+  /// 사용자와의 관계
+  account   Account  @relation(fields: [accountId], references: [id])
+
+  /// 사용자 기준 인덱스 (조회 속도 향상)
+  @@index([accountId])
+  @@map("refresh_token")
+}
+
+model ActionLog {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 대상 타입
+  ownerType AggregateType @map("owner_type")
+
+  /// 대상 PK
+  recordId String? @map("record_id") @db.Char(36)
+
+  /// 메시지
+  message String? @db.VarChar(255)
+
+  /// 이벤트 메서드 (CREATE/UPDATE/DELETE)
+  method EventMethod @map("method")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("action_log")
+}
+
+// ========================
+// Attachment
+// ========================
+model Attachment {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 첨부 대상(열거형)
+  ownerType AttachmentOwner @map("owner_type")
+
+  /// 첨부 대상의 PK값
+  ownerId String @map("owner_id") @db.Char(36)
+
+  /// 파일 제목
+  title String @db.VarChar(100)
+
+  /// 파일 경로
+  filePath String @map("file_path") @db.VarChar(100)
+
+  /// 파일 유형 (예: mime)
+  fileType String @map("file_type") @db.VarChar(100)
+
+  /// 파일 크기(byte)
+  fileSize Int @map("file_size")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([ownerType], name: "idx_attachment_ownerType")
+  @@index([ownerId], name: "idx_attachment_ownerId")
+  @@map("attachment")
+}

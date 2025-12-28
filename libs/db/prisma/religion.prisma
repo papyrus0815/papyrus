@@ -1,0 +1,99 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                              RELIGION DOMAIN                                 ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 종교와 신앙 체계를 관리합니다.
+/// 
+/// 주요 기능:
+/// - 종교(Religion): 주요 종교 전통
+///   • 기독교, 이슬람교, 불교, 힌두교 등
+///   • 종교의 기원과 발전 과정
+///   • 교리적 특징과 신앙 체계
+///   • 지리적 확산과 문화적 영향
+/// 
+/// - 교파(ReligionDenomination): 종교 내 분파
+///   • 계층적 교파 구조 (대교파 > 소교파)
+///   • 교리적 차이와 분열 배경
+///   • 시대별 교파 형성과 소멸
+///   • 지역적 특색과 전통
+/// 
+/// 활용 사례:
+/// - 기독교: 가톨릭, 정교회, 개신교 등
+/// - 이슬람교: 수니파, 시아파 등
+/// - 불교: 대승불교, 소승불교, 선불교 등
+/// - 개신교: 루터교, 장로교, 감리교 등
+/// 
+/// 특징:
+/// - 인물의 정체성과 세계관 형성
+/// - 정치와 사회에 미치는 영향
+/// - 문화와 예술 발전의 원동력
+/// - 국제 관계와 갈등의 배경
+/// - 교육과 복지 활동의 주체
+
+// ========================
+// Religion
+// ========================
+model Religion {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 종교명
+  name String @unique @db.VarChar(100)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 종교 시작일
+  foundationDate DateTime? @map("foundation_date")
+
+  //--- 관계 필드
+  denominations ReligionDenomination[]
+  persons       Person[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("religion")
+}
+
+// ========================
+// ReligionDenomination
+// ========================
+model ReligionDenomination {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 종교 ID
+  religionId String @map("religion_id") @db.Char(36)
+
+  /// 상위 교파 ID
+  parentId String? @map("parent_id") @db.Char(36)
+
+  /// 교파명
+  name String @db.VarChar(100)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  //--- 관계 필드
+  religion Religion               @relation(fields: [religionId], references: [id], onDelete: Cascade)
+  parent   ReligionDenomination?  @relation("ReligionDenominationHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children ReligionDenomination[] @relation("ReligionDenominationHierarchy")
+  persons  Person[]               @relation("DenominationToPerson")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("religion_denomination")
+}

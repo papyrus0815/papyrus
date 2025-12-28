@@ -1,0 +1,337 @@
+/// ║                        COUNTRY STATISTICS DOMAIN                         ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 국가별 년도별 통계 데이터를 관리합니다.
+/// 
+/// 주요 기능:
+/// - 경제 지표(CountryEconomicIndicator): GDP, 무역, 재정 등
+///   • GDP, 1인당 GDP, GDP 성장률
+///   • 무역수지, 인플레이션, 실업률
+///   • 정부부채, 재정수지
+/// 
+/// - 인구 지표(CountryDemographicIndicator): 인구 통계
+///   • 총인구, 인구증가율, 인구밀도
+///   • 출생률, 사망률, 합계출산율
+///   • 도시화율, 기대수명
+/// 
+/// - 발전 지표(CountryDevelopmentIndicator): 사회 발전 수준
+///   • 교육지수, 문해율
+///   • 건강지수, 영아사망률
+///   • 인간개발지수(HDI), GNI
+///   • 에너지 소비, CO2 배출
+/// 
+/// 특징:
+/// - 년도별 시계열 데이터 관리
+/// - 국가 간 비교 분석 가능
+/// - 트렌드 분석 및 예측 근거
+/// - 다양한 국제기구 데이터 통합
+
+// ========================
+// CountryEconomicIndicator
+// ========================
+model CountryEconomicIndicator {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 연도
+  year Int
+
+  //--- GDP 관련
+  /// GDP (명목, USD)
+  gdp Decimal? @db.Decimal(20, 2)
+
+  /// 1인당 GDP (USD)
+  gdpPerCapita Decimal? @map("gdp_per_capita") @db.Decimal(15, 2)
+
+  /// GDP 성장률 (%)
+  gdpGrowthRate Decimal? @map("gdp_growth_rate") @db.Decimal(6, 2)
+
+  /// 실질 GDP
+  realGdp Decimal? @map("real_gdp") @db.Decimal(20, 2)
+
+  //--- 물가/인플레이션
+  /// 인플레이션율 (%)
+  inflationRate Decimal? @map("inflation_rate") @db.Decimal(6, 2)
+
+  /// 소비자물가지수
+  cpi Decimal? @db.Decimal(10, 2)
+
+  //--- 고용
+  /// 실업률 (%)
+  unemploymentRate Decimal? @map("unemployment_rate") @db.Decimal(5, 2)
+
+  /// 경제활동참가율 (%)
+  laborForceParticipationRate Decimal? @map("labor_force_participation_rate") @db.Decimal(5, 2)
+
+  //--- 무역
+  /// 무역수지 (USD)
+  tradeBalance Decimal? @map("trade_balance") @db.Decimal(20, 2)
+
+  /// 경상수지 (USD)
+  currentAccountBalance Decimal? @map("current_account_balance") @db.Decimal(20, 2)
+
+  //--- 재정
+  /// 정부부채 (USD)
+  governmentDebt Decimal? @map("government_debt") @db.Decimal(20, 2)
+
+  /// GDP 대비 정부부채 비율 (%)
+  debtToGdpRatio Decimal? @map("debt_to_gdp_ratio") @db.Decimal(6, 2)
+
+  /// 재정수지 (USD)
+  fiscalBalance Decimal? @map("fiscal_balance") @db.Decimal(20, 2)
+
+  //--- 투자
+  /// 외국인직접투자 (FDI, USD)
+  fdi Decimal? @db.Decimal(20, 2)
+
+  /// 외환보유액 (USD)
+  foreignReserves Decimal? @map("foreign_reserves") @db.Decimal(20, 2)
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([countryId, year], name: "uniq_economic_indicator_country_year")
+  @@index([countryId], name: "idx_economic_indicator_countryId")
+  @@index([year], name: "idx_economic_indicator_year")
+  @@index([countryId, year], name: "idx_economic_indicator_country_year")
+  @@map("country_economic_indicator")
+}
+
+// ========================
+// CountryDemographicIndicator
+// ========================
+model CountryDemographicIndicator {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 연도
+  year Int
+
+  //--- 인구 관련
+  /// 총인구
+  population BigInt? @db.BigInt
+
+  /// 인구증가율 (%)
+  populationGrowthRate Decimal? @map("population_growth_rate") @db.Decimal(6, 2)
+
+  /// 인구밀도 (명/km²)
+  populationDensity Decimal? @map("population_density") @db.Decimal(10, 2)
+
+  //--- 연령 구조
+  /// 출생률 (‰)
+  birthRate Decimal? @map("birth_rate") @db.Decimal(6, 2)
+
+  /// 사망률 (‰)
+  deathRate Decimal? @map("death_rate") @db.Decimal(6, 2)
+
+  /// 합계출산율
+  fertilityRate Decimal? @map("fertility_rate") @db.Decimal(4, 2)
+
+  /// 중위연령
+  medianAge Decimal? @map("median_age") @db.Decimal(4, 1)
+
+  /// 0-14세 인구 비율 (%)
+  populationAge0To14 Decimal? @map("population_age_0_to_14") @db.Decimal(5, 2)
+
+  /// 15-64세 인구 비율 (%)
+  populationAge15To64 Decimal? @map("population_age_15_to_64") @db.Decimal(5, 2)
+
+  /// 65세 이상 인구 비율 (%)
+  populationAge65Plus Decimal? @map("population_age_65_plus") @db.Decimal(5, 2)
+
+  //--- 연령대별 성별 인구 (인구 피라미드용)
+  /// 0-9세 남성 인구
+  maleAge0To9 BigInt? @map("male_age_0_to_9") @db.BigInt
+
+  /// 0-9세 여성 인구
+  femaleAge0To9 BigInt? @map("female_age_0_to_9") @db.BigInt
+
+  /// 10-19세 남성 인구
+  maleAge10To19 BigInt? @map("male_age_10_to_19") @db.BigInt
+
+  /// 10-19세 여성 인구
+  femaleAge10To19 BigInt? @map("female_age_10_to_19") @db.BigInt
+
+  /// 20-29세 남성 인구
+  maleAge20To29 BigInt? @map("male_age_20_to_29") @db.BigInt
+
+  /// 20-29세 여성 인구
+  femaleAge20To29 BigInt? @map("female_age_20_to_29") @db.BigInt
+
+  /// 30-39세 남성 인구
+  maleAge30To39 BigInt? @map("male_age_30_to_39") @db.BigInt
+
+  /// 30-39세 여성 인구
+  femaleAge30To39 BigInt? @map("female_age_30_to_39") @db.BigInt
+
+  /// 40-49세 남성 인구
+  maleAge40To49 BigInt? @map("male_age_40_to_49") @db.BigInt
+
+  /// 40-49세 여성 인구
+  femaleAge40To49 BigInt? @map("female_age_40_to_49") @db.BigInt
+
+  /// 50-59세 남성 인구
+  maleAge50To59 BigInt? @map("male_age_50_to_59") @db.BigInt
+
+  /// 50-59세 여성 인구
+  femaleAge50To59 BigInt? @map("female_age_50_to_59") @db.BigInt
+
+  /// 60-69세 남성 인구
+  maleAge60To69 BigInt? @map("male_age_60_to_69") @db.BigInt
+
+  /// 60-69세 여성 인구
+  femaleAge60To69 BigInt? @map("female_age_60_to_69") @db.BigInt
+
+  /// 70-79세 남성 인구
+  maleAge70To79 BigInt? @map("male_age_70_to_79") @db.BigInt
+
+  /// 70-79세 여성 인구
+  femaleAge70To79 BigInt? @map("female_age_70_to_79") @db.BigInt
+
+  /// 80세 이상 남성 인구
+  maleAge80Plus BigInt? @map("male_age_80_plus") @db.BigInt
+
+  /// 80세 이상 여성 인구
+  femaleAge80Plus BigInt? @map("female_age_80_plus") @db.BigInt
+
+  //--- 도시화
+  /// 도시인구
+  urbanPopulation BigInt? @map("urban_population") @db.BigInt
+
+  /// 도시화율 (%)
+  urbanizationRate Decimal? @map("urbanization_rate") @db.Decimal(5, 2)
+
+  //--- 기대수명
+  /// 평균 기대수명
+  lifeExpectancy Decimal? @map("life_expectancy") @db.Decimal(4, 1)
+
+  /// 남성 기대수명
+  lifeExpectancyMale Decimal? @map("life_expectancy_male") @db.Decimal(4, 1)
+
+  /// 여성 기대수명
+  lifeExpectancyFemale Decimal? @map("life_expectancy_female") @db.Decimal(4, 1)
+
+  //--- 성비
+  /// 성비 (남성/여성 * 100)
+  sexRatio Decimal? @map("sex_ratio") @db.Decimal(6, 2)
+
+  //--- 이주
+  /// 순이민자 수
+  netMigration Int? @map("net_migration")
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([countryId, year], name: "uniq_demographic_indicator_country_year")
+  @@index([countryId], name: "idx_demographic_indicator_countryId")
+  @@index([year], name: "idx_demographic_indicator_year")
+  @@index([countryId, year], name: "idx_demographic_indicator_country_year")
+  @@map("country_demographic_indicator")
+}
+
+// ========================
+// CountryDevelopmentIndicator
+// ========================
+model CountryDevelopmentIndicator {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 연도
+  year Int
+
+  //--- 교육
+  /// 문해율 (%)
+  literacyRate Decimal? @map("literacy_rate") @db.Decimal(5, 2)
+
+  /// 교육지수 (0-1)
+  educationIndex Decimal? @map("education_index") @db.Decimal(4, 3)
+
+  /// 평균 교육년수
+  meanYearsOfSchooling Decimal? @map("mean_years_of_schooling") @db.Decimal(4, 1)
+
+  /// 기대 교육년수
+  expectedYearsOfSchooling Decimal? @map("expected_years_of_schooling") @db.Decimal(4, 1)
+
+  //--- 건강
+  /// 건강지수 (0-1)
+  healthIndex Decimal? @map("health_index") @db.Decimal(4, 3)
+
+  /// 영아사망률 (‰)
+  infantMortalityRate Decimal? @map("infant_mortality_rate") @db.Decimal(6, 2)
+
+  /// 5세 이하 사망률 (‰)
+  under5MortalityRate Decimal? @map("under5_mortality_rate") @db.Decimal(6, 2)
+
+  /// 모성사망비 (출생 10만명당)
+  maternalMortalityRatio Decimal? @map("maternal_mortality_ratio") @db.Decimal(8, 2)
+
+  //--- 종합 지수
+  /// 인간개발지수 (HDI, 0-1)
+  hdi Decimal? @db.Decimal(4, 3)
+
+  /// 불평등 조정 HDI
+  inequalityAdjustedHdi Decimal? @map("inequality_adjusted_hdi") @db.Decimal(4, 3)
+
+  /// 국민총소득 (GNI, USD)
+  gni Decimal? @db.Decimal(20, 2)
+
+  /// 1인당 GNI (USD)
+  gniPerCapita Decimal? @map("gni_per_capita") @db.Decimal(15, 2)
+
+  //--- 불평등
+  /// 지니계수 (0-100)
+  giniCoefficient Decimal? @map("gini_coefficient") @db.Decimal(4, 2)
+
+  /// 빈곤율 (%)
+  povertyRate Decimal? @map("poverty_rate") @db.Decimal(5, 2)
+
+  //--- 에너지/환경
+  /// 에너지소비량 (석유환산톤)
+  energyConsumption Decimal? @map("energy_consumption") @db.Decimal(15, 2)
+
+  /// CO2 배출량 (톤)
+  co2Emissions Decimal? @map("co2_emissions") @db.Decimal(15, 2)
+
+  /// 1인당 CO2 배출량 (톤)
+  co2EmissionsPerCapita Decimal? @map("co2_emissions_per_capita") @db.Decimal(8, 2)
+
+  /// 재생에너지 비율 (%)
+  renewableEnergyShare Decimal? @map("renewable_energy_share") @db.Decimal(5, 2)
+
+  //--- 인프라
+  /// 인터넷 보급률 (%)
+  internetPenetration Decimal? @map("internet_penetration") @db.Decimal(5, 2)
+
+  /// 모바일 보급률 (%)
+  mobilePenetration Decimal? @map("mobile_penetration") @db.Decimal(6, 2)
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([countryId, year], name: "uniq_development_indicator_country_year")
+  @@index([countryId], name: "idx_development_indicator_countryId")
+  @@index([year], name: "idx_development_indicator_year")
+  @@index([countryId, year], name: "idx_development_indicator_country_year")
+  @@map("country_development_indicator")
+}

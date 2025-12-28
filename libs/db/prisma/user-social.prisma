@@ -1,0 +1,347 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                           USER & SOCIAL DOMAIN                               ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 사용자 앱(web-user)의 핵심 기능을 지원합니다:
+/// - User: 일반 사용자 계정 (관리자 Account와 분리)
+/// - Curation: 항목 큐레이션 (사용자가 역사 항목에 대해 작성한 포스트)
+/// - Follow: 팔로우 관계
+/// - Like: 좋아요
+/// - Comment: 댓글
+/// - UserRoom: 사용자 방 설정 (싸이월드 스타일)
+/// 
+/// 설계 원칙:
+/// - 기존 Person, Country 등의 마스터 데이터는 그대로 유지
+/// - Curation이 이들을 참조하는 구조
+/// - 다형성 관계를 활용하여 확장 가능하게 설계
+
+/// 큐레이션 가시성
+enum CurationVisibility {
+  /// 공개 (모두 볼 수 있음)
+  PUBLIC
+  /// 팔로워만
+  FOLLOWERS_ONLY
+  /// 비공개 (본인만)
+  PRIVATE
+}
+
+/// 큐레이션 상태
+enum CurationStatus {
+  /// 작성 중 (임시 저장)
+  DRAFT
+  /// 게시됨
+  PUBLISHED
+  /// 검토 중 (신고 등으로)
+  PENDING_REVIEW
+  /// 신고됨
+  REPORTED
+  /// 삭제됨 (소프트 삭제)
+  DELETED
+}
+
+/// 사용자 역할
+enum UserRole {
+  /// 일반 사용자
+  USER
+  /// 검증된 사용자 (큐레이터 검증 없이 바로 게시 가능)
+  VERIFIED
+  /// 큐레이터 (다른 사용자의 콘텐츠 검토 가능)
+  CURATOR
+  /// 관리자
+  ADMIN
+}
+
+// ========================
+// User (일반 사용자)
+// ========================
+model User {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 이메일 (로그인 ID)
+  email String @unique @db.VarChar(255)
+
+  /// 비밀번호 해시
+  passwordHash String @map("password_hash") @db.VarChar(255)
+
+  /// 표시 이름 (닉네임)
+  displayName String @map("display_name") @db.VarChar(50)
+
+  /// 자기소개
+  bio String? @db.Text
+
+  /// 프로필 이미지 URL
+  profileImageUrl String? @map("profile_image_url") @db.VarChar(255)
+
+  /// 사용자 역할
+  role UserRole @default(USER)
+
+  /// 이메일 인증 여부
+  emailVerified Boolean @default(false) @map("email_verified")
+
+  /// 계정 활성화 여부
+  isActive Boolean @default(true) @map("is_active")
+
+  //--- 통계 필드 (비정규화)
+  /// 팔로워 수
+  followerCount Int @default(0) @map("follower_count")
+
+  /// 팔로잉 수
+  followingCount Int @default(0) @map("following_count")
+
+  /// 큐레이션 수
+  curationCount Int @default(0) @map("curation_count")
+
+  //--- 관계 필드
+  /// 이 사용자를 팔로우하는 사람들
+  followers Follow[] @relation("FollowingUser")
+
+  /// 이 사용자가 팔로우하는 사람들
+  following Follow[] @relation("FollowerUser")
+
+  /// 작성한 큐레이션
+  curations Curation[]
+
+  /// 좋아요
+  likes Like[]
+
+  /// 댓글
+  comments Comment[]
+
+  /// 방 설정
+  room UserRoom?
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 마지막 로그인 일시
+  lastLoginAt DateTime? @map("last_login_at")
+
+  @@index([email], name: "idx_user_email")
+  @@index([displayName], name: "idx_user_display_name")
+  @@index([role], name: "idx_user_role")
+  @@map("user")
+}
+
+// ========================
+// Follow (팔로우 관계)
+// ========================
+model Follow {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 팔로우하는 사용자 ID
+  followerId String @map("follower_id") @db.Char(36)
+
+  /// 팔로우 당하는 사용자 ID
+  followingId String @map("following_id") @db.Char(36)
+
+  //--- 관계 필드
+  follower  User @relation("FollowerUser", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowingUser", fields: [followingId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followingId], name: "uniq_follow")
+  @@index([followerId], name: "idx_follow_follower")
+  @@index([followingId], name: "idx_follow_following")
+  @@map("follow")
+}
+
+// ========================
+// Curation (항목 큐레이션)
+// ========================
+/// 사용자가 역사 항목(Person, Country 등)에 대해 작성한 포스트
+model Curation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 작성자 ID
+  userId String @map("user_id") @db.Char(36)
+
+  /// 항목 타입 (기존 AggregateType enum 재사용)
+  itemType AggregateType @map("item_type")
+
+  /// 항목 ID (Person.id, Country.id 등을 참조)
+  itemId String @map("item_id") @db.Char(36)
+
+  /// 제목
+  title String @db.VarChar(200)
+
+  /// 본문 내용 (마크다운)
+  content String @db.Text
+
+  /// 이미지 URL 리스트 (JSON)
+  images Json?
+
+  /// 출처 리스트 (JSON)
+  sources Json?
+
+  /// 태그 리스트 (JSON)
+  tags Json?
+
+  /// 가시성
+  visibility CurationVisibility @default(PUBLIC)
+
+  /// 상태
+  status CurationStatus @default(PUBLISHED)
+
+  //--- 통계 필드 (비정규화)
+  /// 조회 수
+  viewCount Int @default(0) @map("view_count")
+
+  /// 좋아요 수
+  likeCount Int @default(0) @map("like_count")
+
+  /// 댓글 수
+  commentCount Int @default(0) @map("comment_count")
+
+  //--- 품질 관리
+  /// 검증 여부 (큐레이터가 검토한 양질의 콘텐츠)
+  isVerified Boolean @default(false) @map("is_verified")
+
+  /// 검증한 큐레이터 ID
+  verifiedBy String? @map("verified_by") @db.Char(36)
+
+  /// 검증 일시
+  verifiedAt DateTime? @map("verified_at")
+
+  /// 신고 횟수
+  reportCount Int @default(0) @map("report_count")
+
+  //--- 관계 필드
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  likes    Like[]
+  comments Comment[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 게시 일시 (DRAFT → PUBLISHED 전환 시점)
+  publishedAt DateTime? @map("published_at")
+
+  @@index([userId], name: "idx_curation_user")
+  @@index([itemType, itemId], name: "idx_curation_item")
+  @@index([status], name: "idx_curation_status")
+  @@index([visibility], name: "idx_curation_visibility")
+  @@index([publishedAt], name: "idx_curation_published")
+  @@index([isVerified], name: "idx_curation_verified")
+  @@map("curation")
+}
+
+// ========================
+// Like (좋아요)
+// ========================
+model Like {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사용자 ID
+  userId String @map("user_id") @db.Char(36)
+
+  /// 큐레이션 ID
+  curationId String @map("curation_id") @db.Char(36)
+
+  //--- 관계 필드
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  curation Curation @relation(fields: [curationId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, curationId], name: "uniq_like")
+  @@index([userId], name: "idx_like_user")
+  @@index([curationId], name: "idx_like_curation")
+  @@map("like")
+}
+
+// ========================
+// Comment (댓글)
+// ========================
+model Comment {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 큐레이션 ID
+  curationId String @map("curation_id") @db.Char(36)
+
+  /// 작성자 ID
+  userId String @map("user_id") @db.Char(36)
+
+  /// 댓글 내용
+  content String @db.Text
+
+  /// 부모 댓글 ID (대댓글인 경우)
+  parentId String? @map("parent_id") @db.Char(36)
+
+  /// 삭제 여부 (소프트 삭제)
+  isDeleted Boolean @default(false) @map("is_deleted")
+
+  //--- 관계 필드
+  curation Curation @relation(fields: [curationId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies Comment[] @relation("CommentReplies")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([curationId], name: "idx_comment_curation")
+  @@index([userId], name: "idx_comment_user")
+  @@index([parentId], name: "idx_comment_parent")
+  @@map("comment")
+}
+
+// ========================
+// UserRoom (사용자 방 설정)
+// ========================
+/// 싸이월드 스타일의 개인 방 꾸미기 설정
+model UserRoom {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사용자 ID (1:1 관계)
+  userId String @unique @map("user_id") @db.Char(36)
+
+  /// 방 제목
+  title String? @db.VarChar(100)
+
+  /// 방 소개
+  description String? @db.Text
+
+  /// 테마 색상 (HEX)
+  themeColor String? @map("theme_color") @db.VarChar(7)
+
+  /// 배경 이미지 URL
+  backgroundImageUrl String? @map("background_image_url") @db.VarChar(255)
+
+  /// 배경 음악 URL
+  backgroundMusicUrl String? @map("background_music_url") @db.VarChar(255)
+
+  /// 커스텀 CSS (제한된 범위 내)
+  customCss String? @map("custom_css") @db.Text
+
+  /// 방문자 수 표시 여부
+  showVisitorCount Boolean @default(true) @map("show_visitor_count")
+
+  /// 총 방문자 수
+  totalVisitors Int @default(0) @map("total_visitors")
+
+  /// 오늘 방문자 수
+  todayVisitors Int @default(0) @map("today_visitors")
+
+  //--- 관계 필드
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_room")
+}

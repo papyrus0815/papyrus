@@ -1,0 +1,60 @@
+/// ║                              GEOGRAPHY DOMAIN                                ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 지구의 지리적 구분과 지역 정보를 관리합니다.
+/// 
+/// 주요 기능:
+/// - 대륙(Continent): 세계의 대륙 구분 및 계층적 관리
+///   • 면적, 인구, 국가 수 통계
+///   • 타임존 정보 (JSON 형태)
+///   • 상위-하위 대륙 관계 (예: 아시아 > 동아시아)
+/// 
+/// 특징:
+/// - 국가(Country) 모델과 긴밀한 연관
+/// - 계층적 구조 지원 (자기참조 관계)
+/// - 통계 정보 포함으로 대시보드 활용 가능
+/// - ISO 코드 표준 준수
+
+// ========================
+// Continent
+// ========================
+model Continent {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 대륙명
+  name String @unique @db.VarChar(50)
+
+  /// 영문명
+  enName String? @unique @map("en_name") @db.VarChar(50)
+
+  /// ISO 코드
+  isoCode String? @unique @map("iso_code") @db.VarChar(5)
+
+  /// 면적
+  areaSqKm Decimal? @map("area_sq_km") @db.Decimal(15, 2)
+
+  /// 인구
+  population BigInt?
+
+  /// 국가 수
+  countryCount Int? @map("country_count")
+
+  /// 시/분/초대 목록 (타임존)
+  timeZones Json? @map("time_zones")
+
+  /// 상위 대륙
+  parentId String? @map("parent_id") @db.Char(36)
+
+  //--- 관계 필드
+  parent    Continent?  @relation("ContinentHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Continent[] @relation("ContinentHierarchy")
+  countries Country[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId], name: "idx_continent_parentId")
+  @@map("continent")
+}

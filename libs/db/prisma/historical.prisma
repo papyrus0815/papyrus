@@ -1,0 +1,330 @@
+/// ║                       HISTORICAL POLITICAL DOMAIN                            ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 과거에 존재했던 국가들과 그들 간의 복잡한 관계를 관리합니다.
+/// 
+/// 주요 기능:
+/// - 역사적 국가(HistoricalCountry): 과거 정치체
+///   • 제국, 왕국, 공화국 등 다양한 국가 형태
+///   • 존속 기간, 영토, 정치체제 정보
+///   • 현대 국가와의 계승 관계
+/// 
+/// - 국가 계승(HistoricalCountryTransition): 정치체 변천
+///   • 건국, 정복, 독립, 통일, 분열 등 이벤트
+///   • 전임-후임 국가 간 관계
+///   • 역사적 전환점 기록
+/// 
+/// - 국가 소속(HistoricalCountryMembership): 종속 관계
+///   • 식민지, 보호국, 속국, 동맹 등
+///   • 상위-하위 국가 관계
+///   • 시기별 소속 변화 추적
+/// 
+/// - 국가 관계(HistoricalCountryRelation): 수평적 관계
+///   • 동맹, 전쟁, 조공 관계 등
+///   • 양국 간 외교/군사 관계
+///   • 관계 기간과 성격 기록
+/// 
+/// 특징:
+/// - 시간적 차원의 복잡성 고려
+/// - 현대 국가와 명확한 구분
+/// - 다중 관계 모델링으로 역사적 현실 반영
+
+// ========================
+// Enums for Historical Countries (역사적 국가 관계 Enum)
+// ========================
+
+/// 기원 구분 (기원전/기원후)
+enum Era {
+  /// 기원전 (Before Christ)
+  BC
+  /// 기원후 (Anno Domini)
+  AD
+}
+
+/// 역사적 국가의 형태를 정의합니다.
+enum HistoricalStateType {
+  /// 제국 (황제가 다스리는 국가)
+  EMPIRE
+  /// 왕국 (왕이 다스리는 국가)
+  KINGDOM
+  /// 공국 / 대공국 (공작/대공이 다스리는 국가)
+  PRINCIPALITY
+  /// 공화국 (선출된 대표가 다스리는 국가)
+  REPUBLIC
+  /// 연방 (여러 주/국가의 연합체)
+  FEDERATION
+  /// 연합 (느슨한 형태의 국가 연합)
+  CONFEDERATION
+  /// 도시 국가
+  CITY_STATE
+  /// 신정 국가 (종교 지도자가 다스리는 국가)
+  THEOCRACY
+  /// 부족 국가 / 부족 연맹
+  TRIBAL_STATE
+  /// 유목 제국
+  NOMADIC_EMPIRE
+  /// 기타
+  OTHER
+}
+
+/// 국가 계승/변천 이벤트의 종류를 정의합니다.
+enum TransitionEventType {
+  /// 건국
+  FOUNDED
+  /// 정복
+  CONQUEST
+  /// 조약
+  TREATY
+  /// 독립
+  INDEPENDENCE
+  /// 통일
+  UNIFICATION
+  /// 합병/연합
+  UNION
+  /// 멸망
+  DISSOLVED
+  /// 계승
+  SUCCESSION
+  /// 분열
+  SPLIT
+  /// 기타
+  OTHER
+}
+
+/// 국가 소속 관계의 역할을 정의합니다.
+enum HistoricalMembershipRole {
+  /// 식민지
+  COLONY
+  /// 보호국
+  PROTECTORATE
+  /// 자치령
+  DOMINION
+  /// 연방 구성원
+  CONFEDERATION_MEMBER
+  /// 속국
+  VASSAL_STATE
+  /// 동맹
+  ALLY
+  /// 연합
+  UNION
+  /// 계승
+  SUCCESSION
+  /// 기타
+  OTHER
+}
+
+/// 역사적 국가 간 수평적 관계의 종류를 정의합니다.
+enum HistoricalRelationType {
+  /// 동맹
+  ALLIANCE
+  /// 전쟁
+  WAR
+  /// 종주국-속국 관계
+  SUZERAIN_VASSAL
+  /// 조공-책봉 관계
+  TRIBUTARY
+  /// 개인 연합 (동군연합)
+  PERSONAL_UNION
+}
+
+// ========================
+// HistoricalCountry
+// ========================
+
+/// 역사적 국가 모델
+model HistoricalCountry {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가명 (한글)
+  name         String  @map("name") @db.VarChar(50)
+  /// 국가명 (영문, 선택)
+  enName       String? @map("en_name") @db.VarChar(50)
+  /// 설명
+  description  String? @map("description") @db.Text
+  /// 대표 이미지 URL
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  /// 존속 시작 기원 (기원전/기원후)
+  startEra   Era? @map("start_era")
+  /// 존속 시작 연도 (1 이상의 양수)
+  /// 예: 2333 (기원전 2333년), 1392 (기원후 1392년)
+  startYear  Int? @map("start_year")
+  /// 존속 시작 월 (1~12, 모르면 null)
+  startMonth Int? @map("start_month")
+  /// 존속 시작 일 (1~31, 모르면 null)
+  startDay   Int? @map("start_day")
+
+  /// 존속 종료 기원 (기원전/기원후)
+  endEra   Era? @map("end_era")
+  /// 존속 종료 연도 (1 이상의 양수)
+  endYear  Int? @map("end_year")
+  /// 존속 종료 월 (1~12, 모르면 null)
+  endMonth Int? @map("end_month")
+  /// 존속 종료 일 (1~31, 모르면 null)
+  endDay   Int? @map("end_day")
+
+  /// 국가 형태 (HistoricalStateType Enum 참조)
+  stateType HistoricalStateType @map("state_type")
+
+  /// 위도 (수도 또는 중심부)
+  latitude Decimal? @db.Decimal(10, 7)
+
+  /// 경도 (수도 또는 중심부)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  // --- 관계 필드
+  /// 이 국가가 '전임 국가'가 되는 계승 관계
+  predecessorTransitions HistoricalCountryTransition[] @relation("PredecessorTransitions")
+  /// 이 국가가 '후임 국가'가 되는 계승 관계
+  successorTransitions   HistoricalCountryTransition[] @relation("SuccessorTransitions")
+
+  /// 이 국가가 상위 국가(소속을 제공)가 되는 멤버십 관계
+  membershipsParent HistoricalCountryMembership[] @relation("MembershipParent")
+  /// 이 국가가 하위 국가(어딘가에 소속)가 되는 멤버십 관계
+  memberShipMember  HistoricalCountryMembership[] @relation("MembershipMember")
+
+  /// 현대 국가와의 연결 관계
+  modernConnections HistoricalCountryModernCountry[]
+
+  /// 이 국가가 '주체'가 되는 수평적 관계 (동맹, 전쟁 등)
+  relationsAsSubject HistoricalCountryRelation[] @relation("SubjectRelations")
+  /// 이 국가가 '대상'이 되는 수평적 관계 (동맹, 전쟁 등)
+  relationsAsObject  HistoricalCountryRelation[] @relation("ObjectRelations")
+
+  /// 인물 소속 관계
+  personAffiliations PersonCountryAffiliation[] @relation("PersonHistoricalCountryAffiliations")
+
+  events                  Event[]
+  socialPhenomena         SocialPhenomenon[]
+  Organizations           Organization[]                  @relation("OrganizationHistoricalCountry")
+  organizationMemberships OrganizationCountryMembership[] @relation("OrgMembershipHistoricalCountry")
+  PoliticalParty          PoliticalParty[]                @relation("PoliticalPartyHistoricalCountry")
+  governmentPositions     GovernmentPositionDefinition[]  @relation("GovernmentPositionHistoricalCountry")
+  EventTimeline           EventTimeline[]
+  eventCountryRelations   EventCountryRelation[]
+
+  // 🆕 정규화된 군사 사건 관계
+  countriesInSides               CountryInSide[]
+  fromHistoricalCountryRelations EventCountryRelationNew[] @relation("FromHistoricalCountry")
+  toHistoricalCountryRelations   EventCountryRelationNew[] @relation("ToHistoricalCountry")
+  treatySignatories              TreatySignatory[]
+  allianceMembers                AllianceMember[]
+
+  // --- 메타데이터 필드
+  /// 생성 일시
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 마지막 수정 일시
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("historical_country")
+}
+
+/// 국가 계승/변천 관계 모델 (예: 신라 -> 고려)
+model HistoricalCountryTransition {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 전임 국가 ID
+  predecessorId String @map("predecessor_id") @db.Char(36)
+  /// 후임 국가 ID
+  successorId   String @map("successor_id") @db.Char(36)
+
+  /// 전환 이벤트 유형 (TransitionEventType Enum 참조)
+  eventType TransitionEventType @map("event_type")
+  /// 전환 날짜
+  eventDate DateTime            @map("event_date")
+
+  // --- 관계 필드
+  predecessor HistoricalCountry @relation("PredecessorTransitions", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   HistoricalCountry @relation("SuccessorTransitions", fields: [successorId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([predecessorId, successorId], name: "idx_country_transition")
+  @@map("historical_country_transition")
+}
+
+/// 국가 소속/구성 관계 모델 (예: 신성로마제국 - 제후국)
+model HistoricalCountryMembership {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 상위 국가(소속을 제공)의 ID
+  historicalCountryId String @map("historical_country_id") @db.Char(36)
+  /// 하위 국가(상위 국가에 소속)의 ID
+  memberCountryId     String @map("member_country_id") @db.Char(36)
+
+  /// 소속 관계 내 역할 (HistoricalMembershipRole Enum 참조)
+  role HistoricalMembershipRole @map("role")
+
+  /// 소속 관계 시작일
+  membershipStartDate DateTime? @map("membership_start_date")
+  /// 소속 관계 종료일
+  membershipEndDate   DateTime? @map("membership_end_date")
+
+  // --- 관계 필드
+  historicalCountry HistoricalCountry @relation("MembershipParent", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+  memberCountry     HistoricalCountry @relation("MembershipMember", fields: [memberCountryId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([historicalCountryId, memberCountryId], name: "idx_country_membership")
+  @@map("historical_country_membership")
+}
+
+/// 역사적 국가와 현대 국가의 연결 모델
+model HistoricalCountryModernCountry {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 과거 국가 ID
+  historicalCountryId String @map("historical_country_id") @db.Char(36)
+  /// 현대 국가 ID
+  modernCountryId     String @map("modern_country_id") @db.Char(36)
+
+  // --- 관계 필드
+  historicalCountry HistoricalCountry @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
+  modernCountry     Country           @relation(fields: [modernCountryId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([historicalCountryId, modernCountryId], name: "idx_historic_modern_relation")
+  @@map("historical_country_modern_country")
+}
+
+/// 국가 간 수평적 관계 모델 (동맹, 전쟁 등)
+model HistoricalCountryRelation {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 관계의 주체 국가 ID
+  subjectCountryId String @map("subject_country_id") @db.Char(36)
+  /// 관계의 대상 국가 ID
+  objectCountryId  String @map("object_country_id") @db.Char(36)
+
+  /// 관계 유형 (RelationType Enum 참조)
+  relationType HistoricalRelationType @map("relation_type")
+
+  /// 관계 시작일
+  startDate DateTime? @map("start_date")
+  /// 관계 종료일
+  endDate   DateTime? @map("end_date")
+
+  // --- 관계 필드
+  subjectCountry HistoricalCountry @relation("SubjectRelations", fields: [subjectCountryId], references: [id], onDelete: Cascade)
+  objectCountry  HistoricalCountry @relation("ObjectRelations", fields: [objectCountryId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([subjectCountryId, objectCountryId], name: "idx_country_relation")
+  @@map("historical_country_relations")
+}

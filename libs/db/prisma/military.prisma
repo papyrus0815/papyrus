@@ -1,0 +1,833 @@
+/// ║                              MILITARY DOMAIN                                 ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 군사력과 전쟁사를 종합적으로 관리합니다.
+/// 
+/// 주요 기능:
+/// - 무기(Weapon): 개인화기와 화기류
+///   • 구경, 사거리, 무게 등 제원
+///   • 도입/퇴역 연도와 운용 이력
+///   • 무기별 상세 설명과 미디어
+/// 
+/// - 지상장비(GroundVehicle): 기갑차량과 지상 플랫폼
+///   • 전차, 장갑차, 자주포 등
+///   • 장갑, 엔진, 무장 등 세부 사양
+///   • 제조국과 운용국 정보
+/// 
+/// - 항공기(Aircraft): 군용 항공 플랫폼
+///   • 전투기, 폭격기, 수송기, 헬기 등
+///   • 항속거리, 상승한도, 무장 등
+///   • 개발과 도입 과정
+/// 
+/// - 함선(NavalVessel): 해군 함정
+///   • 항공모함, 구축함, 잠수함 등
+///   • 배수량, 추진방식, 함포 등
+///   • 해군력 평가의 핵심 지표
+/// 
+/// - 군부대(MilitaryUnit): 조직 단위
+///   • 사단, 여단, 연대 등 계층 구조
+///   • 창설과 해체, 개편 과정
+///   • 지휘관과 주요 인사
+/// 
+/// - 전쟁사(WarHistory): 전투와 분쟁
+///   • 각종 장비와 부대의 실전 투입
+///   • 전쟁 양상과 전술 변화
+///   • 기술 발전과 전략의 진화
+/// 
+/// 특징:
+/// - 국가 안보와 지정학의 물리적 기반
+/// - 기술 발전과 산업 발달의 동력
+/// - 역사적 사건의 결정적 요소
+/// - 국가 간 힘의 균형과 경쟁
+
+// ========================
+// Enums
+// 여러 모델에서 공통으로 사용하는 선택지를 미리 정의합니다.
+// ========================
+
+/// 무기의 종류를 정의합니다.
+enum WeaponType {
+  /// 소총
+  RIFLE
+  /// 권총
+  PISTOL
+  /// 기관총
+  MACHINE_GUN
+  /// 산탄총
+  SHOTGUN
+  /// 저격소총
+  SNIPER_RIFLE
+  /// 기관단총
+  SUBMACHINE_GUN
+  /// 유탄발사기
+  GRENADE_LAUNCHER
+  /// 대전차화기
+  ANTI_TANK
+  /// 기타
+  OTHER
+}
+
+/// 지상 장비의 종류를 정의합니다.
+enum GroundVehicleType {
+  /// 전차
+  TANK
+  /// 장갑차
+  ARMORED_PERSONNEL_CARRIER
+  /// 보병전투차
+  INFANTRY_FIGHTING_VEHICLE
+  /// 자주포
+  SELF_PROPELLED_ARTILLERY
+  /// 대공차량
+  ANTI_AIRCRAFT
+  /// 지원차량
+  UTILITY
+  /// 기타
+  OTHER
+}
+
+/// 항공기의 종류를 정의합니다.
+enum AircraftType {
+  /// 전투기
+  FIGHTER
+  /// 폭격기
+  BOMBER
+  /// 수송기
+  TRANSPORT
+  /// 헬리콥터
+  HELICOPTER
+  /// 정찰기
+  RECONNAISSANCE
+  /// 드론
+  DRONE
+  /// 기타
+  OTHER
+}
+
+/// 함선의 종류를 정의합니다.
+enum NavalVesselType {
+  /// 항공모함
+  AIRCRAFT_CARRIER
+  /// 구축함
+  DESTROYER
+  /// 호위함
+  FRIGATE
+  /// 순양함
+  CRUISER
+  /// 잠수함
+  SUBMARINE
+  /// 초계함
+  PATROL_BOAT
+  /// 상륙강습함
+  AMPHIBIOUS_ASSAULT_SHIP
+  /// 기타
+  OTHER
+}
+
+/// 군사 자산의 운용 상태를 정의합니다.
+enum OperationalStatus {
+  /// 현재 운용 중
+  ACTIVE
+  /// 비활성 상태 또는 보관 중
+  INACTIVE
+  /// 퇴역 처리됨
+  RETIRED
+  /// 개발 단계
+  IN_DEVELOPMENT
+  /// 시제품 단계
+  PROTOTYPE
+  /// 상태를 알 수 없음
+  UNKNOWN
+}
+
+/// 지상 장비의 엔진 종류를 정의합니다.
+enum GroundVehicleEngineType {
+  /// 디젤 엔진
+  DIESEL
+  /// 가솔린 엔진
+  GASOLINE
+  /// 가스 터빈 엔진
+  GAS_TURBINE
+  /// 전기 모터
+  ELECTRIC
+  /// 하이브리드 (엔진 + 모터)
+  HYBRID
+  /// 기타
+  OTHER
+}
+
+/// 항공기의 엔진 종류를 정의합니다.
+enum AircraftEngineType {
+  /// 터보팬 엔진
+  TURBOFAN
+  /// 터보젯 엔진
+  TURBOJET
+  /// 터보프롭 엔진
+  TURBOPROP
+  /// 피스톤 엔진
+  PISTON
+  /// 전기 모터
+  ELECTRIC
+  /// 기타
+  OTHER
+}
+
+/// 함선의 추진 방식 종류를 정의합니다.
+enum NavalPropulsionType {
+  /// 돛 (범선)
+  SAIL
+  /// 사람의 힘 (노)
+  OARS
+  /// 증기 피스톤 엔진 (주로 석탄/석유 사용)
+  STEAM_PISTON
+  /// 증기 터빈 (주로 석유/원자력 사용)
+  STEAM_TURBINE
+  /// 디젤 엔진
+  DIESEL
+  /// 가스 터빈
+  GAS_TURBINE
+  /// 원자력
+  NUCLEAR
+  /// 디젤-전기
+  DIESEL_ELECTRIC
+  /// 복합 추진 방식 (CODAG, CODLAG 등)
+  COMBINED
+  /// 기타
+  OTHER
+}
+
+/// 부대의 규모 및 종류를 정의합니다.
+enum MilitaryUnitType {
+  // --- 지상군 ---
+  /// 야전군 (Field Army)
+  FIELD_ARMY
+  /// 군단 (Corps)
+  CORPS
+  /// 사단 (Division)
+  DIVISION
+  /// 여단 (Brigade)
+  BRIGADE
+  /// 연대 (Regiment)
+  REGIMENT
+  /// 대대 (Battalion)
+  BATTALION
+  /// 중대 (Company)
+  COMPANY
+  /// 소대 (Platoon)
+  PLATOON
+  /// 분대 (Squad)
+  SQUAD
+
+  // --- 해군 ---
+  /// 함대 (Fleet)
+  FLEET
+  /// 전대 (Flotilla / Squadron)
+  SQUADRON
+
+  // --- 공군 ---
+  /// 비행단 (Wing)
+  WING
+  // 공군 Squadron은 해군과 중복되므로 추가하지 않음
+
+  // --- 특수/기타 ---
+  /// 특수부대 (Special Forces)
+  SPECIAL_FORCES
+  /// 분견대 (Detachment)
+  DETACHMENT
+  /// 기타
+  OTHER
+}
+
+// ========================
+// Weapon Models (무기 관련 모델)
+// ========================
+
+model Weapon {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 무기명
+  name String @db.VarChar(100)
+
+  /// 무기 종류 (WeaponType Enum 참조)
+  weaponType WeaponType? @map("weapon_type")
+
+  /// 제원: 구경 (mm)
+  caliberMm      Decimal? @map("caliber_mm") @db.Decimal(10, 2)
+  /// 제원: 최대 사거리 (m)
+  maxRangeM      Int?     @map("max_range_m")
+  /// 제원: 무게 (kg)
+  weightKg       Decimal? @map("weight_kg") @db.Decimal(10, 2)
+  /// 도입 연도
+  introducedYear Int?     @map("introduced_year")
+  /// 퇴역 연도
+  retiredYear    Int?     @map("retired_year")
+
+  // --- 관계 필드
+  /// 무기에 대한 상세 설명들
+  descriptions WeaponDescription[]
+  /// 무기가 사용된 전쟁 기록
+  wars         WarHistoryWeapon[]
+
+  // --- 메타데이터
+  /// 생성 일시
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 마지막 수정 일시
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("weapons")
+}
+
+model WeaponDescription {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 연결된 무기의 외래 키 (FK)
+  weaponId String @map("weapon_id") @db.Char(36)
+
+  /// 설명 제목
+  title String @db.VarChar(100)
+
+  /// 상세 설명 내용
+  content String @db.Text
+
+  /// 화면에 표시될 순서
+  displayOrder Int? @map("display_order")
+
+  /// 관련 미디어 URL: 이미지
+  imageUrl String? @map("image_url") @db.VarChar(255)
+  /// 관련 미디어 URL: 비디오
+  videoUrl String? @map("video_url") @db.VarChar(255)
+
+  // --- 관계 필드
+  /// 이 설명이 속한 무기
+  weapon Weapon @relation(fields: [weaponId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터
+  /// 생성 일시
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 마지막 수정 일시
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([weaponId])
+  @@map("weapon_descriptions")
+}
+
+// ========================
+// Military Asset Models (군사 자산 모델)
+// ========================
+
+model GroundVehicle {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 차량명
+  name String @db.VarChar(100)
+
+  /// 차량 종류 (GroundVehicleType Enum 참조)
+  vehicleType GroundVehicleType? @map("vehicle_type")
+
+  /// 제조국 또는 운용국의 외래 키 (FK)
+  countryId String? @map("country_id") @db.Char(36)
+
+  // --- 제원
+  /// 장갑 두께 (mm)
+  armorThicknessMm Decimal?                 @map("armor_thickness_mm") @db.Decimal(10, 2)
+  /// 엔진 출력 (마력)
+  enginePowerHp    Int?                     @map("engine_power_hp")
+  /// 엔진 종류 (GroundVehicleEngineType Enum 참조)
+  engineType       GroundVehicleEngineType? @map("engine_type")
+  /// 최대 속도 (km/h)
+  maxSpeedKph      Decimal?                 @map("max_speed_kph") @db.Decimal(10, 2)
+  /// 중량 (톤)
+  weightTon        Decimal?                 @map("weight_ton") @db.Decimal(10, 2)
+  /// 승무원 수
+  crewCount        Int?                     @map("crew_count")
+  /// 주무장 및 부무장
+  armament         String?                  @db.VarChar(255)
+  /// 제조사
+  manufacturer     String?                  @db.VarChar(100)
+  /// 제조 연도
+  manufactureYear  Int?                     @map("manufacture_year")
+  /// 도입 연도
+  introducedYear   Int?                     @map("introduced_year")
+  /// 퇴역 연도
+  retiredYear      Int?                     @map("retired_year")
+  /// 현재 운용 상태 (OperationalStatus Enum 참조)
+  status           OperationalStatus?
+
+  // --- 크기
+  /// 길이 (m)
+  lengthM Decimal? @map("length_m") @db.Decimal(10, 2)
+  /// 폭 (m)
+  widthM  Decimal? @map("width_m") @db.Decimal(10, 2)
+  /// 높이 (m)
+  heightM Decimal? @map("height_m") @db.Decimal(10, 2)
+
+  // --- 부가 정보
+  /// 차량에 대한 상세 설명
+  description String? @db.Text
+  /// 대표 이미지 URL
+  imageUrl    String? @map("image_url") @db.VarChar(255)
+  /// 기타 특징 (예: 수륙양용)
+  features    String? @db.VarChar(255)
+
+  // --- 관계 필드
+  /// 소속 국가
+  country Country?                  @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 참전 기록
+  wars    WarHistoryGroundVehicle[]
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId])
+  @@map("ground_vehicles")
+}
+
+model Aircraft {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 항공기명
+  name String @db.VarChar(100)
+
+  /// 항공기 종류 (AircraftType Enum 참조)
+  aircraftType AircraftType? @map("aircraft_type")
+
+  /// 제조국 또는 운용국의 외래 키 (FK)
+  countryId String? @map("country_id") @db.Char(36)
+
+  // --- 제원
+  /// 엔진 수
+  engineCount     Int?                @map("engine_count")
+  /// 엔진 종류 (AircraftEngineType Enum 참조)
+  engineType      AircraftEngineType? @map("engine_type")
+  /// 최대 속도 (km/h)
+  maxSpeedKph     Decimal?            @map("max_speed_kph") @db.Decimal(10, 2)
+  /// 항속 거리 (km)
+  rangeKm         Decimal?            @map("range_km") @db.Decimal(10, 2)
+  /// 실용 상승 한도 (m)
+  serviceCeilingM Int?                @map("service_ceiling_m")
+  /// 승무원 수
+  crewCount       Int?                @map("crew_count")
+  /// 주무장 및 부무장
+  armament        String?             @db.VarChar(255)
+  /// 제조사
+  manufacturer    String?             @db.VarChar(100)
+  /// 초도 비행 연도
+  firstFlightYear Int?                @map("first_flight_year")
+  /// 도입 연도
+  introducedYear  Int?                @map("introduced_year")
+  /// 퇴역 연도
+  retiredYear     Int?                @map("retired_year")
+  /// 현재 운용 상태 (OperationalStatus Enum 참조)
+  status          OperationalStatus?
+
+  // --- 중량 및 크기
+  /// 중량 (톤)
+  weightTon        Decimal? @map("weight_ton") @db.Decimal(10, 2)
+  /// 최대 이륙 중량 (톤)
+  maxTakeoffWeight Decimal? @map("max_takeoff_weight_ton") @db.Decimal(10, 2)
+  /// 길이 (m)
+  lengthM          Decimal? @map("length_m") @db.Decimal(10, 2)
+  /// 날개 폭 (m)
+  wingspanM        Decimal? @map("wingspan_m") @db.Decimal(10, 2)
+  /// 높이 (m)
+  heightM          Decimal? @map("height_m") @db.Decimal(10, 2)
+
+  // --- 부가 정보
+  /// 항공기에 대한 상세 설명
+  description String? @db.Text
+  /// 대표 이미지 URL
+  imageUrl    String? @map("image_url") @db.VarChar(255)
+  /// 기타 특징 (예: 스텔스, VTOL)
+  features    String? @db.VarChar(255)
+
+  // --- 관계 필드
+  /// 소속 국가
+  country Country?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 참전 기록
+  wars    WarHistoryAircraft[]
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId])
+  @@map("aircraft")
+}
+
+model NavalVessel {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 함선명
+  name String @db.VarChar(100)
+
+  /// 함선 종류 (NavalVesselType Enum 참조)
+  vesselType NavalVesselType? @map("vessel_type")
+
+  /// 제조국 또는 운용국의 외래 키 (FK)
+  countryId String? @map("country_id") @db.Char(36)
+
+  // --- 제원
+  /// 추진 방식 (NavalPropulsionType Enum 참조)
+  propulsionType      NavalPropulsionType? @map("propulsion_type")
+  /// 배수량 (톤)
+  displacementTon     Decimal?             @map("displacement_ton") @db.Decimal(10, 2)
+  /// 최대 속도 (노트)
+  maxSpeedKnots       Decimal?             @map("max_speed_knots") @db.Decimal(10, 2)
+  /// 승무원 수
+  crewCount           Int?                 @map("crew_count")
+  /// 주무장 및 부무장
+  armament            String?              @db.VarChar(255)
+  /// 제조사
+  manufacturer        String?              @db.VarChar(100)
+  /// 건조 시설 ID (어느 조선소에서 만들어졌는가)
+  builtAtFacilityId   String?              @map("built_at_facility_id") @db.Char(36)
+  /// 건조 시작일
+  keel_laid_date      DateTime?            @map("keel_laid_date")
+  /// 진수일
+  launched_date       DateTime?            @map("launched_date")
+  /// 최초 취역 연도
+  firstCommissionYear Int?                 @map("first_commission_year")
+  /// 도입 연도
+  introducedYear      Int?                 @map("introduced_year")
+  /// 퇴역 연도
+  retiredYear         Int?                 @map("retired_year")
+  /// 현재 운용 상태 (OperationalStatus Enum 참조)
+  status              OperationalStatus?
+
+  // --- 크기
+  /// 길이 (m)
+  lengthM Decimal? @map("length_m") @db.Decimal(10, 2)
+  /// 선폭 (m)
+  beamM   Decimal? @map("beam_m") @db.Decimal(10, 2)
+  /// 흘수 (m)
+  draftM  Decimal? @map("draft_m") @db.Decimal(10, 2)
+
+  // --- 부가 정보
+  /// 함선에 대한 상세 설명
+  description String? @db.Text
+  /// 대표 이미지 URL
+  imageUrl    String? @map("image_url") @db.VarChar(255)
+  /// 기타 특징 (예: 스텔스, 이지스)
+  features    String? @db.VarChar(255)
+
+  // --- 관계 필드
+  /// 소속 국가
+  country         Country?                @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 건조 시설
+  builtAtFacility CompanyFacility?        @relation(fields: [builtAtFacilityId], references: [id], onDelete: SetNull)
+  /// 참전 기록
+  wars            WarHistoryNavalVessel[]
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId])
+  @@map("naval_vessels")
+}
+
+// ========================
+// War History Models (전쟁사 참여 기록 모델)
+// M-N 관계를 위한 중간 테이블들
+// ========================
+
+model WarHistoryWeapon {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 연결된 전쟁사의 외래 키 (FK)
+  warHistoryId String @map("war_history_id") @db.Char(36)
+  /// 사용된 무기의 외래 키 (FK)
+  weaponId     String @map("weapon_id") @db.Char(36)
+
+  /// 투입 시점
+  deployedAt  DateTime? @map("deployed_at")
+  /// 철수 시점
+  withdrawnAt DateTime? @map("withdrawn_at")
+  /// 수량
+  quantity    Int?
+  /// 비고
+  notes       String?   @db.Text
+
+  // --- 관계 필드
+  warHistory WarHistory @relation(fields: [warHistoryId], references: [id], onDelete: Cascade)
+  weapon     Weapon     @relation(fields: [weaponId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([warHistoryId])
+  @@index([weaponId])
+  @@map("war_history_weapons")
+}
+
+model WarHistoryGroundVehicle {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 연결된 전쟁사의 외래 키 (FK)
+  warHistoryId    String @map("war_history_id") @db.Char(36)
+  /// 사용된 지상장비의 외래 키 (FK)
+  groundVehicleId String @map("ground_vehicle_id") @db.Char(36)
+
+  /// 투입 시점
+  deployedAt  DateTime? @map("deployed_at")
+  /// 철수 시점
+  withdrawnAt DateTime? @map("withdrawn_at")
+  /// 수량
+  quantity    Int?
+  /// 비고
+  notes       String?   @db.Text
+
+  // --- 관계 필드
+  warHistory    WarHistory    @relation(fields: [warHistoryId], references: [id], onDelete: Cascade)
+  groundVehicle GroundVehicle @relation(fields: [groundVehicleId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([warHistoryId])
+  @@index([groundVehicleId])
+  @@map("war_history_ground_vehicles")
+}
+
+model WarHistoryAircraft {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 연결된 전쟁사의 외래 키 (FK)
+  warHistoryId String @map("war_history_id") @db.Char(36)
+  /// 사용된 항공기의 외래 키 (FK)
+  aircraftId   String @map("aircraft_id") @db.Char(36)
+
+  /// 투입 시점
+  deployedAt  DateTime? @map("deployed_at")
+  /// 철수 시점
+  withdrawnAt DateTime? @map("withdrawn_at")
+  /// 수량
+  quantity    Int?
+  /// 비고
+  notes       String?   @db.Text
+
+  // --- 관계 필드
+  warHistory WarHistory @relation(fields: [warHistoryId], references: [id], onDelete: Cascade)
+  aircraft   Aircraft   @relation(fields: [aircraftId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([warHistoryId])
+  @@index([aircraftId])
+  @@map("war_history_aircraft")
+}
+
+model WarHistoryNavalVessel {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 연결된 전쟁사의 외래 키 (FK)
+  warHistoryId  String @map("war_history_id") @db.Char(36)
+  /// 사용된 함선의 외래 키 (FK)
+  navalVesselId String @map("naval_vessel_id") @db.Char(36)
+
+  /// 투입 시점
+  deployedAt  DateTime? @map("deployed_at")
+  /// 철수 시점
+  withdrawnAt DateTime? @map("withdrawn_at")
+  /// 수량
+  quantity    Int?
+  /// 비고
+  notes       String?   @db.Text
+
+  // --- 관계 필드
+  warHistory  WarHistory  @relation(fields: [warHistoryId], references: [id], onDelete: Cascade)
+  navalVessel NavalVessel @relation(fields: [navalVesselId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([warHistoryId])
+  @@index([navalVesselId])
+  @@map("war_history_naval_vessels")
+}
+
+model WarHistoryMilitaryUnit {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 연결된 전쟁사의 외래 키 (FK)
+  warHistoryId String @map("war_history_id") @db.Char(36)
+  /// 참여한 부대의 외래 키 (FK)
+  unitId       String @map("unit_id") @db.Char(36)
+
+  /// 참여 시점
+  joinedAt   DateTime? @map("joined_at")
+  /// 철수 시점
+  withdrewAt DateTime? @map("withdrew_at")
+  /// 참전 병력 수
+  troopCount Int?      @map("troop_count")
+  /// 사상자 수
+  casualties Int?
+  /// 비고
+  notes      String?   @db.Text
+
+  // --- 관계 필드
+  warHistory   WarHistory   @relation(fields: [warHistoryId], references: [id], onDelete: Cascade)
+  militaryUnit MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([warHistoryId])
+  @@index([unitId])
+  @@map("war_history_military_units")
+}
+
+// ========================
+// Military Unit & People Models (부대 및 인물 모델)
+// ========================
+
+model MilitaryUnit {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 부대명
+  name String @db.VarChar(100)
+
+  /// 부대 종류 (MilitaryUnitType Enum 참조)
+  unitType MilitaryUnitType? @map("unit_type")
+
+  /// 소속 국가의 외래 키 (FK)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 부대 상태
+  isActive        Boolean?  @map("is_active")
+  /// 창설일
+  establishedDate DateTime? @map("established_date")
+  /// 해체일
+  disbandedDate   DateTime? @map("disbanded_date")
+
+  /// 상위 부대의 외래 키 (자기 참조)
+  parentUnitId String? @map("parent_unit_id") @db.Char(36)
+
+  /// 부대에 대한 상세 설명
+  description String? @db.Text
+
+  // --- 관계 필드
+  /// 소속 국가
+  country    Country?                 @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 상위 부대
+  parentUnit MilitaryUnit?            @relation("UnitHierarchy", fields: [parentUnitId], references: [id], onDelete: SetNull)
+  /// 하위 부대들
+  subUnits   MilitaryUnit[]           @relation("UnitHierarchy")
+  /// 지휘관 기록
+  commanders MilitaryUnitCommander[]
+  /// 참전 기록
+  wars       WarHistoryMilitaryUnit[]
+
+  // 🆕 정규화된 군사 사건 관계
+  sideDeployedUnits    SideDeployedUnit[]
+  countryDeployedUnits CountryDeployedUnit[]
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId])
+  @@index([parentUnitId])
+  @@map("military_units")
+}
+
+model MilitaryUnitCommander {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 지휘 부대의 외래 키 (FK)
+  unitId   String @map("unit_id") @db.Char(36)
+  /// 지휘관(인물)의 외래 키 (FK)
+  personId String @map("person_id") @db.Char(36)
+
+  // --- 지휘 정보
+  /// 계급
+  rank      String?   @db.VarChar(50)
+  /// 직책 (예: 사단장)
+  role      String?   @db.VarChar(50)
+  /// 현재 지휘관 여부
+  isCurrent Boolean?  @default(false) @map("is_current")
+  /// 지휘 시작일
+  startDate DateTime? @map("start_date")
+  /// 지휘 종료일
+  endDate   DateTime? @map("end_date")
+  /// 비고
+  notes     String?   @db.Text
+
+  // --- 경력 정보
+  /// 군 경력 요약
+  careerSummary    String? @map("career_summary") @db.Text
+  /// 주요 업적
+  achievements     String? @db.Text
+  /// 주요 전투 경험
+  combatExperience String? @map("combat_experience") @db.Text
+  /// 수상 경력
+  awards           String? @db.Text
+  /// 출신 학교 등 교육 배경
+  education        String? @db.Text
+  /// 저서 또는 발표 자료
+  publications     String? @db.Text
+
+  // --- 관계 필드
+  /// 지휘 부대
+  unit   MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  /// 지휘관(인물)
+  person Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([unitId])
+  @@index([personId])
+  @@map("military_unit_commanders")
+}
+
+// 참고: WarHistory 모델은 다른 모델에서 참조되지만 원본 스키마에 없어, 완전성을 위해 임시로 추가했습니다.
+model WarHistory {
+  /// 고유 식별자 (PK)
+  id          String    @id @default(uuid()) @db.Char(36)
+  /// 전쟁 또는 전투명
+  name        String    @unique @db.VarChar(150)
+  /// 상세 설명
+  description String?   @db.Text
+  /// 시작일
+  startDate   DateTime? @map("start_date")
+  /// 종료일
+  endDate     DateTime? @map("end_date")
+
+  // --- 관계 필드
+  /// 이 전쟁에 사용된 무기 기록
+  weapons        WarHistoryWeapon[]
+  /// 이 전쟁에 사용된 지상 장비 기록
+  groundVehicles WarHistoryGroundVehicle[]
+  /// 이 전쟁에 사용된 항공기 기록
+  aircraft       WarHistoryAircraft[]
+  /// 이 전쟁에 사용된 함선 기록
+  navalVessels   WarHistoryNavalVessel[]
+  /// 이 전쟁에 참여한 부대 기록
+  militaryUnits  WarHistoryMilitaryUnit[]
+
+  // --- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("war_histories")
+}

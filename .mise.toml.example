@@ -1,0 +1,195 @@
+# mise-en-place 설정 파일 (Best Practice)
+# Papyrus 프로젝트의 개발 환경에 필요한 런타임, 도구, 환경 변수, 태스크를 관리합니다
+
+# ===== 런타임 및 도구 버전 관리 =====
+[tools]
+# Node.js 버전 (package.json의 @types/node 24.1.0과 호환)
+node = "24"
+
+# ===== 환경 변수 설정 =====
+[env]
+# 개발 환경 기본 설정
+NODE_ENV = "development"
+LOG_LEVEL = "debug"
+
+# 프로젝트 루트 경로 (동적으로 설정)
+PROJECT_ROOT = "{{ config_root }}"
+
+# 데이터베이스 설정
+DATABASE_URL = "mysql://papyrus:papyrus@localhost:3307/papyrus"
+MYSQL_PORT = "3307"
+
+# API 서버 설정
+API_PORT = "8000"
+PORT = "8000"
+
+# Prisma 설정
+PRISMA_HIDE_UPDATE_MESSAGE = "true"
+
+# CORS 설정 (개발 환경)
+CORS_ORIGIN = "*"
+
+# Vite 환경 변수
+VITE_API_BASE_URL = ""
+
+# ===== 개발 태스크 정의 =====
+[tasks.install]
+description = "의존성 설치"
+run = "npm install"
+
+[tasks.dev]
+description = "개발 서버 시작 (API + Web Admin + Web User)"
+run = "npm run dev"
+
+[tasks."dev:api"]
+description = "API 서버만 시작"
+run = "npm run serve:api"
+
+[tasks."dev:admin"]
+description = "Web Admin만 시작"
+run = "npm run serve:web-admin"
+
+[tasks."dev:user"]
+description = "Web User만 시작"
+run = "npm run serve:web-user"
+
+[tasks."dev:all"]
+description = "모든 서비스 동시 시작"
+run = "npm run dev:all"
+
+# ===== 데이터베이스 태스크 =====
+[tasks."db:generate"]
+description = "Prisma 클라이언트 생성"
+run = "npm run db:generate"
+
+[tasks."db:migrate"]
+description = "데이터베이스 마이그레이션 실행"
+run = "npm run db:migrate"
+
+[tasks."db:reset"]
+description = "데이터베이스 초기화 및 시드"
+run = "npm run db:reset"
+
+[tasks."db:studio"]
+description = "Prisma Studio 실행"
+run = "npx prisma studio"
+
+# ===== Docker 태스크 =====
+[tasks."docker:up"]
+description = "Docker 컨테이너 시작 (MySQL, Nginx)"
+run = "npm run docker:up"
+
+[tasks."docker:down"]
+description = "Docker 컨테이너 중지"
+run = "docker compose down"
+
+[tasks."docker:logs"]
+description = "Docker 로그 확인"
+run = "docker compose logs -f"
+
+# ===== 빌드 태스크 =====
+[tasks."build:api"]
+description = "API 빌드"
+run = "npm run build:api"
+
+[tasks."build:web"]
+description = "Web 빌드"
+run = "npm run build:web"
+
+[tasks."build:all"]
+description = "전체 빌드"
+run = [
+  "npm run build:api",
+  "npm run build:web"
+]
+
+# ===== 린트 태스크 =====
+[tasks.lint]
+description = "전체 린트 검사"
+run = "npm run lint"
+
+[tasks."lint:fix"]
+description = "린트 자동 수정"
+run = "npm run lint:fix"
+
+# ===== 테스트 태스크 =====
+[tasks.test]
+description = "테스트 실행"
+run = "npm test"
+
+[tasks."test:watch"]
+description = "테스트 watch 모드"
+run = "npm test -- --watch"
+
+# ===== 설정 태스크 =====
+[tasks."env:dev"]
+description = "개발 환경 설정"
+run = "npm run env:dev"
+
+[tasks."env:prod"]
+description = "운영 환경 설정"
+run = "npm run env:prod"
+
+[tasks."ssl:generate"]
+description = "SSL 인증서 생성"
+run = "npm run ssl:generate"
+
+# ===== 복합 태스크 =====
+[tasks.setup]
+description = "프로젝트 초기 설정 (의존성 설치 + DB 설정)"
+depends = ["install", "db:generate"]
+
+[tasks.start]
+description = "개발 환경 전체 시작 (Docker + DB + Dev 서버)"
+run = [
+  "mise run docker:up",
+  "mise run db:migrate",
+  "mise run dev"
+]
+
+[tasks.clean]
+description = "빌드 파일 및 캐시 정리"
+run = [
+  "rm -rf dist",
+  "rm -rf node_modules/.cache",
+  "rm -rf .nx/cache"
+]
+
+# ===== 헬스체크 태스크 =====
+[tasks.health]
+description = "시스템 헬스체크"
+run = """
+echo "=== mise 환경 체크 ==="
+mise doctor
+echo ""
+echo "=== Node.js 버전 ==="
+node --version
+echo ""
+echo "=== npm 버전 ==="
+npm --version
+echo ""
+echo "=== Docker 상태 ==="
+docker compose ps || echo "Docker 미실행"
+"""
+
+# ===== 플러그인 설정 (선택사항) =====
+# [plugins]
+# example-plugin = "https://github.com/example/mise-plugin"
+
+# ===== 설정 옵션 =====
+[settings]
+# 실험적 기능 활성화
+experimental = true
+
+# 태스크 실행 시 상세 출력
+verbose = false
+
+# 자동 설치 활성화 (디렉토리 진입 시 자동으로 누락된 도구 설치)
+auto_install = true
+
+# 레거시 버전 파일 지원 (.nvmrc, .node-version 등)
+legacy_version_file = true
+
+# 레거시 버전 파일 우선순위 (false = .mise.toml 우선)
+legacy_version_file_disable_tools = []
+

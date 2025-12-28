@@ -1,0 +1,147 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                           DATASOURCE & GENERATOR                             ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 파일은 Prisma의 기본 설정과 전역적으로 사용되는 enum들을 정의합니다.
+/// 
+/// 포함 내용:
+/// - 데이터베이스 소스 설정 (MySQL)
+/// - Prisma 클라이언트 생성기 설정
+/// - ERD 생성기 설정
+/// - 전역 공통 enum들:
+///   • AttachmentOwner: 첨부파일 소유자 타입
+///   • AggregateType: 다형성 관계에서 사용되는 모든 모델 타입
+///   • HistoricalModernRelation: 역사적 국가와 현대 국가 간 관계
+///   • GovernmentType: 정부 형태 (대통령제, 의원내각제 등)
+///   • EventMethod: CRUD 이벤트 메서드
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  envFile  = "../../../.env"
+  output   = "../../../node_modules/.prisma/client"
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "./ERD.svg"
+}
+
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                                   ENUMS                                      ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+/// 첨부파일의 소유 대상을 지정하는 열거형
+enum AttachmentOwner {
+  /// 대륙 기록
+  CONTINENT_RECORD
+  /// 국가
+  COUNTRY
+  /// 인물
+  PERSON
+  /// 자원
+  RESOURCE
+  /// 행정구역
+  ADMINISTRATIVE_DIVISION
+}
+
+/// Aggregate(이벤트) 대상 타입
+enum AggregateType {
+  /// 대륙
+  CONTINENT
+  /// 대륙 기록
+  CONTINENT_RECORD
+  /// 국가
+  COUNTRY
+  /// 국가 기록
+  COUNTRY_RECORD
+  /// 수출입
+  EXPORT_IMPORT
+  /// 화폐
+  CURRENCY
+  /// 자원
+  RESOURCE
+  /// 직업
+  JOB
+  /// 직업 카테고리
+  JOB_CATEGORY
+  /// 인물
+  PERSON
+  /// 조직
+  ORGANIZATION
+  /// 정당
+  POLITICAL_PARTY
+  /// 종교
+  RELIGION
+  /// 종교 교파
+  RELIGION_DENOMINATION
+  /// 역사적 국가
+  HISTORICAL_COUNTRY
+  /// 행정구역
+  ADMINISTRATIVE_DIVISION
+  /// 도시
+  CITY
+  /// 계정
+  ACCOUNT
+  /// 영웅
+  HERO
+  /// 법률
+  LAW
+  /// 회사
+  COMPANY
+  /// 회사 시설
+  COMPANY_FACILITY
+  /// 사건
+  EVENT
+  /// 무기
+  WEAPON
+  /// 지상 장비
+  GROUND_VEHICLE
+  /// 항공기
+  AIRCRAFT
+  /// 함선
+  NAVAL_VESSEL
+  /// 군부대
+  MILITARY_UNIT
+  /// 기후
+  CLIMATE
+}
+
+/// 역사적 국가와 현대 국가 간 관계 유형
+enum HistoricalModernRelation {
+  /// 계승
+  SUCCESSOR
+  /// 형성에 영향
+  INFLUENCE
+  /// 일부 계승
+  CONTINUATION
+  /// 기타
+  OTHER
+}
+
+/// 행정부 형태
+enum GovernmentType {
+  /// 대통령제
+  PRESIDENTIAL
+  /// 의원내각제
+  PARLIAMENTARY
+  /// 군사정권
+  MILITARY
+  /// 군주제
+  MONARCHY
+  /// 기타
+  OTHER
+}
+
+/// 이벤트 메서드 (CRUD)
+enum EventMethod {
+  /// 생성
+  CREATE
+  /// 수정
+  UPDATE
+  /// 삭제
+  DELETE
+}

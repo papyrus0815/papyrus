@@ -1,0 +1,189 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                               PERSON DOMAIN                                  ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 역사적/현대적 인물들의 정보를 중앙집중식으로 관리합니다.
+/// 
+/// 주요 기능:
+/// - 인물(Person): 모든 시대의 인물 정보
+///   • 기본 신상정보 (이름, 성, 생몰년도, 성별)
+///   • 가족 관계 (부모-자식 관계)
+///   • 사회적 정체성 (국적, 직업, 종교, 가문)
+///   • 생애 기록 및 프로필 이미지
+/// 
+/// - 인물-국가 관계(PersonCountryAffiliation): 복합적인 국적/소속 관계
+///   • 출생지, 시민권, 주요 활동지, 봉사한 국가 등
+///   • 역사적 국가와 현대 국가 모두 지원
+///   • 시기별 국적 변화 추적
+/// 
+/// 관계 연결:
+/// - 가문(Dynasty): 왕실, 귀족 등 혈통 관계
+/// - 종교(Religion/Denomination): 종교적 소속
+/// - 직업(Job): 사회적 역할과 지위
+/// - 국가(Country/HistoricalCountry): 복합적인 국적 관계
+/// - 사건(Event): 참여한 역사적 사건들
+/// - 조직(Organization): 소속 조직과 역할
+/// - 정당(PoliticalParty): 정치적 소속
+/// - 군부대(MilitaryUnit): 군사적 지휘 관계
+/// - 기업(Company): 창업 및 경영 관계
+/// - 저작(Book): 집필한 도서들
+/// 
+/// 특징:
+/// - 시스템의 핵심 엔티티 중 하나
+/// - 다양한 도메인과 광범위한 관계
+/// - 가족 관계의 복잡성 모델링
+/// - 시대를 초월한 통합 관리
+/// - 복합 국적 및 국가 소속 지원
+
+/// 인물-국가 관계의 유형
+enum PersonCountryAffiliationType {
+  /// 출생지
+  BIRTH_PLACE
+  /// 시민권/국적
+  CITIZENSHIP
+  /// 주요 활동 지역
+  PRIMARY_RESIDENCE
+  /// 봉사한 국가 (외교관, 군인 등)
+  SERVED
+  /// 망명지
+  EXILE
+  /// 기타
+  OTHER
+}
+
+// ========================
+// Person
+// ========================
+model Person {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 이름
+  name String @db.VarChar(30)
+
+  /// 성
+  surname String? @map("sur_name") @db.VarChar(30)
+
+  /// 출생 기원 (BC/AD)
+  birthEra Era? @default(AD) @map("birth_era")
+
+  /// 출생일
+  birthDate DateTime? @map("birth_date")
+
+  /// 사망 기원 (BC/AD)
+  deathEra Era? @default(AD) @map("death_era")
+
+  /// 사망일
+  deathDate DateTime? @map("death_date")
+
+  /// 성별
+  gender String? @db.VarChar(10)
+
+  /// 생애 소개
+  biography String? @db.Text
+
+  /// 프로필 URL
+  profileImageUrl String? @map("profile_image_url") @db.VarChar(255)
+
+  //--- 외래키
+  dynastyId      String? @map("dynasty_id") @db.Char(36)
+  religionId     String? @map("religion_id") @db.Char(36)
+  denominationId String? @map("denomination_id") @db.Char(36)
+  fatherId       String? @map("father_id") @db.Char(36)
+  motherId       String? @map("mother_id") @db.Char(36)
+  jobId          String? @map("job_id") @db.Char(36)
+  countryId      String? @map("country_id") @db.Char(36) // 주 국적 (간편 조회용, deprecated 예정)
+
+  //--- 관계 필드
+  Company            Company[]
+  dynasty            Dynasty?              @relation(fields: [dynastyId], references: [id], onDelete: SetNull)
+  religion           Religion?             @relation(fields: [religionId], references: [id], onDelete: SetNull)
+  denomination       ReligionDenomination? @relation("DenominationToPerson", fields: [denominationId], references: [id], onDelete: SetNull)
+  job                Job?                  @relation("JobToPerson", fields: [jobId], references: [id], onDelete: SetNull)
+  country            Country?              @relation("CountryToPerson", fields: [countryId], references: [id], onDelete: SetNull)
+  father             Person?               @relation("ParentChildFather", fields: [fatherId], references: [id], onDelete: SetNull)
+  mother             Person?               @relation("ParentChildMother", fields: [motherId], references: [id], onDelete: SetNull)
+  childrenFromFather Person[]              @relation("ParentChildFather")
+  childrenFromMother Person[]              @relation("ParentChildMother")
+  foundedCompanies   Company[]             @relation("FounderToCompany")
+
+  // 새로운 국가 관계
+  countryAffiliations PersonCountryAffiliation[]
+
+  EventTimelinePerson      EventTimelinePerson[]
+  PersonEvent              PersonEvent[]
+  MilitaryUnitCommander    MilitaryUnitCommander[]
+  Book                     Book[]
+  OrganizationPersonRole   OrganizationPersonRole[]   @relation("OrganizationPersonRoles")
+  PoliticalPartyLeadership PoliticalPartyLeadership[] @relation("PoliticalPartyLeadership")
+  GovernmentTenures        GovernmentPositionTenure[] @relation("PersonGovernmentTenure")
+
+  // 🆕 정규화된 군사 사건 관계
+  commandedBelligerentSides BelligerentSide[]
+  commandedCountriesInSides CountryInSide[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([dynastyId], name: "idx_person_dynastyId")
+  @@index([religionId], name: "idx_person_religionId")
+  @@index([denominationId], name: "idx_person_denominationId")
+  @@index([fatherId], name: "idx_person_fatherId")
+  @@index([motherId], name: "idx_person_motherId")
+  @@index([jobId], name: "idx_person_jobId")
+  @@index([countryId], name: "idx_person_countryId")
+  @@map("person")
+}
+
+// ========================
+// PersonCountryAffiliation
+// ========================
+/// 인물과 국가(현대/역사적) 간의 소속/관계를 나타내는 중간 테이블
+/// 
+/// 사용 예시:
+/// - 비스마르크: BIRTH_PLACE(프로이센), CITIZENSHIP(독일 제국), SERVED(독일 제국, 프로이센)
+/// - 아인슈타인: BIRTH_PLACE(독일), CITIZENSHIP(스위스, 미국), EXILE(미국)
+model PersonCountryAffiliation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 현대 국가 ID (둘 중 하나는 필수)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (둘 중 하나는 필수)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 관계 유형
+  affiliationType PersonCountryAffiliationType @map("affiliation_type")
+
+  /// 관계 시작일 (선택)
+  startDate DateTime? @map("start_date")
+
+  /// 관계 종료일 (선택)
+  endDate DateTime? @map("end_date")
+
+  /// 우선순위 (주 국적 판단 등에 사용, 낮을수록 우선)
+  priority Int? @default(0)
+
+  /// 비고
+  note String? @db.Text
+
+  //--- 관계 필드
+  person            Person             @relation(fields: [personId], references: [id], onDelete: Cascade)
+  country           Country?           @relation("PersonCountryAffiliations", fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("PersonHistoricalCountryAffiliations", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_person_country_aff_personId")
+  @@index([countryId], name: "idx_person_country_aff_countryId")
+  @@index([historicalCountryId], name: "idx_person_country_aff_histCountryId")
+  @@index([affiliationType], name: "idx_person_country_aff_type")
+  @@map("person_country_affiliation")
+}

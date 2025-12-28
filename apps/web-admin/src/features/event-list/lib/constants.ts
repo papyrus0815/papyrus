@@ -1,0 +1,41 @@
+/**
+ * 이벤트 목록 관련 상수
+ * FSD: features/event-list/lib
+ */
+
+/**
+ * 정렬 옵션
+ */
+export const SORT_OPTIONS = {
+  IMPACT: 'impact',
+  RECENT: 'recent',
+  DURATION: 'duration',
+} as const
+
+export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
+
+/**
+ * 뷰 모드
+ */
+export const VIEW_MODES = {
+  GRID: 'grid',
+  LIST: 'list',
+} as const
+
+export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
+
+/**
+ * 요약 뷰 모드
+ */
+export const SUMMARY_VIEW_MODES = {
+  TIMELINE: 'timeline',
+  TREE: 'tree',
+} as const
+
+export type SummaryViewMode =
+  (typeof SUMMARY_VIEW_MODES)[keyof typeof SUMMARY_VIEW_MODES]
+
+/**
+ * 특수 필터 값
+ */
+export const FILTER_ALL = 'all' as const

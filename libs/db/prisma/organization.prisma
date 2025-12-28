@@ -1,0 +1,359 @@
+/// ║                              ORGANIZATION DOMAIN                              ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 다양한 형태의 조직과 단체를 관리합니다.
+/// 
+/// 주요 기능:
+/// - 조직(Organization): 다목적 조직 관리
+///   • 국제기구, 시민단체, 노동조합, 업계단체 등
+///   • 조직 유형별 특성과 활동 범위
+///   • 설립 목적과 이념적 배경
+///   • 조직 간 복잡한 관계 네트워크
+/// 
+/// - 조직-국가 관계(OrganizationCountryMembership): 멤버십 관리
+///   • 회원국, 옵저버, 창립국 등 역할
+///   • 가입과 탈퇴의 역사적 과정
+///   • 현대/역사 국가 모두 지원
+/// 
+/// - 조직 계층(OrganizationHierarchy): 조직 간 관계
+///   • 산하기구, 전문기구, 제휴 관계
+///   • 상하 관계와 수평 관계
+///   • 조직 구조의 변화 추적
+/// 
+/// - 조직-인물 관계(OrganizationPersonRole): 역할 관리
+///   • 사무총장, 의장, 대표 등 직책
+///   • 임기와 선출 과정
+///   • 리더십 변화와 영향
+/// 
+/// 활용 사례:
+/// - UN, NATO, EU 등 국제기구
+/// - NGO, 시민사회단체
+/// - 노동조합, 경영자단체
+/// - 학술단체, 전문가집단
+/// 
+/// 특징:
+/// - 정당과 구분되는 비정치적 조직
+/// - 국경을 초월한 활동 영역
+/// - 소프트파워와 네트워크 외교
+/// - 글로벌 거버넌스의 주체
+
+// ========================
+// Enums
+// ========================
+
+/// 조직의 유형을 정의합니다.
+enum OrganizationType {
+  /// 정당 (예: 미국 공화당 전국 위원회)
+  POLITICAL_PARTY
+  /// 정부 간 국제기구 (예: UN, NATO)
+  INTERGOVERNMENTAL_ORG
+  /// 비정부기구/시민단체
+  NGO
+  /// 노동조합/산별노조 (예: 민노총)
+  TRADE_UNION
+  /// 정부 기관/부처/위원회
+  GOVERNMENT_AGENCY
+  /// 군사 동맹
+  MILITARY_ALLIANCE
+  /// 종교 단체
+  RELIGIOUS_ORG
+  /// 업계/상공 단체
+  BUSINESS_ASSOCIATION
+  /// 기타
+  OTHER
+}
+
+/// 조직의 활동 범위
+enum OrganizationScope {
+  /// 국제(전세계)
+  INTERNATIONAL
+  /// 초국가(지역 블록 단위)
+  SUPRANATIONAL
+  /// 지역(대륙/권역)
+  REGIONAL
+  /// 국가(국내)
+  NATIONAL
+  /// 광역/기초(지방)
+  SUBNATIONAL
+  /// 지역/도시 단위
+  LOCAL
+}
+
+/// 국가(현대/역사)와 조직 간의 멤버십 역할
+enum OrganizationCountryRole {
+  /// 정회원
+  MEMBER
+  /// 옵서버
+  OBSERVER
+  /// 창립국
+  FOUNDER
+  /// 사무국 소재국
+  SECRETARIAT_HOST
+  /// 자격정지
+  SUSPENDED
+  /// 제명
+  EXPELLED
+  /// 기타
+  OTHER
+}
+
+/// 조직-조직 간 관계 유형(상하/제휴 등)
+enum OrganizationRelationType {
+  /// 산하/전속 기관
+  SUBSIDIARY
+  /// 소속/전문 기구(예: UN의 전문기구)
+  SPECIALIZED_AGENCY
+  /// 제휴/파트너
+  AFFILIATED
+  /// 위원회/분과
+  COMMITTEE
+  /// 옵서버/협력
+  OBSERVER
+  /// 기타
+  OTHER
+}
+
+/// 조직의 별칭/약칭/과거명 등의 분류
+enum OrganizationAliasType {
+  /// 공식 약칭/두문자(예: UN, NATO)
+  ACRONYM
+  /// 별칭/비공식 명칭
+  ALIAS
+  /// 과거명/개명 전 명칭
+  FORMER_NAME
+  /// 현지어 명칭
+  LOCAL_NAME
+}
+
+// ========================
+// Organization
+// ========================
+
+/// 다양한 유형의 조직을 표현하는 모델
+model Organization {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 공식 명칭
+  name String @db.VarChar(200)
+
+  /// 약칭/두문자(예: UN, NATO, RNC)
+  shortName String? @map("short_name") @db.VarChar(50)
+
+  /// 로컬 명칭
+  localName String? @map("local_name") @db.VarChar(200)
+
+  /// 유형
+  type OrganizationType
+
+  /// 활동 범위
+  scope OrganizationScope?
+
+  /// 설명
+  description String? @db.Text
+
+  /// 설립일
+  foundedDate DateTime? @map("founded_date")
+
+  /// 해산일
+  dissolvedDate DateTime? @map("dissolved_date")
+
+  /// 공식 웹사이트
+  websiteUrl String? @map("website_url") @db.VarChar(255)
+
+  /// 로고 URL
+  logoUrl String? @map("logo_url") @db.VarChar(255)
+
+  /// 이념/노선 등(정당/노조 등에서 활용)
+  ideology String? @db.Text
+
+  /// 본부가 위치한 도시
+  headquartersCityId String? @map("headquarters_city_id") @db.Char(36)
+
+  //--- 외래키(국가 맥락)
+  /// 해당 조직의 주요 소속/설립 국가(국내 조직일 때)
+  countryId           String? @map("country_id") @db.Char(36)
+  /// 역사적 국가(필요시)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 자유 확장을 위한 JSON
+  extra Json?
+
+  //--- 관계 필드
+  headquartersCity  City?              @relation("OrganizationHeadquartersCity", fields: [headquartersCityId], references: [id], onDelete: SetNull)
+  country           Country?           @relation("OrganizationCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry? @relation("OrganizationHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  memberships       OrganizationCountryMembership[]
+  roles             OrganizationPersonRole[]
+  aliases           OrganizationAlias[]
+  partyAffiliations PoliticalPartyOrganization[]
+  parents           OrganizationHierarchy[]         @relation("OrgHierarchyParent")
+  children          OrganizationHierarchy[]         @relation("OrgHierarchyChild")
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([type], name: "idx_organization_type")
+  @@index([scope], name: "idx_organization_scope")
+  @@index([countryId], name: "idx_organization_countryId")
+  @@index([headquartersCityId], name: "idx_organization_hqCityId")
+  @@map("organization")
+}
+
+// ========================
+// OrganizationCountryMembership
+// ========================
+
+/// 조직과 국가(현대/역사) 간의 멤버십 관계
+model OrganizationCountryMembership {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 조직
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 현대 국가(UN, NATO 회원국 등)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가(과거 시점 표현)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 역할(회원/옵서버/창립국 등)
+  role OrganizationCountryRole
+
+  /// 시작일/종료일
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  country           Country?           @relation("OrgMembershipCountry", fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("OrgMembershipHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, countryId], name: "uniq_org_country")
+  @@unique([organizationId, historicalCountryId], name: "uniq_org_histCountry")
+  @@index([organizationId], name: "idx_org_member_orgId")
+  @@index([countryId], name: "idx_org_member_countryId")
+  @@index([historicalCountryId], name: "idx_org_member_histCountryId")
+  @@index([role], name: "idx_org_member_role")
+  @@map("organization_membership_country")
+}
+
+// ========================
+// OrganizationHierarchy (Org ↔ Org)
+// ========================
+
+/// 조직 간 상하/제휴 관계(예: UN ↔ FAO)
+model OrganizationHierarchy {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 상위 조직
+  parentOrganizationId String @map("parent_organization_id") @db.Char(36)
+  /// 하위/연결 조직
+  childOrganizationId  String @map("child_organization_id") @db.Char(36)
+
+  /// 관계 유형
+  relationType OrganizationRelationType @map("relation_type")
+
+  /// 기간
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계
+  parent Organization @relation("OrgHierarchyParent", fields: [parentOrganizationId], references: [id], onDelete: Cascade)
+  child  Organization @relation("OrgHierarchyChild", fields: [childOrganizationId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([parentOrganizationId, childOrganizationId], name: "uniq_org_hierarchy_pair")
+  @@index([relationType], name: "idx_org_hierarchy_type")
+  @@map("organization_hierarchy")
+}
+
+// ========================
+// OrganizationPersonRole (Org ↔ Person)
+// ========================
+
+/// 조직과 인물 간 역할(의장, 사무총장, 위원장 등)
+model OrganizationPersonRole {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 조직/인물
+  organizationId String @map("organization_id") @db.Char(36)
+  personId       String @map("person_id") @db.Char(36)
+
+  /// 역할명(예: Secretary-General, Chair)
+  roleTitle String @map("role_title") @db.VarChar(100)
+
+  /// 기간
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  person       Person       @relation("OrganizationPersonRoles", fields: [personId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId], name: "idx_org_person_orgId")
+  @@index([personId], name: "idx_org_person_personId")
+  @@map("organization_person_role")
+}
+
+// ========================
+// OrganizationAlias
+// ========================
+
+/// 조직의 별칭/약칭/과거명 등 보조 명칭
+model OrganizationAlias {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 대상 조직
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 별칭/약칭 명칭
+  name String @db.VarChar(200)
+
+  /// 유형(약칭/별칭/과거명/현지어)
+  type OrganizationAliasType
+
+  /// 언어 코드(예: en, ko)
+  languageCode String? @map("language_code") @db.VarChar(10)
+
+  /// 사용 기간
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  //--- 관계
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, name, type, languageCode], name: "uniq_org_alias")
+  @@index([organizationId], name: "idx_org_alias_orgId")
+  @@map("organization_alias")
+}

@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+
+const path = require('path')
+const fs = require('fs')
+
+/**
+ * 스크립트 실행기
+ * 사용법: node scripts/run.js <category>/<script> [options]
+ * 예시:
+ *   node scripts/run.js database/build
+ *   node scripts/run.js development/serve-web --network
+ *   node scripts/run.js lint/check --api
+ */
+
+function showHelp() {
+  console.log(`
+🚀 Papyrus 프로젝트 스크립트 실행기
+
+사용법: node scripts/run.js <category>/<script> [options]
+
+📁 사용 가능한 스크립트:
+
+📊 데이터베이스 (database/)
+  build     - Prisma 스키마 빌드
+  migrate   - 데이터베이스 마이그레이션
+  generate  - Prisma 클라이언트 생성
+  reset     - 데이터베이스 리셋
+
+🏗️  빌드 (build/)
+  nestia    - Nestia API 빌드
+  api       - API 빌드
+  web       - 웹 빌드
+
+🔧 개발 (development/)
+  serve-api - API 서버 시작
+  serve-web - 웹 서버 시작 [--network, --tunnel]
+  dev       - 개발 환경 시작 [--nginx]
+
+🐳 Docker (docker/)
+  up        - Docker 컨테이너 시작 [--env, --https]
+
+🔍 린트 (lint/)
+  check     - 린트 검사 [--api, --web]
+  fix       - 린트 자동 수정 [--api, --web]
+
+🌐 인프라 (infrastructure/)
+  nginx-generate    - Nginx 설정 생성
+  ssl-generate      - SSL 인증서 생성 [--simple]
+
+⚙️  환경 (environment/)
+  dev       - 개발 환경 설정 적용
+  prod      - 프로덕션 환경 설정 적용
+
+예시:
+  node scripts/run.js database/build
+  node scripts/run.js development/serve-web --network
+  node scripts/run.js lint/check --api
+  node scripts/run.js docker/up --https
+`)
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+
+  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+    showHelp()
+    
+return
+  }
+
+  const scriptPath = args[0]
+  const scriptOptions = args.slice(1)
+
+  if (!scriptPath.includes('/')) {
+    console.error('❌ 스크립트 경로는 <category>/<script> 형식이어야 합니다.')
+    console.error('   예시: database/build, development/serve-api')
+    process.exit(1)
+  }
+
+  const fullScriptPath = path.join(__dirname, `${scriptPath}.js`)
+
+  if (!fs.existsSync(fullScriptPath)) {
+    console.error(`❌ 스크립트를 찾을 수 없습니다: ${fullScriptPath}`)
+    console.error(
+      '   사용 가능한 스크립트 목록을 보려면: node scripts/run.js --help',
+    )
+    process.exit(1)
+  }
+
+  try {
+    // 스크립트 옵션을 process.argv에 설정
+    process.argv = ['node', fullScriptPath, ...scriptOptions]
+
+    console.log(`🚀 실행 중: ${scriptPath}`)
+    const script = require(fullScriptPath)
+
+    if (typeof script === 'function') {
+      await script()
+    }
+  } catch (error) {
+    console.error(`❌ 스크립트 실행 실패: ${error.message}`)
+    process.exit(1)
+  }
+}
+
+if (require.main === module) {
+  main().catch(console.error)
+}
+
+module.exports = main

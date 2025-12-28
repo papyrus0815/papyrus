@@ -1,0 +1,78 @@
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdownButton {
+  background-color: vars.$color-primary;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s ease-in-out;
+
+  &:hover {
+    background-color: vars.$color-primary-hover;
+  }
+}
+
+.arrowIcon {
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.5rem;
+  transition: transform 0.2s ease-in-out;
+
+  &.open {
+    transform: rotate(180deg);
+  }
+}
+
+.dropdownList {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 200px;
+  background-color: white;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.dropdownItem {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+
+  &:hover {
+    background-color: vars.$color-table-row-hover-bg;
+  }
+}
+
+.dark {
+  .dropdownButton {
+    background-color: vars.$color-accent;
+    color: vars.$color-background-dark;
+
+    &:hover {
+      background-color: vars.$color-accent-hover;
+    }
+  }
+
+  .dropdownList {
+    background-color: vars.$color-form-bg;
+    border-color: vars.$color-border-dark;
+  }
+
+  .dropdownItem {
+    &:hover {
+      background-color: vars.$color-border-dark;
+    }
+  }
+}

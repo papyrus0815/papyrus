@@ -1,0 +1,290 @@
+/// ║                               INDUSTRY DOMAIN                                ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 기업과 산업 활동을 관리합니다.
+/// 
+/// 주요 기능:
+/// - 기업(Company): 경제 활동의 주체
+///   • 설립일, 창립자, 주요 인물 정보
+///   • 업종별 분류와 사업 영역
+///   • 기업 연혁과 성장 과정
+///   • 시설과 법규 준수 현황
+/// 
+/// - 기업 시설(CompanyFacility): 기업의 물리적 자산
+///   • 본사, 공장, 연구소, 지사 등
+///   • 🆕 조선소, 항구, 주요 건물 등의 인프라
+///   • 건설 과정과 운영 이력
+///   • 지리적 분포와 전략적 위치
+///   • 관련 법규와 규제 준수
+///   • 🆕 역사적 사건의 출발/경유지로 활용
+/// 
+/// - 시설 이력(CompanyFacilityHistory): 시설의 주요 사건 기록
+///   • 🆕 첫 번째 건조 선박 기록
+///   • 🆕 드라이독 설치, 확장 공사 등
+///   • 주요 생산품, 업적, 사고 등
+///   • 시설의 변천사 추적
+/// 
+/// - 기업 분류(CompanyCategory): 산업 분류 체계
+///   • 계층적 업종 분류
+///   • 시대별 산업 구조 변화
+///   • 기업의 다각화와 업종 변경
+/// 
+/// - 기업 연혁(CompanyHistory): 발전 과정 기록
+///   • 주요 사건과 전환점
+///   • 합병, 분할, 상장 등 변화
+///   • 시간순 정렬된 이력 관리
+/// 
+/// 특징:
+/// - 경제 발전의 미시적 관점
+/// - 인물과 지역의 경제적 연결고리
+/// - 법적 규제와 사업 활동의 상호작용
+/// - 산업 구조 변화의 추적
+/// - 🆕 역사적 사건과 시설의 연결
+
+// ========================
+// 기업 카테고리
+// ========================
+model CompanyCategory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 카테고리 명
+  name String @db.VarChar(100)
+
+  /// 카테고리 설명
+  description String?
+
+  /// 상위 카테고리
+  parentId String? @map("parent_id") @db.Char(36)
+
+  //--- 관계 필드
+  parent    CompanyCategory?          @relation("CompanyCategoryHierarchy", fields: [parentId], references: [id])
+  children  CompanyCategory[]         @relation("CompanyCategoryHierarchy")
+  companies CompanyCategoryRelation[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("company_category")
+}
+
+// ========================
+// 기업
+// ========================
+model Company {
+  /// PK 
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 회사 이름 
+  name String @db.VarChar(100)
+
+  /// 설립일
+  foundedAt DateTime? @map("founded_at")
+
+  /// 회사 설명
+  description String?
+
+  //--- 외래키
+  /// 창립자
+  founderId String? @map("founder_id") @db.Char(36)
+  /// 추가 인물
+  personId  String? @map("person_id") @db.Char(36)
+
+  //--- 관계 필드
+  Person                  Person?                   @relation(fields: [personId], references: [id])
+  CompanyHistory          CompanyHistory[]
+  facilities              CompanyFacility[]
+  CompanyCategoryRelation CompanyCategoryRelation[]
+  founder                 Person?                   @relation("FounderToCompany", fields: [founderId], references: [id], onDelete: SetNull)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("company")
+}
+
+// ========================
+// 기업 시설
+// ========================
+model CompanyFacility {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 시설 유형
+  facilityType FacilityType?
+
+  /// 시설명
+  name String? @db.VarChar(150)
+
+  /// 정확한 주소
+  address String? @db.VarChar(255)
+
+  /// 건설 시작일
+  constructionStartDate DateTime? @map("construction_start_date")
+
+  /// 건설 종료일
+  constructionEndDate DateTime? @map("construction_end_date")
+
+  /// 건설 배경 및 사유
+  constructionBackground String? @map("construction_background") @db.Text
+
+  /// 개장일
+  openedAt DateTime? @map("opened_at")
+
+  /// 폐장일
+  closedAt DateTime? @map("closed_at")
+
+  /// 기타 메모
+  note String?
+
+  //--- 외래키
+  companyId                String  @map("company_id") @db.Char(36)
+  administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
+  cityId                   String? @map("city_id") @db.Char(36)
+
+  //--- 관계 필드
+  administrativeDivision AdministrativeDivision?  @relation(fields: [administrativeDivisionId], references: [id])
+  laws                   CompanyFacilityLaw[]
+  city                   City?                    @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  company                Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  facilityHistories      CompanyFacilityHistory[]
+  EventTimeline          EventTimeline[]
+  builtNavalVessels      NavalVessel[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("company_facility")
+}
+
+// ========================
+// 기업 시설 이력
+// ========================
+model CompanyFacilityHistory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 시설 FK
+  facilityId String @map("facility_id") @db.Char(36)
+
+  /// 이력 제목 (예: "첫 번째 건조 선박", "드라이독 설치")
+  title String @db.VarChar(200)
+
+  /// 발생 일시
+  occurredAt DateTime? @map("occurred_at")
+
+  /// 상세 내용
+  description String? @db.Text
+
+  /// 관련 선박명, 설비명 등 (예: "USS Pennsylvania")
+  relatedName String? @map("related_name") @db.VarChar(100)
+
+  /// 추가 메모
+  note String? @db.Text
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 관계 필드
+  facility CompanyFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([facilityId, occurredAt], name: "idx_facility_history")
+  @@map("company_facility_history")
+}
+
+// ========================
+// 기업 연혁
+// ========================
+model CompanyHistory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 연혁 제목
+  title String @db.VarChar(200)
+
+  /// 이력이 발생한 날짜/시점
+  occurredAt DateTime? @map("occurred_at")
+
+  /// 상세 내용
+  content String?
+
+  /// 추가 메모
+  note String?
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 외래키
+  companyId String @map("company_id") @db.Char(36)
+
+  //--- 관계 필드
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("company_history")
+}
+
+// ========================
+// 기업 카테고리 연결
+// ========================
+model CompanyCategoryRelation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 회사가 이 카테고리에 속하기 시작한/끝난 시점
+  fromDate DateTime? @map("from_date")
+  toDate   DateTime? @map("to_date")
+
+  /// 기타 메모
+  note String?
+
+  //--- 외래키
+  companyId  String @map("company_id") @db.Char(36)
+  categoryId String @map("category_id") @db.Char(36)
+
+  //--- 관계 필드
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category CompanyCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("company_category_relation")
+}
+
+// ========================
+// 기업 시설-법률 연결
+// ========================
+model CompanyFacilityLaw {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 시설
+  facilityId String @map("facility_id") @db.Char(36)
+
+  /// 법/정책
+  lawId String @map("law_id") @db.Char(36)
+
+  /// 법이 어떻게 적용되었는지
+  applicationDetails String? @map("application_details") @db.Text
+
+  /// 비고
+  note String?
+
+  /// 적용 시점
+  appliedFrom DateTime? @map("applied_from")
+  appliedTo   DateTime? @map("applied_to")
+
+  //--- 관계 필드
+  facility CompanyFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  law      Law             @relation(fields: [lawId], references: [id], onDelete: Cascade)
+
+  @@map("company_facility_law")
+}

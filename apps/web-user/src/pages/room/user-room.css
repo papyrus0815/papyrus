@@ -1,0 +1,408 @@
+/* 모던 갤러리 스타일 - 유저 방 페이지 */
+.user-room-page {
+  min-height: 100vh;
+  background: #ffffff;
+}
+
+/* 헤더 */
+.room-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  gap: 16px;
+}
+
+.logo {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: 'Billabong', 'Segoe Script', cursive, system-ui;
+  color: #111827;
+  cursor: pointer;
+  margin: 0;
+  letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+
+.logo:hover {
+  opacity: 0.7;
+}
+
+.nav {
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.nav-icon {
+  padding: 0;
+  background: none;
+  border: none;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.nav-icon:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.nav-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* 갤러리 헤더 */
+.gallery-header {
+  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+  border-bottom: 1px solid #e5e7eb;
+  padding: 40px 20px;
+}
+
+.gallery-profile {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.profile-avatar-large {
+  flex-shrink: 0;
+}
+
+.avatar-circle-large {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  font-weight: 700;
+  color: white;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border: 4px solid white;
+}
+
+.profile-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-header-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.profile-name-large {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.room-title-large {
+  font-size: 18px;
+  font-weight: 500;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+}
+
+.profile-bio-large {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #374151;
+  margin: 0 0 20px 0;
+  max-width: 600px;
+}
+
+.profile-stats-large {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stat-item-large {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-value-large {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.stat-label-large {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.stat-divider {
+  color: #d1d5db;
+  font-size: 18px;
+  margin: 0 4px;
+}
+
+.btn-edit-room,
+.btn-follow-large {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit-room {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-edit-room:hover {
+  background: #e5e7eb;
+  transform: translateY(-1px);
+}
+
+.btn-follow-large {
+  background: #111827;
+  color: white;
+}
+
+.btn-follow-large:hover {
+  background: #1f2937;
+  transform: translateY(-1px);
+}
+
+.btn-follow-large.following {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-follow-large.following:hover {
+  background: #d1d5db;
+}
+
+/* 갤러리 섹션 */
+.gallery-section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.gallery-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.gallery-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gallery-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.gallery-count {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.view-mode-toggle {
+  display: flex;
+  gap: 8px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.view-mode-btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.view-mode-btn:hover {
+  color: #374151;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.view-mode-btn.active {
+  background: white;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 그리드 레이아웃 */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  }
+}
+
+/* 리스트 레이아웃 */
+.gallery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 빈 갤러리 */
+.empty-gallery {
+  text-align: center;
+  padding: 100px 20px;
+  background: #f9fafb;
+  border-radius: 16px;
+  border: 2px dashed #e5e7eb;
+}
+
+.empty-icon {
+  margin-bottom: 24px;
+  opacity: 0.4;
+  color: #9ca3af;
+}
+
+.empty-text {
+  font-size: 18px;
+  color: #6b7280;
+  margin: 0 0 24px 0;
+}
+
+.btn-create-first {
+  padding: 12px 24px;
+  background: #111827;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-create-first:hover {
+  background: #1f2937;
+  transform: translateY(-1px);
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 16px;
+  color: #6b7280;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .gallery-header {
+    padding: 24px 16px;
+  }
+
+  .gallery-profile {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 20px;
+  }
+
+  .profile-header-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .profile-name-large {
+    font-size: 24px;
+  }
+
+  .room-title-large {
+    font-size: 16px;
+  }
+
+  .profile-bio-large {
+    font-size: 14px;
+  }
+
+  .profile-stats-large {
+    justify-content: center;
+  }
+
+  .gallery-section {
+    padding: 24px 16px;
+  }
+
+  .gallery-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .gallery-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+}

@@ -1,0 +1,48 @@
+# Papyrus Service Manager - 정리 가능 파일 목록
+# 이 파일들은 삭제해도 프로그램 실행에 문제 없습니다
+
+## 중복 문서 파일 (12개 삭제, README.md만 남김)
+HOW_TO_RUN.md
+QUICK_START.md
+START_GUIDE.md
+SETUP_GUIDE.md
+GUI_GUIDE.md
+TRAY_ICON_GUIDE.md
+TROUBLESHOOTING.md
+GUI_INTEGRATED.md
+CHANGELOG.md
+UPDATES.md
+CONSOLE_FIX.md
+FINAL_FIX.md
+
+## 중복 실행 파일 (6개 삭제, start.bat만 남김)
+start-simple.bat
+start-silent.bat
+start-gui-only.bat
+start-background.vbs
+start-electron.vbs
+start-web-server.bat
+
+## 불필요한 스크립트 (2개)
+electron-start.js
+electron-start-debug.js
+
+## 정리 후 구조
+service-manager/
+├─ src/                 # 소스 코드
+├─ dist/                # 빌드 결과
+├─ node_modules/        # 라이브러리
+├─ assets/              # 아이콘
+├─ package.json
+├─ tsconfig.json
+├─ README.md           # 하나로 통합된 문서
+├─ start.bat           # 실행
+├─ setup.bat           # 설치
+├─ create-desktop-shortcut.bat
+├─ register-startup.bat
+├─ unregister-startup.bat
+├─ create-icon.js
+└─ start-electron.ps1  # 내부용
+
+## 총 삭제 가능: 20개 파일
+

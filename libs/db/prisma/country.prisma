@@ -1,0 +1,321 @@
+/// ║                              COUNTRY DOMAIN                                  ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 현대 국가들과 그 행정 체계를 관리합니다.
+/// 
+/// 주요 기능:
+/// - 국가(Country): 현재 존재하는 국가들의 기본 정보
+///   • 인구, 면적, 수도, 국기 이모지
+///   • ISO 코드, 화폐, 언어, 대륙 연결
+///   • 수출입 데이터, 사회현상, 군사자산 등과 연관
+/// 
+/// - 행정구역(AdministrativeDivision): 국가 내 행정 단위
+///   • 계층적 구조 (도 > 시 > 구 등)
+///   • 국가별 맞춤 설정 가능
+///   • 지역별 명칭 및 의미 정보
+/// 
+/// - 도시(City): 주요 도시 정보
+///   • 인구, 면적 통계
+///   • 행정구역과의 연결
+///   • 기업 시설, 조직 본부 등의 위치 기준
+/// 
+/// 특징:
+/// - 현대 지정학적 실체 중심
+/// - 역사적 국가(historical.prisma)와 구분
+/// - 다양한 도메인의 지리적 앵커 역할
+
+// ========================
+// Country
+// ========================
+model Country {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가명
+  name String @unique @db.VarChar(100)
+
+  /// 로컬 국가명
+  localName String? @map("local_name") @db.VarChar(100)
+
+  /// 국기 이모지
+  flagEmoji String? @map("flag_emoji") @db.VarChar(10)
+
+  /// ISO 코드
+  isoCode String? @unique @map("iso_code") @db.VarChar(10)
+
+  /// 인구
+  population BigInt? @db.BigInt
+
+  /// 면적
+  areaSqKm Decimal? @map("area_sq_km") @db.Decimal(15, 2)
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  /// 수도
+  capital String? @db.VarChar(100)
+
+  /// 위도 (수도 또는 중심부)
+  latitude Decimal? @db.Decimal(10, 7)
+
+  /// 경도 (수도 또는 중심부)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  //--- 외래키
+  currencyId  String? @map("currency_id") @db.Char(36)
+  languageId  String? @map("language_id") @db.Char(36)
+  continentId String? @map("continent_id") @db.Char(36)
+
+  //--- 관계 필드
+  currency  Currency?  @relation(fields: [currencyId], references: [id], onDelete: SetNull)
+  language  Language?  @relation(fields: [languageId], references: [id], onDelete: SetNull)
+  continent Continent? @relation(fields: [continentId], references: [id], onDelete: SetNull)
+
+  records                   CountryRecord[]
+  exportsImports            ExportImport[]
+  economicIndicators        CountryEconomicIndicator[]
+  demographicIndicators     CountryDemographicIndicator[]
+  developmentIndicators     CountryDevelopmentIndicator[]
+  ethnicities               Ethnicity[]
+  persons                   Person[]                         @relation("CountryToPerson")
+  personAffiliations        PersonCountryAffiliation[]       @relation("PersonCountryAffiliations")
+  adminDivisionConfigs      CountryAdminDivisionConfig[]
+  administrationDepartments AdministrationDepartment[]       @relation("Country_Department")
+  historicalConnections     HistoricalCountryModernCountry[]
+  Law                       Law[]
+  groundVehicles            GroundVehicle[]
+  aircraft                  Aircraft[]
+  navalVessels              NavalVessel[]
+  militaryUnits             MilitaryUnit[]
+  socialPhenomena           SocialPhenomenon[]
+  Organizations             Organization[]                   @relation("OrganizationCountry")
+  organizationMemberships   OrganizationCountryMembership[]  @relation("OrgMembershipCountry")
+  PoliticalParty            PoliticalParty[]                 @relation("PoliticalPartyCountry")
+  governmentPositions       GovernmentPositionDefinition[]   @relation("GovernmentPositionCountry")
+  eventTimelines            EventTimeline[]
+  eventCountryRelations     EventCountryRelation[]
+
+  // 🆕 정규화된 군사 사건 관계
+  countriesInSides               CountryInSide[]
+  fromCountryRelations           EventCountryRelationNew[] @relation("FromCountry")
+  toCountryRelations             EventCountryRelationNew[] @relation("ToCountry")
+  treatySignatories              TreatySignatory[]
+  allianceMembers                AllianceMember[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 마지막 수정 일시
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([currencyId], name: "idx_country_currencyId")
+  @@index([languageId], name: "idx_country_languageId")
+  @@index([continentId], name: "idx_country_continentId")
+  @@map("country")
+}
+
+// ========================
+// CountryRecord
+// ========================
+model CountryRecord {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 기록 내용
+  description String @db.Text
+
+  /// 기록 시점
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@index([countryId], name: "idx_country_record_countryId")
+  @@map("country_record")
+}
+
+// ========================
+// ExportImport
+// ========================
+model ExportImport {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 연도
+  year Int
+
+  /// 수출 금액
+  exportValue Decimal? @db.Decimal(20, 2)
+
+  /// 수입 금액
+  importValue Decimal? @db.Decimal(20, 2)
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([countryId, year], name: "uniq_exportImport_country_year")
+  @@map("export_import")
+}
+
+// ========================
+// CountryAdminDivisionConfig
+// ========================
+model CountryAdminDivisionConfig {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 행정구역 레벨
+  divisionLevel Int @map("division_level")
+
+  /// 행정구역 명칭 (예: 도, 주, 현 등)
+  divisionLabel String @map("division_label") @db.VarChar(50)
+
+  /// 설명
+  description String?
+
+  //--- 관계 필드
+  country                 Country                  @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  administrativeDivisions AdministrativeDivision[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([countryId, divisionLevel])
+  @@map("country_admin_division_config")
+}
+
+// ========================
+// AdministrativeDivision
+// ========================
+model AdministrativeDivision {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 명칭
+  name String @db.VarChar(100)
+
+  /// 로컬 명칭
+  localName String? @map("local_name") @db.VarChar(100)
+
+  /// 명칭 뜻
+  nameMeaning String? @map("name_meaning") @db.Text
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 국가별 지방자치단체 구성 ID
+  adminDivisionId String @map("admin_division_id") @db.Char(36)
+
+  /// 상위 행정구역 ID
+  parentId String? @map("parent_id") @db.Char(36)
+
+  //--- 관계 필드
+  parent              AdministrativeDivision?    @relation("AdminDivHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children            AdministrativeDivision[]   @relation("AdminDivHierarchy")
+  adminDivisionConfig CountryAdminDivisionConfig @relation(fields: [adminDivisionId], references: [id], onDelete: Restrict)
+
+  homeTown        HomeTown[]
+  cities          City[]
+  event           Event[]
+  CompanyFacility CompanyFacility[]
+  EventTimeline   EventTimeline[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_admin_div_countryId")
+  @@index([parentId], name: "idx_admin_div_parentId")
+  @@index([adminDivisionId], name: "idx_admin_div_typeId")
+  @@map("administrative_division")
+}
+
+// ========================
+// City
+// ========================
+model City {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 행정구역 ID
+  administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
+
+  /// 도시명
+  name String @db.VarChar(100)
+
+  /// 인구
+  population BigInt?
+
+  /// 면적
+  areaSqKm Decimal? @map("area_sq_km") @db.Decimal(15, 2)
+
+  //--- 관계 필드
+  administrativeDivision AdministrativeDivision? @relation(fields: [administrativeDivisionId], references: [id], onDelete: Cascade)
+  hometown               HomeTown[]
+  CompanyFacility        CompanyFacility[]
+  Event                  Event[]
+  Organizations          Organization[]          @relation("OrganizationHeadquartersCity")
+  PoliticalParty         PoliticalParty[]        @relation("PoliticalPartyHeadquartersCity")
+  EventTimeline          EventTimeline[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_city_countryId")
+  @@index([administrativeDivisionId], name: "idx_city_adminDivId")
+  @@map("city")
+}
+
+// ========================
+// AdministrationDepartment
+// ========================
+model AdministrationDepartment {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 상위 부처 ID
+  parentId String? @map("parent_id") @db.Char(36)
+
+  /// 부처명
+  name String @db.VarChar(100)
+
+  /// 설명
+  description String?
+
+  //--- 관계 필드
+  country  Country                    @relation("Country_Department", fields: [countryId], references: [id], onDelete: Cascade)
+  parent   AdministrationDepartment?  @relation("DeptHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children AdministrationDepartment[] @relation("DeptHierarchy")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_admin_dept_countryId")
+  @@index([parentId], name: "idx_admin_dept_parentId")
+  @@map("administration_department")
+}

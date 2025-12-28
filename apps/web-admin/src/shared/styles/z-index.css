@@ -1,0 +1,40 @@
+/**
+ * 전역 Z-Index CSS 변수
+ * 
+ * 사용법:
+ * z-index: var(--z-modal-overlay);
+ */
+
+:root {
+  /* Base Layer (0-99) */
+  --z-base: 0;
+  --z-content: 1;
+
+  /* Elevated Elements (100-899) */
+  --z-dropdown: 100;
+  --z-tooltip: 200;
+  --z-action-menu: 300;
+
+  /* Sidebar & Navigation (900-999) */
+  --z-sidebar: 900;
+  --z-nav: 950;
+
+  /* Header & Fixed Elements (1000-1999) */
+  --z-header: 1000;
+  --z-sticky-header: 1100;
+
+  /* Overlays & Dialogs (2000-8999) */
+  --z-dialog-overlay: 2000;
+  --z-dialog-content: 2001;
+  --z-drawer-overlay: 3000;
+  --z-drawer-content: 3001;
+
+  /* Modal Overlays (9000-9999) */
+  --z-modal-overlay: 9999;
+
+  /* Modal Content & Critical UI (10000+) */
+  --z-modal-content: 10000;
+  --z-toast: 10001;
+  --z-notification: 10002;
+  --z-loading-overlay: 10003;
+}

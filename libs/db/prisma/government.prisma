@@ -1,0 +1,193 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                            GOVERNMENT DOMAIN                                 ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 정부 관직과 공직자의 재임 기록을 관리합니다.
+/// 
+/// 주요 기능:
+/// - 정부 직위 정의(GovernmentPositionDefinition): 관직 체계
+///   • 국가원수, 정부수반, 각료, 의원 등
+///   • 직위의 설치와 폐지 이력
+///   • 국가별/시대별 관직 체계
+/// 
+/// - 재임 기록(GovernmentPositionTenure): 공직 이력
+///   • 제N대 대통령, 총리, 장관 등
+///   • 임기 시작과 종료
+///   • 임명 방식과 특이사항
+/// 
+/// 활용 사례:
+/// - 한국: 제20대 대통령 윤석열 (2022.05.10~현재)
+/// - 미국: 제46대 대통령 조 바이든 (2021.01.20~현재)
+/// - 영국: 제80대 총리 리시 수낙 (2022.10.25~2024.07.05)
+/// - 일본: 제100대 내각총리대신 기시다 후미오
+/// - 조선: 영의정, 좌의정, 우의정, 6조 판서
+/// 
+/// 특징:
+/// - 대수/회차(termNumber)로 역대 순서 관리
+/// - 현대 국가와 역사적 국가 모두 지원
+/// - 직위별 재임자 목록과 통계 제공
+/// - 중임 및 겸직 처리 가능
+/// - 임명 방식 기록 (선거, 임명, 세습, 쿠데타 등)
+
+// ========================
+// Enums
+// ========================
+
+/// 정부 관직의 유형을 분류합니다.
+enum GovernmentPositionType {
+  /// 국가원수 (대통령, 국왕, 황제, 천황 등)
+  HEAD_OF_STATE
+  /// 정부수반 (총리, 수상, 영의정 등)
+  HEAD_OF_GOVERNMENT
+  /// 각료/장관 (외교부 장관, 국방부 장관, 6조 판서 등)
+  CABINET_MINISTER
+  /// 차관/차관보 (정무직 고위 공무원)
+  VICE_MINISTER
+  /// 의회의원 (국회의원, 상원의원, 하원의원 등)
+  LEGISLATOR
+  /// 사법부 (대법원장, 대법관, 헌법재판소장 등)
+  JUDICIARY
+  /// 지방정부 (도지사, 시장, 군수 등)
+  LOCAL_GOVERNMENT
+  /// 특별직 (감사원장, 중앙선거관리위원장 등)
+  SPECIAL_POSITION
+  /// 군 지휘관 (국군통수권자는 HEAD_OF_STATE)
+  MILITARY_COMMANDER
+  /// 기타
+  OTHER
+}
+
+/// 임명 또는 선출 방식
+enum AppointmentMethod {
+  /// 직접 선거
+  DIRECT_ELECTION
+  /// 간접 선거
+  INDIRECT_ELECTION
+  /// 임명 (대통령/총리 등의 임명)
+  APPOINTMENT
+  /// 세습 (왕위 계승 등)
+  HEREDITARY
+  /// 쿠데타/혁명
+  COUP
+  /// 의회 선출
+  PARLIAMENTARY_ELECTION
+  /// 기타
+  OTHER
+}
+
+// ========================
+// GovernmentPositionDefinition
+// ========================
+
+/// 정부 직위 정의 모델
+/// 특정 국가의 특정 관직을 정의합니다.
+/// 예: "대한민국 대통령", "조선 영의정", "일본 내각총리대신"
+model GovernmentPositionDefinition {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 직위명 (예: "대통령", "국무총리", "외교부 장관", "영의정")
+  title String @db.VarChar(100)
+
+  /// 영문 직위명
+  titleEn String? @map("title_en") @db.VarChar(100)
+
+  /// 현지어 직위명
+  titleLocal String? @map("title_local") @db.VarChar(100)
+
+  /// 직위 유형
+  positionType GovernmentPositionType @map("position_type")
+
+  /// 설명/개요
+  description String? @db.Text
+
+  /// 직급/서열 (숫자가 작을수록 높은 직위, 예: 1=대통령, 2=국무총리)
+  rank Int? @default(999)
+
+  /// 부서/부처명 (예: "외교부", "국방부", "이조")
+  departmentName String? @map("department_name") @db.VarChar(100)
+
+  /// 소속 국가 (현대 국가)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 소속 국가 (역사적 국가)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 직위 설치일 (이 직위가 생긴 날짜)
+  establishedDate DateTime? @map("established_date")
+
+  /// 직위 폐지일 (이 직위가 없어진 날짜)
+  abolishedDate DateTime? @map("abolished_date")
+
+  //--- 관계 필드
+  country           Country?           @relation("GovernmentPositionCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry? @relation("GovernmentPositionHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  /// 이 직위의 역대 재임자들
+  tenures GovernmentPositionTenure[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_gov_pos_def_countryId")
+  @@index([historicalCountryId], name: "idx_gov_pos_def_histCountryId")
+  @@index([positionType], name: "idx_gov_pos_def_type")
+  @@index([rank], name: "idx_gov_pos_def_rank")
+  @@map("government_position_definition")
+}
+
+// ========================
+// GovernmentPositionTenure
+// ========================
+
+/// 정부 관직 재임 기록 모델
+/// 특정 인물이 특정 직위에 재임한 이력을 기록합니다.
+/// 예: "윤석열 - 제20대 대통령 (2022.05.10 ~ 현재)"
+///     "이순신 - 삼도수군통제사 (1593 ~ 1598)"
+model GovernmentPositionTenure {
+  /// 고유 식별자 (PK)
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 직위 정의 ID
+  positionId String @map("position_id") @db.Char(36)
+
+  /// 재임자 (인물) ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 대수/회차 (예: 20 = 제20대, 100 = 제100대)
+  /// NULL이면 대수 개념이 없는 직위 (예: 조선시대 관직)
+  termNumber Int? @map("term_number")
+
+  /// 임기 시작일
+  startDate DateTime @map("start_date")
+
+  /// 임기 종료일 (현재 재직 중이면 NULL)
+  endDate DateTime? @map("end_date")
+
+  /// 임명/선출 방식
+  appointmentMethod AppointmentMethod? @map("appointment_method")
+
+  /// 종료 사유 (임기만료, 사임, 탄핵, 사망 등)
+  endReason String? @map("end_reason") @db.VarChar(100)
+
+  /// 특이사항/비고
+  notes String? @db.Text
+
+  /// 우선순위 (같은 직위를 여러 번 역임한 경우 순서 구분, 낮을수록 우선)
+  priority Int? @default(0)
+
+  //--- 관계 필드
+  position GovernmentPositionDefinition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  person   Person                       @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([positionId], name: "idx_gov_tenure_posId")
+  @@index([personId], name: "idx_gov_tenure_personId")
+  @@index([termNumber], name: "idx_gov_tenure_termNum")
+  @@index([startDate], name: "idx_gov_tenure_startDate")
+  @@map("government_position_tenure")
+}

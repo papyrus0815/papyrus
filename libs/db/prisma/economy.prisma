@@ -1,0 +1,93 @@
+/// ║                               ECONOMY DOMAIN                                 ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 경제 활동과 자원 관리를 담당합니다.
+/// 
+/// 주요 기능:
+/// - 자원 카테고리(ResourceCategory): 자원의 분류 체계
+///   • 계층적 자원 분류 (대분류 > 중분류 > 소분류)
+///   • 자원의 성격별 그룹핑
+///   • 경제적 중요도와 희소성 관리
+/// 
+/// - 자원(Resource): 구체적 경제 자원
+///   • 천연자원, 인적자원, 기술자원 등
+///   • 수량, 단위, 가치 정보
+///   • 국가별/지역별 부존 현황
+///   • 국제 교역과 경제력의 기반
+/// 
+/// 활용 사례:
+/// - 석유, 가스, 광물 등 천연자원
+/// - 농산물, 수산물 등 생물자원
+/// - 기술력, 노동력 등 무형자원
+/// - 인프라, 시설 등 자본자원
+/// 
+/// 특징:
+/// - 국가 간 경쟁과 협력의 근거
+/// - 지정학적 갈등의 원인
+/// - 경제 발전과 국력의 토대
+/// - 시간에 따른 가치 변동성
+
+// ========================
+// ResourceCategory
+// ========================
+model ResourceCategory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 카테고리명
+  name String @unique @db.VarChar(50)
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  /// 상위 카테고리 ID
+  parentId String? @map("parent_id") @db.Char(36)
+
+  //--- 관계 필드
+  parent    ResourceCategory?  @relation("ResourceCategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  ResourceCategory[] @relation("ResourceCategoryHierarchy")
+  resources Resource[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId], name: "idx_resourceCategory_parentId")
+  @@map("category_resource")
+}
+
+// ========================
+// Resource
+// ========================
+model Resource {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 자원명
+  name String @unique @db.VarChar(100)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 수량
+  quantity Decimal? @db.Decimal(20, 4)
+
+  /// 단위
+  unit String? @db.VarChar(20)
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  /// 카테고리 ID
+  categoryId String @map("category_id") @db.Char(36)
+
+  //--- 관계 필드
+  category ResourceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([categoryId], name: "idx_resource_categoryId")
+  @@map("ref_resource")
+}

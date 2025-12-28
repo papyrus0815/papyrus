@@ -1,0 +1,472 @@
+/// ║                                EVENT DOMAIN                                  ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+/// 
+/// 이 도메인은 역사적 사건과 이벤트를 시간적 맥락에서 관리합니다.
+/// 
+/// 주요 기능:
+/// - 사건 카테고리(EventCategory): 사건 분류 체계
+///   • 계층적 카테고리 구조
+///   • 정치, 경제, 사회, 문화 등 영역별 분류
+///   • 사건의 성격과 영향 범위 구분
+/// 
+/// - 사건(Event): 구체적 역사적 사건
+///   • 시작일과 종료일로 기간 관리
+///   • 발생 장소 (도시, 행정구역, 국가)
+///   • 배경과 여파 분석
+///   • 상위-하위 사건 관계 (큰 사건 > 세부 사건)
+/// 
+/// - 사건 타임라인(EventTimeline): 사건 내 세부 진행 및 여정 기록
+///   • 사건 내부의 시간적 진행 과정
+///   • 중요한 전환점과 순간들
+///   • 단계별 상황 변화
+///   • 🆕 복잡한 여정 경로 추적 (페리 제독 일본 원정 등)
+///   • 🆕 각 시점별 위치 정보 (도시, 국가, 좌표)
+///   • 🆕 순차적 경로 관리 (sequenceNumber)
+/// 
+/// - 사건-인물 관계(PersonEvent): 참여자 관리
+///   • 사건 참여 인물들의 역할
+///   • 주도자, 참여자, 피해자 등 구분
+///   • 개인의 역할과 기여도
+/// 
+/// - 🆕 사건-국가 관계(EventCountryRelation): 연관 국가
+///   • 사건에 관련된 국가들과 역할 기록
+///   • 주도국, 대상국, 중재국, 관찰국 등
+///   • 현대 국가 및 역사적 국가 모두 지원
+/// 
+/// 활용 사례:
+/// - 전쟁: 1차 대전 > 서부전선 > 솜 전투
+/// - 혁명: 프랑스 혁명 > 테르미도르 반동
+/// - 경제: 대공황 > 주식시장 붕괴
+/// - 정치: 통일 과정 > 베를린 장벽 붕괴
+/// - 🆕 원정/탐험: 쿠로후네 사건 (노퍽 → 마데이라 → ... → 에도만)
+/// - 🆕 외교 사절: 조천사 여정 (한양 → 의주 → 북경)
+/// 
+/// 특징:
+/// - 시간과 공간의 구체적 좌표
+/// - 인과관계와 연쇄반응 추적
+/// - 거시사와 미시사의 연결
+/// - 다양한 관점과 해석 수용
+/// - 🆕 다지점 여정과 경로의 상세 기록
+
+// ========================
+// Enums
+// ========================
+
+/// 사건에서 국가의 역할
+enum EventCountryRole {
+  /// 주도국 (사건을 일으킨 국가)
+  INITIATOR
+  /// 대상국 (사건의 대상이 된 국가)
+  TARGET
+  /// 참여국 (사건에 참여한 국가)
+  PARTICIPANT
+  /// 동맹국
+  ALLY
+  /// 적대국
+  ADVERSARY
+  /// 중재국
+  MEDIATOR
+  /// 관찰국
+  OBSERVER
+  /// 피해국
+  VICTIM
+  /// 수혜국
+  BENEFICIARY
+  /// 기타
+  OTHER
+}
+
+/// 진영 레벨
+enum SideLevel {
+  /// 연합 (예: 연합군, 추축국)
+  COALITION
+  /// 국가 (예: 미국, 독일)
+  COUNTRY
+  /// 부대 (예: 제1사단, 제3함대)
+  FORCE
+}
+
+/// 군사 사건에서의 국가 간 관계 타입
+enum MilitaryRelationType {
+  /// 동맹
+  ALLIED
+  /// 협력
+  COOPERATION
+  /// 불가침
+  NON_AGGRESSION
+  /// 중립
+  NEUTRAL
+  /// 적대
+  ENEMY
+  /// 괴뢰
+  PUPPET
+  /// 점령
+  OCCUPIED
+}
+
+/// 참여도
+enum ParticipationType {
+  /// 전면 참전
+  FULL
+  /// 제한적 참전
+  LIMITED
+  /// 간접 참전
+  INDIRECT
+  /// 비전투 지원
+  NON_COMBATANT
+}
+
+/// 조약 타입
+enum TreatyType {
+  /// 불가침 조약
+  NON_AGGRESSION
+  /// 동맹 조약
+  ALLIANCE
+  /// 무역 협정
+  TRADE
+  /// 영토 협정
+  TERRITORIAL
+  /// 기타
+  OTHER
+}
+
+/// 동맹 가입 상태
+enum AllianceMemberStatus {
+  /// 창립 멤버
+  FOUNDING
+  /// 가입
+  JOINED
+  /// 탈퇴
+  LEFT
+  /// 축출
+  EXPELLED
+}
+
+/// 전투 유형
+enum ConflictType {
+  /// 전투
+  BATTLE
+  /// 전쟁
+  WAR
+  /// 포위전
+  SIEGE
+  /// 전역
+  CAMPAIGN
+  /// 소규모 전투
+  SKIRMISH
+}
+
+/// 교전 형태
+enum CombatType {
+  /// 육상
+  LAND
+  /// 해상
+  NAVAL
+  /// 공중
+  AIR
+}
+
+// ========================
+// 사건 카테고리
+// ========================
+model EventCategory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 카테고리 이름
+  name String @db.VarChar(100)
+
+  /// 카테고리 설명
+  description String?
+
+  /// 상위 분류
+  parentId String? @map("parent_id") @db.Char(36)
+
+  //--- 관계 필드
+  parent   EventCategory?  @relation("EventCategoryHierarchy", fields: [parentId], references: [id])
+  children EventCategory[] @relation("EventCategoryHierarchy")
+  events   Event[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("event_category")
+}
+
+// ========================
+// 사건
+// ========================
+model Event {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건명
+  title String @db.VarChar(100)
+
+  /// 개요
+  description String? @db.Text
+
+  /// 기간(시작)
+  startDate DateTime? @map("start_date")
+
+  /// 기간(종료)
+  endDate DateTime? @map("end_date")
+
+  /// 간단 문자열 위치(자유 텍스트)
+  location String? @db.VarChar(255)
+
+  /// 사건 카테고리
+  categoryId String? @map("category_id") @db.Char(36)
+
+  /// 배경, 여파
+  background String? @db.Text
+  aftermath  String? @db.Text
+
+  /// 부모-자식 사건
+  parentEventId String? @map("parent_event_id") @db.Char(36)
+
+  /// 썸네일 이미지 URL
+  thumbnail String? @db.VarChar(500)
+
+  /// 섹션 기반 컨텐츠 (JSON 형태로 저장)
+  sections Json? @db.Json
+
+  /// 전쟁 비용 (텍스트)
+  warCost String? @map("war_cost") @db.Text
+
+  //--- 관계 필드
+  category    EventCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  parentEvent Event?         @relation("ParentChildEvent", fields: [parentEventId], references: [id])
+  childEvents Event[]        @relation("ParentChildEvent")
+
+  /// 도시
+  cityId String? @map("city_id") @db.Char(36)
+  city   City?   @relation(fields: [cityId], references: [id], onDelete: SetNull)
+
+  /// 행정구역
+  administrativeDivisionId String?                 @map("administrative_division_id") @db.Char(36)
+  administrativeDivision   AdministrativeDivision? @relation(fields: [administrativeDivisionId], references: [id], onDelete: SetNull)
+
+  /// 과거 국가
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  persons          PersonEvent[]
+  timelines        EventTimeline[]
+  BookEvent        BookEvent[]
+  countryRelations EventCountryRelation[]
+  relatedEvents    EventRelation[]        @relation("EventToRelated")
+  relatedByEvents  EventRelation[]        @relation("RelatedToEvent")
+
+  // 🆕 정규화된 군사 정보
+  belligerentSides      BelligerentSide[]
+  eventCountryRelations EventCountryRelationNew[]
+  treaties              Treaty[]
+  alliances             Alliance[]
+  militaryDetailsNorm   MilitaryDetailsNorm?
+  casualties            CasualtiesData[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("event")
+}
+
+// ========================
+// EventTimeline
+// ========================
+model EventTimeline {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 어느 사건의 타임라인인가
+  eventId String @map("event_id") @db.Char(36)
+
+  /// 이 시점 발생일시
+  occurredAt DateTime? @map("occurred_at")
+
+  /// 타임라인 제목
+  title String @db.VarChar(100)
+
+  /// 상세 내용
+  description String? @db.Text
+
+  /// 위치명 (자유 텍스트, 예: "노퍽 조선소", "마데이라 항구")
+  locationName String? @map("location_name") @db.VarChar(200)
+
+  /// 도시 ID
+  cityId String? @map("city_id") @db.Char(36)
+
+  /// 행정구역 ID
+  administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
+
+  /// 현대 국가 ID
+  modernCountryId String? @map("modern_country_id") @db.Char(36)
+
+  /// 역사적 국가 ID
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 위도 (경유지 좌표)
+  latitude Decimal? @db.Decimal(10, 7)
+
+  /// 경도 (경유지 좌표)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  /// 순서 번호 (여정 순서 등, 1부터 시작)
+  sequenceNumber Int? @map("sequence_number")
+
+  /// 관련 시설 ID (조선소, 항구, 주요 건물 등)
+  facilityId String? @map("facility_id") @db.Char(36)
+
+  //--- 관계 필드
+  event                  Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  city                   City?                   @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  administrativeDivision AdministrativeDivision? @relation(fields: [administrativeDivisionId], references: [id], onDelete: SetNull)
+  modernCountry          Country?                @relation(fields: [modernCountryId], references: [id], onDelete: SetNull)
+  historicalCountry      HistoricalCountry?      @relation(fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  facility               CompanyFacility?        @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+  EventTimelinePerson    EventTimelinePerson[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId, sequenceNumber], name: "idx_timeline_event_seq")
+  @@index([cityId], name: "idx_timeline_cityId")
+  @@index([modernCountryId], name: "idx_timeline_modernCountryId")
+  @@index([historicalCountryId], name: "idx_timeline_historicalCountryId")
+  @@index([facilityId], name: "idx_timeline_facilityId")
+  @@map("event_timeline")
+}
+
+// ========================
+// EventTimelinePerson
+// ========================
+model EventTimelinePerson {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 타임라인 FK
+  timelineId String @map("timeline_id") @db.Char(36)
+
+  /// 인물 FK
+  personId String @map("person_id") @db.Char(36)
+
+  /// 행동/역할 등
+  action String?
+  note   String?
+
+  //--- 관계 필드
+  timeline EventTimeline @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  person   Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([timelineId, personId])
+  @@map("event_timeline_person")
+}
+
+// ========================
+// PersonEvent (사건-인물 피벗)
+// ========================
+model PersonEvent {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 FK
+  personId String @map("person_id") @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+
+  /// 사건에서의 역할
+  role String? @db.VarChar(100)
+
+  /// 비고
+  note String? @db.Text
+
+  //--- 관계 필드
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([personId, eventId])
+  @@map("person_event")
+}
+
+// ========================
+// 사건-국가 관계
+// ========================
+model EventCountryRelation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+
+  /// 현대 국가 FK (현대 국가인 경우)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 FK (역사적 국가인 경우)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 사건에서의 역할
+  role EventCountryRole
+
+  /// 역할 상세 설명
+  roleDescription String? @map("role_description") @db.Text
+
+  /// 비고
+  note String? @db.Text
+
+  //--- 관계 필드
+  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  country           Country?           @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_event_country_eventId")
+  @@index([countryId], name: "idx_event_country_countryId")
+  @@index([historicalCountryId], name: "idx_event_country_histCountryId")
+  @@map("event_country_relation")
+}
+
+// ========================
+// 사건 간 관계 (관련 사건)
+// ========================
+model EventRelation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 주 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+
+  /// 관련 사건 FK
+  relatedEventId String @map("related_event_id") @db.Char(36)
+
+  /// 관계 설명
+  relationDescription String? @map("relation_description") @db.Text
+
+  //--- 관계 필드
+  event        Event @relation("EventToRelated", fields: [eventId], references: [id], onDelete: Cascade)
+  relatedEvent Event @relation("RelatedToEvent", fields: [relatedEventId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([eventId, relatedEventId])
+  @@index([eventId], name: "idx_event_relation_eventId")
+  @@index([relatedEventId], name: "idx_event_relation_relatedEventId")
+  @@map("event_relation")
+}

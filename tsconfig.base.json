@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "target": "es2017",
+    "module": "commonjs",
+    "rootDir": ".",
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "plugins": [
+      {
+        "transform": "typia/lib/transform"
+      }
+    ],
+    "strictNullChecks": true,
+    "paths": {
+      "@dto/*": ["libs/dto/*"],
+      "@types/*": ["libs/types/*"],
+      "@api": ["apps/api/src/api/module.ts"],
+      "@api/*": ["apps/api/src/api/*"],
+      "@papyrus/api-sdk": ["libs/api-sdk/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}
