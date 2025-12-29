@@ -41,8 +41,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openWeb: () => ipcRenderer.invoke('service:openWeb'),
   openExternal: (url: string) => ipcRenderer.invoke('service:openExternal', url),
 
+  // 개발자 도구
+  openDevTools: () => ipcRenderer.invoke('service:openDevTools'),
+
   // 패키지 업데이트 확인
   checkPackageUpdates: () => ipcRenderer.invoke('service:checkPackageUpdates'),
+
+  // 패키지 업데이트 실행
+  updatePackages: (packages: string[]) =>
+    ipcRenderer.invoke('service:updatePackages', packages),
+  updateAllPackages: () => ipcRenderer.invoke('service:updateAllPackages'),
 
   // 설치된 패키지 목록 가져오기
   getInstalledPackages: () => ipcRenderer.invoke('service:getInstalledPackages'),
@@ -66,6 +74,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runGenerate: () => ipcRenderer.invoke('service:runGenerate'),
   runSeed: () => ipcRenderer.invoke('service:runSeed'),
   openPrismaStudio: () => ipcRenderer.invoke('service:openPrismaStudio'),
+
+  // ========================================
+  // Prisma Manager API
+  // ========================================
+  prisma: {
+    buildSchema: () => ipcRenderer.invoke('prisma:buildSchema'),
+    validateSchema: () => ipcRenderer.invoke('prisma:validateSchema'),
+    generateClient: () => ipcRenderer.invoke('prisma:generateClient'),
+    migrate: (migrationName: string) =>
+      ipcRenderer.invoke('prisma:migrate', migrationName),
+    getMigrations: () => ipcRenderer.invoke('prisma:getMigrations'),
+    getMigrationStatus: () => ipcRenderer.invoke('prisma:getMigrationStatus'),
+    startStudio: () => ipcRenderer.invoke('prisma:startStudio'),
+    stopStudio: () => ipcRenderer.invoke('prisma:stopStudio'),
+    getStatus: () => ipcRenderer.invoke('prisma:getStatus'),
+  },
 })
 
 // TypeScript 타입 정의
@@ -90,6 +114,7 @@ declare global {
       onConsoleLog: (callback: (log: string) => void) => void
       openWeb: () => Promise<void>
       openExternal: (url: string) => Promise<void>
+      openDevTools: () => Promise<void>
       checkPort: (port: number) => Promise<boolean>
       buildApi: () => Promise<boolean>
       buildSdk: () => Promise<boolean>
@@ -98,6 +123,31 @@ declare global {
       runGenerate: () => Promise<boolean>
       runSeed: () => Promise<boolean>
       openPrismaStudio: () => Promise<boolean>
+      checkPackageUpdates: () => Promise<any>
+      updatePackages: (packages: string[]) => Promise<any>
+      updateAllPackages: () => Promise<any>
+      getInstalledPackages: () => Promise<any>
+      getPackageInfo: (packageName: string) => Promise<any>
+      prisma: {
+        buildSchema: () => Promise<{ success: boolean; message: string }>
+        validateSchema: () => Promise<{ success: boolean; message: string }>
+        generateClient: () => Promise<{ success: boolean; message: string }>
+        migrate: (
+          migrationName: string,
+        ) => Promise<{ success: boolean; message: string }>
+        getMigrations: () => Promise<
+          Array<{ name: string; appliedAt: string }>
+        >
+        getMigrationStatus: () => Promise<{ success: boolean; message: string }>
+        startStudio: () => Promise<{ success: boolean; message: string }>
+        stopStudio: () => Promise<{ success: boolean; message: string }>
+        getStatus: () => Promise<{
+          schemaValid: boolean
+          migrationsCount: number
+          lastMigration: string | null
+          studioRunning: boolean
+        }>
+      }
     }
   }
 }

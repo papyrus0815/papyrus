@@ -15,6 +15,7 @@ import {
 import * as path from 'path'
 import * as fs from 'fs'
 import { ServiceManager } from './services/service-manager'
+import { PrismaManager } from './services/prisma-manager'
 
 // macOS에서 Dock에 앱 아이콘 표시
 if (process.platform === 'darwin') {
@@ -25,6 +26,7 @@ let tray: Tray | null = null
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 const serviceManager = ServiceManager.getInstance()
+const prismaManager = PrismaManager.getInstance()
 
 // 원본 console.log 저장
 const originalConsoleLog = console.log
@@ -634,6 +636,14 @@ function registerIpcHandlers() {
     await shell.openExternal(url)
   })
 
+  // 개발자 도구 열기
+  ipcMain.handle('service:openDevTools', async () => {
+    console.log('🔧 개발자 도구 열기')
+    if (mainWindow) {
+      mainWindow.webContents.openDevTools()
+    }
+  })
+
   // 패키지 업데이트 확인
   ipcMain.handle('service:checkPackageUpdates', async () => {
     const { exec } = require('child_process')
@@ -644,11 +654,24 @@ function registerIpcHandlers() {
       const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
       console.log('📦 패키지 업데이트 확인 중...')
 
-      // npm outdated를 사용하여 업데이트 가능한 패키지 확인
-      const { stdout } = await execAsync('npm outdated --json', {
-        cwd: projectRoot,
-        timeout: 30000,
-      })
+      let stdout = ''
+      
+      try {
+        // npm outdated를 사용하여 업데이트 가능한 패키지 확인
+        // 참고: npm outdated는 업데이트가 있으면 exit code 1을 반환하므로 catch로 처리
+        const result = await execAsync('npm outdated --json', {
+          cwd: projectRoot,
+          timeout: 30000,
+        })
+        stdout = result.stdout
+      } catch (execError: any) {
+        // exit code 1은 업데이트 가능한 패키지가 있다는 의미
+        if (execError.stdout) {
+          stdout = execError.stdout
+        } else {
+          throw execError
+        }
+      }
 
       if (!stdout || stdout.trim() === '') {
         console.log('✅ 모든 패키지가 최신 버전입니다')
@@ -694,6 +717,77 @@ function registerIpcHandlers() {
     } catch (error: any) {
       console.error('❌ 패키지 업데이트 확인 실패:', error.message)
       return []
+    }
+  })
+
+  // 패키지 업데이트 실행
+  ipcMain.handle('service:updatePackages', async (_event, packages: string[]) => {
+    const { exec } = require('child_process')
+    const { promisify } = require('util')
+    const execAsync = promisify(exec)
+
+    try {
+      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
+      
+      if (!packages || packages.length === 0) {
+        return { success: false, message: '업데이트할 패키지를 선택해주세요.' }
+      }
+
+      console.log(`📦 패키지 업데이트 시작: ${packages.join(', ')}`)
+      
+      // npm install <package>@<version>을 사용하여 정확한 버전으로 업데이트
+      // packages는 이미 "package@version" 형태로 전달됨
+      const packageList = packages.join(' ')
+      const { stdout, stderr } = await execAsync(`npm install ${packageList}`, {
+        cwd: projectRoot,
+        timeout: 120000, // 2분
+      })
+
+      console.log('✅ 패키지 업데이트 완료')
+      return { 
+        success: true, 
+        message: `${packages.length}개 패키지 업데이트 완료`,
+        output: stdout || stderr
+      }
+    } catch (error: any) {
+      console.error('❌ 패키지 업데이트 실패:', error.message)
+      return { 
+        success: false, 
+        message: error.message,
+        output: error.stdout || error.stderr
+      }
+    }
+  })
+
+  // 전체 패키지 업데이트
+  ipcMain.handle('service:updateAllPackages', async () => {
+    const { exec } = require('child_process')
+    const { promisify } = require('util')
+    const execAsync = promisify(exec)
+
+    try {
+      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
+      
+      console.log('📦 전체 패키지 업데이트 시작...')
+      
+      const { stdout, stderr } = await execAsync('npm update', {
+        cwd: projectRoot,
+        timeout: 300000, // 5분
+      })
+
+      console.log('✅ 전체 패키지 업데이트 완료')
+      return { 
+        success: true, 
+        message: '전체 패키지 업데이트 완료',
+        output: stdout || stderr
+      }
+    } catch (error: any) {
+      console.error('❌ 전체 패키지 업데이트 실패:', error.message)
+      return { 
+        success: false, 
+        message: error.message,
+        output: error.stdout || error.stderr
+      }
     }
   })
 
@@ -851,6 +945,63 @@ function registerIpcHandlers() {
     return await serviceManager.runSeed()
   })
 
+  // ========================================
+  // Prisma Manager IPC Handlers
+  // ========================================
+
+  // Prisma 스키마 빌드
+  ipcMain.handle('prisma:buildSchema', async () => {
+    console.log('🔧 [IPC] Prisma 스키마 빌드 요청')
+    return await prismaManager.buildSchema()
+  })
+
+  // Prisma 스키마 검증
+  ipcMain.handle('prisma:validateSchema', async () => {
+    console.log('🔍 [IPC] Prisma 스키마 검증 요청')
+    return await prismaManager.validateSchema()
+  })
+
+  // Prisma Client 생성
+  ipcMain.handle('prisma:generateClient', async () => {
+    console.log('🔄 [IPC] Prisma Client 생성 요청')
+    return await prismaManager.generateClient()
+  })
+
+  // Prisma 마이그레이션 실행
+  ipcMain.handle('prisma:migrate', async (_event, migrationName: string) => {
+    console.log(`🚀 [IPC] Prisma 마이그레이션 요청: ${migrationName}`)
+    return await prismaManager.migrate(migrationName)
+  })
+
+  // Prisma 마이그레이션 목록 조회
+  ipcMain.handle('prisma:getMigrations', async () => {
+    console.log('📋 [IPC] Prisma 마이그레이션 목록 조회 요청')
+    return await prismaManager.getMigrations()
+  })
+
+  // Prisma 마이그레이션 상태 확인
+  ipcMain.handle('prisma:getMigrationStatus', async () => {
+    console.log('📊 [IPC] Prisma 마이그레이션 상태 확인 요청')
+    return await prismaManager.getMigrationStatus()
+  })
+
+  // Prisma Studio 시작
+  ipcMain.handle('prisma:startStudio', async () => {
+    console.log('🎨 [IPC] Prisma Studio 시작 요청')
+    return await prismaManager.startStudio()
+  })
+
+  // Prisma Studio 중지
+  ipcMain.handle('prisma:stopStudio', async () => {
+    console.log('🛑 [IPC] Prisma Studio 중지 요청')
+    return await prismaManager.stopStudio()
+  })
+
+  // Prisma 상태 조회
+  ipcMain.handle('prisma:getStatus', async () => {
+    return await prismaManager.getStatus()
+  })
+
   // Prisma Studio 열기
   ipcMain.handle('service:openPrismaStudio', async () => {
     return await serviceManager.openPrismaStudio()
@@ -906,6 +1057,7 @@ app.whenReady().then(async () => {
   const projectRoot =
     process.env.PAPYRUS_PROJECT_ROOT || '/Users/yendoo/dev/papyrus'
   serviceManager.setProjectRoot(projectRoot)
+  prismaManager.setProjectRoot(projectRoot)
   console.log(`📁 프로젝트 루트: ${projectRoot}`)
 
   logBox('시스템 트레이 준비 완료', [
@@ -929,6 +1081,7 @@ app.on('before-quit', async () => {
   isQuitting = true
   console.log('🛑 Papyrus Service Manager 종료 중...')
   await serviceManager.stopAll()
+  await prismaManager.cleanup()
 })
 
 // 중복 실행 방지

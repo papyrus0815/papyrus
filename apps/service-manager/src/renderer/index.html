@@ -11,21 +11,42 @@
         box-sizing: border-box;
       }
 
+      html {
+        height: 100%;
+        width: 100%;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+      }
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         background: #1a1a1a;
         color: #e4e6eb;
         overflow: hidden;
-        height: 100vh;
+        height: 100%;
+        width: 100%;
         font-size: 14px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
       }
 
       .container {
         padding: 20px;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: grid;
+        grid-template-rows: auto auto 1fr;
         gap: 20px;
+        overflow: hidden;
       }
 
       /* 헤더 */
@@ -35,6 +56,7 @@
         justify-content: space-between;
         padding-bottom: 20px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        flex-shrink: 0;
       }
 
       .logo {
@@ -102,6 +124,7 @@
         display: flex;
         gap: 8px;
         border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        flex-shrink: 0;
       }
 
       .tab-btn {
@@ -127,24 +150,336 @@
         border-bottom-color: #6366f1;
       }
 
-      /* 탭 콘텐츠 */
-      .tab-content {
-        display: none;
-        flex: 1;
+      /* 탭 콘텐츠 래퍼 */
+      .tab-contents-wrapper {
+        position: relative;
+        min-height: 0;
         overflow: hidden;
       }
 
-      .tab-content.active {
+      /* 모든 탭 콘텐츠 - 기본 스타일 */
+      #tab-packages {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow-y: auto;
+        padding: 20px;
+        background: #1a1a1a;
+        display: none;
+      }
+
+      #tab-services {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+        padding: 20px;
+        background: #1a1a1a;
+        display: none;
+      }
+
+      #tab-prisma {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+        padding: 0;
+        background: #1a1a1a;
+        display: none;
+      }
+
+      /* 서비스 탭 - 좌우 레이아웃 */
+      #tab-services.active {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      #tab-services .card {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #tab-services .services-list {
+        overflow-y: auto;
+        flex: 1;
+      }
+
+      #tab-services .console-output {
+        flex: 1;
+      }
+
+      /* 패키지 탭 */
+      #tab-packages.active {
         display: flex;
         flex-direction: column;
         gap: 20px;
       }
 
-      /* 서비스 탭 */
-      #tab-services.active {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+      #tab-packages .card {
+        flex-shrink: 0;
+      }
+
+      /* Prisma 탭 */
+      #tab-prisma.active {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        overflow: hidden;
+        padding: 0;
+      }
+
+      /* Prisma 서브탭 */
+      .prisma-subtabs {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 4px;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        padding: 0 20px;
+        background: rgba(0, 0, 0, 0.2);
+        flex-shrink: 0;
+        width: 100%;
+        min-height: 48px;
+      }
+
+      .prisma-subtab-btn {
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.5);
+        padding: 12px 20px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.2s;
+        font-family: inherit;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .prisma-subtab-btn:hover {
+        color: rgba(255, 255, 255, 0.8);
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .prisma-subtab-btn.active {
+        color: #8b5cf6;
+        border-bottom-color: #8b5cf6;
+        background: rgba(139, 92, 246, 0.1);
+      }
+
+      /* Prisma 서브탭 콘텐츠 */
+      .prisma-subtab-content {
+        display: none;
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        min-height: 0;
+      }
+
+      .prisma-subtab-content.active {
+        display: flex !important;
+        flex-direction: column;
         gap: 20px;
+      }
+
+      /* Prisma 가이드 배너 */
+      .prisma-guide {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 24px;
+        border-radius: 12px;
+        color: white;
+      }
+
+      .prisma-guide-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .prisma-guide-steps {
+        display: flex;
+        gap: 16px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+
+      .prisma-step {
+        background: rgba(255, 255, 255, 0.15);
+        padding: 12px 16px;
+        border-radius: 8px;
+        flex: 1;
+        min-width: 200px;
+        backdrop-filter: blur(10px);
+      }
+
+      .prisma-step-number {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        background: white;
+        color: #667eea;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 24px;
+        font-weight: 700;
+        font-size: 13px;
+        margin-right: 8px;
+      }
+
+      .prisma-step-text {
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* Prisma 설명 박스 */
+      .prisma-info-box {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      .prisma-info-box.warning {
+        background: rgba(245, 158, 11, 0.1);
+        border-color: rgba(245, 158, 11, 0.3);
+      }
+
+      .prisma-info-box.success {
+        background: rgba(34, 197, 94, 0.1);
+        border-color: rgba(34, 197, 94, 0.3);
+      }
+
+      .prisma-info-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .prisma-info-content {
+        font-size: 13px;
+        line-height: 1.6;
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      .prisma-info-content ul {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+
+      .prisma-info-content li {
+        margin: 4px 0;
+      }
+
+      /* Input 그룹 */
+      .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .input-group label {
+        font-size: 14px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .input-group label .required {
+        color: #ef4444;
+      }
+
+      .input-group input {
+        width: 100%;
+        padding: 12px 16px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        color: #e4e6eb;
+        font-size: 14px;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+
+      .input-group input:focus {
+        outline: none;
+        border-color: #6366f1;
+        background: rgba(0, 0, 0, 0.4);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      .input-group input::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      .input-hint {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+        margin-top: -4px;
+      }
+
+      /* 버튼 그룹 */
+      .button-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .btn-large {
+        padding: 14px 20px;
+        font-size: 15px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      /* 섹션 헤더 */
+      .section-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .section-icon {
+        font-size: 24px;
+      }
+
+      .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #e4e6eb;
+      }
+
+      .section-subtitle {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.6);
+        margin-left: auto;
       }
 
       /* 카드 */
@@ -405,6 +740,14 @@
         color: #94a3b8;
       }
 
+      /* 체크박스 스타일 */
+      .update-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: #6366f1;
+      }
+
       /* 업데이트 패키지 */
       .update-list {
         max-height: 300px;
@@ -419,7 +762,7 @@
         margin-bottom: 8px;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 12px;
       }
 
       .update-info {
@@ -683,11 +1026,9 @@
       <div class="header">
         <div class="logo">🏛️ Papyrus Service Manager</div>
         <div class="header-actions">
-          <button class="btn btn-primary" id="startAllBtn" disabled>
-            ▶ 모두 시작
-          </button>
-          <button class="btn btn-danger" id="stopAllBtn" disabled>
-            ⏸ 모두 중지
+         
+          <button class="btn btn-secondary" onclick="openDevTools()">
+            🔧 개발자 도구
           </button>
         </div>
       </div>
@@ -697,13 +1038,18 @@
         <button class="tab-btn active" onclick="switchTab('services')">
           🔧 서비스
         </button>
+        <button class="tab-btn" onclick="switchTab('prisma')">
+          🗄️ Prisma
+        </button>
         <button class="tab-btn" onclick="switchTab('packages')">
           📦 패키지
         </button>
       </div>
 
-      <!-- 서비스 탭 -->
-      <div id="tab-services" class="tab-content active">
+      <!-- 탭 콘텐츠 래퍼 -->
+      <div class="tab-contents-wrapper">
+        <!-- 서비스 탭 -->
+        <div id="tab-services" class="tab-content active">
         <!-- 서비스 목록 -->
         <div class="card">
           <div class="card-header">
@@ -724,26 +1070,319 @@
         </div>
       </div>
 
+      <!-- Prisma 탭 -->
+      <div id="tab-prisma" class="tab-content">
+        <!-- Prisma 서브탭 -->
+        <div class="prisma-subtabs">
+          <button class="prisma-subtab-btn active" onclick="switchPrismaSubTab('overview')">
+            📋 개요
+          </button>
+          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('schema')">
+            🔨 스키마
+          </button>
+          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('migration')">
+            🚀 마이그레이션
+          </button>
+          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('studio')">
+            🎨 Studio
+          </button>
+          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('history')">
+            📚 히스토리
+          </button>
+        </div>
+
+        <!-- 개요 탭 -->
+        <div id="prisma-subtab-overview" class="prisma-subtab-content active">
+          <!-- 가이드 배너 -->
+          <div class="prisma-guide">
+            <div class="prisma-guide-title">
+              <span>🗄️</span>
+              <span>Prisma 데이터베이스 관리 가이드</span>
+            </div>
+            <div style="font-size: 14px; margin-bottom: 12px; opacity: 0.9;">
+              Prisma를 사용하여 데이터베이스 스키마를 안전하게 관리하고 변경할 수 있습니다.
+            </div>
+            <div class="prisma-guide-steps">
+              <div class="prisma-step">
+                <div><span class="prisma-step-number">1</span><strong>스키마 편집</strong></div>
+                <div class="prisma-step-text">libs/db/prisma/*.prisma 파일을 수정합니다</div>
+              </div>
+              <div class="prisma-step">
+                <div><span class="prisma-step-number">2</span><strong>스키마 빌드</strong></div>
+                <div class="prisma-step-text">여러 파일을 하나로 병합합니다</div>
+              </div>
+              <div class="prisma-step">
+                <div><span class="prisma-step-number">3</span><strong>마이그레이션</strong></div>
+                <div class="prisma-step-text">변경사항을 데이터베이스에 적용합니다</div>
+              </div>
+              <div class="prisma-step">
+                <div><span class="prisma-step-number">4</span><strong>확인</strong></div>
+                <div class="prisma-step-text">Prisma Studio로 결과를 확인합니다</div>
+              </div>
+            </div>
+          </div>
+
+        <!-- 현재 상태 -->
+        <div class="card">
+          <div class="section-header">
+            <span class="section-icon">📊</span>
+            <span class="section-title">현재 상태</span>
+            <button class="btn btn-secondary btn-sm" onclick="refreshPrismaStatus()" style="margin-left: auto;">
+              🔄 새로고침
+            </button>
+          </div>
+          <div class="services-list">
+            <div class="service-item">
+              <div class="service-name">
+                <strong>스키마 파일</strong>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.5);">apps/api/prisma/schema.prisma</div>
+              </div>
+              <div class="service-status" id="prismaSchemaStatus">
+                <div class="status-dot pending"></div>
+                <span>확인 중...</span>
+              </div>
+            </div>
+            <div class="service-item">
+              <div class="service-name">
+                <strong>마이그레이션</strong>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.5);">apps/api/prisma/migrations/</div>
+              </div>
+              <div class="service-status" id="prismaMigrationsStatus">
+                <div class="status-dot pending"></div>
+                <span>확인 중...</span>
+              </div>
+            </div>
+            <div class="service-item">
+              <div class="service-name">
+                <strong>Prisma Studio</strong>
+                <div style="font-size: 11px; color: rgba(255,255,255,0.5);">http://localhost:5555</div>
+              </div>
+              <div class="service-status" id="prismaStudioStatus">
+                <div class="status-dot stopped"></div>
+                <span>중지됨</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <!-- 스키마 탭 -->
+        <div id="prisma-subtab-schema" class="prisma-subtab-content">
+          <!-- STEP 1: 스키마 빌드 -->
+          <div class="card">
+          <div class="section-header">
+            <span class="section-icon">🔨</span>
+            <span class="section-title">STEP 1. 스키마 빌드</span>
+            <span class="section-subtitle">필수 단계</span>
+          </div>
+
+          <div class="prisma-info-box">
+            <div class="prisma-info-title">📖 스키마 빌드란?</div>
+            <div class="prisma-info-content">
+              <strong>libs/db/prisma/</strong> 폴더에 분산된 여러 .prisma 파일들을 하나의 <strong>apps/api/prisma/schema.prisma</strong> 파일로 자동 병합하는 과정입니다.
+              <ul>
+                <li><strong>base.prisma:</strong> 데이터베이스 연결 설정</li>
+                <li><strong>common.prisma:</strong> 공통 모델 (Tag, Attachment 등)</li>
+                <li><strong>country.prisma, event.prisma 등:</strong> 도메인별 모델</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="button-grid">
+            <button class="btn btn-primary btn-large" onclick="buildPrismaSchema()">
+              🔨 스키마 빌드 실행
+            </button>
+            <button class="btn btn-secondary btn-large" onclick="validatePrismaSchema()">
+              ✅ 스키마 검증
+            </button>
+            <button class="btn btn-secondary btn-large" onclick="generatePrismaClient()">
+              🔄 Client 생성
+            </button>
+          </div>
+
+          <div class="input-hint" style="margin-top: 12px;">
+            💡 <strong>언제 실행하나요?</strong> libs/db/prisma/ 폴더의 .prisma 파일을 수정한 직후에 실행하세요.
+          </div>
+          </div>
+        </div>
+
+        <!-- 마이그레이션 탭 -->
+        <div id="prisma-subtab-migration" class="prisma-subtab-content">
+          <!-- STEP 2: 마이그레이션 -->
+          <div class="card">
+          <div class="section-header">
+            <span class="section-icon">🚀</span>
+            <span class="section-title">STEP 2. 마이그레이션 실행</span>
+            <span class="section-subtitle">DB 변경 적용</span>
+          </div>
+
+          <div class="prisma-info-box warning">
+            <div class="prisma-info-title">⚠️ 마이그레이션이란?</div>
+            <div class="prisma-info-content">
+              데이터베이스 스키마 변경사항을 안전하게 적용하고 버전 관리하는 방식입니다.
+              <ul>
+                <li><strong>자동 생성:</strong> 스키마 차이를 비교하여 SQL 파일 자동 생성</li>
+                <li><strong>버전 관리:</strong> 모든 변경 히스토리를 migrations/ 폴더에 저장</li>
+                <li><strong>롤백 가능:</strong> 문제 발생 시 이전 버전으로 되돌릴 수 있음</li>
+                <li><strong>팀 협업:</strong> Git으로 마이그레이션 파일을 공유하여 동일한 스키마 유지</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="migrationName">
+              마이그레이션 이름 <span class="required">*</span>
+            </label>
+            <input
+              type="text"
+              id="migrationName"
+              placeholder="예: add_user_role, create_event_table, add_country_population_field"
+            />
+            <div class="input-hint">
+              📝 <strong>네이밍 규칙:</strong> 소문자와 언더스코어(_)만 사용하여 명확하게 작성하세요.
+              <br>예시: add_필드명, create_테이블명, update_인덱스명
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-large" onclick="runPrismaMigration()" style="width: 100%;">
+            🚀 마이그레이션 실행
+          </button>
+
+          <div class="prisma-info-box warning" style="margin-top: 16px;">
+            <div class="prisma-info-title">⚠️ 주의사항</div>
+            <div class="prisma-info-content">
+              <ul>
+                <li>마이그레이션은 <strong>실제 데이터베이스를 변경</strong>합니다</li>
+                <li>실행 전에 반드시 <strong>백업</strong>을 권장합니다</li>
+                <li>프로덕션 환경에서는 <strong>팀원과 협의 후</strong> 실행하세요</li>
+              </ul>
+            </div>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <button class="btn btn-secondary" onclick="checkMigrationStatus()" style="width: 100%;">
+              📊 마이그레이션 상태 확인
+            </button>
+          </div>
+          </div>
+        </div>
+
+        <!-- Studio 탭 -->
+        <div id="prisma-subtab-studio" class="prisma-subtab-content">
+          <!-- STEP 3: Prisma Studio -->
+          <div class="card">
+          <div class="section-header">
+            <span class="section-icon">🎨</span>
+            <span class="section-title">STEP 3. 데이터 확인</span>
+            <span class="section-subtitle">선택 사항</span>
+          </div>
+
+          <div class="prisma-info-box success">
+            <div class="prisma-info-title">🎨 Prisma Studio란?</div>
+            <div class="prisma-info-content">
+              데이터베이스를 시각적으로 탐색하고 편집할 수 있는 웹 기반 GUI 도구입니다.
+              <ul>
+                <li><strong>테이블 브라우징:</strong> 모든 테이블과 레코드를 한눈에 확인</li>
+                <li><strong>데이터 편집:</strong> 레코드 추가, 수정, 삭제 가능</li>
+                <li><strong>관계 탐색:</strong> 테이블 간의 관계를 시각적으로 확인</li>
+                <li><strong>필터링:</strong> 조건에 맞는 데이터만 검색</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="button-grid">
+            <button class="btn btn-primary btn-large" id="startStudioBtn" onclick="startPrismaStudio()">
+              ▶ Studio 시작
+            </button>
+            <button class="btn btn-danger btn-large" id="stopStudioBtn" onclick="stopPrismaStudio()" style="display: none;">
+              ⏹ Studio 중지
+            </button>
+            <button class="btn btn-secondary btn-large" id="openStudioBtn" onclick="openStudioInBrowser()" style="display: none;">
+              🌐 브라우저에서 열기
+            </button>
+          </div>
+
+          <div class="input-hint" style="margin-top: 12px;">
+            🌐 Studio 실행 후 자동으로 <strong>http://localhost:5555</strong>에서 접속할 수 있습니다.
+          </div>
+          </div>
+        </div>
+
+        <!-- 히스토리 탭 -->
+        <div id="prisma-subtab-history" class="prisma-subtab-content">
+          <!-- 마이그레이션 히스토리 -->
+          <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+          <div class="section-header">
+            <span class="section-icon">📚</span>
+            <span class="section-title">마이그레이션 히스토리</span>
+            <button class="btn btn-secondary btn-sm" onclick="loadMigrationHistory()" style="margin-left: auto;">
+              🔄 새로고침
+            </button>
+          </div>
+
+          <div class="prisma-info-box">
+            <div class="prisma-info-title">📋 히스토리 정보</div>
+            <div class="prisma-info-content">
+              지금까지 실행된 모든 마이그레이션 내역을 시간순으로 확인할 수 있습니다. 각 마이그레이션은 고유한 타임스탬프와 이름을 가지고 있습니다.
+            </div>
+          </div>
+
+          <div class="package-table-wrapper">
+            <table class="package-table">
+              <thead>
+                <tr>
+                  <th style="width: 60%;">마이그레이션 이름</th>
+                  <th style="width: 40%;">적용 시간</th>
+                </tr>
+              </thead>
+              <tbody id="migrationHistoryTable">
+                <tr>
+                  <td colspan="2" class="empty-row">
+                    <div class="empty-state">
+                      <div class="empty-icon">📋</div>
+                      <div>아직 실행된 마이그레이션이 없습니다</div>
+                      <div style="font-size: 12px; margin-top: 8px; color: rgba(255,255,255,0.5);">
+                        첫 번째 마이그레이션을 실행하면 히스토리가 여기에 표시됩니다
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div><!-- .card 닫기 -->
+        </div><!-- prisma-subtab-history 닫기 -->
+      </div><!-- tab-prisma 닫기 -->
+
       <!-- 패키지 탭 -->
-      <div id="tab-packages" class="tab-content">
+      <div id="tab-packages" class="tab-content" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; padding: 20px; background: #1a1a1a; display: none;">
+    
         <!-- 패키지 업데이트 -->
         <div class="card">
           <div class="card-header">
             <h2 class="card-title">📦 패키지 업데이트</h2>
-            <button class="btn btn-secondary btn-sm" onclick="checkPackageUpdates()">
-              확인
-            </button>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" onclick="checkPackageUpdates()">
+                🔍 확인
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="updateSelectedPackages()" id="updateSelectedBtn" style="display: none;">
+                ⬆️ 선택 업데이트
+              </button>
+              <button class="btn btn-primary btn-sm" onclick="updateAllPackagesConfirm()" id="updateAllBtn" style="display: none;">
+                ⬆️ 전체 업데이트
+              </button>
+            </div>
           </div>
           <div class="update-list" id="updateList">
             <div class="empty-state">
               <div class="empty-icon">📦</div>
-              <div>"확인" 버튼을 클릭하여 업데이트 확인</div>
+              <div>"확인" 버튼을 클릭하여 업데이트 검토</div>
             </div>
           </div>
         </div>
 
         <!-- 설치된 패키지 -->
-        <div class="card" style="flex: 1; min-height: 0;">
+        <div class="card">
           <div class="card-header">
             <h2 class="card-title">📚 설치된 패키지</h2>
             <div class="package-stats" id="packageStats">
@@ -802,7 +1441,8 @@
           </div>
         </div>
       </div>
-    </div>
+      </div><!-- .tab-contents-wrapper 닫기 -->
+    </div><!-- .container 닫기 -->
 
     <!-- 패키지 상세 모달 -->
     <div class="modal-overlay" id="packageModal" onclick="closePackageModal(event)">
@@ -824,6 +1464,7 @@
       // 전역 변수
       let consoleLogBuffer = []
       let allPackages = []
+      let availableUpdates = [] // 업데이트 가능한 패키지 정보 저장
       let currentPackageFilter = 'all'
       let currentSortColumn = 'name'
       let currentSortDirection = 'asc'
@@ -863,15 +1504,56 @@
 
       // 탭 전환
       function switchTab(tabName) {
+        console.log(`🔄 탭 전환: ${tabName}`)
+        
+        // 모든 탭 버튼 비활성화
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'))
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'))
         
-        event.target.classList.add('active')
-        document.getElementById(`tab-${tabName}`).classList.add('active')
+        // 모든 탭 콘텐츠 숨기기
+        document.getElementById('tab-services').style.display = 'none'
+        document.getElementById('tab-prisma').style.display = 'none'
+        document.getElementById('tab-packages').style.display = 'none'
         
-        console.log(`탭 전환: ${tabName}`)
+        // 선택된 버튼 활성화
+        const clickedBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => {
+          return btn.textContent.includes(tabName === 'services' ? '서비스' : tabName === 'prisma' ? 'Prisma' : '패키지')
+        })
+        if (clickedBtn) clickedBtn.classList.add('active')
+        
+        // 선택된 탭 표시
+        const tabContent = document.getElementById(`tab-${tabName}`)
+        if (tabContent) {
+          if (tabName === 'packages') {
+            tabContent.style.display = 'flex'
+            tabContent.style.flexDirection = 'column'
+            tabContent.style.gap = '20px'
+          } else if (tabName === 'prisma') {
+            tabContent.style.display = 'flex'
+            tabContent.style.flexDirection = 'column'
+            tabContent.style.gap = '0'
+          } else {
+            tabContent.style.display = 'block'
+          }
+          console.log(`✅ 탭 활성화: #tab-${tabName}`)
+        }
+        
+        // 패키지 탭 진입 시 자동 로드
+        if (tabName === 'packages') {
+          setTimeout(() => loadInstalledPackages(), 100)
+        }
       }
 
+      // 개발자 도구 열기
+      function openDevTools() {
+        console.log('🔧 개발자 도구 열기 요청')
+        if (window.electronAPI && window.electronAPI.openDevTools) {
+          window.electronAPI.openDevTools()
+        } else {
+          alert('개발자 도구를 열 수 없습니다.')
+        }
+      }
+
+  
       // 서비스 렌더링
       function renderServices() {
         const servicesList = document.getElementById('servicesList')
@@ -981,17 +1663,6 @@
         try {
           const status = await window.electronAPI.getStatus()
           window.cachedStatus = status
-          
-          const startAllBtn = document.getElementById('startAllBtn')
-          const stopAllBtn = document.getElementById('stopAllBtn')
-
-          if (status.allReady) {
-            startAllBtn.disabled = true
-            stopAllBtn.disabled = false
-          } else {
-            startAllBtn.disabled = false
-            stopAllBtn.disabled = true
-          }
 
           renderServices()
         } catch (error) {
@@ -1009,12 +1680,21 @@
           const updates = await window.electronAPI.checkPackageUpdates()
           console.log('📦 업데이트 결과:', updates)
           
+          // 전역 변수에 저장
+          availableUpdates = updates || []
+          
           if (!updates || updates.length === 0) {
             updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div>모든 패키지가 최신 버전입니다!</div></div>'
+            document.getElementById('updateSelectedBtn').style.display = 'none'
+            document.getElementById('updateAllBtn').style.display = 'none'
             return
           }
 
-          updateList.innerHTML = updates.map(pkg => {
+          // 버튼 표시
+          document.getElementById('updateSelectedBtn').style.display = 'inline-block'
+          document.getElementById('updateAllBtn').style.display = 'inline-block'
+
+          updateList.innerHTML = updates.map((pkg, index) => {
             let badgeClass = 'patch'
             let badgeText = 'Patch'
             
@@ -1028,6 +1708,7 @@
 
             return `
               <div class="update-item">
+                <input type="checkbox" class="update-checkbox" data-index="${index}" onchange="updateCheckboxChanged()">
                 <div class="update-info">
                   <div class="update-name">${pkg.name}</div>
                   <div class="update-versions">
@@ -1043,47 +1724,184 @@
         } catch (error) {
           console.error('패키지 업데이트 확인 실패:', error)
           updateList.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>업데이트 확인 실패: ${error.message}</div></div>`
+          document.getElementById('updateSelectedBtn').style.display = 'none'
+          document.getElementById('updateAllBtn').style.display = 'none'
+        }
+      }
+
+      // 체크박스 변경 시
+      function updateCheckboxChanged() {
+        const checkboxes = document.querySelectorAll('.update-checkbox:checked')
+        const updateSelectedBtn = document.getElementById('updateSelectedBtn')
+        
+        if (checkboxes.length > 0) {
+          updateSelectedBtn.textContent = `⬆️ 선택 업데이트 (${checkboxes.length})`
+          updateSelectedBtn.disabled = false
+        } else {
+          updateSelectedBtn.textContent = '⬆️ 선택 업데이트'
+          updateSelectedBtn.disabled = true
+        }
+      }
+
+      // 선택된 패키지 업데이트
+      async function updateSelectedPackages() {
+        const checkboxes = document.querySelectorAll('.update-checkbox:checked')
+        
+        if (checkboxes.length === 0) {
+          alert('⚠️ 업데이트할 패키지를 선택해주세요.')
+          return
+        }
+
+        // 체크된 패키지의 정보 수집
+        const packagesToUpdate = Array.from(checkboxes).map(cb => {
+          const index = parseInt(cb.getAttribute('data-index'))
+          const pkg = availableUpdates[index]
+          return {
+            name: pkg.name,
+            version: pkg.latest
+          }
+        })
+        
+        const packageNames = packagesToUpdate.map(p => `${p.name}@${p.version}`)
+
+        const confirmed = confirm(
+          `📦 선택한 ${packagesToUpdate.length}개 패키지를 업데이트하시겠습니까?\n\n` +
+          packageNames.join('\n') +
+          '\n\n⚠️ 이 작업은 1-2분 정도 소요될 수 있습니다.'
+        )
+        
+        if (!confirmed) return
+
+        try {
+          const updateList = document.getElementById('updateList')
+          updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>업데이트 중... 잠시만 기다려주세요.</div></div>'
+          
+          console.log(`📦 패키지 업데이트 시작: ${packageNames.join(', ')}`)
+          const result = await window.electronAPI.updatePackages(packageNames)
+          
+          if (result.success) {
+            alert('✅ ' + result.message)
+            // 업데이트 목록 다시 확인
+            await checkPackageUpdates()
+          } else {
+            alert('❌ 업데이트 실패!\n\n' + result.message)
+            updateList.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>업데이트 실패</div></div>`
+          }
+        } catch (error) {
+          console.error('패키지 업데이트 실패:', error)
+          alert('❌ 업데이트 중 오류 발생!\n\n' + error.message)
+        }
+      }
+
+      // 전체 패키지 업데이트 확인
+      async function updateAllPackagesConfirm() {
+        if (availableUpdates.length === 0) {
+          alert('⚠️ 업데이트 가능한 패키지가 없습니다.')
+          return
+        }
+
+        const packageNames = availableUpdates.map(pkg => `${pkg.name}@${pkg.latest}`)
+        
+        const confirmed = confirm(
+          `📦 모든 업데이트 가능한 패키지(${availableUpdates.length}개)를 업데이트하시겠습니까?\n\n` +
+          packageNames.slice(0, 5).join('\n') +
+          (availableUpdates.length > 5 ? `\n... 외 ${availableUpdates.length - 5}개` : '') +
+          '\n\n⚠️ 이 작업은 수 분이 소요될 수 있습니다.\n' +
+          '⚠️ 일부 패키지는 Breaking Changes가 있을 수 있습니다.'
+        )
+        
+        if (!confirmed) return
+
+        try {
+          const updateList = document.getElementById('updateList')
+          updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>전체 업데이트 중... 잠시만 기다려주세요.</div></div>'
+          
+          console.log('📦 전체 패키지 업데이트 시작')
+          const result = await window.electronAPI.updatePackages(packageNames)
+          
+          if (result.success) {
+            alert('✅ ' + result.message)
+            // 업데이트 목록 다시 확인
+            await checkPackageUpdates()
+          } else {
+            alert('❌ 업데이트 실패!\n\n' + result.message)
+            updateList.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>업데이트 실패</div></div>`
+          }
+        } catch (error) {
+          console.error('전체 패키지 업데이트 실패:', error)
+          alert('❌ 업데이트 중 오류 발생!\n\n' + error.message)
         }
       }
 
       // 설치된 패키지 목록 로드
       async function loadInstalledPackages() {
+        console.log('🚀 loadInstalledPackages 함수 호출됨!')
+        
         const packageTableBody = document.getElementById('packageTableBody')
+        if (!packageTableBody) {
+          console.error('❌ packageTableBody 요소를 찾을 수 없습니다!')
+          alert('❌ packageTableBody 요소를 찾을 수 없습니다!')
+          return
+        }
+        
         packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">⏳</div><div>로딩 중...</div></div></td></tr>'
 
         try {
           console.log('📚 설치된 패키지 목록 로딩...')
+          
+          if (!window.electronAPI) {
+            throw new Error('window.electronAPI가 없습니다!')
+          }
+          
+          if (!window.electronAPI.getInstalledPackages) {
+            throw new Error('window.electronAPI.getInstalledPackages 함수가 없습니다!')
+          }
+          
           const packages = await window.electronAPI.getInstalledPackages()
-          console.log('📚 패키지 목록:', packages)
+          console.log('📚 패키지 목록 받음:', packages)
+          console.log('📚 패키지 개수:', packages ? packages.length : 0)
           
           allPackages = packages || []
           
           if (allPackages.length === 0) {
+            console.warn('⚠️ 패키지가 0개입니다')
             packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">📦</div><div>패키지가 없습니다.</div></div></td></tr>'
             updatePackageStats([])
             return
           }
 
+          console.log('✅ 패키지 렌더링 시작:', allPackages.length + '개')
           // 정렬 적용
           const sortedPackages = applySorting([...allPackages])
           renderPackageTable(sortedPackages)
           updatePackageStats(allPackages)
           updateSortHeaders()
+          console.log('✅ 패키지 렌더링 완료!')
         } catch (error) {
-          console.error('패키지 목록 로딩 실패:', error)
+          console.error('❌ 패키지 목록 로딩 실패:', error)
+          console.error('❌ 에러 상세:', error.message, error.stack)
           packageTableBody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">❌</div><div>목록 로딩 실패: ${error.message}</div></div></td></tr>`
+          alert('❌ 패키지 목록 로딩 실패:\n' + error.message)
         }
       }
 
       function renderPackageTable(packages) {
+        console.log('🎨 renderPackageTable 호출됨, 패키지:', packages.length)
         const packageTableBody = document.getElementById('packageTableBody')
+        
+        if (!packageTableBody) {
+          console.error('❌ packageTableBody를 찾을 수 없습니다!')
+          return
+        }
+        
+        console.log('✅ packageTableBody 찾음:', packageTableBody)
         
         if (!packages || packages.length === 0) {
           packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">🔍</div><div>검색 결과가 없습니다.</div></div></td></tr>'
           return
         }
 
-        packageTableBody.innerHTML = packages.map(pkg => `
+        const html = packages.map(pkg => `
           <tr onclick="showPackageDetail('${pkg.name}', '${pkg.version}', '${pkg.type}')">
             <td class="package-name-col">${pkg.name}</td>
             <td class="package-version-col">${pkg.version}</td>
@@ -1092,6 +1910,11 @@
             </td>
           </tr>
         `).join('')
+        
+        console.log('✅ HTML 생성 완료, 길이:', html.length)
+        packageTableBody.innerHTML = html
+        console.log('✅ innerHTML 설정 완료')
+        console.log('✅ 실제 DOM 행 개수:', packageTableBody.children.length)
       }
 
       function updatePackageStats(packages) {
@@ -1211,17 +2034,6 @@
         })
       }
 
-      // 전체 시작/중지
-      document.getElementById('startAllBtn').onclick = async () => {
-        await window.electronAPI.startAll()
-        setTimeout(updateStatus, 1000)
-      }
-
-      document.getElementById('stopAllBtn').onclick = async () => {
-        await window.electronAPI.stopAll()
-        setTimeout(updateStatus, 1000)
-      }
-
       // 패키지 상세 정보 표시
       async function showPackageDetail(name, version, type) {
         const modal = document.getElementById('packageModal')
@@ -1315,11 +2127,326 @@
         }
       })
 
+      // ========================================
+      // Prisma 관련 함수들
+      // ========================================
+
+      // Prisma 상태 새로고침
+      async function refreshPrismaStatus() {
+        try {
+          const status = await window.electronAPI.prisma.getStatus()
+          
+          // 스키마 상태
+          const schemaStatusEl = document.getElementById('prismaSchemaStatus')
+          if (status.schemaValid) {
+            schemaStatusEl.innerHTML = '<div class="status-dot running"></div><span>유효함</span>'
+          } else {
+            schemaStatusEl.innerHTML = '<div class="status-dot stopped"></div><span>무효 또는 없음</span>'
+          }
+
+          // 마이그레이션 상태
+          const migrationsStatusEl = document.getElementById('prismaMigrationsStatus')
+          if (status.migrationsCount > 0) {
+            migrationsStatusEl.innerHTML = `<div class="status-dot running"></div><span>${status.migrationsCount}개 (최신: ${status.lastMigration || 'N/A'})</span>`
+          } else {
+            migrationsStatusEl.innerHTML = '<div class="status-dot stopped"></div><span>마이그레이션 없음</span>'
+          }
+
+          // Studio 상태
+          const studioStatusEl = document.getElementById('prismaStudioStatus')
+          const startStudioBtn = document.getElementById('startStudioBtn')
+          const stopStudioBtn = document.getElementById('stopStudioBtn')
+          const openStudioBtn = document.getElementById('openStudioBtn')
+          
+          if (status.studioRunning) {
+            studioStatusEl.innerHTML = '<div class="status-dot running"></div><span>실행 중 (포트: 5555)</span>'
+            startStudioBtn.style.display = 'none'
+            stopStudioBtn.style.display = 'inline-block'
+            openStudioBtn.style.display = 'inline-block'
+          } else {
+            studioStatusEl.innerHTML = '<div class="status-dot stopped"></div><span>중지됨</span>'
+            startStudioBtn.style.display = 'inline-block'
+            stopStudioBtn.style.display = 'none'
+            openStudioBtn.style.display = 'none'
+          }
+        } catch (error) {
+          console.error('Prisma 상태 조회 실패:', error)
+        }
+      }
+
+      // 스키마 빌드
+      async function buildPrismaSchema() {
+        try {
+          console.log('📦 스키마 빌드 시작...')
+          const result = await window.electronAPI.prisma.buildSchema()
+          
+          if (result.success) {
+            alert('✅ 스키마 빌드 완료!\n\n' + result.message)
+          } else {
+            alert('❌ 스키마 빌드 실패!\n\n' + result.message)
+          }
+          
+          await refreshPrismaStatus()
+        } catch (error) {
+          alert('❌ 스키마 빌드 실패!\n\n' + error.message)
+        }
+      }
+
+      // 스키마 검증
+      async function validatePrismaSchema() {
+        try {
+          console.log('🔍 스키마 검증 시작...')
+          const result = await window.electronAPI.prisma.validateSchema()
+          
+          if (result.success) {
+            alert('✅ 스키마 검증 완료!\n\n' + result.message)
+          } else {
+            alert('❌ 스키마 검증 실패!\n\n' + result.message)
+          }
+        } catch (error) {
+          alert('❌ 스키마 검증 실패!\n\n' + error.message)
+        }
+      }
+
+      // Prisma Client 생성
+      async function generatePrismaClient() {
+        try {
+          console.log('🔄 Prisma Client 생성 시작...')
+          const result = await window.electronAPI.prisma.generateClient()
+          
+          if (result.success) {
+            alert('✅ Prisma Client 생성 완료!\n\n' + result.message)
+          } else {
+            alert('❌ Prisma Client 생성 실패!\n\n' + result.message)
+          }
+        } catch (error) {
+          alert('❌ Prisma Client 생성 실패!\n\n' + error.message)
+        }
+      }
+
+      // 마이그레이션 실행
+      async function runPrismaMigration() {
+        const migrationNameInput = document.getElementById('migrationName')
+        const migrationName = migrationNameInput.value.trim()
+        
+        if (!migrationName) {
+          alert('⚠️ 마이그레이션 이름을 입력해주세요.\n\n예시: add_user_role, create_event_table')
+          return
+        }
+
+        const confirmed = confirm(`🚀 마이그레이션을 실행하시겠습니까?\n\n이름: ${migrationName}\n\n⚠️ 이 작업은 데이터베이스 스키마를 변경합니다.`)
+        if (!confirmed) return
+
+        try {
+          console.log(`🚀 마이그레이션 실행: ${migrationName}`)
+          const result = await window.electronAPI.prisma.migrate(migrationName)
+          
+          if (result.success) {
+            alert('✅ 마이그레이션 완료!\n\n' + result.message)
+            migrationNameInput.value = ''
+            await loadMigrationHistory()
+            await refreshPrismaStatus()
+          } else {
+            alert('❌ 마이그레이션 실패!\n\n' + result.message)
+          }
+        } catch (error) {
+          alert('❌ 마이그레이션 실패!\n\n' + error.message)
+        }
+      }
+
+      // 마이그레이션 상태 확인
+      async function checkMigrationStatus() {
+        try {
+          console.log('📊 마이그레이션 상태 확인 중...')
+          const result = await window.electronAPI.prisma.getMigrationStatus()
+          
+          if (result.success) {
+            alert('📊 마이그레이션 상태\n\n' + result.message)
+          } else {
+            alert('⚠️ 마이그레이션 상태\n\n' + result.message)
+          }
+        } catch (error) {
+          alert('❌ 마이그레이션 상태 확인 실패!\n\n' + error.message)
+        }
+      }
+
+      // 마이그레이션 히스토리 로드
+      async function loadMigrationHistory() {
+        try {
+          const migrations = await window.electronAPI.prisma.getMigrations()
+          const tbody = document.getElementById('migrationHistoryTable')
+          
+          if (migrations.length === 0) {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="2" class="empty-row">
+                  <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <div>마이그레이션 히스토리가 없습니다</div>
+                  </div>
+                </td>
+              </tr>
+            `
+          } else {
+            tbody.innerHTML = migrations.map(m => `
+              <tr>
+                <td style="font-family: 'Monaco', 'Menlo', monospace; font-size: 12px;">${m.name}</td>
+                <td style="color: rgba(255,255,255,0.6); font-size: 12px;">${m.appliedAt}</td>
+              </tr>
+            `).join('')
+          }
+        } catch (error) {
+          console.error('마이그레이션 히스토리 로드 실패:', error)
+        }
+      }
+
+      // Prisma Studio 시작
+      async function startPrismaStudio() {
+        try {
+          console.log('🎨 Prisma Studio 시작 중...')
+          const result = await window.electronAPI.prisma.startStudio()
+          
+          if (result.success) {
+            alert('✅ Prisma Studio 시작 완료!\n\n' + result.message + '\n\n브라우저에서 http://localhost:5555 를 열어주세요.')
+            await refreshPrismaStatus()
+          } else {
+            alert('❌ Prisma Studio 시작 실패!\n\n' + result.message)
+          }
+        } catch (error) {
+          alert('❌ Prisma Studio 시작 실패!\n\n' + error.message)
+        }
+      }
+
+      // Prisma Studio 중지
+      async function stopPrismaStudio() {
+        try {
+          console.log('🛑 Prisma Studio 중지 중...')
+          const result = await window.electronAPI.prisma.stopStudio()
+          
+          if (result.success) {
+            alert('✅ Prisma Studio 중지 완료!\n\n' + result.message)
+            await refreshPrismaStatus()
+          } else {
+            alert('❌ Prisma Studio 중지 실패!\n\n' + result.message)
+          }
+        } catch (error) {
+          alert('❌ Prisma Studio 중지 실패!\n\n' + error.message)
+        }
+      }
+
+      // Studio 브라우저에서 열기
+      function openStudioInBrowser() {
+        window.electronAPI.openExternal('http://localhost:5555')
+      }
+
       // 초기화
       window.cachedStatus = null
       renderServices()
       updateStatus()
       setInterval(updateStatus, 3000)
+      
+      // 🔥 디버깅: 페이지 로드 후 구조 확인
+      setTimeout(() => {
+        console.log('=== 페이지 구조 디버깅 ===');
+        const container = document.querySelector('.container');
+        const wrapper = document.querySelector('.tab-contents-wrapper');
+        const services = document.getElementById('tab-services');
+        const packages = document.getElementById('tab-packages');
+        const prisma = document.getElementById('tab-prisma');
+        
+        console.log('container:', container?.getBoundingClientRect());
+        console.log('wrapper:', wrapper?.getBoundingClientRect());
+        console.log('services:', services?.getBoundingClientRect());
+        console.log('packages:', packages?.getBoundingClientRect());
+        console.log('prisma:', prisma?.getBoundingClientRect());
+        
+        console.log('wrapper computed style:', wrapper ? {
+          display: window.getComputedStyle(wrapper).display,
+          position: window.getComputedStyle(wrapper).position,
+          width: window.getComputedStyle(wrapper).width,
+          height: window.getComputedStyle(wrapper).height,
+        } : 'N/A');
+        
+        console.log('packages computed style:', packages ? {
+          display: window.getComputedStyle(packages).display,
+          position: window.getComputedStyle(packages).position,
+        } : 'N/A');
+      }, 1000);
+      
+      // 페이지 로드 완료 시 패키지 목록 자동 로드
+      console.log('🎬 페이지 로드 완료 - 초기화 시작')
+      console.log('🔍 window.electronAPI 존재:', !!window.electronAPI)
+      console.log('🔍 getInstalledPackages 존재:', !!(window.electronAPI && window.electronAPI.getInstalledPackages))
+      
+      setTimeout(() => {
+        console.log('📦 패키지 목록 자동 로드 시작 (1초 후)')
+        try {
+          loadInstalledPackages()
+        } catch (error) {
+          console.error('❌ loadInstalledPackages 호출 실패:', error)
+          alert('❌ loadInstalledPackages 호출 실패:\n' + error.message)
+        }
+      }, 1000)
+      
+      // Prisma 서브탭 전환
+      function switchPrismaSubTab(subtabName) {
+        console.log('🔄 Prisma 서브탭 전환:', subtabName)
+        
+        // 모든 서브탭 버튼 비활성화
+        document.querySelectorAll('.prisma-subtab-btn').forEach(btn => {
+          btn.classList.remove('active')
+        })
+        
+        // 모든 서브탭 콘텐츠 숨기기
+        document.querySelectorAll('.prisma-subtab-content').forEach(content => {
+          content.classList.remove('active')
+        })
+        
+        // 클릭된 버튼 찾아서 활성화
+        document.querySelectorAll('.prisma-subtab-btn').forEach(btn => {
+          if (btn.textContent.includes(subtabName === 'overview' ? '개요' : 
+              subtabName === 'schema' ? '스키마' : 
+              subtabName === 'migration' ? '마이그레이션' : 
+              subtabName === 'studio' ? 'Studio' : '히스토리')) {
+            btn.classList.add('active')
+          }
+        })
+        
+        // 선택한 서브탭 콘텐츠 활성화
+        const targetContent = document.getElementById(`prisma-subtab-${subtabName}`)
+        if (targetContent) {
+          targetContent.classList.add('active')
+          console.log('✅ 서브탭 활성화:', subtabName)
+        } else {
+          console.error('❌ 서브탭을 찾을 수 없음:', `prisma-subtab-${subtabName}`)
+        }
+
+        // 히스토리 탭이 활성화되면 자동 로드
+        if (subtabName === 'history') {
+          loadMigrationHistory()
+        }
+
+        // 개요 탭이 활성화되면 상태 새로고침
+        if (subtabName === 'overview') {
+          refreshPrismaStatus()
+        }
+      }
+
+      // Prisma 탭이 활성화되면 상태 새로고침
+      const originalSwitchTab = switchTab
+      switchTab = function(tabName) {
+        originalSwitchTab(tabName)
+        if (tabName === 'prisma') {
+          refreshPrismaStatus()
+        }
+        // 패키지 탭 진입 시 자동 로드
+        if (tabName === 'packages') {
+          console.log('📦 패키지 탭 진입 - 자동 로드')
+          if (allPackages.length === 0) {
+            loadInstalledPackages()
+          }
+        }
+      }
     </script>
   </body>
 </html>
