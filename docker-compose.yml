@@ -36,8 +36,9 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-papyrus} # root 사용자 비밀번호
       MYSQL_DATABASE: ${MYSQL_DATABASE:-papyrus} # 생성할 데이터베이스 이름
-      MYSQL_USER: ${MYSQL_USER:-papyrus} # 생성할 사용자 이름
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-papyrus} # 사용자 비밀번호
+      # MYSQL_USER를 제거하고 init.sql에서 모든 권한과 함께 사용자 생성
+      # MYSQL_USER: ${MYSQL_USER:-papyrus}
+      # MYSQL_PASSWORD: ${MYSQL_PASSWORD:-papyrus}
 
     # MySQL 인증 플러그인 설정 (호환성을 위해)
     command: --default-authentication-plugin=mysql_native_password

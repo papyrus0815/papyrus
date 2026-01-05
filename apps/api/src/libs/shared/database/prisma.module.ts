@@ -8,13 +8,11 @@ import { ConfigService } from '@nestjs/config'
     {
       provide: PrismaClient,
       useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('DATABASE_URL')
+        
         const prisma = new PrismaClient({
+          adapter: databaseUrl,
           log: ['query', 'info', 'warn', 'error'],
-          datasources: {
-            db: {
-              url: configService.get<string>('DATABASE_URL'),
-            },
-          },
         })
 
         // 에러 로깅

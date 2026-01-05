@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Docker 제어
   startDocker: () => ipcRenderer.invoke('service:startDocker'),
   stopDocker: () => ipcRenderer.invoke('service:stopDocker'),
+  resetDocker: () => ipcRenderer.invoke('service:resetDocker'),
 
   // API 서버 제어
   startApi: () => ipcRenderer.invoke('service:startApi'),
@@ -62,6 +63,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 포트 체크
   checkPort: (port: number) => ipcRenderer.invoke('service:checkPort', port),
 
+  // 로그 관리
+  getLogFiles: () => ipcRenderer.invoke('service:getLogFiles'),
+  readLogFile: (filePath: string) => ipcRenderer.invoke('service:readLogFile', filePath),
+
   // API 빌드
   buildApi: () => ipcRenderer.invoke('service:buildApi'),
 
@@ -88,6 +93,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getMigrationStatus: () => ipcRenderer.invoke('prisma:getMigrationStatus'),
     startStudio: () => ipcRenderer.invoke('prisma:startStudio'),
     stopStudio: () => ipcRenderer.invoke('prisma:stopStudio'),
+    runSeed: () => ipcRenderer.invoke('prisma:runSeed'),
+    getSeedFiles: () => ipcRenderer.invoke('prisma:getSeedFiles'),
     getStatus: () => ipcRenderer.invoke('prisma:getStatus'),
   },
 })
@@ -101,6 +108,7 @@ declare global {
       stopAll: () => Promise<void>
       startDocker: () => Promise<void>
       stopDocker: () => Promise<void>
+      resetDocker: () => Promise<{ success: boolean; message: string }>
       startApi: () => Promise<void>
       stopApi: () => Promise<void>
       startWebAdmin: () => Promise<void>
@@ -116,6 +124,8 @@ declare global {
       openExternal: (url: string) => Promise<void>
       openDevTools: () => Promise<void>
       checkPort: (port: number) => Promise<boolean>
+      getLogFiles: () => Promise<Array<{ category: string; files: Array<{ name: string; path: string; size: number; mtime: string }> }>>
+      readLogFile: (filePath: string) => Promise<string>
       buildApi: () => Promise<boolean>
       buildSdk: () => Promise<boolean>
       runMigration: () => Promise<boolean>
@@ -141,6 +151,8 @@ declare global {
         getMigrationStatus: () => Promise<{ success: boolean; message: string }>
         startStudio: () => Promise<{ success: boolean; message: string }>
         stopStudio: () => Promise<{ success: boolean; message: string }>
+        runSeed: () => Promise<{ success: boolean; message: string }>
+        getSeedFiles: () => Promise<Array<{ name: string; path: string }>>
         getStatus: () => Promise<{
           schemaValid: boolean
           migrationsCount: number

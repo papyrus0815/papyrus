@@ -103,12 +103,18 @@ return true
     }
   }
 
+  /**
+   * 특정 컨테이너가 실행 중인지 확인
+   * @param containerName 정확한 컨테이너 이름 (부분 일치 아님)
+   */
   async isContainerRunning(containerName: string): Promise<boolean> {
     try {
       const { stdout } = await execAsync(
-        `docker ps --filter "name=${containerName}" --filter "status=running" --format "{{.Names}}"`,
+        `docker ps --filter "name=^${containerName}$" --filter "status=running" --format "{{.Names}}"`,
       )
-      return stdout.trim().includes(containerName)
+      // 정확한 이름 일치 확인 (부분 일치 방지)
+      const runningContainers = stdout.trim().split('\n').filter(n => n)
+      return runningContainers.includes(containerName)
     } catch (error) {
       return false
     }
@@ -321,14 +327,10 @@ return true
     let nginxImageAvailable = false
 
     if (isRunning) {
-      // MySQL과 Nginx 컨테이너 상태 확인
-      // 컨테이너 이름은 docker-compose.yml의 서비스 이름 또는 container_name
+      // 정확한 컨테이너 이름으로 상태 확인
+      // docker-compose.yml의 container_name과 일치해야 함
       mysqlRunning = await this.isContainerRunning('mysql')
-      // nginx, papyrus-nginx, evolution-nginx 등 다양한 이름 체크
-      nginxRunning =
-        (await this.isContainerRunning('nginx')) ||
-        (await this.isContainerRunning('papyrus-nginx')) ||
-        (await this.isContainerRunning('evolution-nginx'))
+      nginxRunning = await this.isContainerRunning('papyrus-nginx')
       
       // 이미지 확인
       mysqlImageAvailable = await this.isImageAvailable('mysql:8.0')
@@ -434,6 +436,7 @@ return true
         console.warn('⚠️ Docker 경고:', stderr)
       }
 
+      // MySQL 준비 대기
       await this.waitForMySQL(30)
 
       return true
@@ -459,7 +462,7 @@ return true
     while (Date.now() - startTime < timeout) {
       try {
         const { stdout } = await execAsync(
-          'docker exec mysql mysqladmin ping -h localhost -u root -pevolution',
+          'docker exec mysql mysqladmin ping -h localhost -u root -ppapyrus',
         )
 
         if (stdout.includes('mysqld is alive')) {
@@ -484,12 +487,13 @@ return
         cwd: projectRoot,
       })
       console.log('✅ Docker 컨테이너 중지 완료')
+      console.log(stdout)
       
-return true
+      return true
     } catch (error: any) {
       console.error('❌ Docker 컨테이너 중지 실패:', error.message)
       
-return false
+      return false
     }
   }
 
@@ -602,17 +606,22 @@ return
   }
 
   /**
-   * Docker Desktop 중지 (주 entry point)
+   * Docker 컨테이너 중지 (주 entry point)
+   * 
+   * 참고: Docker Desktop 자체는 중지하지 않습니다.
+   *       다른 프로젝트에서 Docker를 사용할 수 있도록 Desktop은 계속 실행됩니다.
    */
   async stopDocker(): Promise<boolean> {
     try {
-      console.log('🛑 Docker 중지 중...')
+      console.log('🛑 Docker 컨테이너 중지 중...')
       
-      // 먼저 컨테이너 중지
+      // Papyrus 프로젝트의 컨테이너만 중지
       if (this.projectRoot) {
         await this.stopContainers(this.projectRoot)
+        console.log('✅ Papyrus Docker 컨테이너 중지 완료')
       } else {
         console.warn('⚠️ 프로젝트 루트가 설정되지 않아 컨테이너를 중지할 수 없습니다')
+        return false
       }
       
       // Docker Desktop은 수동으로 종료하도록 안내
@@ -620,9 +629,112 @@ return
       
       return true
     } catch (error: any) {
-      console.error('❌ Docker 중지 실패:', error.message)
+      console.error('❌ Docker 컨테이너 중지 실패:', error.message)
       
       return false
     }
   }
+
+  /**
+   * Docker 완전 초기화 (컨테이너 + 이미지 + 볼륨 삭제)
+   * 
+   * ⚠️ 경고: 이 작업은 모든 Docker 데이터를 삭제합니다.
+   * - Papyrus 프로젝트의 모든 컨테이너 중지 및 삭제
+   * - Papyrus 프로젝트의 모든 이미지 삭제
+   * - Papyrus 프로젝트의 모든 볼륨 삭제 (데이터베이스 데이터 포함)
+   */
+  async resetDocker(): Promise<{ success: boolean; message: string }> {
+    if (!this.projectRoot) {
+      return {
+        success: false,
+        message: '프로젝트 루트가 설정되지 않았습니다.'
+      }
+    }
+
+    try {
+      console.log('🗑️  Docker 완전 초기화 시작...')
+      let log = '=== Docker 초기화 로그 ===\n\n'
+
+      // 1. 컨테이너 중지 및 삭제
+      console.log('1️⃣ 컨테이너 중지 및 삭제...')
+      try {
+        await execAsync('docker-compose down', { cwd: this.projectRoot })
+        log += '✅ 컨테이너 중지 및 삭제 완료\n'
+        console.log('✅ 컨테이너 삭제 완료')
+      } catch (error: any) {
+        log += `⚠️ 컨테이너 삭제 오류: ${error.message}\n`
+        console.log('⚠️ 컨테이너 삭제 오류 (무시)')
+      }
+
+      // 2. 볼륨 삭제 (데이터베이스 데이터 포함)
+      console.log('2️⃣ 볼륨 삭제 중...')
+      try {
+        const { stdout } = await execAsync('docker volume ls -q', { cwd: this.projectRoot })
+        const volumes = stdout.trim().split('\n').filter(v => v.includes('papyrus'))
+        
+        for (const volume of volumes) {
+          try {
+            await execAsync(`docker volume rm ${volume}`)
+            log += `✅ 볼륨 삭제: ${volume}\n`
+            console.log(`  ✅ ${volume}`)
+          } catch (error: any) {
+            log += `⚠️ 볼륨 삭제 실패: ${volume} - ${error.message}\n`
+          }
+        }
+        
+        console.log('✅ 볼륨 삭제 완료')
+      } catch (error: any) {
+        log += `⚠️ 볼륨 삭제 오류: ${error.message}\n`
+        console.log('⚠️ 볼륨 삭제 오류 (무시)')
+      }
+
+      // 3. 이미지 삭제
+      console.log('3️⃣ 이미지 삭제 중...')
+      try {
+        // MySQL 이미지 삭제
+        try {
+          await execAsync('docker rmi mysql:8.0', { cwd: this.projectRoot })
+          log += '✅ 이미지 삭제: mysql:8.0\n'
+        } catch {}
+
+        // Nginx 이미지 삭제
+        try {
+          await execAsync('docker rmi nginx:alpine', { cwd: this.projectRoot })
+          log += '✅ 이미지 삭제: nginx:alpine\n'
+        } catch {}
+
+        console.log('✅ 이미지 삭제 완료')
+      } catch (error: any) {
+        log += `⚠️ 이미지 삭제 오류: ${error.message}\n`
+        console.log('⚠️ 이미지 삭제 오류 (무시)')
+      }
+
+      // 4. 네트워크 정리
+      console.log('4️⃣ 네트워크 정리 중...')
+      try {
+        await execAsync('docker network prune -f', { cwd: this.projectRoot })
+        log += '✅ 네트워크 정리 완료\n'
+        console.log('✅ 네트워크 정리 완료')
+      } catch (error: any) {
+        log += `⚠️ 네트워크 정리 오류: ${error.message}\n`
+      }
+
+      console.log('✅ Docker 완전 초기화 완료!')
+      log += '\n✅ Docker 완전 초기화 완료!\n'
+      log += '\n💡 다음 단계: Docker 시작 버튼을 눌러 새로운 환경을 구성하세요.'
+
+      return {
+        success: true,
+        message: log
+      }
+    } catch (error: any) {
+      const errorMsg = `Docker 초기화 실패: ${error.message}`
+      console.error('❌', errorMsg)
+      return {
+        success: false,
+        message: errorMsg
+      }
+    }
+  }
 }
+

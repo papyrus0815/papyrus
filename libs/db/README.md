@@ -96,7 +96,6 @@ npm run db:generate
 ```prisma
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -104,6 +103,10 @@ generator client {
   output   = "../../../node_modules/.prisma/client"
 }
 ```
+
+> **참고**: Prisma 7부터 datasource의 `url` 속성이 제거되었습니다. 
+> 데이터베이스 연결 URL은 `PrismaClient` 생성 시 `adapter` 옵션으로 전달합니다.
+> 자세한 내용은 [Prisma 7 마이그레이션 가이드](https://pris.ly/d/config-datasource)를 참조하세요.
 
 #### `build-schema.ts`
 - 모든 `.prisma` 파일을 읽어서 병합

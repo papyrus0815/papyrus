@@ -565,11 +565,26 @@ function registerIpcHandlers() {
     const result = await serviceManager.dockerManager.stopDocker()
     // Docker 중지 후 상태 즉시 업데이트
     setTimeout(() => {
-      updateTrayMenu()
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('service:status-update')
+        mainWindow.webContents.send('status:update')
       }
     }, 1000)
+
+    return result
+  })
+
+  // Docker 초기화 (컨테이너 + 이미지 + 볼륨)
+  ipcMain.handle('service:resetDocker', async () => {
+    console.log('🗑️ [IPC] Docker 초기화 요청')
+    const result = await serviceManager.dockerManager.resetDocker()
+    
+    // 초기화 후 상태 업데이트
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('status:update')
+      }
+    }, 1000)
+
     return result
   })
 
@@ -997,6 +1012,18 @@ function registerIpcHandlers() {
     return await prismaManager.stopStudio()
   })
 
+  // Prisma Seed 실행
+  ipcMain.handle('prisma:runSeed', async () => {
+    console.log('🌱 [IPC] Prisma Seed 실행 요청')
+    return await prismaManager.runSeed()
+  })
+
+  // Prisma Seed 파일 목록 조회
+  ipcMain.handle('prisma:getSeedFiles', async () => {
+    console.log('📋 [IPC] Seed 파일 목록 조회 요청')
+    return await prismaManager.getSeedFiles()
+  })
+
   // Prisma 상태 조회
   ipcMain.handle('prisma:getStatus', async () => {
     return await prismaManager.getStatus()
@@ -1005,6 +1032,18 @@ function registerIpcHandlers() {
   // Prisma Studio 열기
   ipcMain.handle('service:openPrismaStudio', async () => {
     return await serviceManager.openPrismaStudio()
+  })
+
+  // 로그 파일 목록 조회
+  ipcMain.handle('service:getLogFiles', async () => {
+    console.log('📋 [IPC] 로그 파일 목록 조회 요청')
+    return await serviceManager.getLogFiles()
+  })
+
+  // 로그 파일 읽기
+  ipcMain.handle('service:readLogFile', async (_event, filePath: string) => {
+    console.log('📄 [IPC] 로그 파일 읽기 요청:', filePath)
+    return await serviceManager.readLogFile(filePath)
   })
 }
 

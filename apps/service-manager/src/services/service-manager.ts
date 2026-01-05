@@ -503,4 +503,60 @@ export class ServiceManager {
       return false
     }
   }
+
+  /**
+   * 로그 파일 목록 조회
+   */
+  async getLogFiles(): Promise<Array<{ category: string; files: Array<{ name: string; path: string; size: number; mtime: string }> }>> {
+    const fs = await import('fs')
+    const path = await import('path')
+    
+    const logsDir = path.join(this.projectRoot, 'logs')
+    const categories = ['prisma/build', 'prisma/validate', 'prisma/generate', 'prisma/migrate', 'seed']
+    const result: Array<{ category: string; files: Array<{ name: string; path: string; size: number; mtime: string }> }> = []
+
+    for (const category of categories) {
+      const categoryPath = path.join(logsDir, category)
+      
+      if (!fs.existsSync(categoryPath)) {
+        continue
+      }
+
+      const files = fs.readdirSync(categoryPath)
+        .filter(file => file.endsWith('.log'))
+        .map(file => {
+          const filePath = path.join(categoryPath, file)
+          const stats = fs.statSync(filePath)
+          return {
+            name: file,
+            path: filePath,
+            size: stats.size,
+            mtime: stats.mtime.toISOString(),
+          }
+        })
+        .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime()) // 최신순
+
+      if (files.length > 0) {
+        result.push({
+          category: category.replace('prisma/', ''),
+          files,
+        })
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * 로그 파일 읽기
+   */
+  async readLogFile(filePath: string): Promise<string> {
+    const fs = await import('fs')
+    
+    try {
+      return fs.readFileSync(filePath, 'utf-8')
+    } catch (error: any) {
+      throw new Error(`로그 파일 읽기 실패: ${error.message}`)
+    }
+  }
 }

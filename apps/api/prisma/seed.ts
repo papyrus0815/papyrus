@@ -1,7 +1,15 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from './generated/client'
+import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 import * as bcrypt from 'bcrypt'
 
-const prisma = new PrismaClient()
+const adapter = new PrismaMariaDb({
+  host: "localhost",
+  port: 3307,
+  user: 'papyrus',
+  password: 'papyrus',
+  database: 'papyrus',
+})
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   // 1. 대륙 생성
@@ -38,16 +46,7 @@ async function main() {
 
   console.log(`\n✅ 총 ${continents.length}개 대륙 생성 완료!\n`)
 
-  // 2. 히어로 생성 - 나폴레옹
-  const napoleon = await prisma.hero.upsert({
-    where: { name: '나폴레옹' },
-    update: {},
-    create: {
-      name: '나폴레옹',
-      bio: '프랑스의 황제이자 위대한 전략가',
-    },
-  })
-  console.log(`✅ 히어로 생성됨: ${napoleon.name}`)
+
 
   // 3. 어드민 계정 생성
   const plainPassword = '1234'
@@ -59,7 +58,6 @@ async function main() {
     create: {
       username: 'admin',
       passwordHash,
-      heroId: napoleon.id, // 기본 선택된 히어로
     },
   })
   console.log(`✅ 계정 생성됨: ${admin.username}`)

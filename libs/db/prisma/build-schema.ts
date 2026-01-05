@@ -1,8 +1,12 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url' 
+import { dirname } from 'path'      
 import chalk from 'chalk'
 
 // 📁 Prisma 모델 경로
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 const prismaDir = path.resolve(__dirname)
 
 // 📄 출력될 schema.prisma 경로

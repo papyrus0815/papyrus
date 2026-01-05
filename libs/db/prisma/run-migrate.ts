@@ -1,6 +1,11 @@
 import { execSync } from 'child_process'
 import * as readline from 'readline'
 import * as path from 'path'
+import { config } from 'dotenv'
+
+// .env 파일 로드 (프로젝트 루트)
+const envPath = path.resolve(__dirname, '../../../.env')
+config({ path: envPath })
 
 // schema.prisma 병합 스크립트 실행
 const schemaBuilder = path.resolve(__dirname, 'build-schema.ts')
@@ -39,7 +44,7 @@ async function getMigrationName(): Promise<string> {
     // 1. 마이그레이션 생성 및 적용
     console.log('📝 마이그레이션 생성 및 DB 적용 중...')
     execSync(
-      `npx prisma migrate dev --name ${migrationName} --schema=apps/api/prisma/schema.prisma`,
+      `npx prisma migrate dev --name ${migrationName} --schema=apps/api/prisma/schema.prisma --skip-generate`,
       { stdio: 'inherit' },
     )
 

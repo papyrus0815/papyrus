@@ -66,6 +66,35 @@ export class PrismaManager {
   }
 
   /**
+   * 로그 파일 저장
+   */
+  private saveLog(category: string, status: 'success' | 'failed', content: string): string {
+    try {
+      const logsDir = path.join(this.projectRoot, 'logs', 'prisma', category)
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true })
+      }
+
+      const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '')
+      const logFilePath = path.join(logsDir, `${timestamp}_${status}.log`)
+
+      const logContent = `=== Prisma ${category} 로그 ===
+시간: ${new Date().toLocaleString('ko-KR')}
+상태: ${status === 'success' ? '✅ 성공' : '❌ 실패'}
+
+${content}
+`
+      fs.writeFileSync(logFilePath, logContent, 'utf-8')
+      this.log(`📁 로그 저장: ${logFilePath}`)
+      
+      return logFilePath
+    } catch (error) {
+      this.log(`⚠️ 로그 저장 실패: ${error}`)
+      return ''
+    }
+  }
+
+  /**
    * 스키마 빌드 (libs/db/prisma/*.prisma → apps/api/prisma/schema.prisma)
    */
   public async buildSchema(): Promise<{ success: boolean; message: string }> {
@@ -96,11 +125,30 @@ export class PrismaManager {
       this.log('✅ 스키마 빌드 완료!')
       this.log(stdout)
 
-      return { success: true, message: '스키마 빌드가 완료되었습니다.' }
+      // 로그 저장
+      let logContent = '스키마 빌드가 완료되었습니다.\n\n'
+      logContent += '=== 실행 로그 ===\n'
+      logContent += stdout
+      const logPath = this.saveLog('build', 'success', logContent)
+
+      return { 
+        success: true, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     } catch (error: any) {
       const errorMsg = `스키마 빌드 실패: ${error.message}`
       this.log(`❌ ${errorMsg}`)
-      return { success: false, message: errorMsg }
+      
+      // 로그 저장
+      let logContent = errorMsg
+      if (error.stdout) logContent += '\n\n=== 실행 로그 ===\n' + error.stdout
+      if (error.stderr) logContent += '\n\n=== 에러 로그 ===\n' + error.stderr
+      const logPath = this.saveLog('build', 'failed', logContent)
+
+      return { 
+        success: false, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     }
   }
 
@@ -133,11 +181,30 @@ export class PrismaManager {
       this.log('✅ 스키마 검증 완료!')
       this.log(stdout)
 
-      return { success: true, message: '스키마가 유효합니다.' }
+      // 로그 저장
+      let logContent = '스키마가 유효합니다.\n\n'
+      logContent += '=== 실행 로그 ===\n'
+      logContent += stdout
+      const logPath = this.saveLog('validate', 'success', logContent)
+
+      return { 
+        success: true, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     } catch (error: any) {
       const errorMsg = `스키마 검증 실패: ${error.message}`
       this.log(`❌ ${errorMsg}`)
-      return { success: false, message: errorMsg }
+      
+      // 로그 저장
+      let logContent = errorMsg
+      if (error.stdout) logContent += '\n\n=== 실행 로그 ===\n' + error.stdout
+      if (error.stderr) logContent += '\n\n=== 에러 로그 ===\n' + error.stderr
+      const logPath = this.saveLog('validate', 'failed', logContent)
+
+      return { 
+        success: false, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     }
   }
 
@@ -170,11 +237,30 @@ export class PrismaManager {
       this.log('✅ Prisma Client 생성 완료!')
       this.log(stdout)
 
-      return { success: true, message: 'Prisma Client가 생성되었습니다.' }
+      // 로그 저장
+      let logContent = 'Prisma Client가 생성되었습니다.\n\n'
+      logContent += '=== 실행 로그 ===\n'
+      logContent += stdout
+      const logPath = this.saveLog('generate', 'success', logContent)
+
+      return { 
+        success: true, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     } catch (error: any) {
       const errorMsg = `Prisma Client 생성 실패: ${error.message}`
       this.log(`❌ ${errorMsg}`)
-      return { success: false, message: errorMsg }
+      
+      // 로그 저장
+      let logContent = errorMsg
+      if (error.stdout) logContent += '\n\n=== 실행 로그 ===\n' + error.stdout
+      if (error.stderr) logContent += '\n\n=== 에러 로그 ===\n' + error.stderr
+      const logPath = this.saveLog('generate', 'failed', logContent)
+
+      return { 
+        success: false, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     }
   }
 
@@ -216,11 +302,35 @@ export class PrismaManager {
       this.log('✅ 마이그레이션 완료!')
       this.log(stdout)
 
-      return { success: true, message: '마이그레이션이 완료되었습니다.' }
+      // 로그 저장
+      let logContent = `마이그레이션이 완료되었습니다.\n`
+      logContent += `마이그레이션 이름: ${migrationName}\n\n`
+      logContent += '=== 실행 로그 ===\n'
+      logContent += stdout
+      if (stderr && !stderr.includes('ExperimentalWarning')) {
+        logContent += '\n\n=== 경고 ===\n' + stderr
+      }
+      const logPath = this.saveLog('migrate', 'success', logContent)
+
+      return { 
+        success: true, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     } catch (error: any) {
       const errorMsg = `마이그레이션 실패: ${error.message}`
       this.log(`❌ ${errorMsg}`)
-      return { success: false, message: errorMsg }
+      
+      // 로그 저장
+      let logContent = `마이그레이션 이름: ${migrationName}\n\n`
+      logContent += errorMsg
+      if (error.stdout) logContent += '\n\n=== 실행 로그 ===\n' + error.stdout
+      if (error.stderr) logContent += '\n\n=== 에러 로그 ===\n' + error.stderr
+      const logPath = this.saveLog('migrate', 'failed', logContent)
+
+      return { 
+        success: false, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
     }
   }
 
@@ -405,6 +515,159 @@ export class PrismaManager {
       const errorMsg = `Prisma Studio 중지 실패: ${error.message}`
       this.log(`❌ ${errorMsg}`)
       return { success: false, message: errorMsg }
+    }
+  }
+
+  /**
+   * Seed 데이터 삽입
+   */
+  public async runSeed(): Promise<{ success: boolean; message: string }> {
+    if (!this.projectRoot) {
+      return { success: false, message: '프로젝트 루트가 설정되지 않았습니다.' }
+    }
+
+    this.log('🌱 Seed 데이터 삽입 중...')
+
+    // 로그 디렉토리 생성
+    const logsDir = path.join(this.projectRoot, 'logs', 'seed')
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true })
+    }
+
+    // 타임스탬프 생성
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '')
+    let logFilePath = ''
+
+    try {
+      // .env 파일 경로
+      const envPath = path.join(this.projectRoot, '.env')
+      const envDevPath = path.join(this.projectRoot, 'env.development')
+
+      // 환경 변수 준비
+      const env = {
+        ...process.env,
+        NODE_ENV: 'development',
+      }
+
+      // env.development 파일이 있으면 로드
+      if (fs.existsSync(envDevPath)) {
+        const envContent = fs.readFileSync(envDevPath, 'utf-8')
+        const envVars = envContent.split('\n')
+          .filter(line => line && !line.startsWith('#') && line.includes('='))
+          .reduce((acc, line) => {
+            const [key, ...valueParts] = line.split('=')
+            const value = valueParts.join('=').replace(/^["']|["']$/g, '')
+            acc[key.trim()] = value
+            return acc
+          }, {} as Record<string, string>)
+        
+        Object.assign(env, envVars)
+        this.log('📝 env.development 파일 로드 완료')
+      }
+
+      // npm run을 통해 seed 실행 (package.json의 seed 스크립트 활용)
+      const { stdout, stderr } = await execAsync(
+        'npm run --silent prisma:seed || npx prisma db seed',
+        {
+          cwd: this.projectRoot,
+          timeout: 180000,
+          env,
+        }
+      )
+
+      this.log('✅ Seed 데이터 삽입 완료!')
+      if (stdout) this.log(stdout)
+      if (stderr && !stderr.includes('warning')) this.log(`⚠️ ${stderr}`)
+
+      // 상세 로그 포함
+      let resultMessage = '✅ Seed 데이터가 삽입되었습니다.\n\n'
+      resultMessage += '=== 실행 로그 ===\n'
+      if (stdout) {
+        resultMessage += stdout + '\n'
+      }
+      if (stderr && !stderr.includes('warning') && !stderr.includes('ExperimentalWarning')) {
+        resultMessage += '\n⚠️ 경고:\n' + stderr
+      }
+
+      // 로그 파일 저장 (성공)
+      logFilePath = path.join(logsDir, `${timestamp}_success.log`)
+      const logContent = `=== Seed 실행 로그 ===
+시간: ${new Date().toLocaleString('ko-KR')}
+상태: ✅ 성공
+
+${resultMessage}
+`
+      fs.writeFileSync(logFilePath, logContent, 'utf-8')
+      this.log(`📁 로그 저장됨: ${logFilePath}`)
+
+      return {
+        success: true,
+        message: resultMessage.trim() + `\n\n📁 로그: ${logFilePath}`,
+      }
+    } catch (error: any) {
+      // 에러 상세 정보 추출
+      let errorDetails = error.message || '알 수 없는 에러'
+      
+      // stdout이 있으면 포함 (부분 실행 정보가 있을 수 있음)
+      if (error.stdout) {
+        errorDetails += '\n\n=== 실행 로그 ===\n' + error.stdout
+      }
+      
+      // stderr이 있으면 포함
+      if (error.stderr) {
+        errorDetails += '\n\n=== 에러 로그 ===\n' + error.stderr
+      }
+
+      const errorMsg = `Seed 실행 실패\n\n${errorDetails}`
+      this.log(`❌ ${errorMsg}`)
+
+      // 로그 파일 저장 (실패)
+      logFilePath = path.join(logsDir, `${timestamp}_failed.log`)
+      const logContent = `=== Seed 실행 로그 ===
+시간: ${new Date().toLocaleString('ko-KR')}
+상태: ❌ 실패
+
+${errorMsg}
+`
+      try {
+        fs.writeFileSync(logFilePath, logContent, 'utf-8')
+        this.log(`📁 로그 저장됨: ${logFilePath}`)
+      } catch (logError) {
+        this.log(`⚠️ 로그 파일 저장 실패: ${logError}`)
+      }
+
+      return { success: false, message: errorMsg + `\n\n📁 로그: ${logFilePath}` }
+    }
+  }
+
+  /**
+   * Seed 파일 목록 조회
+   */
+  public async getSeedFiles(): Promise<Array<{ name: string; path: string }>> {
+    if (!this.projectRoot) {
+      return []
+    }
+
+    try {
+      const seedsPath = path.join(this.projectRoot, 'apps/api/prisma/seeds')
+
+      if (!fs.existsSync(seedsPath)) {
+        return []
+      }
+
+      const files = fs
+        .readdirSync(seedsPath)
+        .filter((file) => file.endsWith('.sql'))
+        .sort()
+        .map((file) => ({
+          name: file,
+          path: path.join(seedsPath, file),
+        }))
+
+      return files
+    } catch (error) {
+      console.error('Seed 파일 목록 조회 실패:', error)
+      return []
     }
   }
 
