@@ -40,7 +40,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 웹 열기
   openWeb: () => ipcRenderer.invoke('service:openWeb'),
-  openExternal: (url: string) => ipcRenderer.invoke('service:openExternal', url),
+  openExternal: (url: string) =>
+    ipcRenderer.invoke('service:openExternal', url),
 
   // 개발자 도구
   openDevTools: () => ipcRenderer.invoke('service:openDevTools'),
@@ -54,7 +55,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateAllPackages: () => ipcRenderer.invoke('service:updateAllPackages'),
 
   // 설치된 패키지 목록 가져오기
-  getInstalledPackages: () => ipcRenderer.invoke('service:getInstalledPackages'),
+  getInstalledPackages: () =>
+    ipcRenderer.invoke('service:getInstalledPackages'),
 
   // 패키지 상세 정보 가져오기
   getPackageInfo: (packageName: string) =>
@@ -65,7 +67,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 로그 관리
   getLogFiles: () => ipcRenderer.invoke('service:getLogFiles'),
-  readLogFile: (filePath: string) => ipcRenderer.invoke('service:readLogFile', filePath),
+  readLogFile: (filePath: string) =>
+    ipcRenderer.invoke('service:readLogFile', filePath),
 
   // API 빌드
   buildApi: () => ipcRenderer.invoke('service:buildApi'),
@@ -93,9 +96,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getMigrationStatus: () => ipcRenderer.invoke('prisma:getMigrationStatus'),
     startStudio: () => ipcRenderer.invoke('prisma:startStudio'),
     stopStudio: () => ipcRenderer.invoke('prisma:stopStudio'),
-    runSeed: () => ipcRenderer.invoke('prisma:runSeed'),
+    runSeed: (environment?: string) => ipcRenderer.invoke('prisma:runSeed', environment),
     getSeedFiles: () => ipcRenderer.invoke('prisma:getSeedFiles'),
     getStatus: () => ipcRenderer.invoke('prisma:getStatus'),
+  },
+
+  // ========================================
+  // Nestia SDK API
+  // ========================================
+  nestia: {
+    build: () => ipcRenderer.invoke('nestia:build'),
+    validate: () => ipcRenderer.invoke('nestia:validate'),
+  },
+
+  // ========================================
+  // Environment Variables API
+  // ========================================
+  env: {
+    getFiles: () => ipcRenderer.invoke('env:getFiles'),
+    read: (fileName: string) => ipcRenderer.invoke('env:read', fileName),
+    write: (fileName: string, variables: Record<string, string>) =>
+      ipcRenderer.invoke('env:write', fileName, variables),
+    delete: (fileName: string, key: string) =>
+      ipcRenderer.invoke('env:delete', fileName, key),
   },
 })
 
@@ -124,7 +147,17 @@ declare global {
       openExternal: (url: string) => Promise<void>
       openDevTools: () => Promise<void>
       checkPort: (port: number) => Promise<boolean>
-      getLogFiles: () => Promise<Array<{ category: string; files: Array<{ name: string; path: string; size: number; mtime: string }> }>>
+      getLogFiles: () => Promise<
+        Array<{
+          category: string
+          files: Array<{
+            name: string
+            path: string
+            size: number
+            mtime: string
+          }>
+        }>
+      >
       readLogFile: (filePath: string) => Promise<string>
       buildApi: () => Promise<boolean>
       buildSdk: () => Promise<boolean>
@@ -145,13 +178,11 @@ declare global {
         migrate: (
           migrationName: string,
         ) => Promise<{ success: boolean; message: string }>
-        getMigrations: () => Promise<
-          Array<{ name: string; appliedAt: string }>
-        >
+        getMigrations: () => Promise<Array<{ name: string; appliedAt: string }>>
         getMigrationStatus: () => Promise<{ success: boolean; message: string }>
         startStudio: () => Promise<{ success: boolean; message: string }>
         stopStudio: () => Promise<{ success: boolean; message: string }>
-        runSeed: () => Promise<{ success: boolean; message: string }>
+        runSeed: (environment?: string) => Promise<{ success: boolean; message: string }>
         getSeedFiles: () => Promise<Array<{ name: string; path: string }>>
         getStatus: () => Promise<{
           schemaValid: boolean
@@ -159,6 +190,27 @@ declare global {
           lastMigration: string | null
           studioRunning: boolean
         }>
+      }
+      nestia: {
+        build: () => Promise<{ success: boolean; message: string }>
+        validate: () => Promise<{ success: boolean; message: string }>
+      }
+      env: {
+        getFiles: () => Promise<string[]>
+        read: (fileName: string) => Promise<{
+          success: boolean
+          variables: Record<string, string>
+          raw: string
+          message?: string
+        }>
+        write: (
+          fileName: string,
+          variables: Record<string, string>,
+        ) => Promise<{ success: boolean; message: string }>
+        delete: (
+          fileName: string,
+          key: string,
+        ) => Promise<{ success: boolean; message: string }>
       }
     }
   }

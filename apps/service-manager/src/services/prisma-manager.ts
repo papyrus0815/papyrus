@@ -521,12 +521,12 @@ ${content}
   /**
    * Seed 데이터 삽입
    */
-  public async runSeed(): Promise<{ success: boolean; message: string }> {
+  public async runSeed(environment: string = 'development'): Promise<{ success: boolean; message: string }> {
     if (!this.projectRoot) {
       return { success: false, message: '프로젝트 루트가 설정되지 않았습니다.' }
     }
 
-    this.log('🌱 Seed 데이터 삽입 중...')
+    this.log(`🌱 Seed 데이터 삽입 중... (환경: ${environment})`)
 
     // 로그 디렉토리 생성
     const logsDir = path.join(this.projectRoot, 'logs', 'seed')
@@ -565,9 +565,9 @@ ${content}
         this.log('📝 env.development 파일 로드 완료')
       }
 
-      // npm run을 통해 seed 실행 (package.json의 seed 스크립트 활용)
+      // npm run을 통해 seed 실행 (environment 파라미터 전달)
       const { stdout, stderr } = await execAsync(
-        'npm run --silent prisma:seed || npx prisma db seed',
+        `npx prisma db seed -- --environment ${environment}`,
         {
           cwd: this.projectRoot,
           timeout: 180000,

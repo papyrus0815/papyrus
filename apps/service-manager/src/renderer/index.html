@@ -4,1703 +4,1126 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Papyrus Service Manager</title>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      html {
-        height: 100%;
-        width: 100%;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-      }
-
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: #1a1a1a;
-        color: #e4e6eb;
-        overflow: hidden;
-        height: 100%;
-        width: 100%;
-        font-size: 14px;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-      }
-
-      .container {
-        padding: 20px;
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        display: grid;
-        grid-template-rows: auto auto 1fr;
-        gap: 20px;
-        overflow: hidden;
-      }
-
-      /* 헤더 */
-      .header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding-bottom: 20px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        flex-shrink: 0;
-      }
-
-      .logo {
-        font-size: 20px;
-        font-weight: 700;
-        color: #6366f1;
-      }
-
-      .header-actions {
-        display: flex;
-        gap: 10px;
-      }
-
-      /* 버튼 */
-      .btn {
-        padding: 10px 20px;
-        border-radius: 8px;
-        border: none;
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: inherit;
-      }
-
-      .btn-primary {
-        background: #6366f1;
-        color: white;
-      }
-
-      .btn-primary:hover {
-        background: #5558e3;
-      }
-
-      .btn-danger {
-        background: #ef4444;
-        color: white;
-      }
-
-      .btn-danger:hover {
-        background: #dc2626;
-      }
-
-      .btn-secondary {
-        background: rgba(255, 255, 255, 0.1);
-        color: #e4e6eb;
-      }
-
-      .btn-danger {
-        background: #dc2626;
-        color: white;
-      }
-
-      .btn-danger:hover {
-        background: #b91c1c;
-      }
-
-      .btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.15);
-      }
-
-      .btn-sm {
-        padding: 6px 12px;
-        font-size: 12px;
-      }
-
-      .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      /* 탭 */
-      .tabs {
-        display: flex;
-        gap: 8px;
-        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-        flex-shrink: 0;
-      }
-
-      .tab-btn {
-        background: none;
-        border: none;
-        color: rgba(255, 255, 255, 0.5);
-        padding: 12px 24px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -2px;
-        transition: all 0.2s;
-        font-family: inherit;
-      }
-
-      .tab-btn:hover {
-        color: rgba(255, 255, 255, 0.8);
-      }
-
-      .tab-btn.active {
-        color: #6366f1;
-        border-bottom-color: #6366f1;
-      }
-
-      /* 탭 콘텐츠 래퍼 */
-      .tab-contents-wrapper {
-        position: relative;
-        min-height: 0;
-        overflow: hidden;
-      }
-
-      /* 모든 탭 콘텐츠 - 기본 스타일 */
-      #tab-packages {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        overflow-y: auto;
-        padding: 20px;
-        background: #1a1a1a;
-        display: none;
-      }
-
-      #tab-services {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        overflow: hidden;
-        padding: 20px;
-        background: #1a1a1a;
-        display: none;
-      }
-
-      #tab-prisma {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        overflow: hidden;
-        padding: 0;
-        background: #1a1a1a;
-        display: none;
-      }
-
-      /* 서비스 탭 - 좌우 레이아웃 */
-      #tab-services.active {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-      }
-
-      #tab-services .card {
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-
-      #tab-services .services-list {
-        overflow-y: auto;
-        flex: 1;
-      }
-
-      #tab-services .console-output {
-        flex: 1;
-      }
-
-      /* 패키지 탭 */
-      #tab-packages.active {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-      }
-
-      #tab-packages .card {
-        flex-shrink: 0;
-      }
-
-      /* Prisma 탭 */
-      #tab-prisma.active {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        overflow: hidden;
-        padding: 0;
-      }
-
-      /* Prisma 서브탭 */
-      .prisma-subtabs {
-        display: flex;
-        flex-direction: row;
-        flex-wrap: nowrap;
-        align-items: center;
-        gap: 4px;
-        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-        padding: 0 20px;
-        background: rgba(0, 0, 0, 0.2);
-        flex-shrink: 0;
-        width: 100%;
-        min-height: 48px;
-      }
-
-      .prisma-subtab-btn {
-        background: none;
-        border: none;
-        color: rgba(255, 255, 255, 0.5);
-        padding: 12px 20px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -2px;
-        transition: all 0.2s;
-        font-family: inherit;
-        white-space: nowrap;
-        flex-shrink: 0;
-      }
-
-      .prisma-subtab-btn:hover {
-        color: rgba(255, 255, 255, 0.8);
-        background: rgba(255, 255, 255, 0.05);
-      }
-
-      .prisma-subtab-btn.active {
-        color: #8b5cf6;
-        border-bottom-color: #8b5cf6;
-        background: rgba(139, 92, 246, 0.1);
-      }
-
-      /* Prisma 서브탭 콘텐츠 */
-      .prisma-subtab-content {
-        display: none;
-        flex: 1;
-        overflow-y: auto;
-        padding: 20px;
-        min-height: 0;
-      }
-
-      .prisma-subtab-content.active {
-        display: flex !important;
-        flex-direction: column;
-        gap: 20px;
-      }
-
-      /* Prisma 가이드 배너 */
-      .prisma-guide {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 24px;
-        border-radius: 12px;
-        color: white;
-      }
-
-      .prisma-guide-title {
-        font-size: 18px;
-        font-weight: 700;
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .prisma-guide-steps {
-        display: flex;
-        gap: 16px;
-        margin-top: 16px;
-        flex-wrap: wrap;
-      }
-
-      .prisma-step {
-        background: rgba(255, 255, 255, 0.15);
-        padding: 12px 16px;
-        border-radius: 8px;
-        flex: 1;
-        min-width: 200px;
-        backdrop-filter: blur(10px);
-      }
-
-      .prisma-step-number {
-        display: inline-block;
-        width: 24px;
-        height: 24px;
-        background: white;
-        color: #667eea;
-        border-radius: 50%;
-        text-align: center;
-        line-height: 24px;
-        font-weight: 700;
-        font-size: 13px;
-        margin-right: 8px;
-      }
-
-      .prisma-step-text {
-        font-size: 13px;
-        line-height: 1.5;
-      }
-
-      /* Prisma 설명 박스 */
-      .prisma-info-box {
-        background: rgba(59, 130, 246, 0.1);
-        border: 1px solid rgba(59, 130, 246, 0.3);
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 16px;
-        max-height: 300px;
-        overflow-y: auto;
-      }
-
-      .prisma-info-box.warning {
-        background: rgba(245, 158, 11, 0.1);
-        border-color: rgba(245, 158, 11, 0.3);
-      }
-
-      .prisma-info-box.success {
-        background: rgba(34, 197, 94, 0.1);
-        border-color: rgba(34, 197, 94, 0.3);
-      }
-
-      .prisma-info-title {
-        font-weight: 600;
-        font-size: 14px;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .prisma-info-content {
-        font-size: 13px;
-        line-height: 1.6;
-        color: rgba(255, 255, 255, 0.8);
-      }
-
-      .prisma-info-content ul {
-        margin: 8px 0;
-        padding-left: 20px;
-      }
-
-      .prisma-info-content li {
-        margin: 4px 0;
-      }
-
-      /* Input 그룹 */
-      .input-group {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-bottom: 16px;
-      }
-
-      .input-group label {
-        font-size: 14px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.9);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .input-group label .required {
-        color: #ef4444;
-      }
-
-      .input-group input {
-        width: 100%;
-        padding: 12px 16px;
-        background: rgba(0, 0, 0, 0.3);
-        border: 2px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        color: #e4e6eb;
-        font-size: 14px;
-        font-family: inherit;
-        transition: all 0.2s;
-      }
-
-      .input-group input:focus {
-        outline: none;
-        border-color: #6366f1;
-        background: rgba(0, 0, 0, 0.4);
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-      }
-
-      .input-group input::placeholder {
-        color: rgba(255, 255, 255, 0.4);
-      }
-
-      .input-hint {
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.5);
-        margin-top: -4px;
-      }
-
-      /* 버튼 그룹 */
-      .button-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 12px;
-        margin-top: 16px;
-      }
-
-      .btn-large {
-        padding: 14px 20px;
-        font-size: 15px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-      }
-
-      /* 섹션 헤더 */
-      .section-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-      }
-
-      .section-icon {
-        font-size: 24px;
-      }
-
-      .section-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #e4e6eb;
-      }
-
-      .section-subtitle {
-        font-size: 13px;
-        color: rgba(255, 255, 255, 0.6);
-        margin-left: auto;
-      }
-
-      /* 카드 */
-      .card {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-
-      .card-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 16px;
-      }
-
-      .card-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: #f3f4f6;
-      }
-
-      /* 서비스 목록 */
-      .services-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        overflow-y: auto;
-      }
-
-      .service-item {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 16px;
-      }
-
-      .service-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 12px;
-      }
-
-      .service-icon {
-        font-size: 24px;
-      }
-
-      .service-info {
-        flex: 1;
-      }
-
-      .service-name {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
-
-      .service-port {
-        font-size: 12px;
-        color: #9ca3af;
-      }
-
-      .service-status {
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
-      }
-
-      .service-status.running {
-        background: rgba(34, 197, 94, 0.2);
-        color: #22c55e;
-      }
-
-      .service-status.stopped {
-        background: rgba(156, 163, 175, 0.2);
-        color: #9ca3af;
-      }
-
-      .service-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 12px;
-      }
-
-      .service-actions .btn {
-        flex: 1;
-      }
-
-      /* 콘솔 */
-      .console-output {
-        background: rgba(0, 0, 0, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 16px;
-        font-family: 'Consolas', 'Monaco', monospace;
-        font-size: 12px;
-        color: #d1d5db;
-        overflow-y: auto;
-        height: 100%;
-        min-height: 200px;
-        white-space: pre-wrap;
-      }
-
-      /* 패키지 탭 */
-      .package-section {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      .package-controls {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-      }
-
-      .search-input {
-        flex: 1;
-        padding: 10px 16px;
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        color: #e4e6eb;
-        font-size: 13px;
-        font-family: inherit;
-      }
-
-      .search-input:focus {
-        outline: none;
-        border-color: #6366f1;
-      }
-
-      .filter-buttons {
-        display: flex;
-        gap: 8px;
-      }
-
-      .filter-btn {
-        padding: 8px 16px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 12px;
-        cursor: pointer;
-        font-family: inherit;
-      }
-
-      .filter-btn.active {
-        background: rgba(99, 102, 241, 0.2);
-        border-color: #6366f1;
-        color: #6366f1;
-      }
-
-      .package-stats {
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.5);
-        display: flex;
-        gap: 12px;
-      }
-
-      /* 패키지 테이블 */
-      .package-table-container {
-        flex: 1;
-        overflow-y: auto;
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        max-height: 500px;
-        min-height: 300px;
-      }
-
-      .package-table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-
-      .package-table th {
-        position: sticky;
-        top: 0;
-        background: rgba(0, 0, 0, 0.9);
-        backdrop-filter: blur(10px);
-        text-align: left;
-        padding: 12px;
-        font-size: 12px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.7);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        cursor: pointer;
-        user-select: none;
-        transition: all 0.2s;
-      }
-
-      .package-table th:hover {
-        background: rgba(99, 102, 241, 0.2);
-        color: #6366f1;
-      }
-
-      .package-table th.sortable::after {
-        content: ' ⇅';
-        opacity: 0.3;
-        font-size: 10px;
-      }
-
-      .package-table th.sort-asc::after {
-        content: ' ▲';
-        opacity: 1;
-        color: #6366f1;
-      }
-
-      .package-table th.sort-desc::after {
-        content: ' ▼';
-        opacity: 1;
-        color: #6366f1;
-      }
-
-      .package-table td {
-        padding: 12px;
-        font-size: 13px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      }
-
-      .package-table tr:hover {
-        background: rgba(255, 255, 255, 0.03);
-      }
-
-      .package-name-col {
-        font-weight: 500;
-      }
-
-      .package-version-col {
-        font-family: 'Consolas', 'Monaco', monospace;
-        color: #60a5fa;
-        font-size: 12px;
-      }
-
-      .type-badge {
-        display: inline-block;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 10px;
-        font-weight: 600;
-      }
-
-      .type-badge.prod {
-        background: rgba(52, 211, 153, 0.2);
-        color: #34d399;
-      }
-
-      .type-badge.dev {
-        background: rgba(148, 163, 184, 0.2);
-        color: #94a3b8;
-      }
-
-      /* 체크박스 스타일 */
-      .update-checkbox {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-        accent-color: #6366f1;
-      }
-
-      /* 업데이트 패키지 */
-      .update-list {
-        max-height: 300px;
-        overflow-y: auto;
-      }
-
-      .update-item {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .update-info {
-        flex: 1;
-      }
-
-      .update-name {
-        font-weight: 600;
-        font-size: 13px;
-        margin-bottom: 4px;
-      }
-
-      .update-versions {
-        font-size: 11px;
-        color: rgba(255, 255, 255, 0.6);
-      }
-
-      .version-current {
-        color: #60a5fa;
-      }
-
-      .version-latest {
-        color: #34d399;
-      }
-
-      .update-badge {
-        padding: 4px 8px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-      }
-
-      .update-badge.major {
-        background: rgba(239, 68, 68, 0.2);
-        color: #f87171;
-      }
-
-      .update-badge.minor {
-        background: rgba(251, 191, 36, 0.2);
-        color: #fbbf24;
-      }
-
-      .update-badge.patch {
-        background: rgba(52, 211, 153, 0.2);
-        color: #34d399;
-      }
-
-      /* 스크롤바 */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 4px;
-      }
-
-      ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
-      }
-
-      /* 빈 상태 */
-      .empty-state {
-        text-align: center;
-        padding: 40px;
-        color: rgba(255, 255, 255, 0.4);
-      }
-
-      .empty-icon {
-        font-size: 48px;
-        margin-bottom: 16px;
-      }
-
-      /* 모달 */
-      .modal-overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.7);
-        backdrop-filter: blur(4px);
-        z-index: 1000;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .modal-overlay.active {
-        display: flex;
-      }
-
-      .modal {
-        background: #2a2a2a;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        width: 90%;
-        max-width: 600px;
-        max-height: 80vh;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        animation: modalSlideIn 0.2s ease;
-      }
-
-      @keyframes modalSlideIn {
-        from {
-          transform: translateY(-20px);
-          opacity: 0;
-        }
-        to {
-          transform: translateY(0);
-          opacity: 1;
-        }
-      }
-
-      .modal-header {
-        padding: 20px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .modal-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #f3f4f6;
-      }
-
-      .modal-close {
-        background: none;
-        border: none;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 24px;
-        cursor: pointer;
-        padding: 0;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 6px;
-        transition: all 0.2s;
-      }
-
-      .modal-close:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: #fff;
-      }
-
-      .modal-body {
-        padding: 20px;
-        overflow-y: auto;
-        flex: 1;
-      }
-
-      .modal-loading {
-        text-align: center;
-        padding: 40px;
-        color: rgba(255, 255, 255, 0.5);
-      }
-
-      .modal-spinner {
-        font-size: 32px;
-        animation: spin 1s linear infinite;
-      }
-
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-
-      /* 스피너 (버튼 내부용) */
-      .spinner {
-        display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-top-color: #fff;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        vertical-align: middle;
-        margin-right: 8px;
-      }
-
-      .package-detail-section {
-        margin-bottom: 24px;
-      }
-
-      .package-detail-label {
-        font-size: 12px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.5);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 8px;
-      }
-
-      .package-detail-value {
-        font-size: 14px;
-        color: #e4e6eb;
-        line-height: 1.6;
-      }
-
-      .package-detail-value a {
-        color: #6366f1;
-        text-decoration: none;
-      }
-
-      .package-detail-value a:hover {
-        text-decoration: underline;
-      }
-
-      .package-detail-badge {
-        display: inline-block;
-        padding: 4px 10px;
-        background: rgba(99, 102, 241, 0.2);
-        color: #6366f1;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 600;
-        margin-right: 8px;
-        margin-bottom: 4px;
-      }
-
-      .package-detail-description {
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 12px;
-        font-size: 13px;
-        line-height: 1.6;
-      }
-
-      .package-detail-links {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-
-      .package-detail-link {
-        padding: 8px 16px;
-        background: rgba(99, 102, 241, 0.1);
-        border: 1px solid rgba(99, 102, 241, 0.3);
-        border-radius: 8px;
-        color: #6366f1;
-        text-decoration: none;
-        font-size: 13px;
-        font-weight: 500;
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .package-detail-link:hover {
-        background: rgba(99, 102, 241, 0.2);
-        border-color: #6366f1;
-      }
-
-      .package-table tbody tr {
-        cursor: pointer;
-      }
-    </style>
+    <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
     <div class="container">
       <!-- 헤더 -->
-      <div class="header">
+      <header class="header" role="banner">
         <div class="logo">🏛️ Papyrus Service Manager</div>
         <div class="header-actions">
-         
-          <button class="btn btn-secondary" onclick="openDevTools()">
+          <button
+            class="btn btn-secondary"
+            onclick="openDevTools()"
+            aria-label="개발자 도구 열기"
+          >
             🔧 개발자 도구
           </button>
         </div>
-      </div>
+      </header>
 
       <!-- 탭 메뉴 -->
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('services')">
+      <nav class="tabs" role="tablist" aria-label="주요 메뉴">
+        <button
+          class="tab-btn active"
+          onclick="switchTab('services')"
+          role="tab"
+          aria-selected="true"
+          aria-controls="tab-services"
+        >
           🔧 서비스
         </button>
-        <button class="tab-btn" onclick="switchTab('prisma')">
+        <button
+          class="tab-btn"
+          onclick="switchTab('prisma')"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-prisma"
+        >
           🗄️ Prisma
         </button>
-        <button class="tab-btn" onclick="switchTab('packages')">
+        <button
+          class="tab-btn"
+          onclick="switchTab('env')"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-env"
+        >
+          ⚙️ 환경 변수
+        </button>
+        <button
+          class="tab-btn"
+          onclick="switchTab('packages')"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-packages"
+        >
           📦 패키지
         </button>
-        <button class="tab-btn" onclick="switchTab('logs')">
+        <button
+          class="tab-btn"
+          onclick="switchTab('logs')"
+          role="tab"
+          aria-selected="false"
+          aria-controls="tab-logs"
+        >
           📋 로그
         </button>
-      </div>
+      </nav>
 
       <!-- 탭 콘텐츠 래퍼 -->
       <div class="tab-contents-wrapper">
         <!-- 서비스 탭 -->
         <div id="tab-services" class="tab-content active">
-        <!-- 서비스 목록 -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">서비스</h2>
-          </div>
-          <div class="services-list" id="servicesList"></div>
-        </div>
-
-        <!-- Docker 관리 -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">🐳 Docker 관리</h2>
-          </div>
-          <div style="padding: 20px;">
-            <div class="prisma-info-box warning">
-              <div class="prisma-info-title">⚠️ Docker 완전 초기화</div>
-              <div class="prisma-info-content">
-                <strong>이 작업은 다음을 모두 삭제합니다:</strong>
-                <ul>
-                  <li>🗑️ <strong>컨테이너:</strong> 모든 Papyrus Docker 컨테이너 (MySQL, Nginx)</li>
-                  <li>🗑️ <strong>볼륨:</strong> 모든 데이터베이스 데이터 (영구 삭제)</li>
-                  <li>🗑️ <strong>이미지:</strong> MySQL 및 Nginx 이미지</li>
-                  <li>🗑️ <strong>네트워크:</strong> 사용되지 않는 네트워크</li>
-                </ul>
-                <br>
-                <strong>💡 언제 사용하나요?</strong>
-                <ul>
-                  <li>Docker 환경을 처음부터 다시 구성하고 싶을 때</li>
-                  <li>데이터베이스를 완전히 초기화하고 싶을 때</li>
-                  <li>Docker 관련 문제가 발생했을 때</li>
-                </ul>
-                <br>
-                <strong>⚠️ 주의:</strong> 이 작업은 되돌릴 수 없습니다. 모든 데이터가 영구 삭제됩니다.
-              </div>
-            </div>
-            <button id="resetDockerButton" class="btn btn-danger btn-large" onclick="resetDocker()" style="width: 100%; margin-top: 16px;">
-              🗑️ Docker 완전 초기화
-            </button>
-          </div>
-        </div>
-
-        <!-- 실시간 콘솔 -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">🖥️ 실시간 콘솔</h2>
-            <button class="btn btn-secondary btn-sm" onclick="clearConsoleLog()">
-              지우기
-            </button>
-          </div>
-          <div class="console-output" id="consoleOutput"></div>
-        </div>
-      </div>
-
-      <!-- Prisma 탭 -->
-      <div id="tab-prisma" class="tab-content">
-        <!-- Prisma 서브탭 -->
-        <div class="prisma-subtabs">
-          <button class="prisma-subtab-btn active" onclick="switchPrismaSubTab('overview')">
-            📋 개요
-          </button>
-          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('schema')">
-            🔨 스키마
-          </button>
-          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('migration')">
-            🚀 마이그레이션
-          </button>
-          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('studio')">
-            🎨 Studio
-          </button>
-          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('seed')">
-            🌱 Seed
-          </button>
-          <button class="prisma-subtab-btn" onclick="switchPrismaSubTab('history')">
-            📚 히스토리
-          </button>
-        </div>
-
-        <!-- 개요 탭 -->
-        <div id="prisma-subtab-overview" class="prisma-subtab-content active">
-          <!-- 가이드 배너 -->
-          <div class="prisma-guide">
-            <div class="prisma-guide-title">
-              <span>🗄️</span>
-              <span>Prisma 데이터베이스 관리 가이드</span>
-            </div>
-            <div style="font-size: 14px; margin-bottom: 12px; opacity: 0.9;">
-              Prisma를 사용하여 데이터베이스 스키마를 안전하게 관리하고 변경할 수 있습니다.
-            </div>
-            <div class="prisma-guide-steps">
-              <div class="prisma-step">
-                <div><span class="prisma-step-number">1</span><strong>스키마 편집</strong></div>
-                <div class="prisma-step-text">libs/db/prisma/*.prisma 파일을 수정합니다</div>
-              </div>
-              <div class="prisma-step">
-                <div><span class="prisma-step-number">2</span><strong>스키마 빌드</strong></div>
-                <div class="prisma-step-text">여러 파일을 하나로 병합합니다</div>
-              </div>
-              <div class="prisma-step">
-                <div><span class="prisma-step-number">3</span><strong>마이그레이션</strong></div>
-                <div class="prisma-step-text">변경사항을 데이터베이스에 적용합니다</div>
-              </div>
-              <div class="prisma-step">
-                <div><span class="prisma-step-number">4</span><strong>확인</strong></div>
-                <div class="prisma-step-text">Prisma Studio로 결과를 확인합니다</div>
-              </div>
-            </div>
-          </div>
-
-        <!-- 현재 상태 -->
-        <div class="card">
-          <div class="section-header">
-            <span class="section-icon">📊</span>
-            <span class="section-title">현재 상태</span>
-            <button class="btn btn-secondary btn-sm" onclick="refreshPrismaStatus()" style="margin-left: auto;">
-              🔄 새로고침
-            </button>
-          </div>
-          <div class="services-list">
-            <div class="service-item">
-              <div class="service-name">
-                <strong>스키마 파일</strong>
-                <div style="font-size: 11px; color: rgba(255,255,255,0.5);">apps/api/prisma/schema.prisma</div>
-              </div>
-              <div class="service-status" id="prismaSchemaStatus">
-                <div class="status-dot pending"></div>
-                <span>확인 중...</span>
-              </div>
-            </div>
-            <div class="service-item">
-              <div class="service-name">
-                <strong>마이그레이션</strong>
-                <div style="font-size: 11px; color: rgba(255,255,255,0.5);">apps/api/prisma/migrations/</div>
-              </div>
-              <div class="service-status" id="prismaMigrationsStatus">
-                <div class="status-dot pending"></div>
-                <span>확인 중...</span>
-              </div>
-            </div>
-            <div class="service-item">
-              <div class="service-name">
-                <strong>Prisma Studio</strong>
-                <div style="font-size: 11px; color: rgba(255,255,255,0.5);">http://localhost:5555</div>
-              </div>
-              <div class="service-status" id="prismaStudioStatus">
-                <div class="status-dot stopped"></div>
-                <span>중지됨</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        </div>
-
-        <!-- 스키마 탭 -->
-        <div id="prisma-subtab-schema" class="prisma-subtab-content">
-          <!-- STEP 1: 스키마 빌드 -->
           <div class="card">
-          <div class="section-header">
-            <span class="section-icon">🔨</span>
-            <span class="section-title">STEP 1. 스키마 빌드</span>
-            <span class="section-subtitle">필수 단계</span>
-          </div>
-
-          <div class="prisma-info-box">
-            <div class="prisma-info-title">📖 스키마 빌드란?</div>
-            <div class="prisma-info-content">
-              <strong>libs/db/prisma/</strong> 폴더에 분산된 여러 .prisma 파일들을 하나의 <strong>apps/api/prisma/schema.prisma</strong> 파일로 자동 병합하는 과정입니다.
-              <ul>
-                <li><strong>base.prisma:</strong> 데이터베이스 연결 설정</li>
-                <li><strong>common.prisma:</strong> 공통 모델 (Tag, Attachment 등)</li>
-                <li><strong>country.prisma, event.prisma 등:</strong> 도메인별 모델</li>
-              </ul>
+            <div class="card-header">
+              <h2 class="card-title">서비스</h2>
             </div>
+            <div class="services-list" id="servicesList"></div>
           </div>
 
-          <div class="button-grid">
-            <button id="buildSchemaButton" class="btn btn-primary btn-large" onclick="buildPrismaSchema()">
-              🔨 스키마 빌드 실행
-            </button>
-            <button id="validateSchemaButton" class="btn btn-secondary btn-large" onclick="validatePrismaSchema()">
-              ✅ 스키마 검증
-            </button>
-            <button id="generateClientButton" class="btn btn-secondary btn-large" onclick="generatePrismaClient()">
-              🔄 Client 생성
-            </button>
-          </div>
-
-          <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 16px;">
-            <!-- 스키마 빌드 설명 -->
-            <div class="prisma-info-box">
-              <div class="prisma-info-title">🔨 스키마 빌드 실행 (Schema Build)</div>
-              <div class="prisma-info-content">
-                <strong>🎯 목적:</strong> 모듈화된 스키마 파일들을 하나의 통합 스키마로 병합합니다.
-                <ul>
-                  <li><strong>입력:</strong> libs/db/prisma/*.prisma (base, common, country, event, user 등)</li>
-                  <li><strong>출력:</strong> apps/api/prisma/schema.prisma (통합 파일)</li>
-                  <li><strong>작동 방식:</strong> 모든 분산 파일을 읽어 하나의 파일로 자동 병합</li>
-                </ul>
-                <strong>✅ 언제 실행?</strong>
-                <ul>
-                  <li>libs/db/prisma/ 폴더의 어떤 .prisma 파일이든 수정한 직후</li>
-                  <li>새로운 모델, 필드, 관계를 추가/수정/삭제한 경우</li>
-                  <li>데이터베이스 타입, 인덱스, 제약조건을 변경한 경우</li>
-                </ul>
-                <strong>⚠️ 주의:</strong> 빌드 없이 마이그레이션하면 이전 스키마가 적용되어 예상과 다른 결과가 나올 수 있습니다!
-              </div>
-            </div>
-
-            <!-- 스키마 검증 설명 -->
-            <div class="prisma-info-box">
-              <div class="prisma-info-title">✅ 스키마 검증 (Schema Validation)</div>
-              <div class="prisma-info-content">
-                <strong>🎯 목적:</strong> 통합된 스키마의 문법, 구조, 관계가 올바른지 검증합니다.
-                <ul>
-                  <li><strong>문법 검증:</strong> Prisma 문법 오류 체크 (오타, 잘못된 키워드 등)</li>
-                  <li><strong>타입 검증:</strong> 필드 타입이 올바른지 확인 (String, Int, DateTime 등)</li>
-                  <li><strong>관계 검증:</strong> @relation의 참조가 올바른지 확인</li>
-                  <li><strong>제약조건 검증:</strong> @unique, @id, @@index 등의 유효성 확인</li>
-                </ul>
-                <strong>✅ 언제 실행?</strong>
-                <ul>
-                  <li>스키마 빌드 실행 직후 (마이그레이션 전)</li>
-                  <li>복잡한 관계나 제약조건을 추가한 경우</li>
-                  <li>마이그레이션 오류가 발생했을 때 원인 파악용</li>
-                </ul>
-                <strong>💡 팁:</strong> 검증 성공 시에만 마이그레이션을 진행하면 실수를 줄일 수 있습니다.
-              </div>
-            </div>
-
-            <!-- Client 생성 설명 -->
-            <div class="prisma-info-box">
-              <div class="prisma-info-title">🔄 Prisma Client 생성 (Generate Client)</div>
-              <div class="prisma-info-content">
-                <strong>🎯 목적:</strong> 스키마를 기반으로 타입 안전한 TypeScript 데이터베이스 클라이언트를 자동 생성합니다.
-                <ul>
-                  <li><strong>생성 위치:</strong> node_modules/.prisma/client/</li>
-                  <li><strong>생성 내용:</strong> 모든 모델에 대한 TypeScript 타입 + CRUD 메서드</li>
-                  <li><strong>타입 안전성:</strong> 컴파일 시점에 데이터베이스 오류를 잡을 수 있음</li>
-                  <li><strong>자동완성:</strong> IDE에서 필드명, 메서드 자동완성 지원</li>
-                </ul>
-                <strong>✅ 언제 실행?</strong>
-                <ul>
-                  <li><strong>자동 실행:</strong> 마이그레이션 성공 후 자동으로 실행됨</li>
-                  <li><strong>수동 실행:</strong> 스키마는 변경하지 않고 Client만 재생성하고 싶을 때</li>
-                  <li><strong>오류 해결:</strong> Client 관련 TypeScript 에러가 발생할 때</li>
-                  <li><strong>의존성 업데이트:</strong> Prisma 패키지를 업데이트한 후</li>
-                </ul>
-                <strong>💡 예시:</strong> User 모델 추가 → Client 생성 → 코드에서 <code>prisma.user.create()</code> 사용 가능
-              </div>
-            </div>
-          </div>
-
-          <div class="input-hint" style="margin-top: 16px; padding: 12px; background: rgba(99, 102, 241, 0.1); border-radius: 8px;">
-            💡 <strong>권장 워크플로우:</strong><br>
-            1️⃣ libs/db/prisma/*.prisma 파일 수정 →
-            2️⃣ 🔨 스키마 빌드 실행 →
-            3️⃣ ✅ 스키마 검증 (오류 확인) →
-            4️⃣ 마이그레이션 탭으로 이동하여 변경사항 적용 →
-            5️⃣ 🔄 Client 생성 (마이그레이션 후 자동 실행됨)
-          </div>
-          </div>
-        </div>
-
-        <!-- 마이그레이션 탭 -->
-        <div id="prisma-subtab-migration" class="prisma-subtab-content">
-          <!-- STEP 2: 마이그레이션 -->
+          <!-- Nestia SDK 빌드 -->
           <div class="card">
-          <div class="section-header">
-            <span class="section-icon">🚀</span>
-            <span class="section-title">STEP 2. 마이그레이션 실행</span>
-            <span class="section-subtitle">DB 변경 적용</span>
-          </div>
-
-          <div class="prisma-info-box warning">
-            <div class="prisma-info-title">⚠️ 마이그레이션이란?</div>
-            <div class="prisma-info-content">
-              데이터베이스 스키마 변경사항을 안전하게 적용하고 버전 관리하는 방식입니다.
-              <ul>
-                <li><strong>자동 생성:</strong> 스키마 차이를 비교하여 SQL 파일 자동 생성</li>
-                <li><strong>버전 관리:</strong> 모든 변경 히스토리를 migrations/ 폴더에 저장</li>
-                <li><strong>롤백 가능:</strong> 문제 발생 시 이전 버전으로 되돌릴 수 있음</li>
-                <li><strong>팀 협업:</strong> Git으로 마이그레이션 파일을 공유하여 동일한 스키마 유지</li>
-              </ul>
+            <div class="card-header">
+              <h2 class="card-title">🔧 Nestia SDK 빌드</h2>
+            </div>
+            <div class="card-body">
+              <div class="prisma-info-box">
+                <div class="prisma-info-title">📘 Nestia SDK란?</div>
+                <div class="prisma-info-content">
+                  <strong
+                    >NestJS API를 기반으로 타입 안전한 클라이언트 SDK를 자동
+                    생성합니다.</strong
+                  >
+                  <ul>
+                    <li>
+                      ✅ <strong>자동 타입 생성:</strong> 서버 DTO → 클라이언트
+                      타입
+                    </li>
+                    <li>
+                      ✅ <strong>타입 안전성:</strong> 컴파일 타임에 API 오류
+                      감지
+                    </li>
+                    <li>
+                      ✅ <strong>런타임 검증:</strong> typia로 데이터 유효성
+                      검사
+                    </li>
+                    <li>
+                      ✅ <strong>Swagger 생성:</strong> API 문서 자동 생성
+                    </li>
+                  </ul>
+                  <br />
+                  <strong>💡 언제 실행하나요?</strong>
+                  <ul>
+                    <li>서버 API 컨트롤러를 추가/수정한 후</li>
+                    <li>DTO (Request/Response) 구조를 변경한 후</li>
+                    <li>클라이언트에서 타입 에러가 발생할 때</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="button-grid mt-16">
+                <button
+                  id="buildNestiaButton"
+                  class="btn btn-primary btn-large"
+                  onclick="buildNestiaSdk()"
+                >
+                  🔨 SDK 빌드
+                </button>
+                <button
+                  id="validateNestiaButton"
+                  class="btn btn-secondary btn-large"
+                  onclick="validateNestiaSdk()"
+                >
+                  ✅ SDK 검증
+                </button>
+              </div>
+              <div class="input-hint hint-box">
+                💡 <strong>출력 위치:</strong><br />
+                • SDK: <code>apps/api/src/api/</code><br />
+                • Swagger: <code>apps/api/swagger.json</code>
+              </div>
             </div>
           </div>
 
-          <div class="input-group">
-            <label for="migrationName">
-              마이그레이션 이름 <span class="required">*</span>
-            </label>
-            <input
-              type="text"
-              id="migrationName"
-              placeholder="예: add_user_email_field, create_event_category_table"
-            />
-            <div class="input-hint">
-              📝 <strong>네이밍 규칙 (Migration Naming Convention)</strong>
-            </div>
-          </div>
-
-          <!-- 마이그레이션 명칭 규칙 상세 -->
-          <div class="prisma-info-box" style="margin-top: 12px;">
-            <div class="prisma-info-title">📝 마이그레이션 명칭 규칙</div>
-            <div class="prisma-info-content">
-              <strong>기본 원칙:</strong>
-              <ul>
-                <li>영문 소문자와 언더스코어(_)만 사용</li>
-                <li>동사로 시작하여 무엇을 하는지 명확히 표현</li>
-                <li>구체적이고 설명적인 이름 사용</li>
-                <li>공백, 대문자, 특수문자 사용 금지</li>
-              </ul>
-
-              <strong>📋 작업별 명칭 패턴:</strong>
-              <ul>
-                <li><strong>테이블 생성:</strong> <code>create_[테이블명]_table</code>
-                  <br>예: <code>create_user_profile_table</code>, <code>create_event_category_table</code>
-                </li>
-                <li><strong>필드 추가:</strong> <code>add_[테이블명]_[필드명]_field</code>
-                  <br>예: <code>add_user_email_field</code>, <code>add_event_start_date_field</code>
-                </li>
-                <li><strong>필드 수정:</strong> <code>modify_[테이블명]_[필드명]_to_[타입]</code>
-                  <br>예: <code>modify_user_age_to_int</code>, <code>modify_event_title_to_text</code>
-                </li>
-                <li><strong>필드 제거:</strong> <code>remove_[테이블명]_[필드명]_field</code>
-                  <br>예: <code>remove_user_nickname_field</code>
-                </li>
-                <li><strong>인덱스 추가:</strong> <code>add_index_on_[테이블명]_[필드명]</code>
-                  <br>예: <code>add_index_on_user_email</code>, <code>add_index_on_event_date</code>
-                </li>
-                <li><strong>관계 추가:</strong> <code>add_relation_[테이블1]_to_[테이블2]</code>
-                  <br>예: <code>add_relation_user_to_post</code>, <code>add_relation_event_to_category</code>
-                </li>
-                <li><strong>테이블 이름 변경:</strong> <code>rename_[기존명]_to_[새이름]_table</code>
-                  <br>예: <code>rename_old_user_to_member_table</code>
-                </li>
-                <li><strong>초기 설정:</strong> <code>init</code> 또는 <code>initial_setup</code>
-                  <br>예: <code>init</code>, <code>initial_database_setup</code>
-                </li>
-              </ul>
-
-              <strong>✅ 좋은 예시:</strong>
-              <ul>
-                <li><code>add_user_birth_date_field</code> - 명확하고 구체적</li>
-                <li><code>create_event_participant_table</code> - 테이블 생성 의도 명확</li>
-                <li><code>add_index_on_country_code</code> - 인덱스 추가 위치 명확</li>
-                <li><code>modify_event_status_to_enum</code> - 변경 내용 명확</li>
-              </ul>
-
-              <strong>❌ 나쁜 예시:</strong>
-              <ul>
-                <li><code>update</code> - 너무 모호함</li>
-                <li><code>fix_bug</code> - 무엇을 고쳤는지 불명확</li>
-                <li><code>addUserField</code> - camelCase 사용 (언더스코어 사용할 것)</li>
-                <li><code>new-table</code> - 하이픈 사용 금지 (언더스코어 사용)</li>
-                <li><code>임시작업</code> - 한글 사용 금지 (영문 사용)</li>
-              </ul>
-
-              <strong>💡 팁:</strong>
-              <ul>
-                <li>Git 커밋 메시지처럼 미래의 자신과 팀원이 이해할 수 있게 작성</li>
-                <li>약어보다는 전체 단어 사용 (예: <code>usr</code> ❌ → <code>user</code> ✅)</li>
-                <li>날짜는 Prisma가 자동으로 타임스탬프 추가하므로 이름에 포함 불필요</li>
-              </ul>
-            </div>
-          </div>
-
-          <button id="runMigrationButton" class="btn btn-primary btn-large" onclick="runPrismaMigration()" style="width: 100%;">
-            🚀 마이그레이션 실행
-          </button>
-
-          <div class="prisma-info-box warning" style="margin-top: 16px;">
-            <div class="prisma-info-title">⚠️ 주의사항</div>
-            <div class="prisma-info-content">
-              <ul>
-                <li>마이그레이션은 <strong>실제 데이터베이스를 변경</strong>합니다</li>
-                <li>실행 전에 반드시 <strong>백업</strong>을 권장합니다</li>
-                <li>프로덕션 환경에서는 <strong>팀원과 협의 후</strong> 실행하세요</li>
-              </ul>
-            </div>
-          </div>
-
-          <div style="margin-top: 16px;">
-            <button class="btn btn-secondary" onclick="checkMigrationStatus()" style="width: 100%;">
-              📊 마이그레이션 상태 확인
-            </button>
-          </div>
-          </div>
-        </div>
-
-        <!-- Studio 탭 -->
-        <div id="prisma-subtab-studio" class="prisma-subtab-content">
-          <!-- STEP 3: Prisma Studio -->
+          <!-- Docker 관리 -->
           <div class="card">
-          <div class="section-header">
-            <span class="section-icon">🎨</span>
-            <span class="section-title">STEP 3. 데이터 확인</span>
-            <span class="section-subtitle">선택 사항</span>
-          </div>
-
-          <div class="prisma-info-box success">
-            <div class="prisma-info-title">🎨 Prisma Studio란?</div>
-            <div class="prisma-info-content">
-              데이터베이스를 시각적으로 탐색하고 편집할 수 있는 웹 기반 GUI 도구입니다.
-              <ul>
-                <li><strong>테이블 브라우징:</strong> 모든 테이블과 레코드를 한눈에 확인</li>
-                <li><strong>데이터 편집:</strong> 레코드 추가, 수정, 삭제 가능</li>
-                <li><strong>관계 탐색:</strong> 테이블 간의 관계를 시각적으로 확인</li>
-                <li><strong>필터링:</strong> 조건에 맞는 데이터만 검색</li>
-              </ul>
+            <div class="card-header">
+              <h2 class="card-title">🐳 Docker 관리</h2>
+            </div>
+            <div class="card-body">
+              <div class="prisma-info-box warning">
+                <div class="prisma-info-title">⚠️ Docker 완전 초기화</div>
+                <div class="prisma-info-content">
+                  <strong>이 작업은 다음을 모두 삭제합니다:</strong>
+                  <ul>
+                    <li>
+                      🗑️ <strong>컨테이너:</strong> 모든 Papyrus Docker 컨테이너
+                      (MySQL, Nginx)
+                    </li>
+                    <li>
+                      🗑️ <strong>볼륨:</strong> 모든 데이터베이스 데이터 (영구
+                      삭제)
+                    </li>
+                    <li>🗑️ <strong>이미지:</strong> MySQL 및 Nginx 이미지</li>
+                    <li>
+                      🗑️ <strong>네트워크:</strong> 사용되지 않는 네트워크
+                    </li>
+                  </ul>
+                  <br />
+                  <strong>💡 언제 사용하나요?</strong>
+                  <ul>
+                    <li>Docker 환경을 처음부터 다시 구성하고 싶을 때</li>
+                    <li>데이터베이스를 완전히 초기화하고 싶을 때</li>
+                    <li>Docker 관련 문제가 발생했을 때</li>
+                  </ul>
+                  <br />
+                  <strong>⚠️ 주의:</strong> 이 작업은 되돌릴 수 없습니다. 모든
+                  데이터가 영구 삭제됩니다.
+                </div>
+              </div>
+              <button
+                id="resetDockerButton"
+                class="btn btn-danger btn-large w-full mt-16"
+                onclick="resetDocker()"
+              >
+                🗑️ Docker 완전 초기화
+              </button>
             </div>
           </div>
 
-          <div class="button-grid">
-            <button class="btn btn-primary btn-large" id="startStudioBtn" onclick="startPrismaStudio()">
-              ▶ Studio 시작
-            </button>
-            <button class="btn btn-danger btn-large" id="stopStudioBtn" onclick="stopPrismaStudio()" style="display: none;">
-              ⏹ Studio 중지
-            </button>
-            <button class="btn btn-secondary btn-large" id="openStudioBtn" onclick="openStudioInBrowser()" style="display: none;">
-              🌐 브라우저에서 열기
-            </button>
-          </div>
-
-          <div class="input-hint" style="margin-top: 12px;">
-            🌐 Studio 실행 후 자동으로 <strong>http://localhost:5555</strong>에서 접속할 수 있습니다.
-          </div>
+          <!-- 실시간 콘솔 -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">🖥️ 실시간 콘솔</h2>
+              <button
+                class="btn btn-secondary btn-sm"
+                onclick="clearConsoleLog()"
+              >
+                지우기
+              </button>
+            </div>
+            <div class="console-output" id="consoleOutput"></div>
           </div>
         </div>
 
-        <!-- 히스토리 탭 -->
-        <div id="prisma-subtab-history" class="prisma-subtab-content">
-          <!-- 마이그레이션 히스토리 -->
-          <div class="card" style="flex: 1; display: flex; flex-direction: column;">
-          <div class="section-header">
-            <span class="section-icon">📚</span>
-            <span class="section-title">마이그레이션 히스토리</span>
-            <button class="btn btn-secondary btn-sm" onclick="loadMigrationHistory()" style="margin-left: auto;">
-              🔄 새로고침
+        <!-- Prisma 탭 -->
+        <div id="tab-prisma" class="tab-content">
+          <!-- Prisma 서브탭 -->
+          <div class="prisma-subtabs">
+            <button
+              class="prisma-subtab-btn active"
+              onclick="switchPrismaSubTab('overview')"
+            >
+              📋 개요
+            </button>
+            <button
+              class="prisma-subtab-btn"
+              onclick="switchPrismaSubTab('schema')"
+            >
+              🔨 스키마
+            </button>
+            <button
+              class="prisma-subtab-btn"
+              onclick="switchPrismaSubTab('migration')"
+            >
+              🚀 마이그레이션
+            </button>
+            <button
+              class="prisma-subtab-btn"
+              onclick="switchPrismaSubTab('studio')"
+            >
+              🎨 Studio
+            </button>
+            <button
+              class="prisma-subtab-btn"
+              onclick="switchPrismaSubTab('seed')"
+            >
+              🌱 Seed
+            </button>
+            <button
+              class="prisma-subtab-btn"
+              onclick="switchPrismaSubTab('history')"
+            >
+              📚 히스토리
             </button>
           </div>
 
-          <div class="prisma-info-box">
-            <div class="prisma-info-title">📋 히스토리 정보</div>
-            <div class="prisma-info-content">
-              지금까지 실행된 모든 마이그레이션 내역을 시간순으로 확인할 수 있습니다. 각 마이그레이션은 고유한 타임스탬프와 이름을 가지고 있습니다.
+          <!-- 개요 탭 -->
+          <div id="prisma-subtab-overview" class="prisma-subtab-content active">
+            <!-- 가이드 배너 -->
+            <div class="prisma-guide">
+              <div class="prisma-guide-title">
+                <span>🗄️</span>
+                <span>Prisma 데이터베이스 관리 가이드</span>
+              </div>
+              <div class="text-subtitle">
+                Prisma를 사용하여 데이터베이스 스키마를 안전하게 관리하고 변경할
+                수 있습니다.
+              </div>
+              <div class="prisma-guide-steps">
+                <div class="prisma-step">
+                  <div>
+                    <span class="prisma-step-number">1</span
+                    ><strong>스키마 편집</strong>
+                  </div>
+                  <div class="prisma-step-text">
+                    libs/db/prisma/*.prisma 파일을 수정합니다
+                  </div>
+                </div>
+                <div class="prisma-step">
+                  <div>
+                    <span class="prisma-step-number">2</span
+                    ><strong>스키마 빌드</strong>
+                  </div>
+                  <div class="prisma-step-text">
+                    여러 파일을 하나로 병합합니다
+                  </div>
+                </div>
+                <div class="prisma-step">
+                  <div>
+                    <span class="prisma-step-number">3</span
+                    ><strong>마이그레이션</strong>
+                  </div>
+                  <div class="prisma-step-text">
+                    변경사항을 데이터베이스에 적용합니다
+                  </div>
+                </div>
+                <div class="prisma-step">
+                  <div>
+                    <span class="prisma-step-number">4</span
+                    ><strong>확인</strong>
+                  </div>
+                  <div class="prisma-step-text">
+                    Prisma Studio로 결과를 확인합니다
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div class="package-table-wrapper">
-            <table class="package-table">
-              <thead>
-                <tr>
-                  <th style="width: 60%;">마이그레이션 이름</th>
-                  <th style="width: 40%;">적용 시간</th>
-                </tr>
-              </thead>
-              <tbody id="migrationHistoryTable">
-                <tr>
-                  <td colspan="2" class="empty-row">
-                    <div class="empty-state">
-                      <div class="empty-icon">📋</div>
-                      <div>아직 실행된 마이그레이션이 없습니다</div>
-                      <div style="font-size: 12px; margin-top: 8px; color: rgba(255,255,255,0.5);">
-                        첫 번째 마이그레이션을 실행하면 히스토리가 여기에 표시됩니다
-                      </div>
+            <!-- 현재 상태 -->
+            <div class="card">
+              <div class="section-header">
+                <span class="section-icon">📊</span>
+                <span class="section-title">현재 상태</span>
+                <button
+                  class="btn btn-secondary btn-sm ml-auto"
+                  onclick="refreshPrismaStatus()"
+                >
+                  🔄 새로고침
+                </button>
+              </div>
+              <div class="services-list">
+                <div class="service-item">
+                  <div class="service-name">
+                    <strong>스키마 파일</strong>
+                    <div class="text-sm text-muted">
+                      apps/api/prisma/schema.prisma
                     </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </div>
+                  <div class="service-status" id="prismaSchemaStatus">
+                    <div class="status-dot pending"></div>
+                    <span>확인 중...</span>
+                  </div>
+                </div>
+                <div class="service-item">
+                  <div class="service-name">
+                    <strong>마이그레이션</strong>
+                    <div
+                      style="font-size: 11px; color: rgba(255, 255, 255, 0.5)"
+                    >
+                      apps/api/prisma/migrations/
+                    </div>
+                  </div>
+                  <div class="service-status" id="prismaMigrationsStatus">
+                    <div class="status-dot pending"></div>
+                    <span>확인 중...</span>
+                  </div>
+                </div>
+                <div class="service-item">
+                  <div class="service-name">
+                    <strong>Prisma Studio</strong>
+                    <div
+                      style="font-size: 11px; color: rgba(255, 255, 255, 0.5)"
+                    >
+                      http://localhost:5555
+                    </div>
+                  </div>
+                  <div class="service-status" id="prismaStudioStatus">
+                    <div class="status-dot stopped"></div>
+                    <span>중지됨</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div><!-- .card 닫기 -->
-        </div><!-- prisma-subtab-history 닫기 -->
 
-        <!-- Seed 탭 -->
-        <div id="prisma-subtab-seed" class="prisma-subtab-content">
+          <!-- 스키마 탭 -->
+          <div id="prisma-subtab-schema" class="prisma-subtab-content">
+            <!-- STEP 1: 스키마 빌드 -->
+            <div class="card">
+              <div class="section-header">
+                <span class="section-icon">🔨</span>
+                <span class="section-title">STEP 1. 스키마 빌드</span>
+                <span class="section-subtitle">필수 단계</span>
+              </div>
+
+              <div class="prisma-info-box">
+                <div class="prisma-info-title">📖 스키마 빌드란?</div>
+                <div class="prisma-info-content">
+                  <strong>libs/db/prisma/</strong> 폴더에 분산된 여러 .prisma
+                  파일들을 하나의
+                  <strong>apps/api/prisma/schema.prisma</strong> 파일로 자동
+                  병합하는 과정입니다.
+                  <ul>
+                    <li>
+                      <strong>base.prisma:</strong> 데이터베이스 연결 설정
+                    </li>
+                    <li>
+                      <strong>common.prisma:</strong> 공통 모델 (Tag, Attachment
+                      등)
+                    </li>
+                    <li>
+                      <strong>country.prisma, event.prisma 등:</strong> 도메인별
+                      모델
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="button-grid">
+                <button
+                  id="buildSchemaButton"
+                  class="btn btn-primary btn-large"
+                  onclick="buildPrismaSchema()"
+                >
+                  🔨 스키마 빌드 실행
+                </button>
+                <button
+                  id="validateSchemaButton"
+                  class="btn btn-secondary btn-large"
+                  onclick="validatePrismaSchema()"
+                >
+                  ✅ 스키마 검증
+                </button>
+                <button
+                  id="generateClientButton"
+                  class="btn btn-secondary btn-large"
+                  onclick="generatePrismaClient()"
+                >
+                  🔄 Client 생성
+                </button>
+              </div>
+
+              <div
+                style="
+                  margin-top: 20px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 16px;
+                "
+              >
+                <!-- 스키마 빌드 설명 -->
+                <div class="prisma-info-box">
+                  <div class="prisma-info-title">
+                    🔨 스키마 빌드 실행 (Schema Build)
+                  </div>
+                  <div class="prisma-info-content">
+                    <strong>🎯 목적:</strong> 모듈화된 스키마 파일들을 하나의
+                    통합 스키마로 병합합니다.
+                    <ul>
+                      <li>
+                        <strong>입력:</strong> libs/db/prisma/*.prisma (base,
+                        common, country, event, user 등)
+                      </li>
+                      <li>
+                        <strong>출력:</strong> apps/api/prisma/schema.prisma
+                        (통합 파일)
+                      </li>
+                      <li>
+                        <strong>작동 방식:</strong> 모든 분산 파일을 읽어 하나의
+                        파일로 자동 병합
+                      </li>
+                    </ul>
+                    <strong>✅ 언제 실행?</strong>
+                    <ul>
+                      <li>
+                        libs/db/prisma/ 폴더의 어떤 .prisma 파일이든 수정한 직후
+                      </li>
+                      <li>새로운 모델, 필드, 관계를 추가/수정/삭제한 경우</li>
+                      <li>데이터베이스 타입, 인덱스, 제약조건을 변경한 경우</li>
+                    </ul>
+                    <strong>⚠️ 주의:</strong> 빌드 없이 마이그레이션하면 이전
+                    스키마가 적용되어 예상과 다른 결과가 나올 수 있습니다!
+                  </div>
+                </div>
+
+                <!-- 스키마 검증 설명 -->
+                <div class="prisma-info-box">
+                  <div class="prisma-info-title">
+                    ✅ 스키마 검증 (Schema Validation)
+                  </div>
+                  <div class="prisma-info-content">
+                    <strong>🎯 목적:</strong> 통합된 스키마의 문법, 구조, 관계가
+                    올바른지 검증합니다.
+                    <ul>
+                      <li>
+                        <strong>문법 검증:</strong> Prisma 문법 오류 체크 (오타,
+                        잘못된 키워드 등)
+                      </li>
+                      <li>
+                        <strong>타입 검증:</strong> 필드 타입이 올바른지 확인
+                        (String, Int, DateTime 등)
+                      </li>
+                      <li>
+                        <strong>관계 검증:</strong> @relation의 참조가 올바른지
+                        확인
+                      </li>
+                      <li>
+                        <strong>제약조건 검증:</strong> @unique, @id, @@index
+                        등의 유효성 확인
+                      </li>
+                    </ul>
+                    <strong>✅ 언제 실행?</strong>
+                    <ul>
+                      <li>스키마 빌드 실행 직후 (마이그레이션 전)</li>
+                      <li>복잡한 관계나 제약조건을 추가한 경우</li>
+                      <li>마이그레이션 오류가 발생했을 때 원인 파악용</li>
+                    </ul>
+                    <strong>💡 팁:</strong> 검증 성공 시에만 마이그레이션을
+                    진행하면 실수를 줄일 수 있습니다.
+                  </div>
+                </div>
+
+                <!-- Client 생성 설명 -->
+                <div class="prisma-info-box">
+                  <div class="prisma-info-title">
+                    🔄 Prisma Client 생성 (Generate Client)
+                  </div>
+                  <div class="prisma-info-content">
+                    <strong>🎯 목적:</strong> 스키마를 기반으로 타입 안전한
+                    TypeScript 데이터베이스 클라이언트를 자동 생성합니다.
+                    <ul>
+                      <li>
+                        <strong>생성 위치:</strong> node_modules/.prisma/client/
+                      </li>
+                      <li>
+                        <strong>생성 내용:</strong> 모든 모델에 대한 TypeScript
+                        타입 + CRUD 메서드
+                      </li>
+                      <li>
+                        <strong>타입 안전성:</strong> 컴파일 시점에 데이터베이스
+                        오류를 잡을 수 있음
+                      </li>
+                      <li>
+                        <strong>자동완성:</strong> IDE에서 필드명, 메서드
+                        자동완성 지원
+                      </li>
+                    </ul>
+                    <strong>✅ 언제 실행?</strong>
+                    <ul>
+                      <li>
+                        <strong>자동 실행:</strong> 마이그레이션 성공 후
+                        자동으로 실행됨
+                      </li>
+                      <li>
+                        <strong>수동 실행:</strong> 스키마는 변경하지 않고
+                        Client만 재생성하고 싶을 때
+                      </li>
+                      <li>
+                        <strong>오류 해결:</strong> Client 관련 TypeScript
+                        에러가 발생할 때
+                      </li>
+                      <li>
+                        <strong>의존성 업데이트:</strong> Prisma 패키지를
+                        업데이트한 후
+                      </li>
+                    </ul>
+                    <strong>💡 예시:</strong> User 모델 추가 → Client 생성 →
+                    코드에서 <code>prisma.user.create()</code> 사용 가능
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="input-hint"
+                style="
+                  margin-top: 16px;
+                  padding: 12px;
+                  background: rgba(99, 102, 241, 0.1);
+                  border-radius: 8px;
+                "
+              >
+                💡 <strong>권장 워크플로우:</strong><br />
+                1️⃣ libs/db/prisma/*.prisma 파일 수정 → 2️⃣ 🔨 스키마 빌드 실행 →
+                3️⃣ ✅ 스키마 검증 (오류 확인) → 4️⃣ 마이그레이션 탭으로 이동하여
+                변경사항 적용 → 5️⃣ 🔄 Client 생성 (마이그레이션 후 자동 실행됨)
+              </div>
+            </div>
+          </div>
+
+          <!-- 마이그레이션 탭 -->
+          <div id="prisma-subtab-migration" class="prisma-subtab-content">
+            <!-- STEP 2: 마이그레이션 -->
+            <div class="card">
+              <div class="section-header">
+                <span class="section-icon">🚀</span>
+                <span class="section-title">STEP 2. 마이그레이션 실행</span>
+                <span class="section-subtitle">DB 변경 적용</span>
+              </div>
+
+              <div class="prisma-info-box warning">
+                <div class="prisma-info-title">⚠️ 마이그레이션이란?</div>
+                <div class="prisma-info-content">
+                  데이터베이스 스키마 변경사항을 안전하게 적용하고 버전 관리하는
+                  방식입니다.
+                  <ul>
+                    <li>
+                      <strong>자동 생성:</strong> 스키마 차이를 비교하여 SQL
+                      파일 자동 생성
+                    </li>
+                    <li>
+                      <strong>버전 관리:</strong> 모든 변경 히스토리를
+                      migrations/ 폴더에 저장
+                    </li>
+                    <li>
+                      <strong>롤백 가능:</strong> 문제 발생 시 이전 버전으로
+                      되돌릴 수 있음
+                    </li>
+                    <li>
+                      <strong>팀 협업:</strong> Git으로 마이그레이션 파일을
+                      공유하여 동일한 스키마 유지
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="input-group">
+                <label for="migrationName">
+                  마이그레이션 이름 <span class="required">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="migrationName"
+                  placeholder="예: add_user_email_field, create_event_category_table"
+                />
+                <div class="input-hint">
+                  📝 <strong>네이밍 규칙 (Migration Naming Convention)</strong>
+                </div>
+              </div>
+
+              <!-- 마이그레이션 명칭 규칙 상세 -->
+              <div class="prisma-info-box info-box-spacing">
+                <div class="prisma-info-title">📝 마이그레이션 명칭 규칙</div>
+                <div class="prisma-info-content">
+                  <strong>기본 원칙:</strong>
+                  <ul>
+                    <li>영문 소문자와 언더스코어(_)만 사용</li>
+                    <li>동사로 시작하여 무엇을 하는지 명확히 표현</li>
+                    <li>구체적이고 설명적인 이름 사용</li>
+                    <li>공백, 대문자, 특수문자 사용 금지</li>
+                  </ul>
+
+                  <strong>📋 작업별 명칭 패턴:</strong>
+                  <ul>
+                    <li>
+                      <strong>테이블 생성:</strong>
+                      <code>create_[테이블명]_table</code> <br />예:
+                      <code>create_user_profile_table</code>,
+                      <code>create_event_category_table</code>
+                    </li>
+                    <li>
+                      <strong>필드 추가:</strong>
+                      <code>add_[테이블명]_[필드명]_field</code> <br />예:
+                      <code>add_user_email_field</code>,
+                      <code>add_event_start_date_field</code>
+                    </li>
+                    <li>
+                      <strong>필드 수정:</strong>
+                      <code>modify_[테이블명]_[필드명]_to_[타입]</code>
+                      <br />예: <code>modify_user_age_to_int</code>,
+                      <code>modify_event_title_to_text</code>
+                    </li>
+                    <li>
+                      <strong>필드 제거:</strong>
+                      <code>remove_[테이블명]_[필드명]_field</code> <br />예:
+                      <code>remove_user_nickname_field</code>
+                    </li>
+                    <li>
+                      <strong>인덱스 추가:</strong>
+                      <code>add_index_on_[테이블명]_[필드명]</code> <br />예:
+                      <code>add_index_on_user_email</code>,
+                      <code>add_index_on_event_date</code>
+                    </li>
+                    <li>
+                      <strong>관계 추가:</strong>
+                      <code>add_relation_[테이블1]_to_[테이블2]</code> <br />예:
+                      <code>add_relation_user_to_post</code>,
+                      <code>add_relation_event_to_category</code>
+                    </li>
+                    <li>
+                      <strong>테이블 이름 변경:</strong>
+                      <code>rename_[기존명]_to_[새이름]_table</code> <br />예:
+                      <code>rename_old_user_to_member_table</code>
+                    </li>
+                    <li>
+                      <strong>초기 설정:</strong> <code>init</code> 또는
+                      <code>initial_setup</code> <br />예: <code>init</code>,
+                      <code>initial_database_setup</code>
+                    </li>
+                  </ul>
+
+                  <strong>✅ 좋은 예시:</strong>
+                  <ul>
+                    <li>
+                      <code>add_user_birth_date_field</code> - 명확하고 구체적
+                    </li>
+                    <li>
+                      <code>create_event_participant_table</code> - 테이블 생성
+                      의도 명확
+                    </li>
+                    <li>
+                      <code>add_index_on_country_code</code> - 인덱스 추가 위치
+                      명확
+                    </li>
+                    <li>
+                      <code>modify_event_status_to_enum</code> - 변경 내용 명확
+                    </li>
+                  </ul>
+
+                  <strong>❌ 나쁜 예시:</strong>
+                  <ul>
+                    <li><code>update</code> - 너무 모호함</li>
+                    <li><code>fix_bug</code> - 무엇을 고쳤는지 불명확</li>
+                    <li>
+                      <code>addUserField</code> - camelCase 사용 (언더스코어
+                      사용할 것)
+                    </li>
+                    <li>
+                      <code>new-table</code> - 하이픈 사용 금지 (언더스코어
+                      사용)
+                    </li>
+                    <li><code>임시작업</code> - 한글 사용 금지 (영문 사용)</li>
+                  </ul>
+
+                  <strong>💡 팁:</strong>
+                  <ul>
+                    <li>
+                      Git 커밋 메시지처럼 미래의 자신과 팀원이 이해할 수 있게
+                      작성
+                    </li>
+                    <li>
+                      약어보다는 전체 단어 사용 (예: <code>usr</code> ❌ →
+                      <code>user</code> ✅)
+                    </li>
+                    <li>
+                      날짜는 Prisma가 자동으로 타임스탬프 추가하므로 이름에 포함
+                      불필요
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <button
+                id="runMigrationButton"
+                class="btn btn-primary btn-large"
+                onclick="runPrismaMigration()"
+                style="width: 100%"
+              >
+                🚀 마이그레이션 실행
+              </button>
+
+              <div class="prisma-info-box warning" style="margin-top: 16px">
+                <div class="prisma-info-title">⚠️ 주의사항</div>
+                <div class="prisma-info-content">
+                  <ul>
+                    <li>
+                      마이그레이션은
+                      <strong>실제 데이터베이스를 변경</strong>합니다
+                    </li>
+                    <li>실행 전에 반드시 <strong>백업</strong>을 권장합니다</li>
+                    <li>
+                      프로덕션 환경에서는
+                      <strong>팀원과 협의 후</strong> 실행하세요
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div style="margin-top: 16px">
+                <button
+                  class="btn btn-secondary"
+                  onclick="checkMigrationStatus()"
+                  style="width: 100%"
+                >
+                  📊 마이그레이션 상태 확인
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Studio 탭 -->
+          <div id="prisma-subtab-studio" class="prisma-subtab-content">
+            <!-- STEP 3: Prisma Studio -->
+            <div class="card">
+              <div class="section-header">
+                <span class="section-icon">🎨</span>
+                <span class="section-title">STEP 3. 데이터 확인</span>
+                <span class="section-subtitle">선택 사항</span>
+              </div>
+
+              <div class="prisma-info-box success">
+                <div class="prisma-info-title">🎨 Prisma Studio란?</div>
+                <div class="prisma-info-content">
+                  데이터베이스를 시각적으로 탐색하고 편집할 수 있는 웹 기반 GUI
+                  도구입니다.
+                  <ul>
+                    <li>
+                      <strong>테이블 브라우징:</strong> 모든 테이블과 레코드를
+                      한눈에 확인
+                    </li>
+                    <li>
+                      <strong>데이터 편집:</strong> 레코드 추가, 수정, 삭제 가능
+                    </li>
+                    <li>
+                      <strong>관계 탐색:</strong> 테이블 간의 관계를 시각적으로
+                      확인
+                    </li>
+                    <li><strong>필터링:</strong> 조건에 맞는 데이터만 검색</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="button-grid">
+                <button
+                  class="btn btn-primary btn-large"
+                  id="startStudioBtn"
+                  onclick="startPrismaStudio()"
+                >
+                  ▶ Studio 시작
+                </button>
+                <button
+                  class="btn btn-danger btn-large"
+                  id="stopStudioBtn"
+                  onclick="stopPrismaStudio()"
+                  style="display: none"
+                >
+                  ⏹ Studio 중지
+                </button>
+                <button
+                  class="btn btn-secondary btn-large"
+                  id="openStudioBtn"
+                  onclick="openStudioInBrowser()"
+                  style="display: none"
+                >
+                  🌐 브라우저에서 열기
+                </button>
+              </div>
+
+              <div class="input-hint" style="margin-top: 12px">
+                🌐 Studio 실행 후 자동으로
+                <strong>http://localhost:5555</strong>에서 접속할 수 있습니다.
+              </div>
+            </div>
+          </div>
+
+          <!-- 히스토리 탭 -->
+          <div id="prisma-subtab-history" class="prisma-subtab-content">
+            <!-- 마이그레이션 히스토리 -->
+            <div
+              class="card"
+              style="flex: 1; display: flex; flex-direction: column"
+            >
+              <div class="section-header">
+                <span class="section-icon">📚</span>
+                <span class="section-title">마이그레이션 히스토리</span>
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick="loadMigrationHistory()"
+                  style="margin-left: auto"
+                >
+                  🔄 새로고침
+                </button>
+              </div>
+
+              <div class="prisma-info-box">
+                <div class="prisma-info-title">📋 히스토리 정보</div>
+                <div class="prisma-info-content">
+                  지금까지 실행된 모든 마이그레이션 내역을 시간순으로 확인할 수
+                  있습니다. 각 마이그레이션은 고유한 타임스탬프와 이름을 가지고
+                  있습니다.
+                </div>
+              </div>
+
+              <div class="package-table-wrapper">
+                <table class="package-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 60%">마이그레이션 이름</th>
+                      <th style="width: 40%">적용 시간</th>
+                    </tr>
+                  </thead>
+                  <tbody id="migrationHistoryTable">
+                    <tr>
+                      <td colspan="2" class="empty-row">
+                        <div class="empty-state">
+                          <div class="empty-icon">📋</div>
+                          <div>아직 실행된 마이그레이션이 없습니다</div>
+                          <div
+                            style="
+                              font-size: 12px;
+                              margin-top: 8px;
+                              color: rgba(255, 255, 255, 0.5);
+                            "
+                          >
+                            첫 번째 마이그레이션을 실행하면 히스토리가 여기에
+                            표시됩니다
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- .card 닫기 -->
+          </div>
+          <!-- prisma-subtab-history 닫기 -->
+
+          <!-- Seed 탭 -->
+          <div id="prisma-subtab-seed" class="prisma-subtab-content">
+            <div class="card">
+              <div class="section-header">
+                <span class="section-icon">🌱</span>
+                <span class="section-title">Seed 데이터 삽입</span>
+                <span class="section-subtitle">초기 데이터</span>
+              </div>
+
+              <div class="prisma-info-box success">
+                <div class="prisma-info-title">🌱 Seed란?</div>
+                <div class="prisma-info-content">
+                  데이터베이스에 초기 데이터를 삽입하는 작업입니다.
+                  <ul>
+                    <li>
+                      <strong>테스트 데이터:</strong> 개발 환경에서 테스트용
+                      데이터 생성
+                    </li>
+                    <li>
+                      <strong>기본 데이터:</strong> 애플리케이션 실행에 필요한
+                      기본 데이터 (관리자 계정, 카테고리 등)
+                    </li>
+                    <li>
+                      <strong>반복 실행:</strong> 여러 번 실행해도 안전하도록
+                      중복 체크 포함
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="prisma-info-box warning">
+                <div class="prisma-info-title">📝 실행 순서</div>
+                <div class="prisma-info-content">
+                  <ol>
+                    <li>
+                      <strong>TypeScript:</strong>
+                      <code>apps/api/prisma/seed.ts</code> 파일의 로직 실행
+                    </li>
+                  </ol>
+                  <br />
+                  <strong>💡 환경 선택:</strong>
+                  <ul>
+                    <li>
+                      <strong>development:</strong> 개발 환경용 전체 샘플 데이터
+                      (대륙, 국가, 역사적 국가, 카테고리, 관리자 계정)
+                    </li>
+                    <li>
+                      <strong>test:</strong> 테스트 환경용 (현재 비어있음,
+                      필요시 구현)
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- 환경 선택 -->
+              <div class="input-group">
+                <label for="seedEnvironment">
+                  실행 환경 <span class="required">*</span>
+                </label>
+                <select
+                  id="seedEnvironment"
+                  class="select-input"
+                  aria-label="Seed 실행 환경 선택"
+                >
+                  <option value="development" selected>
+                    Development (개발 환경 - 전체 데이터)
+                  </option>
+                  <option value="test">Test (테스트 환경)</option>
+                </select>
+                <div class="input-hint">
+                  💡 <strong>권장:</strong> 개발 환경에서는 Development를
+                  선택하세요
+                </div>
+              </div>
+
+              <!-- Seed 파일 목록 -->
+              <div class="package-table-wrapper" style="margin-top: 16px">
+                <div
+                  style="
+                    margin-bottom: 8px;
+                    font-size: 13px;
+                    color: rgba(255, 255, 255, 0.7);
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
+                >
+                  <span>📂 Seed 파일 목록</span>
+                  <button
+                    class="btn btn-secondary btn-sm"
+                    onclick="loadSeedFiles()"
+                    style="padding: 4px 8px; font-size: 11px"
+                  >
+                    🔄 새로고침
+                  </button>
+                </div>
+                <table class="package-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 10%">순서</th>
+                      <th style="width: 90%">파일명</th>
+                    </tr>
+                  </thead>
+                  <tbody id="seedFilesTable">
+                    <tr>
+                      <td colspan="2" class="empty-row">
+                        <div class="empty-state">
+                          <div class="empty-icon">📋</div>
+                          <div>Seed 파일 목록을 불러오는 중...</div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <button
+                id="runSeedButton"
+                class="btn btn-primary btn-large"
+                onclick="runSeed()"
+                style="width: 100%; margin-top: 16px"
+              >
+                🌱 Seed 실행
+              </button>
+
+              <div class="input-hint" style="margin-top: 16px">
+                💡 <strong>주의:</strong> 마이그레이션 완료 후에 실행하세요.
+                테이블이 없으면 실패합니다.
+              </div>
+            </div>
+          </div>
+          <!-- prisma-subtab-seed 닫기 -->
+        </div>
+        <!-- tab-prisma 닫기 -->
+
+        <!-- 환경 변수 탭 -->
+        <div
+          id="tab-env"
+          class="tab-content tab-content-fullscreen"
+          role="tabpanel"
+          aria-labelledby="tab-env"
+        >
+          <!-- 파일 선택 -->
           <div class="card">
-          <div class="section-header">
-            <span class="section-icon">🌱</span>
-            <span class="section-title">Seed 데이터 삽입</span>
-            <span class="section-subtitle">초기 데이터</span>
-          </div>
-
-          <div class="prisma-info-box success">
-            <div class="prisma-info-title">🌱 Seed란?</div>
-            <div class="prisma-info-content">
-              데이터베이스에 초기 데이터를 삽입하는 작업입니다.
-              <ul>
-                <li><strong>테스트 데이터:</strong> 개발 환경에서 테스트용 데이터 생성</li>
-                <li><strong>기본 데이터:</strong> 애플리케이션 실행에 필요한 기본 데이터 (관리자 계정, 카테고리 등)</li>
-                <li><strong>반복 실행:</strong> 여러 번 실행해도 안전하도록 중복 체크 포함</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="prisma-info-box warning">
-            <div class="prisma-info-title">📝 실행 순서</div>
-            <div class="prisma-info-content">
-              <ol>
-                <li><strong>SQL 파일:</strong> <code>apps/api/prisma/seeds/</code> 내의 <code>.sql</code> 파일을 알파벳 순서로 실행</li>
-                <li><strong>TypeScript:</strong> <code>apps/api/prisma/seed.ts</code> 파일의 로직 실행</li>
-              </ol>
-              <br>
-              <strong>💡 팁:</strong> SQL 파일명에 <code>01-</code>, <code>02-</code> 등의 접두사를 붙여 실행 순서를 제어하세요.
-            </div>
-          </div>
-
-          <!-- Seed 파일 목록 -->
-          <div class="package-table-wrapper" style="margin-top: 16px;">
-            <div style="margin-bottom: 8px; font-size: 13px; color: rgba(255,255,255,0.7); display: flex; justify-content: space-between; align-items: center;">
-              <span>📂 Seed 파일 목록</span>
-              <button class="btn btn-secondary btn-sm" onclick="loadSeedFiles()" style="padding: 4px 8px; font-size: 11px;">
+            <div class="card-header">
+              <h2 class="card-title">⚙️ 환경 변수 관리</h2>
+              <button class="btn btn-secondary btn-sm" onclick="loadEnvFiles()">
                 🔄 새로고침
               </button>
             </div>
-            <table class="package-table">
-              <thead>
-                <tr>
-                  <th style="width: 10%;">순서</th>
-                  <th style="width: 90%;">파일명</th>
-                </tr>
-              </thead>
-              <tbody id="seedFilesTable">
-                <tr>
-                  <td colspan="2" class="empty-row">
-                    <div class="empty-state">
-                      <div class="empty-icon">📋</div>
-                      <div>Seed 파일 목록을 불러오는 중...</div>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+            <div class="card-body">
+              <div class="prisma-info-box">
+                <div class="prisma-info-title">📘 환경 변수란?</div>
+                <div class="prisma-info-content">
+                  <strong
+                    >애플리케이션 설정을 환경별로 관리하는 방법입니다.</strong
+                  >
+                  <ul>
+                    <li>✅ <strong>Development:</strong> 개발 환경용 설정</li>
+                    <li>
+                      ✅ <strong>Production:</strong> 프로덕션 환경용 설정
+                    </li>
+                    <li>✅ <strong>Test:</strong> 테스트 환경용 설정</li>
+                  </ul>
+                  <br />
+                  <strong>⚠️ 주의사항:</strong>
+                  <ul>
+                    <li>변경 후에는 서버를 재시작해야 적용됩니다</li>
+                    <li>
+                      민감한 정보(API 키, 비밀번호 등)는 주의해서 관리하세요
+                    </li>
+                    <li>변경 전 자동으로 백업이 생성됩니다</li>
+                  </ul>
+                </div>
+              </div>
 
-          <button id="runSeedButton" class="btn btn-primary btn-large" onclick="runSeed()" style="width: 100%; margin-top: 16px;">
-            🌱 Seed 실행
-          </button>
-
-          <div class="input-hint" style="margin-top: 16px;">
-            💡 <strong>주의:</strong> 마이그레이션 완료 후에 실행하세요. 테이블이 없으면 실패합니다.
-          </div>
-          </div>
-        </div><!-- prisma-subtab-seed 닫기 -->
-      </div><!-- tab-prisma 닫기 -->
-
-      <!-- 패키지 탭 -->
-      <div id="tab-packages" class="tab-content" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; padding: 20px; background: #1a1a1a; display: none;">
-    
-        <!-- 패키지 업데이트 -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">📦 패키지 업데이트</h2>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn btn-secondary btn-sm" onclick="checkPackageUpdates()">
-                🔍 확인
-              </button>
-              <button class="btn btn-primary btn-sm" onclick="updateSelectedPackages()" id="updateSelectedBtn" style="display: none;">
-                ⬆️ 선택 업데이트
-              </button>
-              <button class="btn btn-primary btn-sm" onclick="updateAllPackagesConfirm()" id="updateAllBtn" style="display: none;">
-                ⬆️ 전체 업데이트
-              </button>
-            </div>
-          </div>
-          <div class="update-list" id="updateList">
-            <div class="empty-state">
-              <div class="empty-icon">📦</div>
-              <div>"확인" 버튼을 클릭하여 업데이트 검토</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 설치된 패키지 -->
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">📚 설치된 패키지</h2>
-            <div class="package-stats" id="packageStats">
-              <span>Total: 0</span>
+              <!-- 파일 선택 -->
+              <div class="input-group">
+                <label for="envFileSelect">
+                  환경 파일 선택 <span class="required">*</span>
+                </label>
+                <select
+                  id="envFileSelect"
+                  class="select-input"
+                  onchange="loadEnvVariables()"
+                  aria-label="환경 파일 선택"
+                >
+                  <option value="">파일을 선택하세요</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div class="package-section">
-            <!-- 검색 및 필터 -->
-            <div class="package-controls">
-              <input
-                type="text"
-                class="search-input"
-                id="packageSearch"
-                placeholder="패키지 이름으로 검색..."
-                onkeyup="filterPackages()"
-              />
-              <div class="filter-buttons">
-                <button class="filter-btn active" data-filter="all" onclick="setPackageFilter('all')">
-                  전체
+          <!-- 변수 목록 -->
+          <div class="card" id="envVariablesCard" style="display: none">
+            <div class="card-header">
+              <h2 class="card-title">📝 환경 변수 목록</h2>
+              <div class="btn-group">
+                <button
+                  class="btn btn-primary btn-sm"
+                  onclick="showAddVariableModal()"
+                  aria-label="환경 변수 추가"
+                >
+                  ➕ 추가
                 </button>
-                <button class="filter-btn" data-filter="prod" onclick="setPackageFilter('prod')">
-                  Prod
-                </button>
-                <button class="filter-btn" data-filter="dev" onclick="setPackageFilter('dev')">
-                  Dev
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick="saveAllVariables()"
+                  aria-label="모든 환경 변수 저장"
+                >
+                  💾 전체 저장
                 </button>
               </div>
-              <button class="btn btn-secondary btn-sm" onclick="loadInstalledPackages()">
-                새로고침
-              </button>
             </div>
 
-            <!-- 패키지 테이블 -->
-            <div class="package-table-container">
-              <table class="package-table">
+            <!-- 변수 테이블 -->
+            <div class="package-table-container" style="max-height: 600px">
+              <table
+                class="package-table"
+                role="table"
+                aria-label="환경 변수 목록"
+              >
                 <thead>
                   <tr>
-                    <th class="sortable" style="width: 50%;" onclick="sortPackages('name')">패키지 이름</th>
-                    <th class="sortable" style="width: 30%;" onclick="sortPackages('version')">버전</th>
-                    <th class="sortable" style="width: 20%; text-align: center;" onclick="sortPackages('type')">타입</th>
+                    <th class="table-col-30">변수명</th>
+                    <th class="table-col-50">값</th>
+                    <th class="table-col-20 table-col-center">작업</th>
                   </tr>
                 </thead>
-                <tbody id="packageTableBody">
+                <tbody id="envVariablesTable">
                   <tr>
                     <td colspan="3">
                       <div class="empty-state">
-                        <div class="empty-icon">📦</div>
-                        <div>"새로고침" 버튼을 클릭하여 패키지 목록 확인</div>
+                        <div class="empty-icon">⚙️</div>
+                        <div>파일을 선택하면 환경 변수가 표시됩니다</div>
                       </div>
                     </td>
                   </tr>
@@ -1708,49 +1131,217 @@
               </table>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- 로그 탭 -->
-      <div id="tab-logs" class="tab-content" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; padding: 20px; background: #1a1a1a; display: none;">
-        <div class="card">
-          <div class="card-header">
-            <h2 class="card-title">📋 로그 파일 목록</h2>
-            <button class="btn btn-secondary btn-sm" onclick="loadLogFiles()">
-              🔄 새로고침
-            </button>
+          <!-- Raw 내용 보기 -->
+          <div class="card" id="envRawCard" style="display: none">
+            <div class="card-header">
+              <h2 class="card-title">📄 원본 내용</h2>
+              <button
+                class="btn btn-secondary btn-sm"
+                id="copyRawButton"
+                onclick="copyEnvRaw()"
+                aria-label="원본 내용 복사"
+              >
+                📋 복사
+              </button>
+            </div>
+            <pre id="envRawContent" class="raw-content"></pre>
           </div>
-          <div style="padding: 20px;">
-            <div class="prisma-info-box">
-              <div class="prisma-info-title">📂 로그 저장 위치</div>
-              <div class="prisma-info-content">
-                모든 작업 로그가 자동으로 저장됩니다:
-                <ul>
-                  <li><code>logs/prisma/build/</code> - 스키마 빌드</li>
-                  <li><code>logs/prisma/validate/</code> - 스키마 검증</li>
-                  <li><code>logs/prisma/generate/</code> - Client 생성</li>
-                  <li><code>logs/prisma/migrate/</code> - 마이그레이션</li>
-                  <li><code>logs/seed/</code> - Seed 실행</li>
-                </ul>
+        </div>
+        <!-- tab-env 닫기 -->
+
+        <!-- 패키지 탭 -->
+        <div
+          id="tab-packages"
+          class="tab-content tab-content-fullscreen"
+          role="tabpanel"
+          aria-labelledby="tab-packages"
+        >
+          <!-- 패키지 업데이트 -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">📦 패키지 업데이트</h2>
+              <div style="display: flex; gap: 8px">
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick="checkPackageUpdates()"
+                >
+                  🔍 확인
+                </button>
+                <button
+                  class="btn btn-primary btn-sm"
+                  onclick="updateSelectedPackages()"
+                  id="updateSelectedBtn"
+                  style="display: none"
+                >
+                  ⬆️ 선택 업데이트
+                </button>
+                <button
+                  class="btn btn-primary btn-sm"
+                  onclick="updateAllPackagesConfirm()"
+                  id="updateAllBtn"
+                  style="display: none"
+                >
+                  ⬆️ 전체 업데이트
+                </button>
               </div>
             </div>
-
-            <!-- 로그 파일 목록 -->
-            <div id="logFilesList" style="margin-top: 20px;">
+            <div class="update-list" id="updateList">
               <div class="empty-state">
-                <div class="empty-icon">📋</div>
-                <div>로그 파일을 불러오는 중...</div>
+                <div class="empty-icon">📦</div>
+                <div>"확인" 버튼을 클릭하여 업데이트 검토</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 설치된 패키지 -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">📚 설치된 패키지</h2>
+              <div class="package-stats" id="packageStats">
+                <span>Total: 0</span>
+              </div>
+            </div>
+
+            <div class="package-section">
+              <!-- 검색 및 필터 -->
+              <div class="package-controls">
+                <input
+                  type="text"
+                  class="search-input"
+                  id="packageSearch"
+                  placeholder="패키지 이름으로 검색..."
+                  onkeyup="filterPackages()"
+                />
+                <div class="filter-buttons">
+                  <button
+                    class="filter-btn active"
+                    data-filter="all"
+                    onclick="setPackageFilter('all')"
+                  >
+                    전체
+                  </button>
+                  <button
+                    class="filter-btn"
+                    data-filter="prod"
+                    onclick="setPackageFilter('prod')"
+                  >
+                    Prod
+                  </button>
+                  <button
+                    class="filter-btn"
+                    data-filter="dev"
+                    onclick="setPackageFilter('dev')"
+                  >
+                    Dev
+                  </button>
+                </div>
+                <button
+                  class="btn btn-secondary btn-sm"
+                  onclick="loadInstalledPackages()"
+                >
+                  새로고침
+                </button>
+              </div>
+
+              <!-- 패키지 테이블 -->
+              <div class="package-table-container">
+                <table class="package-table">
+                  <thead>
+                    <tr>
+                      <th
+                        class="sortable"
+                        style="width: 50%"
+                        onclick="sortPackages('name')"
+                      >
+                        패키지 이름
+                      </th>
+                      <th
+                        class="sortable"
+                        style="width: 30%"
+                        onclick="sortPackages('version')"
+                      >
+                        버전
+                      </th>
+                      <th
+                        class="sortable"
+                        style="width: 20%; text-align: center"
+                        onclick="sortPackages('type')"
+                      >
+                        타입
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody id="packageTableBody">
+                    <tr>
+                      <td colspan="3">
+                        <div class="empty-state">
+                          <div class="empty-icon">📦</div>
+                          <div>"새로고침" 버튼을 클릭하여 패키지 목록 확인</div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 로그 탭 -->
+        <div
+          id="tab-logs"
+          class="tab-content tab-content-fullscreen"
+          role="tabpanel"
+          aria-labelledby="tab-logs"
+        >
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">📋 로그 파일 목록</h2>
+              <button class="btn btn-secondary btn-sm" onclick="loadLogFiles()">
+                🔄 새로고침
+              </button>
+            </div>
+            <div style="padding: 20px">
+              <div class="prisma-info-box">
+                <div class="prisma-info-title">📂 로그 저장 위치</div>
+                <div class="prisma-info-content">
+                  모든 작업 로그가 자동으로 저장됩니다:
+                  <ul>
+                    <li><code>logs/prisma/build/</code> - 스키마 빌드</li>
+                    <li><code>logs/prisma/validate/</code> - 스키마 검증</li>
+                    <li><code>logs/prisma/generate/</code> - Client 생성</li>
+                    <li><code>logs/prisma/migrate/</code> - 마이그레이션</li>
+                    <li><code>logs/seed/</code> - Seed 실행</li>
+                    <li><code>logs/nestia/build/</code> - Nestia SDK 빌드</li>
+                    <li>
+                      <code>logs/nestia/validate/</code> - Nestia SDK 검증
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- 로그 파일 목록 -->
+              <div id="logFilesList" style="margin-top: 20px">
+                <div class="empty-state">
+                  <div class="empty-icon">📋</div>
+                  <div>로그 파일을 불러오는 중...</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      </div><!-- .tab-contents-wrapper 닫기 -->
-    </div><!-- .container 닫기 -->
+      <!-- .tab-contents-wrapper 닫기 -->
+    </div>
+    <!-- .container 닫기 -->
 
     <!-- 패키지 상세 모달 -->
-    <div class="modal-overlay" id="packageModal" onclick="closePackageModal(event)">
+    <div
+      class="modal-overlay"
+      id="packageModal"
+      onclick="closePackageModal(event)"
+    >
       <div class="modal" onclick="event.stopPropagation()">
         <div class="modal-header">
           <h2 class="modal-title" id="modalPackageName">패키지 정보</h2>
@@ -1765,1332 +1356,37 @@
       </div>
     </div>
 
-    <script>
-      // 전역 변수
-      let consoleLogBuffer = []
-      let allPackages = []
-      let availableUpdates = [] // 업데이트 가능한 패키지 정보 저장
-      let currentPackageFilter = 'all'
-      let currentSortColumn = 'name'
-      let currentSortDirection = 'asc'
-      const MAX_CONSOLE_LOGS = 100
-
-      // 콘솔 로그 수신
-      window.electronAPI.onConsoleLog((log) => {
-        consoleLogBuffer.push(`[${new Date().toLocaleTimeString()}] ${log}`)
-        if (consoleLogBuffer.length > MAX_CONSOLE_LOGS) {
-          consoleLogBuffer.shift()
-        }
-        updateConsoleOutput()
-      })
-
-      function updateConsoleOutput() {
-        const consoleOutput = document.getElementById('consoleOutput')
-        if (consoleOutput) {
-          consoleOutput.textContent = consoleLogBuffer.join('\n')
-          consoleOutput.scrollTop = consoleOutput.scrollHeight
-        }
-      }
-
-      function clearConsoleLog() {
-        consoleLogBuffer = []
-        updateConsoleOutput()
-      }
-
-      // 서비스 설정
-      const services = [
-        { id: 'docker', name: 'Docker Desktop', icon: '🐳', type: 'docker', canControl: true },
-        { id: 'mysql', name: 'MySQL Database', icon: '🗄️', type: 'container', port: 3307, canControl: false },
-        { id: 'nginx', name: 'Nginx Proxy', icon: '🌐', type: 'container', port: 443, canControl: false },
-        { id: 'api', name: 'API Server', icon: '⚡', type: 'api', port: 8000, canControl: true },
-        { id: 'web-admin', name: '관리자 앱', icon: '🔧', type: 'web-admin', port: 3000, canControl: true, url: 'https://app.civilization.zone' },
-        { id: 'web-user', name: '사용자 앱', icon: '👥', type: 'web-user', port: 4200, canControl: true, url: 'https://user.civilization.zone' },
-      ]
-
-      // 탭 전환
-      function switchTab(tabName) {
-        console.log(`🔄 탭 전환: ${tabName}`)
-        
-        // 모든 탭 버튼 비활성화
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'))
-        
-        // 모든 탭 콘텐츠 숨기기
-        document.getElementById('tab-services').style.display = 'none'
-        document.getElementById('tab-prisma').style.display = 'none'
-        document.getElementById('tab-packages').style.display = 'none'
-        document.getElementById('tab-logs').style.display = 'none'
-        
-        // 선택된 버튼 활성화
-        const clickedBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => {
-          return btn.textContent.includes(
-            tabName === 'services' ? '서비스' : 
-            tabName === 'prisma' ? 'Prisma' : 
-            tabName === 'logs' ? '로그' : 
-            '패키지'
-          )
-        })
-        if (clickedBtn) clickedBtn.classList.add('active')
-        
-        // 선택된 탭 표시
-        const tabContent = document.getElementById(`tab-${tabName}`)
-        if (tabContent) {
-          if (tabName === 'packages' || tabName === 'logs') {
-            tabContent.style.display = 'flex'
-            tabContent.style.flexDirection = 'column'
-            tabContent.style.gap = '20px'
-          } else if (tabName === 'prisma') {
-            tabContent.style.display = 'flex'
-            tabContent.style.flexDirection = 'column'
-            tabContent.style.gap = '0'
-          } else {
-            tabContent.style.display = 'block'
-          }
-          console.log(`✅ 탭 활성화: #tab-${tabName}`)
-        }
-        
-        // 패키지 탭 진입 시 자동 로드
-        if (tabName === 'packages') {
-          setTimeout(() => loadInstalledPackages(), 100)
-        }
-        // 로그 탭 진입 시 자동 로드
-        if (tabName === 'logs') {
-          setTimeout(() => loadLogFiles(), 100)
-        }
-      }
-
-      // 개발자 도구 열기
-      function openDevTools() {
-        console.log('🔧 개발자 도구 열기 요청')
-        if (window.electronAPI && window.electronAPI.openDevTools) {
-          window.electronAPI.openDevTools()
-        } else {
-          alert('개발자 도구를 열 수 없습니다.')
-        }
-      }
-
-  
-      // 서비스 렌더링
-      function renderServices() {
-        const servicesList = document.getElementById('servicesList')
-        servicesList.innerHTML = services.map(service => {
-          const status = getServiceStatus(service.id)
-          const statusClass = status.toLowerCase()
-          const canControl = service.canControl !== false
-
-          return `
-            <div class="service-item">
-              <div class="service-header">
-                <div class="service-icon">${service.icon}</div>
-                <div class="service-info">
-                  <div class="service-name">${service.name}</div>
-                  <div class="service-port">${service.port ? `포트: ${service.port}` : '시스템 서비스'}</div>
-                </div>
-                <div class="service-status ${statusClass}">${status}</div>
-              </div>
-              ${canControl ? `
-                <div class="service-actions">
-                  <button class="btn btn-secondary btn-sm" onclick="handleStart('${service.id}')" id="start-${service.id}">시작</button>
-                  <button class="btn btn-secondary btn-sm" onclick="handleStop('${service.id}')" id="stop-${service.id}">중지</button>
-                  ${service.url ? `<button class="btn btn-secondary btn-sm" onclick="openUrl('${service.url}')">웹 열기</button>` : ''}
-                </div>
-              ` : ''}
-            </div>
-          `
-        }).join('')
-
-        updateServiceButtons()
-      }
-
-      function getServiceStatus(serviceId) {
-        if (!window.cachedStatus) return 'stopped'
-        
-        const status = window.cachedStatus
-        
-        switch (serviceId) {
-          case 'docker':
-            // Docker Desktop이 실행 중이고 Papyrus 컨테이너(MySQL 또는 Nginx)가 하나라도 실행 중이면 running
-            return status.docker?.isRunning && (status.docker?.containers?.mysql || status.docker?.containers?.nginx) 
-              ? 'running' 
-              : 'stopped'
-          case 'mysql':
-            return status.docker?.containers?.mysql ? 'running' : 'stopped'
-          case 'nginx':
-            return status.docker?.containers?.nginx ? 'running' : 'stopped'
-          case 'api':
-            return status.papyrusServer?.apiServer?.isRunning ? 'running' : 'stopped'
-          case 'web-admin':
-            return status.papyrusServer?.webAdminServer?.isRunning ? 'running' : 'stopped'
-          case 'web-user':
-            return status.papyrusServer?.webUserServer?.isRunning ? 'running' : 'stopped'
-          default:
-            return 'stopped'
-        }
-      }
-
-      function updateServiceButtons() {
-        services.forEach(service => {
-          if (service.canControl === false) return
-
-          const status = getServiceStatus(service.id)
-          const startBtn = document.getElementById(`start-${service.id}`)
-          const stopBtn = document.getElementById(`stop-${service.id}`)
-
-          if (startBtn && stopBtn) {
-            if (status === 'running') {
-              startBtn.disabled = true
-              stopBtn.disabled = false
-            } else {
-              startBtn.disabled = false
-              stopBtn.disabled = true
-            }
-          }
-        })
-      }
-
-      async function handleStart(serviceId) {
-        console.log('Starting:', serviceId)
-        
-        const startBtn = document.getElementById(`start-${serviceId}`)
-        const stopBtn = document.getElementById(`stop-${serviceId}`)
-        
-        if (!startBtn) return
-        
-        const originalText = startBtn.innerHTML
-        
-        try {
-          // 버튼 로딩 상태
-          startBtn.disabled = true
-          stopBtn.disabled = true
-          startBtn.innerHTML = '<span class="spinner"></span> 시작 중...'
-          
-          if (serviceId === 'docker') await window.electronAPI.startDocker()
-          else if (serviceId === 'api') await window.electronAPI.startApi()
-          else if (serviceId === 'web-admin') await window.electronAPI.startWebAdmin()
-          else if (serviceId === 'web-user') await window.electronAPI.startWebUser()
-          
-          setTimeout(updateStatus, 2000)
-        } catch (error) {
-          console.error(`${serviceId} 시작 실패:`, error)
-          showAlert(`❌ ${serviceId} 시작 실패`, error.message)
-        } finally {
-          // 버튼 복구 (상태 업데이트 후)
-          setTimeout(() => {
-            startBtn.innerHTML = originalText
-            updateServiceButtons()
-          }, 2500)
-        }
-      }
-
-      async function handleStop(serviceId) {
-        console.log('Stopping:', serviceId)
-        
-        const startBtn = document.getElementById(`start-${serviceId}`)
-        const stopBtn = document.getElementById(`stop-${serviceId}`)
-        
-        if (!stopBtn) return
-        
-        const originalText = stopBtn.innerHTML
-        
-        try {
-          // 버튼 로딩 상태
-          startBtn.disabled = true
-          stopBtn.disabled = true
-          stopBtn.innerHTML = '<span class="spinner"></span> 중지 중...'
-          
-          if (serviceId === 'docker') await window.electronAPI.stopDocker()
-          else if (serviceId === 'api') await window.electronAPI.stopApi()
-          else if (serviceId === 'web-admin') await window.electronAPI.stopWebAdmin()
-          else if (serviceId === 'web-user') await window.electronAPI.stopWebUser()
-          
-          setTimeout(updateStatus, 2000)
-        } catch (error) {
-          console.error(`${serviceId} 중지 실패:`, error)
-          showAlert(`❌ ${serviceId} 중지 실패`, error.message)
-        } finally {
-          // 버튼 복구 (상태 업데이트 후)
-          setTimeout(() => {
-            stopBtn.innerHTML = originalText
-            updateServiceButtons()
-          }, 2500)
-        }
-      }
-
-      function openUrl(url) {
-        window.electronAPI.openExternal(url)
-      }
-
-      async function updateStatus() {
-        try {
-          const status = await window.electronAPI.getStatus()
-          window.cachedStatus = status
-
-          renderServices()
-        } catch (error) {
-          console.error('Status update failed:', error)
-        }
-      }
-
-      // 패키지 업데이트 확인
-      async function checkPackageUpdates() {
-        const updateList = document.getElementById('updateList')
-        updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>확인 중...</div></div>'
-
-        try {
-          console.log('📦 패키지 업데이트 확인 시작...')
-          const updates = await window.electronAPI.checkPackageUpdates()
-          console.log('📦 업데이트 결과:', updates)
-          
-          // 전역 변수에 저장
-          availableUpdates = updates || []
-          
-          if (!updates || updates.length === 0) {
-            updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div>모든 패키지가 최신 버전입니다!</div></div>'
-            document.getElementById('updateSelectedBtn').style.display = 'none'
-            document.getElementById('updateAllBtn').style.display = 'none'
-            return
-          }
-
-          // 버튼 표시
-          document.getElementById('updateSelectedBtn').style.display = 'inline-block'
-          document.getElementById('updateAllBtn').style.display = 'inline-block'
-
-          updateList.innerHTML = updates.map((pkg, index) => {
-            let badgeClass = 'patch'
-            let badgeText = 'Patch'
-            
-            if (pkg.updateType === 'major') {
-              badgeClass = 'major'
-              badgeText = 'Major'
-            } else if (pkg.updateType === 'minor') {
-              badgeClass = 'minor'
-              badgeText = 'Minor'
-            }
-
-            return `
-              <div class="update-item">
-                <input type="checkbox" class="update-checkbox" data-index="${index}" onchange="updateCheckboxChanged()">
-                <div class="update-info">
-                  <div class="update-name">${pkg.name}</div>
-                  <div class="update-versions">
-                    <span class="version-current">${pkg.current}</span>
-                    <span style="color: rgba(255,255,255,0.3);"> → </span>
-                    <span class="version-latest">${pkg.latest}</span>
-                  </div>
-                </div>
-                <div class="update-badge ${badgeClass}">${badgeText}</div>
-              </div>
-            `
-          }).join('')
-        } catch (error) {
-          console.error('패키지 업데이트 확인 실패:', error)
-          updateList.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>업데이트 확인 실패: ${error.message}</div></div>`
-          document.getElementById('updateSelectedBtn').style.display = 'none'
-          document.getElementById('updateAllBtn').style.display = 'none'
-        }
-      }
-
-      // 체크박스 변경 시
-      function updateCheckboxChanged() {
-        const checkboxes = document.querySelectorAll('.update-checkbox:checked')
-        const updateSelectedBtn = document.getElementById('updateSelectedBtn')
-        
-        if (checkboxes.length > 0) {
-          updateSelectedBtn.textContent = `⬆️ 선택 업데이트 (${checkboxes.length})`
-          updateSelectedBtn.disabled = false
-        } else {
-          updateSelectedBtn.textContent = '⬆️ 선택 업데이트'
-          updateSelectedBtn.disabled = true
-        }
-      }
-
-      // 선택된 패키지 업데이트
-      async function updateSelectedPackages() {
-        const checkboxes = document.querySelectorAll('.update-checkbox:checked')
-        
-        if (checkboxes.length === 0) {
-          alert('⚠️ 업데이트할 패키지를 선택해주세요.')
-          return
-        }
-
-        // 체크된 패키지의 정보 수집
-        const packagesToUpdate = Array.from(checkboxes).map(cb => {
-          const index = parseInt(cb.getAttribute('data-index'))
-          const pkg = availableUpdates[index]
-          return {
-            name: pkg.name,
-            version: pkg.latest
-          }
-        })
-        
-        const packageNames = packagesToUpdate.map(p => `${p.name}@${p.version}`)
-
-        const confirmed = confirm(
-          `📦 선택한 ${packagesToUpdate.length}개 패키지를 업데이트하시겠습니까?\n\n` +
-          packageNames.join('\n') +
-          '\n\n⚠️ 이 작업은 1-2분 정도 소요될 수 있습니다.'
-        )
-        
-        if (!confirmed) return
-
-        try {
-          const updateList = document.getElementById('updateList')
-          updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>업데이트 중... 잠시만 기다려주세요.</div></div>'
-          
-          console.log(`📦 패키지 업데이트 시작: ${packageNames.join(', ')}`)
-          const result = await window.electronAPI.updatePackages(packageNames)
-          
-          if (result.success) {
-            alert('✅ ' + result.message)
-            // 업데이트 목록 다시 확인
-            await checkPackageUpdates()
-          } else {
-            alert('❌ 업데이트 실패!\n\n' + result.message)
-            updateList.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>업데이트 실패</div></div>`
-          }
-        } catch (error) {
-          console.error('패키지 업데이트 실패:', error)
-          alert('❌ 업데이트 중 오류 발생!\n\n' + error.message)
-        }
-      }
-
-      // 전체 패키지 업데이트 확인
-      async function updateAllPackagesConfirm() {
-        if (availableUpdates.length === 0) {
-          alert('⚠️ 업데이트 가능한 패키지가 없습니다.')
-          return
-        }
-
-        const packageNames = availableUpdates.map(pkg => `${pkg.name}@${pkg.latest}`)
-        
-        const confirmed = confirm(
-          `📦 모든 업데이트 가능한 패키지(${availableUpdates.length}개)를 업데이트하시겠습니까?\n\n` +
-          packageNames.slice(0, 5).join('\n') +
-          (availableUpdates.length > 5 ? `\n... 외 ${availableUpdates.length - 5}개` : '') +
-          '\n\n⚠️ 이 작업은 수 분이 소요될 수 있습니다.\n' +
-          '⚠️ 일부 패키지는 Breaking Changes가 있을 수 있습니다.'
-        )
-        
-        if (!confirmed) return
-
-        try {
-          const updateList = document.getElementById('updateList')
-          updateList.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>전체 업데이트 중... 잠시만 기다려주세요.</div></div>'
-          
-          console.log('📦 전체 패키지 업데이트 시작')
-          const result = await window.electronAPI.updatePackages(packageNames)
-          
-          if (result.success) {
-            alert('✅ ' + result.message)
-            // 업데이트 목록 다시 확인
-            await checkPackageUpdates()
-          } else {
-            alert('❌ 업데이트 실패!\n\n' + result.message)
-            updateList.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>업데이트 실패</div></div>`
-          }
-        } catch (error) {
-          console.error('전체 패키지 업데이트 실패:', error)
-          alert('❌ 업데이트 중 오류 발생!\n\n' + error.message)
-        }
-      }
-
-      // 설치된 패키지 목록 로드
-      async function loadInstalledPackages() {
-        console.log('🚀 loadInstalledPackages 함수 호출됨!')
-        
-        const packageTableBody = document.getElementById('packageTableBody')
-        if (!packageTableBody) {
-          console.error('❌ packageTableBody 요소를 찾을 수 없습니다!')
-          alert('❌ packageTableBody 요소를 찾을 수 없습니다!')
-          return
-        }
-        
-        packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">⏳</div><div>로딩 중...</div></div></td></tr>'
-
-        try {
-          console.log('📚 설치된 패키지 목록 로딩...')
-          
-          if (!window.electronAPI) {
-            throw new Error('window.electronAPI가 없습니다!')
-          }
-          
-          if (!window.electronAPI.getInstalledPackages) {
-            throw new Error('window.electronAPI.getInstalledPackages 함수가 없습니다!')
-          }
-          
-          const packages = await window.electronAPI.getInstalledPackages()
-          console.log('📚 패키지 목록 받음:', packages)
-          console.log('📚 패키지 개수:', packages ? packages.length : 0)
-          
-          allPackages = packages || []
-          
-          if (allPackages.length === 0) {
-            console.warn('⚠️ 패키지가 0개입니다')
-            packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">📦</div><div>패키지가 없습니다.</div></div></td></tr>'
-            updatePackageStats([])
-            return
-          }
-
-          console.log('✅ 패키지 렌더링 시작:', allPackages.length + '개')
-          // 정렬 적용
-          const sortedPackages = applySorting([...allPackages])
-          renderPackageTable(sortedPackages)
-          updatePackageStats(allPackages)
-          updateSortHeaders()
-          console.log('✅ 패키지 렌더링 완료!')
-        } catch (error) {
-          console.error('❌ 패키지 목록 로딩 실패:', error)
-          console.error('❌ 에러 상세:', error.message, error.stack)
-          packageTableBody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">❌</div><div>목록 로딩 실패: ${error.message}</div></div></td></tr>`
-          alert('❌ 패키지 목록 로딩 실패:\n' + error.message)
-        }
-      }
-
-      function renderPackageTable(packages) {
-        console.log('🎨 renderPackageTable 호출됨, 패키지:', packages.length)
-        const packageTableBody = document.getElementById('packageTableBody')
-        
-        if (!packageTableBody) {
-          console.error('❌ packageTableBody를 찾을 수 없습니다!')
-          return
-        }
-        
-        console.log('✅ packageTableBody 찾음:', packageTableBody)
-        
-        if (!packages || packages.length === 0) {
-          packageTableBody.innerHTML = '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">🔍</div><div>검색 결과가 없습니다.</div></div></td></tr>'
-          return
-        }
-
-        const html = packages.map(pkg => `
-          <tr onclick="showPackageDetail('${pkg.name}', '${pkg.version}', '${pkg.type}')">
-            <td class="package-name-col">${pkg.name}</td>
-            <td class="package-version-col">${pkg.version}</td>
-            <td style="text-align: center;">
-              <span class="type-badge ${pkg.type}">${pkg.type === 'dev' ? 'Dev' : 'Prod'}</span>
-            </td>
-          </tr>
-        `).join('')
-        
-        console.log('✅ HTML 생성 완료, 길이:', html.length)
-        packageTableBody.innerHTML = html
-        console.log('✅ innerHTML 설정 완료')
-        console.log('✅ 실제 DOM 행 개수:', packageTableBody.children.length)
-      }
-
-      function updatePackageStats(packages) {
-        const packageStats = document.getElementById('packageStats')
-        const prodCount = packages.filter(p => p.type === 'prod').length
-        const devCount = packages.filter(p => p.type === 'dev').length
-        
-        packageStats.innerHTML = `
-          <span>Total: ${packages.length}</span>
-          <span style="color: #34d399;">Prod: ${prodCount}</span>
-          <span style="color: #94a3b8;">Dev: ${devCount}</span>
-        `
-      }
-
-      function setPackageFilter(filter) {
-        currentPackageFilter = filter
-        
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-          btn.classList.remove('active')
-          if (btn.getAttribute('data-filter') === filter) {
-            btn.classList.add('active')
-          }
-        })
-        
-        filterPackages()
-      }
-
-      function filterPackages() {
-        const searchTerm = document.getElementById('packageSearch').value.toLowerCase()
-        
-        let filteredPackages = allPackages
-        
-        if (currentPackageFilter !== 'all') {
-          filteredPackages = filteredPackages.filter(pkg => pkg.type === currentPackageFilter)
-        }
-        
-        if (searchTerm) {
-          filteredPackages = filteredPackages.filter(pkg => pkg.name.toLowerCase().includes(searchTerm))
-        }
-        
-        // 현재 정렬 적용
-        filteredPackages = applySorting(filteredPackages)
-        
-        renderPackageTable(filteredPackages)
-        updatePackageStats(filteredPackages)
-      }
-
-      function sortPackages(column) {
-        // 같은 컬럼 클릭시 방향 변경, 다른 컬럼 클릭시 오름차순
-        if (currentSortColumn === column) {
-          currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc'
-        } else {
-          currentSortColumn = column
-          currentSortDirection = 'asc'
-        }
-        
-        // 헤더 UI 업데이트
-        updateSortHeaders()
-        
-        // 필터링 + 정렬 적용
-        filterPackages()
-      }
-
-      function updateSortHeaders() {
-        // 모든 헤더에서 정렬 클래스 제거
-        document.querySelectorAll('.package-table th').forEach(th => {
-          th.classList.remove('sort-asc', 'sort-desc')
-        })
-        
-        // 현재 정렬 컬럼에 클래스 추가
-        const headers = document.querySelectorAll('.package-table th')
-        const columnIndex = currentSortColumn === 'name' ? 0 : currentSortColumn === 'version' ? 1 : 2
-        
-        if (headers[columnIndex]) {
-          headers[columnIndex].classList.add(`sort-${currentSortDirection}`)
-        }
-      }
-
-      function applySorting(packages) {
-        return packages.sort((a, b) => {
-          let aVal, bVal
-          
-          if (currentSortColumn === 'name') {
-            aVal = a.name.toLowerCase()
-            bVal = b.name.toLowerCase()
-          } else if (currentSortColumn === 'version') {
-            // 버전 정렬 (숫자 기반)
-            aVal = a.version.replace(/[^0-9.]/g, '')
-            bVal = b.version.replace(/[^0-9.]/g, '')
-            
-            // 버전 숫자 비교
-            const aParts = aVal.split('.').map(n => parseInt(n) || 0)
-            const bParts = bVal.split('.').map(n => parseInt(n) || 0)
-            
-            for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-              const aNum = aParts[i] || 0
-              const bNum = bParts[i] || 0
-              if (aNum !== bNum) {
-                return currentSortDirection === 'asc' ? aNum - bNum : bNum - aNum
-              }
-            }
-            return 0
-          } else if (currentSortColumn === 'type') {
-            aVal = a.type
-            bVal = b.type
-          }
-          
-          if (currentSortColumn !== 'version') {
-            if (currentSortDirection === 'asc') {
-              return aVal > bVal ? 1 : aVal < bVal ? -1 : 0
-            } else {
-              return aVal < bVal ? 1 : aVal > bVal ? -1 : 0
-            }
-          }
-          
-          return 0
-        })
-      }
-
-      // 패키지 상세 정보 표시
-      async function showPackageDetail(name, version, type) {
-        const modal = document.getElementById('packageModal')
-        const modalTitle = document.getElementById('modalPackageName')
-        const modalBody = document.getElementById('modalPackageBody')
-        
-        // 모달 열기
-        modal.classList.add('active')
-        modalTitle.textContent = name
-        modalBody.innerHTML = '<div class="modal-loading"><div class="modal-spinner">⏳</div><div>로딩 중...</div></div>'
-        
-        try {
-          console.log(`📦 패키지 정보 가져오기: ${name}`)
-          const packageInfo = await window.electronAPI.getPackageInfo(name)
-          console.log('📦 패키지 정보:', packageInfo)
-          
-          if (!packageInfo) {
-            modalBody.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><div>패키지 정보를 가져올 수 없습니다.</div></div>'
-            return
-          }
-          
-          // 정보 렌더링
-          modalBody.innerHTML = `
-            <div class="package-detail-section">
-              <div class="package-detail-label">버전</div>
-              <div class="package-detail-value">
-                <span class="package-detail-badge">설치됨: ${version}</span>
-                ${packageInfo.latestVersion ? `<span class="package-detail-badge">최신: ${packageInfo.latestVersion}</span>` : ''}
-                <span class="package-detail-badge">${type === 'dev' ? 'Dev' : 'Prod'}</span>
-              </div>
-            </div>
-            
-            ${packageInfo.description ? `
-              <div class="package-detail-section">
-                <div class="package-detail-label">설명</div>
-                <div class="package-detail-description">${packageInfo.description}</div>
-              </div>
-            ` : ''}
-            
-            ${packageInfo.author ? `
-              <div class="package-detail-section">
-                <div class="package-detail-label">작성자</div>
-                <div class="package-detail-value">${packageInfo.author}</div>
-              </div>
-            ` : ''}
-            
-            ${packageInfo.license ? `
-              <div class="package-detail-section">
-                <div class="package-detail-label">라이선스</div>
-                <div class="package-detail-value">${packageInfo.license}</div>
-              </div>
-            ` : ''}
-            
-            ${packageInfo.homepage || packageInfo.repository ? `
-              <div class="package-detail-section">
-                <div class="package-detail-label">링크</div>
-                <div class="package-detail-links">
-                  ${packageInfo.homepage ? `<a href="${packageInfo.homepage}" class="package-detail-link" onclick="window.electronAPI.openExternal('${packageInfo.homepage}'); return false;">🏠 홈페이지</a>` : ''}
-                  ${packageInfo.repository ? `<a href="${packageInfo.repository}" class="package-detail-link" onclick="window.electronAPI.openExternal('${packageInfo.repository}'); return false;">📦 저장소</a>` : ''}
-                  <a href="https://www.npmjs.com/package/${name}" class="package-detail-link" onclick="window.electronAPI.openExternal('https://www.npmjs.com/package/${name}'); return false;">📚 NPM</a>
-                </div>
-              </div>
-            ` : ''}
-            
-            ${packageInfo.keywords && packageInfo.keywords.length > 0 ? `
-              <div class="package-detail-section">
-                <div class="package-detail-label">키워드</div>
-                <div class="package-detail-value">
-                  ${packageInfo.keywords.map(k => `<span class="package-detail-badge">${k}</span>`).join('')}
-                </div>
-              </div>
-            ` : ''}
-          `
-        } catch (error) {
-          console.error('패키지 정보 로딩 실패:', error)
-          modalBody.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><div>정보 로딩 실패: ${error.message}</div></div>`
-        }
-      }
-
-      function closePackageModal(event) {
-        // 오버레이 클릭 또는 닫기 버튼 클릭 시에만 닫기
-        if (!event || event.target.id === 'packageModal') {
-          document.getElementById('packageModal').classList.remove('active')
-        }
-      }
-
-      // ESC 키로 모달 닫기
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          closePackageModal()
-        }
-      })
-
-      // ========================================
-      // Prisma 관련 함수들
-      // ========================================
-
-      // Prisma 상태 새로고침
-      async function refreshPrismaStatus() {
-        try {
-          const status = await window.electronAPI.prisma.getStatus()
-          
-          // 스키마 상태
-          const schemaStatusEl = document.getElementById('prismaSchemaStatus')
-          if (status.schemaValid) {
-            schemaStatusEl.innerHTML = '<div class="status-dot running"></div><span>유효함</span>'
-          } else {
-            schemaStatusEl.innerHTML = '<div class="status-dot stopped"></div><span>무효 또는 없음</span>'
-          }
-
-          // 마이그레이션 상태
-          const migrationsStatusEl = document.getElementById('prismaMigrationsStatus')
-          if (status.migrationsCount > 0) {
-            migrationsStatusEl.innerHTML = `<div class="status-dot running"></div><span>${status.migrationsCount}개 (최신: ${status.lastMigration || 'N/A'})</span>`
-          } else {
-            migrationsStatusEl.innerHTML = '<div class="status-dot stopped"></div><span>마이그레이션 없음</span>'
-          }
-
-          // Studio 상태
-          const studioStatusEl = document.getElementById('prismaStudioStatus')
-          const startStudioBtn = document.getElementById('startStudioBtn')
-          const stopStudioBtn = document.getElementById('stopStudioBtn')
-          const openStudioBtn = document.getElementById('openStudioBtn')
-          
-          if (status.studioRunning) {
-            studioStatusEl.innerHTML = '<div class="status-dot running"></div><span>실행 중 (포트: 5555)</span>'
-            startStudioBtn.style.display = 'none'
-            stopStudioBtn.style.display = 'inline-block'
-            openStudioBtn.style.display = 'inline-block'
-          } else {
-            studioStatusEl.innerHTML = '<div class="status-dot stopped"></div><span>중지됨</span>'
-            startStudioBtn.style.display = 'inline-block'
-            stopStudioBtn.style.display = 'none'
-            openStudioBtn.style.display = 'none'
-          }
-        } catch (error) {
-          console.error('Prisma 상태 조회 실패:', error)
-        }
-      }
-
-      // 스키마 빌드
-      async function buildPrismaSchema() {
-        const button = document.getElementById('buildSchemaButton')
-        const originalText = button.innerHTML
-        
-        try {
-          button.disabled = true
-          button.innerHTML = '<span class="spinner"></span> 빌드 중...'
-          
-          console.log('📦 스키마 빌드 시작...')
-          const result = await window.electronAPI.prisma.buildSchema()
-          
-          if (result.success) {
-            showAlert('✅ 스키마 빌드 완료', result.message)
-          } else {
-            showAlert('❌ 스키마 빌드 실패', result.message)
-          }
-          
-          await refreshPrismaStatus()
-        } catch (error) {
-          showAlert('❌ 스키마 빌드 실패', error.message)
-        } finally {
-          button.disabled = false
-          button.innerHTML = originalText
-        }
-      }
-
-      // 스키마 검증
-      async function validatePrismaSchema() {
-        const button = document.getElementById('validateSchemaButton')
-        const originalText = button.innerHTML
-        
-        try {
-          button.disabled = true
-          button.innerHTML = '<span class="spinner"></span> 검증 중...'
-          
-          console.log('🔍 스키마 검증 시작...')
-          const result = await window.electronAPI.prisma.validateSchema()
-          
-          if (result.success) {
-            showAlert('✅ 스키마 검증 완료', result.message)
-          } else {
-            showAlert('❌ 스키마 검증 실패', result.message)
-          }
-        } catch (error) {
-          showAlert('❌ 스키마 검증 실패', error.message)
-        } finally {
-          button.disabled = false
-          button.innerHTML = originalText
-        }
-      }
-
-      // Prisma Client 생성
-      async function generatePrismaClient() {
-        const button = document.getElementById('generateClientButton')
-        const originalText = button.innerHTML
-        
-        try {
-          button.disabled = true
-          button.innerHTML = '<span class="spinner"></span> 생성 중...'
-          
-          console.log('🔄 Prisma Client 생성 시작...')
-          const result = await window.electronAPI.prisma.generateClient()
-          
-          if (result.success) {
-            showAlert('✅ Prisma Client 생성 완료', result.message)
-          } else {
-            showAlert('❌ Prisma Client 생성 실패', result.message)
-          }
-        } catch (error) {
-          showAlert('❌ Prisma Client 생성 실패', error.message)
-        } finally {
-          button.disabled = false
-          button.innerHTML = originalText
-        }
-      }
-
-      // 마이그레이션 실행
-      async function runPrismaMigration() {
-        const migrationNameInput = document.getElementById('migrationName')
-        const migrationName = migrationNameInput.value.trim()
-        
-        if (!migrationName) {
-          alert('⚠️ 마이그레이션 이름을 입력해주세요.\n\n예시: add_user_role, create_event_table')
-          return
-        }
-
-        const confirmed = confirm(`🚀 마이그레이션을 실행하시겠습니까?\n\n이름: ${migrationName}\n\n⚠️ 이 작업은 데이터베이스 스키마를 변경합니다.`)
-        if (!confirmed) return
-
-        const button = document.getElementById('runMigrationButton')
-        const originalText = button.innerHTML
-
-        try {
-          button.disabled = true
-          button.innerHTML = '<span class="spinner"></span> 마이그레이션 중...'
-          
-          console.log(`🚀 마이그레이션 실행: ${migrationName}`)
-          const result = await window.electronAPI.prisma.migrate(migrationName)
-          
-          if (result.success) {
-            showAlert('✅ 마이그레이션 완료', result.message)
-            migrationNameInput.value = ''
-            await loadMigrationHistory()
-            await refreshPrismaStatus()
-          } else {
-            showAlert('❌ 마이그레이션 실패', result.message)
-          }
-        } catch (error) {
-          showAlert('❌ 마이그레이션 실패', error.message)
-        } finally {
-          button.disabled = false
-          button.innerHTML = originalText
-        }
-      }
-
-      // 마이그레이션 상태 확인
-      async function checkMigrationStatus() {
-        try {
-          console.log('📊 마이그레이션 상태 확인 중...')
-          const result = await window.electronAPI.prisma.getMigrationStatus()
-          
-          if (result.success) {
-            alert('📊 마이그레이션 상태\n\n' + result.message)
-          } else {
-            alert('⚠️ 마이그레이션 상태\n\n' + result.message)
-          }
-        } catch (error) {
-          alert('❌ 마이그레이션 상태 확인 실패!\n\n' + error.message)
-        }
-      }
-
-      // 마이그레이션 히스토리 로드
-      async function loadMigrationHistory() {
-        try {
-          const migrations = await window.electronAPI.prisma.getMigrations()
-          const tbody = document.getElementById('migrationHistoryTable')
-          
-          if (migrations.length === 0) {
-            tbody.innerHTML = `
-              <tr>
-                <td colspan="2" class="empty-row">
-                  <div class="empty-state">
-                    <div class="empty-icon">📋</div>
-                    <div>마이그레이션 히스토리가 없습니다</div>
-                  </div>
-                </td>
-              </tr>
-            `
-          } else {
-            tbody.innerHTML = migrations.map(m => `
-              <tr>
-                <td style="font-family: 'Monaco', 'Menlo', monospace; font-size: 12px;">${m.name}</td>
-                <td style="color: rgba(255,255,255,0.6); font-size: 12px;">${m.appliedAt}</td>
-              </tr>
-            `).join('')
-          }
-        } catch (error) {
-          console.error('마이그레이션 히스토리 로드 실패:', error)
-        }
-      }
-
-      // Prisma Studio 시작
-      async function startPrismaStudio() {
-        try {
-          console.log('🎨 Prisma Studio 시작 중...')
-          const result = await window.electronAPI.prisma.startStudio()
-          
-          if (result.success) {
-            alert('✅ Prisma Studio 시작 완료!\n\n' + result.message + '\n\n브라우저에서 http://localhost:5555 를 열어주세요.')
-            await refreshPrismaStatus()
-          } else {
-            alert('❌ Prisma Studio 시작 실패!\n\n' + result.message)
-          }
-        } catch (error) {
-          alert('❌ Prisma Studio 시작 실패!\n\n' + error.message)
-        }
-      }
-
-      // Prisma Studio 중지
-      async function stopPrismaStudio() {
-        try {
-          console.log('🛑 Prisma Studio 중지 중...')
-          const result = await window.electronAPI.prisma.stopStudio()
-          
-          if (result.success) {
-            alert('✅ Prisma Studio 중지 완료!\n\n' + result.message)
-            await refreshPrismaStatus()
-          } else {
-            alert('❌ Prisma Studio 중지 실패!\n\n' + result.message)
-          }
-        } catch (error) {
-          alert('❌ Prisma Studio 중지 실패!\n\n' + error.message)
-        }
-      }
-
-      // Studio 브라우저에서 열기
-      function openStudioInBrowser() {
-        window.electronAPI.openExternal('http://localhost:5555')
-      }
-
-      // Seed 파일 목록 불러오기
-      async function loadSeedFiles() {
-        try {
-          const files = await window.electronAPI.prisma.getSeedFiles()
-          const tableBody = document.getElementById('seedFilesTable')
-          
-          if (files.length === 0) {
-            tableBody.innerHTML = `
-              <tr>
-                <td colspan="2" class="empty-row">
-                  <div class="empty-state">
-                    <div class="empty-icon">📂</div>
-                    <div>Seed 파일이 없습니다</div>
-                    <div style="font-size: 12px; margin-top: 8px; color: rgba(255,255,255,0.5);">
-                      <code>apps/api/prisma/seeds/</code> 폴더에 <code>.sql</code> 파일을 추가하세요
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            `
-          } else {
-            tableBody.innerHTML = files.map((file, index) => `
-              <tr>
-                <td style="text-align: center; color: rgba(255,255,255,0.6);">${index + 1}</td>
-                <td>
-                  <div style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px;">
-                    ${file.name}
-                  </div>
-                </td>
-              </tr>
-            `).join('')
-          }
-        } catch (error) {
-          console.error('Seed 파일 목록 불러오기 실패:', error)
-          const tableBody = document.getElementById('seedFilesTable')
-          tableBody.innerHTML = `
-            <tr>
-              <td colspan="2" class="empty-row">
-                <div class="empty-state">
-                  <div class="empty-icon">⚠️</div>
-                  <div>파일 목록을 불러오는데 실패했습니다</div>
-                </div>
-              </td>
-            </tr>
-          `
-        }
-      }
-
-      // Alert 다이얼로그 열기
-      function showAlert(title, content) {
-        document.getElementById('alertTitle').textContent = title
-        document.getElementById('alertContent').textContent = content
-        document.getElementById('alertDialog').style.display = 'flex'
-      }
-
-      // Alert 다이얼로그 닫기
-      function closeAlertDialog() {
-        document.getElementById('alertDialog').style.display = 'none'
-      }
-
-      // Alert 내용 복사
-      function copyAlertContent() {
-        const content = document.getElementById('alertContent').textContent
-        navigator.clipboard.writeText(content).then(() => {
-          const btn = document.getElementById('copyButton')
-          const originalText = btn.textContent
-          btn.textContent = '✅ 복사됨'
-          setTimeout(() => {
-            btn.textContent = originalText
-          }, 2000)
-        }).catch(err => {
-          console.error('복사 실패:', err)
-        })
-      }
-
-      // ESC 키로 다이얼로그 닫기
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-          closeAlertDialog()
-        }
-      })
-
-      // 배경 클릭 시 닫기
-      document.getElementById('alertDialog')?.addEventListener('click', function(e) {
-        if (e.target === this) {
-          closeAlertDialog()
-        }
-      })
-
-      // Docker 완전 초기화
-      async function resetDocker() {
-        const confirmed = confirm(
-          '⚠️ Docker 완전 초기화\n\n' +
-          '다음 항목이 모두 삭제됩니다:\n' +
-          '• 모든 컨테이너 (MySQL, Nginx)\n' +
-          '• 모든 볼륨 (데이터베이스 데이터)\n' +
-          '• 모든 이미지\n' +
-          '• 네트워크\n\n' +
-          '⚠️ 이 작업은 되돌릴 수 없습니다!\n\n' +
-          '계속하시겠습니까?'
-        )
-        
-        if (!confirmed) return
-
-        const button = document.getElementById('resetDockerButton')
-        const originalText = button.innerHTML
-
-        try {
-          button.disabled = true
-          button.innerHTML = '<span class="spinner"></span> 초기화 중...'
-          
-          console.log('🗑️ Docker 초기화 시작...')
-          const result = await window.electronAPI.resetDocker()
-          
-          if (result.success) {
-            showAlert('✅ Docker 초기화 완료', result.message)
-          } else {
-            showAlert('❌ Docker 초기화 실패', result.message)
-          }
-          
-          await updateStatus()
-        } catch (error) {
-          showAlert('❌ Docker 초기화 실패', error.message)
-        } finally {
-          button.disabled = false
-          button.innerHTML = originalText
-        }
-      }
-
-      // 로그 파일 목록 불러오기
-      async function loadLogFiles() {
-        const container = document.getElementById('logFilesList')
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><div>로그 파일을 불러오는 중...</div></div>'
-
-        try {
-          const logData = await window.electronAPI.getLogFiles()
-          
-          if (logData.length === 0) {
-            container.innerHTML = '<div class="empty-state"><div class="empty-icon">📂</div><div>로그 파일이 없습니다</div></div>'
-            return
-          }
-
-          let html = ''
-          for (const category of logData) {
-            html += `
-              <div style="margin-bottom: 24px;">
-                <h3 style="color: #4a9eff; margin-bottom: 12px; font-size: 16px;">
-                  📁 ${category.category}
-                </h3>
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-            `
-            
-            for (const file of category.files) {
-              const date = new Date(file.mtime).toLocaleString('ko-KR')
-              const sizeKB = (file.size / 1024).toFixed(2)
-              const status = file.name.includes('success') ? '✅' : '❌'
-              
-              html += `
-                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'" onclick="viewLogFile('${file.path.replace(/\\/g, '\\\\')}')">
-                  <div>
-                    <div style="font-family: 'Monaco', 'Courier New', monospace; font-size: 13px; color: rgba(255,255,255,0.9);">
-                      ${status} ${file.name}
-                    </div>
-                    <div style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 4px;">
-                      ${date} • ${sizeKB} KB
-                    </div>
-                  </div>
-                  <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); viewLogFile('${file.path.replace(/\\/g, '\\\\')}')">
-                    📄 보기
-                  </button>
-                </div>
-              `
-            }
-            
-            html += '</div></div>'
-          }
-          
-          container.innerHTML = html
-        } catch (error) {
-          console.error('로그 파일 목록 불러오기 실패:', error)
-          container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><div>로그 파일을 불러오는데 실패했습니다</div></div>'
-        }
-      }
-
-      // 로그 파일 보기
-      async function viewLogFile(filePath) {
-        try {
-          console.log('📄 로그 파일 읽기:', filePath)
-          const content = await window.electronAPI.readLogFile(filePath)
-          const fileName = filePath.split('/').pop()
-          showAlert(`📄 ${fileName}`, content)
-        } catch (error) {
-          showAlert('❌ 로그 파일 읽기 실패', error.message)
-        }
-      }
-
-      // Seed 실행
-      async function runSeed() {
-        const confirmed = confirm('🌱 Seed 데이터를 삽입하시겠습니까?\n\n이미 데이터가 있는 경우 중복될 수 있습니다.')
-        if (!confirmed) return
-
-        const button = document.getElementById('runSeedButton')
-        const originalText = button.innerHTML
-        
-        try {
-          // 버튼 로딩 상태로 변경
-          button.disabled = true
-          button.innerHTML = '<span class="spinner"></span> Seed 실행 중...'
-          
-          console.log('🌱 Seed 실행 중...')
-          const result = await window.electronAPI.prisma.runSeed()
-          
-          if (result.success) {
-            showAlert('✅ Seed 완료', result.message)
-          } else {
-            showAlert('❌ Seed 실패', result.message)
-          }
-        } catch (error) {
-          showAlert('❌ Seed 실패', error.message)
-        } finally {
-          // 버튼 원래 상태로 복구
-          button.disabled = false
-          button.innerHTML = originalText
-        }
-      }
-
-      // 초기화
-      window.cachedStatus = null
-      renderServices()
-      updateStatus()
-      setInterval(updateStatus, 3000)
-      
-      // 🔥 디버깅: 페이지 로드 후 구조 확인
-      setTimeout(() => {
-        console.log('=== 페이지 구조 디버깅 ===');
-        const container = document.querySelector('.container');
-        const wrapper = document.querySelector('.tab-contents-wrapper');
-        const services = document.getElementById('tab-services');
-        const packages = document.getElementById('tab-packages');
-        const prisma = document.getElementById('tab-prisma');
-        
-        console.log('container:', container?.getBoundingClientRect());
-        console.log('wrapper:', wrapper?.getBoundingClientRect());
-        console.log('services:', services?.getBoundingClientRect());
-        console.log('packages:', packages?.getBoundingClientRect());
-        console.log('prisma:', prisma?.getBoundingClientRect());
-        
-        console.log('wrapper computed style:', wrapper ? {
-          display: window.getComputedStyle(wrapper).display,
-          position: window.getComputedStyle(wrapper).position,
-          width: window.getComputedStyle(wrapper).width,
-          height: window.getComputedStyle(wrapper).height,
-        } : 'N/A');
-        
-        console.log('packages computed style:', packages ? {
-          display: window.getComputedStyle(packages).display,
-          position: window.getComputedStyle(packages).position,
-        } : 'N/A');
-      }, 1000);
-      
-      // 페이지 로드 완료 시 패키지 목록 자동 로드
-      console.log('🎬 페이지 로드 완료 - 초기화 시작')
-      console.log('🔍 window.electronAPI 존재:', !!window.electronAPI)
-      console.log('🔍 getInstalledPackages 존재:', !!(window.electronAPI && window.electronAPI.getInstalledPackages))
-      
-      setTimeout(() => {
-        console.log('📦 패키지 목록 자동 로드 시작 (1초 후)')
-        try {
-          loadInstalledPackages()
-        } catch (error) {
-          console.error('❌ loadInstalledPackages 호출 실패:', error)
-          alert('❌ loadInstalledPackages 호출 실패:\n' + error.message)
-        }
-      }, 1000)
-      
-      // Prisma 서브탭 전환
-      function switchPrismaSubTab(subtabName) {
-        console.log('🔄 Prisma 서브탭 전환:', subtabName)
-        
-        // 모든 서브탭 버튼 비활성화
-        document.querySelectorAll('.prisma-subtab-btn').forEach(btn => {
-          btn.classList.remove('active')
-        })
-        
-        // 모든 서브탭 콘텐츠 숨기기
-        document.querySelectorAll('.prisma-subtab-content').forEach(content => {
-          content.classList.remove('active')
-        })
-        
-        // 클릭된 버튼 찾아서 활성화
-        document.querySelectorAll('.prisma-subtab-btn').forEach(btn => {
-          if (btn.textContent.includes(subtabName === 'overview' ? '개요' : 
-              subtabName === 'schema' ? '스키마' : 
-              subtabName === 'migration' ? '마이그레이션' : 
-              subtabName === 'studio' ? 'Studio' : 
-              subtabName === 'seed' ? 'Seed' : '히스토리')) {
-            btn.classList.add('active')
-          }
-        })
-        
-        // 선택한 서브탭 콘텐츠 활성화
-        const targetContent = document.getElementById(`prisma-subtab-${subtabName}`)
-        if (targetContent) {
-          targetContent.classList.add('active')
-          console.log('✅ 서브탭 활성화:', subtabName)
-        } else {
-          console.error('❌ 서브탭을 찾을 수 없음:', `prisma-subtab-${subtabName}`)
-        }
-
-        // 히스토리 탭이 활성화되면 자동 로드
-        if (subtabName === 'history') {
-          loadMigrationHistory()
-        }
-
-        // Seed 탭이 활성화되면 파일 목록 로드
-        if (subtabName === 'seed') {
-          loadSeedFiles()
-        }
-
-        // 개요 탭이 활성화되면 상태 새로고침
-        if (subtabName === 'overview') {
-          refreshPrismaStatus()
-        }
-      }
-
-      // Prisma 탭이 활성화되면 상태 새로고침
-      const originalSwitchTab = switchTab
-      switchTab = function(tabName) {
-        originalSwitchTab(tabName)
-        if (tabName === 'prisma') {
-          refreshPrismaStatus()
-        }
-        // 패키지 탭 진입 시 자동 로드
-        if (tabName === 'packages') {
-          console.log('📦 패키지 탭 진입 - 자동 로드')
-          if (allPackages.length === 0) {
-            loadInstalledPackages()
-          }
-        }
-      }
-    </script>
-
     <!-- 간단한 Alert 다이얼로그 (스크롤 + 복사 기능) -->
-    <div id="alertDialog" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
-      <div style="background: #2a2a2a; border-radius: 8px; padding: 20px; max-width: 500px; max-height: 70vh; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.5); min-width: 400px;">
-        <div id="alertTitle" style="font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 12px;"></div>
-        <div style="flex: 1; overflow-y: auto; margin-bottom: 16px; position: relative;">
-          <pre id="alertContent" style="margin: 0; padding: 12px; background: #1a1a1a; border-radius: 4px; color: rgba(255,255,255,0.9); line-height: 1.5; white-space: pre-wrap; word-break: break-word; font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; max-height: 50vh; overflow-y: auto;"></pre>
-          <button id="copyButton" onclick="copyAlertContent()" style="position: absolute; top: 8px; right: 8px; background: rgba(74, 158, 255, 0.2); border: 1px solid rgba(74, 158, 255, 0.5); color: #4a9eff; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; transition: all 0.2s;">
+    <div
+      id="alertDialog"
+      class="alert-dialog"
+      role="dialog"
+      aria-labelledby="alertTitle"
+      aria-modal="true"
+    >
+      <div class="alert-dialog-content">
+        <div id="alertTitle" class="alert-dialog-title"></div>
+        <div class="alert-dialog-body">
+          <pre id="alertContent" class="alert-dialog-content-text"></pre>
+          <button
+            id="copyButton"
+            class="alert-dialog-copy-btn"
+            onclick="copyAlertContent()"
+            aria-label="알림 내용 복사"
+          >
             📋 복사
           </button>
         </div>
-        <button onclick="closeAlertDialog()" style="background: #4a9eff; border: none; color: white; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s;">
+        <button
+          class="alert-dialog-confirm-btn"
+          onclick="closeAlertDialog()"
+          aria-label="알림 닫기"
+        >
           확인
         </button>
       </div>
     </div>
   </body>
+
+  <script type="module" src="js/app.js"></script>
 </html>

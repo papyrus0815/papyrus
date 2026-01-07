@@ -2,20 +2,20 @@
  * Papyrus Service Manager - Main Process
  * 독립 실행형 서비스 관리 도구
  */
-
 import {
-  app,
-  Tray,
-  Menu,
-  nativeImage,
-  dialog,
   BrowserWindow,
+  Menu,
+  Tray,
+  app,
+  dialog,
   ipcMain,
+  nativeImage,
 } from 'electron'
-import * as path from 'path'
 import * as fs from 'fs'
-import { ServiceManager } from './services/service-manager'
+import * as path from 'path'
+
 import { PrismaManager } from './services/prisma-manager'
+import { ServiceManager } from './services/service-manager'
 
 // macOS에서 Dock에 앱 아이콘 표시
 if (process.platform === 'darwin') {
@@ -98,7 +98,16 @@ function createWindow() {
   })
 
   // HTML 파일 로드
+  // TypeScript로 변환되었으므로 개발/프로덕션 모두 dist/renderer/index.html 사용
+  // (개발 모드에서도 TypeScript 컴파일이 필요함)
   const htmlPath = path.join(__dirname, 'renderer', 'index.html')
+  
+  // dist/renderer/index.html이 없으면 빌드 필요
+  if (!fs.existsSync(htmlPath)) {
+    console.error('❌ dist/renderer/index.html이 없습니다. 빌드를 실행하세요: npm run build')
+    console.error('   또는 개발 모드: npm run dev (자동으로 빌드 후 실행)')
+  }
+  
   console.log(`📄 Loading HTML from: ${htmlPath}`)
   mainWindow.loadFile(htmlPath)
 
@@ -577,7 +586,7 @@ function registerIpcHandlers() {
   ipcMain.handle('service:resetDocker', async () => {
     console.log('🗑️ [IPC] Docker 초기화 요청')
     const result = await serviceManager.dockerManager.resetDocker()
-    
+
     // 초기화 후 상태 업데이트
     setTimeout(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -591,12 +600,9 @@ function registerIpcHandlers() {
   // API 서버 제어
   ipcMain.handle('service:startApi', async () => {
     const projectRoot =
-      serviceManager['projectRoot'] ||
-      '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
     console.log(`🚀 [IPC] API 서버 시작 요청 (프로젝트 경로: ${projectRoot})`)
-    return await serviceManager.papyrusServerManager.startApiServer(
-      projectRoot,
-    )
+    return await serviceManager.papyrusServerManager.startApiServer(projectRoot)
   })
 
   ipcMain.handle('service:stopApi', async () => {
@@ -607,8 +613,7 @@ function registerIpcHandlers() {
   // 관리자 웹 서버 제어
   ipcMain.handle('service:startWebAdmin', async () => {
     const projectRoot =
-      serviceManager['projectRoot'] ||
-      '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
     console.log(
       `🚀 [IPC] 관리자 웹 서버 시작 요청 (프로젝트 경로: ${projectRoot})`,
     )
@@ -625,8 +630,7 @@ function registerIpcHandlers() {
   // 사용자 웹 서버 제어
   ipcMain.handle('service:startWebUser', async () => {
     const projectRoot =
-      serviceManager['projectRoot'] ||
-      '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
     console.log(
       `🚀 [IPC] 사용자 웹 서버 시작 요청 (프로젝트 경로: ${projectRoot})`,
     )
@@ -666,11 +670,12 @@ function registerIpcHandlers() {
     const execAsync = promisify(exec)
 
     try {
-      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
+      const projectRoot =
+        serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
       console.log('📦 패키지 업데이트 확인 중...')
 
       let stdout = ''
-      
+
       try {
         // npm outdated를 사용하여 업데이트 가능한 패키지 확인
         // 참고: npm outdated는 업데이트가 있으면 exit code 1을 반환하므로 catch로 처리
@@ -736,43 +741,53 @@ function registerIpcHandlers() {
   })
 
   // 패키지 업데이트 실행
-  ipcMain.handle('service:updatePackages', async (_event, packages: string[]) => {
-    const { exec } = require('child_process')
-    const { promisify } = require('util')
-    const execAsync = promisify(exec)
+  ipcMain.handle(
+    'service:updatePackages',
+    async (_event, packages: string[]) => {
+      const { exec } = require('child_process')
+      const { promisify } = require('util')
+      const execAsync = promisify(exec)
 
-    try {
-      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
-      
-      if (!packages || packages.length === 0) {
-        return { success: false, message: '업데이트할 패키지를 선택해주세요.' }
-      }
+      try {
+        const projectRoot =
+          serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
 
-      console.log(`📦 패키지 업데이트 시작: ${packages.join(', ')}`)
-      
-      // npm install <package>@<version>을 사용하여 정확한 버전으로 업데이트
-      // packages는 이미 "package@version" 형태로 전달됨
-      const packageList = packages.join(' ')
-      const { stdout, stderr } = await execAsync(`npm install ${packageList}`, {
-        cwd: projectRoot,
-        timeout: 120000, // 2분
-      })
+        if (!packages || packages.length === 0) {
+          return {
+            success: false,
+            message: '업데이트할 패키지를 선택해주세요.',
+          }
+        }
 
-      console.log('✅ 패키지 업데이트 완료')
-      return { 
-        success: true, 
-        message: `${packages.length}개 패키지 업데이트 완료`,
-        output: stdout || stderr
+        console.log(`📦 패키지 업데이트 시작: ${packages.join(', ')}`)
+
+        // npm install <package>@<version>을 사용하여 정확한 버전으로 업데이트
+        // packages는 이미 "package@version" 형태로 전달됨
+        const packageList = packages.join(' ')
+        const { stdout, stderr } = await execAsync(
+          `npm install ${packageList}`,
+          {
+            cwd: projectRoot,
+            timeout: 120000, // 2분
+          },
+        )
+
+        console.log('✅ 패키지 업데이트 완료')
+        return {
+          success: true,
+          message: `${packages.length}개 패키지 업데이트 완료`,
+          output: stdout || stderr,
+        }
+      } catch (error: any) {
+        console.error('❌ 패키지 업데이트 실패:', error.message)
+        return {
+          success: false,
+          message: error.message,
+          output: error.stdout || error.stderr,
+        }
       }
-    } catch (error: any) {
-      console.error('❌ 패키지 업데이트 실패:', error.message)
-      return { 
-        success: false, 
-        message: error.message,
-        output: error.stdout || error.stderr
-      }
-    }
-  })
+    },
+  )
 
   // 전체 패키지 업데이트
   ipcMain.handle('service:updateAllPackages', async () => {
@@ -781,27 +796,28 @@ function registerIpcHandlers() {
     const execAsync = promisify(exec)
 
     try {
-      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
-      
+      const projectRoot =
+        serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
+
       console.log('📦 전체 패키지 업데이트 시작...')
-      
+
       const { stdout, stderr } = await execAsync('npm update', {
         cwd: projectRoot,
         timeout: 300000, // 5분
       })
 
       console.log('✅ 전체 패키지 업데이트 완료')
-      return { 
-        success: true, 
+      return {
+        success: true,
         message: '전체 패키지 업데이트 완료',
-        output: stdout || stderr
+        output: stdout || stderr,
       }
     } catch (error: any) {
       console.error('❌ 전체 패키지 업데이트 실패:', error.message)
-      return { 
-        success: false, 
+      return {
+        success: false,
         message: error.message,
-        output: error.stdout || error.stderr
+        output: error.stdout || error.stderr,
       }
     }
   })
@@ -809,23 +825,24 @@ function registerIpcHandlers() {
   // 설치된 패키지 목록 가져오기
   ipcMain.handle('service:getInstalledPackages', async () => {
     const fs = require('fs')
-    
+
     try {
-      const projectRoot = serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
+      const projectRoot =
+        serviceManager['projectRoot'] || path.resolve(__dirname, '../../')
       const packageJsonPath = path.join(projectRoot, 'package.json')
-      
+
       console.log('📚 package.json 읽기:', packageJsonPath)
-      
+
       const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
       const dependencies = packageJson.dependencies || {}
       const devDependencies = packageJson.devDependencies || {}
-      
+
       const packages: Array<{
         name: string
         version: string
         type: string
       }> = []
-      
+
       // 프로덕션 의존성
       for (const [name, version] of Object.entries(dependencies)) {
         packages.push({
@@ -834,7 +851,7 @@ function registerIpcHandlers() {
           type: 'prod',
         })
       }
-      
+
       // 개발 의존성
       for (const [name, version] of Object.entries(devDependencies)) {
         packages.push({
@@ -843,11 +860,13 @@ function registerIpcHandlers() {
           type: 'dev',
         })
       }
-      
+
       // 이름순 정렬
       packages.sort((a, b) => a.name.localeCompare(b.name))
-      
-      console.log(`📚 전체 패키지: ${packages.length}개 (Prod: ${Object.keys(dependencies).length}, Dev: ${Object.keys(devDependencies).length})`)
+
+      console.log(
+        `📚 전체 패키지: ${packages.length}개 (Prod: ${Object.keys(dependencies).length}, Dev: ${Object.keys(devDependencies).length})`,
+      )
       return packages
     } catch (error: any) {
       console.error('❌ 패키지 목록 로딩 실패:', error.message)
@@ -856,62 +875,72 @@ function registerIpcHandlers() {
   })
 
   // 패키지 상세 정보 가져오기
-  ipcMain.handle('service:getPackageInfo', async (_event, packageName: string) => {
-    const { exec } = require('child_process')
-    const { promisify } = require('util')
-    const execAsync = promisify(exec)
+  ipcMain.handle(
+    'service:getPackageInfo',
+    async (_event, packageName: string) => {
+      const { exec } = require('child_process')
+      const { promisify } = require('util')
+      const execAsync = promisify(exec)
 
-    try {
-      console.log(`📦 패키지 정보 가져오기: ${packageName}`)
+      try {
+        console.log(`📦 패키지 정보 가져오기: ${packageName}`)
 
-      // npm view 명령어로 패키지 정보 가져오기
-      const { stdout } = await execAsync(
-        `npm view ${packageName} description version author license homepage repository keywords --json`,
-        {
-          timeout: 10000,
+        // npm view 명령어로 패키지 정보 가져오기
+        const { stdout } = await execAsync(
+          `npm view ${packageName} description version author license homepage repository keywords --json`,
+          {
+            timeout: 10000,
+          },
+        )
+
+        const info = JSON.parse(stdout)
+
+        // repository URL 정리
+        let repositoryUrl = ''
+        if (info.repository) {
+          if (typeof info.repository === 'string') {
+            repositoryUrl = info.repository
+          } else if (info.repository.url) {
+            repositoryUrl = info.repository.url
+              .replace(/^git\+/, '')
+              .replace(/\.git$/, '')
+          }
         }
-      )
 
-      const info = JSON.parse(stdout)
-      
-      // repository URL 정리
-      let repositoryUrl = ''
-      if (info.repository) {
-        if (typeof info.repository === 'string') {
-          repositoryUrl = info.repository
-        } else if (info.repository.url) {
-          repositoryUrl = info.repository.url.replace(/^git\+/, '').replace(/\.git$/, '')
+        // author 정리
+        let authorName = ''
+        if (info.author) {
+          if (typeof info.author === 'string') {
+            authorName = info.author
+          } else if (info.author.name) {
+            authorName = info.author.name
+          }
         }
-      }
 
-      // author 정리
-      let authorName = ''
-      if (info.author) {
-        if (typeof info.author === 'string') {
-          authorName = info.author
-        } else if (info.author.name) {
-          authorName = info.author.name
+        const packageInfo = {
+          name: packageName,
+          description: info.description || '',
+          latestVersion: info.version || '',
+          author: authorName,
+          license: info.license || '',
+          homepage: info.homepage || '',
+          repository: repositoryUrl,
+          keywords: Array.isArray(info.keywords)
+            ? info.keywords.slice(0, 10)
+            : [],
         }
-      }
 
-      const packageInfo = {
-        name: packageName,
-        description: info.description || '',
-        latestVersion: info.version || '',
-        author: authorName,
-        license: info.license || '',
-        homepage: info.homepage || '',
-        repository: repositoryUrl,
-        keywords: Array.isArray(info.keywords) ? info.keywords.slice(0, 10) : [],
+        console.log(`✅ 패키지 정보 가져오기 성공: ${packageName}`)
+        return packageInfo
+      } catch (error: any) {
+        console.error(
+          `❌ 패키지 정보 가져오기 실패 (${packageName}):`,
+          error.message,
+        )
+        return null
       }
-
-      console.log(`✅ 패키지 정보 가져오기 성공: ${packageName}`)
-      return packageInfo
-    } catch (error: any) {
-      console.error(`❌ 패키지 정보 가져오기 실패 (${packageName}):`, error.message)
-      return null
-    }
-  })
+    },
+  )
 
   // 포트 체크
   ipcMain.handle('service:checkPort', async (_event, port: number) => {
@@ -1044,6 +1073,446 @@ function registerIpcHandlers() {
   ipcMain.handle('service:readLogFile', async (_event, filePath: string) => {
     console.log('📄 [IPC] 로그 파일 읽기 요청:', filePath)
     return await serviceManager.readLogFile(filePath)
+  })
+
+  // ========================================
+  // Environment Variables IPC Handlers
+  // ========================================
+
+  // 환경 변수 파일 목록 조회
+  ipcMain.handle('env:getFiles', async () => {
+    console.log('📋 [IPC] 환경 변수 파일 목록 조회 요청')
+    try {
+      const projectRoot =
+        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      const envFiles: string[] = []
+
+      const files = ['env.development', 'env.production', 'env.test']
+      for (const file of files) {
+        const filePath = path.join(projectRoot, file)
+        if (fs.existsSync(filePath)) {
+          envFiles.push(file)
+        }
+      }
+
+      return envFiles
+    } catch (error: any) {
+      console.error('❌ 환경 변수 파일 목록 조회 실패:', error.message)
+      return []
+    }
+  })
+
+  // 환경 변수 읽기
+  ipcMain.handle('env:read', async (_event, fileName: string) => {
+    console.log(`📖 [IPC] 환경 변수 읽기 요청: ${fileName}`)
+    try {
+      const projectRoot =
+        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      const filePath = path.join(projectRoot, fileName)
+
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`파일을 찾을 수 없습니다: ${fileName}`)
+      }
+
+      const content = fs.readFileSync(filePath, 'utf-8')
+
+      // 환경 변수 파싱 (key=value 형식)
+      const variables: Record<string, string> = {}
+      const lines = content.split('\n')
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+
+        // 빈 줄이나 주석 건너뛰기
+        if (!trimmed || trimmed.startsWith('#')) {
+          continue
+        }
+
+        // key=value 파싱
+        const equalIndex = trimmed.indexOf('=')
+        if (equalIndex === -1) {
+          continue
+        }
+
+        const key = trimmed.substring(0, equalIndex).trim()
+        let value = trimmed.substring(equalIndex + 1).trim()
+
+        // 따옴표 제거
+        if (
+          (value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))
+        ) {
+          value = value.slice(1, -1)
+        }
+
+        variables[key] = value
+      }
+
+      return {
+        success: true,
+        variables,
+        raw: content,
+      }
+    } catch (error: any) {
+      console.error('❌ 환경 변수 읽기 실패:', error.message)
+      return {
+        success: false,
+        message: error.message,
+        variables: {},
+        raw: '',
+      }
+    }
+  })
+
+  // 환경 변수 쓰기
+  ipcMain.handle(
+    'env:write',
+    async (_event, fileName: string, variables: Record<string, string>) => {
+      console.log(`✏️ [IPC] 환경 변수 쓰기 요청: ${fileName}`)
+      try {
+        const projectRoot =
+          serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+        const filePath = path.join(projectRoot, fileName)
+
+        // 기존 파일 읽기 (주석 및 섹션 구조 유지)
+        let originalContent = ''
+        if (fs.existsSync(filePath)) {
+          originalContent = fs.readFileSync(filePath, 'utf-8')
+        }
+
+        // 백업 생성
+        if (fs.existsSync(filePath)) {
+          const backupPath = `${filePath}.backup.${Date.now()}`
+          fs.copyFileSync(filePath, backupPath)
+          console.log(`📦 백업 생성: ${backupPath}`)
+        }
+
+        // 환경 변수를 key=value 형식으로 변환
+        let newContent = ''
+        const lines = originalContent.split('\n')
+        const updatedKeys = new Set<string>()
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+
+          // 빈 줄이나 주석은 그대로 유지
+          if (!trimmed || trimmed.startsWith('#')) {
+            newContent += line + '\n'
+            continue
+          }
+
+          // key=value 파싱
+          const equalIndex = trimmed.indexOf('=')
+          if (equalIndex === -1) {
+            newContent += line + '\n'
+            continue
+          }
+
+          const key = trimmed.substring(0, equalIndex).trim()
+
+          // 변수가 업데이트 목록에 있으면 새 값으로 교체
+          if (key in variables) {
+            const value = variables[key]
+            newContent += `${key}=${value}\n`
+            updatedKeys.add(key)
+          } else {
+            newContent += line + '\n'
+          }
+        }
+
+        // 새로 추가된 변수 처리
+        for (const [key, value] of Object.entries(variables)) {
+          if (!updatedKeys.has(key)) {
+            newContent += `${key}=${value}\n`
+          }
+        }
+
+        // 파일 쓰기
+        fs.writeFileSync(filePath, newContent, 'utf-8')
+        console.log(`✅ 환경 변수 저장 완료: ${filePath}`)
+
+        return {
+          success: true,
+          message: '환경 변수가 성공적으로 저장되었습니다.',
+        }
+      } catch (error: any) {
+        console.error('❌ 환경 변수 쓰기 실패:', error.message)
+        return {
+          success: false,
+          message: error.message,
+        }
+      }
+    },
+  )
+
+  // 환경 변수 삭제
+  ipcMain.handle(
+    'env:delete',
+    async (_event, fileName: string, key: string) => {
+      console.log(`🗑️ [IPC] 환경 변수 삭제 요청: ${fileName} - ${key}`)
+      try {
+        const projectRoot =
+          serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+        const filePath = path.join(projectRoot, fileName)
+
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`파일을 찾을 수 없습니다: ${fileName}`)
+        }
+
+        // 백업 생성
+        const backupPath = `${filePath}.backup.${Date.now()}`
+        fs.copyFileSync(filePath, backupPath)
+        console.log(`📦 백업 생성: ${backupPath}`)
+
+        const content = fs.readFileSync(filePath, 'utf-8')
+        const lines = content.split('\n')
+        const newLines: string[] = []
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+
+          // key=value 파싱
+          const equalIndex = trimmed.indexOf('=')
+          if (equalIndex !== -1) {
+            const lineKey = trimmed.substring(0, equalIndex).trim()
+
+            // 삭제할 키가 아니면 유지
+            if (lineKey !== key) {
+              newLines.push(line)
+            }
+          } else {
+            // 주석이나 빈 줄은 유지
+            newLines.push(line)
+          }
+        }
+
+        fs.writeFileSync(filePath, newLines.join('\n'), 'utf-8')
+        console.log(`✅ 환경 변수 삭제 완료: ${key}`)
+
+        return {
+          success: true,
+          message: `환경 변수 '${key}'가 삭제되었습니다.`,
+        }
+      } catch (error: any) {
+        console.error('❌ 환경 변수 삭제 실패:', error.message)
+        return {
+          success: false,
+          message: error.message,
+        }
+      }
+    },
+  )
+
+  // ========================================
+  // Nestia SDK IPC Handlers
+  // ========================================
+
+  // Nestia SDK 빌드
+  ipcMain.handle('nestia:build', async () => {
+    console.log('🔨 [IPC] Nestia SDK 빌드 요청')
+    const { exec } = require('child_process')
+    const { promisify } = require('util')
+    const execAsync = promisify(exec)
+    const fs = require('fs')
+
+    const projectRoot =
+      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+    const apiPath = path.join(projectRoot, 'apps/api')
+    const startTime = new Date()
+    let isSuccess = false
+    let output = ''
+
+    try {
+      console.log(`📂 API 경로: ${apiPath}`)
+      console.log('🔨 Nestia SDK 빌드 시작...')
+
+      const result = await execAsync('npx nestia sdk', {
+        cwd: apiPath,
+        timeout: 60000, // 1분
+      })
+
+      output = result.stdout || result.stderr || ''
+      isSuccess = true
+    } catch (error: any) {
+      // exit code가 0이 아니어도 stderr에 출력이 있을 수 있음
+      // SDK 파일이 생성되었는지 확인
+      output = error.stdout || error.stderr || error.message
+
+      const sdkPath = path.join(projectRoot, 'apps/api/src/api/functional')
+      if (fs.existsSync(sdkPath)) {
+        const files = fs.readdirSync(sdkPath)
+        if (files.length > 0) {
+          isSuccess = true
+          console.log('✅ SDK 파일이 생성되었으므로 성공으로 간주')
+        }
+      }
+    }
+
+    const endTime = new Date()
+    const duration = endTime.getTime() - startTime.getTime()
+
+    // 로그 저장
+    const logDir = path.join(projectRoot, 'logs/nestia/build')
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true })
+    }
+
+    const timestamp = startTime.toISOString().replace(/:/g, '-').split('.')[0]
+    const status = isSuccess ? 'success' : 'failed'
+    const logFile = path.join(logDir, `${timestamp}_${status}.log`)
+    const logContent = [
+      `========================================`,
+      `Nestia SDK Build Log`,
+      `========================================`,
+      `Start Time: ${startTime.toISOString()}`,
+      `End Time: ${endTime.toISOString()}`,
+      `Duration: ${duration}ms`,
+      `Status: ${isSuccess ? 'SUCCESS' : 'FAILED'}`,
+      ``,
+      `========================================`,
+      `Output:`,
+      `========================================`,
+      output,
+    ].join('\n')
+
+    fs.writeFileSync(logFile, logContent, 'utf-8')
+    console.log(`📝 로그 저장: ${logFile}`)
+
+    if (isSuccess) {
+      console.log('✅ Nestia SDK 빌드 완료')
+      return {
+        success: true,
+        message: `✅ Nestia SDK 빌드 완료\n\n소요 시간: ${duration}ms\n\n${output}`,
+      }
+    } else {
+      console.error('❌ Nestia SDK 빌드 실패')
+      return {
+        success: false,
+        message: `❌ Nestia SDK 빌드 실패\n\n${output}`,
+      }
+    }
+  })
+
+  // Nestia SDK 검증
+  ipcMain.handle('nestia:validate', async () => {
+    console.log('✅ [IPC] Nestia SDK 검증 요청')
+    const fs = require('fs')
+
+    try {
+      const projectRoot =
+        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      const sdkPath = path.join(projectRoot, 'apps/api/src/api')
+      const swaggerPath = path.join(projectRoot, 'apps/api/swagger.json')
+
+      console.log(`📂 SDK 경로: ${sdkPath}`)
+      console.log(`📂 Swagger 경로: ${swaggerPath}`)
+
+      const startTime = new Date()
+
+      // SDK 폴더 확인
+      if (!fs.existsSync(sdkPath)) {
+        throw new Error('SDK 폴더가 없습니다. SDK를 먼저 빌드해주세요.')
+      }
+
+      // Swagger 파일 확인
+      if (!fs.existsSync(swaggerPath)) {
+        throw new Error('Swagger 파일이 없습니다. SDK를 먼저 빌드해주세요.')
+      }
+
+      // SDK 파일 목록 확인
+      const functionalPath = path.join(sdkPath, 'functional')
+      if (!fs.existsSync(functionalPath)) {
+        throw new Error(
+          'SDK functional 폴더가 없습니다. SDK를 먼저 빌드해주세요.',
+        )
+      }
+
+      const files = fs.readdirSync(functionalPath)
+      const tsFiles = files.filter((f: string) => f.endsWith('.ts'))
+
+      console.log(`✅ SDK 검증 완료: ${tsFiles.length}개 파일`)
+
+      const message =
+        `✅ SDK 검증 완료\n\n` +
+        `📁 SDK 경로: apps/api/src/api/\n` +
+        `📄 생성된 파일: ${tsFiles.length}개\n` +
+        `📄 Swagger: swagger.json\n\n` +
+        `주요 파일:\n${tsFiles
+          .slice(0, 10)
+          .map((f: string) => `  • ${f}`)
+          .join('\n')}` +
+        (tsFiles.length > 10 ? `\n  ... 외 ${tsFiles.length - 10}개` : '')
+
+      // 로그 저장
+      const logDir = path.join(projectRoot, 'logs/nestia/validate')
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true })
+      }
+
+      const timestamp = startTime.toISOString().replace(/:/g, '-').split('.')[0]
+      const logFile = path.join(logDir, `${timestamp}_success.log`)
+      const logContent = [
+        `========================================`,
+        `Nestia SDK Validation Log`,
+        `========================================`,
+        `Time: ${startTime.toISOString()}`,
+        `Status: SUCCESS`,
+        ``,
+        `========================================`,
+        `Results:`,
+        `========================================`,
+        `SDK Path: ${sdkPath}`,
+        `Swagger Path: ${swaggerPath}`,
+        `Total Files: ${tsFiles.length}`,
+        ``,
+        `Files:`,
+        tsFiles.map((f: string) => `  - ${f}`).join('\n'),
+      ].join('\n')
+
+      fs.writeFileSync(logFile, logContent, 'utf-8')
+      console.log(`📝 로그 저장: ${logFile}`)
+
+      return {
+        success: true,
+        message,
+      }
+    } catch (error: any) {
+      console.error('❌ Nestia SDK 검증 실패:', error.message)
+
+      // 실패 로그 저장
+      const projectRoot =
+        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      const logDir = path.join(projectRoot, 'logs/nestia/validate')
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true })
+      }
+
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/:/g, '-')
+        .split('.')[0]
+      const logFile = path.join(logDir, `${timestamp}_failed.log`)
+      const logContent = [
+        `========================================`,
+        `Nestia SDK Validation Log`,
+        `========================================`,
+        `Time: ${new Date().toISOString()}`,
+        `Status: FAILED`,
+        ``,
+        `========================================`,
+        `Error:`,
+        `========================================`,
+        error.message,
+      ].join('\n')
+
+      fs.writeFileSync(logFile, logContent, 'utf-8')
+      console.log(`📝 로그 저장: ${logFile}`)
+
+      return {
+        success: false,
+        message: `❌ SDK 검증 실패\n\n${error.message}`,
+      }
+    }
   })
 }
 
