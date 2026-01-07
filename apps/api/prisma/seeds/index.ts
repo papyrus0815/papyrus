@@ -1,0 +1,5 @@
+export * from './admin.seed'
+export * from './continent.seed'
+export * from './country.seed'
+export * from './eventCategory.seed'
+export * from './historicalCountry.seed'
