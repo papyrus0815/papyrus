@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
-const path = require('path')
-const fs = require('fs')
+import path from 'path'
+import fs from 'fs'
+import { fileURLToPath, pathToFileURL } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 /**
  * 스크립트 실행기
@@ -92,7 +96,8 @@ return
     process.argv = ['node', fullScriptPath, ...scriptOptions]
 
     console.log(`🚀 실행 중: ${scriptPath}`)
-    const script = require(fullScriptPath)
+    const scriptModule = await import(pathToFileURL(fullScriptPath).href)
+    const script = scriptModule.default || scriptModule
 
     if (typeof script === 'function') {
       await script()
@@ -103,8 +108,9 @@ return
   }
 }
 
-if (require.main === module) {
+// ES 모듈에서는 import.meta.url로 현재 모듈 확인
+if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch(console.error)
 }
 
-module.exports = main
+export default main

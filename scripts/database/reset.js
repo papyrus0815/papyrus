@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const { runCommands, runNpx, success, error } = require('../utils/common')
-const build = require('./build')
-const generate = require('./generate')
+import { runNpx, success, error } from '../utils/common.js'
+import build from './build.js'
+import generate from './generate.js'
 
 async function main() {
   try {
@@ -29,8 +29,8 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main()
 }
 
-module.exports = main
+export default main

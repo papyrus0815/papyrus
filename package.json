@@ -2,7 +2,6 @@
   "name": "papyrus",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
   "scripts": {
     "script": "node scripts/run.js",
     "dev": "node scripts/run.js development/dev",

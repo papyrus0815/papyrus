@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { runNpx, getEnvVar, success, error } = require('../utils/common')
+import { runNpx, success, error } from '../utils/common.js'
 
 async function main(options = {}) {
   try {
@@ -27,7 +27,7 @@ async function main(options = {}) {
 }
 
 // CLI 인수 처리
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2)
   const options = {
     network: args.includes('--network'),
@@ -36,4 +36,4 @@ if (require.main === module) {
   main(options)
 }
 
-module.exports = main
+export default main

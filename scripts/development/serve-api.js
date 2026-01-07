@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { runNpx, success, error } = require('../utils/common')
+import { runNpx, success, error } from '../utils/common.js'
 
 async function main() {
   try {
@@ -13,8 +13,9 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+// ES 모듈에서 직접 실행 여부 확인
+if (import.meta.url === `file://${process.argv[1]}`) {
   main()
 }
 
-module.exports = main
+export default main
