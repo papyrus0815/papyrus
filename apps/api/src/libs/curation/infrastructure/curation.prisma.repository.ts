@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { PrismaClient } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 import {
   ICurationRepository,
   CurationFindManyParams,
@@ -25,7 +25,7 @@ function toCurationEntity(data: any): CurationEntity {
 
 @Injectable()
 export class CurationPrismaRepository implements ICurationRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(
     data: Omit<CurationEntity, 'id' | 'createdAt' | 'updatedAt'>,

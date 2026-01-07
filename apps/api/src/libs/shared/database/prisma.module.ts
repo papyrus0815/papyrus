@@ -1,34 +1,23 @@
 import { Global, Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { PrismaClient } from '@prisma/client'
-import { ConfigService } from '@nestjs/config'
+import { PrismaService } from '@prisma/prisma.service'
 
 @Global()
 @Module({
   providers: [
     {
       provide: PrismaClient,
-      useFactory: (configService: ConfigService) => {
-        const databaseUrl = configService.get<string>('DATABASE_URL')
-        
-        const prisma = new PrismaClient({
-          adapter: databaseUrl,
-          log: ['query', 'info', 'warn', 'error'],
-        })
-
-        // 에러 로깅
-        prisma.$on('error', (event) => {
-          console.error('Prisma error:', event)
-        })
-
-        return prisma
+      useFactory: () => {
+        // 공통 설정을 사용하여 PrismaService 생성 (datasources 사용)
+        return new PrismaService({ useAdapter: false })
       },
-      inject: [ConfigService],
     },
+    PrismaService,
   ],
-  exports: [PrismaClient],
+  exports: [PrismaClient, PrismaService],
 })
 export class PrismaModule implements OnModuleInit, OnModuleDestroy {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
     try {

@@ -6,7 +6,7 @@
 //================================================================
 import type { IConnection } from "@nestia/fetcher";
 import { PlainFetcher } from "@nestia/fetcher/lib/PlainFetcher";
-import type { AggregateType } from "@prisma/client";
+import type { AggregateType } from '@prisma/client';
 import type { Primitive } from "typia";
 
 import type { PaginatedCurationResponse } from "../../../../libs/curation/presentation/curation.controller";

@@ -6,7 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { Logger } from '@nestjs/common'
 import cookieParser from 'cookie-parser'
 import { AppModule } from './app.module'
-import { AppConfigService } from '../../../libs/shared/config'
+import { AppConfigService } from '../../../libs/shared/config/index'
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap')

@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common'
-import { PrismaClient, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 import { Event } from '../domain/event.entity'
 import { EventRepository } from '../domain/event.repository'
 
 @Injectable()
 export class EventPrismaRepository implements EventRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(): Promise<Event[]> {
     const events = await this.prisma.event.findMany({

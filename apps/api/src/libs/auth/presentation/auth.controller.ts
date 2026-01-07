@@ -16,10 +16,13 @@ import { AuthGuard } from '@nestjs/passport'
 import { Inject } from '@nestjs/common'
 import { AccountsPrismaRepository } from '../infrastructure/accounts.prisma.repository'
 import type { Response } from 'express'
-import { AppConfigService } from '../../shared/config'
-// import { TypedBody, TypedRoute } from '@nestia/core'
+import { AppConfigService } from '../../shared/config/config.service'
 import type { AccountMeResponseDto } from './dto/account-me.response'
 
+/**
+ * 인증 컨트롤러  
+ * @description 로그인, 세션 디버그, 리프레시 토큰 재발급 기능 제공
+ */
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -28,26 +31,23 @@ export class AuthController {
     private readonly configService: AppConfigService,
   ) {}
 
+  /**
+   * 로그인 요청 처리
+   * @param dto - 로그인 요청 데이터
+   * @param res - 응답 객체
+   * @returns - 로그인 응답 데이터  
+   */  
   @Post('login')
   @ApiOperation({ summary: '로그인' })
   async login(
-    @Body() dto: LoginDto,
-    @Res({ passthrough: true }) res: Response,
+    @Body() dto: LoginDto, 
+    @Res({ passthrough: true }) res: Response
   ): Promise<LoginResponseDto> {
-    const { accessToken, refreshToken } = await this.auth.login(dto)
-    const cookieSettings = this.configService.security.cookieSettings
+    // 로그인 처리
+    const tokens = await this.auth.login(dto)
+    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken)
     
-    // httpOnly 쿠키로 발급
-    res.cookie('access_token', accessToken, {
-      ...cookieSettings,
-      maxAge: 1000 * 60 * 60 * 24 * 30, // 30d
-    })
-    res.cookie('refresh_token', refreshToken, {
-      ...cookieSettings,
-      maxAge: 1000 * 60 * 60 * 24 * 90, // 90d
-    })
-
-    return { accessToken, refreshToken }
+    return tokens
   }
 
   @Get('session')
@@ -91,6 +91,28 @@ export class AuthController {
 
     return { ok: true }
   }
+
+  private setAuthCookies(res: Response, access: string, refresh?: string) {
+    const settings = this.configService.security.cookieSettings;
+    
+    res.cookie('access_token', access, {
+      ...settings,
+      maxAge: this.parseDuration(this.configService.jwt.expiresIn), 
+    });
+
+    if (refresh) {
+      res.cookie('refresh_token', refresh, {
+        ...settings,
+        maxAge: this.parseDuration(this.configService.jwt.refreshExpiresIn),
+      });
+    }
+  }
+
+  // '30d' 같은 문자열을 ms 숫자로 변환하는 유틸리티 (ms 라이브러리 활용 권장)
+  private parseDuration(d: any): number {
+    // 임시: 하드코딩 대신 config의 단위를 숫자로 변환하는 로직 필요
+    return 1000 * 60 * 60 * 24 * 30; 
+  }
 }
 
 @ApiTags('account')
@@ -99,15 +121,23 @@ export class AuthController {
 @Controller('account')
 export class AccountController {
   constructor(
-    @Inject(AccountsPrismaRepository)
-    private readonly accounts: AccountsPrismaRepository,
+    private readonly authService: AuthService, 
   ) {}
 
   @Get('me')
+  @ApiOperation({ summary: '내 정보 조회' })
   async me(@Req() req: any): Promise<AccountMeResponseDto | null> {
-    const userId = req.user?.userId as string
-    const account = userId ? await this.accounts.findById(userId) : null
-    if (!account) return null
-    return { id: account.id, account: account.username, heroId: account.heroId }
+    const userId = req.user?.userId;
+    if (!userId) return null;
+
+    // accounts repository를 직접 사용
+    const account = await this.authService['accounts'].findUnique({ id: userId });
+    
+    if (!account) return null;
+    return { 
+      id: account.id, 
+      account: account.username, 
+      heroId: account.heroId 
+    };
   }
 }

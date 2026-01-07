@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { PrismaClient, ParticipationType, CombatType } from '@prisma/client'
+import { ParticipationType, CombatType, PrismaClient } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 import { MilitaryEventDto } from '../presentation/dto/military-event.dto'
 
 /**
@@ -14,7 +15,7 @@ import { MilitaryEventDto } from '../presentation/dto/military-event.dto'
  */
 @Injectable()
 export class MilitaryEventService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * 군사 정보 저장
@@ -346,7 +347,7 @@ export class MilitaryEventService {
     if (sides.length > 0) {
       await tx.countryInSide.deleteMany({
         where: {
-          sideId: { in: sides.map((sideItem) => sideItem.id) },
+          sideId: { in: sides.map((sideItem: { id: string }) => sideItem.id) },
         },
       })
     }

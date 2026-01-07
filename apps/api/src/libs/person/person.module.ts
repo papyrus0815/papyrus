@@ -12,10 +12,6 @@ import { PersonPrismaRepository } from './infrastructure/person.prisma.repositor
   providers: [
     PersonService,
     PersonPrismaRepository,
-    {
-      provide: PrismaClient,
-      useValue: new PrismaClient(),
-    },
   ],
   exports: [PersonService],
 })

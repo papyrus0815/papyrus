@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { PrismaClient } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 import { Country } from '../domain/country.entity'
 import {
   CountryRepository,
@@ -8,7 +8,7 @@ import {
 
 @Injectable()
 export class CountryPrismaRepository implements CountryRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(): Promise<Country[]> {
     const countries = await this.prisma.country.findMany({

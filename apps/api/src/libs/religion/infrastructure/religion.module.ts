@@ -9,10 +9,6 @@ import { ReligionRepository } from './religion.repository'
   providers: [
     ReligionService,
     ReligionRepository,
-    {
-      provide: PrismaClient,
-      useValue: new PrismaClient(),
-    },
   ],
   exports: [ReligionService],
 })

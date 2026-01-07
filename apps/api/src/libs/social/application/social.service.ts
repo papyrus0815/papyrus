@@ -4,11 +4,11 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common'
-import { PrismaClient } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 
 @Injectable()
 export class SocialService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // ==================== FOLLOW ====================
   async follow(followerId: string, followingId: string) {

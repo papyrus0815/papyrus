@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { PrismaClient } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 import {
   IHistoricalCountryRepository,
   CreateHistoricalCountryData,
@@ -11,7 +11,7 @@ import { HistoricalCountry } from '../domain/historical-country.entity'
 export class HistoricalCountryPrismaRepository
   implements IHistoricalCountryRepository
 {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(): Promise<HistoricalCountry[]> {
     const countries = await this.prisma.historicalCountry.findMany({

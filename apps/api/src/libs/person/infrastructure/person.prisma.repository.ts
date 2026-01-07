@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { Person, PrismaClient } from '@prisma/client'
+import { Person } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 import {
   IPersonRepository,
   CreatePersonData,
@@ -11,7 +12,7 @@ import {
  */
 @Injectable()
 export class PersonPrismaRepository implements IPersonRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * 모든 인물 목록 조회

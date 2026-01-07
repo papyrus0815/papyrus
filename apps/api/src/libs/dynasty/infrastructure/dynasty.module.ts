@@ -9,10 +9,6 @@ import { DynastyRepository } from './dynasty.repository'
   providers: [
     DynastyService,
     DynastyRepository,
-    {
-      provide: PrismaClient,
-      useValue: new PrismaClient(),
-    },
   ],
   exports: [DynastyService],
 })

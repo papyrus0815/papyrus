@@ -9,10 +9,6 @@ import { JobRepository } from './job.repository'
   providers: [
     JobService,
     JobRepository,
-    {
-      provide: PrismaClient,
-      useValue: new PrismaClient(),
-    },
   ],
   exports: [JobService],
 })

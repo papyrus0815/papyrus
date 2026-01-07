@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { PrismaClient } from '@prisma/client'
+import { PrismaService } from '@prisma/prisma.service'
 import { IUserRepository } from '../domain/user.repository'
 import { UserEntity } from '../domain/user.entity'
 
@@ -18,7 +18,7 @@ function toUserEntity(data: any): UserEntity {
 
 @Injectable()
 export class UserPrismaRepository implements IUserRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(
     data: Omit<UserEntity, 'id' | 'createdAt' | 'updatedAt'>,

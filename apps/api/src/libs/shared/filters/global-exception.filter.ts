@@ -7,8 +7,9 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common'
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/client'
 import { Request, Response } from 'express'
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library'
+
 
 export interface ApiErrorResponse {
   success: false

@@ -8,7 +8,7 @@ const config = {
   },
   output: 'src/api',
   swagger: {
-    output: 'src/api/swagger.json',
+    output: 'swagger.json',
     info: {
       title: 'Papyrus API',
       version: '1.0.0',
@@ -24,4 +24,4 @@ const config = {
   ],
 }
 
-export default config
+module.exports = config
