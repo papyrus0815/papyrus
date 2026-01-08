@@ -1,5 +1,10 @@
+import {
+  AggregateType,
+  CurationStatus,
+  CurationVisibility,
+} from '@prisma/client'
+
 import { CurationEntity } from './curation.entity'
-import { AggregateType, CurationVisibility, CurationStatus } from '@prisma/client'
 
 /**
  * Curation 생성 시 필요한 데이터 타입 (메서드 제외)
@@ -61,17 +66,26 @@ export interface ICurationRepository {
   /**
    * 큐레이션 목록 조회
    */
-  findMany(params: CurationFindManyParams): Promise<{ curations: CurationEntity[]; total: number }>
+  findMany(
+    params: CurationFindManyParams,
+  ): Promise<{ curations: CurationEntity[]; total: number }>
 
   /**
    * 특정 항목의 큐레이션 목록 조회 (항목 피드)
    */
-  findByItem(itemType: AggregateType, itemId: string, params: { skip?: number; take?: number }): Promise<{ curations: CurationEntity[]; total: number }>
+  findByItem(
+    itemType: AggregateType,
+    itemId: string,
+    params: { skip?: number; take?: number },
+  ): Promise<{ curations: CurationEntity[]; total: number }>
 
   /**
    * 사용자의 큐레이션 목록 조회
    */
-  findByUser(userId: string, params: { skip?: number; take?: number }): Promise<{ curations: CurationEntity[]; total: number }>
+  findByUser(
+    userId: string,
+    params: { skip?: number; take?: number },
+  ): Promise<{ curations: CurationEntity[]; total: number }>
 
   /**
    * 큐레이션 업데이트
@@ -113,4 +127,3 @@ export interface ICurationRepository {
    */
   incrementReportCount(id: string): Promise<void>
 }
-

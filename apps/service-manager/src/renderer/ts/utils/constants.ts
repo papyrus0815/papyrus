@@ -61,3 +61,13 @@ export const CONSOLE = {
   MAX_LOGS: 100,
 } as const
 
+// 환경 변수 키 매핑
+export const ENV_KEYS = {
+  MYSQL_PORT: 'MYSQL_PORT',
+  NGINX_HTTP_PORT: 'NGINX_HTTP_PORT',
+  NGINX_HTTPS_PORT: 'NGINX_HTTPS_PORT',
+  API_PORT: 'API_PORT',
+  WEB_PORT: 'WEB_PORT',
+  WEB_USER_PORT: 'WEB_USER_PORT',
+  DOMAIN_NAME: 'DOMAIN_NAME',
+} as const

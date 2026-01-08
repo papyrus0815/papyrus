@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt'
 import * as bcrypt from 'bcrypt'
 import { AccountRepository } from '../domain/account.repository'
 import { AppConfigService } from '../../shared/config/config.service'
-import {AggregateType, EventMethod } from '@prisma/client/client'
+import {AggregateType, EventMethod } from '@prisma/client'
 @Injectable()
 export class AuthService {
   constructor(

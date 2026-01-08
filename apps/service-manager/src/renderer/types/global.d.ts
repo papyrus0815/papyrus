@@ -15,13 +15,14 @@ declare global {
     updateStatus: () => Promise<void>
     clearConsoleLog: () => void
     openDevTools: () => void
-    renderServices: () => void
+    renderServices: () => Promise<void>
     getServiceStatus: (serviceId: string) => string
     updateServiceButtons: () => void
     handleStart: (serviceId: string) => Promise<void>
     handleStop: (serviceId: string) => Promise<void>
     openUrl: (url: string) => void
     resetDocker: () => Promise<void>
+    clearEnvCache: () => void
     switchTab: (tabName: string) => void
     switchPrismaSubTab: (subtabName: string) => void
     showAlert: (title: string, content: string) => void

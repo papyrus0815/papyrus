@@ -5,14 +5,11 @@ import { PrismaService } from '@prisma/prisma.service'
 @Global()
 @Module({
   providers: [
+    PrismaService,
     {
       provide: PrismaClient,
-      useFactory: () => {
-        // 공통 설정을 사용하여 PrismaService 생성 (datasources 사용)
-        return new PrismaService({ useAdapter: false })
-      },
+      useExisting: PrismaService,
     },
-    PrismaService,
   ],
   exports: [PrismaClient, PrismaService],
 })

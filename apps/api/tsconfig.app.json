@@ -1,6 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "outDir": "../../dist/apps/api",
@@ -10,6 +12,8 @@
     "strict": true,
     "strictNullChecks": true,
     "plugins": [
+      { "transform": "typescript-transform-paths" },
+      { "transform": "typescript-transform-paths", "afterDeclarations": true },
       {
         "transform": "typia/lib/transform"
       },
@@ -18,6 +22,6 @@
       }
     ]
   },
-  "include": ["src/**/*.ts", "prisma/generated/**/*.ts"],
+  "include": ["src/**/*.ts", "prisma/generated/**/*.ts", "prisma/**/*.ts"],
   "exclude": ["**/*.spec.ts"]
 }

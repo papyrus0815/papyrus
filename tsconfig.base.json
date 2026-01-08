@@ -22,9 +22,11 @@
       "@api": ["apps/api/src/api/module.ts"],
       "@api/*": ["apps/api/src/api/*"],
       "@papyrus/api-sdk": ["libs/api-sdk/src/index.ts"],
-      "@prisma/client": ["apps/api/prisma/generated/client"],
-      "@prisma/client/*": ["apps/api/prisma/generated/*"],
-      "@prisma/prisma.service": ["apps/api/prisma/prisma.service"]
+
+      "@prisma/client": ["node_modules/.prisma/client"],
+      "@prisma/client/*": ["node_modules/.prisma/client/*"],
+      "@prisma/prisma.service": ["apps/api/prisma/prisma.service"],
+      "@prisma/config": ["apps/api/prisma/prisma.config"]
     }
   },
   "exclude": ["node_modules", "tmp"]

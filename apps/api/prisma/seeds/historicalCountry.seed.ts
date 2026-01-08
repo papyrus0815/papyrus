@@ -1,4 +1,5 @@
-import { Era, HistoricalStateType } from '../generated/client'
+import { Era, HistoricalStateType } from '@prisma/client'
+
 import { PrismaService } from '../prisma.service'
 
 export interface HistoricalCountryData {
@@ -74,8 +75,7 @@ const HISTORICAL_COUNTRIES: HistoricalCountryData[] = [
     id: 'hist-country-joseon',
     name: '조선',
     enName: 'Joseon',
-    description:
-      '한국의 마지막 왕조. 500년 이상 존속. 한글 창제, 성리학 발전.',
+    description: '한국의 마지막 왕조. 500년 이상 존속. 한글 창제, 성리학 발전.',
     startEra: Era.AD,
     startYear: 1392,
     endEra: Era.AD,
@@ -153,4 +153,3 @@ export async function seedHistoricalCountries(
 
   console.log(`✅ 총 ${HISTORICAL_COUNTRIES.length}개 역사적 국가 생성 완료!\n`)
 }
-

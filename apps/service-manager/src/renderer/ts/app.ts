@@ -98,7 +98,7 @@ async function updateStatus(): Promise<void> {
 
     // 서비스 목록 화면 갱신
     if (typeof window.renderServices === 'function') {
-      window.renderServices()
+      await window.renderServices()
     }
 
     // Prisma 관련 상태(Overview 등)도 갱신이 필요하면 호출

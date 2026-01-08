@@ -14,13 +14,19 @@ async function bootstrap() {
   console.log('🚀 Starting bootstrap process...')
 
   try {
+    console.log('📍 Step 1: Creating temporary app...')
     // 임시로 앱을 만들어 config 가져오기
-    const tempApp = await NestFactory.create(AppModule, { logger: false })
+    const tempApp = await NestFactory.create(AppModule, { 
+      logger: ['error', 'warn', 'log', 'debug', 'verbose'] 
+    })
+    console.log('📍 Step 2: Getting config service...')
     const configService = tempApp.get(AppConfigService)
     const config = configService.app
     const securityConfig = configService.security
+    console.log('📍 Step 3: Closing temporary app...')
     await tempApp.close()
 
+    console.log('📍 Step 4: Creating actual app...')
     // 실제 앱 생성
     const app = await NestFactory.create<NestExpressApplication>(
       AppModule,
@@ -33,6 +39,8 @@ async function bootstrap() {
           }
         : undefined,
     )
+
+    console.log('📍 Step 5: Configuring CORS...')
 
     // CORS 설정
     app.enableCors({

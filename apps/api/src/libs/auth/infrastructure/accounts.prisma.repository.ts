@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import { AccountRepository } from '../domain/account.repository'
 import { AccountEntity } from '../domain/account.entity'
-import { Account, ActionLog, Prisma } from '@prisma/client/client'
+import { Account, ActionLog, Prisma } from '@prisma/client'
 @Injectable()
 export class AccountsPrismaRepository implements AccountRepository {
   constructor(private readonly prisma: PrismaService) {}

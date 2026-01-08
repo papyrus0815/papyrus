@@ -7,14 +7,14 @@
       "executor": "nx:run-commands",
       "outputs": ["{workspaceRoot}/dist/apps/api"],
       "options": {
-        "command": "tspc -p apps/api/tsconfig.app.json",
+        "command": "npx prisma generate --schema=apps/api/prisma/schema.prisma && tspc -p apps/api/tsconfig.app.json",
         "cwd": "."
       }
     },
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node -r dotenv/config dist/apps/api/apps/api-gateway/src/main.js",
+        "command": "DOTENV_CONFIG_PATH=env.development node -r dotenv/config dist/apps/api/src/apps/api-gateway/src/main.js",
         "cwd": ".",
         "env": {
           "NODE_ENV": "development",

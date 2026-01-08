@@ -4,7 +4,7 @@ import { EventCategoryController } from './presentation/event-category.controlle
 
 @Module({
   controllers: [EventCategoryController],
-  providers: [PrismaClient],
+  providers: [],
 })
 export class EventCategoryModule {}
 

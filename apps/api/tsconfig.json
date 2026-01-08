@@ -9,9 +9,9 @@
     "types": ["node", "express", "multer"],
     "esModuleInterop": true,
     "plugins": [
-      {
-        "transform": "typia/lib/transform"
-      }
+      { "transform": "typescript-transform-paths" },
+      { "transform": "typescript-transform-paths", "afterDeclarations": true },
+      { "transform": "typia/lib/transform" }
     ],
     "skipLibCheck": true,
     "strictNullChecks": true,
