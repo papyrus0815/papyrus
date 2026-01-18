@@ -178,6 +178,25 @@ export const EventCreatePage: React.FC = () => {
     }>
   >([])
 
+  // 🆕 하위 사건 빠른 등록
+  const [childEvents, setChildEvents] = useState<
+    Array<{
+      title: string
+      startDate?: string
+      endDate?: string
+      description?: string
+      location?: string
+    }>
+  >([])
+  const [showChildEventForm, setShowChildEventForm] = useState(false)
+  const [newChildEvent, setNewChildEvent] = useState({
+    title: '',
+    startDate: '',
+    endDate: '',
+    description: '',
+    location: '',
+  })
+
   // 관련 인물
   const [relatedPersons, setRelatedPersons] = useState<
     Array<{ personId: string; role: string; note: string }>
@@ -813,6 +832,7 @@ export const EventCreatePage: React.FC = () => {
         warCost,
         mentionedPersons,
         mentionedEvents,
+        childEvents, // 🆕 하위 사건 추가
       })
 
       console.log('📤 사건 데이터 전송:', eventData)
@@ -832,7 +852,7 @@ export const EventCreatePage: React.FC = () => {
       }
 
       // 성공 시 목록 페이지로 이동
-      navigate(pathKeys.history.events())
+      navigate(pathKeys.events.root())
     } catch (error) {
       console.error('사건 등록 실패:', error)
       toast.error(
@@ -1114,7 +1134,7 @@ export const EventCreatePage: React.FC = () => {
           currentStep={currentStep}
           setCurrentStep={setCurrentStep}
           playClickSound={playClickSound}
-          onBack={() => navigate(pathKeys.history.events())}
+          onBack={() => navigate(pathKeys.events.root())}
         />
 
         {/* 우측: 폼 */}
@@ -1425,6 +1445,124 @@ export const EventCreatePage: React.FC = () => {
                   <S.Hint>
                     이 사건이 다른 사건의 하위 사건인 경우 상위 사건을
                     선택하세요 (예: 노르망디 상륙작전 → 제2차 세계 대전)
+                  </S.Hint>
+                </S.FormField>
+              </S.FormRow>
+
+              {/* 🆕 하위 사건 빠른 추가 */}
+              <S.FormRow>
+                <S.FormLabel>하위 사건</S.FormLabel>
+                <S.FormField>
+                  {childEvents.length > 0 && (
+                    <S.ChildEventsList>
+                      {childEvents.map((child, idx) => (
+                        <S.ChildEventItem key={idx}>
+                          <div>
+                            <strong>{child.title}</strong>
+                            {child.startDate && <span> · {child.startDate}</span>}
+                            {child.location && <span> · {child.location}</span>}
+                          </div>
+                          <S.RemoveChildButton
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              setChildEvents(childEvents.filter((_, i) => i !== idx))
+                            }}
+                          >
+                            <FiX size={14} />
+                          </S.RemoveChildButton>
+                        </S.ChildEventItem>
+                      ))}
+                    </S.ChildEventsList>
+                  )}
+                  
+                  {showChildEventForm ? (
+                    <S.QuickAddForm>
+                      <S.QuickAddInputGroup>
+                        <S.QuickAddInput
+                          type="text"
+                          placeholder="사건명 (필수)*"
+                          value={newChildEvent.title}
+                          onChange={(e) => setNewChildEvent({...newChildEvent, title: e.target.value})}
+                        />
+                        <S.QuickAddInput
+                          type="date"
+                          placeholder="시작일"
+                          value={newChildEvent.startDate}
+                          onChange={(e) => setNewChildEvent({...newChildEvent, startDate: e.target.value})}
+                        />
+                        <S.QuickAddInput
+                          type="date"
+                          placeholder="종료일"
+                          value={newChildEvent.endDate}
+                          onChange={(e) => setNewChildEvent({...newChildEvent, endDate: e.target.value})}
+                        />
+                        <S.QuickAddInput
+                          type="text"
+                          placeholder="위치"
+                          value={newChildEvent.location}
+                          onChange={(e) => setNewChildEvent({...newChildEvent, location: e.target.value})}
+                        />
+                      </S.QuickAddInputGroup>
+                      <S.QuickAddButtons>
+                        <S.QuickAddButton
+                          type="button"
+                          $variant="primary"
+                          onClick={() => {
+                            playClickSound()
+                            if (!newChildEvent.title.trim()) {
+                              toast.error('사건명을 입력하세요')
+                              return
+                            }
+                            setChildEvents([...childEvents, newChildEvent])
+                            setNewChildEvent({
+                              title: '',
+                              startDate: '',
+                              endDate: '',
+                              description: '',
+                              location: '',
+                            })
+                            setShowChildEventForm(false)
+                            toast.success('하위 사건이 추가되었습니다')
+                          }}
+                        >
+                          <FiCheck size={14} />
+                          추가
+                        </S.QuickAddButton>
+                        <S.QuickAddButton
+                          type="button"
+                          $variant="secondary"
+                          onClick={() => {
+                            playClickSound()
+                            setShowChildEventForm(false)
+                            setNewChildEvent({
+                              title: '',
+                              startDate: '',
+                              endDate: '',
+                              description: '',
+                              location: '',
+                            })
+                          }}
+                        >
+                          <FiX size={14} />
+                          취소
+                        </S.QuickAddButton>
+                      </S.QuickAddButtons>
+                    </S.QuickAddForm>
+                  ) : (
+                    <S.AddChildButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setShowChildEventForm(true)
+                      }}
+                    >
+                      <FiPlus size={14} />
+                      하위 사건 추가
+                    </S.AddChildButton>
+                  )}
+                  <S.Hint>
+                    이 사건에 포함되는 하위 사건들을 빠르게 추가하세요 (예: 2차 세계대전 → 폴란드 침공, 프랑스 침공...). 기본 정보만 입력하고, 상세 내용은 나중에 작성할 수 있습니다.
                   </S.Hint>
                 </S.FormField>
               </S.FormRow>

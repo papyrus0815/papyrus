@@ -45,15 +45,15 @@ export default defineConfig(({ mode }) => ({
       },
       {
         find: /^@api\/(.*)$/,
-        replacement: resolve(__dirname, '../apps/api/src/api/$1'),
+        replacement: resolve(__dirname, '../../apps/api/src/api/$1'),
       },
       {
         find: '@api',
-        replacement: resolve(__dirname, '../apps/api/src/api/index.ts'),
+        replacement: resolve(__dirname, '../../apps/api/src/api/index.ts'),
       },
       {
         find: '@papyrus/api-sdk',
-        replacement: resolve(__dirname, '../libs/api-sdk/src/index.ts'),
+        replacement: resolve(__dirname, '../../libs/api-sdk/src/index.ts'),
       },
     ],
   },
@@ -84,6 +84,13 @@ export default defineConfig(({ mode }) => ({
       'all', // 모든 호스트 허용
     ],
     proxy: {
+      // 🔧 FIX: /uploads 경로를 백엔드로 프록시 (정적 파일)
+      '/uploads': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      },
       // 모든 API 요청을 자동으로 백엔드로 프록시 (정적 파일 제외)
       // 정적 파일(.js, .css, .html 등)이나 Vite 내부 요청(/@...)이 아니면 모두 API로 프록시
       '/': {

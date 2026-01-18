@@ -329,20 +329,34 @@ export function usePersonPage() {
     )
 
     try {
+      // 날짜 구성: birthDate
+      let birthDate: string | undefined = undefined
+      if (formData.birthYear) {
+        const year = String(formData.birthYear).padStart(4, '0')
+        const month = formData.birthMonth ? String(formData.birthMonth).padStart(2, '0') : '01'
+        const day = formData.birthDay ? String(formData.birthDay).padStart(2, '0') : '01'
+        birthDate = `${year}-${month}-${day}`
+      }
+
+      // 날짜 구성: deathDate
+      let deathDate: string | undefined = undefined
+      if (formData.deathYear) {
+        const year = String(formData.deathYear).padStart(4, '0')
+        const month = formData.deathMonth ? String(formData.deathMonth).padStart(2, '0') : '01'
+        const day = formData.deathDay ? String(formData.deathDay).padStart(2, '0') : '01'
+        deathDate = `${year}-${month}-${day}`
+      }
+
       const payload: CreatePersonData = {
         name: formData.name.trim(),
-        surname: formData.surname?.trim() || '',
+        surname: formData.surname?.trim() || undefined,
         gender: formData.gender,
         biography: formData.biography?.trim(),
         profileImageUrl: formData.profileImageUrl?.trim(),
-        birthEra: formData.birthEra,
-        birthYear: formData.birthYear,
-        birthMonth: formData.birthMonth,
-        birthDay: formData.birthDay,
-        deathEra: formData.deathEra,
-        deathYear: formData.deathYear,
-        deathMonth: formData.deathMonth,
-        deathDay: formData.deathDay,
+        birthEra: formData.birthYear ? formData.birthEra : undefined,
+        birthDate: birthDate,
+        deathEra: formData.deathYear ? formData.deathEra : undefined,
+        deathDate: deathDate,
         dynastyId: formData.dynastyId,
         religionId: formData.religionId,
         denominationId: formData.denominationId,

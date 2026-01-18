@@ -10,7 +10,7 @@
     "serve:web": "node scripts/run.js development/serve-web",
     "serve:web:network": "node scripts/run.js development/serve-web --network",
     "serve:web:tunnel": "node scripts/run.js development/serve-web --tunnel",
-    "serve:web-admin": "nx run web-admin:serve",
+    "serve:web-admin": "nx run web:serve",
     "serve:web-user": "nx run web-user:serve",
     "dev:all": "concurrently \"npm run serve:api\" \"npm run serve:web-admin\" \"npm run serve:web-user\" --names \"API,ADMIN,USER\" --prefix-colors \"bgBlue,bgGreen,bgMagenta\"",
     "build:api": "node scripts/run.js build/api",

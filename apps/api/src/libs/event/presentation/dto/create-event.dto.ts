@@ -175,5 +175,31 @@ export class CreateEventDto {
   @IsOptional()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   conferenceEvent?: any
+
+  @ApiProperty({
+    description: '하위 사건 목록 (기본 정보만 - 빠른 등록용)',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: '사건명' },
+        startDate: { type: 'string', description: '시작일' },
+        endDate: { type: 'string', description: '종료일' },
+        description: { type: 'string', description: '간단한 설명' },
+        location: { type: 'string', description: '위치' },
+        thumbnail: { type: 'string', description: '썸네일 이미지 URL' },
+      },
+    },
+  })
+  @IsOptional()
+  childEvents?: Array<{
+    title: string
+    startDate?: string
+    endDate?: string
+    description?: string
+    location?: string
+    thumbnail?: string
+  }>
 }
 

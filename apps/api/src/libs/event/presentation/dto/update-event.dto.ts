@@ -119,5 +119,12 @@ export class UpdateEventDto {
   @Type(() => MilitaryEventDto)
   @IsOptional()
   militaryEvent?: MilitaryEventDto
+
+  @ApiProperty({
+    description: '회담/외교 이벤트 정보 (JSON)',
+    required: false,
+  })
+  @IsOptional()
+  conferenceEvent?: any
 }
 

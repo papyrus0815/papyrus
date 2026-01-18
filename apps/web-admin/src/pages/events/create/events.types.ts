@@ -151,4 +151,5 @@ export interface HistoricalEvent {
     logisticalScale: string
   }
   parentEventId?: string
+  sectionTitles?: string[] // 작성된 섹션 제목 리스트
 }

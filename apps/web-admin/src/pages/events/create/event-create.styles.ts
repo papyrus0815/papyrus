@@ -183,7 +183,7 @@ export const PageWrapper = styled.div`
   height: calc(100vh - var(--header-height));
   padding: 32px;
   overflow-y: auto;
-  background: ${COLORS.background.page};
+  background: transparent;
 `
 
 export const PageHeader = styled.div`
@@ -488,9 +488,13 @@ export const StepItem = styled.button<{
   border-radius: 10px;
   padding: 14px 16px;
   background: ${({ $active, $completed }) =>
-    $active ? COLORS.primary.gradient : $completed ? '#f0fdf4' : 'transparent'};
+    $active
+      ? '#f8f9fa'
+      : $completed
+        ? '#f0fdf4'
+        : 'transparent'};
   color: ${({ $active }) =>
-    $active ? COLORS.text.inverse : COLORS.text.primary};
+    $active ? '#0f172a' : COLORS.text.primary};
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
@@ -499,12 +503,18 @@ export const StepItem = styled.button<{
   gap: 12px;
   position: relative;
   margin-bottom: 2px;
+  border-left: ${({ $active }) =>
+    $active ? '3px solid #8b5cf6' : '3px solid transparent'};
+  padding-left: ${({ $active }) =>
+    $active ? '13px' : '16px'};
+  box-shadow: ${({ $active }) =>
+    $active ? '0 2px 8px rgba(139, 92, 246, 0.1)' : 'none'};
 
   &:hover {
     background: ${({ $active }) =>
       $active
-        ? `linear-gradient(135deg, ${COLORS.primary.dark}, #6d28d9)`
-        : 'rgba(139, 92, 246, 0.08)'};
+        ? '#f1f3f5'
+        : 'rgba(139, 92, 246, 0.04)'};
   }
 
   &:active {
@@ -536,28 +546,30 @@ export const StepIconWrapper = styled.div<{
 }>`
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: ${({ $active, $completed }) =>
     $active
-      ? 'rgba(255, 255, 255, 0.2)'
+      ? '#8b5cf6'
       : $completed
         ? '#22c55e'
         : 'rgba(139, 92, 246, 0.1)'};
   color: ${({ $active, $completed }) =>
-    $active || $completed ? COLORS.text.inverse : COLORS.primary.main};
+    $active || $completed ? '#ffffff' : COLORS.primary.main};
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: ${({ $active }) =>
+    $active ? '0 2px 8px rgba(139, 92, 246, 0.3)' : 'none'};
 `
 
 export const StepLabel = styled.div<{
   $active?: boolean
 }>`
   font-size: 14px;
-  font-weight: 600;
+  font-weight: ${({ $active }) => ($active ? '700' : '600')};
   color: ${({ $active }) =>
-    $active ? COLORS.text.inverse : COLORS.text.primary};
+    $active ? '#0f172a' : COLORS.text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -613,6 +625,7 @@ export const FormSection = styled.div`
   padding: 32px;
   flex: 1;
   overflow-y: auto;
+  width: 100%;
 `
 
 export const SectionHeader = styled.div`
@@ -707,6 +720,26 @@ export const PeriodBadge = styled.div`
     font-size: 10px;
   }
 `
+
+export const OptionalBadge = styled.span`
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 4px;
+`
+
+export const RequiredBadge = styled.span`
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 4px;
+`
+
+
 
 export const DateRangeRow = styled.div`
   display: grid;
@@ -821,6 +854,126 @@ export const CategoryGrid = styled.div`
   max-width: 1000px;
 `
 
+// 확장 가능한 카테고리 카드
+export const ExpandableCategoryCard = styled.div<{
+  $selected: boolean
+  $category: HistoricalEventCategory | ''
+  $expanded: boolean
+}>`
+  position: relative;
+  border: 2px solid
+    ${({ $selected, $category }) =>
+      $selected ? getCategoryColor($category).border : '#e2e8f0'};
+  border-radius: 16px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: ${({ $selected }) =>
+    $selected
+      ? '0 4px 16px rgba(139, 92, 246, 0.15)'
+      : '0 2px 6px rgba(0, 0, 0, 0.04)'};
+  
+  /* 확장 시 전체 너비 차지 */
+  grid-column: ${({ $expanded }) => ($expanded ? '1 / -1' : 'auto')};
+  
+  &:hover {
+    border-color: ${({ $category }) => getCategoryColor($category).border};
+    background: #ffffff;
+    transform: ${({ $expanded }) => ($expanded ? 'none' : 'translateY(-3px)')};
+    box-shadow: 0 6px 20px
+      ${({ $category }) => getCategoryColor($category).shadow};
+  }
+
+  &:active {
+    transform: ${({ $expanded }) => ($expanded ? 'none' : 'translateY(-1px)')};
+  }
+`
+
+export const CategoryCardHeader = styled.div`
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+`
+
+export const CategoryExpandedContent = styled.div`
+  padding: 0 20px 20px 20px;
+  border-top: 1.5px dashed rgba(239, 68, 68, 0.2);
+  margin-top: -10px;
+  animation: expandDown 0.3s ease-out;
+  
+  @keyframes expandDown {
+    from {
+      opacity: 0;
+      max-height: 0;
+      padding-bottom: 0;
+    }
+    to {
+      opacity: 1;
+      max-height: 500px;
+      padding-bottom: 20px;
+    }
+  }
+`
+
+export const ExpandedLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  margin-top: 16px;
+  
+  span:first-child {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+  }
+`
+
+export const MiniConflictTypeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+`
+
+export const MiniCombatTypeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+`
+
+export const MiniTypeButton = styled.button<{ $selected: boolean }>`
+  padding: 12px 8px;
+  border: 1.5px solid ${({ $selected }) => ($selected ? '#ef4444' : '#e2e8f0')};
+  border-radius: 10px;
+  background: ${({ $selected }) =>
+    $selected ? 'rgba(239, 68, 68, 0.08)' : '#ffffff'};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  font-weight: 600;
+  color: #475569;
+
+  &:hover {
+    border-color: #f87171;
+    background: rgba(239, 68, 68, 0.06);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(248, 113, 113, 0.15);
+  }
+
+  &:active {
+    transform: translateY(0);
+    background: rgba(239, 68, 68, 0.12);
+    border-color: #dc2626;
+  }
+`
+
 export const CategoryCard = styled.button<{
   $selected: boolean
   $category: HistoricalEventCategory | ''
@@ -907,6 +1060,525 @@ export const MilitaryNoticeBox = styled.div`
   box-shadow: 0 2px 8px rgba(139, 92, 246, 0.08);
   max-width: ${FORM_FIELD_MAX_WIDTH};
 `
+
+// 전투 유형/양상 선택 (군사 카테고리) - 하위 상세 옵션 느낌
+export const CombatTypeSection = styled.div`
+  margin-top: 0;
+  margin-bottom: 32px;
+  padding: 24px;
+  background: linear-gradient(
+    135deg,
+    rgba(148, 163, 184, 0.04),
+    rgba(203, 213, 225, 0.03)
+  );
+  border: 2px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 16px;
+  max-width: ${FORM_FIELD_MAX_WIDTH};
+  position: relative;
+
+  &::before {
+    content: '⚔️ 전쟁/군사 상세 설정';
+    position: absolute;
+    top: -12px;
+    left: 16px;
+    background: #ffffff;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+  }
+`
+
+export const ConflictTypeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+  max-width: 1000px;
+`
+
+export const ConflictTypeButton = styled.button<{ $selected: boolean }>`
+  position: relative;
+  border: 2px solid ${({ $selected }) => ($selected ? '#ef4444' : '#e2e8f0')};
+  border-radius: 16px;
+  padding: 20px;
+  background: ${({ $selected }) =>
+    $selected ? 'rgba(239, 68, 68, 0.08)' : '#ffffff'};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  box-shadow: ${({ $selected }) =>
+    $selected
+      ? '0 4px 16px rgba(239, 68, 68, 0.18)'
+      : '0 2px 6px rgba(0, 0, 0, 0.04)'};
+
+  &:hover {
+    border-color: #f87171;
+    background: rgba(239, 68, 68, 0.06);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.2);
+  }
+
+  &:active {
+    transform: translateY(-1px);
+    background: rgba(239, 68, 68, 0.12);
+    border-color: #dc2626;
+  }
+`
+
+export const ConflictTypeIcon = styled.div<{ $selected: boolean }>`
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: ${({ $selected }) =>
+    $selected ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)'};
+  color: ${({ $selected }) => ($selected ? '#dc2626' : '#ef4444')};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+`
+
+export const ConflictTypeLabel = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+`
+
+export const CombatTypeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  max-width: 1000px;
+`
+
+export const CombatTypeButton = styled.button<{ $selected: boolean }>`
+  position: relative;
+  border: 2px solid ${({ $selected }) => ($selected ? '#ef4444' : '#e2e8f0')};
+  border-radius: 16px;
+  padding: 20px;
+  background: ${({ $selected }) =>
+    $selected ? 'rgba(239, 68, 68, 0.08)' : '#ffffff'};
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  box-shadow: ${({ $selected }) =>
+    $selected
+      ? '0 4px 16px rgba(239, 68, 68, 0.18)'
+      : '0 2px 6px rgba(0, 0, 0, 0.04)'};
+
+  &:hover {
+    border-color: #f87171;
+    background: rgba(239, 68, 68, 0.06);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.2);
+  }
+
+  &:active {
+    transform: translateY(-1px);
+    background: rgba(239, 68, 68, 0.12);
+    border-color: #dc2626;
+  }
+`
+
+export const CombatTypeIcon = styled.div<{ $selected: boolean }>`
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: ${({ $selected }) =>
+    $selected ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)'};
+  color: ${({ $selected }) => ($selected ? '#dc2626' : '#ef4444')};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+`
+
+export const CombatTypeLabel = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+`
+
+
+// InfoBox 스타일 (전투 유형 가이드용)
+export const InfoBox = styled.div`
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #6366f1;
+  border-radius: 10px;
+  margin-bottom: 20px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+`
+
+// 말풍선 스타일 가이드
+export const GuideIconButton = styled.button`
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(139, 92, 246, 0.15);
+  background: rgba(139, 92, 246, 0.04);
+  color: #8b5cf6;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+  margin-left: auto;
+
+  &:hover {
+    border-color: rgba(139, 92, 246, 0.3);
+    background: rgba(139, 92, 246, 0.08);
+    color: #7c3aed;
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
+`
+
+export const GuideTooltip = styled.div<{ $visible: boolean }>`
+  position: absolute;
+  top: 46px;
+  right: 0;
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 
+    0 4px 20px rgba(15, 23, 42, 0.12),
+    0 12px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  padding: 18px;
+  z-index: 1000;
+  opacity: ${({ $visible }) => ($visible ? 1 : 0)};
+  visibility: ${({ $visible }) => ($visible ? 'visible' : 'hidden')};
+  transform: ${({ $visible }) => ($visible ? 'translateY(0)' : 'translateY(-8px)')};
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: top right;
+
+  /* 말풍선 화살표 */
+  &::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: 10px;
+    width: 12px;
+    height: 12px;
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-bottom: none;
+    border-right: none;
+    transform: rotate(45deg);
+  }
+
+  @media (max-width: 640px) {
+    width: calc(100vw - 40px);
+    right: 0;
+    
+    &::before {
+      right: 10px;
+    }
+  }
+`
+
+export const GuideTooltipHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+`
+
+export const GuideTooltipTitle = styled.h4`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  svg {
+    color: #8b5cf6;
+    width: 16px;
+    height: 16px;
+  }
+`
+
+export const GuideTooltipClose = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(148, 163, 184, 0.1);
+    color: #64748b;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`
+
+export const GuideTooltipContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+// 기존 접을 수 있는 가이드 스타일들은 유지 (다른 곳에서 사용할 수 있음)
+export const CollapsibleGuide = styled.div`
+  margin-bottom: 28px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.03),
+    rgba(168, 85, 247, 0.02)
+  );
+  border: 1px solid rgba(139, 92, 246, 0.12);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba(139, 92, 246, 0.2);
+    box-shadow: 0 2px 12px rgba(139, 92, 246, 0.08);
+  }
+`
+
+export const GuideHeader = styled.button`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(139, 92, 246, 0.04);
+  }
+
+  &:active {
+    background: rgba(139, 92, 246, 0.06);
+  }
+`
+
+export const GuideIcon = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #ffffff;
+  flex-shrink: 0;
+`
+
+export const GuideTitle = styled.h4`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: -0.01em;
+`
+
+export const GuideToggle = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b5cf6;
+  transition: transform 0.2s ease;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+`
+
+export const GuideContent = styled.div`
+  padding: 8px 20px 20px 20px;
+  overflow: hidden;
+`
+
+export const GuideTip = styled.div`
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(248, 250, 252, 0.8);
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(241, 245, 249, 1);
+    border-color: rgba(203, 213, 225, 1);
+  }
+`
+
+export const TipNumber = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+`
+
+export const TipTitle = styled.h5`
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+`
+
+export const TipDescription = styled.p`
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+`
+
+export const TipExample = styled.div`
+  padding: 6px 8px;
+  background: rgba(139, 92, 246, 0.06);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #7c3aed;
+  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  border-left: 2px solid rgba(139, 92, 246, 0.3);
+`
+
+export const InfoIconWrapper = styled.div`
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  color: #6366f1;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  @media (max-width: 768px) {
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+`
+
+export const InfoContent = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+export const InfoTitle = styled.h3`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: -0.01em;
+
+  @media (max-width: 768px) {
+    font-size: 13px;
+  }
+`
+
+export const InfoDescription = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #64748b;
+  font-weight: 400;
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
+`
+
+export const InfoExamples = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 4px;
+`
+
+export const InfoExample = styled.div`
+  font-size: 12px;
+  line-height: 1.6;
+  color: #64748b;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+
+  &::before {
+    content: '•';
+    color: #6366f1;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-weight: 600;
+    color: #475569;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 11px;
+  }
+`
+
+
+
 
 export const MilitaryNoticeIcon = styled.div`
   flex-shrink: 0;
@@ -1040,37 +1712,6 @@ export const ErrorMessage = styled.div`
   &::before {
     content: '⚠';
     font-size: 14px;
-  }
-`
-
-export const InfoBox = styled.div`
-  background: rgba(99, 102, 241, 0.05);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  border-radius: 12px;
-  padding: 14px 16px;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  max-width: ${FORM_FIELD_MAX_WIDTH};
-
-  svg {
-    color: #6366f1;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-
-  strong {
-    font-size: 13px;
-    color: #0f172a;
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  p {
-    margin: 0;
-    font-size: 12px;
-    color: #475569;
-    line-height: 1.6;
   }
 `
 
@@ -1659,26 +2300,439 @@ export const UploadButton = styled.button`
   }
 `
 
+// ============================================
+// 내용 작성 섹션: 에디터 + 사이드바 레이아웃
+// ============================================
+
+export const ContentLayoutWrapper = styled.div`
+  display: flex;
+  gap: 32px;
+  padding: 32px;
+  flex: 1;
+  overflow: hidden;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  justify-content: center;
+  align-items: flex-start;
+
+  @media (max-width: 1440px) {
+    gap: 24px;
+  }
+
+  @media (max-width: 1200px) {
+    flex-direction: column;
+    overflow-y: auto;
+    align-items: stretch;
+  }
+`
+
+export const EditorColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 900px;
+  flex-shrink: 0;
+  padding-right: 16px;
+
+  /* 스크롤바 스타일링 */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.2);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.3);
+  }
+
+  @media (max-width: 1200px) {
+    max-width: 100%;
+    padding-right: 0;
+  }
+`
+
+export const SidebarColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  width: 400px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 200px);
+
+  /* 스크롤바 스타일링 */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.15);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.25);
+  }
+
+  @media (max-width: 1440px) {
+    width: 350px;
+  }
+
+  @media (max-width: 1200px) {
+    display: none;
+  }
+`
+
+// ============================================
+// 사이드바: 사건 빠른 정보
+// ============================================
+
+export const SidebarCard = styled.div`
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid ${COLORS.border.default};
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.2);
+  }
+`
+
+export const SidebarCardHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid ${COLORS.border.light};
+
+  svg {
+    color: ${COLORS.primary.main};
+    flex-shrink: 0;
+  }
+`
+
+export const SidebarCardTitle = styled.h3`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: ${COLORS.text.primary};
+  letter-spacing: -0.01em;
+`
+
+export const SidebarCardContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+export const QuickInfoItem = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+
+  svg {
+    color: ${COLORS.primary.main};
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+`
+
+export const QuickInfoLabel = styled.span`
+  color: ${COLORS.text.secondary};
+  font-weight: 500;
+  min-width: 60px;
+`
+
+export const QuickInfoValue = styled.span`
+  color: ${COLORS.text.primary};
+  font-weight: 400;
+  flex: 1;
+  word-break: break-word;
+`
+
+export const QuickInfoThumbnail = styled.img`
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid ${COLORS.border.default};
+  margin-bottom: 8px;
+`
+
+// ============================================
+// 사이드바: 목차 / 섹션 네비게이션
+// ============================================
+
+export const TocList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+export const TocItem = styled.button<{ $active?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: ${(props) =>
+    props.$active
+      ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(124, 58, 237, 0.06))'
+      : 'transparent'};
+  border-left: 3px solid
+    ${(props) => (props.$active ? COLORS.primary.main : 'transparent')};
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  color: ${(props) =>
+    props.$active ? COLORS.primary.main : COLORS.text.secondary};
+  font-weight: ${(props) => (props.$active ? 600 : 500)};
+
+  &:hover {
+    background: ${(props) =>
+      props.$active
+        ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(124, 58, 237, 0.08))'
+        : 'rgba(139, 92, 246, 0.04)'};
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+`
+
+export const TocItemTitle = styled.span`
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const TocItemBadge = styled.span`
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(139, 92, 246, 0.1);
+  color: ${COLORS.primary.main};
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+`
+
+// ============================================
+// 사이드바: 작성 통계
+// ============================================
+
+export const StatsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+`
+
+export const StatCard = styled.div`
+  padding: 12px;
+  border-radius: 8px;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.04),
+    rgba(168, 85, 247, 0.02)
+  );
+  border: 1px solid rgba(139, 92, 246, 0.1);
+  text-align: center;
+`
+
+export const StatValue = styled.div`
+  font-size: 20px;
+  font-weight: 700;
+  color: ${COLORS.primary.main};
+  margin-bottom: 4px;
+`
+
+export const StatLabel = styled.div`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${COLORS.text.secondary};
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`
+
+// ============================================
+// 사이드바: 빠른 참조
+// ============================================
+
+export const QuickRefList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+export const QuickRefItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.03);
+  border: 1px solid rgba(139, 92, 246, 0.08);
+  font-size: 12px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(139, 92, 246, 0.08);
+    border-color: rgba(139, 92, 246, 0.15);
+  }
+
+  svg {
+    color: ${COLORS.primary.main};
+    flex-shrink: 0;
+  }
+`
+
+export const QuickRefName = styled.span`
+  color: ${COLORS.text.primary};
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const QuickRefCount = styled.span`
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: ${COLORS.primary.main};
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+`
+
+export const QuickRefEmpty = styled.div`
+  padding: 16px;
+  text-align: center;
+  color: ${COLORS.text.muted};
+  font-size: 12px;
+  font-style: italic;
+`
+
+// ============================================
+// 기존 섹션 추가 버튼
+// ============================================
+
 export const AddSectionButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 
+    0 2px 8px rgba(139, 92, 246, 0.2),
+    0 0 0 0 rgba(139, 92, 246, 0.3);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+      0 4px 16px rgba(139, 92, 246, 0.3),
+      0 0 0 4px rgba(139, 92, 246, 0.1);
+    
+    &::before {
+      opacity: 1;
+    }
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 
+      0 2px 8px rgba(139, 92, 246, 0.2),
+      0 0 0 2px rgba(139, 92, 246, 0.15);
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+  }
+`
+
+// 섹션 사이에 나타나는 작은 추가 버튼
+export const AddSectionButtonCompact = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
-  max-width: ${FORM_FIELD_MAX_WIDTH};
-  padding: 12px;
-  border: 2px dashed rgba(99, 102, 241, 0.3);
+  margin: 16px 0;
+  padding: 10px 16px;
+  border: 2px dashed rgba(139, 92, 246, 0.25);
   border-radius: 10px;
-  background: rgba(99, 102, 241, 0.05);
-  color: #6366f1;
-  font-size: 14px;
-  font-weight: 600;
+  background: rgba(139, 92, 246, 0.04);
+  color: #8b5cf6;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  opacity: 0.7;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.5);
-    background: rgba(99, 102, 241, 0.1);
+    opacity: 1;
+    border-color: rgba(139, 92, 246, 0.4);
+    background: rgba(139, 92, 246, 0.08);
+    transform: scale(1.02);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
   }
 `
 
@@ -2193,4 +3247,100 @@ export const CountryModalItem = styled.div<{ $selected?: boolean }>`
       $selected ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.05)'};
     border-color: rgba(99, 102, 241, 0.3);
   }
+`
+
+// ============================================
+// 🆕 하위 사건 빠른 추가 스타일
+// ============================================
+
+export const ChildEventsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+`
+
+export const ChildEventItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: ${COLORS.background.section};
+  border: 1px solid ${COLORS.border.default};
+  border-radius: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: ${COLORS.border.hover};
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.05);
+  }
+`
+
+export const ChildEventThumbnail = styled.img`
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+`
+
+export const ChildEventInfo = styled.div`
+  flex: 1;
+  min-width: 0;
+
+  strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: ${COLORS.text.primary};
+    margin-bottom: 4px;
+  }
+
+  div {
+    font-size: 12px;
+    color: ${COLORS.text.secondary};
+  }
+
+  span {
+    white-space: nowrap;
+  }
+`
+
+export const RemoveChildButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.2);
+    transform: scale(1.1);
+  }
+`
+
+export const ChildEventFormCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  background: ${COLORS.background.content};
+  border: 1.5px solid ${COLORS.border.default};
+  border-radius: 12px;
+  margin-bottom: 16px;
+`
+
+export const ChildEventFormActions = styled.div`
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid ${COLORS.border.light};
 `

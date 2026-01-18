@@ -184,10 +184,10 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
               <SettingLabel>기원</SettingLabel>
               <EraSelector>
                 <EraButton $isSelected={!isBCE} onClick={toggleEra}>
-                  CE<EraSubtext>기원후</EraSubtext>
+                  AD
                 </EraButton>
                 <EraButton $isSelected={isBCE} onClick={toggleEra}>
-                  BCE<EraSubtext>기원전</EraSubtext>
+                  BC
                 </EraButton>
               </EraSelector>
             </SettingSection>
@@ -197,7 +197,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
               <SettingLabel>년도</SettingLabel>
               <YearControl>
                 <YearNavButton onClick={() => handleYearChange(-1)}>
-                  <FiChevronLeft size={18} />
+                  <FiChevronLeft size={16} />
                 </YearNavButton>
                 <YearInputContainer>
                   <YearInput
@@ -210,7 +210,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   <YearUnit>년</YearUnit>
                 </YearInputContainer>
                 <YearNavButton onClick={() => handleYearChange(1)}>
-                  <FiChevronRight size={18} />
+                  <FiChevronRight size={16} />
                 </YearNavButton>
               </YearControl>
             </SettingSection>
@@ -242,10 +242,10 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                 <FiChevronLeft size={18} />
               </NavButton>
               <CurrentDateDisplay>
-                <YearText $isBCE={isBCE}>
-                  {isBCE ? `BCE ${viewYear}` : viewYear}
-                </YearText>
-                <MonthText>{MONTH_NAMES[viewMonth]}</MonthText>
+                <DateDisplayText>
+                  {isBCE && <EraTag>BC</EraTag>}
+                  {viewYear}년 {viewMonth + 1}월
+                </DateDisplayText>
               </CurrentDateDisplay>
               <NavButton onClick={() => handleMonthChange(1)}>
                 <FiChevronRight size={18} />
@@ -281,7 +281,8 @@ const Overlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -300,15 +301,15 @@ const Overlay = styled.div`
 
 const ModalContainer = styled.div`
   background: #ffffff;
-  border-radius: 20px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   width: 90%;
-  max-width: 720px;
+  max-width: 750px;
   animation: slideUp 0.3s ease;
 
   @keyframes slideUp {
     from {
-      transform: translateY(20px);
+      transform: translateY(30px);
       opacity: 0;
     }
     to {
@@ -322,58 +323,58 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: #1e293b;
 `
 
 const CloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: none;
-  background: rgba(148, 163, 184, 0.08);
-  color: #94a3b8;
-  border-radius: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: #fee2e2;
     color: #ef4444;
   }
 `
 
 const ModalContent = styled.div`
   display: flex;
-  min-height: 400px;
+  min-height: 420px;
 `
 
 const LeftPanel = styled.div`
-  flex: 0 0 280px;
-  padding: 28px 24px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(168, 85, 247, 0.02));
-  border-right: 1px solid rgba(226, 232, 240, 0.6);
-  border-radius: 0 0 0 20px;
+  flex: 0 0 260px;
+  padding: 24px 20px;
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+  border-radius: 0 0 0 16px;
 `
 
 const RightPanel = styled.div`
   flex: 1;
-  padding: 28px 24px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
 `
 
 const SettingSection = styled.div`
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 
   &:last-child {
     margin-bottom: 0;
@@ -382,9 +383,9 @@ const SettingSection = styled.div`
 
 const SettingLabel = styled.div`
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: #64748b;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `
@@ -396,40 +397,22 @@ const EraSelector = styled.div`
 `
 
 const EraButton = styled.button<{ $isSelected: boolean }>`
-  padding: 14px 12px;
-  font-size: 15px;
+  padding: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: ${({ $isSelected }) => ($isSelected ? '#ffffff' : '#64748b')};
   background: ${({ $isSelected }) =>
-    $isSelected
-      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'rgba(148, 163, 184, 0.08)'};
-  border: none;
-  border-radius: 10px;
+    $isSelected ? '#8b5cf6' : '#ffffff'};
+  border: 2px solid ${({ $isSelected }) => ($isSelected ? '#8b5cf6' : '#e2e8f0')};
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
 
   &:hover {
     background: ${({ $isSelected }) =>
-      $isSelected
-        ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-        : 'rgba(99, 102, 241, 0.12)'};
-    transform: translateY(-1px);
+      $isSelected ? '#7c3aed' : '#faf5ff'};
+    border-color: #8b5cf6;
   }
-
-  &:active {
-    transform: translateY(0);
-  }
-`
-
-const EraSubtext = styled.span`
-  font-size: 10px;
-  font-weight: 500;
-  opacity: 0.7;
 `
 
 const YearControl = styled.div`
@@ -442,24 +425,20 @@ const YearNavButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 44px;
-  border: 1px solid rgba(226, 232, 240, 1);
+  width: 36px;
+  height: 40px;
+  border: 1.5px solid #e2e8f0;
   background: #ffffff;
   color: #64748b;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 
   &:hover {
-    border-color: #6366f1;
-    color: #6366f1;
-    background: rgba(99, 102, 241, 0.05);
-  }
-
-  &:active {
-    transform: scale(0.95);
+    border-color: #8b5cf6;
+    color: #8b5cf6;
+    background: #faf5ff;
   }
 `
 
@@ -472,19 +451,19 @@ const YearInputContainer = styled.div`
 
 const YearInput = styled.input`
   width: 100%;
-  padding: 12px 40px 12px 16px;
-  font-size: 18px;
+  padding: 10px 36px 10px 12px;
+  font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
-  border: 2px solid rgba(226, 232, 240, 1);
-  border-radius: 10px;
+  color: #1e293b;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
   outline: none;
   transition: all 0.2s ease;
   text-align: center;
 
   &:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.08);
+    border-color: #8b5cf6;
+    background: #faf5ff;
   }
 
   &::placeholder {
@@ -494,8 +473,8 @@ const YearInput = styled.input`
 
 const YearUnit = styled.div`
   position: absolute;
-  right: 16px;
-  font-size: 14px;
+  right: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: #94a3b8;
   pointer-events: none;
@@ -508,29 +487,21 @@ const MonthGrid = styled.div`
 `
 
 const MonthButton = styled.button<{ $isSelected: boolean }>`
-  padding: 12px 8px;
-  font-size: 14px;
+  padding: 10px 6px;
+  font-size: 13px;
   font-weight: 600;
   color: ${({ $isSelected }) => ($isSelected ? '#ffffff' : '#64748b')};
   background: ${({ $isSelected }) =>
-    $isSelected
-      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'rgba(148, 163, 184, 0.08)'};
-  border: none;
-  border-radius: 8px;
+    $isSelected ? '#8b5cf6' : '#ffffff'};
+  border: 1.5px solid ${({ $isSelected }) => ($isSelected ? '#8b5cf6' : '#e2e8f0')};
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
     background: ${({ $isSelected }) =>
-      $isSelected
-        ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-        : 'rgba(99, 102, 241, 0.12)'};
-    transform: translateY(-1px);
-  }
-
-  &:active {
-    transform: translateY(0);
+      $isSelected ? '#7c3aed' : '#faf5ff'};
+    border-color: #8b5cf6;
   }
 `
 
@@ -548,45 +519,46 @@ const NavButton = styled.button`
   width: 36px;
   height: 36px;
   border: none;
-  background: rgba(148, 163, 184, 0.08);
+  background: #f1f5f9;
   color: #64748b;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    color: #6366f1;
-  }
-
-  &:active {
-    transform: scale(0.95);
+    background: #faf5ff;
+    color: #8b5cf6;
   }
 `
 
 const CurrentDateDisplay = styled.div`
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
 `
 
-const YearText = styled.div<{ $isBCE: boolean }>`
-  font-size: 15px;
+const DateDisplayText = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
   font-weight: 700;
-  color: ${({ $isBCE }) => ($isBCE ? '#dc2626' : '#6366f1')};
+  color: #1e293b;
 `
 
-const MonthText = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
+const EraTag = styled.span`
+  padding: 4px 8px;
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
 `
 
 const CalendarGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  gap: 4px;
   flex: 1;
 `
 
@@ -596,8 +568,9 @@ const DayNameCell = styled.div`
   justify-content: center;
   height: 32px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: #94a3b8;
+  text-transform: uppercase;
 `
 
 const DayCell = styled.button<{
@@ -608,17 +581,15 @@ const DayCell = styled.button<{
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  height: 42px;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: ${({ $isSelected }) => ($isSelected ? '700' : '500')};
   color: ${({ $isDisabled, $isSelected }) =>
-    $isDisabled ? '#e2e8f0' : $isSelected ? '#ffffff' : '#0f172a'};
+    $isDisabled ? '#e2e8f0' : $isSelected ? '#ffffff' : '#1e293b'};
   background: ${({ $isSelected }) =>
-    $isSelected
-      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'transparent'};
+    $isSelected ? '#8b5cf6' : 'transparent'};
   cursor: ${({ $isDisabled }) => ($isDisabled ? 'not-allowed' : 'pointer')};
   transition: all 0.15s ease;
   position: relative;
@@ -627,20 +598,24 @@ const DayCell = styled.button<{
     $isToday &&
     !$isSelected &&
     `
-    border: 2px solid #6366f1;
+    background: #fef3c7;
+    color: #f59e0b;
+    font-weight: 700;
   `}
 
   &:hover:not(:disabled) {
-    background: ${({ $isSelected, $isDisabled }) =>
+    background: ${({ $isSelected, $isDisabled, $isToday }) =>
       $isSelected
-        ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+        ? '#7c3aed'
         : $isDisabled
           ? 'transparent'
-          : 'rgba(99, 102, 241, 0.1)'};
-    transform: ${({ $isDisabled }) => ($isDisabled ? 'none' : 'scale(1.05)')};
+          : $isToday
+            ? '#fde68a'
+            : '#faf5ff'};
+    transform: ${({ $isDisabled }) => ($isDisabled ? 'none' : 'scale(1.08)')};
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: scale(0.95);
   }
 `

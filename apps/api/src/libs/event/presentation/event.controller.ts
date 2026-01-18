@@ -31,6 +31,18 @@ export class EventController {
    * @returns EventResponseDto
    */
   private toResponseDto(event: any): EventResponseDto {
+    // sections에서 제목만 추출
+    let sectionTitles: string[] | undefined
+    if (event.sections) {
+      // sections가 { items: [...] } 형태인 경우
+      const items = event.sections.items || event.sections
+      if (Array.isArray(items)) {
+        sectionTitles = items
+          .map((section: any) => section.title)
+          .filter((title: string) => title) // 빈 제목 제외
+      }
+    }
+
     return {
       id: event.id,
       title: event.title,
@@ -54,6 +66,7 @@ export class EventController {
       historicalCountryId: event.historicalCountryId,
       thumbnail: event.thumbnail ?? null,
       sections: event.sections ?? null,
+      sectionTitles: sectionTitles,
       warCost: event.warCost ?? null,
       createdAt: event.createdAt?.toISOString ? event.createdAt.toISOString() : event.createdAt,
       updatedAt: event.updatedAt?.toISOString ? event.updatedAt.toISOString() : event.updatedAt,
@@ -166,6 +179,7 @@ export class EventController {
         thumbnail: dto.thumbnail,
         sections: dto.sections,
         warCost: dto.warCost,
+        childEvents: dto.childEvents, // 🆕 하위 사건 정보 전달
       },
       dto.relatedPersons,
       dto.relatedEventIds,

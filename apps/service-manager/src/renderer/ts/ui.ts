@@ -35,6 +35,18 @@ const UI = {
         }
       })
 
+    // Dock 아이템 활성 상태 업데이트
+    document
+      .querySelectorAll('.dock-item')
+      .forEach((item) => {
+        const itemTab = item.getAttribute('data-tab')
+        if (itemTab === tabName) {
+          item.classList.add('active')
+        } else {
+          item.classList.remove('active')
+        }
+      })
+
     // 모든 탭 콘텐츠 숨기기 (active 클래스 제거)
     const tabIds = [
       TABS.SERVICES,

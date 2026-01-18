@@ -22,8 +22,8 @@ const EVENT_CATEGORIES: EventCategoryData[] = [
   },
   {
     id: 'cat-military-001',
-    name: '군사',
-    description: '군사 관련 사건',
+    name: '전쟁/군사',
+    description: '전쟁, 전투, 군사 작전 및 군사 관련 사건',
     parentId: null,
   },
   {

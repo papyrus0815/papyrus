@@ -32,9 +32,7 @@ export class PrismaService extends PrismaClient {
       )
     }
 
-    const logConfig = log
-      ? ['query', 'info', 'warn', 'error']
-      : ['warn', 'error']
+    const logConfig = log ? ['info', 'warn', 'error'] : ['warn', 'error']
 
     // Prisma v7에서는 adapter가 필수
     const adapter = new PrismaMariaDb({

@@ -140,6 +140,8 @@ export const transformEventsFromApi = (
       },
       // 자식 여부 표시
       parentEventId: isChild ? evt.parentEventId || undefined : undefined,
+      // ✅ 섹션 제목 추가
+      sectionTitles: evt.sectionTitles || [],
     }
   }
 

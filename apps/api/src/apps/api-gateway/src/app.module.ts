@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common'
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
+import { AppController } from './app.controller'
 import { AuthModule } from '../../../libs/auth/infrastructure/auth.module'
 import { CountryModule } from '../../../libs/country/infrastructure/country.module'
 import { ContinentModule } from '../../../libs/continent/infrastructure/continent.module'
@@ -25,7 +26,7 @@ import {
   LoggingInterceptor,
   GlobalValidationPipe,
   RequestIdMiddleware,
-  // HealthModule, 임시 비활성화
+  HealthModule,
 } from '../../../libs/shared'
 
 @Module({
@@ -48,7 +49,9 @@ import {
     EventModule,
     EventCategoryModule,
     UploadModule,
-  ], // HealthModule 임시 비활성화
+    HealthModule,
+  ],
+  controllers: [AppController],
   providers: [
     {
       provide: APP_FILTER,

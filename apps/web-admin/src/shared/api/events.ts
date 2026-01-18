@@ -6,10 +6,13 @@ import type { IConnection } from '@nestia/fetcher'
 
 const api = functional
 
-// SDK 타입 re-export
+// SDK 타입 re-export + sectionTitles 추가
 export type EventResponseDto = Awaited<
   ReturnType<typeof api.events.getEventById>
->
+> & {
+  sectionTitles?: string[] // 추가된 필드
+}
+
 export type CreateEventDto = Parameters<typeof api.events.createEvent>[1]
 export type UpdateEventDto = Parameters<typeof api.events.updateEvent>[2]
 

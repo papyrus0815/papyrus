@@ -138,7 +138,7 @@ export const EventDetailPage: React.FC = () => {
           </EmptyState>
           <BackLink
             type="button"
-            onClick={() => navigate(pathKeys.history.events())}
+            onClick={() => navigate(pathKeys.events.root())}
           >
             사건 목록으로 돌아가기
           </BackLink>
@@ -155,14 +155,14 @@ export const EventDetailPage: React.FC = () => {
           <SidebarActions>
             <BackLink
               type="button"
-              onClick={() => navigate(pathKeys.history.events())}
+              onClick={() => navigate(pathKeys.events.root())}
             >
               ← 목록으로
             </BackLink>
             <EditButton
               type="button"
               onClick={() =>
-                navigate(pathKeys.history.eventsCreate(), {
+                navigate(pathKeys.events.create(), {
                   state: { editEventId: selectedEvent.id },
                 })
               }
@@ -184,7 +184,7 @@ export const EventDetailPage: React.FC = () => {
                   $active={event.id === selectedEvent.id}
                   type="button"
                   onClick={() =>
-                    navigate(pathKeys.history.eventsDetail(event.id))
+                    navigate(pathKeys.events.detail(event.id))
                   }
                 >
                   <RelatedEventDot $category={selectedEvent.category} />

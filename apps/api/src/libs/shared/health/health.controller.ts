@@ -27,34 +27,33 @@ export interface HealthCheckResponse {
   }
 }
 
-// 임시로 주석 처리 - Nestia 중복 생성 문제 해결을 위해
-// @ApiTags('health')
-// @Controller('health')
+@ApiTags('health')
+@Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
-  // @Get()
-  // @ApiOperation({ summary: '시스템 헬스체크' })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: '시스템 상태 정보',
-  //   type: Object,
-  // })
+  @Get()
+  @ApiOperation({ summary: '시스템 헬스체크' })
+  @ApiResponse({
+    status: 200,
+    description: '시스템 상태 정보',
+    type: Object,
+  })
   async check(): Promise<HealthCheckResponse> {
     return this.healthService.getHealthStatus()
   }
 
-  // @Get('ready')
-  // @ApiOperation({ summary: '준비 상태 확인 (Kubernetes readiness probe)' })
-  // @ApiResponse({ status: 200, description: '서비스 준비 완료' })
+  @Get('ready')
+  @ApiOperation({ summary: '준비 상태 확인 (Kubernetes readiness probe)' })
+  @ApiResponse({ status: 200, description: '서비스 준비 완료' })
   async ready(): Promise<{ status: string }> {
     const isReady = await this.healthService.isReady()
     return { status: isReady ? 'ready' : 'not ready' }
   }
 
-  // @Get('live')
-  // @ApiOperation({ summary: '생존 상태 확인 (Kubernetes liveness probe)' })
-  // @ApiResponse({ status: 200, description: '서비스 실행 중' })
+  @Get('live')
+  @ApiOperation({ summary: '생존 상태 확인 (Kubernetes liveness probe)' })
+  @ApiResponse({ status: 200, description: '서비스 실행 중' })
   async live(): Promise<{ status: string }> {
     return { status: 'alive' }
   }

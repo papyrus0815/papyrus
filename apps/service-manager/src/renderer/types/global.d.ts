@@ -15,7 +15,7 @@ declare global {
     updateStatus: () => Promise<void>
     clearConsoleLog: () => void
     openDevTools: () => void
-    renderServices: () => Promise<void>
+    renderServices: () => void
     getServiceStatus: (serviceId: string) => string
     updateServiceButtons: () => void
     handleStart: (serviceId: string) => Promise<void>
@@ -41,6 +41,9 @@ declare global {
     stopPrismaStudio: () => Promise<void>
     openStudioInBrowser: () => void
     runSeed: () => Promise<void>
+    editPrismaSetting: (settingKey: string) => Promise<void>
+    openSchemaFile: () => Promise<void>
+    showAllPrismaSettings: () => Promise<void>
     buildNestiaSdk: () => Promise<void>
     validateNestiaSdk: () => Promise<void>
     loadLogFiles: () => Promise<void>
@@ -66,6 +69,23 @@ declare global {
       version: string,
       type: string,
     ) => Promise<void>
+    loadNxProjects: () => Promise<void>
+    selectNxProject: (
+      projectName: string,
+      projectRoot: string,
+      hasNestiaConfig: boolean,
+    ) => Promise<void>
+    loadProjectJson: (projectRoot: string) => Promise<void>
+    saveProjectJson: () => Promise<void>
+    validateProjectJson: () => void
+    restoreProjectJsonBackup: () => Promise<void>
+    loadNestiaConfig: (projectRoot: string) => Promise<void>
+    saveNestiaConfig: () => Promise<void>
+    restoreNestiaConfigBackup: () => Promise<void>
+    loadNxJson: () => Promise<void>
+    saveNxJson: () => Promise<void>
+    validateNxJson: () => void
+    restoreNxJsonBackup: () => Promise<void>
   }
 }
 

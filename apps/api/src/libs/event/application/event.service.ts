@@ -58,11 +58,21 @@ export class EventService {
    * @param relatedPersons 관련 인물 목록
    * @param relatedEventIds 관련 사건 ID 목록
    * @param sections 섹션 기반 내용 (멘션 정보 포함)
+   * @param childEvents 하위 사건 목록 (빠른 등록용)
    * @returns 생성된 사건
    * @throws ConflictException 동일한 제목의 사건이 이미 존재하는 경우
    */
   async createEvent(
-    data: Omit<Event, 'id'>,
+    data: Omit<Event, 'id'> & {
+    childEvents?: Array<{
+      title: string
+      startDate?: string
+      endDate?: string
+      description?: string
+      location?: string
+      thumbnail?: string
+    }>
+    },
     relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
     relatedEventIds?: string[],
     sections?: Array<{
@@ -128,13 +138,18 @@ export class EventService {
     const allMentionedPersons = new Map<string, string>() // personId -> role
 
     if (sections) {
-      sections.forEach((section) => {
-        section.mentions.forEach((mention) => {
-          if (mention.type === 'person') {
-            // 멘션된 인물의 역할은 섹션 제목이나 내용에서 추출 가능
-            allMentionedPersons.set(mention.id, '')
-          }
-        })
+      // sections가 {items: [...]} 형태인지 확인
+      const sectionArray = Array.isArray(sections) ? sections : (sections as any).items || []
+      
+      sectionArray.forEach((section: any) => {
+        if (section.mentions && Array.isArray(section.mentions)) {
+          section.mentions.forEach((mention: any) => {
+            if (mention.type === 'person') {
+              // 멘션된 인물의 역할은 섹션 제목이나 내용에서 추출 가능
+              allMentionedPersons.set(mention.id, '')
+            }
+          })
+        }
       })
     }
 
@@ -175,6 +190,38 @@ export class EventService {
     }
 
     // 관련 사건 연결 (추후 구현 가능 - 현재는 parentEventId만 지원)
+
+    // 🆕 하위 사건 자동 생성
+    if (data.childEvents && Array.isArray(data.childEvents) && data.childEvents.length > 0) {
+      console.log(`📝 하위 사건 ${data.childEvents.length}개 생성 시작...`)
+      
+      for (const childData of data.childEvents) {
+        try {
+          await this.createEvent({
+            title: childData.title,
+            description: childData.description || null,
+            startDate: childData.startDate ? new Date(childData.startDate) : null,
+            endDate: childData.endDate ? new Date(childData.endDate) : null,
+            location: childData.location || null,
+            parentEventId: event.id, // 방금 생성한 사건을 상위로 설정
+            categoryId: data.categoryId || null, // 상위 사건의 카테고리 상속
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            background: null,
+            aftermath: null,
+            thumbnail: childData.thumbnail || null,
+            cityId: null,
+            administrativeDivisionId: null,
+            historicalCountryId: null,
+            warCost: null,
+          })
+          console.log(`✅ 하위 사건 생성 완료: ${childData.title}`)
+        } catch (error) {
+          console.error(`❌ 하위 사건 생성 실패: ${childData.title}`, error)
+          // 하위 사건 생성 실패해도 상위 사건은 유지
+        }
+      }
+    }
 
     return event
   }

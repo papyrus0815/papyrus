@@ -5,6 +5,7 @@
 import './env.js'
 import './logs.js'
 import './nestia.js'
+import './nx.js'
 import './packages.js'
 import './prisma.js'
 import './service.js'

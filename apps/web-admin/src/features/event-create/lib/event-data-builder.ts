@@ -274,6 +274,14 @@ export const buildEventSubmitData = (params: {
   warCost: string
   mentionedPersons: Array<{ personId: string; role: string; note: string }>
   mentionedEvents: string[]
+  childEvents?: Array<{
+    title: string
+    startDate?: string
+    endDate?: string
+    description?: string
+    location?: string
+    thumbnail?: string
+  }>
 }) => {
   return {
     title: params.title,
@@ -286,9 +294,8 @@ export const buildEventSubmitData = (params: {
         ? `${params.endDate}T${params.endTime}:00.000Z`
         : `${params.endDate}T00:00:00.000Z`
       : undefined,
-    categoryName: params.category
-      ? categoryNameMap[params.category]
-      : undefined,
+    // 🔧 FIX: category는 이미 categoryId (cat-military-001)이므로 직접 전달
+    categoryId: params.category || undefined,
     location: params.location.trim() || undefined,
     thumbnail: params.thumbnail || undefined,
     parentEventId: params.parentEventId || undefined,
@@ -335,5 +342,8 @@ export const buildEventSubmitData = (params: {
         ? params.belligerentsGraph
         : undefined,
     warCost: params.warCost || undefined,
+    childEvents: params.childEvents && params.childEvents.length > 0
+      ? params.childEvents
+      : undefined, // 🆕 하위 사건 추가
   }
 }

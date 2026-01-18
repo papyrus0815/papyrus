@@ -416,7 +416,10 @@ export const BelligerentsGraphForm: React.FC<BelligerentsGraphFormProps> = ({
                         {sides.length > 0 && (
                           <FormGroup>
                             <Label>
-                              <FiShield size={14} style={{ marginRight: '4px' }} />
+                              <FiShield
+                                size={14}
+                                style={{ marginRight: '4px' }}
+                              />
                               진영
                             </Label>
                             <FactionSelectButton
@@ -433,21 +436,31 @@ export const BelligerentsGraphForm: React.FC<BelligerentsGraphFormProps> = ({
                                 <FactionIcon>
                                   {country.role ? '🛡️' : '⚪'}
                                 </FactionIcon>
-                                <span>{country.role || '진영을 선택하세요'}</span>
+                                <span>
+                                  {country.role || '진영을 선택하세요'}
+                                </span>
                               </FactionSelectContent>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                              >
+                                <path
+                                  d="M7 10l5 5 5-5H7z"
+                                  fill="currentColor"
+                                />
                               </svg>
                             </FactionSelectButton>
                             {country.role && (
                               <ClearFactionButton
                                 type="button"
                                 onClick={() => {
-                                handleUpdateCountry(country.countryId, {
+                                  handleUpdateCountry(country.countryId, {
                                     role: '',
-                                })
+                                  })
                                 }}
-                            >
+                              >
                                 <FiX size={14} />
                                 <span>진영 해제</span>
                               </ClearFactionButton>
@@ -977,7 +990,11 @@ export const BelligerentsGraphForm: React.FC<BelligerentsGraphFormProps> = ({
       {/* 진영 선택 모달 */}
       {factionModalState.isOpen && factionModalState.countryId && (
         <Modal>
-          <ModalOverlay onClick={() => setFactionModalState({ isOpen: false, countryId: null })} />
+          <ModalOverlay
+            onClick={() =>
+              setFactionModalState({ isOpen: false, countryId: null })
+            }
+          />
           <ModalContent>
             <ModalHeader>
               <ModalHeaderLeft>
@@ -991,7 +1008,9 @@ export const BelligerentsGraphForm: React.FC<BelligerentsGraphFormProps> = ({
               </ModalHeaderLeft>
               <CloseButton
                 type="button"
-                onClick={() => setFactionModalState({ isOpen: false, countryId: null })}
+                onClick={() =>
+                  setFactionModalState({ isOpen: false, countryId: null })
+                }
               >
                 <FiX size={20} />
               </CloseButton>
@@ -1001,10 +1020,16 @@ export const BelligerentsGraphForm: React.FC<BelligerentsGraphFormProps> = ({
               <FactionGrid>
                 <FactionOption
                   type="button"
-                  $selected={!value.countries.find(c => c.countryId === factionModalState.countryId)?.role}
+                  $selected={
+                    !value.countries.find(
+                      (c) => c.countryId === factionModalState.countryId,
+                    )?.role
+                  }
                   onClick={() => {
                     if (factionModalState.countryId) {
-                      handleUpdateCountry(factionModalState.countryId, { role: '' })
+                      handleUpdateCountry(factionModalState.countryId, {
+                        role: '',
+                      })
                       setFactionModalState({ isOpen: false, countryId: null })
                     }
                   }}
@@ -1016,11 +1041,17 @@ export const BelligerentsGraphForm: React.FC<BelligerentsGraphFormProps> = ({
                   <FactionOption
                     key={side.id}
                     type="button"
-                    $selected={value.countries.find(c => c.countryId === factionModalState.countryId)?.role === side.name}
+                    $selected={
+                      value.countries.find(
+                        (c) => c.countryId === factionModalState.countryId,
+                      )?.role === side.name
+                    }
                     $color={side.color}
                     onClick={() => {
                       if (factionModalState.countryId) {
-                        handleUpdateCountry(factionModalState.countryId, { role: side.name })
+                        handleUpdateCountry(factionModalState.countryId, {
+                          role: side.name,
+                        })
                         setFactionModalState({ isOpen: false, countryId: null })
                       }
                     }}
@@ -1072,7 +1103,7 @@ export const BelligerentsGraphForm: React.FC<BelligerentsGraphFormProps> = ({
                   </RelationCountryName>
                 </RelationCountryBox>
                 <RelationArrow>
-                  <FiLink size={24} color="#6366f1" />
+                  <FiLink size={24} color="#8b5cf6" />
                 </RelationArrow>
                 <RelationCountryBox>
                   <CountryLabel>대상 국가</CountryLabel>
@@ -1264,7 +1295,7 @@ const StatsBar = styled.div`
   align-items: center;
   padding: 16px 20px;
   background: white;
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid rgba(139, 92, 246, 0.12);
   border-radius: 12px;
 `
 
@@ -1286,9 +1317,9 @@ const StatIcon = styled.div`
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(139, 92, 246, 0.08);
   border-radius: 10px;
-  color: #6366f1;
+  color: #8b5cf6;
 `
 
 const StatContent = styled.div`
@@ -1313,7 +1344,7 @@ const StatValue = styled.div`
 const StatDivider = styled.div`
   width: 1px;
   height: 32px;
-  background: rgba(99, 102, 241, 0.12);
+  background: rgba(139, 92, 246, 0.12);
 `
 
 const AddButton = styled.button`
@@ -1324,13 +1355,13 @@ const AddButton = styled.button`
   font-size: 14px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
   position: relative;
   overflow: hidden;
 
@@ -1361,9 +1392,9 @@ const AddButton = styled.button`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
 
     &::before {
       width: 300px;
@@ -1433,14 +1464,14 @@ const ColumnHeader = styled.div`
   }
 
   svg {
-    color: #6366f1;
+    color: #8b5cf6;
   }
 `
 
 const CountBadge = styled.div`
   padding: 4px 10px;
-  background: rgba(99, 102, 241, 0.1);
-  color: #6366f1;
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
   font-size: 12px;
   font-weight: 600;
   border-radius: 12px;
@@ -1476,16 +1507,16 @@ const CountryListItem = styled.div<{ $selected: boolean }>`
   padding: 12px 14px;
   margin-bottom: 6px;
   background: ${(props) => (props.$selected ? '#ffffff' : 'transparent')};
-  border: 1px solid ${(props) => (props.$selected ? '#6366f1' : 'transparent')};
+  border: 1px solid ${(props) => (props.$selected ? '#8b5cf6' : 'transparent')};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: ${(props) =>
-    props.$selected ? '0 2px 8px rgba(99, 102, 241, 0.15)' : 'none'};
+    props.$selected ? '0 2px 8px rgba(139, 92, 246, 0.15)' : 'none'};
 
   &:hover {
     background: #ffffff;
-    border-color: ${(props) => (props.$selected ? '#6366f1' : '#e2e8f0')};
+    border-color: ${(props) => (props.$selected ? '#8b5cf6' : '#e2e8f0')};
   }
 `
 
@@ -1558,7 +1589,7 @@ const EmptyState = styled.div`
   justify-content: center;
   padding: 80px 20px;
   background: white;
-  border: 1.5px dashed rgba(99, 102, 241, 0.2);
+  border: 1.5px dashed rgba(139, 92, 246, 0.2);
   border-radius: 12px;
 `
 
@@ -1568,9 +1599,9 @@ const EmptyIcon = styled.div`
   justify-content: center;
   width: 80px;
   height: 80px;
-  background: rgba(99, 102, 241, 0.06);
+  background: rgba(139, 92, 246, 0.06);
   border-radius: 50%;
-  color: #6366f1;
+  color: #8b5cf6;
   margin-bottom: 20px;
 `
 
@@ -1603,12 +1634,12 @@ const EmptyButton = styled.button`
   font-size: 15px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
   position: relative;
   overflow: hidden;
 
@@ -1639,9 +1670,9 @@ const EmptyButton = styled.button`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
     transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.4);
 
     &::before {
       width: 400px;
@@ -1663,13 +1694,13 @@ const CountryCard = styled.div<{ $selected: boolean }>`
   background: white;
   border: 1.5px solid
     ${(props) =>
-      props.$selected ? 'rgba(99, 102, 241, 0.4)' : 'rgba(99, 102, 241, 0.12)'};
+      props.$selected ? 'rgba(139, 92, 246, 0.4)' : 'rgba(139, 92, 246, 0.12)'};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: rgba(139, 92, 246, 0.25);
   }
 `
 
@@ -1700,13 +1731,17 @@ const RelationsBadge = styled.div`
   padding: 6px 10px;
   font-size: 11px;
   font-weight: 600;
-  color: #6366f1;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(79, 70, 229, 0.08) 100%);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: #8b5cf6;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.12) 0%,
+    rgba(124, 58, 237, 0.08) 100%
+  );
+  border: 1px solid rgba(139, 92, 246, 0.2);
   border-radius: 8px;
   white-space: nowrap;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 1px 3px rgba(139, 92, 246, 0.1);
 
   &::before {
     content: '🔗';
@@ -1714,10 +1749,14 @@ const RelationsBadge = styled.div`
   }
 
   &:hover {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, rgba(79, 70, 229, 0.12) 100%);
-    border-color: rgba(99, 102, 241, 0.3);
+    background: linear-gradient(
+      135deg,
+      rgba(139, 92, 246, 0.18) 0%,
+      rgba(124, 58, 237, 0.12) 100%
+    );
+    border-color: rgba(139, 92, 246, 0.3);
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.15);
+    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.15);
   }
 `
 
@@ -1732,15 +1771,15 @@ const IconButton = styled.button`
   justify-content: center;
   width: 32px;
   height: 32px;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.2);
+    background: rgba(139, 92, 246, 0.2);
   }
 `
 
@@ -1801,7 +1840,7 @@ const Label = styled.label`
 `
 
 const Input = styled.input`
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid rgba(139, 92, 246, 0.12);
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 14px;
@@ -1813,13 +1852,13 @@ const Input = styled.input`
   }
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: rgba(139, 92, 246, 0.25);
   }
 
   &:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 
   &:disabled {
@@ -1829,7 +1868,7 @@ const Input = styled.input`
 `
 
 const Select = styled.select`
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid rgba(139, 92, 246, 0.12);
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 14px;
@@ -1839,18 +1878,18 @@ const Select = styled.select`
   cursor: pointer;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: rgba(139, 92, 246, 0.25);
   }
 
   &:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 
 const SelectButton = styled.button`
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid rgba(139, 92, 246, 0.12);
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 14px;
@@ -1861,18 +1900,18 @@ const SelectButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: rgba(139, 92, 246, 0.25);
   }
 
   &:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 
 const TextArea = styled.textarea`
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid rgba(139, 92, 246, 0.12);
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 14px;
@@ -1886,13 +1925,13 @@ const TextArea = styled.textarea`
   }
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: rgba(139, 92, 246, 0.25);
   }
 
   &:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 
@@ -1916,7 +1955,7 @@ const InheritedRelationsLabel = styled.div`
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #6366f1;
+  color: #8b5cf6;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-top: 12px;
@@ -1973,7 +2012,7 @@ const RelationItem = styled.div<{ $type: RelationType }>`
 // 상속된 관계 아이템 (읽기전용)
 const InheritedRelationItem = styled(RelationItem)`
   opacity: 0.7;
-  border: 1.5px dashed #6366f1;
+  border: 1.5px dashed #8b5cf6;
   background: ${(props) => {
     const colors: Record<RelationType, string> = {
       allied: '#eef2ff',
@@ -2010,9 +2049,9 @@ const InheritedBadge = styled.div`
   padding: 3px 8px;
   font-size: 10px;
   font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
   border-radius: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2111,13 +2150,13 @@ const ModalHeaderLeft = styled.div`
 const ModalIconWrapper = styled.div`
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 `
 
 const ModalTitle = styled.h3`
@@ -2193,16 +2232,16 @@ const ConfirmButton = styled.button`
   font-size: 14px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
   border: none;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
   }
 
   &:active {
@@ -2389,8 +2428,15 @@ const FactionSelectButton = styled.button<{ $hasValue?: boolean }>`
   justify-content: space-between;
   width: 100%;
   padding: 12px 14px;
-  background: ${(props) => (props.$hasValue ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(79, 70, 229, 0.05) 100%)' : 'white')};
-  border: 1.5px solid ${(props) => (props.$hasValue ? 'rgba(99, 102, 241, 0.25)' : 'rgba(99, 102, 241, 0.12)')};
+  background: ${(props) =>
+    props.$hasValue
+      ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(124, 58, 237, 0.05) 100%)'
+      : 'white'};
+  border: 1.5px solid
+    ${(props) =>
+      props.$hasValue
+        ? 'rgba(139, 92, 246, 0.25)'
+        : 'rgba(139, 92, 246, 0.12)'};
   border-radius: 10px;
   font-size: 14px;
   color: ${(props) => (props.$hasValue ? '#1e293b' : '#94a3b8')};
@@ -2398,18 +2444,22 @@ const FactionSelectButton = styled.button<{ $hasValue?: boolean }>`
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.35);
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(79, 70, 229, 0.08) 100%);
+    border-color: rgba(139, 92, 246, 0.35);
+    background: linear-gradient(
+      135deg,
+      rgba(139, 92, 246, 0.08) 0%,
+      rgba(124, 58, 237, 0.08) 100%
+    );
   }
 
   &:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.4);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 
   svg {
-    color: #6366f1;
+    color: #8b5cf6;
     transition: transform 0.2s ease;
   }
 
@@ -2472,31 +2522,28 @@ const FactionOption = styled.button<{ $selected?: boolean; $color?: string }>`
   align-items: center;
   gap: 8px;
   padding: 20px 16px;
-  background: ${(props) => 
-    props.$selected 
-      ? props.$color 
+  background: ${(props) =>
+    props.$selected
+      ? props.$color
         ? `linear-gradient(135deg, ${props.$color}20 0%, ${props.$color}10 100%)`
-        : 'linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(79, 70, 229, 0.1) 100%)'
-      : 'white'
-  };
-  border: 2px solid ${(props) => 
-    props.$selected 
-      ? props.$color || '#6366f1'
-      : '#e2e8f0'
-  };
+        : 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.1) 100%)'
+      : 'white'};
+  border: 2px solid
+    ${(props) => (props.$selected ? props.$color || '#8b5cf6' : '#e2e8f0')};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: ${(props) => props.$color || '#6366f1'};
-    background: ${(props) => 
-      props.$color 
+    border-color: ${(props) => props.$color || '#8b5cf6'};
+    background: ${(props) =>
+      props.$color
         ? `linear-gradient(135deg, ${props.$color}15 0%, ${props.$color}08 100%)`
-        : 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.05) 100%)'
-    };
+        : 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.05) 100%)'};
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px ${(props) => props.$color ? `${props.$color}30` : 'rgba(99, 102, 241, 0.2)'};
+    box-shadow: 0 4px 12px
+      ${(props) =>
+        props.$color ? `${props.$color}30` : 'rgba(139, 92, 246, 0.2)'};
   }
 
   &:active {

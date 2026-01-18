@@ -4,11 +4,22 @@
  */
 import type { IconType } from 'react-icons'
 import {
+  FiBook,
+  FiBookOpen,
+  FiBriefcase,
+  FiCoffee,
+  FiFileText,
   FiGlobe,
+  FiHeart,
   FiHome,
   FiMapPin,
+  FiMusic,
+  FiPackage,
   FiShield,
+  FiShoppingBag,
+  FiStar,
   FiTarget,
+  FiTrendingUp,
   FiUsers,
   FiZap,
 } from 'react-icons/fi'
@@ -23,18 +34,46 @@ import type { HistoricalEvent } from './events.types'
 
 // 멘션 가능한 엔티티 타입
 export type MentionEntityType =
+  // 인물/조직
   | 'person'
+  | 'organization'
+  | 'militaryUnit'
+  
+  // 지리/정치
   | 'event'
   | 'country'
   | 'historicalCountry'
   | 'city'
   | 'administrativeDivision'
-  | 'organization'
-  | 'militaryUnit'
+  
+  // 경제/상업
+  | 'brand'              // 브랜드: 코카콜라, 배스킨라빈스
+  | 'company'            // 기업: IBM, 도요타
+  | 'product'            // 제품: M1 개런드, 지프
+  
+  // 군사
   | 'weapon'
   | 'groundVehicle'
   | 'aircraft'
   | 'navalVessel'
+  
+  // 문화/사회
+  | 'culture'            // 문화 현상: 재즈, 스윙
+  | 'ideology'           // 이념: 파시즘, 공산주의
+  | 'religion'           // 종교: 기독교, 이슬람
+  | 'art'                // 예술 작품: 게르니카
+  | 'literature'         // 문학: 1984, 동물농장
+  | 'music'              // 음악: 라 마르세예즈
+  
+  // 과학/기술
+  | 'technology'         // 기술: 레이더, 암호 해독
+  | 'invention'          // 발명품: 페니실린, 제트 엔진
+  | 'scientificTheory'   // 과학 이론: 원자폭탄 이론
+  
+  // 법률/문서
+  | 'document'           // 문서: 대서양 헌장
+  | 'treaty'             // 조약: 베르사유 조약
+  | 'law'                // 법률: 뉘른베르크 법
 
 // 통합 멘션 아이템 타입
 export interface MentionItem {
@@ -170,6 +209,166 @@ export const MENTION_TYPE_CONFIG: Record<
     searchFields: ['name'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
+  },
+  
+  // ============================================
+  // 경제/상업 엔티티
+  // ============================================
+  brand: {
+    label: '브랜드',
+    icon: FiShoppingBag,
+    color: '#ec4899', // 핑크
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { foundedYear?: number }).foundedYear
+        ? `${(item as { foundedYear: number }).foundedYear}년 설립`
+        : undefined,
+  },
+  company: {
+    label: '기업',
+    icon: FiBriefcase,
+    color: '#0891b2', // 시안
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { industry?: string }).industry || undefined,
+  },
+  product: {
+    label: '제품',
+    icon: FiPackage,
+    color: '#f59e0b', // 주황
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { manufacturer?: string }).manufacturer || undefined,
+  },
+  
+  // ============================================
+  // 문화/사회 엔티티
+  // ============================================
+  culture: {
+    label: '문화',
+    icon: FiStar,
+    color: '#a855f7', // 보라
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+  },
+  ideology: {
+    label: '이념',
+    icon: FiTrendingUp,
+    color: '#dc2626', // 빨강
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+  },
+  religion: {
+    label: '종교',
+    icon: FiHeart,
+    color: '#7c3aed', // 진보라
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+  },
+  art: {
+    label: '예술',
+    icon: FiStar,
+    color: '#db2777', // 마젠타
+    searchFields: ['name', 'artist'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { artist?: string }).artist || undefined,
+  },
+  literature: {
+    label: '문학',
+    icon: FiBook,
+    color: '#059669', // 초록
+    searchFields: ['name', 'author'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { author?: string }).author || undefined,
+  },
+  music: {
+    label: '음악',
+    icon: FiMusic,
+    color: '#d946ef', // 핑크
+    searchFields: ['name', 'composer'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { composer?: string }).composer || undefined,
+  },
+  
+  // ============================================
+  // 과학/기술 엔티티
+  // ============================================
+  technology: {
+    label: '기술',
+    icon: FiZap,
+    color: '#0284c7', // 블루
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+  },
+  invention: {
+    label: '발명품',
+    icon: FiCoffee,
+    color: '#ea580c', // 주황
+    searchFields: ['name', 'inventor'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { inventor?: string }).inventor || undefined,
+  },
+  scientificTheory: {
+    label: '과학 이론',
+    icon: FiBookOpen,
+    color: '#0369a1', // 다크 블루
+    searchFields: ['name', 'scientist'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { scientist?: string }).scientist || undefined,
+  },
+  
+  // ============================================
+  // 법률/문서 엔티티
+  // ============================================
+  document: {
+    label: '문서',
+    icon: FiFileText,
+    color: '#64748b', // 회색
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { date?: string }).date || undefined,
+  },
+  treaty: {
+    label: '조약',
+    icon: FiFileText,
+    color: '#16a34a', // 초록
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { signedDate?: string }).signedDate || undefined,
+  },
+  law: {
+    label: '법률',
+    icon: FiShield,
+    color: '#b91c1c', // 다크 레드
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { enactedDate?: string }).enactedDate || undefined,
   },
 }
 

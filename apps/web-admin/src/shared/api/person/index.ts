@@ -35,6 +35,11 @@ export type CreatePersonInput = {
   biography?: string | null
   profileImageUrl?: string | null
   countryId?: string | null
+  dynastyId?: string | null
+  religionId?: string | null
+  jobId?: string | null
+  fatherId?: string | null
+  motherId?: string | null
 }
 
 export type UpdatePersonInput = Partial<CreatePersonInput>

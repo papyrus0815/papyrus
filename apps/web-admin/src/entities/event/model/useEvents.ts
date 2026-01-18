@@ -24,23 +24,15 @@ export const useEvents = () => {
       setIsLoading(true)
       try {
         // 🎭 목업 데이터 사용 여부 (true로 설정하면 목업 데이터 사용)
-        const USE_MOCK_DATA = true
+        const USE_MOCK_DATA = false // ✅ 실제 API 사용으로 변경
 
         let eventsResponse: Awaited<ReturnType<typeof getAllEvents>>
         let personsResponse: typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
 
-        if (USE_MOCK_DATA) {
-          // 목업 데이터 사용
-          eventsResponse = await getAllEvents()
-          personsResponse = MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
-          console.log('🎭 목업 데이터 사용 중')
-        } else {
-          // 실제 API 호출
-          ;[eventsResponse, personsResponse] = await Promise.all([
-            getAllEvents(),
-            getAllPersonsWithGovernmentPositions(),
-          ])
-        }
+        // ✅ Events는 실제 API, Persons는 목업 데이터 사용
+        eventsResponse = await getAllEvents()
+        personsResponse = MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
+        console.log('✅ Events: API 사용, Persons: 목업 데이터 사용')
 
         console.log('📦 API 응답 (전체):', eventsResponse)
         console.log('📦 첫 번째 이벤트 상세:', eventsResponse[0])

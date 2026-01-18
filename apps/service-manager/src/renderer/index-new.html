@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Papyrus Service Manager</title>
+    <link rel="stylesheet" href="css/macos-system-settings.css" />
+  </head>
+  <body>
+    <!-- macOS 시스템 설정 스타일 레이아웃 -->
+    <div class="app-container">
+      <!-- 사이드바 -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title">Papyrus</div>
+          <div class="sidebar-subtitle">Service Manager</div>
+        </div>
+        
+        <nav class="sidebar-nav">
+          <!-- 서비스 섹션 -->
+          <div class="nav-section">
+            <div class="nav-section-title">서비스</div>
+            <div class="nav-item active" onclick="showSection('services')" data-section="services">
+              <div class="nav-item-icon">🔧</div>
+              <div class="nav-item-text">서비스 관리</div>
+            </div>
+            <div class="nav-item" onclick="showSection('docker')" data-section="docker">
+              <div class="nav-item-icon">🐳</div>
+              <div class="nav-item-text">Docker</div>
+            </div>
+            <div class="nav-item" onclick="showSection('console')" data-section="console">
+              <div class="nav-item-icon">🖥️</div>
+              <div class="nav-item-text">콘솔</div>
+            </div>
+          </div>
+
+          <!-- 데이터베이스 섹션 -->
+          <div class="nav-section">
+            <div class="nav-section-title">데이터베이스</div>
+            <div class="nav-item" onclick="showSection('prisma')" data-section="prisma">
+              <div class="nav-item-icon">🗄️</div>
+              <div class="nav-item-text">Prisma</div>
+            </div>
+            <div class="nav-item" onclick="showSection('schema')" data-section="schema">
+              <div class="nav-item-icon">🔨</div>
+              <div class="nav-item-text">스키마</div>
+            </div>
+            <div class="nav-item" onclick="showSection('migration')" data-section="migration">
+              <div class="nav-item-icon">🚀</div>
+              <div class="nav-item-text">마이그레이션</div>
+            </div>
+          </div>
+
+          <!-- 개발 도구 섹션 -->
+          <div class="nav-section">
+            <div class="nav-section-title">개발 도구</div>
+            <div class="nav-item" onclick="showSection('env')" data-section="env">
+              <div class="nav-item-icon">⚙️</div>
+              <div class="nav-item-text">환경 변수</div>
+            </div>
+            <div class="nav-item" onclick="showSection('packages')" data-section="packages">
+              <div class="nav-item-icon">📦</div>
+              <div class="nav-item-text">패키지</div>
+            </div>
+            <div class="nav-item" onclick="showSection('logs')" data-section="logs">
+              <div class="nav-item-icon">📋</div>
+              <div class="nav-item-text">로그</div>
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- 메인 콘텐츠 영역 -->
+      <main class="content-area">
+        <!-- 서비스 관리 섹션 (기본) -->
+        <div id="section-services" class="content-section active">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">서비스 관리</div>
+              <div class="content-header-subtitle">개발 서버 및 서비스 상태 제어</div>
+            </div>
+            <div class="content-header-actions">
+              <button class="macos-btn macos-btn-secondary" onclick="openDevTools()">
+                개발자 도구
+              </button>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">⚡</div>
+                <div class="settings-section-title">실행 중인 서비스</div>
+              </div>
+              <div class="settings-section-body" id="servicesList">
+                <!-- 서비스 목록이 여기에 동적으로 추가됩니다 -->
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">🔨</div>
+                <div class="settings-section-title">Nestia SDK 빌드</div>
+              </div>
+              <div class="settings-section-body">
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">SDK 빌드</div>
+                    <div class="settings-row-description">NestJS API 타입 안전 클라이언트 생성</div>
+                  </div>
+                  <button class="macos-btn macos-btn-primary" onclick="buildNestiaSdk()" id="buildNestiaButton">
+                    빌드
+                  </button>
+                </div>
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">SDK 검증</div>
+                    <div class="settings-row-description">생성된 SDK의 타입 검증</div>
+                  </div>
+                  <button class="macos-btn macos-btn-secondary" onclick="validateNestiaSdk()" id="validateNestiaButton">
+                    검증
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">🖥️</div>
+                <div class="settings-section-title">실시간 콘솔</div>
+              </div>
+              <div class="settings-section-body">
+                <div style="background: rgba(28, 28, 30, 0.95); border-radius: 8px; padding: 16px; min-height: 300px; max-height: 400px; overflow-y: auto; font-family: 'SF Mono', 'Menlo', monospace; font-size: 11px; color: #f5f5f7;" id="consoleOutput">
+                  <!-- 콘솔 출력 -->
+                </div>
+                <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                  <button class="macos-btn macos-btn-secondary" onclick="clearConsoleLog()">
+                    지우기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Docker 섹션 -->
+        <div id="section-docker" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">Docker 관리</div>
+              <div class="content-header-subtitle">컨테이너 및 이미지 관리</div>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">⚠️</div>
+                <div class="settings-section-title">Docker 완전 초기화</div>
+              </div>
+              <div class="settings-section-body">
+                <div style="background: rgba(255, 204, 0, 0.1); border: 1px solid rgba(255, 204, 0, 0.3); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                  <p style="font-size: 14px; color: rgba(255, 255, 255, 0.9); margin-bottom: 8px;">
+                    <strong>주의:</strong> 모든 Docker 컨테이너, 볼륨, 이미지가 삭제됩니다.
+                  </p>
+                  <p style="font-size: 13px; color: rgba(255, 255, 255, 0.7);">
+                    이 작업은 되돌릴 수 없습니다. 데이터가 영구적으로 삭제됩니다.
+                  </p>
+                </div>
+                <button class="macos-btn" style="background: linear-gradient(180deg, #FF453A 0%, #CC3630 100%); color: white; width: 100%;" onclick="resetDocker()" id="resetDockerButton">
+                  Docker 완전 초기화
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Prisma 섹션 -->
+        <div id="section-prisma" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">Prisma</div>
+              <div class="content-header-subtitle">데이터베이스 ORM 관리</div>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-grid">
+              <div class="settings-card" onclick="showSection('schema')">
+                <span class="settings-card-icon">🔨</span>
+                <div class="settings-card-title">스키마</div>
+                <div class="settings-card-description">Prisma 스키마 파일 빌드 및 검증</div>
+              </div>
+              <div class="settings-card" onclick="showSection('migration')">
+                <span class="settings-card-icon">🚀</span>
+                <div class="settings-card-title">마이그레이션</div>
+                <div class="settings-card-description">데이터베이스 스키마 변경 적용</div>
+              </div>
+              <div class="settings-card" onclick="startPrismaStudio()">
+                <span class="settings-card-icon">🎨</span>
+                <div class="settings-card-title">Prisma Studio</div>
+                <div class="settings-card-description">데이터베이스 시각적 관리 도구</div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">📊</div>
+                <div class="settings-section-title">현재 상태</div>
+              </div>
+              <div class="settings-section-body">
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">스키마 파일</div>
+                    <div class="settings-row-description">apps/api/prisma/schema.prisma</div>
+                  </div>
+                  <span class="status-indicator running" id="prismaSchemaStatus">
+                    <span class="status-dot"></span>
+                    정상
+                  </span>
+                </div>
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">마이그레이션</div>
+                    <div class="settings-row-description">apps/api/prisma/migrations/</div>
+                  </div>
+                  <span class="status-indicator running" id="prismaMigrationsStatus">
+                    <span class="status-dot"></span>
+                    동기화됨
+                  </span>
+                </div>
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">Prisma Studio</div>
+                    <div class="settings-row-description">http://localhost:5555</div>
+                  </div>
+                  <span class="status-indicator stopped" id="prismaStudioStatus">
+                    <span class="status-dot"></span>
+                    중지됨
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 스키마 섹션 -->
+        <div id="section-schema" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">스키마 관리</div>
+              <div class="content-header-subtitle">Prisma 스키마 빌드 및 검증</div>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">🔨</div>
+                <div class="settings-section-title">스키마 작업</div>
+              </div>
+              <div class="settings-section-body">
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">스키마 빌드</div>
+                    <div class="settings-row-description">libs/db/prisma/ 파일들을 하나로 병합</div>
+                  </div>
+                  <button class="macos-btn macos-btn-primary" onclick="buildPrismaSchema()" id="buildSchemaButton">
+                    빌드
+                  </button>
+                </div>
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">스키마 검증</div>
+                    <div class="settings-row-description">통합 스키마의 문법 및 구조 확인</div>
+                  </div>
+                  <button class="macos-btn macos-btn-secondary" onclick="validatePrismaSchema()" id="validateSchemaButton">
+                    검증
+                  </button>
+                </div>
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">Prisma Client 생성</div>
+                    <div class="settings-row-description">타입 안전 데이터베이스 클라이언트 생성</div>
+                  </div>
+                  <button class="macos-btn macos-btn-secondary" onclick="generatePrismaClient()" id="generateClientButton">
+                    생성
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 마이그레이션 섹션 -->
+        <div id="section-migration" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">마이그레이션</div>
+              <div class="content-header-subtitle">데이터베이스 스키마 변경 관리</div>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">🚀</div>
+                <div class="settings-section-title">마이그레이션 실행</div>
+              </div>
+              <div class="settings-section-body">
+                <div style="margin-bottom: 16px;">
+                  <label style="display: block; font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, 0.9); margin-bottom: 8px;">
+                    마이그레이션 이름 <span style="color: #FF453A;">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    id="migrationName"
+                    placeholder="예: add_user_email_field"
+                    style="width: 100%; padding: 10px 14px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #ffffff; font-size: 14px; font-family: inherit;"
+                  />
+                  <div style="font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-top: 6px;">
+                    영문 소문자와 언더스코어(_)만 사용
+                  </div>
+                </div>
+                <button class="macos-btn macos-btn-primary" onclick="runPrismaMigration()" id="runMigrationButton" style="width: 100%;">
+                  마이그레이션 실행
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 환경 변수 섹션 -->
+        <div id="section-env" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">환경 변수</div>
+              <div class="content-header-subtitle">애플리케이션 설정 관리</div>
+            </div>
+            <div class="content-header-actions">
+              <button class="macos-btn macos-btn-secondary" onclick="loadEnvFiles()">
+                새로고침
+              </button>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">📁</div>
+                <div class="settings-section-title">환경 파일 선택</div>
+              </div>
+              <div class="settings-section-body">
+                <select 
+                  id="envFileSelect" 
+                  onchange="loadEnvVariables()"
+                  style="width: 100%; padding: 10px 14px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #ffffff; font-size: 14px; font-family: inherit; cursor: pointer;"
+                >
+                  <option value="">파일을 선택하세요</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="settings-section" id="envVariablesCard" style="display: none;">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">📝</div>
+                <div class="settings-section-title">환경 변수 목록</div>
+              </div>
+              <div class="settings-section-body">
+                <div id="envVariablesTable">
+                  <!-- 환경 변수 목록이 여기에 추가됩니다 -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 패키지 섹션 -->
+        <div id="section-packages" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">패키지 관리</div>
+              <div class="content-header-subtitle">의존성 및 업데이트 관리</div>
+            </div>
+            <div class="content-header-actions">
+              <button class="macos-btn macos-btn-secondary" onclick="loadInstalledPackages()">
+                새로고침
+              </button>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">⬆️</div>
+                <div class="settings-section-title">패키지 업데이트</div>
+              </div>
+              <div class="settings-section-body">
+                <button class="macos-btn macos-btn-primary" onclick="checkPackageUpdates()">
+                  업데이트 확인
+                </button>
+                <div id="updateList" style="margin-top: 16px;">
+                  <!-- 업데이트 목록이 여기에 추가됩니다 -->
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">📚</div>
+                <div class="settings-section-title">설치된 패키지</div>
+              </div>
+              <div class="settings-section-body">
+                <div id="packageTableBody">
+                  <!-- 패키지 목록이 여기에 추가됩니다 -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 로그 섹션 -->
+        <div id="section-logs" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">로그</div>
+              <div class="content-header-subtitle">시스템 작업 기록</div>
+            </div>
+            <div class="content-header-actions">
+              <button class="macos-btn macos-btn-secondary" onclick="loadLogFiles()">
+                새로고침
+              </button>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">📂</div>
+                <div class="settings-section-title">로그 파일 목록</div>
+              </div>
+              <div class="settings-section-body">
+                <div id="logFilesList">
+                  <!-- 로그 파일 목록이 여기에 추가됩니다 -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 콘솔 섹션 -->
+        <div id="section-console" class="content-section">
+          <div class="content-header">
+            <div>
+              <div class="content-header-title">실시간 콘솔</div>
+              <div class="content-header-subtitle">서비스 출력 모니터링</div>
+            </div>
+            <div class="content-header-actions">
+              <button class="macos-btn macos-btn-secondary" onclick="clearConsoleLog()">
+                지우기
+              </button>
+            </div>
+          </div>
+          <div class="content-body">
+            <div class="settings-section" style="height: calc(100vh - 200px);">
+              <div style="background: rgba(28, 28, 30, 0.95); border-radius: 8px; padding: 20px; height: 100%; overflow-y: auto; font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; color: #f5f5f7;" id="consoleOutput2">
+                <!-- 콘솔 출력 -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Dock -->
+    <div class="macos-dock">
+      <div class="dock-item active" onclick="quickNav('services')" data-section="services">
+        <span>🔧</span>
+        <div class="dock-tooltip">서비스</div>
+      </div>
+      <div class="dock-item" onclick="quickNav('prisma')" data-section="prisma">
+        <span>🗄️</span>
+        <div class="dock-tooltip">Prisma</div>
+      </div>
+      <div class="dock-item" onclick="quickNav('env')" data-section="env">
+        <span>⚙️</span>
+        <div class="dock-tooltip">환경 변수</div>
+      </div>
+      <div class="dock-separator"></div>
+      <div class="dock-item" onclick="quickNav('packages')" data-section="packages">
+        <span>📦</span>
+        <div class="dock-tooltip">패키지</div>
+      </div>
+      <div class="dock-item" onclick="quickNav('logs')" data-section="logs">
+        <span>📋</span>
+        <div class="dock-tooltip">로그</div>
+      </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+    <script>
+      // 섹션 전환 함수
+      function showSection(sectionName) {
+        // 모든 섹션 숨기기
+        document.querySelectorAll('.content-section').forEach(section => {
+          section.classList.remove('active');
+          section.style.display = 'none';
+        });
+
+        // 선택된 섹션 표시
+        const targetSection = document.getElementById(`section-${sectionName}`);
+        if (targetSection) {
+          targetSection.classList.add('active');
+          targetSection.style.display = 'block';
+        }
+
+        // 네비게이션 아이템 활성화
+        document.querySelectorAll('.nav-item').forEach(item => {
+          if (item.getAttribute('data-section') === sectionName) {
+            item.classList.add('active');
+          } else {
+            item.classList.remove('active');
+          }
+        });
+
+        // Dock 아이템 활성화
+        document.querySelectorAll('.dock-item').forEach(item => {
+          if (item.getAttribute('data-section') === sectionName) {
+            item.classList.add('active');
+          } else {
+            item.classList.remove('active');
+          }
+        });
+
+        // 섹션별 자동 로드
+        setTimeout(() => {
+          switch(sectionName) {
+            case 'packages':
+              if (typeof window.loadInstalledPackages === 'function') {
+                window.loadInstalledPackages();
+              }
+              break;
+            case 'logs':
+              if (typeof window.loadLogFiles === 'function') {
+                window.loadLogFiles();
+              }
+              break;
+            case 'env':
+              if (typeof window.loadEnvFiles === 'function') {
+                window.loadEnvFiles();
+              }
+              break;
+            case 'prisma':
+              if (typeof window.refreshPrismaStatus === 'function') {
+                window.refreshPrismaStatus();
+              }
+              break;
+          }
+        }, 100);
+      }
+
+      // Dock에서 빠른 전환
+      function quickNav(sectionName) {
+        showSection(sectionName);
+      }
+
+      // CSS 적용
+      document.querySelectorAll('.content-section').forEach(section => {
+        section.style.display = 'none';
+      });
+      document.getElementById('section-services').style.display = 'block';
+      document.getElementById('section-services').classList.add('active');
+    </script>
+  </body>
+</html>

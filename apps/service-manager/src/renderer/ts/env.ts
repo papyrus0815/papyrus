@@ -102,15 +102,11 @@ function renderEnvVariablesTable(): void {
 
   if (Object.keys(currentEnvVariables).length === 0) {
     tbody.innerHTML = `
-            <tr>
-              <td colspan="3">
-                <div class="empty-state">
-                  <div class="empty-icon">⚙️</div>
-                  <div>환경 변수가 없습니다</div>
-                </div>
-              </td>
-            </tr>
-          `
+      <div class="empty-state">
+        <div class="empty-state-icon">⚙️</div>
+        <div class="empty-state-text">환경 변수가 없습니다</div>
+      </div>
+    `
     return
   }
 
@@ -124,30 +120,25 @@ function renderEnvVariablesTable(): void {
   tbody.innerHTML = Object.entries(currentEnvVariables)
     .map(
       ([key, value]) => `
-          <tr>
-            <td style="font-family: 'Monaco', 'Courier New', monospace; font-size: 12px; font-weight: 600;">
-              ${key}
-            </td>
-            <td>
-              <input
-                type="text"
-                class="search-input"
-                value="${escapeHtml(value)}"
-                onchange="updateEnvVariable('${escapeHtml(key)}', this.value)"
-                style="width: 100%; padding: 8px 12px; font-size: 12px;"
-              />
-            </td>
-            <td style="text-align: center;">
-              <button
-                class="btn btn-danger btn-sm"
-                onclick="deleteEnvVariable('${escapeHtml(key)}')"
-                style="padding: 6px 12px;"
-              >
-                🗑️ 삭제
-              </button>
-            </td>
-          </tr>
-        `,
+        <div class="env-var-item">
+          <div class="env-var-key">${key}</div>
+          <input
+            type="text"
+            class="form-input env-var-value"
+            value="${escapeHtml(value)}"
+            onchange="updateEnvVariable('${escapeHtml(key)}', this.value)"
+            style="margin: 0;"
+          />
+          <div class="env-var-actions">
+            <button
+              class="macos-btn macos-btn-secondary macos-btn-sm"
+              onclick="deleteEnvVariable('${escapeHtml(key)}')"
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+      `,
     )
     .join('')
 }

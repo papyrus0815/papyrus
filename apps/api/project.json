@@ -44,8 +44,7 @@
           "CACHE_MAX_AGE": "1y",
           "GZIP_MIN_LENGTH": "1024"
         }
-      },
-      "dependsOn": ["build"]
+      }
     },
     "generate": {
       "executor": "nx:run-commands",

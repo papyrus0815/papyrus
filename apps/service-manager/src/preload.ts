@@ -120,6 +120,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (fileName: string, key: string) =>
       ipcRenderer.invoke('env:delete', fileName, key),
   },
+
+  // ========================================
+  // NX Configuration API
+  // ========================================
+  nx: {
+    getProjects: () => ipcRenderer.invoke('nx:getProjects'),
+    readProjectJson: (projectRoot: string) =>
+      ipcRenderer.invoke('nx:readProjectJson', projectRoot),
+    saveProjectJson: (projectName: string, content: any) =>
+      ipcRenderer.invoke('nx:saveProjectJson', projectName, content),
+    restoreProjectJsonBackup: (projectName: string) =>
+      ipcRenderer.invoke('nx:restoreProjectJsonBackup', projectName),
+    readNestiaConfig: (projectRoot: string) =>
+      ipcRenderer.invoke('nx:readNestiaConfig', projectRoot),
+    saveNestiaConfig: (projectName: string, content: string) =>
+      ipcRenderer.invoke('nx:saveNestiaConfig', projectName, content),
+    restoreNestiaConfigBackup: (projectName: string) =>
+      ipcRenderer.invoke('nx:restoreNestiaConfigBackup', projectName),
+    readNxJson: () => ipcRenderer.invoke('nx:readNxJson'),
+    saveNxJson: (content: any) =>
+      ipcRenderer.invoke('nx:saveNxJson', content),
+    restoreNxJsonBackup: () => ipcRenderer.invoke('nx:restoreNxJsonBackup'),
+  },
 })
 
 // TypeScript 타입 정의
@@ -211,6 +234,36 @@ declare global {
           fileName: string,
           key: string,
         ) => Promise<{ success: boolean; message: string }>
+      }
+      nx: {
+        getProjects: () => Promise<
+          Array<{
+            name: string
+            root: string
+            type: 'application' | 'library'
+            hasProjectJson: boolean
+            hasNestiaConfig: boolean
+          }>
+        >
+        readProjectJson: (projectRoot: string) => Promise<any>
+        saveProjectJson: (
+          projectName: string,
+          content: any,
+        ) => Promise<{ success: boolean; message: string }>
+        restoreProjectJsonBackup: (
+          projectName: string,
+        ) => Promise<{ success: boolean; message: string }>
+        readNestiaConfig: (projectRoot: string) => Promise<string>
+        saveNestiaConfig: (
+          projectName: string,
+          content: string,
+        ) => Promise<{ success: boolean; message: string }>
+        restoreNestiaConfigBackup: (
+          projectName: string,
+        ) => Promise<{ success: boolean; message: string }>
+        readNxJson: () => Promise<any>
+        saveNxJson: (content: any) => Promise<{ success: boolean; message: string }>
+        restoreNxJsonBackup: () => Promise<{ success: boolean; message: string }>
       }
     }
   }

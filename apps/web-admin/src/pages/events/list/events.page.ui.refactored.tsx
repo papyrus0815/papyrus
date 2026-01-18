@@ -227,7 +227,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             <p>시대별 주요 사건과 계층적 관계를 탐색합니다</p>
           </Layout.PageTopTitle>
           <Layout.CreateEventButton
-            onClick={() => navigate(pathKeys.history.eventsCreate())}
+            onClick={() => navigate(pathKeys.events.create())}
           >
             <FiPlus size={16} />새 사건 등록
           </Layout.CreateEventButton>
@@ -293,11 +293,13 @@ export const EventsCatalogPageRefactored: React.FC = () => {
           />
 
           {/* ===== Widget: Event Detail Panel ===== */}
-          <최시시
+          <EventDetailPanel
             isLoading={isLoading}
             selectedEvent={selectedEvent}
             selectedNode={selectedNode}
             dbCategories={dbCategories}
+            personsWithGovPositions={personsWithGovPositions}
+            eventHeadsOfState={eventHeadsOfState}
             onSelectEvent={setSelectedEventId}
             onExpandEvent={(eventId) => {
               setExpandedEventIds((prev) => {

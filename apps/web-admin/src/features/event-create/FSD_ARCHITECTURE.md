@@ -317,7 +317,7 @@ export const EventCreatePage = () => {
       await createEvent(eventData)
     }
 
-    navigate(pathKeys.history.events())
+    navigate(pathKeys.events.root())
   }
 
   // JSX는 동일...

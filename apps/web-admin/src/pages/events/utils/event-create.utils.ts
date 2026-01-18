@@ -5,29 +5,44 @@ import type { HistoricalEventCategory } from './create/events.types'
 
 export const getApiHost = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL
+  
+  console.log('🔍 VITE_API_BASE_URL:', envUrl, typeof envUrl)
 
   if (envUrl === '') {
     const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    console.log('✅ 빈 문자열 → origin 사용:', origin)
     return origin
   }
 
   if (envUrl) {
+    console.log('✅ 환경변수 사용:', envUrl)
     return envUrl
   }
 
+  console.log('⚠️ 기본값 사용: http://localhost:8000')
   return 'http://localhost:8000'
 }
 
 export const getImageUrl = (url: string): string => {
+  console.log('🔍 getImageUrl 입력:', url)
+  
   if (
     url.startsWith('http://') ||
     url.startsWith('https://') ||
     url.startsWith('blob:')
   ) {
+    console.log('✅ 절대 URL 반환:', url)
     return url
   }
+  
   const apiHost = getApiHost()
-  return `${apiHost}${url.startsWith('/') ? url : `/${url}`}`
+  const fullUrl = `${apiHost}${url.startsWith('/') ? url : `/${url}`}`
+  
+  console.log('🔗 변환된 URL:', fullUrl)
+  console.log('   - apiHost:', apiHost)
+  console.log('   - 원본 URL:', url)
+  
+  return fullUrl
 }
 
 /**

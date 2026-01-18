@@ -148,11 +148,12 @@ export const fromParticipationTypeDto = (
 
 /**
  * 카테고리명 매핑 (영문 → 한글)
+ * @deprecated 더 이상 사용하지 않음. DB에서 직접 categoryId 사용
  */
 export const categoryNameMap: Record<string, string> = {
   political: '정치',
   economic: '경제',
-  military: '군사',
+  military: '전쟁/군사',
   social: '사회',
   cultural: '문화',
   technological: '과학기술',

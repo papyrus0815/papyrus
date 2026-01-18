@@ -47,7 +47,7 @@ export class AppConfigService {
     return {
       url: this.configService.get<string>('DATABASE_URL')!,
       logLevel: this.isDevelopment
-        ? ['query', 'info', 'warn', 'error']
+        ? ['info', 'warn', 'error']
         : ['warn', 'error'],
     }
   }

@@ -14,19 +14,16 @@ import {
 import * as fs from 'fs'
 import * as path from 'path'
 
+import { NxManager } from './services/nx-manager'
 import { PrismaManager } from './services/prisma-manager'
 import { ServiceManager } from './services/service-manager'
-
-// macOS에서 Dock에 앱 아이콘 표시
-if (process.platform === 'darwin') {
-  app.dock.show()
-}
 
 let tray: Tray | null = null
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 const serviceManager = ServiceManager.getInstance()
 const prismaManager = PrismaManager.getInstance()
+const nxManager = NxManager.getInstance()
 
 // 원본 console.log 저장
 const originalConsoleLog = console.log
@@ -90,6 +87,7 @@ function createWindow() {
     minHeight: 700,
     title: 'Papyrus Service Manager',
     icon: nativeImage.createEmpty(),
+    show: true, // 창을 즉시 표시
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -161,27 +159,70 @@ function createTray() {
       throw new Error('아이콘 파일을 찾을 수 없음')
     }
   } catch (error) {
-    console.log(`⚠️  PNG 아이콘 로드 실패, base64 아이콘 사용: ${error}`)
-    // 아이콘 파일이 없으면 간단한 이미지 생성
-    // 🎮 이모지를 이미지로 변환
-    const iconData = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAE0SURBVDiNpdPNSsNAFIbh502aJhBbqYKgC8GFIrgQXIgL/wGv1L2/N+BG3AiuXHghLlwI/qBCbW1Tk8nMcZGGpE0T8INZzDnPzJkzhv8UY8wC8ALYBuaBKfAJPAIPWuuPnyALWFJKrQMngAJcIADqwB1wq7V+/hUcADfAEnAKOH8AtgD3QAXYAx6Ac631vTEmAJaBE8D+BY6AY+AN2ATugQvgEqgBG8AecDgIeATsgBU4BtxBgD1wDGyAF+AYsIGDQcAu4AKb4BjYB+wDc0AFqAJzQ4FzwB/gGLgGNoENYBd4A84Au+Db3wRsA0+AS2AR+AZ2gCXAAdY0oE6gHWCqtR7r2DZQBhaGAEuAHce5/k2gtV4Zc+sCK1rrUc8BaK3PgJf0N+jWWq/+r18AVNhp1dmOl2oAAAAASUVORK5CYII=',
-      'base64',
-    )
-    icon = nativeImage.createFromBuffer(iconData)
+    console.log(`⚠️  PNG 아이콘 로드 실패, 텍스트 기반 아이콘 사용: ${error}`)
   }
 
-  if (!icon) {
-    // 최후의 수단: 기본 아이콘
-    const iconData = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAE0SURBVDiNpdPNSsNAFIbh502aJhBbqYKgC8GFIrgQXIgL/wGv1L2/N+BG3AiuXHghLlwI/qBCbW1Tk8nMcZGGpE0T8INZzDnPzJkzhv8UY8wC8ALYBuaBKfAJPAIPWuuPnyALWFJKrQMngAJcIADqwB1wq7V+/hUcADfAEnAKOH8AtgD3QAXYAx6Ac631vTEmAJaBE8D+BY6AY+AN2ATugQvgEqgBG8AecDgIeATsgBU4BtxBgD1wDGyAF+AYsIGDQcAu4AKb4BjYB+wDc0AFqAJzQ4FzwB/gGLgGNoENYBd4A84Au+Db3wRsA0+AS2AR+AZ2gCXAAdY0oE6gHWCqtR7r2DZQBhaGAEuAHce5/k2gtV4Zc+sCK1rrUc8BaK3PgJf0N+jWWq/+r18AVNhp1dmOl2oAAAAASUVORK5CYII=',
-      'base64',
-    )
-    icon = nativeImage.createFromBuffer(iconData)
+  if (!icon || icon.isEmpty()) {
+    // 최후의 수단: 간단한 텍스트 기반 아이콘
+    // macOS 메뉴바용 16x16 템플릿 이미지 (흑백 원)
+    const size = 22
+    const canvas = {
+      width: size,
+      height: size,
+      data: Buffer.alloc(size * size * 4),
+    }
+    
+    // 중앙에 작은 원 그리기
+    const centerX = size / 2
+    const centerY = size / 2
+    const radius = 4
+    
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - centerX
+        const dy = y - centerY
+        const distance = Math.sqrt(dx * dx + dy * dy)
+        
+        const idx = (y * size + x) * 4
+        if (distance <= radius) {
+          // 원 안쪽 - 흰색
+          canvas.data[idx] = 0
+          canvas.data[idx + 1] = 0
+          canvas.data[idx + 2] = 0
+          canvas.data[idx + 3] = 255
+        } else {
+          // 원 바깥 - 투명
+          canvas.data[idx] = 0
+          canvas.data[idx + 1] = 0
+          canvas.data[idx + 2] = 0
+          canvas.data[idx + 3] = 0
+        }
+      }
+    }
+    
+    icon = nativeImage.createFromBuffer(canvas.data, {
+      width: size,
+      height: size,
+    })
   }
 
   tray = new Tray(icon)
   tray.setToolTip('Papyrus Service Manager')
+  
+  // macOS 메뉴바에 잘 보이도록 템플릿 이미지로 설정
+  if (icon && !icon.isEmpty()) {
+    icon.setTemplateImage(true)
+  }
+
+  // 트레이 아이콘 클릭 시 창 열기
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show()
+      mainWindow.focus()
+    } else {
+      createWindow()
+    }
+  })
 
   console.log('✅ 트레이 아이콘 생성 완료')
 
@@ -223,7 +264,12 @@ async function updateTrayMenu() {
         label: '📊 GUI 열기',
         type: 'normal',
         click: () => {
-          createWindow()
+          if (mainWindow) {
+            mainWindow.show()
+            mainWindow.focus()
+          } else {
+            createWindow()
+          }
         },
       },
       { type: 'separator' },
@@ -1513,6 +1559,102 @@ function registerIpcHandlers() {
         message: `❌ SDK 검증 실패\n\n${error.message}`,
       }
     }
+  })
+
+  // ========================================
+  // NX Configuration IPC Handlers
+  // ========================================
+
+  // NX 프로젝트 목록 가져오기
+  ipcMain.handle('nx:getProjects', async () => {
+    console.log('📂 [IPC] NX 프로젝트 목록 요청')
+    try {
+      return await nxManager.getProjects()
+    } catch (error: any) {
+      console.error('❌ NX 프로젝트 목록 조회 실패:', error)
+      return []
+    }
+  })
+
+  // project.json 읽기
+  ipcMain.handle('nx:readProjectJson', async (_event, projectRoot: string) => {
+    console.log(`📖 [IPC] project.json 읽기: ${projectRoot}`)
+    try {
+      return await nxManager.readProjectJson(projectRoot)
+    } catch (error: any) {
+      console.error('❌ project.json 읽기 실패:', error)
+      throw error
+    }
+  })
+
+  // project.json 저장
+  ipcMain.handle(
+    'nx:saveProjectJson',
+    async (_event, projectName: string, content: any) => {
+      console.log(`💾 [IPC] project.json 저장: ${projectName}`)
+      return await nxManager.saveProjectJson(projectName, content)
+    },
+  )
+
+  // project.json 백업 복원
+  ipcMain.handle(
+    'nx:restoreProjectJsonBackup',
+    async (_event, projectName: string) => {
+      console.log(`🔄 [IPC] project.json 백업 복원: ${projectName}`)
+      return await nxManager.restoreProjectJsonBackup(projectName)
+    },
+  )
+
+  // nestia.config.ts 읽기
+  ipcMain.handle('nx:readNestiaConfig', async (_event, projectRoot: string) => {
+    console.log(`📖 [IPC] nestia.config.ts 읽기: ${projectRoot}`)
+    try {
+      return await nxManager.readNestiaConfig(projectRoot)
+    } catch (error: any) {
+      console.error('❌ nestia.config.ts 읽기 실패:', error)
+      throw error
+    }
+  })
+
+  // nestia.config.ts 저장
+  ipcMain.handle(
+    'nx:saveNestiaConfig',
+    async (_event, projectName: string, content: string) => {
+      console.log(`💾 [IPC] nestia.config.ts 저장: ${projectName}`)
+      return await nxManager.saveNestiaConfig(projectName, content)
+    },
+  )
+
+  // nestia.config.ts 백업 복원
+  ipcMain.handle(
+    'nx:restoreNestiaConfigBackup',
+    async (_event, projectName: string) => {
+      console.log(`🔄 [IPC] nestia.config.ts 백업 복원: ${projectName}`)
+      return await nxManager.restoreNestiaConfigBackup(projectName)
+    },
+  )
+
+  // nx.json 읽기
+  ipcMain.handle('nx:readNxJson', async () => {
+    console.log('📖 [IPC] nx.json 읽기')
+    try {
+      return await nxManager.readNxJson()
+    } catch (error: any) {
+      console.error('❌ nx.json 읽기 실패:', error)
+      throw error
+    }
+  })
+
+  // nx.json 저장
+  ipcMain.handle('nx:saveNxJson', async (_event, content: any) => {
+    console.log('💾 [IPC] nx.json 저장')
+    return await nxManager.saveNxJson(content)
+  })
+
+  // nx.json 백업 복원
+  ipcMain.handle('nx:restoreNxJsonBackup', async () => {
+    console.log('🔄 [IPC] nx.json 백업 복원')
+    return await nxManager.restoreNxJsonBackup()
   })
 }
 

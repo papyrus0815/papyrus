@@ -22,6 +22,9 @@ export class LoggingInterceptor implements NestInterceptor {
     const userAgent = headers['user-agent'] || ''
     const requestId = headers['x-request-id'] as string
 
+    // 헬스체크 엔드포인트와 루트 경로는 로깅 제외
+    const isHealthCheck = url.startsWith('/health') || url === '/'
+    
     const startTime = Date.now()
 
     const logContext = {
@@ -32,11 +35,15 @@ export class LoggingInterceptor implements NestInterceptor {
       requestId,
     }
 
-    this.logger.log(`Incoming Request: ${method} ${url}`, logContext)
+    if (!isHealthCheck) {
+      this.logger.log(`Incoming Request: ${method} ${url}`, logContext)
+    }
 
     return next.handle().pipe(
       tap({
         next: (data) => {
+          if (isHealthCheck) return
+
           const endTime = Date.now()
           const duration = endTime - startTime
 
@@ -51,6 +58,8 @@ export class LoggingInterceptor implements NestInterceptor {
           )
         },
         error: (error) => {
+          if (isHealthCheck) return
+
           const endTime = Date.now()
           const duration = endTime - startTime
 

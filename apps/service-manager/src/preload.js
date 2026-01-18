@@ -89,4 +89,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
         write: (fileName, variables) => ipcRenderer.invoke('env:write', fileName, variables),
         delete: (fileName, key) => ipcRenderer.invoke('env:delete', fileName, key),
     },
+    // ========================================
+    // NX Configuration API
+    // ========================================
+    nx: {
+        getProjects: () => ipcRenderer.invoke('nx:getProjects'),
+        readProjectJson: (projectRoot) => ipcRenderer.invoke('nx:readProjectJson', projectRoot),
+        saveProjectJson: (projectName, content) => ipcRenderer.invoke('nx:saveProjectJson', projectName, content),
+        restoreProjectJsonBackup: (projectName) => ipcRenderer.invoke('nx:restoreProjectJsonBackup', projectName),
+        readNestiaConfig: (projectRoot) => ipcRenderer.invoke('nx:readNestiaConfig', projectRoot),
+        saveNestiaConfig: (projectName, content) => ipcRenderer.invoke('nx:saveNestiaConfig', projectName, content),
+        restoreNestiaConfigBackup: (projectName) => ipcRenderer.invoke('nx:restoreNestiaConfigBackup', projectName),
+        readNxJson: () => ipcRenderer.invoke('nx:readNxJson'),
+        saveNxJson: (content) => ipcRenderer.invoke('nx:saveNxJson', content),
+        restoreNxJsonBackup: () => ipcRenderer.invoke('nx:restoreNxJsonBackup'),
+    },
 });

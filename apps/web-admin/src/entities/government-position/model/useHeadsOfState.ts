@@ -146,10 +146,11 @@ export const useTenureGroups = (
     // 연속된 사건들만 그룹으로 유지 (중간에 빈 공간이 있으면 분리)
     const continuousGroups: typeof groups = []
     groups.forEach((group) => {
-      if (group.eventIds.length < 2) {
-        // 1개 사건만 있으면 그룹으로 표시하지 않음
-        return
-      }
+      // ✅ 모든 사건에 국가 원수 표시 (1개여도 표시)
+      // if (group.eventIds.length < 2) {
+      //   // 1개 사건만 있으면 그룹으로 표시하지 않음
+      //   return
+      // }
 
       // 연속성 확인
       const indices = topLevelEvents
@@ -171,7 +172,8 @@ export const useTenureGroups = (
             currentGroup.endIndex = indices[i]
           }
         } else {
-          if (currentGroup && currentGroup.eventIds.length >= 2) {
+          // ✅ 1개 사건도 표시
+          if (currentGroup) {
             continuousGroups.push(currentGroup)
           }
           currentGroup = {
@@ -182,7 +184,8 @@ export const useTenureGroups = (
           }
         }
       }
-      if (currentGroup && currentGroup.eventIds.length >= 2) {
+      // ✅ 1개 사건도 표시
+      if (currentGroup) {
         continuousGroups.push(currentGroup)
       }
     })

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import {
@@ -55,18 +55,11 @@ interface BasicInfoSectionProps {
   // DB 카테고리
   dbCategories: EventCategoryDto[]
 
-  // 태그
-  tags: string[]
-  setTags: React.Dispatch<React.SetStateAction<string[]>>
-
-  // 관련 국가
-  relatedCountryIds: string[]
-  setRelatedCountryIds: React.Dispatch<React.SetStateAction<string[]>>
-  relatedHistoricalCountryIds: string[]
-  setRelatedHistoricalCountryIds: React.Dispatch<React.SetStateAction<string[]>>
-  setShowCountryModal: (value: boolean) => void
-  availableCountries: CountryResponseDto[]
-  availableHistoricalCountries: HistoricalCountryResponseDto[]
+  // 군사 카테고리 전용 필드
+  conflictType?: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish'
+  setConflictType?: (value: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish') => void
+  combatTypes?: ('land' | 'naval' | 'air')[]
+  setCombatTypes?: (value: ('land' | 'naval' | 'air')[]) => void
 
   // UI 상태
   playClickSound: () => void
@@ -93,25 +86,43 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   setThumbnail,
   setThumbnailFile,
   dbCategories,
-  tags,
-  setTags,
-  relatedCountryIds,
-  setRelatedCountryIds,
-  relatedHistoricalCountryIds,
-  setRelatedHistoricalCountryIds,
-  setShowCountryModal,
-  availableCountries,
-  availableHistoricalCountries,
+  conflictType,
+  setConflictType,
+  combatTypes = [],
+  setCombatTypes,
   playClickSound,
   getDateError,
   calculateDaysDifference,
 }) => {
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
-  const [tagInput, setTagInput] = useState('')
+  const combatTypeSectionRef = useRef<HTMLDivElement>(null)
+  const hasScrolledRef = useRef(false) // 스크롤 여부 추적
   const [isStartDateModalOpen, setIsStartDateModalOpen] = useState(false)
   const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
   const [isEndTimeModalOpen, setIsEndTimeModalOpen] = useState(false)
+
+  // 전쟁/군사 카테고리 선택 시 자동 스크롤 (최초 1회만)
+  useEffect(() => {
+    if (
+      isMilitaryCategory(category) &&
+      combatTypeSectionRef.current &&
+      !hasScrolledRef.current
+    ) {
+      setTimeout(() => {
+        combatTypeSectionRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        })
+      }, 100)
+      hasScrolledRef.current = true
+    }
+    
+    // 카테고리가 군사가 아니게 변경되면 스크롤 플래그 리셋
+    if (!isMilitaryCategory(category)) {
+      hasScrolledRef.current = false
+    }
+  }, [category])
 
   return (
     <S.FormSection
@@ -373,14 +384,87 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           <div>카테고리</div>
         </S.FormLabel>
         <S.FormField>
+          {/* 전쟁/군사 카테고리 선택 시 전투 유형 및 양상 선택 */}
+          {isMilitaryCategory(category) && setConflictType && setCombatTypes && (
+            <S.CombatTypeSection>
+              {/* 전투 유형 */}
+              <S.FormLabel style={{ marginBottom: '12px' }}>
+                <div>전투 유형</div>
+                <S.RequiredBadge>필수</S.RequiredBadge>
+              </S.FormLabel>
+              <S.Hint style={{ marginBottom: '12px' }}>
+                사건의 규모와 성격에 맞는 전투 유형을 선택하세요
+              </S.Hint>
+              <S.ConflictTypeGrid>
+                {[
+                  { value: 'battle' as const, icon: '⚔️', label: '전투' },
+                  { value: 'war' as const, icon: '🌍', label: '전쟁' },
+                  { value: 'siege' as const, icon: '🏰', label: '공성전' },
+                  { value: 'campaign' as const, icon: '🎯', label: '작전' },
+                  { value: 'skirmish' as const, icon: '💥', label: '소규모 교전' },
+                ].map((type) => (
+                  <S.ConflictTypeButton
+                    key={type.value}
+                    type="button"
+                    $selected={conflictType === type.value}
+                    onClick={() => {
+                      playClickSound()
+                      setConflictType(type.value)
+                    }}
+                  >
+                    <S.ConflictTypeIcon $selected={conflictType === type.value}>
+                      {type.icon}
+                    </S.ConflictTypeIcon>
+                    <S.ConflictTypeLabel>{type.label}</S.ConflictTypeLabel>
+                  </S.ConflictTypeButton>
+                ))}
+              </S.ConflictTypeGrid>
+
+              {/* 전투 양상 */}
+              <S.FormLabel style={{ marginBottom: '12px', marginTop: '32px' }}>
+                <div>전투 양상</div>
+                <S.OptionalBadge>복수 선택 가능</S.OptionalBadge>
+              </S.FormLabel>
+              <S.Hint style={{ marginBottom: '12px' }}>
+                해당 사건의 전투 양상을 선택하세요 (지상전, 해전, 공중전 등)
+              </S.Hint>
+              <S.CombatTypeGrid>
+                {[
+                  { value: 'land' as const, icon: '🪖', label: '지상전' },
+                  { value: 'naval' as const, icon: '⚓', label: '해전' },
+                  { value: 'air' as const, icon: '✈️', label: '공중전' },
+                ].map((type) => (
+                  <S.CombatTypeButton
+                    key={type.value}
+                    type="button"
+                    $selected={combatTypes.includes(type.value)}
+                    onClick={() => {
+                      playClickSound()
+                      const updated = combatTypes.includes(type.value)
+                        ? combatTypes.filter((t) => t !== type.value)
+                        : [...combatTypes, type.value]
+                      setCombatTypes(updated)
+                    }}
+                  >
+                    <S.CombatTypeIcon $selected={combatTypes.includes(type.value)}>
+                      {type.icon}
+                    </S.CombatTypeIcon>
+                    <S.CombatTypeLabel>{type.label}</S.CombatTypeLabel>
+                  </S.CombatTypeButton>
+                ))}
+              </S.CombatTypeGrid>
+            </S.CombatTypeSection>
+          )}
+
           {dbCategories.length > 0 ? (
             <S.CategoryGrid>
               {dbCategories.map((dbCat) => {
                 const categoryId = dbCat.id
                 const categoryName = dbCat.name
-                const categoryKey = extractCategoryKey(categoryId) // 'military', 'diplomatic'
+                const categoryKey = extractCategoryKey(categoryId)
                 const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
                 const isSelected = category === categoryId
+                
                 return (
                   <S.CategoryCard
                     key={dbCat.id}
@@ -416,179 +500,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.EmptyState>
           )}
           <S.Hint>사건의 유형을 선택하세요</S.Hint>
-
-          {/* 군사 카테고리 안내 */}
-          {category === 'military' && (
-            <S.MilitaryNoticeBox
-              as={motion.div}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, type: 'spring' }}
-            >
-              <S.MilitaryNoticeIcon>
-                <FiShield size={28} />
-              </S.MilitaryNoticeIcon>
-              <S.MilitaryNoticeContent>
-                <S.MilitaryNoticeTitle>
-                  ⚔️ 군사 정보 입력이 필요합니다
-                </S.MilitaryNoticeTitle>
-                <S.MilitaryNoticeText>
-                  다음 단계에서{' '}
-                  <strong>교전 세력, 병력 규모, 피해 상황, 전투 결과</strong>{' '}
-                  등을 상세히 기록하실 수 있습니다.
-                </S.MilitaryNoticeText>
-              </S.MilitaryNoticeContent>
-            </S.MilitaryNoticeBox>
-          )}
-
-          {/* 외교/회의 카테고리 안내 */}
-          {isDiplomaticCategory(category) && (
-            <S.MilitaryNoticeBox
-              as={motion.div}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, type: 'spring' }}
-            >
-              <S.MilitaryNoticeIcon>
-                <FiGlobe size={28} />
-              </S.MilitaryNoticeIcon>
-              <S.MilitaryNoticeContent>
-                <S.MilitaryNoticeTitle>
-                  🤝 회담 정보 입력이 필요합니다
-                </S.MilitaryNoticeTitle>
-                <S.MilitaryNoticeText>
-                  다음 단계에서{' '}
-                  <strong>
-                    참가국 및 역할, 조약/협정 내용, 국가별 적용 사항
-                  </strong>{' '}
-                  등을 상세히 기록하실 수 있습니다.
-                </S.MilitaryNoticeText>
-              </S.MilitaryNoticeContent>
-            </S.MilitaryNoticeBox>
-          )}
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 태그 */}
-      <S.FormRow>
-        <S.FormLabel>태그</S.FormLabel>
-        <S.FormField>
-          <S.TagInputWrapper>
-            <S.Input
-              type="text"
-              placeholder="태그 입력 후 Enter (#으로 시작하면 그룹 태그)"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && tagInput.trim()) {
-                  e.preventDefault()
-                  const newTag = tagInput.trim()
-                  if (!tags.includes(newTag)) {
-                    setTags([...tags, newTag])
-                    setTagInput('')
-                    playClickSound()
-                  }
-                }
-              }}
-            />
-          </S.TagInputWrapper>
-          {tags.length > 0 && (
-            <S.TagList>
-              {tags.map((tag) => (
-                <S.TagChip key={tag} $isGroup={tag.startsWith('#')}>
-                  {tag}
-                  <S.TagRemoveButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      setTags((prev: string[]) =>
-                        prev.filter((tagItem: string) => tagItem !== tag),
-                      )
-                    }}
-                  >
-                    <FiX size={12} />
-                  </S.TagRemoveButton>
-                </S.TagChip>
-              ))}
-            </S.TagList>
-          )}
-          <S.Hint>
-            💡 <strong>#</strong> 으로 시작하는 태그는 시리즈 그룹으로
-            사용됩니다
-            <br />
-            예: #군축협정, #해군군축, #국제조약
-          </S.Hint>
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 관련 국가 */}
-      <S.FormRow>
-        <S.FormLabel>관련 국가</S.FormLabel>
-        <S.FormField>
-          <S.Input
-            type="text"
-            placeholder="국가 검색 (클릭하여 선택)"
-            value=""
-            readOnly
-            onClick={() => {
-              playClickSound()
-              setShowCountryModal(true)
-            }}
-            style={{ cursor: 'pointer' }}
-          />
-
-          {(relatedCountryIds.length > 0 ||
-            relatedHistoricalCountryIds.length > 0) && (
-            <S.SelectedCountriesList>
-              {relatedCountryIds.map((countryId) => {
-                const country = availableCountries.find(
-                  (countryItem) => countryItem.id === countryId,
-                )
-                return (
-                  <S.CountryChip key={countryId}>
-                    <FiGlobe size={14} />
-                    {country?.name || '알 수 없음'}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playClickSound()
-                        setRelatedCountryIds((prev: string[]) =>
-                          prev.filter((id: string) => id !== countryId),
-                        )
-                      }}
-                    >
-                      <FiX size={12} />
-                    </button>
-                  </S.CountryChip>
-                )
-              })}
-              {relatedHistoricalCountryIds.map((countryId) => {
-                const country = availableHistoricalCountries.find(
-                  (countryItem) => countryItem.id === countryId,
-                )
-                return (
-                  <S.CountryChip key={countryId}>
-                    <FiGlobe size={14} />
-                    {country?.name || '알 수 없음'}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playClickSound()
-                        setRelatedHistoricalCountryIds((prev: string[]) =>
-                          prev.filter((id: string) => id !== countryId),
-                        )
-                      }}
-                    >
-                      <FiX size={12} />
-                    </button>
-                  </S.CountryChip>
-                )
-              })}
-            </S.SelectedCountriesList>
-          )}
-          <S.Hint>
-            이 사건과 관련된 국가를 추가하세요 (예: 프랑스 혁명 → 프랑스)
-          </S.Hint>
         </S.FormField>
       </S.FormRow>
     </S.FormSection>

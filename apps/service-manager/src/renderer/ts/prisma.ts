@@ -100,14 +100,17 @@ async function refreshPrismaStatus(): Promise<void> {
           '<div class="status-dot running"></div><span>실행 중 (포트: 5555)</span>'
       }
       if (startStudioBtn) (startStudioBtn as HTMLElement).style.display = 'none'
-      if (stopStudioBtn) (stopStudioBtn as HTMLElement).style.display = 'inline-block'
-      if (openStudioBtn) (openStudioBtn as HTMLElement).style.display = 'inline-block'
+      if (stopStudioBtn)
+        (stopStudioBtn as HTMLElement).style.display = 'inline-block'
+      if (openStudioBtn)
+        (openStudioBtn as HTMLElement).style.display = 'inline-block'
     } else {
       if (studioStatusEl) {
         studioStatusEl.innerHTML =
           '<div class="status-dot stopped"></div><span>중지됨</span>'
       }
-      if (startStudioBtn) (startStudioBtn as HTMLElement).style.display = 'inline-block'
+      if (startStudioBtn)
+        (startStudioBtn as HTMLElement).style.display = 'inline-block'
       if (stopStudioBtn) (stopStudioBtn as HTMLElement).style.display = 'none'
       if (openStudioBtn) (openStudioBtn as HTMLElement).style.display = 'none'
     }
@@ -304,7 +307,9 @@ async function generatePrismaClient(): Promise<void> {
  * 마이그레이션 실행
  */
 async function runPrismaMigration(): Promise<void> {
-  const migrationNameInput = document.getElementById('migrationName') as HTMLInputElement
+  const migrationNameInput = document.getElementById(
+    'migrationName',
+  ) as HTMLInputElement
   if (!migrationNameInput) return
   const migrationName = migrationNameInput.value.trim()
 
@@ -467,7 +472,9 @@ function openStudioInBrowser(): void {
  * Seed 실행
  */
 async function runSeed(): Promise<void> {
-  const environmentSelect = document.getElementById('seedEnvironment') as HTMLSelectElement
+  const environmentSelect = document.getElementById(
+    'seedEnvironment',
+  ) as HTMLSelectElement
   if (!environmentSelect) return
   const environment = environmentSelect.value
 
@@ -485,7 +492,9 @@ async function runSeed(): Promise<void> {
     button.innerHTML = '<span class="spinner"></span> Seed 실행 중...'
 
     console.log(`🌱 Seed 실행 중... (환경: ${environment})`)
-    const result = await window.electronAPI.prisma.runSeed(environment || undefined)
+    const result = await window.electronAPI.prisma.runSeed(
+      environment || undefined,
+    )
 
     if (result.success) {
       if (typeof UI !== 'undefined' && UI.showAlert) {
@@ -512,7 +521,94 @@ async function runSeed(): Promise<void> {
   }
 }
 
+/**
+ * Prisma 설정 편집
+ */
+async function editPrismaSetting(settingKey: string): Promise<void> {
+  try {
+    // 현재 값 가져오기
+    const result = await window.electronAPI.env.read('env.development')
+    if (!result.success) {
+      alert('❌ 환경 변수를 읽을 수 없습니다.')
+      return
+    }
+
+    const currentValue = result.variables[settingKey] || ''
+    const newValue = prompt(
+      `${settingKey} 값을 입력하세요:\n\n현재 값: ${currentValue || '(설정되지 않음)'}`,
+      currentValue,
+    )
+
+    if (newValue === null) return // 취소
+
+    // 값 업데이트
+    const updatedVariables = { ...result.variables, [settingKey]: newValue }
+    const writeResult = await window.electronAPI.env.write(
+      'env.development',
+      updatedVariables,
+    )
+
+    if (writeResult.success) {
+      alert(`✅ ${settingKey} 업데이트 완료!\n\n${writeResult.message}`)
+      await refreshPrismaStatus()
+    } else {
+      alert(`❌ ${settingKey} 업데이트 실패!\n\n${writeResult.message}`)
+    }
+  } catch (error: any) {
+    alert(`❌ 설정 편집 실패!\n\n${error.message}`)
+  }
+}
+
+/**
+ * 스키마 파일 열기
+ */
+async function openSchemaFile(): Promise<void> {
+  try {
+    const schemaPath = 'apps/api/prisma/schema.prisma'
+    await window.electronAPI.openExternal(
+      `file://${process.cwd()}/${schemaPath}`,
+    )
+  } catch (error: any) {
+    alert(`❌ 파일 열기 실패!\n\n${error.message}`)
+  }
+}
+
+/**
+ * 모든 Prisma 설정 보기
+ */
+async function showAllPrismaSettings(): Promise<void> {
+  try {
+    const result = await window.electronAPI.env.read('env.development')
+    if (!result.success) {
+      alert('❌ 환경 변수를 읽을 수 없습니다.')
+      return
+    }
+
+    // Prisma 관련 환경 변수만 필터링
+    const prismaSettings = Object.entries(result.variables)
+      .filter(
+        ([key]) =>
+          key.includes('DATABASE') ||
+          key.includes('PRISMA') ||
+          key.includes('MYSQL'),
+      )
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n')
+
+    if (prismaSettings) {
+      alert(`⚙️ Prisma 관련 설정\n\n${prismaSettings}`)
+    } else {
+      alert('⚠️ Prisma 관련 설정이 없습니다.')
+    }
+  } catch (error: any) {
+    alert(`❌ 설정 조회 실패!\n\n${error.message}`)
+  }
+}
+
 // 🌐 전역 등록
+window.editPrismaSetting = editPrismaSetting
+window.openSchemaFile = openSchemaFile
+window.showAllPrismaSettings = showAllPrismaSettings
 window.loadSeedFiles = loadSeedFiles
 window.refreshPrismaStatus = refreshPrismaStatus
 window.switchPrismaSubTab = switchPrismaSubTab

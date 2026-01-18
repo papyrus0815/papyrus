@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { runNpx, success, error } from '../utils/common.js'
+import { error, runNpx, success } from '../utils/common.js'
 
 async function main() {
   try {
@@ -11,11 +11,6 @@ async function main() {
     error('API 서버 시작 실패')
     process.exit(1)
   }
-}
-
-// ES 모듈에서 직접 실행 여부 확인
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main()
 }
 
 export default main

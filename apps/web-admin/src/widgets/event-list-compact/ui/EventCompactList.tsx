@@ -149,7 +149,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             )}
             {events.length === 0 && (
               <List.EmptyCreateButton
-                onClick={() => navigate(pathKeys.history.eventsCreate())}
+                onClick={() => navigate(pathKeys.events.create())}
               >
                 <FiPlus size={14} />새 사건 등록
               </List.EmptyCreateButton>

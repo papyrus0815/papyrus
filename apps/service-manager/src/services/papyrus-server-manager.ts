@@ -2,10 +2,9 @@
  * Papyrus Server Manager
  * Papyrus 서버 상태를 모니터링하는 서비스
  */
-
+import { ChildProcess, exec, spawn } from 'child_process'
 import * as http from 'http'
 import * as path from 'path'
-import { exec, spawn, ChildProcess } from 'child_process'
 import { promisify } from 'util'
 
 const execAsync = promisify(exec)
@@ -151,13 +150,34 @@ export class PapyrusServerManager {
    */
   async isApiServerRunning(): Promise<boolean> {
     // 1. 먼저 HTTP로 실제 서버 응답 확인 (가장 정확)
+    // /health 엔드포인트로 변경하여 로그 오염 방지
     const httpCheck = await new Promise<boolean>((resolve) => {
-      const req = http.get(`http://localhost:${this.apiPort}/`, (res) => {
+      const req = http.get(`http://localhost:${this.apiPort}/health`, (res) => {
         // 200, 404 등 응답이 오면 서버 실행 중
-        resolve(res.statusCode !== undefined)
+        resolve(
+          res.statusCode !== undefined &&
+            res.statusCode >= 200 &&
+            res.statusCode < 500,
+        )
       })
 
-      req.on('error', () => resolve(false))
+      req.on('error', (err: any) => {
+        // ECONNREFUSED, ETIMEDOUT, ECONNRESET, ENOTFOUND 등은 정상적인 상황 (서버가 꺼져있거나 연결 문제)
+        // 예상치 못한 에러만 로그 출력
+        const expectedErrors = [
+          'ECONNREFUSED',
+          'ETIMEDOUT',
+          'ENOTFOUND',
+          'ECONNRESET',
+          'EPIPE',
+        ]
+        if (!expectedErrors.includes(err.code)) {
+          console.log(
+            `[Health Check] Unexpected Error: ${err.code} - ${err.message}`,
+          )
+        }
+        resolve(false)
+      })
       req.setTimeout(2000, () => {
         req.destroy()
         resolve(false)
@@ -233,9 +253,14 @@ export class PapyrusServerManager {
 
       this.apiProcess = spawn('npm', ['run', 'serve:api'], {
         cwd: root,
-        shell: true,
+        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
+        env: {
+          ...process.env,
+          PATH:
+            process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+        },
       })
 
       this.apiProcess.stdout?.on('data', (data) => {
@@ -263,7 +288,9 @@ export class PapyrusServerManager {
       })
 
       this.apiProcess.on('exit', (code, signal) => {
-        console.log(`🛑 Papyrus API 프로세스 종료됨 (코드: ${code}, 신호: ${signal})`)
+        console.log(
+          `🛑 Papyrus API 프로세스 종료됨 (코드: ${code}, 신호: ${signal})`,
+        )
         this.apiProcess = null
       })
 
@@ -415,11 +442,13 @@ export class PapyrusServerManager {
 
       this.webAdminProcess = spawn('npm', ['run', 'serve:web-admin'], {
         cwd: root,
-        shell: true,
+        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
         detached: false,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          PATH:
+            process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
           WEB_BIND_HOST: '0.0.0.0',
           WEB_PORT: '3000',
           NODE_ENV: 'development',
@@ -493,11 +522,13 @@ export class PapyrusServerManager {
 
       this.webUserProcess = spawn('npm', ['run', 'serve:web-user'], {
         cwd: root,
-        shell: true,
+        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
         detached: false,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          PATH:
+            process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
           WEB_USER_BIND_HOST: '0.0.0.0',
           WEB_USER_PORT: '4200',
           NODE_ENV: 'development',

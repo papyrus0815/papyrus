@@ -301,9 +301,9 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
   const playClickSound = useClickSound()
 
   // 탭 상태
-  const [activeTab, setActiveTab] = useState<
-    'type' | 'belligerents' | 'details'
-  >('type')
+  const [activeTab, setActiveTab] = useState<'belligerents' | 'details'>(
+    'belligerents',
+  )
 
   // 진영 추가 모달
   const [showAddSideModal, setShowAddSideModal] = useState(false)
@@ -1349,20 +1349,6 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
         <TabsContainer>
           <TabButton
             type="button"
-            $active={activeTab === 'type'}
-            onClick={() => {
-              playClickSound()
-              setActiveTab('type')
-            }}
-          >
-            <TabIcon $active={activeTab === 'type'}>
-              <FiTarget size={18} />
-            </TabIcon>
-            <TabLabel $active={activeTab === 'type'}>전투 유형</TabLabel>
-          </TabButton>
-
-          <TabButton
-            type="button"
             $active={activeTab === 'belligerents'}
             onClick={() => {
               playClickSound()
@@ -1394,111 +1380,6 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
       </div>
 
       {/* 탭 컨텐츠 */}
-      {activeTab === 'type' && (
-        <>
-          {/* 안내 메시지 */}
-          <InfoBox>
-            <InfoIconWrapper>
-              <FiInfo size={20} />
-            </InfoIconWrapper>
-            <InfoContent>
-              <InfoTitle>전투 유형 선택 가이드</InfoTitle>
-              <InfoDescription>
-                사건의 규모와 성격에 맞는 전투 유형을 선택해주세요. 여러 개를
-                선택할 수 있습니다.
-              </InfoDescription>
-              <InfoExamples>
-                <InfoExample>
-                  <strong>전투:</strong> 단일 전투 (예: 워털루 전투, 게티즈버그
-                  전투)
-                </InfoExample>
-                <InfoExample>
-                  <strong>전쟁:</strong> 장기간 지속된 전쟁 (예: 6.25전쟁,
-                  세계대전)
-                </InfoExample>
-                <InfoExample>
-                  <strong>공성전:</strong> 도시나 요새 포위 공격 (예: 진주성
-                  전투)
-                </InfoExample>
-                <InfoExample>
-                  <strong>작전:</strong> 군사 작전 (예: 인천상륙작전, 노르망디
-                  상륙작전)
-                </InfoExample>
-                <InfoExample>
-                  <strong>소규모 교전:</strong> 국지적 충돌 (예: 국경 분쟁)
-                </InfoExample>
-              </InfoExamples>
-            </InfoContent>
-          </InfoBox>
-
-          {/* 전투/전쟁 유형 */}
-          <FormGroup>
-            <Label>
-              전투 유형 <RequiredBadge>필수</RequiredBadge>
-            </Label>
-            <TypeGrid>
-              {[
-                { value: 'battle', label: '전투' },
-                { value: 'war', label: '전쟁' },
-                { value: 'siege', label: '공성전' },
-                { value: 'campaign', label: '작전' },
-                { value: 'skirmish', label: '소규모 교전' },
-              ].map((type) => (
-                <TypeButton
-                  key={type.value}
-                  type="button"
-                  $selected={militaryDetails.type === type.value}
-                  onClick={() => {
-                    playClickSound()
-                    setMilitaryDetails({
-                      ...militaryDetails,
-                      type: type.value as any,
-                    })
-                  }}
-                >
-                  {type.label}
-                </TypeButton>
-              ))}
-            </TypeGrid>
-          </FormGroup>
-
-          {/* 전투 양상 */}
-          <FormGroup>
-            <Label>
-              전투 양상 <OptionalBadge>복수 선택 가능</OptionalBadge>
-            </Label>
-            <TypeGrid>
-              {[
-                { value: 'land', label: '🪖 지상전' },
-                { value: 'naval', label: '⚓ 해전' },
-                { value: 'air', label: '✈️ 공중전' },
-              ].map((type) => (
-                <TypeButton
-                  key={type.value}
-                  type="button"
-                  $selected={militaryDetails.combatType.includes(
-                    type.value as any,
-                  )}
-                  onClick={() => {
-                    playClickSound()
-                    const current = militaryDetails.combatType
-                    const updated = current.includes(type.value as any)
-                      ? current.filter((t) => t !== type.value)
-                      : [...current, type.value as any]
-                    setMilitaryDetails({
-                      ...militaryDetails,
-                      combatType: updated,
-                    })
-                  }}
-                >
-                  {type.label}
-                </TypeButton>
-              ))}
-            </TypeGrid>
-          </FormGroup>
-        </>
-      )}
-
       {/* 교전 세력 탭 */}
       {activeTab === 'belligerents' && (
         <>
@@ -1594,7 +1475,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                           justifyContent: 'center',
                           width: '40px',
                           height: '40px',
-                          background: '#6366f1',
+                          background: '#8b5cf6',
                           borderRadius: '10px',
                         }}
                       >
@@ -1718,7 +1599,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             alignItems: 'center',
                             gap: '8px',
                             padding: '12px 24px',
-                            background: '#6366f1',
+                            background: '#8b5cf6',
                             border: 'none',
                             borderRadius: '8px',
                             color: 'white',
@@ -1728,11 +1609,11 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             transition: 'all 0.2s',
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#4f46e5'
+                            e.currentTarget.style.background = '#7c3aed'
                             e.currentTarget.style.transform = 'translateY(-1px)'
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#6366f1'
+                            e.currentTarget.style.background = '#8b5cf6'
                             e.currentTarget.style.transform = 'translateY(0)'
                           }}
                         >
@@ -1957,10 +1838,10 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                     }}
                                     onMouseEnter={(e) => {
                                       e.currentTarget.style.background =
-                                        '#6366f1'
+                                        '#8b5cf6'
                                       e.currentTarget.style.color = 'white'
                                       e.currentTarget.style.borderColor =
-                                        '#6366f1'
+                                        '#8b5cf6'
                                     }}
                                     onMouseLeave={(e) => {
                                       e.currentTarget.style.background = 'white'
@@ -2041,7 +1922,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.background = 'white'
-                            e.currentTarget.style.borderColor = '#6366f1'
+                            e.currentTarget.style.borderColor = '#8b5cf6'
                             e.currentTarget.style.borderStyle = 'solid'
                             e.currentTarget.style.transform = 'translateY(-2px)'
                           }}
@@ -2063,7 +1944,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                               justifyContent: 'center',
                             }}
                           >
-                            <FiPlus size={24} color="#6366f1" />
+                            <FiPlus size={24} color="#8b5cf6" />
                           </div>
                           <div style={{ textAlign: 'center' }}>
                             <div
@@ -4670,10 +4551,10 @@ const TypeButton = styled.button<{ $selected: boolean }>`
   color: ${({ $selected }) => ($selected ? '#ffffff' : '#64748b')};
   background: ${({ $selected }) =>
     $selected
-      ? 'linear-gradient(135deg, #ef4444, #dc2626)'
+      ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
       : 'rgba(148, 163, 184, 0.08)'};
   border: 1.5px solid
-    ${({ $selected }) => ($selected ? '#ef4444' : 'rgba(148, 163, 184, 0.15)')};
+    ${({ $selected }) => ($selected ? '#8b5cf6' : 'rgba(148, 163, 184, 0.15)')};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -4684,10 +4565,10 @@ const TypeButton = styled.button<{ $selected: boolean }>`
   &:hover {
     background: ${({ $selected }) =>
       $selected
-        ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-        : 'rgba(239, 68, 68, 0.08)'};
+        ? 'linear-gradient(135deg, #7c3aed, #6d28d9)'
+        : 'rgba(139, 92, 246, 0.08)'};
     border-color: ${({ $selected }) =>
-      $selected ? '#ef4444' : 'rgba(239, 68, 68, 0.3)'};
+      $selected ? '#7c3aed' : 'rgba(139, 92, 246, 0.3)'};
     transform: translateY(-1px);
   }
 
@@ -4884,8 +4765,8 @@ const Input = styled.input`
   }
 
   &:focus {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 
@@ -4903,8 +4784,8 @@ const Select = styled.select`
   margin-bottom: 12px;
 
   &:focus {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 
@@ -4920,7 +4801,7 @@ const CountrySelectButton = styled.button<{ $selected: boolean }>`
   background: #ffffff;
   border: 1.5px solid
     ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.3)' : 'rgba(226, 232, 240, 1)'};
+      $selected ? 'rgba(139, 92, 246, 0.3)' : 'rgba(226, 232, 240, 1)'};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -4929,13 +4810,13 @@ const CountrySelectButton = styled.button<{ $selected: boolean }>`
 
   svg {
     flex-shrink: 0;
-    color: ${({ $selected }) => ($selected ? '#6366f1' : '#94a3b8')};
+    color: ${({ $selected }) => ($selected ? '#8b5cf6' : '#94a3b8')};
   }
 
   &:hover {
     border-color: ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.5)' : 'rgba(99, 102, 241, 0.3)'};
-    background: rgba(99, 102, 241, 0.03);
+      $selected ? 'rgba(139, 92, 246, 0.5)' : 'rgba(139, 92, 246, 0.3)'};
+    background: rgba(139, 92, 246, 0.03);
   }
 
   &:active {
@@ -4961,8 +4842,8 @@ const TextArea = styled.textarea`
   }
 
   &:focus {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 
@@ -5055,8 +4936,8 @@ const SmallInput = styled.input`
   }
 
   &:focus {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.08);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.08);
   }
 `
 
@@ -5069,16 +4950,16 @@ const AddCountryButton = styled.button`
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.05);
-  border: 1.5px dashed rgba(99, 102, 241, 0.25);
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1.5px dashed rgba(139, 92, 246, 0.25);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: #6366f1;
+    background: rgba(139, 92, 246, 0.1);
+    border-color: #8b5cf6;
   }
 `
 
@@ -5119,8 +5000,8 @@ const CasualtyInput = styled.input`
   }
 
   &:focus {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.08);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.08);
   }
 `
 
@@ -5137,18 +5018,18 @@ const AddBelligerentButton = styled.button`
   gap: 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.05);
-  border: 1.5px dashed rgba(99, 102, 241, 0.25);
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1.5px dashed rgba(139, 92, 246, 0.25);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: #6366f1;
+    background: rgba(139, 92, 246, 0.08);
+    border-color: #8b5cf6;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
   }
 
   &:active {
@@ -5181,15 +5062,15 @@ const DeployedUnitChip = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
   border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
   color: #0f172a;
 
   svg {
-    color: #ef4444;
+    color: #8b5cf6;
     flex-shrink: 0;
   }
 `
@@ -5233,16 +5114,16 @@ const UnitSelectButton = styled.button`
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.05);
-  border: 1.5px dashed rgba(239, 68, 68, 0.25);
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.05);
+  border: 1.5px dashed rgba(99, 102, 241, 0.25);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: #ef4444;
+    background: rgba(99, 102, 241, 0.1);
+    border-color: #6366f1;
   }
 `
 
@@ -5321,8 +5202,8 @@ const UnitSelectSearch = styled.input`
   }
 
   &:focus {
-    border-color: #ef4444;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 
@@ -5339,10 +5220,10 @@ const UnitSelectItem = styled.button<{ $selected: boolean }>`
   align-items: center;
   gap: 12px;
   background: ${({ $selected }) =>
-    $selected ? 'rgba(239, 68, 68, 0.08)' : '#ffffff'};
+    $selected ? 'rgba(139, 92, 246, 0.08)' : '#ffffff'};
   border: 1.5px solid
     ${({ $selected }) =>
-      $selected ? 'rgba(239, 68, 68, 0.3)' : 'rgba(226, 232, 240, 1)'};
+      $selected ? 'rgba(139, 92, 246, 0.3)' : 'rgba(226, 232, 240, 1)'};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -5350,13 +5231,13 @@ const UnitSelectItem = styled.button<{ $selected: boolean }>`
   text-align: left;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.05);
-    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(139, 92, 246, 0.05);
+    border-color: rgba(139, 92, 246, 0.3);
   }
 
   svg {
     flex-shrink: 0;
-    color: ${({ $selected }) => ($selected ? '#ef4444' : '#94a3b8')};
+    color: ${({ $selected }) => ($selected ? '#8b5cf6' : '#94a3b8')};
   }
 `
 
@@ -5422,16 +5303,16 @@ const CommanderSelectButton = styled.button`
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.05);
-  border: 1.5px dashed rgba(99, 102, 241, 0.25);
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1.5px dashed rgba(139, 92, 246, 0.25);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: #6366f1;
+    background: rgba(139, 92, 246, 0.1);
+    border-color: #8b5cf6;
   }
 `
 
@@ -5652,16 +5533,16 @@ const AddSubForceButton = styled.button`
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.05);
-  border: 1.5px dashed rgba(99, 102, 241, 0.25);
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.05);
+  border: 1.5px dashed rgba(139, 92, 246, 0.25);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: #6366f1;
+    background: rgba(139, 92, 246, 0.1);
+    border-color: #8b5cf6;
   }
 `
 
@@ -5679,7 +5560,7 @@ const CountrySelectButtonSimple = styled.button`
   text-align: left;
 
   &:hover {
-    border-color: #6366f1;
+    border-color: #8b5cf6;
   }
 `
 
@@ -5776,17 +5657,17 @@ const QuickTemplateButton = styled.button`
   font-size: 13px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   border: none;
   border-radius: 10px;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25);
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.35);
   }
 
   &:active {
@@ -5801,12 +5682,11 @@ const QuickTemplateButton = styled.button`
 // 탭 스타일
 const TabsContainer = styled.div`
   display: flex;
-  gap: 0;
+  gap: 16px;
   padding: 0;
   background: transparent;
   border-radius: 0;
   border: none;
-  border-bottom: 2px solid #e2e8f0;
   box-shadow: none;
   max-width: ${FORM_FIELD_MAX_WIDTH};
   margin-bottom: 32px;
@@ -5814,59 +5694,68 @@ const TabsContainer = styled.div`
 
 const TabButton = styled.button<{ $active: boolean }>`
   flex: 1;
-  min-width: 180px;
-  padding: 18px 28px;
-  background: transparent;
-  border: none;
-  border-bottom: ${(props) =>
-    props.$active ? '3px solid #ef4444' : '3px solid transparent'};
-  border-radius: 0;
+  min-width: 140px;
+  max-width: 200px;
+  padding: 12px 18px;
+  background: ${(props) =>
+    props.$active
+      ? 'linear-gradient(135deg, #ffffff 0%, #faf9fc 100%)'
+      : '#ffffff'};
+  border: 1.5px solid
+    ${(props) => (props.$active ? '#8b5cf6' : 'rgba(226, 232, 240, 1)')};
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   position: relative;
-  box-shadow: none;
+  box-shadow: ${(props) =>
+    props.$active
+      ? '0 4px 16px rgba(139, 92, 246, 0.15), 0 1px 4px rgba(139, 92, 246, 0.1)'
+      : '0 1px 3px rgba(0, 0, 0, 0.08)'};
+  transform: ${(props) => (props.$active ? 'translateY(-1px)' : 'translateY(0)')};
 
-  &::after {
+  &::before {
     content: '';
     position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
-    height: 3px;
+    inset: -1.5px;
     background: ${(props) =>
       props.$active
-        ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
+        ? 'linear-gradient(135deg, #8b5cf6, #a78bfa, #8b5cf6)'
         : 'transparent'};
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 12px;
+    padding: 1.5px;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: ${(props) => (props.$active ? 1 : 0)};
+    transition: opacity 0.3s ease;
   }
 
   &:hover {
     background: ${(props) =>
-      props.$active ? 'transparent' : 'rgba(239, 68, 68, 0.04)'};
-    border-bottom-color: ${(props) =>
-      props.$active ? '#ef4444' : 'rgba(239, 68, 68, 0.3)'};
-
-    &::after {
-      background: ${(props) =>
-        props.$active
-          ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
-          : 'rgba(239, 68, 68, 0.3)'};
-    }
+      props.$active
+        ? 'linear-gradient(135deg, #ffffff 0%, #faf9fc 100%)'
+        : 'linear-gradient(135deg, #fafafa 0%, #f5f3ff 100%)'};
+    border-color: ${(props) => (props.$active ? '#7c3aed' : '#8b5cf6')};
+    transform: translateY(-2px);
+    box-shadow: ${(props) =>
+      props.$active
+        ? '0 6px 20px rgba(139, 92, 246, 0.2), 0 2px 8px rgba(139, 92, 246, 0.12)'
+        : '0 4px 12px rgba(139, 92, 246, 0.12)'};
   }
 
   &:active {
-    transform: none;
+    transform: translateY(0);
   }
 
   @media (max-width: 768px) {
     min-width: 120px;
-    padding: 14px 18px;
-    gap: 10px;
+    padding: 10px 14px;
+    gap: 8px;
   }
 `
 
@@ -5874,40 +5763,57 @@ const TabIcon = styled.div<{ $active: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${(props) => (props.$active ? '#ef4444' : '#94a3b8')};
-  transition: all 0.3s ease;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: ${(props) =>
+    props.$active
+      ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+      : 'rgba(148, 163, 184, 0.08)'};
+  color: ${(props) => (props.$active ? '#ffffff' : '#64748b')};
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: ${(props) =>
+    props.$active ? '0 2px 6px rgba(139, 92, 246, 0.25)' : 'none'};
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
   ${TabButton}:hover & {
-    color: ${(props) => (props.$active ? '#ef4444' : '#ef4444')};
+    background: ${(props) =>
+      props.$active
+        ? 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)'
+        : 'rgba(139, 92, 246, 0.15)'};
+    color: ${(props) => (props.$active ? '#ffffff' : '#8b5cf6')};
+    transform: scale(1.05) rotate(3deg);
   }
 
   @media (max-width: 768px) {
+    width: 24px;
+    height: 24px;
+
     svg {
-      width: 18px;
-      height: 18px;
+      width: 14px;
+      height: 14px;
     }
   }
 `
 
 const TabLabel = styled.span<{ $active?: boolean }>`
-  font-size: 15px;
+  font-size: 14px;
   font-weight: ${(props) => (props.$active ? '700' : '600')};
-  color: ${(props) => (props.$active ? '#1e293b' : '#64748b')};
-  letter-spacing: -0.02em;
-  transition: color 0.3s ease;
+  color: ${(props) => (props.$active ? '#8b5cf6' : '#64748b')};
+  letter-spacing: -0.01em;
+  transition: all 0.3s ease;
   white-space: nowrap;
 
   ${TabButton}:hover & {
-    color: ${(props) => (props.$active ? '#1e293b' : '#ef4444')};
+    color: #8b5cf6;
   }
 
   @media (max-width: 768px) {
-    font-size: 14px;
+    font-size: 12px;
   }
 `
 
@@ -5916,12 +5822,19 @@ const InfoBox = styled.div`
   display: flex;
   gap: 14px;
   padding: 16px 18px;
-  background: #f8fafc;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border: 1px solid #e2e8f0;
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid #8b5cf6;
   border-radius: 10px;
   margin-bottom: 20px;
   max-width: ${FORM_FIELD_MAX_WIDTH};
+  box-shadow: 0 1px 3px rgba(139, 92, 246, 0.08);
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-left-color: #7c3aed;
+    box-shadow: 0 2px 6px rgba(139, 92, 246, 0.12);
+  }
 
   @media (max-width: 768px) {
     flex-direction: column;

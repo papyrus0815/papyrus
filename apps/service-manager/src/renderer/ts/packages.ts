@@ -31,7 +31,7 @@ async function loadInstalledPackages(): Promise<void> {
   if (!tbody) return
 
   tbody.innerHTML =
-    '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">⏳</div><div>로딩 중...</div></div></td></tr>'
+    '<tr><td colspan="3" style="text-align: center; padding: 40px; color: rgba(255, 255, 255, 0.4);">로딩 중...</td></tr>'
 
   try {
     const packages = await window.electronAPI.getInstalledPackages()
@@ -39,7 +39,7 @@ async function loadInstalledPackages(): Promise<void> {
 
     if (allPackages.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">📦</div><div>패키지가 없습니다.</div></div></td></tr>'
+        '<tr><td colspan="3" style="text-align: center; padding: 40px; color: rgba(255, 255, 255, 0.4);">패키지가 없습니다.</td></tr>'
       updatePackageStats([])
       return
     }
@@ -49,7 +49,7 @@ async function loadInstalledPackages(): Promise<void> {
     updateSortHeaders()
   } catch (error: any) {
     console.error('❌ 패키지 목록 로딩 실패:', error)
-    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">❌</div><div>목록 로딩 실패: ${error.message}</div></div></td></tr>`
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; padding: 40px; color: rgba(255, 59, 48, 0.9);">❌ 목록 로딩 실패: ${error.message}</td></tr>`
   }
 }
 
@@ -79,7 +79,7 @@ function renderPackageTable(packages: Package[]): void {
 
   if (packages.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="3"><div class="empty-state"><div class="empty-icon">🔍</div><div>검색 결과가 없습니다.</div></div></td></tr>'
+      '<tr><td colspan="3" style="text-align: center; padding: 40px; color: rgba(255, 255, 255, 0.4);">검색 결과가 없습니다.</td></tr>'
     return
   }
 
@@ -87,8 +87,8 @@ function renderPackageTable(packages: Package[]): void {
     .map(
       (pkg) => `
     <tr onclick="showPackageDetail('${pkg.name}', '${pkg.version}', '${pkg.type}')">
-      <td class="package-name-col">${pkg.name}</td>
-      <td class="package-version-col">${pkg.version}</td>
+      <td>${pkg.name}</td>
+      <td>${pkg.version}</td>
       <td style="text-align: center;">
         <span class="type-badge ${pkg.type}">${pkg.type === 'dev' ? 'Dev' : 'Prod'}</span>
       </td>

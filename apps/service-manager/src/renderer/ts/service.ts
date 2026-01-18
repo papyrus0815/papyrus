@@ -176,9 +176,9 @@ async function renderServices(): Promise<void> {
             canControl
               ? `
             <div class="service-actions">
-              <button class="btn btn-secondary btn-sm" onclick="handleStart('${service.id}')" id="start-${service.id}">시작</button>
-              <button class="btn btn-secondary btn-sm" onclick="handleStop('${service.id}')" id="stop-${service.id}">중지</button>
-              ${service.url ? `<button class="btn btn-secondary btn-sm" onclick="openUrl('${service.url}')">웹 열기</button>` : ''}
+              <button class="macos-btn macos-btn-primary macos-btn-sm" onclick="handleStart('${service.id}')" id="start-${service.id}">시작</button>
+              <button class="macos-btn macos-btn-secondary macos-btn-sm" onclick="handleStop('${service.id}')" id="stop-${service.id}">중지</button>
+              ${service.url ? `<button class="macos-btn macos-btn-secondary macos-btn-sm" onclick="openUrl('${service.url}')">웹 열기</button>` : ''}
             </div>
           `
               : ''
@@ -194,7 +194,10 @@ async function renderServices(): Promise<void> {
  * Electron에서 받은 상태값을 텍스트로 변환
  */
 function getServiceStatus(serviceId: string): ServiceStatus {
-  if (!window.cachedStatus) return SERVICE_STATUS.STOPPED
+  if (!window.cachedStatus) {
+    console.warn('⚠️ cachedStatus가 없습니다!')
+    return SERVICE_STATUS.STOPPED
+  }
 
   const status = window.cachedStatus as ServiceStatusMap
 
@@ -279,7 +282,6 @@ const SERVICE_API_MAP: Record<string, () => Promise<void>> = {
  * 서비스 시작 처리
  */
 async function handleStart(serviceId: string): Promise<void> {
-  console.log('🚀 Starting:', serviceId)
   const startBtnId = `start-${serviceId}`
   const stopBtnId = `stop-${serviceId}`
 
@@ -331,7 +333,6 @@ const SERVICE_STOP_API_MAP: Record<string, () => Promise<void>> = {
  * 서비스 중지 처리
  */
 async function handleStop(serviceId: string): Promise<void> {
-  console.log('🛑 Stopping:', serviceId)
   const startBtnId = `start-${serviceId}`
   const stopBtnId = `stop-${serviceId}`
 

@@ -1,0 +1,341 @@
+/* macOS 다크모드 오버라이드 */
+
+/* Prisma 서브탭 - 다크모드 */
+.prisma-subtabs {
+  background: rgba(40, 40, 40, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.prisma-subtab-btn {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.prisma-subtab-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.prisma-subtab-btn.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Prisma 설명 박스 - 다크모드 */
+.prisma-info-box {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.prisma-info-box.warning {
+  background: rgba(255, 204, 0, 0.15);
+  border-color: rgba(255, 204, 0, 0.3);
+}
+
+.prisma-info-box.success {
+  background: rgba(52, 199, 89, 0.15);
+  border-color: rgba(52, 199, 89, 0.3);
+}
+
+.prisma-info-title {
+  color: #ffffff;
+}
+
+.prisma-info-content {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Input 그룹 - 다크모드 */
+.input-group label {
+  color: #ffffff;
+}
+
+.input-group input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.input-group input:focus {
+  border-color: #0A84FF;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.input-group input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.input-hint {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 섹션 헤더 - 다크모드 */
+.section-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.section-title {
+  color: #ffffff;
+}
+
+.section-subtitle {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 카드 - 다크모드 */
+.card {
+  background: rgba(50, 50, 50, 0.7);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.card-title {
+  color: #ffffff;
+}
+
+/* 서비스 목록 - 다크모드 */
+.service-item {
+  background: rgba(60, 60, 60, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.service-item:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.service-name {
+  color: #ffffff;
+}
+
+.service-port {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 검색 입력 - 다크모드 */
+.search-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.search-input:focus {
+  border-color: #0A84FF;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* 필터 버튼 - 다크모드 */
+.filter-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.filter-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.filter-btn.active {
+  background: rgba(10, 132, 255, 0.2);
+  border-color: rgba(10, 132, 255, 0.4);
+  color: #0A84FF;
+}
+
+.package-stats {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 패키지 테이블 - 다크모드 */
+.package-table-container {
+  background: rgba(50, 50, 50, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.package-table th {
+  background: rgba(40, 40, 40, 0.95);
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.package-table th:hover {
+  background: rgba(10, 132, 255, 0.15);
+  color: #0A84FF;
+}
+
+.package-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.package-table tr:hover {
+  background: rgba(10, 132, 255, 0.08);
+}
+
+/* 업데이트 항목 - 다크모드 */
+.update-item {
+  background: rgba(60, 60, 60, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.update-item:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.update-name {
+  color: #ffffff;
+}
+
+.update-versions {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 빈 상태 - 다크모드 */
+.empty-state {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 모달 - 다크모드 */
+.modal {
+  background: rgba(50, 50, 50, 0.95);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(40, 40, 40, 0.9);
+}
+
+.modal-title {
+  color: #ffffff;
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.modal-loading {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 패키지 상세 - 다크모드 */
+.package-detail-label {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.package-detail-value {
+  color: #ffffff;
+}
+
+.package-detail-value a {
+  color: #0A84FF;
+}
+
+.package-detail-description {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.package-detail-link {
+  background: rgba(10, 132, 255, 0.15);
+  border: 1px solid rgba(10, 132, 255, 0.3);
+  color: #0A84FF;
+}
+
+.package-detail-link:hover {
+  background: rgba(10, 132, 255, 0.25);
+  border-color: #0A84FF;
+}
+
+/* Select 요소 - 다크모드 */
+.select-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.select-input:focus {
+  border-color: #0A84FF;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Alert 다이얼로그 - 다크모드 */
+.alert-dialog-content {
+  background: rgba(50, 50, 50, 0.95);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+
+.alert-dialog-title {
+  color: #ffffff;
+}
+
+.alert-dialog-copy-btn {
+  background: rgba(10, 132, 255, 0.2);
+  border: 1px solid rgba(10, 132, 255, 0.4);
+  color: #0A84FF;
+}
+
+.alert-dialog-copy-btn:hover {
+  background: rgba(10, 132, 255, 0.3);
+  border-color: #0A84FF;
+}
+
+.alert-dialog-confirm-btn {
+  background: linear-gradient(180deg, #0A84FF 0%, #0066CC 100%);
+  box-shadow: 0 1px 3px rgba(10, 132, 255, 0.4);
+}
+
+.alert-dialog-confirm-btn:hover {
+  background: linear-gradient(180deg, #0070E0 0%, #0055AA 100%);
+  box-shadow: 0 2px 6px rgba(10, 132, 255, 0.5);
+}
+
+/* 텍스트 유틸리티 - 다크모드 */
+.text-muted {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.text-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.hint-box {
+  background: rgba(10, 132, 255, 0.15);
+  border: 1px solid rgba(10, 132, 255, 0.3);
+}
+
+/* 패키지 테이블 래퍼 - 다크모드 */
+.package-table-wrapper {
+  background: rgba(50, 50, 50, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* 스크롤바 - 다크모드 */
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

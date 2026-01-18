@@ -17,7 +17,7 @@ import type {
 const CATEGORY_MAP: Record<string, HistoricalEventCategory> = {
   정치: 'political',
   경제: 'economic',
-  군사: 'military',
+  '전쟁/군사': 'military',
   사회: 'social',
   '과학/기술': 'technological',
   과학기술: 'technological',
@@ -106,6 +106,7 @@ function convertToHistoricalEvent(event: any): HistoricalEvent {
       intelligenceNotes: '',
       logisticalScale: '',
     },
+    sectionTitles: event.sectionTitles || [],
   }
 }
 

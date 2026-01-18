@@ -1,12 +1,14 @@
+import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { NestExpressApplication } from '@nestjs/platform-express'
-import { join } from 'path'
-import { readFileSync } from 'fs'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import { Logger } from '@nestjs/common'
+
 import cookieParser from 'cookie-parser'
-import { AppModule } from './app.module'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
 import { AppConfigService } from '../../../libs/shared/config/index'
+import { AppModule } from './app.module'
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap')
@@ -16,8 +18,8 @@ async function bootstrap() {
   try {
     console.log('📍 Step 1: Creating temporary app...')
     // 임시로 앱을 만들어 config 가져오기
-    const tempApp = await NestFactory.create(AppModule, { 
-      logger: ['error', 'warn', 'log', 'debug', 'verbose'] 
+    const tempApp = await NestFactory.create(AppModule, {
+      logger: ['error', 'warn', 'log', 'debug', 'verbose'],
     })
     console.log('📍 Step 2: Getting config service...')
     const configService = tempApp.get(AppConfigService)

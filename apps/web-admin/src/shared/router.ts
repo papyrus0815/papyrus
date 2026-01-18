@@ -22,10 +22,21 @@ export const pathKeys = {
     root: () => `/${ROUTES.HISTORY.ROOT}/`,
     country: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
-    events: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.EVENTS}/`,
-    eventsCreate: () => `/${ROUTES.HISTORY.EVENTS}/create/`,
-    eventsDetail: (eventId: string) =>
-      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.EVENTS}/${eventId}/`,
+  },
+
+  // --- Events Routes ---
+  events: {
+    root: () => `/${ROUTES.HISTORY.EVENTS}/`,
+    create: () => `/${ROUTES.HISTORY.EVENTS}/create/`,
+    detail: (eventId: string) => `/${ROUTES.HISTORY.EVENTS}/${eventId}/`,
+  },
+
+  // --- Persons Routes ---
+  persons: {
+    root: () => '/persons/',
+    create: () => '/persons/create/',
+    edit: (personId: string) => `/persons/${personId}/edit/`,
+    detail: (personId: string) => `/persons/${personId}/`,
   },
 
   // --- Dynamic Routes ---

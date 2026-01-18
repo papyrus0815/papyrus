@@ -59,6 +59,13 @@ export class EventResponseDto {
   @ApiProperty({ description: '섹션 기반 컨텐츠', required: false })
   sections?: any | null
 
+  @ApiProperty({ 
+    description: '섹션 제목 목록 (리스트 미리보기용)', 
+    required: false,
+    type: [String]
+  })
+  sectionTitles?: string[]
+
   @ApiProperty({ description: '교전 세력 정보 (통합 구조)', required: false })
   belligerents?:
     | {

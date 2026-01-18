@@ -1,0 +1,1139 @@
+import React, { useEffect, useMemo, useState } from 'react'
+
+import { motion } from 'framer-motion'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { FiSave, FiUser, FiCalendar, FiGlobe, FiUpload, FiX, FiChevronDown, FiSearch, FiCheck } from 'react-icons/fi'
+import { toast } from 'react-hot-toast'
+import styled from 'styled-components'
+
+import { getAllCountries } from '@/shared/api/countries'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import { dynastyApi } from '@/shared/api/dynasty'
+import {
+  type CreatePersonInput,
+  type Era,
+  personApi,
+} from '@/shared/api/person'
+import { uploadImage } from '@/shared/api/upload'
+import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { DatePickerModal } from '@/shared/ui/date-picker'
+import { StepNavigation } from '@/widgets/event-form/ui'
+import {
+  FormSection,
+  Input,
+  TextArea,
+  DateRangeRow,
+  DateRangeColumn,
+  DateRangeLabel,
+  DateInputWrapper,
+  DateInputDisplay,
+  PageWrapper,
+  ContentWrapper,
+  FormArea,
+  FormAreaHeader,
+  FormAreaTitle,
+  ActionButton,
+  FormRow,
+  FormLabel,
+  FormField,
+  Required,
+  Hint,
+} from '@/pages/events/create/event-create.styles'
+
+interface FormData {
+  // 기본 정보
+  name: string
+  surname: string
+  gender: string
+  birthEra: Era
+  birthYear: string
+  birthMonth: string
+  birthDay: string
+  deathEra: Era
+  deathYear: string
+  deathMonth: string
+  deathDay: string
+  biography: string
+  profileImageUrl: string
+
+  // 소속 정보
+  countryId: string
+  dynastyId: string
+  
+  // 미상 플래그
+  isBirthDateUnknown: boolean
+  isDeathDateUnknown: boolean
+}
+
+interface FormErrors {
+  [key: string]: string
+}
+
+export default function PersonCreatePage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const presetCountryId = searchParams.get('countryId')
+  const playClick = useClickSound()
+
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    surname: '',
+    gender: '',
+    birthEra: 'AD',
+    birthYear: '',
+    birthMonth: '',
+    birthDay: '',
+    deathEra: 'AD',
+    deathYear: '',
+    deathMonth: '',
+    deathDay: '',
+    biography: '',
+    profileImageUrl: '',
+    countryId: presetCountryId || '',
+    dynastyId: '',
+    isBirthDateUnknown: false,
+    isDeathDateUnknown: false,
+  })
+
+  const [errors, setErrors] = useState<FormErrors>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [countries, setCountries] = useState<any[]>([])
+  const [historicalCountries, setHistoricalCountries] = useState<any[]>([])
+  const [dynasties, setDynasties] = useState<any[]>([])
+
+  // 모달 상태
+  const [showCountryModal, setShowCountryModal] = useState(false)
+  const [showDynastyModal, setShowDynastyModal] = useState(false)
+  const [showBirthDateModal, setShowBirthDateModal] = useState(false)
+  const [showDeathDateModal, setShowDeathDateModal] = useState(false)
+  
+  // 검색 상태
+  const [countrySearchTerm, setCountrySearchTerm] = useState('')
+  const [dynastySearchTerm, setDynastySearchTerm] = useState('')
+  const [countryType, setCountryType] = useState<'modern' | 'historical'>('modern')
+
+  // 이미지 업로드 상태
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+
+  useEffect(() => {
+    loadEntities()
+  }, [])
+
+  const loadEntities = async () => {
+    try {
+      const [countriesData, historicalCountriesData, dynastiesData] = await Promise.all([
+        getAllCountries(),
+        getAllHistoricalCountries(),
+        dynastyApi.getAll(),
+      ])
+
+      console.log('Modern countries:', countriesData)
+      console.log('Historical countries:', historicalCountriesData)
+
+      setCountries(countriesData || [])
+      setHistoricalCountries(historicalCountriesData || [])
+      setDynasties(dynastiesData || [])
+    } catch (error) {
+      console.error('Failed to load entities:', error)
+      toast.error('데이터를 불러오는데 실패했습니다.')
+    }
+  }
+
+  // 나이 계산
+  const calculatedAge = useMemo(() => {
+    const birthYear = parseInt(formData.birthYear)
+    const deathYear = parseInt(formData.deathYear)
+
+    if (!birthYear || !deathYear) return null
+    if (formData.isBirthDateUnknown || formData.isDeathDateUnknown) return null
+
+    const birthYearAdjusted = formData.birthEra === 'BC' ? -birthYear : birthYear
+    const deathYearAdjusted = formData.deathEra === 'BC' ? -deathYear : deathYearAdjusted
+
+    return Math.abs(deathYearAdjusted - birthYearAdjusted)
+  }, [formData.birthYear, formData.birthMonth, formData.birthDay, formData.deathYear, formData.deathMonth, formData.deathDay, formData.birthEra, formData.deathEra, formData.isBirthDateUnknown, formData.isDeathDateUnknown])
+
+  const selectedCountry = useMemo(() => {
+    if (!formData.countryId) return null
+    return countries.find(c => c.id === formData.countryId) || 
+           historicalCountries.find(c => c.id === formData.countryId)
+  }, [formData.countryId, countries, historicalCountries])
+
+  const selectedDynasty = useMemo(() => {
+    if (!formData.dynastyId) return null
+    return dynasties.find(d => d.id === formData.dynastyId)
+  }, [formData.dynastyId, dynasties])
+
+  const filteredCountries = useMemo(() => {
+    const sourceList = countryType === 'modern' ? countries : historicalCountries
+    if (!countrySearchTerm) return sourceList
+
+    return sourceList.filter(country =>
+      country.name.toLowerCase().includes(countrySearchTerm.toLowerCase())
+    )
+  }, [countries, historicalCountries, countrySearchTerm, countryType])
+
+  const filteredDynasties = useMemo(() => {
+    if (!dynastySearchTerm) return dynasties
+
+    return dynasties.filter(dynasty =>
+      dynasty.name.toLowerCase().includes(dynastySearchTerm.toLowerCase())
+    )
+  }, [dynasties, dynastySearchTerm])
+
+  const handleInputChange = (field: keyof FormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }))
+    }
+  }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드할 수 있습니다.')
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('이미지 크기는 10MB 이하여야 합니다.')
+      return
+    }
+
+    setIsUploadingImage(true)
+    try {
+      const imageUrl = await uploadImage(file)
+      handleInputChange('profileImageUrl', imageUrl)
+      toast.success('이미지가 업로드되었습니다.')
+    } catch (error) {
+      console.error('Image upload failed:', error)
+      toast.error('이미지 업로드에 실패했습니다.')
+    } finally {
+      setIsUploadingImage(false)
+    }
+  }
+
+  const handleBirthDateSelect = (era: Era, year: number, month: number, day: number) => {
+    setFormData(prev => ({
+      ...prev,
+      birthEra: era,
+      birthYear: year.toString(),
+      birthMonth: month.toString(),
+      birthDay: day.toString(),
+    }))
+    setShowBirthDateModal(false)
+  }
+
+  const handleDeathDateSelect = (era: Era, year: number, month: number, day: number) => {
+    setFormData(prev => ({
+      ...prev,
+      deathEra: era,
+      deathYear: year.toString(),
+      deathMonth: month.toString(),
+      deathDay: day.toString(),
+    }))
+    setShowDeathDateModal(false)
+  }
+
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {}
+
+    if (!formData.name.trim()) {
+      newErrors.name = '이름을 입력해주세요.'
+    }
+
+    if (!formData.gender) {
+      newErrors.gender = '성별을 선택해주세요.'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async () => {
+    playClick()
+    
+    if (!validateForm()) {
+      toast.error('필수 항목을 입력해주세요.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const input: CreatePersonInput = {
+        name: formData.name.trim(),
+        surname: formData.surname.trim() || undefined,
+        gender: formData.gender,
+        biography: formData.biography.trim() || undefined,
+        profileImageUrl: formData.profileImageUrl || undefined,
+        countryId: formData.countryId || undefined,
+        dynastyId: formData.dynastyId || undefined,
+      }
+
+      // 출생일이 미상이 아닐 경우에만 포함
+      if (!formData.isBirthDateUnknown) {
+        if (formData.birthYear) {
+          input.birth = {
+            era: formData.birthEra,
+            year: parseInt(formData.birthYear),
+            month: formData.birthMonth ? parseInt(formData.birthMonth) : undefined,
+            day: formData.birthDay ? parseInt(formData.birthDay) : undefined,
+          }
+        }
+      }
+
+      // 사망일이 미상이 아닐 경우에만 포함
+      if (!formData.isDeathDateUnknown) {
+        if (formData.deathYear) {
+          input.death = {
+            era: formData.deathEra,
+            year: parseInt(formData.deathYear),
+            month: formData.deathMonth ? parseInt(formData.deathMonth) : undefined,
+            day: formData.deathDay ? parseInt(formData.deathDay) : undefined,
+          }
+        }
+      }
+
+      console.log('Submitting person data:', input)
+
+      await personApi.create(input)
+      toast.success('인물이 등록되었습니다.')
+      navigate('/persons')
+    } catch (error: any) {
+      console.error('Person creation failed:', error)
+      
+      if (error.response?.data) {
+        const errorData = error.response.data
+        if (errorData.error?.details?.errors) {
+          const validationErrors = errorData.error.details.errors
+          toast.error(`등록 실패: ${validationErrors.map((e: any) => Object.values(e.constraints || {}).join(', ')).join(', ')}`)
+        } else {
+          toast.error(`등록 실패: ${errorData.error?.message || '알 수 없는 오류'}`)
+        }
+      } else {
+        toast.error('인물 등록에 실패했습니다.')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const steps = [
+    { id: 'basic', label: '기본 정보', icon: FiUser, color: '#a78bfa' },
+  ]
+
+  const formatBirthDate = () => {
+    if (formData.isBirthDateUnknown) return '출생일 미상'
+    if (!formData.birthYear) return '출생일 선택'
+    
+    let dateStr = `${formData.birthEra} ${formData.birthYear}`
+    if (formData.birthMonth) dateStr += `.${formData.birthMonth.padStart(2, '0')}`
+    if (formData.birthDay) dateStr += `.${formData.birthDay.padStart(2, '0')}`
+    return dateStr
+  }
+
+  const formatDeathDate = () => {
+    if (formData.isDeathDateUnknown) return '사망일 미상'
+    if (!formData.deathYear) return '사망일 선택'
+    
+    let dateStr = `${formData.deathEra} ${formData.deathYear}`
+    if (formData.deathMonth) dateStr += `.${formData.deathMonth.padStart(2, '0')}`
+    if (formData.deathDay) dateStr += `.${formData.deathDay.padStart(2, '0')}`
+    return dateStr
+  }
+
+  return (
+    <PageWrapper>
+      <ContentWrapper>
+        {/* 좌측: 네비게이션 */}
+        <StepNavigation
+          steps={steps}
+          currentStep="basic"
+          onStepChange={() => {}}
+        />
+
+        {/* 우측: 폼 영역 */}
+        <FormArea>
+          <FormAreaHeader>
+            <FormAreaTitle>인물 등록</FormAreaTitle>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <ActionButton
+                type="button"
+                $variant="secondary"
+                onClick={() => navigate('/persons')}
+              >
+                취소
+              </ActionButton>
+              <ActionButton
+                type="button"
+                $variant="primary"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+              >
+                <FiSave />
+                {isSubmitting ? '등록 중...' : '등록'}
+              </ActionButton>
+            </div>
+          </FormAreaHeader>
+
+          <FormContent>
+            <FormSection>
+              {/* 프로필 이미지 */}
+              <FormRow>
+                <FormLabel>프로필 이미지</FormLabel>
+                <FormField>
+                <ProfileImageContainer>
+                  <ProfileImagePreview>
+                    {formData.profileImageUrl ? (
+                      <ProfileImage src={formData.profileImageUrl} alt="프로필" />
+                    ) : (
+                      <ProfileImagePlaceholder>
+                        <FiUser size={32} />
+                      </ProfileImagePlaceholder>
+                    )}
+                  </ProfileImagePreview>
+                  <ProfileImageActions>
+                    <SelectButton as="label" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <FiUpload size={16} />
+                      {isUploadingImage ? '업로드 중...' : '이미지 업로드'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        style={{ display: 'none' }}
+                        disabled={isUploadingImage}
+                      />
+                    </SelectButton>
+                    {formData.profileImageUrl && (
+                      <RemoveImageButton
+                        onClick={() => handleInputChange('profileImageUrl', '')}
+                      >
+                        <FiX size={16} />
+                      </RemoveImageButton>
+                    )}
+                  </ProfileImageActions>
+                </ProfileImageContainer>
+                </FormField>
+              </FormRow>
+
+              {/* 이름과 성 (한 줄) */}
+              <FormRow>
+                <FormLabel>
+                  이름 <Required>*</Required>
+                </FormLabel>
+                <FormField>
+                  <NameRow>
+                    <NameInputWrapper>
+                      <NameLabel>성</NameLabel>
+                      <Input
+                        type="text"
+                        placeholder="성 (선택)"
+                        value={formData.surname}
+                        onChange={(e) => handleInputChange('surname', e.target.value)}
+                      />
+                    </NameInputWrapper>
+                    <NameInputWrapper>
+                      <NameLabel>이름</NameLabel>
+                      <Input
+                        type="text"
+                        placeholder="이름"
+                        value={formData.name}
+                        onChange={(e) => handleInputChange('name', e.target.value)}
+                        $hasError={!!errors.name}
+                      />
+                    </NameInputWrapper>
+                  </NameRow>
+                  {errors.name && <ErrorText>{errors.name}</ErrorText>}
+                  <Hint>성과 이름을 각각 입력하세요 (이름은 필수)</Hint>
+                </FormField>
+              </FormRow>
+
+              {/* 성별 */}
+              <FormRow>
+                <FormLabel>
+                  성별 <Required>*</Required>
+                </FormLabel>
+                <FormField>
+                <GenderButtonGroup>
+                  <SelectButton
+                    $selected={formData.gender === 'male'}
+                    onClick={() => handleInputChange('gender', 'male')}
+                  >
+                    남성
+                  </SelectButton>
+                  <SelectButton
+                    $selected={formData.gender === 'female'}
+                    onClick={() => handleInputChange('gender', 'female')}
+                  >
+                    여성
+                  </SelectButton>
+                  <SelectButton
+                    $selected={formData.gender === 'other'}
+                    onClick={() => handleInputChange('gender', 'other')}
+                  >
+                    기타
+                  </SelectButton>
+                  </GenderButtonGroup>
+                  {errors.gender && <ErrorText>{errors.gender}</ErrorText>}
+                </FormField>
+              </FormRow>
+
+              {/* 생몰 정보 */}
+              <FormRow>
+                <FormLabel>
+                  생몰 정보{' '}
+                  {calculatedAge !== null && (
+                    <AgeDisplay>(향년 {calculatedAge}세)</AgeDisplay>
+                  )}
+                </FormLabel>
+                <FormField>
+                <DateRangeRow>
+                  <DateRangeColumn>
+                    <DateRangeLabel>출생</DateRangeLabel>
+                    <DateInputWrapper>
+                      <CustomCheckbox>
+                        <input
+                          type="checkbox"
+                          checked={formData.isBirthDateUnknown}
+                          onChange={(e) => {
+                            handleInputChange('isBirthDateUnknown', e.target.checked)
+                            if (e.target.checked) {
+                              handleInputChange('birthYear', '')
+                              handleInputChange('birthMonth', '')
+                              handleInputChange('birthDay', '')
+                            }
+                          }}
+                        />
+                        <span className="checkmark">
+                          <FiCheck size={12} />
+                        </span>
+                        <span className="label">출생일 미상</span>
+                      </CustomCheckbox>
+                      {formData.isBirthDateUnknown ? (
+                        <UnknownDateBox>
+                          <span className="icon">❓</span>
+                          <span className="text">출생일이 알려지지 않음</span>
+                        </UnknownDateBox>
+                      ) : (
+                        <DateInputDisplay
+                          onClick={() => setShowBirthDateModal(true)}
+                          $hasValue={!!formData.birthYear}
+                        >
+                          <FiCalendar />
+                          {formatBirthDate()}
+                        </DateInputDisplay>
+                      )}
+                    </DateInputWrapper>
+                  </DateRangeColumn>
+
+                  <DateRangeSeparator>~</DateRangeSeparator>
+
+                  <DateRangeColumn>
+                    <DateRangeLabel>사망</DateRangeLabel>
+                    <DateInputWrapper>
+                      <CustomCheckbox>
+                        <input
+                          type="checkbox"
+                          checked={formData.isDeathDateUnknown}
+                          onChange={(e) => {
+                            handleInputChange('isDeathDateUnknown', e.target.checked)
+                            if (e.target.checked) {
+                              handleInputChange('deathYear', '')
+                              handleInputChange('deathMonth', '')
+                              handleInputChange('deathDay', '')
+                            }
+                          }}
+                        />
+                        <span className="checkmark">
+                          <FiCheck size={12} />
+                        </span>
+                        <span className="label">사망일 미상</span>
+                      </CustomCheckbox>
+                      {formData.isDeathDateUnknown ? (
+                        <UnknownDateBox>
+                          <span className="icon">❓</span>
+                          <span className="text">사망일이 알려지지 않음</span>
+                        </UnknownDateBox>
+                      ) : (
+                        <DateInputDisplay
+                          onClick={() => setShowDeathDateModal(true)}
+                          $hasValue={!!formData.deathYear}
+                        >
+                          <FiCalendar />
+                          {formatDeathDate()}
+                        </DateInputDisplay>
+                      )}
+                    </DateInputWrapper>
+                  </DateRangeColumn>
+                </DateRangeRow>
+                </FormField>
+              </FormRow>
+
+              {/* 국가 */}
+              <FormRow>
+                <FormLabel>국가</FormLabel>
+                <FormField>
+                  <SelectButton onClick={() => setShowCountryModal(true)}>
+                    <FiGlobe />
+                    {selectedCountry ? selectedCountry.name : '국가 선택'}
+                  </SelectButton>
+                </FormField>
+              </FormRow>
+
+              {/* 가문 */}
+              <FormRow>
+                <FormLabel>가문</FormLabel>
+                <FormField>
+                  <SelectButton onClick={() => setShowDynastyModal(true)}>
+                    {selectedDynasty ? selectedDynasty.name : '가문 선택'}
+                  </SelectButton>
+                </FormField>
+              </FormRow>
+
+              {/* 약력 */}
+              <FormRow>
+                <FormLabel>약력</FormLabel>
+                <FormField>
+                  <TextArea
+                    placeholder="인물의 약력을 입력하세요"
+                    value={formData.biography}
+                    onChange={(e) => handleInputChange('biography', e.target.value)}
+                    rows={6}
+                  />
+                </FormField>
+              </FormRow>
+            </FormSection>
+          </FormContent>
+        </FormArea>
+      </ContentWrapper>
+
+      {/* 국가 선택 모달 */}
+      {showCountryModal && (
+        <Modal onClick={() => setShowCountryModal(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <ModalTitle>국가 선택</ModalTitle>
+              <ModalCloseButton onClick={() => setShowCountryModal(false)}>
+                <FiX />
+              </ModalCloseButton>
+            </ModalHeader>
+
+            <CountryTypeSelector>
+              <CountryTypeButton
+                $active={countryType === 'modern'}
+                onClick={() => setCountryType('modern')}
+              >
+                현대 국가
+              </CountryTypeButton>
+              <CountryTypeButton
+                $active={countryType === 'historical'}
+                onClick={() => setCountryType('historical')}
+              >
+                역사적 국가
+              </CountryTypeButton>
+            </CountryTypeSelector>
+
+            <SearchWrapper>
+              <FiSearch />
+              <SearchInput
+                type="text"
+                placeholder="국가 검색..."
+                value={countrySearchTerm}
+                onChange={(e) => setCountrySearchTerm(e.target.value)}
+                autoFocus
+              />
+            </SearchWrapper>
+
+            <ModalList>
+              <ModalListItem
+                $selected={!formData.countryId}
+                onClick={() => {
+                  handleInputChange('countryId', '')
+                  setShowCountryModal(false)
+                  setCountrySearchTerm('')
+                }}
+              >
+                선택 안함
+              </ModalListItem>
+              {filteredCountries.map((country) => (
+                <ModalListItem
+                  key={country.id}
+                  $selected={formData.countryId === country.id}
+                  onClick={() => {
+                    handleInputChange('countryId', country.id)
+                    setShowCountryModal(false)
+                    setCountrySearchTerm('')
+                  }}
+                >
+                  <CountryItemContent>
+                    {country.flagEmoji && <CountryFlag>{country.flagEmoji}</CountryFlag>}
+                    <CountryName>{country.name}</CountryName>
+                    {country.startYear && (
+                      <CountryPeriod>
+                        ({country.startYear}
+                        {country.endYear ? ` - ${country.endYear}` : ' - 현재'})
+                      </CountryPeriod>
+                    )}
+                  </CountryItemContent>
+                </ModalListItem>
+              ))}
+              {filteredCountries.length === 0 && (
+                <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
+              )}
+            </ModalList>
+          </ModalContent>
+        </Modal>
+      )}
+
+      {/* 가문 선택 모달 */}
+      {showDynastyModal && dynasties.length > 0 && (
+        <Modal onClick={() => setShowDynastyModal(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <ModalTitle>가문 선택</ModalTitle>
+              <ModalCloseButton onClick={() => setShowDynastyModal(false)}>
+                <FiX />
+              </ModalCloseButton>
+            </ModalHeader>
+
+            <SearchWrapper>
+              <FiSearch />
+              <SearchInput
+                type="text"
+                placeholder="가문 검색..."
+                value={dynastySearchTerm}
+                onChange={(e) => setDynastySearchTerm(e.target.value)}
+                autoFocus
+              />
+            </SearchWrapper>
+
+            <ModalList>
+              <ModalListItem
+                $selected={!formData.dynastyId}
+                onClick={() => {
+                  handleInputChange('dynastyId', '')
+                  setShowDynastyModal(false)
+                  setDynastySearchTerm('')
+                }}
+              >
+                선택 안함
+              </ModalListItem>
+              {filteredDynasties.map((dynasty) => (
+                <ModalListItem
+                  key={dynasty.id}
+                  $selected={formData.dynastyId === dynasty.id}
+                  onClick={() => {
+                    handleInputChange('dynastyId', dynasty.id)
+                    setShowDynastyModal(false)
+                    setDynastySearchTerm('')
+                  }}
+                >
+                  {dynasty.name}
+                </ModalListItem>
+              ))}
+              {filteredDynasties.length === 0 && (
+                <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
+              )}
+            </ModalList>
+          </ModalContent>
+        </Modal>
+      )}
+
+      {/* 출생일 선택 모달 */}
+      {showBirthDateModal && (
+        <DatePickerModal
+          isOpen={showBirthDateModal}
+          onClose={() => setShowBirthDateModal(false)}
+          onSelect={handleBirthDateSelect}
+          initialEra={formData.birthEra}
+          initialYear={formData.birthYear ? parseInt(formData.birthYear) : undefined}
+          initialMonth={formData.birthMonth ? parseInt(formData.birthMonth) : undefined}
+          initialDay={formData.birthDay ? parseInt(formData.birthDay) : undefined}
+        />
+      )}
+
+      {/* 사망일 선택 모달 */}
+      {showDeathDateModal && (
+        <DatePickerModal
+          isOpen={showDeathDateModal}
+          onClose={() => setShowDeathDateModal(false)}
+          onSelect={handleDeathDateSelect}
+          initialEra={formData.deathEra}
+          initialYear={formData.deathYear ? parseInt(formData.deathYear) : undefined}
+          initialMonth={formData.deathMonth ? parseInt(formData.deathMonth) : undefined}
+          initialDay={formData.deathDay ? parseInt(formData.deathDay) : undefined}
+        />
+      )}
+    </PageWrapper>
+  )
+}
+
+// Styled Components
+const FormContent = styled.div`
+  padding: 32px;
+`
+
+const SelectButton = styled.button<{ $selected?: boolean }>`
+  padding: 0.75rem 1rem;
+  background: ${props => props.$selected ? '#f3e8ff' : 'white'};
+  border: 2px solid ${props => props.$selected ? '#a78bfa' : '#e5e7eb'};
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: ${props => props.$selected ? '600' : '500'};
+  color: ${props => props.$selected ? '#7c3aed' : '#374151'};
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    border-color: #a78bfa;
+    background: ${props => props.$selected ? '#f3e8ff' : '#faf5ff'};
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  svg {
+    font-size: 1.125rem;
+  }
+`
+
+const ErrorText = styled.span`
+  font-size: 0.85rem;
+  color: #ef4444;
+`
+
+const NameRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const NameInputWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`
+
+const NameLabel = styled.label`
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #6b7280;
+`
+
+const ProfileImageContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`
+
+const ProfileImagePreview = styled.div`
+  width: 100px;
+  height: 100px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`
+
+const ProfileImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`
+
+const ProfileImagePlaceholder = styled.div`
+  color: #9ca3af;
+`
+
+const ProfileImageActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`
+
+const RemoveImageButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #dc2626;
+  }
+`
+
+const GenderButtonGroup = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  
+  button {
+    flex: 0 0 auto;
+    min-width: 80px;
+  }
+`
+
+const DateRangeSeparator = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #9ca3af;
+  padding-top: 2rem;
+`
+
+const CustomCheckbox = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #6b7280;
+  user-select: none;
+  margin-bottom: 0.5rem;
+
+  input[type='checkbox'] {
+    display: none;
+  }
+
+  .checkmark {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    background: white;
+
+    svg {
+      opacity: 0;
+      color: white;
+      transition: opacity 0.2s;
+    }
+  }
+
+  input[type='checkbox']:checked + .checkmark {
+    background: #a78bfa;
+    border-color: #a78bfa;
+
+    svg {
+      opacity: 1;
+    }
+  }
+
+  &:hover .checkmark {
+    border-color: #a78bfa;
+  }
+
+  .label {
+    color: #374151;
+  }
+`
+
+const UnknownDateBox = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+
+  .icon {
+    font-size: 1.5rem;
+  }
+
+  .text {
+    font-size: 0.9rem;
+    color: #6b7280;
+  }
+`
+
+const AgeDisplay = styled.span`
+  font-size: 0.85rem;
+  color: #a78bfa;
+  font-weight: 600;
+`
+
+// Modal Styled Components
+const Modal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+`
+
+const ModalContent = styled.div`
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+`
+
+const ModalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+`
+
+const ModalTitle = styled.h3`
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+`
+
+const ModalCloseButton = styled.button`
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #1f2937;
+  }
+
+  svg {
+    font-size: 1.25rem;
+  }
+`
+
+const CountryTypeSelector = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 0;
+`
+
+const CountryTypeButton = styled.button<{ $active: boolean }>`
+  flex: 1;
+  padding: 0.75rem;
+  background: ${props => props.$active ? '#a78bfa' : '#f3f4f6'};
+  color: ${props => props.$active ? 'white' : '#6b7280'};
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${props => props.$active ? '#9333ea' : '#e5e7eb'};
+  }
+`
+
+const SearchWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+
+  svg {
+    color: #9ca3af;
+    font-size: 1.125rem;
+  }
+`
+
+const SearchInput = styled.input`
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  color: #1f2937;
+
+  &::placeholder {
+    color: #9ca3af;
+  }
+`
+
+const ModalList = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+`
+
+const ModalListItem = styled.button<{ $selected?: boolean }>`
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: ${props => props.$selected ? '#f3e8ff' : 'transparent'};
+  border: none;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: ${props => props.$selected ? '#7c3aed' : '#374151'};
+  font-weight: ${props => props.$selected ? '500' : '400'};
+  font-size: 0.95rem;
+
+  &:hover {
+    background: ${props => props.$selected ? '#f3e8ff' : '#f9fafb'};
+  }
+`
+
+const CountryItemContent = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`
+
+const CountryFlag = styled.span`
+  font-size: 1.5rem;
+`
+
+const CountryName = styled.span`
+  flex: 1;
+`
+
+const CountryPeriod = styled.span`
+  font-size: 0.85rem;
+  color: #6b7280;
+`
+
+const EmptyMessage = styled.div`
+  padding: 2rem;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.95rem;
+`
