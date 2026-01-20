@@ -61,8 +61,17 @@ model Person {
   /// 이름
   name String @db.VarChar(30)
 
+  /// 중간 이름 (Middle Name)
+  middleName String? @map("middle_name") @db.VarChar(50)
+
   /// 성
   surname String? @map("sur_name") @db.VarChar(30)
+
+  /// 원어 이름 (Original Name)
+  originalName String? @map("original_name") @db.VarChar(100)
+
+  /// 별명/호/필명 (JSON 배열)
+  nicknames Json? @db.Json
 
   /// 출생 기원 (BC/AD)
   birthEra Era? @default(AD) @map("birth_era")
@@ -70,11 +79,20 @@ model Person {
   /// 출생일
   birthDate DateTime? @map("birth_date")
 
+  /// 출생일 미상 여부
+  isBirthDateUnknown Boolean @default(false) @map("is_birth_date_unknown")
+
   /// 사망 기원 (BC/AD)
   deathEra Era? @default(AD) @map("death_era")
 
   /// 사망일
   deathDate DateTime? @map("death_date")
+
+  /// 사망일 미상 여부
+  isDeathDateUnknown Boolean @default(false) @map("is_death_date_unknown")
+
+  /// 생존 중 여부
+  isAlive Boolean @default(false) @map("is_alive")
 
   /// 성별
   gender String? @db.VarChar(10)
@@ -84,6 +102,12 @@ model Person {
 
   /// 프로필 URL
   profileImageUrl String? @map("profile_image_url") @db.VarChar(255)
+
+  /// 프로필 이미지 URL들 (JSON 배열)
+  profileImageUrls Json? @map("profile_image_urls") @db.Json
+
+  /// 이벤트 목록에 생몰년 표시 여부
+  showLifespanOnEventList Boolean @default(true) @map("show_lifespan_on_event_list")
 
   //--- 외래키
   dynastyId      String? @map("dynasty_id") @db.Char(36)
@@ -207,8 +231,17 @@ model MilitaryCareer {
   /// 인물 ID
   personId String @map("person_id") @db.Char(36)
 
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 직책 정보 표시 여부
+  showPositionInfo Boolean @default(true) @map("show_position_info")
+
   /// 군 계급 ID (대장, 중장, 소장 등)
   rankId String @map("rank_id") @db.Char(36)
+
+  /// 직업 카테고리 ID
+  jobCategoryId String? @map("job_category_id") @db.Char(36)
 
   /// 군종 (육군, 해군, 공군, 해병대)
   branch String @db.VarChar(50)
@@ -230,6 +263,9 @@ model MilitaryCareer {
 
   /// 비고
   notes String? @db.Text
+
+  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
+  images Json? @db.Json
 
   //--- 관계 필드
   person       Person       @relation("PersonMilitaryCareers", fields: [personId], references: [id], onDelete: Cascade)
@@ -258,8 +294,17 @@ model GovernmentCareer {
   /// 인물 ID
   personId String @map("person_id") @db.Char(36)
 
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 직책 정보 표시 여부
+  showPositionInfo Boolean @default(true) @map("show_position_info")
+
   /// 직급 ID (대통령, 장관, 차관 등)
   positionId String @map("position_id") @db.Char(36)
+
+  /// 직업 카테고리 ID
+  jobCategoryId String? @map("job_category_id") @db.Char(36)
 
   /// 부처/기관명
   department String? @db.VarChar(200)
@@ -284,6 +329,9 @@ model GovernmentCareer {
 
   /// 비고
   notes String? @db.Text
+
+  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
+  images Json? @db.Json
 
   //--- 관계 필드
   person       Person        @relation("PersonGovernmentCareers", fields: [personId], references: [id], onDelete: Cascade)
@@ -313,8 +361,17 @@ model BusinessCareer {
   /// 인물 ID
   personId String @map("person_id") @db.Char(36)
 
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 직책 정보 표시 여부
+  showPositionInfo Boolean @default(true) @map("show_position_info")
+
   /// 직급 ID (CEO, CFO, 회장, 사장 등)
   positionId String @map("position_id") @db.Char(36)
+
+  /// 직업 카테고리 ID
+  jobCategoryId String? @map("job_category_id") @db.Char(36)
 
   /// 회사/조직 ID
   organizationId String @map("organization_id") @db.Char(36)
@@ -333,6 +390,9 @@ model BusinessCareer {
 
   /// 비고
   notes String? @db.Text
+
+  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
+  images Json? @db.Json
 
   //--- 관계 필드
   person       Person       @relation("PersonBusinessCareers", fields: [personId], references: [id], onDelete: Cascade)
@@ -361,8 +421,17 @@ model AcademicCareer {
   /// 인물 ID
   personId String @map("person_id") @db.Char(36)
 
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 직책 정보 표시 여부
+  showPositionInfo Boolean @default(true) @map("show_position_info")
+
   /// 직급 ID (교수, 부교수, 조교수 등)
   positionId String @map("position_id") @db.Char(36)
+
+  /// 직업 카테고리 ID
+  jobCategoryId String? @map("job_category_id") @db.Char(36)
 
   /// 소속 기관 ID (대학, 연구소 등)
   organizationId String @map("organization_id") @db.Char(36)
@@ -381,6 +450,9 @@ model AcademicCareer {
 
   /// 비고
   notes String? @db.Text
+
+  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
+  images Json? @db.Json
 
   //--- 관계 필드
   person       Person       @relation("PersonAcademicCareers", fields: [personId], references: [id], onDelete: Cascade)
@@ -409,8 +481,17 @@ model ReligiousCareer {
   /// 인물 ID
   personId String @map("person_id") @db.Char(36)
 
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 직책 정보 표시 여부
+  showPositionInfo Boolean @default(true) @map("show_position_info")
+
   /// 직급 ID (교황, 추기경, 주교, 목사 등)
   positionId String @map("position_id") @db.Char(36)
+
+  /// 직업 카테고리 ID
+  jobCategoryId String? @map("job_category_id") @db.Char(36)
 
   /// 종교 단체/교구 ID
   organizationId String? @map("organization_id") @db.Char(36)
@@ -433,12 +514,15 @@ model ReligiousCareer {
   /// 비고
   notes String? @db.Text
 
+  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
+  images Json? @db.Json
+
   //--- 관계 필드
-  person        Person                @relation("PersonReligiousCareers", fields: [personId], references: [id], onDelete: Cascade)
-  position      Job                   @relation("ReligiousPosition", fields: [positionId], references: [id], onDelete: Restrict)
-  organization  Organization?         @relation("ReligiousOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
-  religion      Religion              @relation("ReligionCareer", fields: [religionId], references: [id], onDelete: Restrict)
-  denomination  ReligionDenomination? @relation("DenominationCareer", fields: [denominationId], references: [id], onDelete: SetNull)
+  person       Person                @relation("PersonReligiousCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job                   @relation("ReligiousPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization?         @relation("ReligiousOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  religion     Religion              @relation("ReligionCareer", fields: [religionId], references: [id], onDelete: Restrict)
+  denomination ReligionDenomination? @relation("DenominationCareer", fields: [denominationId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
