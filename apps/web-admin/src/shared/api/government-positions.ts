@@ -74,6 +74,17 @@ export interface HeadOfStateDuringEvent {
     name: string
     surname?: string
     profileImageUrl?: string
+    birthEra?: 'BC' | 'AD' | null
+    birthYear?: number | null
+    birthMonth?: number | null
+    birthDay?: number | null
+    birthDate?: string | null
+    deathEra?: 'BC' | 'AD' | null
+    deathYear?: number | null
+    deathMonth?: number | null
+    deathDay?: number | null
+    deathDate?: string | null
+    governmentPositions?: GovernmentPositionTenure[]
   }
   position: GovernmentPositionDefinition
   tenure: {
@@ -146,6 +157,17 @@ export function findHeadsOfStateDuringPeriod(
               name: person.name,
               surname: person.surname,
               profileImageUrl: person.profileImageUrl,
+              birthEra: person.birthEra ?? null,
+              birthYear: person.birthYear ?? null,
+              birthMonth: person.birthMonth ?? null,
+              birthDay: person.birthDay ?? null,
+              birthDate: person.birthDate ?? null,
+              deathEra: person.deathEra ?? null,
+              deathYear: person.deathYear ?? null,
+              deathMonth: person.deathMonth ?? null,
+              deathDay: person.deathDay ?? null,
+              deathDate: person.deathDate ?? null,
+              governmentPositions: person.governmentPositions ?? [],
             },
             position: tenure.position,
             tenure: {

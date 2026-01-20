@@ -188,8 +188,15 @@ model Organization {
   roles             OrganizationPersonRole[]
   aliases           OrganizationAlias[]
   partyAffiliations PoliticalPartyOrganization[]
-  parents           OrganizationHierarchy[]         @relation("OrgHierarchyParent")
-  children          OrganizationHierarchy[]         @relation("OrgHierarchyChild")
+  parents           OrganizationHierarchy[]   @relation("OrgHierarchyParent")
+  children          OrganizationHierarchy[]   @relation("OrgHierarchyChild")
+
+  // 분야별 경력 관계
+  militaryCareers    MilitaryCareer[]    @relation("MilitaryOrganization")
+  governmentCareers  GovernmentCareer[]  @relation("GovernmentOrganization")
+  businessCareers    BusinessCareer[]    @relation("BusinessOrganization")
+  academicCareers    AcademicCareer[]    @relation("AcademicOrganization")
+  religiousCareers   ReligiousCareer[]   @relation("ReligiousOrganization")
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")

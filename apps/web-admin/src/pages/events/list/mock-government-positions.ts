@@ -24,6 +24,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '루스벨트',
     surname: '프랭클린 D.',
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1882,
+    birthMonth: 1,
+    birthDay: 30,
+    deathEra: 'AD',
+    deathYear: 1945,
+    deathMonth: 4,
+    deathDay: 12,
     governmentPositions: [
       {
         id: 'tenure-1',
@@ -57,6 +65,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '처칠',
     surname: '윈스턴',
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1874,
+    birthMonth: 11,
+    birthDay: 30,
+    deathEra: 'AD',
+    deathYear: 1965,
+    deathMonth: 1,
+    deathDay: 24,
     governmentPositions: [
       {
         id: 'tenure-2',
@@ -90,6 +106,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '스탈린',
     surname: '이오시프',
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1878,
+    birthMonth: 12,
+    birthDay: 18,
+    deathEra: 'AD',
+    deathYear: 1953,
+    deathMonth: 3,
+    deathDay: 5,
     governmentPositions: [
       {
         id: 'tenure-3',
@@ -122,6 +146,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '히틀러',
     surname: '아돌프',
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1889,
+    birthMonth: 4,
+    birthDay: 20,
+    deathEra: 'AD',
+    deathYear: 1945,
+    deathMonth: 4,
+    deathDay: 30,
     governmentPositions: [
       {
         id: 'tenure-4',
@@ -154,6 +186,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '도조 히데키',
     surname: null,
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1884,
+    birthMonth: 12,
+    birthDay: 30,
+    deathEra: 'AD',
+    deathYear: 1948,
+    deathMonth: 12,
+    deathDay: 23,
     governmentPositions: [
       {
         id: 'tenure-5',
@@ -187,6 +227,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '무솔리니',
     surname: '베니토',
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1883,
+    birthMonth: 7,
+    birthDay: 29,
+    deathEra: 'AD',
+    deathYear: 1945,
+    deathMonth: 4,
+    deathDay: 28,
     governmentPositions: [
       {
         id: 'tenure-6',
@@ -220,6 +268,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '드골',
     surname: '샤를',
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1890,
+    birthMonth: 11,
+    birthDay: 22,
+    deathEra: 'AD',
+    deathYear: 1970,
+    deathMonth: 11,
+    deathDay: 9,
     governmentPositions: [
       {
         id: 'tenure-7',
@@ -253,6 +309,14 @@ export const MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [
     name: '트루먼',
     surname: '해리',
     profileImageUrl: null,
+    birthEra: 'AD',
+    birthYear: 1884,
+    birthMonth: 5,
+    birthDay: 8,
+    deathEra: 'AD',
+    deathYear: 1972,
+    deathMonth: 12,
+    deathDay: 26,
     governmentPositions: [
       {
         id: 'tenure-8',

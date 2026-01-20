@@ -582,6 +582,33 @@ export const ToolbarMeta = styled.div`
   }
 `
 
+export const ToolbarToggle = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(99, 102, 241, 0.04);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 10px;
+`
+
+export const ToolbarToggleText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+export const ToolbarToggleLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+`
+
+export const ToolbarToggleDescription = styled.span`
+  font-size: 10px;
+  color: rgba(20, 19, 34, 0.5);
+`
+
 // Sort Controls
 export const SortSelect = styled.select`
   border: 1.5px solid rgba(99, 102, 241, 0.2);
@@ -825,6 +852,86 @@ export const TenureGroupExpandButton = styled.button`
     background: rgba(99, 102, 241, 0.15);
     border-color: rgba(99, 102, 241, 0.3);
   }
+`
+
+export const TenureDetailsPanel = styled.div`
+  margin: 0 0 8px 0;
+  padding: 10px 12px;
+  background: rgba(249, 250, 251, 0.9);
+  border-radius: 6px;
+  border-left: 3px solid rgba(99, 102, 241, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+`
+
+export const TenureDetailsHeader = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+export const TenureSectionTitle = styled.div`
+  font-size: 12px;
+  font-weight: 700;
+  color: #141322;
+`
+
+export const TenureSectionDescription = styled.div`
+  font-size: 10px;
+  color: rgba(20, 19, 34, 0.5);
+`
+
+export const TenureDetailRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+`
+
+export const TenureDetailLabel = styled.span`
+  min-width: 44px;
+  color: rgba(99, 102, 241, 0.9);
+  font-weight: 600;
+`
+
+export const TenureDetailValue = styled.div`
+  color: rgba(20, 19, 34, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+`
+
+export const TenureTimeline = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+export const TenureTimelineItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid rgba(99, 102, 241, 0.08);
+`
+
+export const TenureTimelinePeriod = styled.span`
+  font-size: 10px;
+  color: rgba(20, 19, 34, 0.5);
+  min-width: 72px;
+`
+
+export const TenureTimelineTitle = styled.span`
+  font-weight: 600;
+  color: #141322;
+`
+
+export const TenureTimelineMeta = styled.span`
+  color: rgba(20, 19, 34, 0.6);
 `
 
 export const OtherHeadsOfStateList = styled.div`

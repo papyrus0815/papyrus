@@ -102,6 +102,9 @@ model Country {
   treatySignatories              TreatySignatory[]
   allianceMembers                AllianceMember[]
 
+  // 분야별 경력 관계
+  governmentCareers GovernmentCareer[] @relation("GovernmentCountry")
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   /// 마지막 수정 일시

@@ -110,6 +110,13 @@ model Person {
   // 새로운 국가 관계
   countryAffiliations PersonCountryAffiliation[]
 
+  // 분야별 경력 히스토리
+  militaryCareers   MilitaryCareer[]   @relation("PersonMilitaryCareers")
+  governmentCareers GovernmentCareer[] @relation("PersonGovernmentCareers")
+  businessCareers   BusinessCareer[]   @relation("PersonBusinessCareers")
+  academicCareers   AcademicCareer[]   @relation("PersonAcademicCareers")
+  religiousCareers  ReligiousCareer[]  @relation("PersonReligiousCareers")
+
   EventTimelinePerson      EventTimelinePerson[]
   PersonEvent              PersonEvent[]
   MilitaryUnitCommander    MilitaryUnitCommander[]
@@ -186,4 +193,259 @@ model PersonCountryAffiliation {
   @@index([historicalCountryId], name: "idx_person_country_aff_histCountryId")
   @@index([affiliationType], name: "idx_person_country_aff_type")
   @@map("person_country_affiliation")
+}
+
+// ========================
+// MilitaryCareer (군인 경력 전용)
+// ========================
+/// 군인 경력 전용 테이블
+/// 예시: 백선엽 장군 - 대장, 제8군단, 군단장
+model MilitaryCareer {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 군 계급 ID (대장, 중장, 소장 등)
+  rankId String @map("rank_id") @db.Char(36)
+
+  /// 군종 (육군, 해군, 공군, 해병대)
+  branch String @db.VarChar(50)
+
+  /// 소속 부대/조직 ID
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 보직 (군단장, 사단장, 참모총장 등)
+  position String? @db.VarChar(100)
+
+  /// 대수 (예: 2대 군단장)
+  termNumber Int? @map("term_number")
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계 필드
+  person       Person       @relation("PersonMilitaryCareers", fields: [personId], references: [id], onDelete: Cascade)
+  rank         Job          @relation("MilitaryRank", fields: [rankId], references: [id], onDelete: Restrict)
+  organization Organization @relation("MilitaryOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_military_career_personId")
+  @@index([rankId], name: "idx_military_career_rankId")
+  @@index([organizationId], name: "idx_military_career_orgId")
+  @@map("military_career")
+}
+
+// ========================
+// GovernmentCareer (공무원/정치인 경력 전용)
+// ========================
+/// 공무원/정치인 경력 전용 테이블
+/// 예시: 김대중 대통령 - 대통령, 대한민국, 15대
+model GovernmentCareer {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 직급 ID (대통령, 장관, 차관 등)
+  positionId String @map("position_id") @db.Char(36)
+
+  /// 부처/기관명
+  department String? @db.VarChar(200)
+
+  /// 소속 조직 ID
+  organizationId String? @map("organization_id") @db.Char(36)
+
+  /// 구체적 역할 (국방부장관, 외교부장관 등)
+  roleTitle String? @map("role_title") @db.VarChar(100)
+
+  /// 대수 (15대 대통령, 20대 국회의원 등)
+  termNumber Int? @map("term_number")
+
+  /// 소속 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계 필드
+  person       Person        @relation("PersonGovernmentCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job           @relation("GovernmentPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization? @relation("GovernmentOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  country      Country       @relation("GovernmentCountry", fields: [countryId], references: [id], onDelete: Restrict)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_gov_career_personId")
+  @@index([positionId], name: "idx_gov_career_positionId")
+  @@index([countryId], name: "idx_gov_career_countryId")
+  @@map("government_career")
+}
+
+// ========================
+// BusinessCareer (기업인 경력 전용)
+// ========================
+/// 기업인 경력 전용 테이블
+/// 예시: 이건희 회장 - CEO, 삼성전자
+model BusinessCareer {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 직급 ID (CEO, CFO, 회장, 사장 등)
+  positionId String @map("position_id") @db.Char(36)
+
+  /// 회사/조직 ID
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 구체적 직함 (최고경영자, 대표이사 등)
+  title String? @db.VarChar(100)
+
+  /// 직급 레벨 (C-level, 임원, 관리자 등)
+  level String? @db.VarChar(50)
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계 필드
+  person       Person       @relation("PersonBusinessCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job          @relation("BusinessPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization @relation("BusinessOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_business_career_personId")
+  @@index([positionId], name: "idx_business_career_positionId")
+  @@index([organizationId], name: "idx_business_career_orgId")
+  @@map("business_career")
+}
+
+// ========================
+// AcademicCareer (학자/교육자 경력 전용)
+// ========================
+/// 학자/교육자 경력 전용 테이블
+/// 예시: 아인슈타인 - 교수, 프린스턴 대학교, 물리학과
+model AcademicCareer {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 직급 ID (교수, 부교수, 조교수 등)
+  positionId String @map("position_id") @db.Char(36)
+
+  /// 소속 기관 ID (대학, 연구소 등)
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 학과/전공
+  department String? @db.VarChar(200)
+
+  /// 연구 분야
+  researchField String? @map("research_field") @db.VarChar(200)
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계 필드
+  person       Person       @relation("PersonAcademicCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job          @relation("AcademicPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization @relation("AcademicOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_academic_career_personId")
+  @@index([positionId], name: "idx_academic_career_positionId")
+  @@index([organizationId], name: "idx_academic_career_orgId")
+  @@map("academic_career")
+}
+
+// ========================
+// ReligiousCareer (종교인 경력 전용)
+// ========================
+/// 종교인 경력 전용 테이블
+/// 예시: 교황 - 교황, 바티칸
+model ReligiousCareer {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 직급 ID (교황, 추기경, 주교, 목사 등)
+  positionId String @map("position_id") @db.Char(36)
+
+  /// 종교 단체/교구 ID
+  organizationId String? @map("organization_id") @db.Char(36)
+
+  /// 종교
+  religionId String @map("religion_id") @db.Char(36)
+
+  /// 교파/종파 ID
+  denominationId String? @map("denomination_id") @db.Char(36)
+
+  /// 구체적 직함
+  title String? @db.VarChar(100)
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계 필드
+  person        Person                @relation("PersonReligiousCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position      Job                   @relation("ReligiousPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization  Organization?         @relation("ReligiousOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  religion      Religion              @relation("ReligionCareer", fields: [religionId], references: [id], onDelete: Restrict)
+  denomination  ReligionDenomination? @relation("DenominationCareer", fields: [denominationId], references: [id], onDelete: SetNull)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_religious_career_personId")
+  @@index([positionId], name: "idx_religious_career_positionId")
+  @@index([religionId], name: "idx_religious_career_religionId")
+  @@map("religious_career")
 }

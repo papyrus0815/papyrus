@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import {
   FiBriefcase,
@@ -12,7 +11,6 @@ import {
   FiPlus,
   FiSave,
   FiSearch,
-  FiUpload,
   FiUser,
   FiUsers,
   FiX,
@@ -21,7 +19,7 @@ import { GiCrossedSwords } from 'react-icons/gi'
 import { IoFemaleSharp, IoMaleSharp } from 'react-icons/io5'
 import { RiGovernmentLine } from 'react-icons/ri'
 import { useNavigate, useParams } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import {
   ActionButton,
@@ -75,6 +73,7 @@ interface FormData {
   deathDay: string
   biography: string
   profileImageUrl: string
+  profileImageUrls: string[]
 
   // 소속 정보
   countryId: string
@@ -115,6 +114,7 @@ export default function PersonEditPage() {
     deathDay: '',
     biography: '',
     profileImageUrl: '',
+    profileImageUrls: [],
     countryId: '',
     dynastyId: '',
     religionId: '',
@@ -127,6 +127,8 @@ export default function PersonEditPage() {
 
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorFlashOn, setErrorFlashOn] = useState(false)
+  const errorFlashTimerRef = useRef<number | null>(null)
   const [countries, setCountries] = useState<any[]>([])
   const [historicalCountries, setHistoricalCountries] = useState<any[]>([])
   const [dynasties, setDynasties] = useState<any[]>([])
@@ -211,6 +213,9 @@ export default function PersonEditPage() {
         deathDay: personData.death?.day?.toString() || '',
         biography: personData.biography || '',
         profileImageUrl: personData.profileImageUrl || '',
+        profileImageUrls: personData.profileImageUrl
+          ? [personData.profileImageUrl]
+          : [],
         countryId: personData.countryId || '',
         dynastyId: personData.dynastyId || '',
         religionId: personData.religionId || '',
@@ -445,31 +450,89 @@ export default function PersonEditPage() {
     }
   }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const triggerErrorFlash = () => {
+    if (errorFlashTimerRef.current) {
+      window.clearTimeout(errorFlashTimerRef.current)
+    }
+    setErrorFlashOn(true)
+    errorFlashTimerRef.current = window.setTimeout(() => {
+      setErrorFlashOn(false)
+    }, 1200)
+  }
 
-    if (!file.type.startsWith('image/')) {
+  useEffect(() => {
+    return () => {
+      if (errorFlashTimerRef.current) {
+        window.clearTimeout(errorFlashTimerRef.current)
+      }
+    }
+  }, [])
+
+  const primaryProfileImage =
+    formData.profileImageUrls[0] || formData.profileImageUrl
+
+  const handleProfileImagesUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+
+    const invalidFile = files.find((file) => !file.type.startsWith('image/'))
+    if (invalidFile) {
       toast.error('이미지 파일만 업로드할 수 있습니다.')
       return
     }
 
-    if (file.size > 10 * 1024 * 1024) {
+    const oversizedFile = files.find((file) => file.size > 10 * 1024 * 1024)
+    if (oversizedFile) {
       toast.error('이미지 크기는 10MB 이하여야 합니다.')
       return
     }
 
     setIsUploadingImage(true)
     try {
-      const imageUrl = await uploadImage(file)
-      handleInputChange('profileImageUrl', imageUrl)
+      const uploaded = await Promise.all(files.map((file) => uploadImage(file)))
+      const urls = uploaded.map((response) => response.url).filter(Boolean)
+
+      setFormData((prev) => {
+        const merged = [...prev.profileImageUrls, ...urls]
+        return {
+          ...prev,
+          profileImageUrls: merged,
+          profileImageUrl: merged[0] || '',
+        }
+      })
       toast.success('이미지가 업로드되었습니다.')
     } catch (error) {
       console.error('Image upload failed:', error)
       toast.error('이미지 업로드에 실패했습니다.')
     } finally {
       setIsUploadingImage(false)
+      e.target.value = ''
     }
+  }
+
+  const handleRemoveProfileImage = (url: string) => {
+    setFormData((prev) => {
+      const remaining = prev.profileImageUrls.filter((item) => item !== url)
+      return {
+        ...prev,
+        profileImageUrls: remaining,
+        profileImageUrl: remaining[0] || '',
+      }
+    })
+  }
+
+  const handleSetPrimaryProfileImage = (url: string) => {
+    setFormData((prev) => {
+      const remaining = prev.profileImageUrls.filter((item) => item !== url)
+      const merged = [url, ...remaining]
+      return {
+        ...prev,
+        profileImageUrls: merged,
+        profileImageUrl: merged[0] || '',
+      }
+    })
   }
 
   const handleBirthDateSelect = (
@@ -511,6 +574,10 @@ export default function PersonEditPage() {
       newErrors.name = '이름을 입력해주세요.'
     }
 
+    if (!formData.surname.trim()) {
+      newErrors.surname = '성을 입력해주세요.'
+    }
+
     if (!formData.gender) {
       newErrors.gender = '성별을 선택해주세요.'
     }
@@ -524,6 +591,7 @@ export default function PersonEditPage() {
 
     if (!validateForm()) {
       toast.error('필수 항목을 입력해주세요.')
+      triggerErrorFlash()
       return
     }
 
@@ -535,7 +603,7 @@ export default function PersonEditPage() {
         surname: formData.surname.trim() || undefined,
         gender: formData.gender,
         biography: formData.biography.trim() || undefined,
-        profileImageUrl: formData.profileImageUrl || undefined,
+        profileImageUrl: formData.profileImageUrls[0] || formData.profileImageUrl || undefined,
         countryId: formData.countryId || undefined,
         dynastyId: formData.dynastyId || undefined,
         religionId: formData.religionId || undefined,
@@ -671,47 +739,67 @@ export default function PersonEditPage() {
                 <FormField>
                   <ProfileImageContainer>
                     <ProfileImagePreview>
-                      {formData.profileImageUrl ? (
+                      <ProfileImageInput
+                        id="profile-images-edit"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleProfileImagesUpload}
+                        disabled={isUploadingImage}
+                      />
+                      {primaryProfileImage ? (
                         <ProfileImage
-                          src={formData.profileImageUrl}
+                          src={primaryProfileImage}
                           alt="프로필"
                         />
                       ) : (
                         <ProfileImagePlaceholder>
                           <FiUser size={32} />
+                          <span>클릭하여 이미지 추가</span>
                         </ProfileImagePlaceholder>
                       )}
-                    </ProfileImagePreview>
-                    <ProfileImageActions>
-                      <SelectButton
-                        as="label"
-                        style={{
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                        }}
-                      >
-                        <FiUpload size={16} />
-                        {isUploadingImage ? '업로드 중...' : '이미지 업로드'}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                          style={{ display: 'none' }}
-                          disabled={isUploadingImage}
-                        />
-                      </SelectButton>
-                      {formData.profileImageUrl && (
+                      {primaryProfileImage && (
                         <RemoveImageButton
-                          onClick={() =>
-                            handleInputChange('profileImageUrl', '')
-                          }
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleRemoveProfileImage(primaryProfileImage)
+                          }}
                         >
-                          <FiX size={16} />
+                          <FiX size={14} />
                         </RemoveImageButton>
                       )}
-                    </ProfileImageActions>
+                    </ProfileImagePreview>
+                    <ProfileImageThumbnails>
+                      {formData.profileImageUrls.map((url, index) => (
+                        <ProfileImageThumb
+                          key={`${url}-${index}`}
+                          $active={url === primaryProfileImage}
+                          type="button"
+                          onClick={() => handleSetPrimaryProfileImage(url)}
+                        >
+                          <img src={url} alt="프로필 썸네일" />
+                          <ThumbRemoveButton
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleRemoveProfileImage(url)
+                            }}
+                          >
+                            <FiX size={12} />
+                          </ThumbRemoveButton>
+                        </ProfileImageThumb>
+                      ))}
+                      <ProfileImageAddThumb
+                        as="label"
+                        htmlFor="profile-images-edit"
+                      >
+                        <FiPlus />
+                        추가
+                      </ProfileImageAddThumb>
+                    </ProfileImageThumbnails>
                   </ProfileImageContainer>
                 </FormField>
               </FormRow>
@@ -725,18 +813,21 @@ export default function PersonEditPage() {
                   <NameRow>
                     <NameInputWrapper>
                       <NameLabel>성</NameLabel>
-                      <Input
+                      <ErrorInput
                         type="text"
-                        placeholder="성 (선택)"
+                        placeholder="성"
                         value={formData.surname}
                         onChange={(e) =>
                           handleInputChange('surname', e.target.value)
                         }
+                        $hasError={!!errors.surname}
+                        $flash={errorFlashOn}
                       />
+                      {errors.surname && <ErrorText>{errors.surname}</ErrorText>}
                     </NameInputWrapper>
                     <NameInputWrapper>
                       <NameLabel>이름</NameLabel>
-                      <Input
+                      <ErrorInput
                         type="text"
                         placeholder="이름"
                         value={formData.name}
@@ -744,11 +835,12 @@ export default function PersonEditPage() {
                           handleInputChange('name', e.target.value)
                         }
                         $hasError={!!errors.name}
+                        $flash={errorFlashOn}
                       />
                     </NameInputWrapper>
                   </NameRow>
                   {errors.name && <ErrorText>{errors.name}</ErrorText>}
-                  <Hint>성과 이름을 각각 입력하세요 (이름은 필수)</Hint>
+                  <Hint>성과 이름을 각각 입력하세요 (필수)</Hint>
                 </FormField>
               </FormRow>
 
@@ -761,6 +853,8 @@ export default function PersonEditPage() {
                   <GenderButtonGroup>
                     <SelectButton
                       $selected={formData.gender === '남'}
+                      $hasError={!!errors.gender}
+                      $flash={errorFlashOn}
                       onClick={() => handleInputChange('gender', '남')}
                     >
                       <IoMaleSharp style={{ color: '#3b82f6' }} />
@@ -768,6 +862,8 @@ export default function PersonEditPage() {
                     </SelectButton>
                     <SelectButton
                       $selected={formData.gender === '여'}
+                      $hasError={!!errors.gender}
+                      $flash={errorFlashOn}
                       onClick={() => handleInputChange('gender', '여')}
                     >
                       <IoFemaleSharp style={{ color: '#ec4899' }} />
@@ -786,43 +882,42 @@ export default function PersonEditPage() {
                     <LifespanRow>
                       {/* 출생 */}
                       <LifespanItem>
-                        <LifespanLabelRow>
-                          <LifespanLabel>출생</LifespanLabel>
-                          <CustomCheckbox>
-                            <input
-                              type="checkbox"
-                              checked={formData.isBirthDateUnknown}
-                              onChange={(e) => {
-                                handleInputChange(
-                                  'isBirthDateUnknown',
-                                  e.target.checked,
-                                )
-                                if (e.target.checked) {
-                                  handleInputChange('birthYear', '')
-                                  handleInputChange('birthMonth', '')
-                                  handleInputChange('birthDay', '')
-                                }
-                              }}
-                            />
-                            <span className="checkmark">
-                              <FiCheck size={12} />
-                            </span>
-                            <span className="label">미상</span>
-                          </CustomCheckbox>
-                        </LifespanLabelRow>
+                          <LifespanLabelRow>
+                            <LifespanLabel>출생</LifespanLabel>
+                            <InlineCheckRow>
+                              <InlineCheckButton
+                                type="button"
+                                $checked={formData.isBirthDateUnknown}
+                                onClick={() => {
+                                  const next = !formData.isBirthDateUnknown
+                                  handleInputChange('isBirthDateUnknown', next)
+                                  if (next) {
+                                    handleInputChange('birthYear', '')
+                                    handleInputChange('birthMonth', '')
+                                    handleInputChange('birthDay', '')
+                                  }
+                                }}
+                              >
+                                {formData.isBirthDateUnknown && <FiCheck />}
+                              </InlineCheckButton>
+                              <InlineCheckLabel>미상</InlineCheckLabel>
+                            </InlineCheckRow>
+                          </LifespanLabelRow>
                         {formData.isBirthDateUnknown ? (
                           <UnknownDateBox>
                             <span className="icon">❓</span>
                             <span className="text">미상</span>
                           </UnknownDateBox>
                         ) : (
-                          <DateInputDisplay
+                          <ErrorDateInputDisplay
                             onClick={() => setShowBirthDateModal(true)}
                             $hasValue={!!formData.birthYear}
+                            $hasError={!!errors.lifespan}
+                            $flash={errorFlashOn}
                           >
                             <FiCalendar />
                             {formatBirthDate()}
-                          </DateInputDisplay>
+                          </ErrorDateInputDisplay>
                         )}
                       </LifespanItem>
 
@@ -830,43 +925,42 @@ export default function PersonEditPage() {
 
                       {/* 사망 */}
                       <LifespanItem>
-                        <LifespanLabelRow>
-                          <LifespanLabel>사망</LifespanLabel>
-                          <CustomCheckbox>
-                            <input
-                              type="checkbox"
-                              checked={formData.isDeathDateUnknown}
-                              onChange={(e) => {
-                                handleInputChange(
-                                  'isDeathDateUnknown',
-                                  e.target.checked,
-                                )
-                                if (e.target.checked) {
-                                  handleInputChange('deathYear', '')
-                                  handleInputChange('deathMonth', '')
-                                  handleInputChange('deathDay', '')
-                                }
-                              }}
-                            />
-                            <span className="checkmark">
-                              <FiCheck size={12} />
-                            </span>
-                            <span className="label">미상</span>
-                          </CustomCheckbox>
-                        </LifespanLabelRow>
+                          <LifespanLabelRow>
+                            <LifespanLabel>사망</LifespanLabel>
+                            <InlineCheckRow>
+                              <InlineCheckButton
+                                type="button"
+                                $checked={formData.isDeathDateUnknown}
+                                onClick={() => {
+                                  const next = !formData.isDeathDateUnknown
+                                  handleInputChange('isDeathDateUnknown', next)
+                                  if (next) {
+                                    handleInputChange('deathYear', '')
+                                    handleInputChange('deathMonth', '')
+                                    handleInputChange('deathDay', '')
+                                  }
+                                }}
+                              >
+                                {formData.isDeathDateUnknown && <FiCheck />}
+                              </InlineCheckButton>
+                              <InlineCheckLabel>미상</InlineCheckLabel>
+                            </InlineCheckRow>
+                          </LifespanLabelRow>
                         {formData.isDeathDateUnknown ? (
                           <UnknownDateBox>
                             <span className="icon">❓</span>
                             <span className="text">미상</span>
                           </UnknownDateBox>
                         ) : (
-                          <DateInputDisplay
+                          <ErrorDateInputDisplay
                             onClick={() => setShowDeathDateModal(true)}
                             $hasValue={!!formData.deathYear}
+                            $hasError={!!errors.lifespan}
+                            $flash={errorFlashOn}
                           >
                             <FiCalendar />
                             {formatDeathDate()}
-                          </DateInputDisplay>
+                          </ErrorDateInputDisplay>
                         )}
                       </LifespanItem>
                     </LifespanRow>
@@ -1481,18 +1575,53 @@ const FormContent = styled.div`
   padding: 32px;
 `
 
-const SelectButton = styled.button<{ $selected?: boolean }>`
+const errorBlinkStyles = css`
+  animation: error-blink 0.9s ease-in-out 2;
+
+  @keyframes error-blink {
+    0%,
+    100% {
+      border-color: #fca5a5;
+      box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.18);
+    }
+    50% {
+      border-color: #f87171;
+      box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.18);
+    }
+  }
+`
+
+const ErrorInput = styled(Input)<{ $hasError?: boolean; $flash?: boolean }>`
+  ${(props) =>
+    props.$hasError &&
+    css`
+      border-color: #fca5a5;
+      box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
+
+      &:focus {
+        border-color: #f87171;
+        box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.16);
+      }
+    `}
+
+  ${(props) => props.$hasError && props.$flash && errorBlinkStyles}
+`
+
+const SelectButton = styled.button<{
+  $selected?: boolean
+  $hasError?: boolean
+  $flash?: boolean
+}>`
   padding: 1rem 1.5rem;
-  background: ${(props) =>
-    props.$selected
-      ? 'linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%)'
-      : 'white'};
-  border: 2px solid ${(props) => (props.$selected ? '#a78bfa' : '#e5e7eb')};
+  background: ${(props) => (props.$selected ? '#f3f4f6' : 'white')};
+  border: 2px solid
+    ${(props) =>
+      props.$hasError ? '#fca5a5' : props.$selected ? '#9ca3af' : '#e5e7eb'};
   border-radius: 10px;
   cursor: pointer;
   font-size: 0.95rem;
   font-weight: ${(props) => (props.$selected ? '600' : '500')};
-  color: ${(props) => (props.$selected ? '#7c3aed' : '#374151')};
+  color: ${(props) => (props.$selected ? '#111827' : '#374151')};
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
@@ -1502,11 +1631,8 @@ const SelectButton = styled.button<{ $selected?: boolean }>`
   width: 100%;
 
   &:hover {
-    border-color: #a78bfa;
-    background: ${(props) =>
-      props.$selected
-        ? 'linear-gradient(135deg, #e9d5ff 0%, #ddd6fe 100%)'
-        : 'linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)'};
+    border-color: ${(props) => (props.$hasError ? '#fca5a5' : '#9ca3af')};
+    background: ${(props) => (props.$selected ? '#e5e7eb' : '#f9fafb')};
     transform: translateY(-1px);
   }
 
@@ -1523,6 +1649,21 @@ const SelectButton = styled.button<{ $selected?: boolean }>`
       return 'inherit'
     }};
   }
+  ${(props) => props.$hasError && props.$flash && errorBlinkStyles}
+`
+
+const ErrorDateInputDisplay = styled(DateInputDisplay)<{
+  $hasError?: boolean
+  $flash?: boolean
+}>`
+  ${(props) =>
+    props.$hasError &&
+    css`
+      border-color: #fca5a5;
+      box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.12);
+    `}
+
+  ${(props) => props.$hasError && props.$flash && errorBlinkStyles}
 `
 
 const ErrorText = styled.span`
@@ -1553,28 +1694,42 @@ const NameLabel = styled.label`
 `
 
 const ProfileImageContainer = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  align-items: start;
+  gap: 1.25rem;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
 `
 
-const ProfileImagePreview = styled.div`
-  width: 120px;
-  height: 120px;
+const ProfileImagePreview = styled.label`
+  width: 360px;
+  height: 180px;
   border-radius: 12px;
   overflow: hidden;
-  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  background: #f8fafc;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid #e9d5ff;
+  border: 1px solid #e5e7eb;
   transition: all 0.2s;
   cursor: pointer;
+  position: relative;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
 
   &:hover {
-    border-color: #a78bfa;
-    transform: scale(1.02);
+    border-color: #cbd5e1;
   }
+
+  &::after {
+    content: none;
+  }
+`
+
+const ProfileImageInput = styled.input`
+  display: none;
 `
 
 const ProfileImage = styled.img`
@@ -1584,7 +1739,7 @@ const ProfileImage = styled.img`
 `
 
 const ProfileImagePlaceholder = styled.div`
-  color: #a78bfa;
+  color: #9ca3af;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1596,6 +1751,69 @@ const ProfileImagePlaceholder = styled.div`
   }
 `
 
+const ProfileImageThumbnails = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 0.6rem;
+`
+
+const ProfileImageThumb = styled.button<{ $active?: boolean }>`
+  width: 96px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid ${(props) => (props.$active ? '#111827' : '#e5e7eb')};
+  background: #f9fafb;
+  position: relative;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  &:hover {
+    border-color: #9ca3af;
+  }
+`
+
+const ProfileImageAddThumb = styled.label`
+  width: 96px;
+  height: 72px;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+`
+
+const ThumbRemoveButton = styled.button`
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.9);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+`
+
+
 const ProfileImageActions = styled.div`
   display: flex;
   flex-direction: column;
@@ -1603,23 +1821,27 @@ const ProfileImageActions = styled.div`
 `
 
 const RemoveImageButton = styled.button`
-  padding: 0.625rem 1rem;
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  color: #dc2626;
-  border: 2px solid #fca5a5;
-  border-radius: 8px;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: #ffffff;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: 0.8rem;
+  font-weight: 600;
   transition: all 0.2s;
 
   &:hover {
-    background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
-    border-color: #dc2626;
+    background: #fee2e2;
+    border-color: #ef4444;
   }
 `
 
@@ -1696,6 +1918,103 @@ const DateRangeSeparator = styled.div`
   font-size: 1.2rem;
   color: #9ca3af;
   padding-top: 2rem;
+`
+
+const DateRangeInline = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+`
+
+const DateRangeInlineSeparator = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: #9ca3af;
+  padding-top: 1.65rem;
+`
+
+const DateRangeCurrent = styled.div`
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 0.875rem;
+`
+
+const ToggleRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+`
+
+const ToggleLabel = styled.span`
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+`
+
+const ToggleButton = styled.button<{ $active?: boolean }>`
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid ${({ $active }) => ($active ? '#4f46e5' : '#d1d5db')};
+  background: ${({ $active }) => ($active ? '#6366f1' : '#f3f4f6')};
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  transition: all 0.2s;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ $active }) => ($active ? '#4338ca' : '#9ca3af')};
+  }
+`
+
+const ToggleThumb = styled.span<{ $active?: boolean }>`
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  transform: ${({ $active }) => ($active ? 'translateX(20px)' : 'none')};
+  transition: transform 0.2s;
+`
+
+const InlineCheckRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+`
+
+const InlineCheckLabel = styled.span`
+  font-size: 0.85rem;
+  color: #6b7280;
+`
+
+const InlineCheckButton = styled.button<{ $checked?: boolean }>`
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid ${(props) => (props.$checked ? '#111827' : '#d1d5db')};
+  background: ${(props) => (props.$checked ? '#111827' : '#ffffff')};
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  svg {
+    font-size: 0.75rem;
+  }
 `
 
 const CustomCheckbox = styled.label`

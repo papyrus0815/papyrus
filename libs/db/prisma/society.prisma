@@ -140,6 +140,13 @@ model Job {
   category JobCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   persons  Person[]    @relation("JobToPerson")
 
+  // 분야별 경력 관계
+  militaryRanks      MilitaryCareer[]   @relation("MilitaryRank")
+  governmentPositions GovernmentCareer[] @relation("GovernmentPosition")
+  businessPositions  BusinessCareer[]   @relation("BusinessPosition")
+  academicPositions  AcademicCareer[]   @relation("AcademicPosition")
+  religiousPositions ReligiousCareer[]  @relation("ReligiousPosition")
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

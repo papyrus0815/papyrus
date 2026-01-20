@@ -400,18 +400,19 @@ const EraButton = styled.button<{ $isSelected: boolean }>`
   padding: 12px;
   font-size: 14px;
   font-weight: 700;
-  color: ${({ $isSelected }) => ($isSelected ? '#ffffff' : '#64748b')};
+  color: ${({ $isSelected }) => ($isSelected ? '#111827' : '#6b7280')};
   background: ${({ $isSelected }) =>
-    $isSelected ? '#8b5cf6' : '#ffffff'};
-  border: 2px solid ${({ $isSelected }) => ($isSelected ? '#8b5cf6' : '#e2e8f0')};
+    $isSelected ? '#f3f4f6' : '#ffffff'};
+  border: 1.5px solid
+    ${({ $isSelected }) => ($isSelected ? '#d1d5db' : '#e5e7eb')};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
     background: ${({ $isSelected }) =>
-      $isSelected ? '#7c3aed' : '#faf5ff'};
-    border-color: #8b5cf6;
+      $isSelected ? '#e5e7eb' : '#f9fafb'};
+    border-color: #d1d5db;
   }
 `
 
@@ -490,18 +491,18 @@ const MonthButton = styled.button<{ $isSelected: boolean }>`
   padding: 10px 6px;
   font-size: 13px;
   font-weight: 600;
-  color: ${({ $isSelected }) => ($isSelected ? '#ffffff' : '#64748b')};
+  color: ${({ $isSelected }) => ($isSelected ? '#111827' : '#6b7280')};
   background: ${({ $isSelected }) =>
-    $isSelected ? '#8b5cf6' : '#ffffff'};
-  border: 1.5px solid ${({ $isSelected }) => ($isSelected ? '#8b5cf6' : '#e2e8f0')};
+    $isSelected ? '#f3f4f6' : '#ffffff'};
+  border: 1px solid ${({ $isSelected }) => ($isSelected ? '#d1d5db' : '#e5e7eb')};
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
     background: ${({ $isSelected }) =>
-      $isSelected ? '#7c3aed' : '#faf5ff'};
-    border-color: #8b5cf6;
+      $isSelected ? '#e5e7eb' : '#f9fafb'};
+    border-color: #d1d5db;
   }
 `
 
@@ -585,11 +586,11 @@ const DayCell = styled.button<{
   border: none;
   border-radius: 8px;
   font-size: 14px;
-  font-weight: ${({ $isSelected }) => ($isSelected ? '700' : '500')};
+  font-weight: ${({ $isSelected }) => ($isSelected ? '600' : '500')};
   color: ${({ $isDisabled, $isSelected }) =>
-    $isDisabled ? '#e2e8f0' : $isSelected ? '#ffffff' : '#1e293b'};
+    $isDisabled ? '#e5e7eb' : $isSelected ? '#111827' : '#1f2937'};
   background: ${({ $isSelected }) =>
-    $isSelected ? '#8b5cf6' : 'transparent'};
+    $isSelected ? '#f3f4f6' : 'transparent'};
   cursor: ${({ $isDisabled }) => ($isDisabled ? 'not-allowed' : 'pointer')};
   transition: all 0.15s ease;
   position: relative;
@@ -606,13 +607,13 @@ const DayCell = styled.button<{
   &:hover:not(:disabled) {
     background: ${({ $isSelected, $isDisabled, $isToday }) =>
       $isSelected
-        ? '#7c3aed'
+        ? '#e5e7eb'
         : $isDisabled
           ? 'transparent'
           : $isToday
-            ? '#fde68a'
-            : '#faf5ff'};
-    transform: ${({ $isDisabled }) => ($isDisabled ? 'none' : 'scale(1.08)')};
+            ? '#fef3c7'
+            : '#f9fafb'};
+    transform: ${({ $isDisabled }) => ($isDisabled ? 'none' : 'none')};
   }
 
   &:active:not(:disabled) {

@@ -102,6 +102,58 @@ const projectCoordinates = (marker: EventMapMarker) => {
   return { top: `${top}%`, left: `${left}%` }
 }
 
+const formatPersonDate = (
+  person: any,
+  type: 'birth' | 'death',
+): string | null => {
+  if (!person) return null
+  const era = person[`${type}Era`]
+  const year = person[`${type}Year`]
+  const month = person[`${type}Month`]
+  const day = person[`${type}Day`]
+
+  if (year) {
+    let dateStr = `${era === 'BC' ? 'BC ' : ''}${year}`
+    if (month) dateStr += `.${String(month).padStart(2, '0')}`
+    if (day) dateStr += `.${String(day).padStart(2, '0')}`
+    return dateStr
+  }
+
+  const rawDate = person[`${type}Date`]
+  if (rawDate) {
+    const parsed = new Date(rawDate)
+    if (!Number.isNaN(parsed.getTime())) {
+      return String(parsed.getFullYear())
+    }
+    return String(rawDate)
+  }
+
+  return null
+}
+
+const formatLifeSpan = (person: any) => {
+  const birth = formatPersonDate(person, 'birth')
+  const death = formatPersonDate(person, 'death')
+  if (!birth && !death) return '정보 없음'
+  return `${birth ?? '미상'} ~ ${death ?? '미상'}`
+}
+
+const formatTenurePeriod = (startDate?: string, endDate?: string) => {
+  if (!startDate && !endDate) return '기간 미상'
+  const startYear = startDate ? new Date(startDate).getFullYear() : null
+  const endYear = endDate ? new Date(endDate).getFullYear() : null
+  return `${startYear ?? '미상'} ~ ${endYear ?? '현재'}`
+}
+
+const getCareerTimeline = (person: any) => {
+  const positions = person?.governmentPositions ?? []
+  return [...positions].sort((a, b) => {
+    const aTime = new Date(a.startDate || 0).getTime()
+    const bTime = new Date(b.startDate || 0).getTime()
+    return aTime - bTime
+  })
+}
+
 export const EventsCatalogPage: React.FC = () => {
   const navigate = useNavigate()
 
@@ -125,6 +177,7 @@ export const EventsCatalogPage: React.FC = () => {
     typeof FILTER_ALL | string
   >(FILTER_ALL)
   const [showFlatView, setShowFlatView] = useState(false)
+  const [showTenureMarkers, setShowTenureMarkers] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(
     new Set(),
@@ -1101,6 +1154,25 @@ export const EventsCatalogPage: React.FC = () => {
               <List.ToolbarMeta>
                 <span>{sortedEvents.length}건</span>
               </List.ToolbarMeta>
+              <List.ToolbarToggle>
+                <List.ToolbarToggleText>
+                  <List.ToolbarToggleLabel>
+                    정적 인물 타임라인
+                  </List.ToolbarToggleLabel>
+                  <List.ToolbarToggleDescription>
+                    사건 사이 인물 생몰/주요 경력 표시
+                  </List.ToolbarToggleDescription>
+                </List.ToolbarToggleText>
+                <Filter.Switch
+                  type="button"
+                  $active={showTenureMarkers}
+                  onClick={() => {
+                    setShowTenureMarkers(!showTenureMarkers)
+                  }}
+                >
+                  <Filter.SwitchThumb $active={showTenureMarkers} />
+                </Filter.Switch>
+              </List.ToolbarToggle>
               <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
                 <List.SortSelect
                   value={sortBy}
@@ -1206,19 +1278,28 @@ export const EventsCatalogPage: React.FC = () => {
 
                     // 이 사건이 그룹의 첫 번째 사건인지 확인
                     const isGroupStart =
+                      showTenureMarkers &&
                       tenureGroup &&
                       tenureGroup.eventIds[0] === node.id &&
                       depth === 0
 
                     // 이 사건이 그룹의 마지막 사건인지 확인
                     const isGroupEnd =
+                      showTenureMarkers &&
                       tenureGroup &&
                       tenureGroup.eventIds[tenureGroup.eventIds.length - 1] ===
                         node.id &&
                       depth === 0
 
                     // 이 사건이 집권 기간 그룹에 속하는지
-                    const isInTenureGroup = tenureGroup && depth === 0
+                    const isInTenureGroup =
+                      showTenureMarkers && tenureGroup && depth === 0
+
+                    const careerTimeline = tenureGroup
+                      ? getCareerTimeline(
+                          tenureGroup.headOfState.person,
+                        ).slice(0, 4)
+                      : []
 
                     return (
                       <React.Fragment key={node.id}>
@@ -1289,6 +1370,59 @@ export const EventsCatalogPage: React.FC = () => {
                                   </List.TenureGroupExpandButton>
                                 )}
                             </List.TenureGroupHeader>
+                            {showTenureMarkers && tenureGroup && (
+                              <List.TenureDetailsPanel>
+                                <List.TenureDetailsHeader>
+                                  <List.TenureSectionTitle>
+                                    주요 경력사항
+                                  </List.TenureSectionTitle>
+                                  <List.TenureSectionDescription>
+                                    인물의 주요 직책 타임라인을 표시합니다.
+                                  </List.TenureSectionDescription>
+                                </List.TenureDetailsHeader>
+                                {careerTimeline.length === 0 ? (
+                                  <List.TenureDetailRow>
+                                    <List.TenureDetailValue>
+                                      정보 없음
+                                    </List.TenureDetailValue>
+                                  </List.TenureDetailRow>
+                                ) : (
+                                  <List.TenureTimeline>
+                                    {careerTimeline.map((career) => {
+                                      const countryName =
+                                        career.position?.country?.name ||
+                                        career.position?.historicalCountry
+                                          ?.name ||
+                                        ''
+                                      return (
+                                        <List.TenureTimelineItem key={career.id}>
+                                          <List.TenureTimelinePeriod>
+                                            {formatTenurePeriod(
+                                              career.startDate,
+                                              career.endDate,
+                                            )}
+                                          </List.TenureTimelinePeriod>
+                                          <List.TenureTimelineTitle>
+                                            {career.position?.title || '직책 미정'}
+                                          </List.TenureTimelineTitle>
+                                          {countryName && (
+                                            <List.TenureTimelineMeta>
+                                              {countryName}
+                                            </List.TenureTimelineMeta>
+                                          )}
+                                        </List.TenureTimelineItem>
+                                      )
+                                    })}
+                                  </List.TenureTimeline>
+                                )}
+                                <List.TenureDetailRow>
+                                  <List.TenureDetailLabel>생몰</List.TenureDetailLabel>
+                                  <List.TenureDetailValue>
+                                    {formatLifeSpan(tenureGroup.headOfState.person)}
+                                  </List.TenureDetailValue>
+                                </List.TenureDetailRow>
+                              </List.TenureDetailsPanel>
+                            )}
                             {/* 다른 국가 원수 리스트 */}
                             {tenureGroup.otherHeadsOfState &&
                               tenureGroup.otherHeadsOfState.length > 0 &&
