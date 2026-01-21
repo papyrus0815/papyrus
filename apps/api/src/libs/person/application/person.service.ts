@@ -12,6 +12,11 @@ import {
   CreateBusinessCareerDto,
   CreateAcademicCareerDto,
   CreateAthleteCareerDto,
+  CreateReligiousCareerDto,
+  CreateArtistCareerDto,
+  CreateMediaCareerDto,
+  CreateLegalCareerDto,
+  CreateMedicalCareerDto,
   CreateEducationDto,
   CreatePersonAwardDto,
 } from '../presentation/dto'
@@ -124,35 +129,35 @@ export class PersonService {
   /**
    * 종교인 경력 추가
    */
-  async addReligiousCareer(dto: any) {
+  async addReligiousCareer(dto: CreateReligiousCareerDto) {
     return this.personRepository.addReligiousCareer(dto)
   }
 
   /**
    * 예술가 경력 추가
    */
-  async addArtistCareer(dto: any) {
+  async addArtistCareer(dto: CreateArtistCareerDto) {
     return this.personRepository.addArtistCareer(dto)
   }
 
   /**
    * 언론인 경력 추가
    */
-  async addMediaCareer(dto: any) {
+  async addMediaCareer(dto: CreateMediaCareerDto) {
     return this.personRepository.addMediaCareer(dto)
   }
 
   /**
    * 법조인 경력 추가
    */
-  async addLegalCareer(dto: any) {
+  async addLegalCareer(dto: CreateLegalCareerDto) {
     return this.personRepository.addLegalCareer(dto)
   }
 
   /**
    * 의료인 경력 추가
    */
-  async addMedicalCareer(dto: any) {
+  async addMedicalCareer(dto: CreateMedicalCareerDto) {
     return this.personRepository.addMedicalCareer(dto)
   }
 

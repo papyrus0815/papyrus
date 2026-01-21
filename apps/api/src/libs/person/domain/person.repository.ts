@@ -5,6 +5,11 @@ import {
   CreateBusinessCareerDto,
   CreateAcademicCareerDto,
   CreateAthleteCareerDto,
+  CreateReligiousCareerDto,
+  CreateArtistCareerDto,
+  CreateMediaCareerDto,
+  CreateLegalCareerDto,
+  CreateMedicalCareerDto,
   CreateEducationDto,
   CreatePersonAwardDto,
 } from '../presentation/dto'
@@ -96,11 +101,11 @@ export interface IPersonRepository {
   addBusinessCareer(dto: CreateBusinessCareerDto): Promise<any>
   addAcademicCareer(dto: CreateAcademicCareerDto): Promise<any>
   addAthleteCareer(dto: CreateAthleteCareerDto): Promise<any>
-  addReligiousCareer(dto: any): Promise<any>
-  addArtistCareer(dto: any): Promise<any>
-  addMediaCareer(dto: any): Promise<any>
-  addLegalCareer(dto: any): Promise<any>
-  addMedicalCareer(dto: any): Promise<any>
+  addReligiousCareer(dto: CreateReligiousCareerDto): Promise<any>
+  addArtistCareer(dto: CreateArtistCareerDto): Promise<any>
+  addMediaCareer(dto: CreateMediaCareerDto): Promise<any>
+  addLegalCareer(dto: CreateLegalCareerDto): Promise<any>
+  addMedicalCareer(dto: CreateMedicalCareerDto): Promise<any>
   addEducation(dto: CreateEducationDto): Promise<any>
   addAward(dto: CreatePersonAwardDto): Promise<any>
   findAllCareers(personId: string): Promise<any>

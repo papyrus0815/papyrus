@@ -6,6 +6,20 @@ import {
   CreatePersonData,
   UpdatePersonData,
 } from '../domain/person.repository'
+import {
+  CreateMilitaryCareerDto,
+  CreateGovernmentCareerDto,
+  CreateBusinessCareerDto,
+  CreateAcademicCareerDto,
+  CreateAthleteCareerDto,
+  CreateReligiousCareerDto,
+  CreateArtistCareerDto,
+  CreateMediaCareerDto,
+  CreateLegalCareerDto,
+  CreateMedicalCareerDto,
+  CreateEducationDto,
+  CreatePersonAwardDto,
+} from '../presentation/dto'
 
 /**
  * Prisma 기반 인물 Repository 구현체
@@ -376,7 +390,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 군인 경력 추가
    */
-  async addMilitaryCareer(dto: any) {
+  async addMilitaryCareer(dto: CreateMilitaryCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.militaryCareer.create({
@@ -397,7 +411,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 정치인/공무원 경력 추가
    */
-  async addGovernmentCareer(dto: any) {
+  async addGovernmentCareer(dto: CreateGovernmentCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.governmentCareer.create({
@@ -419,7 +433,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 기업인 경력 추가
    */
-  async addBusinessCareer(dto: any) {
+  async addBusinessCareer(dto: CreateBusinessCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.businessCareer.create({
@@ -440,7 +454,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 학자 경력 추가
    */
-  async addAcademicCareer(dto: any) {
+  async addAcademicCareer(dto: CreateAcademicCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.academicCareer.create({
@@ -461,7 +475,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 운동선수 경력 추가
    */
-  async addAthleteCareer(dto: any) {
+  async addAthleteCareer(dto: CreateAthleteCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.athleteCareer.create({
@@ -482,7 +496,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 종교인 경력 추가
    */
-  async addReligiousCareer(dto: any) {
+  async addReligiousCareer(dto: CreateReligiousCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.religiousCareer.create({
@@ -503,7 +517,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 예술가 경력 추가
    */
-  async addArtistCareer(dto: any) {
+  async addArtistCareer(dto: CreateArtistCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.artistCareer.create({
@@ -524,7 +538,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 언론인 경력 추가
    */
-  async addMediaCareer(dto: any) {
+  async addMediaCareer(dto: CreateMediaCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.mediaCareer.create({
@@ -545,7 +559,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 법조인 경력 추가
    */
-  async addLegalCareer(dto: any) {
+  async addLegalCareer(dto: CreateLegalCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.legalCareer.create({
@@ -566,7 +580,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 의료인 경력 추가
    */
-  async addMedicalCareer(dto: any) {
+  async addMedicalCareer(dto: CreateMedicalCareerDto) {
     const { images, ...careerData } = dto
     
     return this.prisma.medicalCareer.create({
@@ -587,7 +601,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 학력 추가
    */
-  async addEducation(dto: any) {
+  async addEducation(dto: CreateEducationDto) {
     const { images, ...educationData } = dto
     
     return this.prisma.personEducation.create({
@@ -607,7 +621,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 수상/훈장 추가
    */
-  async addAward(dto: any) {
+  async addAward(dto: CreatePersonAwardDto) {
     const { images, ...awardData } = dto
     
     return this.prisma.personAward.create({
