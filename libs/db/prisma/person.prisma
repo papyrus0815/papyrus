@@ -520,14 +520,12 @@ model GovernmentCareer {
   /// 비고
   notes String? @db.Text
 
-  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
-  images Json? @db.Json
-
   //--- 관계 필드
-  person       Person        @relation("PersonGovernmentCareers", fields: [personId], references: [id], onDelete: Cascade)
-  position     Job           @relation("GovernmentPosition", fields: [positionId], references: [id], onDelete: Restrict)
-  organization Organization? @relation("GovernmentOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
-  country      Country       @relation("GovernmentCountry", fields: [countryId], references: [id], onDelete: Restrict)
+  person       Person                  @relation("PersonGovernmentCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job                     @relation("GovernmentPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization?           @relation("GovernmentOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  country      Country                 @relation("GovernmentCountry", fields: [countryId], references: [id], onDelete: Restrict)
+  images       GovernmentCareerImage[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -581,13 +579,11 @@ model BusinessCareer {
   /// 비고
   notes String? @db.Text
 
-  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
-  images Json? @db.Json
-
   //--- 관계 필드
-  person       Person       @relation("PersonBusinessCareers", fields: [personId], references: [id], onDelete: Cascade)
-  position     Job          @relation("BusinessPosition", fields: [positionId], references: [id], onDelete: Restrict)
-  organization Organization @relation("BusinessOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  person       Person                @relation("PersonBusinessCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job                   @relation("BusinessPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization          @relation("BusinessOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images       BusinessCareerImage[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -641,13 +637,11 @@ model AcademicCareer {
   /// 비고
   notes String? @db.Text
 
-  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
-  images Json? @db.Json
-
   //--- 관계 필드
-  person       Person       @relation("PersonAcademicCareers", fields: [personId], references: [id], onDelete: Cascade)
-  position     Job          @relation("AcademicPosition", fields: [positionId], references: [id], onDelete: Restrict)
-  organization Organization @relation("AcademicOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  person       Person                @relation("PersonAcademicCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job                   @relation("AcademicPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization          @relation("AcademicOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images       AcademicCareerImage[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -704,15 +698,13 @@ model ReligiousCareer {
   /// 비고
   notes String? @db.Text
 
-  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
-  images Json? @db.Json
-
   //--- 관계 필드
-  person       Person                @relation("PersonReligiousCareers", fields: [personId], references: [id], onDelete: Cascade)
-  position     Job                   @relation("ReligiousPosition", fields: [positionId], references: [id], onDelete: Restrict)
-  organization Organization?         @relation("ReligiousOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
-  religion     Religion              @relation("ReligionCareer", fields: [religionId], references: [id], onDelete: Restrict)
-  denomination ReligionDenomination? @relation("DenominationCareer", fields: [denominationId], references: [id], onDelete: SetNull)
+  person       Person                 @relation("PersonReligiousCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job                    @relation("ReligiousPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization?          @relation("ReligiousOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  religion     Religion               @relation("ReligionCareer", fields: [religionId], references: [id], onDelete: Restrict)
+  denomination ReligionDenomination?  @relation("DenominationCareer", fields: [denominationId], references: [id], onDelete: SetNull)
+  images       ReligiousCareerImage[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -722,4 +714,377 @@ model ReligiousCareer {
   @@index([positionId], name: "idx_religious_career_positionId")
   @@index([religionId], name: "idx_religious_career_religionId")
   @@map("religious_career")
+}
+// 이 파일은 person.prisma 끝에 추가될 내용입니다
+
+// GovernmentCareer, BusinessCareer, AcademicCareer, ReligiousCareer의 JSON 제거는
+// 기존 파일에서 직접 수정 필요
+
+// ========================
+// GovernmentCareerImage
+// ========================
+model GovernmentCareerImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 경력 ID
+  careerId String @map("career_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명
+  description String? @db.Text
+
+  //--- 관계 필드
+  career GovernmentCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([careerId], name: "idx_government_career_image_careerId")
+  @@map("government_career_image")
+}
+
+// ========================
+// BusinessCareerImage
+// ========================
+model BusinessCareerImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 경력 ID
+  careerId String @map("career_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명
+  description String? @db.Text
+
+  //--- 관계 필드
+  career BusinessCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([careerId], name: "idx_business_career_image_careerId")
+  @@map("business_career_image")
+}
+
+// ========================
+// AcademicCareerImage
+// ========================
+model AcademicCareerImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 경력 ID
+  careerId String @map("career_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명
+  description String? @db.Text
+
+  //--- 관계 필드
+  career AcademicCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([careerId], name: "idx_academic_career_image_careerId")
+  @@map("academic_career_image")
+}
+
+// ========================
+// ReligiousCareerImage
+// ========================
+model ReligiousCareerImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 경력 ID
+  careerId String @map("career_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명
+  description String? @db.Text
+
+  //--- 관계 필드
+  career ReligiousCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([careerId], name: "idx_religious_career_image_careerId")
+  @@map("religious_career_image")
+}
+
+// ========================
+// ArtistCareer (예술가 경력 전용)
+// ========================
+model ArtistCareer {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 직책 정보 표시 여부
+  showPositionInfo Boolean @default(true) @map("show_position_info")
+
+  /// 직급 ID (화가, 조각가, 작곡가, 배우 등)
+  positionId String @map("position_id") @db.Char(36)
+
+  /// 직업 카테고리 ID
+  jobCategoryId String? @map("job_category_id") @db.Char(36)
+
+  /// 소속 조직 ID (극단, 화실, 오케스트라 등)
+  organizationId String? @map("organization_id") @db.Char(36)
+
+  /// 예술 장르 (유화, 조각, 클래식, 영화 등)
+  genre String? @db.VarChar(200)
+
+  /// 작품 활동 분야
+  artField String? @map("art_field") @db.VarChar(200)
+
+  /// 시작일
+  startDate DateTime? @map("start_date")
+
+  /// 종료일
+  endDate DateTime? @map("end_date")
+
+  /// 비고
+  notes String? @db.Text
+
+  //--- 관계 필드
+  person       Person              @relation("PersonArtistCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position     Job                 @relation("ArtistPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization Organization?       @relation("ArtistOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images       ArtistCareerImage[]
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_artist_career_personId")
+  @@index([positionId], name: "idx_artist_career_positionId")
+  @@map("artist_career")
+}
+
+model ArtistCareerImage {
+  id          String        @id @default(uuid()) @db.Char(36)
+  careerId    String        @map("career_id") @db.Char(36)
+  url         String        @db.VarChar(500)
+  description String?       @db.Text
+  career      ArtistCareer  @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@index([careerId])
+  @@map("artist_career_image")
+}
+
+// ========================
+// AthleteCareer (운동선수 경력)
+// ========================
+model AthleteCareer {
+  id               String               @id @default(uuid()) @db.Char(36)
+  personId         String               @map("person_id") @db.Char(36)
+  timelineTitle    String?              @map("timeline_title") @db.VarChar(200)
+  showPositionInfo Boolean              @default(true) @map("show_position_info")
+  positionId       String               @map("position_id") @db.Char(36)
+  jobCategoryId    String?              @map("job_category_id") @db.Char(36)
+  organizationId   String?              @map("organization_id") @db.Char(36)
+  sport            String?              @db.VarChar(100) // 축구, 야구, 육상 등
+  position         String?              @db.VarChar(100) // 포지션 (공격수, 투수 등)
+  jerseyNumber     Int?                 @map("jersey_number") // 등번호
+  startDate        DateTime?            @map("start_date")
+  endDate          DateTime?            @map("end_date")
+  notes            String?              @db.Text
+  person           Person               @relation("PersonAthleteCareers", fields: [personId], references: [id], onDelete: Cascade)
+  job              Job                  @relation("AthletePosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization     Organization?        @relation("AthleteOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images           AthleteCareerImage[]
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@index([personId])
+  @@map("athlete_career")
+}
+
+model AthleteCareerImage {
+  id          String         @id @default(uuid()) @db.Char(36)
+  careerId    String         @map("career_id") @db.Char(36)
+  url         String         @db.VarChar(500)
+  description String?        @db.Text
+  career      AthleteCareer  @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([careerId])
+  @@map("athlete_career_image")
+}
+
+// ========================
+// MediaCareer (언론인 경력)
+// ========================
+model MediaCareer {
+  id               String             @id @default(uuid()) @db.Char(36)
+  personId         String             @map("person_id") @db.Char(36)
+  timelineTitle    String?            @map("timeline_title") @db.VarChar(200)
+  showPositionInfo Boolean            @default(true) @map("show_position_info")
+  positionId       String             @map("position_id") @db.Char(36) // 기자, 앵커, 편집장 등
+  jobCategoryId    String?            @map("job_category_id") @db.Char(36)
+  organizationId   String             @map("organization_id") @db.Char(36) // 방송사, 신문사
+  department       String?            @db.VarChar(200) // 부서 (정치부, 경제부 등)
+  beat             String?            @db.VarChar(200) // 담당 분야
+  startDate        DateTime?          @map("start_date")
+  endDate          DateTime?          @map("end_date")
+  notes            String?            @db.Text
+  person           Person             @relation("PersonMediaCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position         Job                @relation("MediaPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization     Organization       @relation("MediaOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images           MediaCareerImage[]
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@index([personId])
+  @@map("media_career")
+}
+
+model MediaCareerImage {
+  id          String      @id @default(uuid()) @db.Char(36)
+  careerId    String      @map("career_id") @db.Char(36)
+  url         String      @db.VarChar(500)
+  description String?     @db.Text
+  career      MediaCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@index([careerId])
+  @@map("media_career_image")
+}
+
+// ========================
+// LegalCareer (법조인 경력)
+// ========================
+model LegalCareer {
+  id               String             @id @default(uuid()) @db.Char(36)
+  personId         String             @map("person_id") @db.Char(36)
+  timelineTitle    String?            @map("timeline_title") @db.VarChar(200)
+  showPositionInfo Boolean            @default(true) @map("show_position_info")
+  positionId       String             @map("position_id") @db.Char(36) // 판사, 검사, 변호사 등
+  jobCategoryId    String?            @map("job_category_id") @db.Char(36)
+  organizationId   String?            @map("organization_id") @db.Char(36) // 법원, 검찰청, 로펌
+  specialization   String?            @db.VarChar(200) // 전문 분야
+  startDate        DateTime?          @map("start_date")
+  endDate          DateTime?          @map("end_date")
+  notes            String?            @db.Text
+  person           Person             @relation("PersonLegalCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position         Job                @relation("LegalPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization     Organization?      @relation("LegalOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images           LegalCareerImage[]
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@index([personId])
+  @@map("legal_career")
+}
+
+model LegalCareerImage {
+  id          String      @id @default(uuid()) @db.Char(36)
+  careerId    String      @map("career_id") @db.Char(36)
+  url         String      @db.VarChar(500)
+  description String?     @db.Text
+  career      LegalCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@index([careerId])
+  @@map("legal_career_image")
+}
+
+// ========================
+// MedicalCareer (의료인 경력)
+// ========================
+model MedicalCareer {
+  id               String               @id @default(uuid()) @db.Char(36)
+  personId         String               @map("person_id") @db.Char(36)
+  timelineTitle    String?              @map("timeline_title") @db.VarChar(200)
+  showPositionInfo Boolean              @default(true) @map("show_position_info")
+  positionId       String               @map("position_id") @db.Char(36) // 의사, 간호사, 병원장 등
+  jobCategoryId    String?              @map("job_category_id") @db.Char(36)
+  organizationId   String               @map("organization_id") @db.Char(36) // 병원, 의료기관
+  department       String?              @db.VarChar(200) // 진료과 (내과, 외과 등)
+  specialization   String?              @db.VarChar(200) // 전문 분야
+  startDate        DateTime?            @map("start_date")
+  endDate          DateTime?            @map("end_date")
+  notes            String?              @db.Text
+  person           Person               @relation("PersonMedicalCareers", fields: [personId], references: [id], onDelete: Cascade)
+  position         Job                  @relation("MedicalPosition", fields: [positionId], references: [id], onDelete: Restrict)
+  organization     Organization         @relation("MedicalOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images           MedicalCareerImage[]
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@index([personId])
+  @@map("medical_career")
+}
+
+model MedicalCareerImage {
+  id          String         @id @default(uuid()) @db.Char(36)
+  careerId    String         @map("career_id") @db.Char(36)
+  url         String         @db.VarChar(500)
+  description String?        @db.Text
+  career      MedicalCareer  @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([careerId])
+  @@map("medical_career_image")
+}
+
+// ========================
+// PersonAward (수상/훈장)
+// ========================
+model PersonAward {
+  id              String            @id @default(uuid()) @db.Char(36)
+  personId        String            @map("person_id") @db.Char(36)
+  awardName       String            @map("award_name") @db.VarChar(200) // 노벨상, 올림픽 금메달 등
+  category        String?           @db.VarChar(100) // 물리학상, 100m 달리기 등
+  awardingBody    String?           @map("awarding_body") @db.VarChar(200) // 수여 기관
+  awardDate       DateTime?         @map("award_date")
+  description     String?           @db.Text
+  person          Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
+  images          PersonAwardImage[]
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  @@index([personId])
+  @@map("person_award")
+}
+
+model PersonAwardImage {
+  id          String       @id @default(uuid()) @db.Char(36)
+  awardId     String       @map("award_id") @db.Char(36)
+  url         String       @db.VarChar(500)
+  description String?      @db.Text
+  award       PersonAward  @relation(fields: [awardId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@index([awardId])
+  @@map("person_award_image")
 }

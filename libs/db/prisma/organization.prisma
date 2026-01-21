@@ -206,6 +206,11 @@ model Organization {
   businessCareers    BusinessCareer[]    @relation("BusinessOrganization")
   academicCareers    AcademicCareer[]    @relation("AcademicOrganization")
   religiousCareers   ReligiousCareer[]   @relation("ReligiousOrganization")
+  artistCareers      ArtistCareer[]      @relation("ArtistOrganization")
+  athleteCareers     AthleteCareer[]     @relation("AthleteOrganization")
+  mediaCareers       MediaCareer[]       @relation("MediaOrganization")
+  legalCareers       LegalCareer[]       @relation("LegalOrganization")
+  medicalCareers     MedicalCareer[]     @relation("MedicalOrganization")
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -330,12 +335,10 @@ model OrganizationPersonRole {
   /// 비고
   notes String? @db.Text
 
-  /// 이미지 URL들 (임명장, 재직 사진 등)
-  images Json? @db.Json
-
   //--- 관계
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  person       Person       @relation("OrganizationPersonRoles", fields: [personId], references: [id], onDelete: Cascade)
+  organization Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  person       Person                     @relation("OrganizationPersonRoles", fields: [personId], references: [id], onDelete: Cascade)
+  images       OrganizationPersonRoleImage[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -344,6 +347,33 @@ model OrganizationPersonRole {
   @@index([organizationId], name: "idx_org_person_orgId")
   @@index([personId], name: "idx_org_person_personId")
   @@map("organization_person_role")
+}
+
+// ========================
+// OrganizationPersonRoleImage
+// ========================
+model OrganizationPersonRoleImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 조직 역할 ID
+  roleId String @map("role_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명
+  description String? @db.Text
+
+  //--- 관계
+  role OrganizationPersonRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([roleId], name: "idx_org_person_role_image_roleId")
+  @@map("organization_person_role_image")
 }
 
 // ========================
