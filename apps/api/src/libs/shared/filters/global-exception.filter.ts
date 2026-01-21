@@ -164,6 +164,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error: {
         name: error.name,
         message: error.message,
+        details: error.details, // Validation 에러 상세 정보 추가
         stack: exception instanceof Error ? exception.stack : undefined,
       },
     }
