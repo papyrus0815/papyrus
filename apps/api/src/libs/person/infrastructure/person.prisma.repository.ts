@@ -1,10 +1,25 @@
 import { Injectable } from '@nestjs/common'
-import { Person } from '@prisma/client'
+import { 
+  Person,
+  MilitaryCareer,
+  GovernmentCareer,
+  BusinessCareer,
+  AcademicCareer,
+  AthleteCareer,
+  ReligiousCareer,
+  ArtistCareer,
+  MediaCareer,
+  LegalCareer,
+  MedicalCareer,
+  PersonEducation,
+  PersonAward,
+} from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import {
   IPersonRepository,
   CreatePersonData,
   UpdatePersonData,
+  AllCareersResponse,
 } from '../domain/person.repository'
 import {
   CreateMilitaryCareerDto,
@@ -640,8 +655,11 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 인물의 모든 경력 조회
    */
-  async findAllCareers(personId: string) {
-    return this.prisma.person.findUnique({
+  /**
+   * 인물의 모든 경력 조회
+   */
+  async findAllCareers(personId: string): Promise<AllCareersResponse> {
+    const person = await this.prisma.person.findUnique({
       where: { id: personId },
       include: {
         militaryCareers: {
@@ -730,5 +748,37 @@ export class PersonPrismaRepository implements IPersonRepository {
         }
       }
     })
+
+    if (!person) {
+      return {
+        military: [],
+        government: [],
+        business: [],
+        academic: [],
+        athlete: [],
+        religious: [],
+        artist: [],
+        media: [],
+        legal: [],
+        medical: [],
+        education: [],
+        awards: []
+      }
+    }
+
+    return {
+      military: person.militaryCareers,
+      government: person.governmentCareers,
+      business: person.businessCareers,
+      academic: person.academicCareers,
+      athlete: person.athleteCareers,
+      religious: person.religiousCareers,
+      artist: person.artistCareers,
+      media: person.mediaCareers,
+      legal: person.legalCareers,
+      medical: person.medicalCareers,
+      education: person.educations,
+      awards: person.awards
+    }
   }
 }

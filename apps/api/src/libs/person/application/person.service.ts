@@ -1,9 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { Person } from '@prisma/client'
+import { 
+  Person,
+  MilitaryCareer,
+  GovernmentCareer,
+  BusinessCareer,
+  AcademicCareer,
+  AthleteCareer,
+  ReligiousCareer,
+  ArtistCareer,
+  MediaCareer,
+  LegalCareer,
+  MedicalCareer,
+  PersonEducation,
+  PersonAward,
+} from '@prisma/client'
 import {
   IPersonRepository,
   CreatePersonData,
   UpdatePersonData,
+  AllCareersResponse,
 } from '../domain/person.repository'
 import { PersonPrismaRepository } from '../infrastructure/person.prisma.repository'
 import {
@@ -94,91 +109,91 @@ export class PersonService {
   /**
    * 군인 경력 추가
    */
-  async addMilitaryCareer(dto: CreateMilitaryCareerDto) {
+  async addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<MilitaryCareer> {
     return this.personRepository.addMilitaryCareer(dto)
   }
 
   /**
    * 정치인/공무원 경력 추가
    */
-  async addGovernmentCareer(dto: CreateGovernmentCareerDto) {
+  async addGovernmentCareer(dto: CreateGovernmentCareerDto): Promise<GovernmentCareer> {
     return this.personRepository.addGovernmentCareer(dto)
   }
 
   /**
    * 기업인 경력 추가
    */
-  async addBusinessCareer(dto: CreateBusinessCareerDto) {
+  async addBusinessCareer(dto: CreateBusinessCareerDto): Promise<BusinessCareer> {
     return this.personRepository.addBusinessCareer(dto)
   }
 
   /**
    * 학자 경력 추가
    */
-  async addAcademicCareer(dto: CreateAcademicCareerDto) {
+  async addAcademicCareer(dto: CreateAcademicCareerDto): Promise<AcademicCareer> {
     return this.personRepository.addAcademicCareer(dto)
   }
 
   /**
    * 운동선수 경력 추가
    */
-  async addAthleteCareer(dto: CreateAthleteCareerDto) {
+  async addAthleteCareer(dto: CreateAthleteCareerDto): Promise<AthleteCareer> {
     return this.personRepository.addAthleteCareer(dto)
   }
 
   /**
    * 종교인 경력 추가
    */
-  async addReligiousCareer(dto: CreateReligiousCareerDto) {
+  async addReligiousCareer(dto: CreateReligiousCareerDto): Promise<ReligiousCareer> {
     return this.personRepository.addReligiousCareer(dto)
   }
 
   /**
    * 예술가 경력 추가
    */
-  async addArtistCareer(dto: CreateArtistCareerDto) {
+  async addArtistCareer(dto: CreateArtistCareerDto): Promise<ArtistCareer> {
     return this.personRepository.addArtistCareer(dto)
   }
 
   /**
    * 언론인 경력 추가
    */
-  async addMediaCareer(dto: CreateMediaCareerDto) {
+  async addMediaCareer(dto: CreateMediaCareerDto): Promise<MediaCareer> {
     return this.personRepository.addMediaCareer(dto)
   }
 
   /**
    * 법조인 경력 추가
    */
-  async addLegalCareer(dto: CreateLegalCareerDto) {
+  async addLegalCareer(dto: CreateLegalCareerDto): Promise<LegalCareer> {
     return this.personRepository.addLegalCareer(dto)
   }
 
   /**
    * 의료인 경력 추가
    */
-  async addMedicalCareer(dto: CreateMedicalCareerDto) {
+  async addMedicalCareer(dto: CreateMedicalCareerDto): Promise<MedicalCareer> {
     return this.personRepository.addMedicalCareer(dto)
   }
 
   /**
    * 학력 추가
    */
-  async addEducation(dto: CreateEducationDto) {
+  async addEducation(dto: CreateEducationDto): Promise<PersonEducation> {
     return this.personRepository.addEducation(dto)
   }
 
   /**
    * 수상/훈장 추가
    */
-  async addAward(dto: CreatePersonAwardDto) {
+  async addAward(dto: CreatePersonAwardDto): Promise<PersonAward> {
     return this.personRepository.addAward(dto)
   }
 
   /**
    * 인물의 모든 경력 조회
    */
-  async findAllCareers(personId: string) {
+  async findAllCareers(personId: string): Promise<AllCareersResponse> {
     await this.findById(personId) // 존재 여부 확인
     return this.personRepository.findAllCareers(personId)
   }

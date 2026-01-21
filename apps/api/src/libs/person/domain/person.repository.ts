@@ -1,4 +1,18 @@
-import { Person } from '@prisma/client'
+import { 
+  Person,
+  MilitaryCareer,
+  GovernmentCareer,
+  BusinessCareer,
+  AcademicCareer,
+  AthleteCareer,
+  ReligiousCareer,
+  ArtistCareer,
+  MediaCareer,
+  LegalCareer,
+  MedicalCareer,
+  PersonEducation,
+  PersonAward,
+} from '@prisma/client'
 import {
   CreateMilitaryCareerDto,
   CreateGovernmentCareerDto,
@@ -67,6 +81,24 @@ export interface UpdatePersonData {
 }
 
 /**
+ * 모든 경력 조회 응답 타입
+ */
+export interface AllCareersResponse {
+  military: MilitaryCareer[]
+  government: GovernmentCareer[]
+  business: BusinessCareer[]
+  academic: AcademicCareer[]
+  athlete: AthleteCareer[]
+  religious: ReligiousCareer[]
+  artist: ArtistCareer[]
+  media: MediaCareer[]
+  legal: LegalCareer[]
+  medical: MedicalCareer[]
+  education: PersonEducation[]
+  awards: PersonAward[]
+}
+
+/**
  * 인물 Repository 인터페이스
  */
 export interface IPersonRepository {
@@ -96,17 +128,17 @@ export interface IPersonRepository {
   delete(id: string): Promise<void>
 
   // Career 관리
-  addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<any>
-  addGovernmentCareer(dto: CreateGovernmentCareerDto): Promise<any>
-  addBusinessCareer(dto: CreateBusinessCareerDto): Promise<any>
-  addAcademicCareer(dto: CreateAcademicCareerDto): Promise<any>
-  addAthleteCareer(dto: CreateAthleteCareerDto): Promise<any>
-  addReligiousCareer(dto: CreateReligiousCareerDto): Promise<any>
-  addArtistCareer(dto: CreateArtistCareerDto): Promise<any>
-  addMediaCareer(dto: CreateMediaCareerDto): Promise<any>
-  addLegalCareer(dto: CreateLegalCareerDto): Promise<any>
-  addMedicalCareer(dto: CreateMedicalCareerDto): Promise<any>
-  addEducation(dto: CreateEducationDto): Promise<any>
-  addAward(dto: CreatePersonAwardDto): Promise<any>
-  findAllCareers(personId: string): Promise<any>
+  addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<MilitaryCareer>
+  addGovernmentCareer(dto: CreateGovernmentCareerDto): Promise<GovernmentCareer>
+  addBusinessCareer(dto: CreateBusinessCareerDto): Promise<BusinessCareer>
+  addAcademicCareer(dto: CreateAcademicCareerDto): Promise<AcademicCareer>
+  addAthleteCareer(dto: CreateAthleteCareerDto): Promise<AthleteCareer>
+  addReligiousCareer(dto: CreateReligiousCareerDto): Promise<ReligiousCareer>
+  addArtistCareer(dto: CreateArtistCareerDto): Promise<ArtistCareer>
+  addMediaCareer(dto: CreateMediaCareerDto): Promise<MediaCareer>
+  addLegalCareer(dto: CreateLegalCareerDto): Promise<LegalCareer>
+  addMedicalCareer(dto: CreateMedicalCareerDto): Promise<MedicalCareer>
+  addEducation(dto: CreateEducationDto): Promise<PersonEducation>
+  addAward(dto: CreatePersonAwardDto): Promise<PersonAward>
+  findAllCareers(personId: string): Promise<AllCareersResponse>
 }
