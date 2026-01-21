@@ -59,6 +59,12 @@ enum OrganizationType {
   RELIGIOUS_ORG
   /// 업계/상공 단체
   BUSINESS_ASSOCIATION
+  /// 교육기관 (대학, 사관학교, 연구소 등)
+  EDUCATION
+  /// 군사 교육기관 (육사, 공사, 해사, 황포군관학교 등)
+  MILITARY_ACADEMY
+  /// 기업/회사
+  COMPANY
   /// 기타
   OTHER
 }
