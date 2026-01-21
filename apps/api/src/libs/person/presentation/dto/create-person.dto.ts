@@ -10,6 +10,25 @@ export enum Era {
 }
 
 /**
+ * 날짜 정보 DTO
+ */
+export class DateInfoDto {
+  @IsEnum(Era)
+  era!: Era
+
+  @IsNumber()
+  year!: number
+
+  @IsOptional()
+  @IsNumber()
+  month?: number
+
+  @IsOptional()
+  @IsNumber()
+  day?: number
+}
+
+/**
  * 별명 DTO
  */
 export class NicknameDto {
@@ -86,7 +105,15 @@ export class CreatePersonDto {
   nicknames?: NicknameDto[]
 
   /**
-   * 출생 기원 (BC/AD)
+   * 출생 정보 (객체 형식)
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  birth?: DateInfoDto
+
+  /**
+   * 출생 기원 (BC/AD) - 단순 필드
    * @example "AD"
    */
   @IsOptional()
@@ -94,7 +121,7 @@ export class CreatePersonDto {
   birthEra?: Era
 
   /**
-   * 출생일 (선택)
+   * 출생일 (선택) - ISO 날짜 문자열
    * @example "1397-05-15"
    */
   @IsOptional()
@@ -109,7 +136,15 @@ export class CreatePersonDto {
   isBirthDateUnknown?: boolean
 
   /**
-   * 사망 기원 (BC/AD)
+   * 사망 정보 (객체 형식)
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  death?: DateInfoDto
+
+  /**
+   * 사망 기원 (BC/AD) - 단순 필드
    * @example "AD"
    */
   @IsOptional()
@@ -117,7 +152,7 @@ export class CreatePersonDto {
   deathEra?: Era
 
   /**
-   * 사망일 (선택)
+   * 사망일 (선택) - ISO 날짜 문자열
    * @example "1450-02-17"
    */
   @IsOptional()

@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator'
-import { Era } from './create-person.dto'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested } from 'class-validator'
+import { Type } from 'class-transformer'
+import { Era, DateInfoDto } from './create-person.dto'
 
 /**
  * 인물 수정 DTO
@@ -13,11 +14,33 @@ export class UpdatePersonDto {
   name?: string
 
   /**
+   * 중간 이름 (선택)
+   */
+  @IsOptional()
+  @IsString()
+  middleName?: string
+
+  /**
    * 성 (선택)
    */
   @IsOptional()
   @IsString()
   surname?: string
+
+  /**
+   * 원어 이름 (선택)
+   */
+  @IsOptional()
+  @IsString()
+  originalName?: string
+
+  /**
+   * 출생 정보 (객체 형식)
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  birth?: DateInfoDto
 
   /**
    * 출생 기원 (BC/AD)
@@ -34,6 +57,21 @@ export class UpdatePersonDto {
   birthDate?: string
 
   /**
+   * 출생일 미상 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  isBirthDateUnknown?: boolean
+
+  /**
+   * 사망 정보 (객체 형식)
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  death?: DateInfoDto
+
+  /**
    * 사망 기원 (BC/AD)
    */
   @IsOptional()
@@ -46,6 +84,20 @@ export class UpdatePersonDto {
   @IsOptional()
   @IsDateString()
   deathDate?: string
+
+  /**
+   * 사망일 미상 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  isDeathDateUnknown?: boolean
+
+  /**
+   * 생존 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  isAlive?: boolean
 
   /**
    * 성별 (선택)
@@ -67,6 +119,13 @@ export class UpdatePersonDto {
   @IsOptional()
   @IsString()
   profileImageUrl?: string
+
+  /**
+   * 이벤트 목록에 생몰년 표시 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  showLifespanOnEventList?: boolean
 
   /**
    * 가문 ID (선택)

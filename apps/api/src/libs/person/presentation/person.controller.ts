@@ -243,14 +243,48 @@ export class PersonController {
    */
   @Post()
   async create(@Body() dto: CreatePersonDto): Promise<PersonResponseDto> {
+    // birth/death 객체에서 날짜 문자열로 변환
+    let birthDate: Date | undefined
+    let deathDate: Date | undefined
+
+    if (dto.birth) {
+      // birth 객체가 있으면 이를 사용
+      const { era, year, month, day } = dto.birth
+      const yearStr = era === 'BC' ? `-${year}` : `${year}`
+      const monthStr = (month || 1).toString().padStart(2, '0')
+      const dayStr = (day || 1).toString().padStart(2, '0')
+      birthDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+    } else if (dto.birthDate) {
+      // birthDate 문자열이 있으면 사용
+      birthDate = new Date(dto.birthDate)
+    }
+
+    if (dto.death) {
+      // death 객체가 있으면 이를 사용
+      const { era, year, month, day } = dto.death
+      const yearStr = era === 'BC' ? `-${year}` : `${year}`
+      const monthStr = (month || 1).toString().padStart(2, '0')
+      const dayStr = (day || 1).toString().padStart(2, '0')
+      deathDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+    } else if (dto.deathDate) {
+      // deathDate 문자열이 있으면 사용
+      deathDate = new Date(dto.deathDate)
+    }
+
     const person = await this.personService.create({
       name: dto.name,
+      middleName: dto.middleName,
       surname: dto.surname,
-      birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
-      deathDate: dto.deathDate ? new Date(dto.deathDate) : undefined,
+      originalName: dto.originalName,
+      birthDate,
+      deathDate,
+      isBirthDateUnknown: dto.isBirthDateUnknown,
+      isDeathDateUnknown: dto.isDeathDateUnknown,
+      isAlive: dto.isAlive,
       gender: dto.gender,
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
+      showLifespanOnEventList: dto.showLifespanOnEventList,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,
@@ -295,14 +329,44 @@ export class PersonController {
     @Param('id') id: string,
     @Body() dto: UpdatePersonDto,
   ): Promise<PersonResponseDto> {
+    // birth/death 객체에서 날짜 문자열로 변환
+    let birthDate: Date | undefined
+    let deathDate: Date | undefined
+
+    if (dto.birth) {
+      const { era, year, month, day } = dto.birth
+      const yearStr = era === 'BC' ? `-${year}` : `${year}`
+      const monthStr = (month || 1).toString().padStart(2, '0')
+      const dayStr = (day || 1).toString().padStart(2, '0')
+      birthDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+    } else if (dto.birthDate) {
+      birthDate = new Date(dto.birthDate)
+    }
+
+    if (dto.death) {
+      const { era, year, month, day } = dto.death
+      const yearStr = era === 'BC' ? `-${year}` : `${year}`
+      const monthStr = (month || 1).toString().padStart(2, '0')
+      const dayStr = (day || 1).toString().padStart(2, '0')
+      deathDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+    } else if (dto.deathDate) {
+      deathDate = new Date(dto.deathDate)
+    }
+
     const person = await this.personService.update(id, {
       name: dto.name,
+      middleName: dto.middleName,
       surname: dto.surname,
-      birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
-      deathDate: dto.deathDate ? new Date(dto.deathDate) : undefined,
+      originalName: dto.originalName,
+      birthDate,
+      deathDate,
+      isBirthDateUnknown: dto.isBirthDateUnknown,
+      isDeathDateUnknown: dto.isDeathDateUnknown,
+      isAlive: dto.isAlive,
       gender: dto.gender,
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
+      showLifespanOnEventList: dto.showLifespanOnEventList,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,
