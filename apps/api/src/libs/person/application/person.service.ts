@@ -122,6 +122,41 @@ export class PersonService {
   }
 
   /**
+   * 종교인 경력 추가
+   */
+  async addReligiousCareer(dto: any) {
+    return this.personRepository.addReligiousCareer(dto)
+  }
+
+  /**
+   * 예술가 경력 추가
+   */
+  async addArtistCareer(dto: any) {
+    return this.personRepository.addArtistCareer(dto)
+  }
+
+  /**
+   * 언론인 경력 추가
+   */
+  async addMediaCareer(dto: any) {
+    return this.personRepository.addMediaCareer(dto)
+  }
+
+  /**
+   * 법조인 경력 추가
+   */
+  async addLegalCareer(dto: any) {
+    return this.personRepository.addLegalCareer(dto)
+  }
+
+  /**
+   * 의료인 경력 추가
+   */
+  async addMedicalCareer(dto: any) {
+    return this.personRepository.addMedicalCareer(dto)
+  }
+
+  /**
    * 학력 추가
    */
   async addEducation(dto: CreateEducationDto) {

@@ -1680,30 +1680,115 @@ export default function PersonCreatePage() {
               description: img.description || undefined
             }))
 
-            // 직업 카테고리 기반으로 Career 타입 판별
-            // 간단하게 jobCategoryId 또는 jobId의 이름으로 판별
-            // 실제로는 더 정확한 로직이 필요할 수 있음
-            const careerData = {
+            // 직업 카테고리 이름 가져오기
+            const jobCategory = jobCategories.find(c => c.id === career.jobCategoryId)
+            const parentCategory = jobCategory?.parentId 
+              ? jobCategories.find(c => c.id === jobCategory.parentId)
+              : null
+            const topLevelCategoryName = parentCategory?.name || jobCategory?.name || ''
+
+            // Career 타입 판별 및 API 호출
+            const baseCareerData = {
               personId,
               timelineTitle: career.timelineTitle || undefined,
               showPositionInfo: career.showPositionInfo,
               positionId: career.jobId, // 직급/직책 ID
               jobCategoryId: career.jobCategoryId || undefined,
               organizationId: career.organizationId || undefined,
-              countryId: career.countryId || undefined,
-              title: career.title || undefined,
-              termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
               startDate,
               endDate,
               notes: career.note || undefined,
               images: images.length > 0 ? images : undefined
             }
 
-            // 기본적으로 Government Career로 저장 (가장 일반적)
-            // TODO: 실제로는 jobCategoryId를 기반으로 적절한 API를 호출해야 함
-            await personCareerApi.addGovernmentCareer(careerData)
+            // 카테고리 이름에 따라 적절한 API 호출
+            if (topLevelCategoryName.includes('군사')) {
+              // 군인 경력
+              await personCareerApi.addMilitaryCareer({
+                ...baseCareerData,
+                branch: undefined, // TODO: UI에서 군종 선택 추가
+                position: career.title || undefined,
+                termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
+              })
+            } else if (topLevelCategoryName.includes('정치') || topLevelCategoryName.includes('행정')) {
+              // 정치인/공무원 경력
+              await personCareerApi.addGovernmentCareer({
+                ...baseCareerData,
+                countryId: career.countryId || undefined,
+                department: undefined,
+                role: career.title || undefined,
+                termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
+              })
+            } else if (topLevelCategoryName.includes('경제') || topLevelCategoryName.includes('산업')) {
+              // 기업인 경력
+              await personCareerApi.addBusinessCareer({
+                ...baseCareerData,
+                title: career.title || undefined,
+                level: undefined,
+              })
+            } else if (topLevelCategoryName.includes('학문') || topLevelCategoryName.includes('교육')) {
+              // 학자 경력
+              await personCareerApi.addAcademicCareer({
+                ...baseCareerData,
+                department: undefined,
+                researchField: undefined,
+              })
+            } else if (topLevelCategoryName.includes('스포츠')) {
+              // 운동선수 경력
+              await personCareerApi.addAthleteCareer({
+                ...baseCareerData,
+                sport: undefined,
+                position: career.title || undefined,
+                jerseyNumber: undefined,
+              })
+            } else if (topLevelCategoryName.includes('종교')) {
+              // 종교인 경력
+              await personCareerApi.addReligiousCareer({
+                ...baseCareerData,
+                religion: undefined,
+                denomination: undefined,
+                rank: career.title || undefined,
+              })
+            } else if (topLevelCategoryName.includes('예술') || topLevelCategoryName.includes('문화')) {
+              // 예술가 경력
+              await personCareerApi.addArtistCareer({
+                ...baseCareerData,
+                artForm: undefined,
+                style: undefined,
+              })
+            } else if (topLevelCategoryName.includes('언론') || topLevelCategoryName.includes('출판')) {
+              // 언론인 경력
+              await personCareerApi.addMediaCareer({
+                ...baseCareerData,
+                mediaType: undefined,
+                role: career.title || undefined,
+              })
+            } else if (topLevelCategoryName.includes('법조')) {
+              // 법조인 경력
+              await personCareerApi.addLegalCareer({
+                ...baseCareerData,
+                specialization: undefined,
+                courtLevel: undefined,
+              })
+            } else if (topLevelCategoryName.includes('의료')) {
+              // 의료인 경력
+              await personCareerApi.addMedicalCareer({
+                ...baseCareerData,
+                specialization: undefined,
+                department: undefined,
+              })
+            } else {
+              // 기타 - Government Career로 처리
+              await personCareerApi.addGovernmentCareer({
+                ...baseCareerData,
+                countryId: career.countryId || undefined,
+                department: undefined,
+                role: career.title || undefined,
+                termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
+              })
+            }
             
-            console.log(`Career ${i + 1}/${careers.length} saved`)
+            console.log(`Career ${i + 1}/${careers.length} saved as ${topLevelCategoryName}`)
           } catch (careerError) {
             console.error(`Career ${i + 1} save failed:`, careerError)
             // Career 저장 실패는 경고만 표시하고 계속 진행

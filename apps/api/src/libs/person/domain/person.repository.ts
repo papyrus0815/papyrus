@@ -96,6 +96,11 @@ export interface IPersonRepository {
   addBusinessCareer(dto: CreateBusinessCareerDto): Promise<any>
   addAcademicCareer(dto: CreateAcademicCareerDto): Promise<any>
   addAthleteCareer(dto: CreateAthleteCareerDto): Promise<any>
+  addReligiousCareer(dto: any): Promise<any>
+  addArtistCareer(dto: any): Promise<any>
+  addMediaCareer(dto: any): Promise<any>
+  addLegalCareer(dto: any): Promise<any>
+  addMedicalCareer(dto: any): Promise<any>
   addEducation(dto: CreateEducationDto): Promise<any>
   addAward(dto: CreatePersonAwardDto): Promise<any>
   findAllCareers(personId: string): Promise<any>

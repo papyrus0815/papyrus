@@ -21,6 +21,11 @@ import {
   CreateBusinessCareerDto,
   CreateAcademicCareerDto,
   CreateAthleteCareerDto,
+  CreateReligiousCareerDto,
+  CreateArtistCareerDto,
+  CreateMediaCareerDto,
+  CreateLegalCareerDto,
+  CreateMedicalCareerDto,
   CreateEducationDto,
   CreatePersonAwardDto,
 } from './dto'
@@ -393,6 +398,46 @@ export class PersonController {
   @Post('careers/athlete')
   async addAthleteCareer(@Body() dto: CreateAthleteCareerDto) {
     return this.personService.addAthleteCareer(dto)
+  }
+
+  /**
+   * 종교인 경력 추가
+   */
+  @Post('careers/religious')
+  async addReligiousCareer(@Body() dto: CreateReligiousCareerDto) {
+    return this.personService.addReligiousCareer(dto)
+  }
+
+  /**
+   * 예술가 경력 추가
+   */
+  @Post('careers/artist')
+  async addArtistCareer(@Body() dto: CreateArtistCareerDto) {
+    return this.personService.addArtistCareer(dto)
+  }
+
+  /**
+   * 언론인 경력 추가
+   */
+  @Post('careers/media')
+  async addMediaCareer(@Body() dto: CreateMediaCareerDto) {
+    return this.personService.addMediaCareer(dto)
+  }
+
+  /**
+   * 법조인 경력 추가
+   */
+  @Post('careers/legal')
+  async addLegalCareer(@Body() dto: CreateLegalCareerDto) {
+    return this.personService.addLegalCareer(dto)
+  }
+
+  /**
+   * 의료인 경력 추가
+   */
+  @Post('careers/medical')
+  async addMedicalCareer(@Body() dto: CreateMedicalCareerDto) {
+    return this.personService.addMedicalCareer(dto)
   }
 
   /**

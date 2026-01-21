@@ -480,6 +480,111 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 종교인 경력 추가
+   */
+  async addReligiousCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.religiousCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 예술가 경력 추가
+   */
+  async addArtistCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.artistCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 언론인 경력 추가
+   */
+  async addMediaCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.mediaCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 법조인 경력 추가
+   */
+  async addLegalCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.legalCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 의료인 경력 추가
+   */
+  async addMedicalCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.medicalCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
    * 학력 추가
    */
   async addEducation(dto: any) {

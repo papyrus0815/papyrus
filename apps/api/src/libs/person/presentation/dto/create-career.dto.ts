@@ -291,6 +291,275 @@ export class CreateAthleteCareerDto {
 }
 
 /**
+ * 종교인 경력 생성 DTO
+ */
+export class CreateReligiousCareerDto {
+  @IsString()
+  personId!: string
+
+  @IsOptional()
+  @IsString()
+  timelineTitle?: string
+
+  @IsOptional()
+  @IsBoolean()
+  showPositionInfo?: boolean
+
+  @IsString()
+  positionId!: string // 직급 ID (성직자, 수도자 등)
+
+  @IsOptional()
+  @IsString()
+  jobCategoryId?: string
+
+  @IsOptional()
+  @IsString()
+  organizationId?: string // 종교 조직 ID
+
+  @IsOptional()
+  @IsString()
+  religion?: string // 종교
+
+  @IsOptional()
+  @IsString()
+  denomination?: string // 종파
+
+  @IsOptional()
+  @IsString()
+  rank?: string // 직급/지위
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
+
+  @IsOptional()
+  @IsString()
+  notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CareerImageDto)
+  images?: CareerImageDto[]
+}
+
+/**
+ * 예술가 경력 생성 DTO
+ */
+export class CreateArtistCareerDto {
+  @IsString()
+  personId!: string
+
+  @IsOptional()
+  @IsString()
+  timelineTitle?: string
+
+  @IsOptional()
+  @IsBoolean()
+  showPositionInfo?: boolean
+
+  @IsString()
+  positionId!: string // 직급 ID (화가, 조각가 등)
+
+  @IsOptional()
+  @IsString()
+  jobCategoryId?: string
+
+  @IsOptional()
+  @IsString()
+  organizationId?: string
+
+  @IsOptional()
+  @IsString()
+  artForm?: string // 예술 분야 (회화, 조각 등)
+
+  @IsOptional()
+  @IsString()
+  style?: string // 스타일/장르
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
+
+  @IsOptional()
+  @IsString()
+  notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CareerImageDto)
+  images?: CareerImageDto[]
+}
+
+/**
+ * 언론인 경력 생성 DTO
+ */
+export class CreateMediaCareerDto {
+  @IsString()
+  personId!: string
+
+  @IsOptional()
+  @IsString()
+  timelineTitle?: string
+
+  @IsOptional()
+  @IsBoolean()
+  showPositionInfo?: boolean
+
+  @IsString()
+  positionId!: string // 직급 ID (기자, 앵커 등)
+
+  @IsOptional()
+  @IsString()
+  jobCategoryId?: string
+
+  @IsOptional()
+  @IsString()
+  organizationId?: string // 언론사 ID
+
+  @IsOptional()
+  @IsString()
+  mediaType?: string // 매체 유형 (신문, 방송 등)
+
+  @IsOptional()
+  @IsString()
+  role?: string // 역할
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
+
+  @IsOptional()
+  @IsString()
+  notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CareerImageDto)
+  images?: CareerImageDto[]
+}
+
+/**
+ * 법조인 경력 생성 DTO
+ */
+export class CreateLegalCareerDto {
+  @IsString()
+  personId!: string
+
+  @IsOptional()
+  @IsString()
+  timelineTitle?: string
+
+  @IsOptional()
+  @IsBoolean()
+  showPositionInfo?: boolean
+
+  @IsString()
+  positionId!: string // 직급 ID (판사, 검사, 변호사)
+
+  @IsOptional()
+  @IsString()
+  jobCategoryId?: string
+
+  @IsOptional()
+  @IsString()
+  organizationId?: string // 법원/검찰청/로펌 ID
+
+  @IsOptional()
+  @IsString()
+  specialization?: string // 전문 분야
+
+  @IsOptional()
+  @IsString()
+  courtLevel?: string // 법원 등급 (대법원, 고등법원 등)
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
+
+  @IsOptional()
+  @IsString()
+  notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CareerImageDto)
+  images?: CareerImageDto[]
+}
+
+/**
+ * 의료인 경력 생성 DTO
+ */
+export class CreateMedicalCareerDto {
+  @IsString()
+  personId!: string
+
+  @IsOptional()
+  @IsString()
+  timelineTitle?: string
+
+  @IsOptional()
+  @IsBoolean()
+  showPositionInfo?: boolean
+
+  @IsString()
+  positionId!: string // 직급 ID (의사, 간호사 등)
+
+  @IsOptional()
+  @IsString()
+  jobCategoryId?: string
+
+  @IsOptional()
+  @IsString()
+  organizationId?: string // 병원 ID
+
+  @IsOptional()
+  @IsString()
+  specialization?: string // 전문 분야
+
+  @IsOptional()
+  @IsString()
+  department?: string // 진료과
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
+
+  @IsOptional()
+  @IsString()
+  notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CareerImageDto)
+  images?: CareerImageDto[]
+}
+
+/**
  * 학력 생성 DTO
  */
 export class CreateEducationDto {

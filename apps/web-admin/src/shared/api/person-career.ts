@@ -94,18 +94,90 @@ export interface CreateAcademicCareerDto {
 }
 
 /**
- * 운동선수 경력 생성 DTO
+ * 종교인 경력 생성 DTO
  */
-export interface CreateAthleteCareerDto {
+export interface CreateReligiousCareerDto {
   personId: string
   timelineTitle?: string
   showPositionInfo?: boolean
-  positionId: string // 직급 ID (축구선수, 야구선수 등)
+  positionId: string // 직급 ID (성직자, 수도자 등)
   jobCategoryId?: string
-  organizationId?: string // 팀 ID
-  sport?: string // 종목 (축구, 야구 등)
-  position?: string // 포지션 (공격수, 투수 등)
-  jerseyNumber?: number // 등번호
+  organizationId?: string // 종교 조직 ID
+  religion?: string // 종교
+  denomination?: string // 종파
+  rank?: string // 직급/지위
+  startDate?: string
+  endDate?: string
+  notes?: string
+  images?: CareerImageDto[]
+}
+
+/**
+ * 예술가 경력 생성 DTO
+ */
+export interface CreateArtistCareerDto {
+  personId: string
+  timelineTitle?: string
+  showPositionInfo?: boolean
+  positionId: string // 직급 ID (화가, 조각가 등)
+  jobCategoryId?: string
+  organizationId?: string
+  artForm?: string // 예술 분야 (회화, 조각 등)
+  style?: string // 스타일/장르
+  startDate?: string
+  endDate?: string
+  notes?: string
+  images?: CareerImageDto[]
+}
+
+/**
+ * 언론인 경력 생성 DTO
+ */
+export interface CreateMediaCareerDto {
+  personId: string
+  timelineTitle?: string
+  showPositionInfo?: boolean
+  positionId: string // 직급 ID (기자, 앵커 등)
+  jobCategoryId?: string
+  organizationId?: string // 언론사 ID
+  mediaType?: string // 매체 유형 (신문, 방송 등)
+  role?: string // 역할
+  startDate?: string
+  endDate?: string
+  notes?: string
+  images?: CareerImageDto[]
+}
+
+/**
+ * 법조인 경력 생성 DTO
+ */
+export interface CreateLegalCareerDto {
+  personId: string
+  timelineTitle?: string
+  showPositionInfo?: boolean
+  positionId: string // 직급 ID (판사, 검사, 변호사)
+  jobCategoryId?: string
+  organizationId?: string // 법원/검찰청/로펌 ID
+  specialization?: string // 전문 분야
+  courtLevel?: string // 법원 등급 (대법원, 고등법원 등)
+  startDate?: string
+  endDate?: string
+  notes?: string
+  images?: CareerImageDto[]
+}
+
+/**
+ * 의료인 경력 생성 DTO
+ */
+export interface CreateMedicalCareerDto {
+  personId: string
+  timelineTitle?: string
+  showPositionInfo?: boolean
+  positionId: string // 직급 ID (의사, 간호사 등)
+  jobCategoryId?: string
+  organizationId?: string // 병원 ID
+  specialization?: string // 전문 분야
+  department?: string // 진료과
   startDate?: string
   endDate?: string
   notes?: string
@@ -186,6 +258,46 @@ export const personCareerApi = {
    */
   addAthleteCareer: async (dto: CreateAthleteCareerDto) => {
     const response = await apiClient.post('/persons/careers/athlete', dto)
+    return response.data
+  },
+
+  /**
+   * 종교인 경력 추가
+   */
+  addReligiousCareer: async (dto: CreateReligiousCareerDto) => {
+    const response = await apiClient.post('/persons/careers/religious', dto)
+    return response.data
+  },
+
+  /**
+   * 예술가 경력 추가
+   */
+  addArtistCareer: async (dto: CreateArtistCareerDto) => {
+    const response = await apiClient.post('/persons/careers/artist', dto)
+    return response.data
+  },
+
+  /**
+   * 언론인 경력 추가
+   */
+  addMediaCareer: async (dto: CreateMediaCareerDto) => {
+    const response = await apiClient.post('/persons/careers/media', dto)
+    return response.data
+  },
+
+  /**
+   * 법조인 경력 추가
+   */
+  addLegalCareer: async (dto: CreateLegalCareerDto) => {
+    const response = await apiClient.post('/persons/careers/legal', dto)
+    return response.data
+  },
+
+  /**
+   * 의료인 경력 추가
+   */
+  addMedicalCareer: async (dto: CreateMedicalCareerDto) => {
+    const response = await apiClient.post('/persons/careers/medical', dto)
     return response.data
   },
 
