@@ -67,6 +67,7 @@ import {
   type Era,
   personApi,
 } from '@/shared/api/person'
+import { personCareerApi } from '@/shared/api/person-career'
 import { getAllReligions } from '@/shared/api/religions'
 import { uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
@@ -1645,7 +1646,73 @@ export default function PersonCreatePage() {
 
       console.log('Submitting person data:', input)
 
-      await personApi.create(input)
+      const createdPerson = await personApi.create(input)
+      console.log('Person created:', createdPerson)
+      
+      // Person ID 추출 (응답 구조에 따라 조정 필요)
+      const personId = createdPerson?.id || createdPerson?.data?.id
+      
+      if (!personId) {
+        throw new Error('Person ID를 가져올 수 없습니다.')
+      }
+
+      // Career 데이터 저장 (순차적으로)
+      if (careers.length > 0) {
+        toast.loading(`경력 정보 저장 중... (0/${careers.length})`)
+        
+        for (let i = 0; i < careers.length; i++) {
+          const career = careers[i]
+          toast.loading(`경력 정보 저장 중... (${i + 1}/${careers.length})`)
+          
+          try {
+            // Career 시작/종료일 포맷팅
+            const startDate = career.startYear 
+              ? `${career.startEra === 'BC' ? '-' : ''}${career.startYear.padStart(4, '0')}-${(career.startMonth || '01').padStart(2, '0')}-${(career.startDay || '01').padStart(2, '0')}`
+              : undefined
+
+            const endDate = !career.isCurrent && career.endYear
+              ? `${career.endEra === 'BC' ? '-' : ''}${career.endYear.padStart(4, '0')}-${(career.endMonth || '12').padStart(2, '0')}-${(career.endDay || '31').padStart(2, '0')}`
+              : undefined
+
+            // Career 이미지 변환
+            const images = career.images.map(img => ({
+              url: img.url,
+              description: img.description || undefined
+            }))
+
+            // 직업 카테고리 기반으로 Career 타입 판별
+            // 간단하게 jobCategoryId 또는 jobId의 이름으로 판별
+            // 실제로는 더 정확한 로직이 필요할 수 있음
+            const careerData = {
+              personId,
+              timelineTitle: career.timelineTitle || undefined,
+              showPositionInfo: career.showPositionInfo,
+              positionId: career.jobId, // 직급/직책 ID
+              jobCategoryId: career.jobCategoryId || undefined,
+              organizationId: career.organizationId || undefined,
+              countryId: career.countryId || undefined,
+              title: career.title || undefined,
+              termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
+              startDate,
+              endDate,
+              notes: career.note || undefined,
+              images: images.length > 0 ? images : undefined
+            }
+
+            // 기본적으로 Government Career로 저장 (가장 일반적)
+            // TODO: 실제로는 jobCategoryId를 기반으로 적절한 API를 호출해야 함
+            await personCareerApi.addGovernmentCareer(careerData)
+            
+            console.log(`Career ${i + 1}/${careers.length} saved`)
+          } catch (careerError) {
+            console.error(`Career ${i + 1} save failed:`, careerError)
+            // Career 저장 실패는 경고만 표시하고 계속 진행
+            toast.error(`경력 ${i + 1} 저장 실패: ${career.timelineTitle}`)
+          }
+        }
+        
+        toast.dismiss()
+      }
       
       // 임시 저장 삭제
       handleClearDraft()

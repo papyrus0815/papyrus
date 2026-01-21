@@ -1,6 +1,14 @@
 // apps/web-admin/src/shared/api/person-career.ts
 
-import { apiClient } from './api-client'
+import axios from 'axios'
+
+// API 클라이언트 생성
+const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || '',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
 
 /**
  * Career 이미지 DTO
