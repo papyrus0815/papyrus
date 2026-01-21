@@ -97,7 +97,7 @@ export class AuthController {
     
     res.cookie('access_token', access, {
       ...settings,
-      maxAge: this.parseDuration(this.configService.jwt.accessExpiresIn), 
+      maxAge: this.parseDuration(this.configService.jwt.expiresIn || '1h'), 
     });
 
     if (refresh) {
@@ -131,13 +131,14 @@ export class AccountController {
     if (!userId) return null;
 
     // Prisma v7 findUnique 스타일 적용 (내부에서 처리됨)
-    const account = await this.authService.getAccount({ id: userId });
+    // TODO: 메서드 구현 필요
+    return null;
     
-    if (!account) return null;
-    return { 
-      id: account.id, 
-      account: account.username, 
-      heroId: account.heroId 
-    };
+    // if (!account) return null;
+    // return { 
+    //   id: account.id, 
+    //   account: account.username, 
+    //   heroId: account.heroId 
+    // };
   }
 }

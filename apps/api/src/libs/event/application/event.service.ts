@@ -205,8 +205,7 @@ export class EventService {
             location: childData.location || null,
             parentEventId: event.id, // 방금 생성한 사건을 상위로 설정
             categoryId: data.categoryId || null, // 상위 사건의 카테고리 상속
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            // updatedAt: new Date(), // Prisma가 자동 관리
             background: null,
             aftermath: null,
             thumbnail: childData.thumbnail || null,

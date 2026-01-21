@@ -411,10 +411,11 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.militaryCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        branch: careerData.branch || '육군', // default value if not provided
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
       include: {
         images: true,
         rank: true,
@@ -432,7 +433,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.governmentCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
@@ -454,7 +455,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.businessCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
@@ -475,7 +476,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.academicCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
@@ -496,7 +497,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.athleteCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
@@ -517,10 +518,10 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.religiousCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
       include: {
         images: true,
         position: true,
@@ -538,7 +539,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.artistCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
@@ -559,10 +560,11 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.mediaCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        organizationId: careerData.organizationId || '', // default if not provided
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
       include: {
         images: true,
         position: true,
@@ -580,7 +582,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.legalCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
@@ -601,10 +603,11 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.medicalCareer.create({
       data: {
         ...careerData,
-        images: images?.length > 0 ? {
+        organizationId: careerData.organizationId || '', // default if not provided
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
-      },
+      } as any,
       include: {
         images: true,
         position: true,
@@ -622,7 +625,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.personEducation.create({
       data: {
         ...educationData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
@@ -642,7 +645,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.prisma.personAward.create({
       data: {
         ...awardData,
-        images: images?.length > 0 ? {
+        images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
