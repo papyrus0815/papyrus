@@ -191,6 +191,9 @@ model Organization {
   parents           OrganizationHierarchy[]   @relation("OrgHierarchyParent")
   children          OrganizationHierarchy[]   @relation("OrgHierarchyChild")
 
+  // 학력 관계
+  educations PersonEducation[] @relation("EducationOrganization")
+
   // 분야별 경력 관계
   militaryCareers    MilitaryCareer[]    @relation("MilitaryOrganization")
   governmentCareers  GovernmentCareer[]  @relation("GovernmentOrganization")

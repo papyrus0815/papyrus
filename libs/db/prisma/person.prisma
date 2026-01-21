@@ -134,6 +134,9 @@ model Person {
   // 새로운 국가 관계
   countryAffiliations PersonCountryAffiliation[]
 
+  // 학력
+  educations PersonEducation[] @relation("PersonEducations")
+
   // 분야별 경력 히스토리
   militaryCareers   MilitaryCareer[]   @relation("PersonMilitaryCareers")
   governmentCareers GovernmentCareer[] @relation("PersonGovernmentCareers")
@@ -217,6 +220,74 @@ model PersonCountryAffiliation {
   @@index([historicalCountryId], name: "idx_person_country_aff_histCountryId")
   @@index([affiliationType], name: "idx_person_country_aff_type")
   @@map("person_country_affiliation")
+}
+
+// ========================
+// PersonEducation (학력)
+// ========================
+/// 인물의 학력 정보를 저장하는 테이블
+/// 
+/// 사용 예시:
+/// - 백선엽 장군: 육군사관학교, 50기, 군사학 학사
+/// - 아인슈타인: 프린스턴 대학교, 박사, 물리학
+model PersonEducation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 학교/교육기관 ID (육사, 공사, 서울대 등)
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 교육 유형 (정규교육, 단기과정, 특수과정 등)
+  educationType String? @map("education_type") @db.VarChar(50)
+
+  /// 기수 (육사 50기, 공사 32기 등) - 군 사관학교 전용
+  classNumber Int? @map("class_number")
+
+  /// 학위 유형 (학사, 석사, 박사, 수료 등)
+  degree String? @db.VarChar(50)
+
+  /// 전공
+  major String? @db.VarChar(200)
+
+  /// 학과
+  department String? @db.VarChar(200)
+
+  /// 입학일
+  startDate DateTime? @map("start_date")
+
+  /// 졸업일/수료일
+  endDate DateTime? @map("end_date")
+
+  /// 졸업 여부 (졸업/수료/중퇴/재학중)
+  status String? @db.VarChar(50)
+
+  /// 학번/학위번호
+  studentNumber String? @map("student_number") @db.VarChar(50)
+
+  /// 비고
+  notes String? @db.Text
+
+  /// 학력 이미지 URL들 (졸업증서, 학위증 등)
+  images Json? @db.Json
+
+  //--- 관계 필드
+  person       Person       @relation("PersonEducations", fields: [personId], references: [id], onDelete: Cascade)
+  organization Organization @relation("EducationOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_person_education_personId")
+  @@index([organizationId], name: "idx_person_education_orgId")
+  @@index([classNumber], name: "idx_person_education_classNumber")
+  @@map("person_education")
 }
 
 // ========================
