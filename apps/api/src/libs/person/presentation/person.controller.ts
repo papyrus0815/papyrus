@@ -12,7 +12,18 @@ import {
 import { ApiTags } from '@nestjs/swagger'
 import { TypedBody, TypedParam, TypedRoute } from '@nestia/core'
 import { PersonService } from '../application/person.service'
-import { CreatePersonDto, UpdatePersonDto, PersonResponseDto } from './dto'
+import { 
+  CreatePersonDto, 
+  UpdatePersonDto, 
+  PersonResponseDto,
+  CreateMilitaryCareerDto,
+  CreateGovernmentCareerDto,
+  CreateBusinessCareerDto,
+  CreateAcademicCareerDto,
+  CreateAthleteCareerDto,
+  CreateEducationDto,
+  CreatePersonAwardDto,
+} from './dto'
 
 /**
  * 인물 관리 컨트롤러
@@ -330,5 +341,73 @@ export class PersonController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id') id: string): Promise<void> {
     await this.personService.delete(id)
+  }
+
+  // ========================
+  // Career 관리 엔드포인트
+  // ========================
+
+  /**
+   * 인물의 모든 경력 조회
+   */
+  @Get(':personId/careers')
+  async getAllCareers(@Param('personId') personId: string) {
+    return this.personService.findAllCareers(personId)
+  }
+
+  /**
+   * 군인 경력 추가
+   */
+  @Post('careers/military')
+  async addMilitaryCareer(@Body() dto: CreateMilitaryCareerDto) {
+    return this.personService.addMilitaryCareer(dto)
+  }
+
+  /**
+   * 정치인/공무원 경력 추가
+   */
+  @Post('careers/government')
+  async addGovernmentCareer(@Body() dto: CreateGovernmentCareerDto) {
+    return this.personService.addGovernmentCareer(dto)
+  }
+
+  /**
+   * 기업인 경력 추가
+   */
+  @Post('careers/business')
+  async addBusinessCareer(@Body() dto: CreateBusinessCareerDto) {
+    return this.personService.addBusinessCareer(dto)
+  }
+
+  /**
+   * 학자 경력 추가
+   */
+  @Post('careers/academic')
+  async addAcademicCareer(@Body() dto: CreateAcademicCareerDto) {
+    return this.personService.addAcademicCareer(dto)
+  }
+
+  /**
+   * 운동선수 경력 추가
+   */
+  @Post('careers/athlete')
+  async addAthleteCareer(@Body() dto: CreateAthleteCareerDto) {
+    return this.personService.addAthleteCareer(dto)
+  }
+
+  /**
+   * 학력 추가
+   */
+  @Post('educations')
+  async addEducation(@Body() dto: CreateEducationDto) {
+    return this.personService.addEducation(dto)
+  }
+
+  /**
+   * 수상/훈장 추가
+   */
+  @Post('awards')
+  async addAward(@Body() dto: CreatePersonAwardDto) {
+    return this.personService.addAward(dto)
   }
 }

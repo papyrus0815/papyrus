@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber } from 'class-validator'
+import { Type } from 'class-transformer'
 
 /**
  * 기원 열거형
@@ -6,6 +7,38 @@ import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator'
 export enum Era {
   BC = 'BC',
   AD = 'AD',
+}
+
+/**
+ * 별명 DTO
+ */
+export class NicknameDto {
+  @IsString()
+  nickname!: string
+
+  @IsOptional()
+  @IsString()
+  type?: string
+
+  @IsOptional()
+  @IsNumber()
+  priority?: number
+}
+
+/**
+ * 프로필 이미지 DTO
+ */
+export class ProfileImageDto {
+  @IsString()
+  url!: string
+
+  @IsOptional()
+  @IsString()
+  description?: string
+
+  @IsOptional()
+  @IsNumber()
+  priority?: number
 }
 
 /**
@@ -20,12 +53,37 @@ export class CreatePersonDto {
   name!: string
 
   /**
+   * 중간 이름 (Middle Name)
+   * @example "Fitzgerald"
+   */
+  @IsOptional()
+  @IsString()
+  middleName?: string
+
+  /**
    * 성 (선택)
    * @example "이"
    */
   @IsOptional()
   @IsString()
   surname?: string
+
+  /**
+   * 원어 이름 (Original Name)
+   * @example "Franklin D. Roosevelt"
+   */
+  @IsOptional()
+  @IsString()
+  originalName?: string
+
+  /**
+   * 별명/호/필명 목록
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NicknameDto)
+  nicknames?: NicknameDto[]
 
   /**
    * 출생 기원 (BC/AD)
@@ -44,6 +102,13 @@ export class CreatePersonDto {
   birthDate?: string
 
   /**
+   * 출생일 미상 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  isBirthDateUnknown?: boolean
+
+  /**
    * 사망 기원 (BC/AD)
    * @example "AD"
    */
@@ -58,6 +123,20 @@ export class CreatePersonDto {
   @IsOptional()
   @IsDateString()
   deathDate?: string
+
+  /**
+   * 사망일 미상 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  isDeathDateUnknown?: boolean
+
+  /**
+   * 생존 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  isAlive?: boolean
 
   /**
    * 성별 (선택)
@@ -75,11 +154,27 @@ export class CreatePersonDto {
   biography?: string
 
   /**
-   * 프로필 이미지 URL (선택)
+   * 메인 프로필 이미지 URL (선택)
    */
   @IsOptional()
   @IsString()
   profileImageUrl?: string
+
+  /**
+   * 프로필 이미지 목록
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProfileImageDto)
+  profileImages?: ProfileImageDto[]
+
+  /**
+   * 이벤트 목록에 생몰년 표시 여부
+   */
+  @IsOptional()
+  @IsBoolean()
+  showLifespanOnEventList?: boolean
 
   /**
    * 가문 ID (선택)
@@ -117,7 +212,7 @@ export class CreatePersonDto {
   motherId?: string
 
   /**
-   * 직업 ID (선택)
+   * 직업 ID (선택) - @deprecated Career 테이블 사용 권장
    */
   @IsOptional()
   @IsString()

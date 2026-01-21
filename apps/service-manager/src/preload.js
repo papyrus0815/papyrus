@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         validateSchema: () => ipcRenderer.invoke('prisma:validateSchema'),
         generateClient: () => ipcRenderer.invoke('prisma:generateClient'),
         migrate: (migrationName) => ipcRenderer.invoke('prisma:migrate', migrationName),
+        deploy: () => ipcRenderer.invoke('prisma:deploy'),
         getMigrations: () => ipcRenderer.invoke('prisma:getMigrations'),
         getMigrationStatus: () => ipcRenderer.invoke('prisma:getMigrationStatus'),
         startStudio: () => ipcRenderer.invoke('prisma:startStudio'),

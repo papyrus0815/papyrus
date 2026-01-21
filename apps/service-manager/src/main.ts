@@ -1063,6 +1063,12 @@ function registerIpcHandlers() {
     return await prismaManager.migrate(migrationName)
   })
 
+  // Prisma 마이그레이션 Deploy
+  ipcMain.handle('prisma:deploy', async () => {
+    console.log('🚀 [IPC] Prisma 마이그레이션 Deploy 요청')
+    return await prismaManager.deploy()
+  })
+
   // Prisma 마이그레이션 목록 조회
   ipcMain.handle('prisma:getMigrations', async () => {
     console.log('📋 [IPC] Prisma 마이그레이션 목록 조회 요청')

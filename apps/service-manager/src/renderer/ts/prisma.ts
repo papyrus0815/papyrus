@@ -365,6 +365,53 @@ async function runPrismaMigration(): Promise<void> {
 }
 
 /**
+ * 마이그레이션 Deploy (프로덕션)
+ */
+async function deployPrismaMigration(): Promise<void> {
+  const confirmed = confirm(
+    `🚀 마이그레이션을 Deploy 하시겠습니까?\n\n⚠️ 이 작업은 데이터베이스에 미적용된 마이그레이션을 모두 적용합니다.\n\n• 개발 환경: migrate dev 사용\n• 프로덕션 환경: migrate deploy 사용`,
+  )
+  if (!confirmed) return
+
+  const button = document.getElementById('deployMigrationButton')
+  if (!button) return
+  const originalText = button.innerHTML
+
+  try {
+    ;(button as HTMLButtonElement).disabled = true
+    button.innerHTML = '<span class="spinner"></span> Deploy 중...'
+
+    console.log('🚀 마이그레이션 Deploy 실행')
+    const result = await window.electronAPI.prisma.deploy()
+
+    if (result.success) {
+      if (typeof UI !== 'undefined' && UI.showAlert) {
+        UI.showAlert('✅ Deploy 완료', result.message)
+      } else {
+        alert('✅ Deploy 완료\n\n' + result.message)
+      }
+      await loadMigrationHistory()
+      await refreshPrismaStatus()
+    } else {
+      if (typeof UI !== 'undefined' && UI.showAlert) {
+        UI.showAlert('❌ Deploy 실패', result.message)
+      } else {
+        alert('❌ Deploy 실패\n\n' + result.message)
+      }
+    }
+  } catch (error: any) {
+    if (typeof UI !== 'undefined' && UI.showAlert) {
+      UI.showAlert('❌ Deploy 실패', error.message)
+    } else {
+      alert('❌ Deploy 실패\n\n' + error.message)
+    }
+  } finally {
+    ;(button as HTMLButtonElement).disabled = false
+    button.innerHTML = originalText
+  }
+}
+
+/**
  * 마이그레이션 상태 확인
  */
 async function checkMigrationStatus(): Promise<void> {
@@ -616,6 +663,7 @@ window.buildPrismaSchema = buildPrismaSchema
 window.validatePrismaSchema = validatePrismaSchema
 window.generatePrismaClient = generatePrismaClient
 window.runPrismaMigration = runPrismaMigration
+window.deployPrismaMigration = deployPrismaMigration
 window.checkMigrationStatus = checkMigrationStatus
 window.loadMigrationHistory = loadMigrationHistory
 window.startPrismaStudio = startPrismaStudio

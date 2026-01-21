@@ -368,4 +368,248 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id },
     })
   }
+
+  // ========================
+  // Career 관리 메서드
+  // ========================
+
+  /**
+   * 군인 경력 추가
+   */
+  async addMilitaryCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.militaryCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        rank: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 정치인/공무원 경력 추가
+   */
+  async addGovernmentCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.governmentCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true,
+        country: true
+      }
+    })
+  }
+
+  /**
+   * 기업인 경력 추가
+   */
+  async addBusinessCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.businessCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 학자 경력 추가
+   */
+  async addAcademicCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.academicCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        position: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 운동선수 경력 추가
+   */
+  async addAthleteCareer(dto: any) {
+    const { images, ...careerData } = dto
+    
+    return this.prisma.athleteCareer.create({
+      data: {
+        ...careerData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        job: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 학력 추가
+   */
+  async addEducation(dto: any) {
+    const { images, ...educationData } = dto
+    
+    return this.prisma.personEducation.create({
+      data: {
+        ...educationData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true,
+        organization: true
+      }
+    })
+  }
+
+  /**
+   * 수상/훈장 추가
+   */
+  async addAward(dto: any) {
+    const { images, ...awardData } = dto
+    
+    return this.prisma.personAward.create({
+      data: {
+        ...awardData,
+        images: images?.length > 0 ? {
+          create: images
+        } : undefined
+      },
+      include: {
+        images: true
+      }
+    })
+  }
+
+  /**
+   * 인물의 모든 경력 조회
+   */
+  async findAllCareers(personId: string) {
+    return this.prisma.person.findUnique({
+      where: { id: personId },
+      include: {
+        militaryCareers: {
+          include: {
+            images: true,
+            rank: true,
+            organization: true
+          }
+        },
+        governmentCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true,
+            country: true
+          }
+        },
+        businessCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true
+          }
+        },
+        academicCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true
+          }
+        },
+        religiousCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true,
+            religion: true,
+            denomination: true
+          }
+        },
+        artistCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true
+          }
+        },
+        athleteCareers: {
+          include: {
+            images: true,
+            job: true,
+            organization: true
+          }
+        },
+        mediaCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true
+          }
+        },
+        legalCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true
+          }
+        },
+        medicalCareers: {
+          include: {
+            images: true,
+            position: true,
+            organization: true
+          }
+        },
+        educations: {
+          include: {
+            images: true,
+            organization: true
+          }
+        },
+        awards: {
+          include: {
+            images: true
+          }
+        }
+      }
+    })
+  }
 }

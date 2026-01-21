@@ -265,7 +265,7 @@ ${content}
   }
 
   /**
-   * 마이그레이션 생성 및 적용
+   * 마이그레이션 생성 및 적용 (개발 환경)
    */
   public async migrate(
     migrationName: string,
@@ -326,6 +326,80 @@ ${content}
       if (error.stdout) logContent += '\n\n=== 실행 로그 ===\n' + error.stdout
       if (error.stderr) logContent += '\n\n=== 에러 로그 ===\n' + error.stderr
       const logPath = this.saveLog('migrate', 'failed', logContent)
+
+      return { 
+        success: false, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
+    }
+  }
+
+  /**
+   * 마이그레이션 Deploy (프로덕션 환경)
+   * 이미 생성된 마이그레이션 파일들을 DB에 적용
+   */
+  public async deploy(): Promise<{ success: boolean; message: string }> {
+    if (!this.projectRoot) {
+      return { success: false, message: '프로젝트 루트가 설정되지 않았습니다.' }
+    }
+
+    this.log('🚀 마이그레이션 Deploy 시작...')
+
+    try {
+      const schemaPath = this.getSchemaPath()
+
+      if (!fs.existsSync(schemaPath)) {
+        throw new Error(
+          '스키마 파일이 없습니다. 먼저 스키마를 빌드해주세요.',
+        )
+      }
+
+      // 마이그레이션 폴더 확인
+      const migrationsPath = this.getMigrationsPath()
+      if (!fs.existsSync(migrationsPath)) {
+        throw new Error(
+          '마이그레이션 폴더가 없습니다. 먼저 마이그레이션을 생성해주세요.',
+        )
+      }
+
+      this.log('📝 마이그레이션 Deploy 중...')
+
+      const { stdout, stderr } = await execAsync(
+        `cd "${this.projectRoot}" && npx prisma migrate deploy --schema="${schemaPath}"`,
+        {
+          timeout: 120000, // 2분
+        }
+      )
+
+      if (stderr && !stderr.includes('ExperimentalWarning')) {
+        this.log(`⚠️ ${stderr}`)
+      }
+
+      this.log('✅ 마이그레이션 Deploy 완료!')
+      this.log(stdout)
+
+      // 로그 저장
+      let logContent = `마이그레이션 Deploy가 완료되었습니다.\n\n`
+      logContent += '=== 실행 로그 ===\n'
+      logContent += stdout
+      if (stderr && !stderr.includes('ExperimentalWarning')) {
+        logContent += '\n\n=== 경고 ===\n' + stderr
+      }
+      const logPath = this.saveLog('deploy', 'success', logContent)
+
+      return { 
+        success: true, 
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      }
+    } catch (error: any) {
+      const errorMsg = `마이그레이션 Deploy 실패: ${error.message}`
+      this.log(`❌ ${errorMsg}`)
+      
+      // 로그 저장
+      let logContent = errorMsg
+      if (error.stdout) logContent += '\n\n=== 실행 로그 ===\n' + error.stdout
+      if (error.stderr) logContent += '\n\n=== 에러 로그 ===\n' + error.stderr
+      const logPath = this.saveLog('deploy', 'failed', logContent)
 
       return { 
         success: false, 

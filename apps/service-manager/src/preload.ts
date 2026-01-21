@@ -92,6 +92,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     generateClient: () => ipcRenderer.invoke('prisma:generateClient'),
     migrate: (migrationName: string) =>
       ipcRenderer.invoke('prisma:migrate', migrationName),
+    deploy: () => ipcRenderer.invoke('prisma:deploy'),
     getMigrations: () => ipcRenderer.invoke('prisma:getMigrations'),
     getMigrationStatus: () => ipcRenderer.invoke('prisma:getMigrationStatus'),
     startStudio: () => ipcRenderer.invoke('prisma:startStudio'),
@@ -201,6 +202,7 @@ declare global {
         migrate: (
           migrationName: string,
         ) => Promise<{ success: boolean; message: string }>
+        deploy: () => Promise<{ success: boolean; message: string }>
         getMigrations: () => Promise<Array<{ name: string; appliedAt: string }>>
         getMigrationStatus: () => Promise<{ success: boolean; message: string }>
         startStudio: () => Promise<{ success: boolean; message: string }>

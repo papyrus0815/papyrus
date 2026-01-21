@@ -35,6 +35,7 @@ declare global {
     validatePrismaSchema: () => Promise<void>
     generatePrismaClient: () => Promise<void>
     runPrismaMigration: () => Promise<void>
+    deployPrismaMigration: () => Promise<void>
     checkMigrationStatus: () => Promise<void>
     loadMigrationHistory: () => Promise<void>
     startPrismaStudio: () => Promise<void>
