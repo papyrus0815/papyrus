@@ -314,8 +314,14 @@ model OrganizationPersonRole {
   organizationId String @map("organization_id") @db.Char(36)
   personId       String @map("person_id") @db.Char(36)
 
-  /// 역할명(예: Secretary-General, Chair)
+  /// 타임라인 제목
+  timelineTitle String? @map("timeline_title") @db.VarChar(200)
+
+  /// 역할명(예: Secretary-General, Chair, 사무총장, 당대표)
   roleTitle String @map("role_title") @db.VarChar(100)
+
+  /// 대수 (제8대 UN 사무총장, 제15대 당대표 등)
+  termNumber Int? @map("term_number")
 
   /// 기간
   startDate DateTime? @map("start_date")
@@ -323,6 +329,9 @@ model OrganizationPersonRole {
 
   /// 비고
   notes String? @db.Text
+
+  /// 이미지 URL들 (임명장, 재직 사진 등)
+  images Json? @db.Json
 
   //--- 관계
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

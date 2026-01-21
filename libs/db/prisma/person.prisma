@@ -70,9 +70,6 @@ model Person {
   /// 원어 이름 (Original Name)
   originalName String? @map("original_name") @db.VarChar(100)
 
-  /// 별명/호/필명 (JSON 배열)
-  nicknames Json? @db.Json
-
   /// 출생 기원 (BC/AD)
   birthEra Era? @default(AD) @map("birth_era")
 
@@ -103,9 +100,6 @@ model Person {
   /// 프로필 URL
   profileImageUrl String? @map("profile_image_url") @db.VarChar(255)
 
-  /// 프로필 이미지 URL들 (JSON 배열)
-  profileImageUrls Json? @map("profile_image_urls") @db.Json
-
   /// 이벤트 목록에 생몰년 표시 여부
   showLifespanOnEventList Boolean @default(true) @map("show_lifespan_on_event_list")
 
@@ -115,6 +109,7 @@ model Person {
   denominationId String? @map("denomination_id") @db.Char(36)
   fatherId       String? @map("father_id") @db.Char(36)
   motherId       String? @map("mother_id") @db.Char(36)
+  /// @deprecated 직업 정보는 Career 테이블들 사용 (MilitaryCareer, BusinessCareer 등)
   jobId          String? @map("job_id") @db.Char(36)
   countryId      String? @map("country_id") @db.Char(36) // 주 국적 (간편 조회용, deprecated 예정)
 
@@ -134,6 +129,12 @@ model Person {
   // 새로운 국가 관계
   countryAffiliations PersonCountryAffiliation[]
 
+  // 별명/호/필명
+  nicknames PersonNickname[]
+
+  // 프로필 이미지들
+  profileImages PersonProfileImage[]
+
   // 학력
   educations PersonEducation[] @relation("PersonEducations")
 
@@ -143,6 +144,14 @@ model Person {
   businessCareers   BusinessCareer[]   @relation("PersonBusinessCareers")
   academicCareers   AcademicCareer[]   @relation("PersonAcademicCareers")
   religiousCareers  ReligiousCareer[]  @relation("PersonReligiousCareers")
+  artistCareers     ArtistCareer[]     @relation("PersonArtistCareers")
+  athleteCareers    AthleteCareer[]    @relation("PersonAthleteCareers")
+  mediaCareers      MediaCareer[]      @relation("PersonMediaCareers")
+  legalCareers      LegalCareer[]      @relation("PersonLegalCareers")
+  medicalCareers    MedicalCareer[]    @relation("PersonMedicalCareers")
+
+  // 수상/훈장
+  awards PersonAward[]
 
   EventTimelinePerson      EventTimelinePerson[]
   PersonEvent              PersonEvent[]
@@ -223,6 +232,66 @@ model PersonCountryAffiliation {
 }
 
 // ========================
+// PersonNickname (별명/호/필명)
+// ========================
+model PersonNickname {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 별명/호/필명
+  nickname String @db.VarChar(100)
+
+  /// 유형 (별명, 호, 필명, 아호 등)
+  type String? @db.VarChar(50)
+
+  /// 우선순위 (낮을수록 우선)
+  priority Int? @default(0)
+
+  //--- 관계 필드
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_person_nickname_personId")
+  @@map("person_nickname")
+}
+
+// ========================
+// PersonProfileImage (프로필 이미지)
+// ========================
+model PersonProfileImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 ID
+  personId String @map("person_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명/캡션
+  description String? @db.Text
+
+  /// 우선순위 (낮을수록 우선, 0이 메인 프로필)
+  priority Int? @default(0)
+
+  //--- 관계 필드
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_person_profile_image_personId")
+  @@map("person_profile_image")
+}
+
+// ========================
 // PersonEducation (학력)
 // ========================
 /// 인물의 학력 정보를 저장하는 테이블
@@ -273,12 +342,10 @@ model PersonEducation {
   /// 비고
   notes String? @db.Text
 
-  /// 학력 이미지 URL들 (졸업증서, 학위증 등)
-  images Json? @db.Json
-
   //--- 관계 필드
-  person       Person       @relation("PersonEducations", fields: [personId], references: [id], onDelete: Cascade)
-  organization Organization @relation("EducationOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  person       Person                @relation("PersonEducations", fields: [personId], references: [id], onDelete: Cascade)
+  organization Organization          @relation("EducationOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images       EducationImage[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -288,6 +355,33 @@ model PersonEducation {
   @@index([organizationId], name: "idx_person_education_orgId")
   @@index([classNumber], name: "idx_person_education_classNumber")
   @@map("person_education")
+}
+
+// ========================
+// EducationImage (학력 이미지)
+// ========================
+model EducationImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 학력 ID
+  educationId String @map("education_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명 (졸업증서, 학위증, 기념사진 등)
+  description String? @db.Text
+
+  //--- 관계 필드
+  education PersonEducation @relation(fields: [educationId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([educationId], name: "idx_education_image_educationId")
+  @@map("education_image")
 }
 
 // ========================
@@ -335,13 +429,11 @@ model MilitaryCareer {
   /// 비고
   notes String? @db.Text
 
-  /// 경력 이미지 URL들 (JSON 배열: [{url, description}])
-  images Json? @db.Json
-
   //--- 관계 필드
-  person       Person       @relation("PersonMilitaryCareers", fields: [personId], references: [id], onDelete: Cascade)
-  rank         Job          @relation("MilitaryRank", fields: [rankId], references: [id], onDelete: Restrict)
-  organization Organization @relation("MilitaryOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  person       Person            @relation("PersonMilitaryCareers", fields: [personId], references: [id], onDelete: Cascade)
+  rank         Job               @relation("MilitaryRank", fields: [rankId], references: [id], onDelete: Restrict)
+  organization Organization      @relation("MilitaryOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  images       MilitaryCareerImage[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -351,6 +443,33 @@ model MilitaryCareer {
   @@index([rankId], name: "idx_military_career_rankId")
   @@index([organizationId], name: "idx_military_career_orgId")
   @@map("military_career")
+}
+
+// ========================
+// MilitaryCareerImage
+// ========================
+model MilitaryCareerImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 경력 ID
+  careerId String @map("career_id") @db.Char(36)
+
+  /// 이미지 URL
+  url String @db.VarChar(500)
+
+  /// 설명
+  description String? @db.Text
+
+  //--- 관계 필드
+  career MilitaryCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([careerId], name: "idx_military_career_image_careerId")
+  @@map("military_career_image")
 }
 
 // ========================
