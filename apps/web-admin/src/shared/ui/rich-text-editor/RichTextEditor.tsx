@@ -39,15 +39,16 @@ export interface MentionExtensionProps {
 const EditorContainer = styled.div`
   position: relative;
   border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 
+  overflow: visible;
+  box-shadow:
     0 1px 3px rgba(15, 23, 42, 0.04),
     0 0 0 1px rgba(139, 92, 246, 0.08);
   transition: all 0.3s ease;
   background: #ffffff;
+  width: 100%;
 
   &:focus-within {
-    box-shadow: 
+    box-shadow:
       0 4px 16px rgba(139, 92, 246, 0.12),
       0 0 0 2px rgba(139, 92, 246, 0.2);
   }
@@ -65,6 +66,9 @@ const Toolbar = styled.div`
   );
   border-bottom: 1px solid rgba(139, 92, 246, 0.08);
   backdrop-filter: blur(8px);
+  border-radius: 16px 16px 0 0;
+  overflow: visible;
+  width: 100%;
 `
 
 const ToolbarButton = styled.button<{ $active?: boolean }>`
@@ -77,14 +81,13 @@ const ToolbarButton = styled.button<{ $active?: boolean }>`
   border: none;
   border-radius: 8px;
   background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
-      : 'transparent'};
+    $active ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)' : 'transparent'};
   color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.1s ease;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   position: relative;
+  user-select: none;
 
   &:hover {
     background: ${({ $active }) =>
@@ -93,6 +96,35 @@ const ToolbarButton = styled.button<{ $active?: boolean }>`
         : 'rgba(139, 92, 246, 0.08)'};
     color: ${({ $active }) => ($active ? '#ffffff' : '#8b5cf6')};
     transform: translateY(-1px);
+  }
+
+  &:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.95);
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    z-index: 100000;
+    pointer-events: none;
+    animation: tooltipFadeIn 0.15s ease;
+  }
+
+  @keyframes tooltipFadeIn {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   }
 
   &:active {
@@ -130,6 +162,8 @@ const EditorWrapper = styled.div`
   background: #ffffff;
   transition: all 0.2s ease;
   position: relative;
+  border-radius: 0 0 16px 16px;
+  overflow: visible;
 
   &::before {
     content: '';
@@ -143,6 +177,7 @@ const EditorWrapper = styled.div`
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.3s ease;
+    border-radius: 0 0 16px 16px;
   }
 
   &:focus-within::before {
@@ -160,7 +195,9 @@ const TitleInput = styled.input`
   font-weight: 700;
   line-height: 1.2;
   color: #0f172a;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
   letter-spacing: -0.02em;
 
   &::placeholder {
@@ -188,17 +225,21 @@ const TitleDivider = styled.div`
 const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   outline: none;
   min-height: ${({ $hasTitle }) => ($hasTitle ? '280px' : '320px')};
-  padding: ${({ $hasTitle }) => ($hasTitle ? '16px 28px 24px 28px' : '24px 28px')};
+  padding: ${({ $hasTitle }) =>
+    $hasTitle ? '16px 28px 24px 28px' : '24px 28px'};
   font-size: 15px;
   line-height: 1.75;
   color: #1e293b;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
   user-select: text;
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
   cursor: text;
   position: relative;
+  overflow: visible;
 
   &[contenteditable='true']:empty:before {
     content: attr(data-placeholder);
@@ -319,11 +360,16 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   }
 
   code {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(99, 102, 241, 0.08));
+    background: linear-gradient(
+      135deg,
+      rgba(139, 92, 246, 0.12),
+      rgba(99, 102, 241, 0.08)
+    );
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 13px;
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
+    font-family:
+      'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
     color: #7c3aed;
     font-weight: 500;
     border: 1px solid rgba(139, 92, 246, 0.15);
@@ -645,17 +691,13 @@ const ImageCaptionButton = styled.button<{ $primary?: boolean }>`
 
 // 색상 선택기 스타일
 const ColorPickerDropdown = styled.div`
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
   background: #ffffff;
   border: 1px solid rgba(139, 92, 246, 0.15);
   border-radius: 14px;
-  box-shadow: 
+  box-shadow:
     0 8px 24px rgba(15, 23, 42, 0.12),
     0 20px 48px rgba(139, 92, 246, 0.15);
   padding: 14px;
-  z-index: 1000;
   min-width: 260px;
 `
 
@@ -694,7 +736,11 @@ const ColorPickerInputWrapper = styled.div`
 `
 
 // 컨텍스트 메뉴 스타일
-const ContextMenu = styled.div<{ $visible: boolean; $top: number; $left: number }>`
+const ContextMenu = styled.div<{
+  $visible: boolean
+  $top: number
+  $left: number
+}>`
   position: fixed;
   top: ${({ $top }) => $top}px;
   left: ${({ $left }) => $left}px;
@@ -884,6 +930,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   showTitle = false,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const [internalTitle, setInternalTitle] = useState(title)
   const [isBold, setIsBold] = useState(false)
   const [isItalic, setIsItalic] = useState(false)
   const [isStrike, setIsStrike] = useState(false)
@@ -893,6 +941,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [isCode, setIsCode] = useState(false)
   const [currentColor, setCurrentColor] = useState<string>('#000000')
   const [colorPickerVisible, setColorPickerVisible] = useState(false)
+  const colorPickerButtonRef = useRef<HTMLButtonElement>(null)
+
+  // title prop이 변경되면 내부 상태 업데이트
+  useEffect(() => {
+    setInternalTitle(title)
+  }, [title])
 
   // 멘션 관련 상태
   const [mentionPopupVisible, setMentionPopupVisible] = useState(false)
@@ -913,7 +967,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [selectedTextRange, setSelectedTextRange] = useState<Range | null>(null)
   const [selectedText, setSelectedText] = useState('')
   const [contextMenuVisible, setContextMenuVisible] = useState(false)
-  const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 })
+  const [contextMenuPosition, setContextMenuPosition] = useState({
+    top: 0,
+    left: 0,
+  })
 
   // 이미지 설명 모달 관련 상태
   const [imageCaptionModalVisible, setImageCaptionModalVisible] =
@@ -1967,9 +2024,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       entitySpan.setAttribute('data-entity-type', item.type)
       entitySpan.setAttribute('data-entity-id', item.id)
       entitySpan.setAttribute('data-entity-name', item.name)
-      entitySpan.setAttribute('title', `${item.name} (${MENTION_TYPE_CONFIG[item.type]?.label || item.type})`)
+      entitySpan.setAttribute(
+        'title',
+        `${item.name} (${MENTION_TYPE_CONFIG[item.type]?.label || item.type})`,
+      )
       entitySpan.setAttribute('contenteditable', 'false') // 엔티티 링크 내부 편집 방지
-      
+
       // 선택된 텍스트의 내용을 가져오기
       const fragment = range.extractContents()
       entitySpan.appendChild(fragment)
@@ -2036,20 +2096,28 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       setSelectedText('')
       setSelectedTextRange(null)
     },
-    [selectedTextRange, handleContentChange, handleCloseEntityLinkModal, updateFormatState],
+    [
+      selectedTextRange,
+      handleContentChange,
+      handleCloseEntityLinkModal,
+      updateFormatState,
+    ],
   )
 
   // 마우스 우클릭 핸들러
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    if (selectedText.length > 0) {
-      e.preventDefault()
-      setContextMenuPosition({
-        top: e.clientY,
-        left: e.clientX,
-      })
-      setContextMenuVisible(true)
-    }
-  }, [selectedText])
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (selectedText.length > 0) {
+        e.preventDefault()
+        setContextMenuPosition({
+          top: e.clientY,
+          left: e.clientX,
+        })
+        setContextMenuVisible(true)
+      }
+    },
+    [selectedText],
+  )
 
   // 이미지 설명 모달이 열릴 때 입력 필드에 포커스
   useEffect(() => {
@@ -2179,6 +2247,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     <EditorContainer>
       <Toolbar>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyFormat('bold')
@@ -2189,6 +2258,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <FiBold />
         </ToolbarButton>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyFormat('italic')
@@ -2199,6 +2269,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <FiItalic />
         </ToolbarButton>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyFormat('strikeThrough')
@@ -2210,6 +2281,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </ToolbarButton>
         <ToolbarDivider />
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyHeading(1)
@@ -2221,6 +2293,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <span style={{ fontSize: '10px', marginLeft: '2px' }}>1</span>
         </ToolbarButton>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyHeading(2)
@@ -2232,6 +2305,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <span style={{ fontSize: '10px', marginLeft: '2px' }}>2</span>
         </ToolbarButton>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyHeading(3)
@@ -2244,6 +2318,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </ToolbarButton>
         <ToolbarDivider />
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyFormat('insertUnorderedList')
@@ -2254,6 +2329,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <FiList />
         </ToolbarButton>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyFormat('insertOrderedList')
@@ -2265,6 +2341,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </ToolbarButton>
         <ToolbarDivider />
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             handleSetLink()
@@ -2274,6 +2351,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <FiLink />
         </ToolbarButton>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             if (selectedText.length > 0) {
@@ -2285,17 +2363,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           disabled={selectedText.length === 0}
           title="엔티티 연결 (텍스트 선택 후 클릭)"
           style={{
-            background: selectedText.length > 0 
-              ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(251, 191, 36, 0.08))'
-              : undefined,
-            borderColor: selectedText.length > 0 
-              ? 'rgba(245, 158, 11, 0.3)' 
-              : undefined,
+            background:
+              selectedText.length > 0
+                ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(251, 191, 36, 0.08))'
+                : undefined,
+            borderColor:
+              selectedText.length > 0 ? 'rgba(245, 158, 11, 0.3)' : undefined,
           }}
         >
           <FiLink style={{ transform: 'rotate(-45deg)' }} />
         </ToolbarButton>
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             handleImageUpload()
@@ -2307,6 +2386,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </ToolbarButton>
         <ToolbarDivider />
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             applyFormat('formatCode')
@@ -2319,7 +2399,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <ToolbarDivider />
         <div style={{ position: 'relative' }}>
           <ToolbarButton
-            onClick={() => {
+            ref={colorPickerButtonRef}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation()
               playClickSound()
               setColorPickerVisible(!colorPickerVisible)
             }}
@@ -2332,79 +2415,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           >
             <FiDroplet style={{ color: currentColor }} />
           </ToolbarButton>
-          {colorPickerVisible && (
-            <ColorPickerDropdown>
-              <ColorPickerGrid>
-                {[
-                  '#000000',
-                  '#374151',
-                  '#6b7280',
-                  '#9ca3af',
-                  '#d1d5db',
-                  '#ffffff',
-                  '#ef4444',
-                  '#f97316',
-                  '#f59e0b',
-                  '#eab308',
-                  '#84cc16',
-                  '#22c55e',
-                  '#10b981',
-                  '#14b8a6',
-                  '#06b6d4',
-                  '#3b82f6',
-                  '#6366f1',
-                  '#8b5cf6',
-                  '#a855f7',
-                  '#d946ef',
-                  '#ec4899',
-                  '#f43f5e',
-                ].map((color) => (
-                  <ColorPickerItem
-                    key={color}
-                    $color={color}
-                    $selected={currentColor === color}
-                    onClick={() => {
-                      playClickSound()
-                      if (!editorRef.current) return
-                      editorRef.current.focus()
-                      document.execCommand('foreColor', false, color)
-                      setCurrentColor(color)
-                      setColorPickerVisible(false)
-                      updateFormatState()
-                      handleContentChange()
-                    }}
-                    title={color}
-                  />
-                ))}
-              </ColorPickerGrid>
-              <ColorPickerInputWrapper>
-                <input
-                  type="color"
-                  value={currentColor}
-                  onChange={(e) => {
-                    playClickSound()
-                    const color = e.target.value
-                    if (!editorRef.current) return
-                    editorRef.current.focus()
-                    document.execCommand('foreColor', false, color)
-                    setCurrentColor(color)
-                    updateFormatState()
-                    handleContentChange()
-                  }}
-                  style={{
-                    width: '100%',
-                    height: '32px',
-                    border: '1px solid rgba(99, 102, 241, 0.2)',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                  }}
-                />
-              </ColorPickerInputWrapper>
-            </ColorPickerDropdown>
-          )}
         </div>
         <ToolbarDivider />
         <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
             if (!editorRef.current) return
@@ -2421,11 +2435,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         {showTitle && (
           <>
             <TitleInput
+              ref={titleInputRef}
               type="text"
-              value={title}
+              value={internalTitle}
               onChange={(e) => {
+                const newValue = e.target.value
+                setInternalTitle(newValue)
                 if (onTitleChange) {
-                  onTitleChange(e.target.value)
+                  onTitleChange(newValue)
                 }
               }}
               placeholder={titlePlaceholder}
@@ -2445,17 +2462,107 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           $hasTitle={showTitle}
         />
       </EditorWrapper>
-      {/* 외부 클릭 시 색상 선택기 닫기 */}
-      {colorPickerVisible && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 999,
-          }}
-          onClick={() => setColorPickerVisible(false)}
-        />
-      )}
+      {/* 색상 선택기 - Portal로 body에 렌더링 */}
+      {colorPickerVisible &&
+        colorPickerButtonRef.current &&
+        (() => {
+          const rect = colorPickerButtonRef.current!.getBoundingClientRect()
+          return (
+            <>
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 99998,
+                  background: 'transparent',
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setColorPickerVisible(false)
+                }}
+              />
+              <div
+                style={{
+                  position: 'fixed',
+                  top: `${rect.bottom + window.scrollY + 8}px`,
+                  left: `${rect.left + window.scrollX}px`,
+                  zIndex: 99999,
+                }}
+              >
+                <ColorPickerDropdown>
+                  <ColorPickerGrid>
+                    {[
+                      '#000000',
+                      '#374151',
+                      '#6b7280',
+                      '#9ca3af',
+                      '#d1d5db',
+                      '#ffffff',
+                      '#ef4444',
+                      '#f97316',
+                      '#f59e0b',
+                      '#eab308',
+                      '#84cc16',
+                      '#22c55e',
+                      '#10b981',
+                      '#14b8a6',
+                      '#06b6d4',
+                      '#3b82f6',
+                      '#6366f1',
+                      '#8b5cf6',
+                      '#a855f7',
+                      '#d946ef',
+                      '#ec4899',
+                      '#f43f5e',
+                    ].map((color) => (
+                      <ColorPickerItem
+                        key={color}
+                        $color={color}
+                        $selected={currentColor === color}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          playClickSound()
+                          if (!editorRef.current) return
+                          editorRef.current.focus()
+                          document.execCommand('foreColor', false, color)
+                          setCurrentColor(color)
+                          setColorPickerVisible(false)
+                          updateFormatState()
+                          handleContentChange()
+                        }}
+                        title={color}
+                      />
+                    ))}
+                  </ColorPickerGrid>
+                  <ColorPickerInputWrapper>
+                    <input
+                      type="color"
+                      value={currentColor}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onChange={(e) => {
+                        playClickSound()
+                        const color = e.target.value
+                        if (!editorRef.current) return
+                        editorRef.current.focus()
+                        document.execCommand('foreColor', false, color)
+                        setCurrentColor(color)
+                        updateFormatState()
+                        handleContentChange()
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '32px',
+                        border: '1px solid rgba(99, 102, 241, 0.2)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  </ColorPickerInputWrapper>
+                </ColorPickerDropdown>
+              </div>
+            </>
+          )
+        })()}
       {mentionPopupVisible && (
         <MentionPopup
           $visible={mentionPopupVisible}
@@ -2692,8 +2799,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </EntityLinkModalHeader>
           <EntityLinkModalContent>
             <EntityLinkSelectedText>
-              <strong>선택한 텍스트</strong>
-              "{selectedText}"
+              <strong>선택한 텍스트</strong>"{selectedText}"
             </EntityLinkSelectedText>
 
             <EntityLinkSearchInput
@@ -2730,7 +2836,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             />
 
             <EntityLinkResultsList>
-              {entityLinkQuery.trim() === '' && entityLinkResults.length === 0 ? (
+              {entityLinkQuery.trim() === '' &&
+              entityLinkResults.length === 0 ? (
                 <div
                   style={{
                     padding: '24px',
@@ -2740,7 +2847,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   }}
                 >
                   검색어를 입력하여 연결할 엔티티를 찾으세요
-                  <div style={{ fontSize: '11px', marginTop: '8px', color: '#cbd5e1' }}>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      marginTop: '8px',
+                      color: '#cbd5e1',
+                    }}
+                  >
                     예: 처칠, 영국, 2차세계대전
                   </div>
                 </div>
@@ -2769,7 +2882,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   let globalIndex = 0
                   return Object.entries(grouped).map(([type, items]) => {
                     const typeConfig =
-                      MENTION_TYPE_CONFIG[type as keyof typeof MENTION_TYPE_CONFIG]
+                      MENTION_TYPE_CONFIG[
+                        type as keyof typeof MENTION_TYPE_CONFIG
+                      ]
                     const startIndex = globalIndex
                     globalIndex += items.length
 
@@ -2794,7 +2909,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         >
                           {typeConfig && typeConfig.icon && (
                             <span style={{ color: typeConfig.color }}>
-                              {React.createElement(typeConfig.icon, { size: 14 })}
+                              {React.createElement(typeConfig.icon, {
+                                size: 14,
+                              })}
                             </span>
                           )}
                           <span style={{ color: '#64748b' }}>
@@ -2841,7 +2958,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                               }}
                             >
                               {item.icon && (
-                                <span style={{ color: item.color, flexShrink: 0 }}>
+                                <span
+                                  style={{ color: item.color, flexShrink: 0 }}
+                                >
                                   {React.createElement(item.icon, {
                                     size: 18,
                                   })}

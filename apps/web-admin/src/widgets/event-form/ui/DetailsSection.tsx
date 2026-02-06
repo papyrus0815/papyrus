@@ -264,11 +264,12 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
               )}
 
               <RichTextEditor
+                key={section.id}
                 showTitle={true}
                 title={section.title}
                 onTitleChange={(newTitle) => {
-                  setSections(
-                    sections.map((sectionItem) =>
+                  setSections((prevSections) =>
+                    prevSections.map((sectionItem) =>
                       sectionItem.id === section.id
                         ? { ...sectionItem, title: newTitle }
                         : sectionItem,
@@ -278,8 +279,8 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
                 titlePlaceholder={`섹션 ${index + 1} 제목 (예: 배경, 전개, 여파 등)`}
                 value={section.content}
                 onChange={(newContent) => {
-                  setSections(
-                    sections.map((sectionItem) =>
+                  setSections((prevSections) =>
+                    prevSections.map((sectionItem) =>
                       sectionItem.id === section.id
                         ? { ...sectionItem, content: newContent }
                         : sectionItem,

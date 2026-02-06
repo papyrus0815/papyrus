@@ -488,13 +488,8 @@ export const StepItem = styled.button<{
   border-radius: 10px;
   padding: 14px 16px;
   background: ${({ $active, $completed }) =>
-    $active
-      ? '#f8f9fa'
-      : $completed
-        ? '#f0fdf4'
-        : 'transparent'};
-  color: ${({ $active }) =>
-    $active ? '#0f172a' : COLORS.text.primary};
+    $active ? '#f8f9fa' : $completed ? '#f0fdf4' : 'transparent'};
+  color: ${({ $active }) => ($active ? '#0f172a' : COLORS.text.primary)};
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
@@ -505,16 +500,13 @@ export const StepItem = styled.button<{
   margin-bottom: 2px;
   border-left: ${({ $active }) =>
     $active ? '3px solid #8b5cf6' : '3px solid transparent'};
-  padding-left: ${({ $active }) =>
-    $active ? '13px' : '16px'};
+  padding-left: ${({ $active }) => ($active ? '13px' : '16px')};
   box-shadow: ${({ $active }) =>
     $active ? '0 2px 8px rgba(139, 92, 246, 0.1)' : 'none'};
 
   &:hover {
     background: ${({ $active }) =>
-      $active
-        ? '#f1f3f5'
-        : 'rgba(139, 92, 246, 0.04)'};
+      $active ? '#f1f3f5' : 'rgba(139, 92, 246, 0.04)'};
   }
 
   &:active {
@@ -548,11 +540,7 @@ export const StepIconWrapper = styled.div<{
   height: 32px;
   border-radius: 8px;
   background: ${({ $active, $completed }) =>
-    $active
-      ? '#8b5cf6'
-      : $completed
-        ? '#22c55e'
-        : 'rgba(139, 92, 246, 0.1)'};
+    $active ? '#8b5cf6' : $completed ? '#22c55e' : 'rgba(139, 92, 246, 0.1)'};
   color: ${({ $active, $completed }) =>
     $active || $completed ? '#ffffff' : COLORS.primary.main};
   display: flex;
@@ -568,8 +556,7 @@ export const StepLabel = styled.div<{
 }>`
   font-size: 14px;
   font-weight: ${({ $active }) => ($active ? '700' : '600')};
-  color: ${({ $active }) =>
-    $active ? '#0f172a' : COLORS.text.primary};
+  color: ${({ $active }) => ($active ? '#0f172a' : COLORS.text.primary)};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -624,7 +611,7 @@ export const FormSection = styled.div`
   gap: 24px;
   padding: 32px;
   flex: 1;
-  overflow-y: auto;
+  overflow: visible;
   width: 100%;
 `
 
@@ -738,8 +725,6 @@ export const RequiredBadge = styled.span`
   background: rgba(239, 68, 68, 0.1);
   border-radius: 4px;
 `
-
-
 
 export const DateRangeRow = styled.div`
   display: grid;
@@ -872,10 +857,10 @@ export const ExpandableCategoryCard = styled.div<{
     $selected
       ? '0 4px 16px rgba(139, 92, 246, 0.15)'
       : '0 2px 6px rgba(0, 0, 0, 0.04)'};
-  
+
   /* 확장 시 전체 너비 차지 */
   grid-column: ${({ $expanded }) => ($expanded ? '1 / -1' : 'auto')};
-  
+
   &:hover {
     border-color: ${({ $category }) => getCategoryColor($category).border};
     background: #ffffff;
@@ -903,7 +888,7 @@ export const CategoryExpandedContent = styled.div`
   border-top: 1.5px dashed rgba(239, 68, 68, 0.2);
   margin-top: -10px;
   animation: expandDown 0.3s ease-out;
-  
+
   @keyframes expandDown {
     from {
       opacity: 0;
@@ -924,7 +909,7 @@ export const ExpandedLabel = styled.div`
   gap: 8px;
   margin-bottom: 10px;
   margin-top: 16px;
-  
+
   span:first-child {
     font-size: 12px;
     font-weight: 600;
@@ -1210,7 +1195,6 @@ export const CombatTypeLabel = styled.span`
   color: #475569;
 `
 
-
 // InfoBox 스타일 (전투 유형 가이드용)
 export const InfoBox = styled.div`
   display: flex;
@@ -1270,7 +1254,7 @@ export const GuideTooltip = styled.div<{ $visible: boolean }>`
   max-width: calc(100vw - 40px);
   background: #ffffff;
   border-radius: 12px;
-  box-shadow: 
+  box-shadow:
     0 4px 20px rgba(15, 23, 42, 0.12),
     0 12px 40px rgba(15, 23, 42, 0.08);
   border: 1px solid rgba(148, 163, 184, 0.15);
@@ -1278,7 +1262,8 @@ export const GuideTooltip = styled.div<{ $visible: boolean }>`
   z-index: 1000;
   opacity: ${({ $visible }) => ($visible ? 1 : 0)};
   visibility: ${({ $visible }) => ($visible ? 'visible' : 'hidden')};
-  transform: ${({ $visible }) => ($visible ? 'translateY(0)' : 'translateY(-8px)')};
+  transform: ${({ $visible }) =>
+    $visible ? 'translateY(0)' : 'translateY(-8px)'};
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   transform-origin: top right;
 
@@ -1300,7 +1285,7 @@ export const GuideTooltip = styled.div<{ $visible: boolean }>`
   @media (max-width: 640px) {
     width: calc(100vw - 40px);
     right: 0;
-    
+
     &::before {
       right: 10px;
     }
@@ -1576,9 +1561,6 @@ export const InfoExample = styled.div`
     font-size: 11px;
   }
 `
-
-
-
 
 export const MilitaryNoticeIcon = styled.div`
   flex-shrink: 0;
@@ -2309,7 +2291,7 @@ export const ContentLayoutWrapper = styled.div`
   gap: 32px;
   padding: 32px;
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
   width: 100%;
   max-width: 1600px;
   margin: 0 auto;
@@ -2332,10 +2314,12 @@ export const EditorColumn = styled.div`
   flex-direction: column;
   gap: 24px;
   overflow-y: auto;
+  overflow-x: visible;
   width: 100%;
   max-width: 900px;
   flex-shrink: 0;
-  padding-right: 16px;
+  padding: 0 16px 0 4px;
+  position: relative;
 
   /* 스크롤바 스타일링 */
   &::-webkit-scrollbar {
@@ -2357,7 +2341,7 @@ export const EditorColumn = styled.div`
 
   @media (max-width: 1200px) {
     max-width: 100%;
-    padding-right: 0;
+    padding: 0;
   }
 `
 
@@ -2656,7 +2640,7 @@ export const AddSectionButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 
+  box-shadow:
     0 2px 8px rgba(139, 92, 246, 0.2),
     0 0 0 0 rgba(139, 92, 246, 0.3);
   position: relative;
@@ -2666,21 +2650,17 @@ export const AddSectionButton = styled.button`
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.1),
-      transparent
-    );
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
     opacity: 0;
     transition: opacity 0.3s ease;
   }
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 
+    box-shadow:
       0 4px 16px rgba(139, 92, 246, 0.3),
       0 0 0 4px rgba(139, 92, 246, 0.1);
-    
+
     &::before {
       opacity: 1;
     }
@@ -2688,7 +2668,7 @@ export const AddSectionButton = styled.button`
 
   &:active {
     transform: translateY(0);
-    box-shadow: 
+    box-shadow:
       0 2px 8px rgba(139, 92, 246, 0.2),
       0 0 0 2px rgba(139, 92, 246, 0.15);
   }
