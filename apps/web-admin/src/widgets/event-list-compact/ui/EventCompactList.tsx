@@ -229,26 +229,30 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 ).length
 
                 return (
-                  <List.YearDivider
-                    key={`year-${currentYear}`}
-                    type="button"
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                      e.preventDefault()
-                      toggleYearCollapse(currentYear)
-                    }}
-                  >
-                    <span>
-                      <FiChevronRight
-                        size={13}
-                        style={{
-                          transform: 'rotate(0deg)',
-                          transition: 'transform 0.3s ease',
-                        }}
-                      />
-                      {currentYear}년
-                      <List.CollapsedCount>{yearEventCount}</List.CollapsedCount>
-                    </span>
-                  </List.YearDivider>
+                  <React.Fragment key={`year-${currentYear}`}>
+                    <List.YearDivider
+                      type="button"
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                        e.preventDefault()
+                        toggleYearCollapse(currentYear)
+                      }}
+                    >
+                      <span>
+                        <FiChevronRight
+                          size={13}
+                          style={{
+                            transform: 'rotate(0deg)',
+                            transition: 'transform 0.3s ease',
+                          }}
+                        />
+                        {currentYear}년
+                        <List.CollapsedCount>{yearEventCount}</List.CollapsedCount>
+                      </span>
+                    </List.YearDivider>
+                    <List.CollapsedPlaceholder>
+                      <span>{yearEventCount}개 사건이 접혀있습니다</span>
+                    </List.CollapsedPlaceholder>
+                  </React.Fragment>
                 )
               }
               return null

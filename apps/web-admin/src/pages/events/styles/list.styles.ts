@@ -15,7 +15,8 @@ export const CompactList = styled.div`
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 12px 120px 0;
+  padding: 4px 12px 120px 70px;
+  position: relative;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -81,27 +82,54 @@ export const CompactListItem = styled.div<{
     }
   }
 
-  /* 선택 상태 좌측 바 */
-  ${({ $active }) =>
-    $active &&
-    `
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 100%);
-      border-radius: 14px 0 0 14px;
-      box-shadow: 2px 0 8px rgba(99, 102, 241, 0.3);
-    }
-  `}
+  /* 선택 상태 좌측 강조 */
+  border-left: ${({ $active }) =>
+    $active ? '4px solid #6366f1' : '1.5px solid rgba(20, 19, 34, 0.08)'};
+  padding-left: ${({ $active }) => ($active ? '0' : '0')};
+
+  /* 타임라인 연결선 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: -41px;
+    top: 50%;
+    width: 38px;
+    height: 2px;
+    background: rgba(99, 102, 241, 0.25);
+    transition: all 0.2s ease;
+  }
+
+  /* 타임라인 점 */
+  &::after {
+    content: '';
+    position: absolute;
+    left: -41px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: ${({ $active }) => ($active ? '10px' : '8px')};
+    height: ${({ $active }) => ($active ? '10px' : '8px')};
+    background: ${({ $active }) => ($active ? '#6366f1' : '#ffffff')};
+    border: 2px solid
+      ${({ $active }) => ($active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)')};
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px #ffffff;
+    transition: all 0.2s ease;
+    z-index: 1;
+  }
 
   &:hover {
     border-color: rgba(99, 102, 241, 0.3);
-    transform: translateY(-1px);
+    transform: translateX(2px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+
+    &::before {
+      width: 40px;
+    }
+
+    &::after {
+      background: #6366f1;
+      transform: translate(-50%, -50%) scale(1.15);
+    }
   }
 
   @media (max-width: 768px) {
@@ -329,52 +357,63 @@ export const LoadingSpinner = styled.div`
 export const YearDivider = styled.button`
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 20px 0 12px 0;
+  gap: 0;
+  margin: 32px 0 24px -70px;
   padding: 0;
   background: transparent;
   border: none;
-  width: 100%;
+  width: calc(100% + 70px);
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.3s ease;
+  position: relative;
 
-  &::before,
-  &::after {
+  /* 타임라인 점 (년도 마커) - CompactList 기준 33px */
+  &::before {
     content: '';
-    flex: 1;
-    height: 1px;
-    background: rgba(226, 232, 240, 0.6);
-    transition: all 0.25s ease;
+    position: absolute;
+    left: 32px;
+    transform: translateX(-50%);
+    width: 14px;
+    height: 14px;
+    background: #6366f1;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+    z-index: 2;
+    transition: all 0.2s ease;
+  }
+
+  &:hover::before {
+    transform: translateX(-50%) scale(1.1);
   }
 
   span {
+    margin-left: 60px;
     font-size: 11px;
     font-weight: 600;
-    color: #64748b;
-    background: #fafafa;
-    padding: 5px 12px;
+    color: #475569;
+    background: #ffffff;
+    padding: 4px 12px;
     border-radius: 8px;
-    border: 1px solid rgba(203, 213, 225, 0.4);
-    letter-spacing: 0.2px;
+    border: 1px solid rgba(203, 213, 225, 0.5);
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    transition: all 0.25s ease;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
     svg {
-      transition: transform 0.25s ease;
+      transition: transform 0.2s ease;
       color: #6366f1;
       font-size: 10px;
       flex-shrink: 0;
     }
   }
 
-  &:hover {
-    span {
-      background: #ffffff;
-      border-color: rgba(99, 102, 241, 0.25);
-    }
+  &:hover span {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   }
 `
 
@@ -387,6 +426,51 @@ export const CollapsedCount = styled.span`
   border-radius: 6px;
   margin-left: 2px;
   flex-shrink: 0;
+`
+
+export const CollapsedPlaceholder = styled.div`
+  margin: 0 0 16px 0;
+  padding: 16px 20px;
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.03) 0%,
+    rgba(168, 85, 247, 0.02) 100%
+  );
+  border: 1px dashed rgba(99, 102, 241, 0.2);
+  border-radius: 12px;
+  text-align: center;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -38px;
+    top: 50%;
+    width: 38px;
+    height: 1px;
+    background: rgba(99, 102, 241, 0.15);
+    border-top: 1px dashed rgba(99, 102, 241, 0.2);
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: -38px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 6px;
+    background: rgba(99, 102, 241, 0.2);
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px #ffffff;
+  }
+
+  span {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 500;
+  }
 `
 
 export const CompactListSummary = styled.p<{ $depth: number }>`
@@ -657,6 +741,26 @@ export const CatalogSection = styled.section`
   height: 100%;
   max-height: calc(100vh - var(--header-height) - 60px);
   overflow: hidden;
+  position: relative;
+
+  /* 타임라인 세로 바 - 스크롤과 무관하게 고정 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 32px;
+    top: 64px;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(
+      180deg,
+      rgba(99, 102, 241, 0.3) 0%,
+      rgba(99, 102, 241, 0.1) 50%,
+      rgba(99, 102, 241, 0.3) 100%
+    );
+    border-radius: 1px;
+    z-index: 0;
+    pointer-events: none;
+  }
 `
 
 // Result Controls (Toolbar)
@@ -1179,21 +1283,6 @@ export const CompactListItemInTenure = styled(CompactListItem)`
   position: relative;
   margin-left: ${({ $depth }) => $depth * 24 + 8}px;
 
-  &::before {
-    content: '';
-    position: absolute;
-    left: -8px;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: linear-gradient(
-      180deg,
-      rgba(99, 102, 241, 0.4),
-      rgba(168, 85, 247, 0.3)
-    );
-    border-radius: 2px;
-  }
-
   background: ${({ $active, $depth }) =>
     $active
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.1))'
@@ -1203,6 +1292,42 @@ export const CompactListItemInTenure = styled(CompactListItem)`
 
   border-color: ${({ $active }) =>
     $active ? 'rgba(99, 102, 241, 0.5)' : 'rgba(99, 102, 241, 0.15)'};
+
+  border-left: 4px solid
+    ${({ $active }) =>
+      $active
+        ? '#6366f1'
+        : 'linear-gradient(180deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.3))'};
+
+  /* 타임라인 연결선 - 8px 더 왼쪽 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: -45px;
+    top: 50%;
+    width: 52px;
+    height: 2px;
+    background: rgba(99, 102, 241, 0.25);
+    transition: all 0.2s ease;
+  }
+
+  /* 타임라인 점 - 8px 더 왼쪽 */
+  &::after {
+    content: '';
+    position: absolute;
+    left: -45px;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: ${({ $active }) => ($active ? '10px' : '8px')};
+    height: ${({ $active }) => ($active ? '10px' : '8px')};
+    background: ${({ $active }) => ($active ? '#6366f1' : '#ffffff')};
+    border: 2px solid
+      ${({ $active }) => ($active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)')};
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px #ffffff;
+    transition: all 0.2s ease;
+    z-index: 1;
+  }
 
   &:hover {
     background: ${({ $active, $depth }) =>
