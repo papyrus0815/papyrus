@@ -53,11 +53,10 @@ export const CompactListItem = styled.div<{
           : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 14px;
   padding: 0;
-  margin-left: ${({ $depth }) => ($depth === 0 ? '40px' : $depth * 24 + 40)}px;
-  margin-right: 16px;
+  margin-left: ${({ $depth }) => $depth * 24}px;
   background: ${({ $active, $depth }) =>
     $active
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))'
+      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.06))'
       : $depth > 0
         ? 'rgba(248, 250, 252, 0.8)'
         : '#ffffff'};
@@ -70,9 +69,26 @@ export const CompactListItem = styled.div<{
   position: relative;
   display: flex;
 
+  /* 선택 상태 좌측 바 */
+  ${({ $active }) =>
+    $active &&
+    `
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(180deg, #6366f1 0%, #8b5cf6 100%);
+      border-radius: 14px 0 0 14px;
+      box-shadow: 2px 0 8px rgba(99, 102, 241, 0.3);
+    }
+  `}
+
   &:hover {
     border-color: rgba(99, 102, 241, 0.3);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
   }
 

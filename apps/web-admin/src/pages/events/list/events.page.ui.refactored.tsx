@@ -174,6 +174,35 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     resetAndFetch(newSize)
   }
 
+  // ===== 키보드 네비게이션 =====
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!flattenedHierarchy.length) return
+
+      const currentIndex = flattenedHierarchy.findIndex(
+        (item) => item.node.id === selectedEventId,
+      )
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (currentIndex < flattenedHierarchy.length - 1) {
+          setSelectedEventId(flattenedHierarchy[currentIndex + 1].node.id)
+        } else if (currentIndex === -1 && flattenedHierarchy.length > 0) {
+          setSelectedEventId(flattenedHierarchy[0].node.id)
+        }
+      } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+        e.preventDefault()
+        setSelectedEventId(flattenedHierarchy[currentIndex - 1].node.id)
+      } else if (e.key === 'Enter' && selectedEventId) {
+        e.preventDefault()
+        navigate(pathKeys.events.detail(selectedEventId))
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [flattenedHierarchy, selectedEventId, navigate])
+
   // ===== Pagination: 스크롤 감지 (서버 페이징) =====
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget

@@ -2,7 +2,6 @@
  * Modal Styled Components
  * 모달 관련 스타일
  */
-
 import styled from 'styled-components'
 
 export const ModalOverlay = styled.div`
