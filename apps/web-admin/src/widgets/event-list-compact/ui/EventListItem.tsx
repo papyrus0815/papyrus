@@ -33,9 +33,11 @@ interface EventListItemProps {
   isActive: boolean
   isInTenureGroup: boolean
   dbCategories: EventCategoryDto[]
+  isBookmarked?: boolean
   onSelect: () => void
   onToggleExpansion: () => void
   onShowSummary: () => void
+  onToggleBookmark?: () => void
 }
 
 export const EventListItem: React.FC<EventListItemProps> = ({
@@ -47,9 +49,11 @@ export const EventListItem: React.FC<EventListItemProps> = ({
   isActive,
   isInTenureGroup,
   dbCategories,
+  isBookmarked = false,
   onSelect,
   onToggleExpansion,
   onShowSummary,
+  onToggleBookmark,
 }) => {
   const formatFullDate = (date: Date) => {
     return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`
@@ -113,7 +117,12 @@ export const EventListItem: React.FC<EventListItemProps> = ({
     : List.CompactListItem
 
   return (
-    <ListItemComponent $active={isActive} $depth={depth} onClick={onSelect}>
+    <ListItemComponent
+      $active={isActive}
+      $depth={depth}
+      onClick={onSelect}
+      data-event-id={node.id}
+    >
       <List.CompactListBody>
         <List.CompactThumbnail
           $depth={depth}
@@ -166,6 +175,36 @@ export const EventListItem: React.FC<EventListItemProps> = ({
                 >
                   <FiGitBranch size={13} />
                 </Modal.SummaryIconButton>
+              )}
+              {onToggleBookmark && (
+                <button
+                  type="button"
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    e.stopPropagation()
+                    onToggleBookmark()
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    padding: '4px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: isBookmarked ? '#f59e0b' : '#cbd5e1',
+                    fontSize: '16px',
+                    transition: 'all 0.2s ease',
+                    marginLeft: 'auto',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'scale(1.2)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)'
+                  }}
+                  title={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                >
+                  {isBookmarked ? '★' : '☆'}
+                </button>
               )}
             </List.CompactListTitle>
           </List.CompactListHeader>

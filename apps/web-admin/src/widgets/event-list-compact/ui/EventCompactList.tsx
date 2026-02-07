@@ -58,10 +58,11 @@ interface EventCompactListProps {
   hasActiveFilters: boolean
   tenureGroups: TenureGroup[]
   dbCategories: EventCategoryDto[]
-  totalCount?: number // 총 개수
-  isLoadingMore?: boolean // 추가 로딩 상태
-  displayedCount?: number // 현재 표시된 개수
-  hasMoreData?: boolean // 더 불러올 데이터가 있는지
+  totalCount?: number
+  isLoadingMore?: boolean
+  displayedCount?: number
+  hasMoreData?: boolean
+  bookmarks?: Set<string>
   onToggleExpansion: (eventId: string) => void
   onToggleTenureGroupExpansion: (tenureKey: string) => void
   onSelectEvent: (eventId: string) => void
@@ -69,6 +70,7 @@ interface EventCompactListProps {
   onSortChange: (sortBy: SortOption) => void
   onSortDirectionToggle: () => void
   onResetFilters: () => void
+  onToggleBookmark?: (eventId: string) => void
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
   pageSize?: number
   onPageSizeChange?: (size: number) => void
@@ -92,6 +94,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   isLoadingMore = false,
   displayedCount = 0,
   hasMoreData = false,
+  bookmarks = new Set(),
   onToggleExpansion,
   onToggleTenureGroupExpansion,
   onSelectEvent,
@@ -99,6 +102,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onSortChange,
   onSortDirectionToggle,
   onResetFilters,
+  onToggleBookmark,
   onScroll,
   pageSize = 20,
   onPageSizeChange,
@@ -124,45 +128,22 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         <List.ToolbarMeta>
           <span>{sortedEvents.length}건</span>
         </List.ToolbarMeta>
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            marginLeft: 'auto',
-            alignItems: 'center',
-          }}
-        >
-          {onPageSizeChange && (
+        {onPageSizeChange && (
+          <div style={{ marginLeft: 'auto' }}>
             <List.SortSelect
               value={pageSize}
-              aria-label="페이지 크기 선택"
+              aria-label="페이지 크기"
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                 onPageSizeChange(Number(e.target.value))
               }
-              style={{ width: '110px' }}
+              style={{ width: '100px', fontSize: '12px', padding: '8px 10px' }}
             >
-              <option value={20}>20개씩</option>
-              <option value={50}>50개씩</option>
-              <option value={100}>100개씩</option>
+              <option value={20}>20개</option>
+              <option value={50}>50개</option>
+              <option value={100}>100개</option>
             </List.SortSelect>
-          )}
-          <List.SortSelect
-            value={sortBy}
-            aria-label="정렬 기준 선택"
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-              onSortChange(e.target.value as SortOption)
-            }
-          >
-            <option value="recent">최근 발생 순</option>
-            <option value="duration">장기 지속 순</option>
-          </List.SortSelect>
-          <List.SortDirectionToggle
-            type="button"
-            onClick={onSortDirectionToggle}
-          >
-            {sortDirection === 'asc' ? <FiArrowUp /> : <FiArrowDown />}
-          </List.SortDirectionToggle>
-        </div>
+          </div>
+        )}
       </List.ResultControls>
 
       {isLoading ? (
@@ -340,9 +321,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   isActive={selectedEventId === node.id}
                   isInTenureGroup={!!isInTenureGroup}
                   dbCategories={dbCategories}
+                  isBookmarked={bookmarks.has(node.id)}
                   onSelect={() => onSelectEvent(node.id)}
                   onToggleExpansion={() => onToggleExpansion(node.id)}
                   onShowSummary={() => onShowSummary(node.id)}
+                  onToggleBookmark={onToggleBookmark ? () => onToggleBookmark(node.id) : undefined}
                 />
 
                 {/* 집권 기간 그룹 푸터 */}

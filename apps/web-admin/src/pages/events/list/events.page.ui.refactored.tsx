@@ -44,6 +44,8 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
+import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
+import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
 import { FiltersPanel } from '@/widgets/event-filters-panel/ui'
 import { EventCompactList } from '@/widgets/event-list-compact/ui'
 import {
@@ -68,6 +70,10 @@ export const EventsCatalogPageRefactored: React.FC = () => {
 
   // ===== Pagination State (useEvents보다 먼저 선언) =====
   const [pageSize, setPageSize] = useState(20)
+
+  // ===== Bookmarks & Recent =====
+  const { bookmarks, toggleBookmark } = useBookmarks()
+  const { addRecentEvent } = useRecentEvents()
 
   // ===== Entity: Events Data =====
   const {
@@ -167,6 +173,13 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     SUMMARY_VIEW_MODES.TIMELINE,
   )
 
+  // ===== 사건 선택 시 최근 본 목록에 추가 =====
+  useEffect(() => {
+    if (selectedEventId) {
+      addRecentEvent(selectedEventId)
+    }
+  }, [selectedEventId, addRecentEvent])
+
   // ===== Pagination: 페이지 크기 변경 핸들러 =====
   const handlePageSizeChange = (newSize: number) => {
     console.log(`📏 페이지 크기 변경: ${pageSize} → ${newSize}`)
@@ -183,19 +196,37 @@ export const EventsCatalogPageRefactored: React.FC = () => {
         (item) => item.node.id === selectedEventId,
       )
 
+      let newIndex = currentIndex
+
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         if (currentIndex < flattenedHierarchy.length - 1) {
-          setSelectedEventId(flattenedHierarchy[currentIndex + 1].node.id)
+          newIndex = currentIndex + 1
         } else if (currentIndex === -1 && flattenedHierarchy.length > 0) {
-          setSelectedEventId(flattenedHierarchy[0].node.id)
+          newIndex = 0
         }
       } else if (e.key === 'ArrowUp' && currentIndex > 0) {
         e.preventDefault()
-        setSelectedEventId(flattenedHierarchy[currentIndex - 1].node.id)
+        newIndex = currentIndex - 1
       } else if (e.key === 'Enter' && selectedEventId) {
         e.preventDefault()
         navigate(pathKeys.events.detail(selectedEventId))
+        return
+      } else {
+        return
+      }
+
+      if (newIndex !== currentIndex && newIndex !== -1) {
+        const newId = flattenedHierarchy[newIndex].node.id
+        setSelectedEventId(newId)
+
+        // 선택된 카드로 스크롤
+        setTimeout(() => {
+          const element = document.querySelector(`[data-event-id="${newId}"]`)
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }, 50)
       }
     }
 
@@ -307,6 +338,8 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             showFlatView={showFlatView}
             hasActiveFilters={hasActiveFilters}
             isLoading={isLoading}
+            sortBy={sortBy}
+            sortDirection={sortDirection}
             dbCategories={dbCategories}
             availableCenturies={availableCenturies}
             events={events}
@@ -319,6 +352,10 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             onToggleFlatView={() => setShowFlatView(!showFlatView)}
             onResetFilters={handleResetFilters}
             onSelectCentury={setSelectedCentury}
+            onSortChange={setSortBy}
+            onSortDirectionToggle={() =>
+              setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+            }
           />
           <Layout.CreateEventButton
             onClick={() => navigate(pathKeys.events.create())}
@@ -347,6 +384,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             isLoadingMore={isLoading && events.length > 0}
             displayedCount={flattenedHierarchy.length}
             hasMoreData={hasMore}
+            bookmarks={bookmarks}
             onToggleExpansion={toggleEventExpansion}
             onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
             onSelectEvent={setSelectedEventId}
@@ -359,6 +397,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
               setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
             }
             onResetFilters={handleResetFilters}
+            onToggleBookmark={toggleBookmark}
             onScroll={handleScroll}
             pageSize={pageSize}
             onPageSizeChange={handlePageSizeChange}

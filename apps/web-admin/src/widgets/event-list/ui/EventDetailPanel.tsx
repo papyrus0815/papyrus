@@ -14,6 +14,7 @@ import {
   FiGlobe,
   FiLayers,
   FiMapPin,
+  FiShare2,
   FiTarget,
   FiUsers,
 } from 'react-icons/fi'
@@ -135,20 +136,21 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               </Detail.DetailDescription>
             )}
             
-            {/* 액션 버튼 - 개별 크기 */}
+            {/* 액션 버튼 */}
             <div style={{
               display: 'flex',
-              gap: '10px',
-              marginTop: '20px'
+              gap: '8px',
+              marginTop: '16px'
             }}>
               <button
-                onClick={() =>
-                  navigate(pathKeys.events.create(), {
-                    state: { editEventId: selectedNode.id },
+                onClick={() => {
+                  const url = `${window.location.origin}${pathKeys.events.detail(selectedNode.id)}`
+                  navigator.clipboard.writeText(url).then(() => {
+                    alert('링크가 복사되었습니다!')
                   })
-                }
+                }}
                 style={{
-                  padding: '11px 20px',
+                  padding: '10px 16px',
                   background: 'white',
                   border: '1px solid #d1d5db',
                   borderRadius: '8px',
@@ -158,8 +160,42 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '7px',
-                  transition: 'all 0.15s ease',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  flex: 1,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#6366f1'
+                  e.currentTarget.style.color = '#6366f1'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db'
+                  e.currentTarget.style.color = '#374151'
+                }}
+              >
+                <FiShare2 size={15} />
+                공유
+              </button>
+              <button
+                onClick={() =>
+                  navigate(pathKeys.events.create(), {
+                    state: { editEventId: selectedNode.id },
+                  })
+                }
+                style={{
+                  padding: '10px 16px',
+                  background: 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#374151',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                  flex: 1,
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = '#9ca3af'
@@ -178,7 +214,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                   navigate(pathKeys.events.detail(selectedNode.id))
                 }
                 style={{
-                  padding: '11px 20px',
+                  padding: '10px 20px',
                   background: '#0f172a',
                   border: '1px solid #0f172a',
                   borderRadius: '8px',

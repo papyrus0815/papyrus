@@ -30,6 +30,8 @@ interface FiltersPanelProps {
   showFlatView: boolean
   hasActiveFilters: boolean
   isLoading: boolean
+  sortBy: string
+  sortDirection: 'asc' | 'desc'
 
   // 데이터
   dbCategories: EventCategoryDto[]
@@ -46,6 +48,8 @@ interface FiltersPanelProps {
   onToggleFlatView: () => void
   onResetFilters: () => void
   onSelectCentury: (century: CenturyFilter) => void
+  onSortChange: (sortBy: string) => void
+  onSortDirectionToggle: () => void
 }
 
 export const FiltersPanel: React.FC<FiltersPanelProps> = ({
@@ -57,6 +61,8 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   showFlatView,
   hasActiveFilters,
   isLoading,
+  sortBy,
+  sortDirection,
   dbCategories,
   availableCenturies,
   events,
@@ -69,7 +75,44 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   onToggleFlatView,
   onResetFilters,
   onSelectCentury,
+  onSortChange,
+  onSortDirectionToggle,
 }) => {
+  // 활성 필터 칩 생성
+  const activeFilters = []
+  
+  if (selectedCategory !== FILTER_ALL) {
+    const categoryName = dbCategories.find((cat) => cat.id === selectedCategory)?.name
+    if (categoryName) {
+      activeFilters.push({
+        key: 'category',
+        label: categoryName,
+        onRemove: () => onShowCategoryModal(),
+      })
+    }
+  }
+  
+  if (selectedCountry !== FILTER_ALL) {
+    const countryName =
+      countries.find((c) => c.id === selectedCountry)?.name ||
+      historicalCountries.find((c) => c.id === selectedCountry)?.name
+    if (countryName) {
+      activeFilters.push({
+        key: 'country',
+        label: countryName,
+        onRemove: () => onShowCountryModal(),
+      })
+    }
+  }
+  
+  if (selectedCentury !== FILTER_ALL) {
+    activeFilters.push({
+      key: 'century',
+      label: `${selectedCentury}C`,
+      onRemove: () => onSelectCentury(FILTER_ALL),
+    })
+  }
+
   return (
     <Filter.FilterColumn>
       {/* 검색 */}
@@ -79,6 +122,20 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
         value={keyword}
         onChange={(e) => onKeywordChange(e.target.value)}
       />
+
+      {/* 활성 필터 칩 */}
+      {activeFilters.length > 0 && (
+        <Filter.FilterChips>
+          {activeFilters.map((filter) => (
+            <Filter.FilterChip key={filter.key}>
+              <span>{filter.label}</span>
+              <button type="button" onClick={filter.onRemove}>
+                <FiX size={12} />
+              </button>
+            </Filter.FilterChip>
+          ))}
+        </Filter.FilterChips>
+      )}
 
       <Filter.FilterBlock>
         {/* 카테고리 */}
@@ -113,17 +170,27 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
             onSelectCentury(value === 'all' ? FILTER_ALL : parseInt(value, 10))
           }}
         >
-          <option value="all">전체 시대</option>
+          <option value="all">전체</option>
           {availableCenturies.map((century) => (
             <option key={century} value={century}>
-              {century}세기
+              {century}C
             </option>
           ))}
         </Filter.CenturySelect>
 
+        {/* 정렬 */}
+        <Filter.SortSelect value={sortBy} onChange={(e) => onSortChange(e.target.value)}>
+          <option value="recent">최근순</option>
+          <option value="duration">기간순</option>
+        </Filter.SortSelect>
+
+        <Filter.SortButton type="button" onClick={onSortDirectionToggle}>
+          {sortDirection === 'asc' ? '↑' : '↓'}
+        </Filter.SortButton>
+
         {/* 계층 구조 토글 */}
         <Filter.FilterToggle>
-          <Filter.FilterToggleLabel>계층 구조</Filter.FilterToggleLabel>
+          <Filter.FilterToggleLabel>계층</Filter.FilterToggleLabel>
           <Filter.Switch
             type="button"
             $active={showFlatView}

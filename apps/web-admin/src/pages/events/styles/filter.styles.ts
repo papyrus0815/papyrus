@@ -162,6 +162,47 @@ export const FilterCheckbox = styled.label`
   }
 `
 
+export const FilterChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+export const FilterChip = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f46e5;
+
+  span {
+    white-space: nowrap;
+  }
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: rgba(99, 102, 241, 0.15);
+    border: none;
+    border-radius: 50%;
+    color: #6366f1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: rgba(99, 102, 241, 0.25);
+      color: #4f46e5;
+    }
+  }
+`
+
 export const FilterResetButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -370,29 +411,25 @@ export const SortDirectionToggle = styled.button`
 `
 
 export const SortSelect = styled.select`
-  flex: 0 0 160px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
   border-radius: 10px;
-  padding: 9px 32px 9px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1f2937;
-  background: #fff;
-  appearance: none;
-  background-image: url('data:image/svg+xml,%3Csvg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M1 1L5 5L9 1" stroke="%232266dd" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E');
-  background-repeat: no-repeat;
-  background-position: calc(100% - 10px) 50%;
-  transition:
-    border-color 0.2s ease,
-    color 0.2s ease;
+  padding: 9px 12px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.4);
+    background: #ffffff;
+    border-color: rgba(99, 102, 241, 0.2);
   }
 
-  &:focus-visible {
+  &:focus {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    border-color: #6366f1;
   }
 
   option {
@@ -450,6 +487,7 @@ export const CenturySelect = styled.select`
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-width: 90px;
 
   &:hover {
     background: #ffffff;
@@ -459,6 +497,28 @@ export const CenturySelect = styled.select`
   &:focus {
     outline: none;
     border-color: #6366f1;
+  }
+`
+
+export const SortButton = styled.button`
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: #ffffff;
+    border-color: rgba(99, 102, 241, 0.2);
+    color: #6366f1;
   }
 `
 

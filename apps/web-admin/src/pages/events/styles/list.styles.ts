@@ -68,6 +68,18 @@ export const CompactListItem = styled.div<{
       : '0 1px 3px rgba(0, 0, 0, 0.04)'};
   position: relative;
   display: flex;
+  animation: fadeIn 0.3s ease-out;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
   /* 선택 상태 좌측 바 */
   ${({ $active }) =>
@@ -438,19 +450,19 @@ export const EmptyCatalogState = styled.div`
 export const EmptyIcon = styled.div`
   position: relative;
   z-index: 1;
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
   background: linear-gradient(
     135deg,
-    rgba(99, 102, 241, 0.1),
-    rgba(168, 85, 247, 0.08)
+    rgba(99, 102, 241, 0.08),
+    rgba(168, 85, 247, 0.06)
   );
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 
   svg {
     color: #6366f1;
