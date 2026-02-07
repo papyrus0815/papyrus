@@ -211,6 +211,10 @@ model HistoricalCountry {
   treatySignatories              TreatySignatory[]
   allianceMembers                AllianceMember[]
 
+  // 🆕 왕조 통치 관계
+  /// 이 국가를 통치한 왕조들의 역사 (시기별)
+  dynastyRules DynastyRule[] @relation("CountryDynastyRules")
+
   // --- 메타데이터 필드
   /// 생성 일시
   createdAt DateTime @default(now()) @map("created_at")

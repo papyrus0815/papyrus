@@ -23,8 +23,9 @@
       "@api/*": ["apps/api/src/api/*"],
       "@papyrus/api-sdk": ["libs/api-sdk/src/index.ts"],
 
-      "@prisma/client": ["apps/api/prisma/generated/client.ts"],
-      "@prisma/client/*": ["apps/api/prisma/generated/*"],
+      // "@prisma/client": ["apps/api/prisma/generated/prisma"],
+      // "@prisma/client/*": ["apps/api/prisma/generated/prisma/*"],
+
       "@prisma/prisma.service": ["apps/api/prisma/prisma.service"],
       "@prisma/config": ["apps/api/prisma/prisma.config"]
     }

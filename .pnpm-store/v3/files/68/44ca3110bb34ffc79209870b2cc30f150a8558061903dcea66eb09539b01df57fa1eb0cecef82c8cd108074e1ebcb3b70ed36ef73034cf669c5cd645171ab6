@@ -1,0 +1,106 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ArgumentParser = void 0;
+const commander_1 = __importDefault(require("commander"));
+const fs_1 = __importDefault(require("fs"));
+const inquirer_1 = __importDefault(require("inquirer"));
+const package_manager_detector_1 = require("package-manager-detector");
+var ArgumentParser;
+(function (ArgumentParser) {
+    function parse(pack) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // PREPARE ASSETS
+            commander_1.default.program.option("--manager [manager]", "package manager");
+            commander_1.default.program.option("--project [project]", "tsconfig.json file location");
+            commander_1.default.program.option("--runtime [boolean]", "transform runtime swagger");
+            // INTERNAL PROCEDURES
+            const questioned = { value: false };
+            const action = (closure) => {
+                return new Promise((resolve, reject) => {
+                    commander_1.default.program.action((options) => __awaiter(this, void 0, void 0, function* () {
+                        try {
+                            resolve(yield closure(options));
+                        }
+                        catch (exp) {
+                            reject(exp);
+                        }
+                    }));
+                    commander_1.default.program.parseAsync().catch(reject);
+                });
+            };
+            const select = (name) => (message) => (choices, filter) => __awaiter(this, void 0, void 0, function* () {
+                questioned.value = true;
+                return (yield inquirer_1.default.createPromptModule()({
+                    type: "list",
+                    name: name,
+                    message: message,
+                    choices: choices,
+                    filter,
+                }))[name];
+            });
+            const configure = () => __awaiter(this, void 0, void 0, function* () {
+                const fileList = yield (yield fs_1.default.promises.readdir(process.cwd()))
+                    .filter((str) => str.substring(0, 8) === "tsconfig" &&
+                    str.substring(str.length - 5) === ".json")
+                    .sort((x, y) => x === "tsconfig.json"
+                    ? -1
+                    : y === "tsconfig.json"
+                        ? 1
+                        : x < y
+                            ? -1
+                            : 1);
+                if (fileList.length === 0) {
+                    if (process.cwd() !== pack.directory)
+                        throw new Error(`Unable to find "tsconfig.json" file.`);
+                    return null;
+                }
+                else if (fileList.length === 1)
+                    return fileList[0];
+                return select("tsconfig")("TS Config File")(fileList);
+            });
+            // DO CONSTRUCT
+            return action((options) => __awaiter(this, void 0, void 0, function* () {
+                var _a, _b, _c, _d;
+                (_a = options.manager) !== null && _a !== void 0 ? _a : (options.manager = (_b = (yield detectManager())) !== null && _b !== void 0 ? _b : (yield select("manager")("Package Manager")([
+                    "npm",
+                    "pnpm",
+                    "yarn (berry is not supported)",
+                    "bun",
+                ], (value) => value.split(" ")[0])));
+                pack.manager = options.manager;
+                (_c = options.project) !== null && _c !== void 0 ? _c : (options.project = yield configure());
+                options.runtime =
+                    ((_d = options.runtime) !== null && _d !== void 0 ? _d : (yield select("runtime")("Transform Runtime Swagger")([
+                        "true",
+                        "false",
+                    ]))) !== "false";
+                if (questioned.value)
+                    console.log("");
+                return options;
+            }));
+        });
+    }
+    ArgumentParser.parse = parse;
+    const detectManager = () => __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        const result = yield (0, package_manager_detector_1.detect)({ cwd: process.cwd() });
+        if ((result === null || result === void 0 ? void 0 : result.name) === "npm")
+            return null; // NPM case is still selectable
+        else if ((result === null || result === void 0 ? void 0 : result.name) === "deno")
+            return null; // Deno case is not supported
+        return (_a = result === null || result === void 0 ? void 0 : result.name) !== null && _a !== void 0 ? _a : null;
+    });
+})(ArgumentParser || (exports.ArgumentParser = ArgumentParser = {}));
+//# sourceMappingURL=ArgumentParser.js.map

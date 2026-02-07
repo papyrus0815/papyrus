@@ -1,0 +1,98 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NestiaSetupWizard = void 0;
+const fs_1 = __importDefault(require("fs"));
+const ArgumentParser_1 = require("./internal/ArgumentParser");
+const CommandExecutor_1 = require("./internal/CommandExecutor");
+const PackageManager_1 = require("./internal/PackageManager");
+const PluginConfigurator_1 = require("./internal/PluginConfigurator");
+var NestiaSetupWizard;
+(function (NestiaSetupWizard) {
+    function setup() {
+        return __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            console.log("----------------------------------------");
+            console.log(" Nestia Setup Wizard");
+            console.log("----------------------------------------");
+            // PREPARE ASSETS
+            const pack = yield PackageManager_1.PackageManager.mount();
+            const args = yield ArgumentParser_1.ArgumentParser.parse(pack);
+            // INSTALL NESTIA
+            pack.install({ dev: false, modulo: "@nestia/core", version: "latest" });
+            pack.install({ dev: false, modulo: "@nestia/e2e", version: "latest" });
+            pack.install({ dev: false, modulo: "@nestia/fetcher", version: "latest" });
+            pack.install({
+                dev: args.runtime === false,
+                modulo: "@nestia/sdk",
+                version: "latest",
+            });
+            pack.install({ dev: true, modulo: "@nestia/benchmark", version: "latest" });
+            pack.install({ dev: true, modulo: "nestia", version: "latest" });
+            pack.install({ dev: false, modulo: "typia", version: "latest" });
+            // INSTALL TYPESCRIPT COMPILERS
+            pack.install({ dev: true, modulo: "ts-patch", version: "latest" });
+            pack.install({ dev: true, modulo: "ts-node", version: "latest" });
+            pack.install({
+                dev: true,
+                modulo: "typescript",
+                version: yield getTypeScriptVersion(),
+            });
+            (_a = args.project) !== null && _a !== void 0 ? _a : (args.project = (() => {
+                const runner = pack.manager === "npm" ? "npx" : pack.manager;
+                CommandExecutor_1.CommandExecutor.run(`${runner} tsc --init`);
+                return (args.project = "tsconfig.json");
+            })());
+            // SETUP TRANSFORMER
+            yield pack.save((data) => {
+                var _a;
+                // COMPOSE PREPARE COMMAND
+                (_a = data.scripts) !== null && _a !== void 0 ? _a : (data.scripts = {});
+                if (typeof data.scripts.prepare === "string" &&
+                    data.scripts.prepare.trim().length !== 0) {
+                    if (data.scripts.prepare.includes("ts-patch install") === false)
+                        data.scripts.prepare = "ts-patch install && " + data.scripts.prepare;
+                }
+                else
+                    data.scripts.prepare = "ts-patch install";
+                // NO MORE "typia patch" REQUIRED
+                data.scripts.prepare = data.scripts.prepare
+                    .split("&&")
+                    .map((str) => str.trim())
+                    .filter((str) => str !== "typia patch")
+                    .join(" && ");
+                // FOR OLDER VERSIONS
+                if (typeof data.scripts.postinstall === "string") {
+                    data.scripts.postinstall = data.scripts.postinstall
+                        .split("&&")
+                        .map((str) => str.trim())
+                        .filter((str) => str.indexOf("ts-patch install") === -1)
+                        .join(" && ");
+                    if (data.scripts.postinstall.length === 0)
+                        delete data.scripts.postinstall;
+                }
+            });
+            CommandExecutor_1.CommandExecutor.run(`${pack.manager} run prepare`);
+            // CONFIGURE PLUGIN
+            yield PluginConfigurator_1.PluginConfigurator.configure(args);
+        });
+    }
+    NestiaSetupWizard.setup = setup;
+    const getTypeScriptVersion = () => __awaiter(this, void 0, void 0, function* () {
+        const content = yield fs_1.default.promises.readFile(`${__dirname}/../package.json`, "utf-8");
+        const json = JSON.parse(content);
+        return json.devDependencies.typescript;
+    });
+})(NestiaSetupWizard || (exports.NestiaSetupWizard = NestiaSetupWizard = {}));
+//# sourceMappingURL=NestiaSetupWizard.js.map

@@ -1,0 +1,10 @@
+import ts from "typescript";
+export declare namespace FilePrinter {
+    const description: <Node extends ts.Node>(node: Node, comment: string) => Node;
+    const enter: () => ts.ExpressionStatement;
+    const write: (props: {
+        location: string;
+        statements: ts.Statement[];
+        top?: string;
+    }) => Promise<void>;
+}

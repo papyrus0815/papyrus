@@ -1,0 +1,9 @@
+import { VERSION_NEUTRAL, VersionValue } from "@nestjs/common/interfaces";
+export declare namespace VersioningStrategy {
+    interface IConfig {
+        prefix: string;
+        defaultVersion?: VersionValue;
+    }
+    const cast: (value: VersionValue | undefined) => Array<string | typeof VERSION_NEUTRAL>;
+    const merge: (config: IConfig | undefined) => (values: Array<string | typeof VERSION_NEUTRAL>) => string[];
+}

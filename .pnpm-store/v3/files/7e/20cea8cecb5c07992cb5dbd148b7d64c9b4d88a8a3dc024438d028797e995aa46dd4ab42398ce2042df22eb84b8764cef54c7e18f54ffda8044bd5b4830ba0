@@ -1,0 +1,6 @@
+import { VERSION_NEUTRAL, VersionValue } from "@nestjs/common/interfaces";
+import { INestiaProject } from "../structures/INestiaProject";
+export declare namespace VersioningStrategy {
+    const cast: (value: VersionValue | undefined) => Array<string | typeof VERSION_NEUTRAL>;
+    const merge: (project: Omit<INestiaProject, "config">) => (values: Array<string | typeof VERSION_NEUTRAL>) => string[];
+}

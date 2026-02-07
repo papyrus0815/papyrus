@@ -2,7 +2,6 @@
  * Layout Styled Components
  * 페이지 레이아웃 관련 스타일
  */
-
 import styled from 'styled-components'
 
 export const PageScene = styled.div`
@@ -15,9 +14,10 @@ export const PageScene = styled.div`
   height: calc(100vh - var(--header-height));
   padding-top: 16px;
   padding-bottom: 16px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   background: #ffffff;
+  display: flex;
+  flex-direction: column;
 
   @media (max-width: 768px) {
     padding-top: 16px;
@@ -33,6 +33,9 @@ export const PageWrapper = styled.div`
   width: 100%;
   margin: 0 auto;
   padding: 0 20px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 
   @media (max-width: 768px) {
     padding: 0 16px;
@@ -105,14 +108,17 @@ export const CreateEventButton = styled.button`
 
 export const CatalogSplit = styled.div`
   display: grid;
-  grid-template-columns: 280px minmax(500px, 1fr) minmax(400px, 600px);
+  grid-template-columns: 280px minmax(650px, 920px) minmax(400px, 600px);
   gap: 18px;
   align-items: start;
   max-width: 2400px;
   margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 
   @media (max-width: 1600px) {
-    grid-template-columns: 260px minmax(450px, 1fr) minmax(350px, 500px);
+    grid-template-columns: 260px minmax(600px, 800px) minmax(350px, 500px);
     gap: 16px;
   }
 
@@ -131,6 +137,7 @@ export const CatalogSection = styled.section`
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 `
-

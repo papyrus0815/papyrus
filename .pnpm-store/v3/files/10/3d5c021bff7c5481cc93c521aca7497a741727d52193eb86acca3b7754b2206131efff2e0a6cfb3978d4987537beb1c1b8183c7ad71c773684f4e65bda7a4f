@@ -1,0 +1,19 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CoreMetadataUtil = void 0;
+var CoreMetadataUtil;
+(function (CoreMetadataUtil) {
+    CoreMetadataUtil.atomics = (meta) => new Set([
+        ...meta.atomics.map((a) => a.type),
+        ...meta.constants.map((c) => c.type),
+        ...(meta.templates.length ? ["string"] : []),
+    ]);
+    CoreMetadataUtil.isUnion = (meta) => CoreMetadataUtil.atomics(meta).size +
+        meta.arrays.length +
+        meta.tuples.length +
+        meta.natives.length +
+        meta.maps.length +
+        meta.objects.length >
+        1;
+})(CoreMetadataUtil || (exports.CoreMetadataUtil = CoreMetadataUtil = {}));
+//# sourceMappingURL=CoreMetadataUtil.js.map

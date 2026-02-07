@@ -1,4 +1,5 @@
 import * as personsApi from '@api/functional/persons'
+
 import { apiConnection } from '../client'
 
 export type Era = 'BC' | 'AD'
@@ -24,6 +25,13 @@ export type Person = {
   } | null
 }
 
+export type DateInfo = {
+  era: Era
+  year: number
+  month?: number
+  day?: number
+}
+
 export type CreatePersonInput = {
   name: string
   surname?: string | null
@@ -34,12 +42,20 @@ export type CreatePersonInput = {
   gender?: string | null
   biography?: string | null
   profileImageUrl?: string | null
+  // 왕/군주 관련 필드
+  regnalName?: string | null
+  templeName?: string | null
+  posthumousName?: string | null
+  // 관계
   countryId?: string | null
   dynastyId?: string | null
   religionId?: string | null
   jobId?: string | null
   fatherId?: string | null
   motherId?: string | null
+  // 날짜 객체 형식
+  birth?: DateInfo
+  death?: DateInfo
 }
 
 export type UpdatePersonInput = Partial<CreatePersonInput>

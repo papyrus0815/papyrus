@@ -5,7 +5,6 @@ import type { RouteObject } from 'react-router-dom'
 
 import PersonCreatePage from '@/pages/persons/person-create.page'
 import PersonDetailPage from '@/pages/persons/person-detail.page'
-import PersonEditPage from '@/pages/persons/person-edit.page'
 import PersonPage from '@/pages/persons/person.page'
 
 export const personsRoute: RouteObject = {
@@ -20,8 +19,9 @@ export const personsRoute: RouteObject = {
       element: <PersonCreatePage />,
     },
     {
+      // 수정도 같은 컴포넌트 사용 (ID로 구분)
       path: ':id/edit',
-      element: <PersonEditPage />,
+      element: <PersonCreatePage />,
     },
     {
       path: ':id',

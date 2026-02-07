@@ -1,0 +1,106 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SwaggerOperationParameterComposer = void 0;
+const tstl_1 = require("tstl");
+const JsonSchemasProgrammer_1 = require("typia/lib/programmers/json/JsonSchemasProgrammer");
+const SwaggerDescriptionComposer_1 = require("./SwaggerDescriptionComposer");
+var SwaggerOperationParameterComposer;
+(function (SwaggerOperationParameterComposer) {
+    SwaggerOperationParameterComposer.compose = (props) => props.parameter.category === "body"
+        ? []
+        : props.parameter.category === "param"
+            ? [SwaggerOperationParameterComposer.path(Object.assign(Object.assign({}, props), { parameter: props.parameter }))]
+            : props.parameter.category === "query"
+                ? SwaggerOperationParameterComposer.query(Object.assign(Object.assign({}, props), { parameter: props.parameter }))
+                : SwaggerOperationParameterComposer.header(Object.assign(Object.assign({}, props), { parameter: props.parameter }));
+    SwaggerOperationParameterComposer.body = (props) => {
+        const description = SwaggerDescriptionComposer_1.SwaggerDescriptionComposer.descriptionFromJsDocTag({
+            jsDocTags: props.jsDocTags,
+            tag: "param",
+            parameter: props.parameter.name,
+        });
+        return Object.assign({ description: props.parameter.encrypted
+                ? `${warning.get(!!description)}${description !== null && description !== void 0 ? description : ""}`
+                : description, content: {
+                [props.parameter.contentType]: {
+                    schema: props.schema,
+                    example: props.parameter.example,
+                    examples: props.parameter.examples,
+                },
+            }, required: props.parameter.metadata.isRequired() }, (props.parameter.encrypted ? { "x-nestia-encrypted": true } : {}));
+    };
+    SwaggerOperationParameterComposer.path = (props) => ({
+        name: props.parameter.field,
+        in: "path",
+        schema: props.schema,
+        required: props.parameter.metadata.isRequired(),
+        description: parameterDescription(props),
+        example: props.parameter.example,
+        examples: props.parameter.examples,
+    });
+    SwaggerOperationParameterComposer.query = (props) => decomposible(props);
+    SwaggerOperationParameterComposer.header = (props) => decomposible(props);
+    const parameterDescription = (props) => {
+        var _a, _b, _c, _d, _e, _f;
+        return ((_d = (_a = props.parameter.description) !== null && _a !== void 0 ? _a : (_c = (_b = props.parameter.jsDocTags.find((tag) => tag.name === "description")) === null || _b === void 0 ? void 0 : _b.text) === null || _c === void 0 ? void 0 : _c[0].text) !== null && _d !== void 0 ? _d : (_f = (_e = props.jsDocTags
+            .find((tag) => { var _a; return tag.name === "param" && ((_a = tag.text) === null || _a === void 0 ? void 0 : _a[0].text) === props.parameter.name; })) === null || _e === void 0 ? void 0 : _e.text) === null || _f === void 0 ? void 0 : _f.map((e) => e.text).join("").substring(props.parameter.name.length).trim());
+    };
+    const decomposible = (props) => {
+        var _a;
+        const param = {
+            name: (_a = props.parameter.field) !== null && _a !== void 0 ? _a : props.parameter.name,
+            in: props.parameter.category === "query" ? "query" : "header",
+            schema: props.schema,
+            description: parameterDescription(props),
+            required: props.parameter.metadata.isRequired(),
+            example: props.parameter.example,
+            examples: props.parameter.examples,
+        };
+        if (props.config.decompose === false ||
+            props.parameter.metadata.objects.length === 0)
+            return [param];
+        return props.parameter.metadata.objects[0].type.properties
+            .filter((p) => p.jsDocTags.every((tag) => tag.name !== "hidden" && tag.name !== "ignore"))
+            .map((p) => {
+            var _a, _b, _c, _d;
+            var _e, _f;
+            const json = JsonSchemasProgrammer_1.JsonSchemasProgrammer.write({
+                version: "3.1",
+                metadatas: [p.value],
+            });
+            if (Object.keys((_a = json.components.schemas) !== null && _a !== void 0 ? _a : {}).length !== 0) {
+                (_b = (_e = props.document).components) !== null && _b !== void 0 ? _b : (_e.components = {});
+                (_c = (_f = props.document.components).schemas) !== null && _c !== void 0 ? _c : (_f.schemas = {});
+                Object.assign(props.document.components.schemas, json.components.schemas);
+            }
+            return {
+                name: p.key.constants[0].values[0].value,
+                in: props.parameter.category === "query" ? "query" : "header",
+                schema: json.schemas[0],
+                required: p.value.isRequired(),
+                description: SwaggerDescriptionComposer_1.SwaggerDescriptionComposer.compose({
+                    description: (_d = p.description) !== null && _d !== void 0 ? _d : null,
+                    jsDocTags: p.jsDocTags,
+                    kind: "title",
+                }).description,
+            };
+        });
+    };
+})(SwaggerOperationParameterComposer || (exports.SwaggerOperationParameterComposer = SwaggerOperationParameterComposer = {}));
+const warning = new tstl_1.VariadicSingleton((described) => {
+    const summary = "Request body must be encrypted.";
+    const component = "[EncryptedBody](https://github.com/samchon/@nestia/core#encryptedbody)";
+    const content = [
+        "## Warning",
+        "",
+        summary,
+        "",
+        `The request body data would be encrypted as "AES-128(256) / CBC mode / PKCS#5 Padding / Base64 Encoding", through the ${component} component.`,
+        "",
+        `Therefore, just utilize this swagger editor only for referencing. If you need to call the real API, using [SDK](https://github.com/samchon/nestia#software-development-kit) would be much better.`,
+    ];
+    if (described === true)
+        content.push("", "----------------", "", "");
+    return content.join("\n");
+});
+//# sourceMappingURL=SwaggerOperationParameterComposer.js.map

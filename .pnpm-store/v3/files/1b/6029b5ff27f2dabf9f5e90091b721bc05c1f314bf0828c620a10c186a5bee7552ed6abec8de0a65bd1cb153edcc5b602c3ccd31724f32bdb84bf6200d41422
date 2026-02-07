@@ -1,0 +1,7 @@
+import { INestiaConfig } from "../../INestiaConfig";
+export declare namespace SdkDistributionComposer {
+    const compose: (props: {
+        config: INestiaConfig;
+        websocket: boolean;
+    }) => Promise<void>;
+}

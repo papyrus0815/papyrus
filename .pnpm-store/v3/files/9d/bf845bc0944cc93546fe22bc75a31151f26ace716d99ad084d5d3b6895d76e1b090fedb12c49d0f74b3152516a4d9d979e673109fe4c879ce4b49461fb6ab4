@@ -1,0 +1,79 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedRouteProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const JsonMetadataFactory_1 = require("typia/lib/factories/JsonMetadataFactory");
+const JsonAssertStringifyProgrammer_1 = require("typia/lib/programmers/json/JsonAssertStringifyProgrammer");
+const JsonIsStringifyProgrammer_1 = require("typia/lib/programmers/json/JsonIsStringifyProgrammer");
+const JsonStringifyProgrammer_1 = require("typia/lib/programmers/json/JsonStringifyProgrammer");
+const JsonValidateStringifyProgrammer_1 = require("typia/lib/programmers/json/JsonValidateStringifyProgrammer");
+const LlmSchemaProgrammer_1 = require("typia/lib/programmers/llm/LlmSchemaProgrammer");
+var TypedRouteProgrammer;
+(function (TypedRouteProgrammer) {
+    TypedRouteProgrammer.generate = (props) => {
+        // VALIDATE TYPE
+        if (props.context.options.llm)
+            JsonMetadataFactory_1.JsonMetadataFactory.analyze({
+                method: "@nestia.core.TypedRoute",
+                checker: props.context.checker,
+                transformer: props.context.transformer,
+                type: props.type,
+                validate: (metadata) => {
+                    var _a;
+                    return LlmSchemaProgrammer_1.LlmSchemaProgrammer.validate({
+                        config: {
+                            strict: (_a = props.context.options.llm) === null || _a === void 0 ? void 0 : _a.strict,
+                        },
+                        metadata,
+                    });
+                },
+            });
+        // GENERATE STRINGIFY PLAN
+        const parameter = (next) => typescript_1.default.factory.createObjectLiteralExpression([
+            typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier("type"), typescript_1.default.factory.createStringLiteral(next.type)),
+            typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier(next.key), next.programmer({
+                context: Object.assign(Object.assign({}, props.context), { options: {} }),
+                modulo: props.modulo,
+                type: props.type,
+                name: undefined,
+            })),
+        ]);
+        // RETURNS
+        if (props.context.options.stringify === "is")
+            return parameter({
+                type: "is",
+                key: "is",
+                programmer: JsonIsStringifyProgrammer_1.JsonIsStringifyProgrammer.write,
+            });
+        else if (props.context.options.stringify === "validate")
+            return parameter({
+                type: "validate",
+                key: "validate",
+                programmer: JsonValidateStringifyProgrammer_1.JsonValidateStringifyProgrammer.write,
+            });
+        else if (props.context.options.stringify === "stringify")
+            return parameter({
+                type: "stringify",
+                key: "stringify",
+                programmer: JsonStringifyProgrammer_1.JsonStringifyProgrammer.write,
+            });
+        else if (props.context.options.stringify === "validate.log")
+            return parameter({
+                type: "validate.log",
+                key: "validate",
+                programmer: JsonValidateStringifyProgrammer_1.JsonValidateStringifyProgrammer.write,
+            });
+        else if (props.context.options.stringify === null)
+            return typescript_1.default.factory.createNull();
+        // ASSERT IS DEFAULT
+        return parameter({
+            type: "assert",
+            key: "assert",
+            programmer: JsonAssertStringifyProgrammer_1.JsonAssertStringifyProgrammer.write,
+        });
+    };
+})(TypedRouteProgrammer || (exports.TypedRouteProgrammer = TypedRouteProgrammer = {}));
+//# sourceMappingURL=TypedRouteProgrammer.js.map

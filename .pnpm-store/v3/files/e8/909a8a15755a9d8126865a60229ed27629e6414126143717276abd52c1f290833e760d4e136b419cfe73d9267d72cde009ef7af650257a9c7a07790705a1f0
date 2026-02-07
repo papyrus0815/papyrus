@@ -1,0 +1,5 @@
+import ts from "typescript";
+import { ITypiaContext } from "typia/lib/transformers/ITypiaContext";
+import { INestiaTransformOptions } from "./options/INestiaTransformOptions";
+export declare const transform: (program: ts.Program, options: INestiaTransformOptions | undefined, extras: ITypiaContext["extras"]) => ts.TransformerFactory<ts.SourceFile>;
+export default transform;

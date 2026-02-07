@@ -2990,6 +2990,26 @@ export const CancelButton = styled.button`
   }
 `
 
+export const SelectedItemsContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+`
+
+export const SelectedItem = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+`
+
 export const AddButton = styled.button`
   display: flex;
   align-items: center;

@@ -1,0 +1,770 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NestiaConfigLoader = void 0;
+const __typia_transform__assertGuard = __importStar(require("typia/lib/internal/_assertGuard.js"));
+const __typia_transform__accessExpressionAsString = __importStar(require("typia/lib/internal/_accessExpressionAsString.js"));
+const NoTransformConfigurationError_1 = require("@nestia/core/lib/decorators/NoTransformConfigurationError");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const ts_node_1 = require("ts-node");
+const tsconfck_1 = require("tsconfck");
+const typescript_1 = __importDefault(require("typescript"));
+const typia_1 = __importDefault(require("typia"));
+var NestiaConfigLoader;
+(function (NestiaConfigLoader) {
+    NestiaConfigLoader.compilerOptions = (project) => __awaiter(this, void 0, void 0, function* () {
+        const configFileName = typescript_1.default.findConfigFile(process.cwd(), typescript_1.default.sys.fileExists, project);
+        if (!configFileName)
+            throw new Error(`unable to find "${project}" file.`);
+        const { tsconfig } = yield (0, tsconfck_1.parse)(configFileName);
+        const configFileText = JSON.stringify(tsconfig);
+        const { config } = typescript_1.default.parseConfigFileTextToJson(configFileName, configFileText);
+        return typescript_1.default.parseJsonConfigFileContent(config, typescript_1.default.sys, path_1.default.dirname(configFileName));
+    });
+    NestiaConfigLoader.configurations = (file, compilerOptions) => __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        if (fs_1.default.existsSync(path_1.default.resolve(file)) === false)
+            throw new Error(`Unable to find "${file}" file.`);
+        NoTransformConfigurationError_1.NoTransformConfigurationError.throws = false;
+        const plugins = [
+            ...(() => { const _io0 = input => true; const _ao0 = (input, _path, _exceptionable = true) => true; const __is = input => Array.isArray(input) && input.every(elem => "object" === typeof elem && null !== elem && false === Array.isArray(elem) && _io0(elem)); let _errorFactory; return (input, errorFactory) => {
+                if (false === __is(input)) {
+                    _errorFactory = errorFactory;
+                    ((input, _path, _exceptionable = true) => (Array.isArray(input) || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia\n        .assert",
+                        path: _path + "",
+                        expected: "Array<object>",
+                        value: input
+                    }, _errorFactory)) && input.every((elem, _index2) => ("object" === typeof elem && null !== elem && false === Array.isArray(elem) || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia\n        .assert",
+                        path: _path + "[" + _index2 + "]",
+                        expected: "object",
+                        value: elem
+                    }, _errorFactory)) && _ao0(elem, _path + "[" + _index2 + "]", true) || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia\n        .assert",
+                        path: _path + "[" + _index2 + "]",
+                        expected: "object",
+                        value: elem
+                    }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia\n        .assert",
+                        path: _path + "",
+                        expected: "Array<object>",
+                        value: input
+                    }, _errorFactory))(input, "$input", true);
+                }
+                return input;
+            }; })()((_a = compilerOptions.plugins) !== null && _a !== void 0 ? _a : []).filter((x) => x.transform !== "@nestia/sdk/lib/transform"),
+            { transform: "@nestia/sdk/lib/transform" },
+        ];
+        (0, ts_node_1.register)({
+            emit: false,
+            compilerOptions: Object.assign(Object.assign({}, compilerOptions), { plugins }),
+            require: compilerOptions.baseUrl
+                ? ["tsconfig-paths/register"]
+                : undefined,
+        });
+        const loaded = yield Promise.resolve(`${path_1.default.resolve(file)}`).then(s => __importStar(require(s)));
+        const instance = typeof (loaded === null || loaded === void 0 ? void 0 : loaded.default) === "object" && loaded.default !== null
+            ? loaded.default
+            : loaded;
+        const configurations = Array.isArray(instance)
+            ? instance
+            : [instance];
+        try {
+            return (() => { const _io0 = input => null !== input.input && undefined !== input.input && ("function" === typeof input.input || "string" === typeof input.input || (Array.isArray(input.input) && input.input.every(elem => "string" === typeof elem) || "object" === typeof input.input && null !== input.input && _io1(input.input))) && (undefined === input.swagger || "object" === typeof input.swagger && null !== input.swagger && _io2(input.swagger)) && (undefined === input.output || "string" === typeof input.output) && (undefined === input.distribute || "string" === typeof input.distribute) && (undefined === input.keyword || "boolean" === typeof input.keyword) && (undefined === input.simulate || "boolean" === typeof input.simulate) && (undefined === input.e2e || "string" === typeof input.e2e) && (undefined === input.propagate || "boolean" === typeof input.propagate) && (undefined === input.clone || "boolean" === typeof input.clone) && (undefined === input.primitive || "boolean" === typeof input.primitive) && (undefined === input.assert || "boolean" === typeof input.assert) && (undefined === input.json || "boolean" === typeof input.json); const _io1 = input => Array.isArray(input.include) && input.include.every(elem => "string" === typeof elem) && (undefined === input.exclude || Array.isArray(input.exclude) && input.exclude.every(elem => "string" === typeof elem)); const _io2 = input => "string" === typeof input.output && (undefined === input.openapi || "2.0" === input.openapi || "3.0" === input.openapi || "3.1" === input.openapi) && (undefined === input.beautify || "number" === typeof input.beautify || "boolean" === typeof input.beautify) && (undefined === input.additional || "boolean" === typeof input.additional) && (undefined === input.info || "object" === typeof input.info && null !== input.info && false === Array.isArray(input.info) && _io3(input.info)) && (undefined === input.servers || Array.isArray(input.servers) && input.servers.every(elem => "object" === typeof elem && null !== elem && _io6(elem))) && (undefined === input.security || "object" === typeof input.security && null !== input.security && false === Array.isArray(input.security) && _io9(input.security)) && (undefined === input.tags || Array.isArray(input.tags) && input.tags.every(elem => "object" === typeof elem && null !== elem && _io20(elem))) && (undefined === input.decompose || "boolean" === typeof input.decompose); const _io3 = input => (undefined === input.title || "string" === typeof input.title) && (undefined === input.summary || "string" === typeof input.summary) && (undefined === input.description || "string" === typeof input.description) && (undefined === input.termsOfService || "string" === typeof input.termsOfService) && (undefined === input.contact || "object" === typeof input.contact && null !== input.contact && false === Array.isArray(input.contact) && _io4(input.contact)) && (undefined === input.license || "object" === typeof input.license && null !== input.license && _io5(input.license)) && (undefined === input.version || "string" === typeof input.version); const _io4 = input => (undefined === input.name || "string" === typeof input.name) && (undefined === input.url || "string" === typeof input.url) && (undefined === input.email || "string" === typeof input.email && /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(input.email)); const _io5 = input => "string" === typeof input.name && (undefined === input.identifier || "string" === typeof input.identifier) && (undefined === input.url || "string" === typeof input.url); const _io6 = input => "string" === typeof input.url && (undefined === input.description || "string" === typeof input.description) && (undefined === input.variables || "object" === typeof input.variables && null !== input.variables && false === Array.isArray(input.variables) && _io7(input.variables)); const _io7 = input => Object.keys(input).every(key => {
+                const value = input[key];
+                if (undefined === value)
+                    return true;
+                return "object" === typeof value && null !== value && _io8(value);
+            }); const _io8 = input => "string" === typeof input["default"] && (undefined === input["enum"] || Array.isArray(input["enum"]) && input["enum"].every(elem => "string" === typeof elem)) && (undefined === input.description || "string" === typeof input.description); const _io9 = input => Object.keys(input).every(key => {
+                const value = input[key];
+                if (undefined === value)
+                    return true;
+                return "object" === typeof value && null !== value && _iu0(value);
+            }); const _io10 = input => "apiKey" === input.type && (undefined === input["in"] || "query" === input["in"] || "header" === input["in"] || "cookie" === input["in"]) && (undefined === input.name || "string" === typeof input.name) && (undefined === input.description || "string" === typeof input.description); const _io11 = input => "http" === input.type && "basic" === input.scheme && (undefined === input.description || "string" === typeof input.description); const _io12 = input => "http" === input.type && "bearer" === input.scheme && (undefined === input.bearerFormat || "string" === typeof input.bearerFormat) && (undefined === input.description || "string" === typeof input.description); const _io13 = input => "oauth2" === input.type && ("object" === typeof input.flows && null !== input.flows && false === Array.isArray(input.flows) && _io14(input.flows)) && (undefined === input.description || "string" === typeof input.description); const _io14 = input => (undefined === input.authorizationCode || "object" === typeof input.authorizationCode && null !== input.authorizationCode && false === Array.isArray(input.authorizationCode) && _io15(input.authorizationCode)) && (undefined === input.implicit || "object" === typeof input.implicit && null !== input.implicit && false === Array.isArray(input.implicit) && _io17(input.implicit)) && (undefined === input.password || "object" === typeof input.password && null !== input.password && false === Array.isArray(input.password) && _io18(input.password)) && (undefined === input.clientCredentials || "object" === typeof input.clientCredentials && null !== input.clientCredentials && false === Array.isArray(input.clientCredentials) && _io18(input.clientCredentials)); const _io15 = input => (undefined === input.authorizationUrl || "string" === typeof input.authorizationUrl) && (undefined === input.tokenUrl || "string" === typeof input.tokenUrl) && (undefined === input.refreshUrl || "string" === typeof input.refreshUrl) && (undefined === input.scopes || "object" === typeof input.scopes && null !== input.scopes && false === Array.isArray(input.scopes) && _io16(input.scopes)); const _io16 = input => Object.keys(input).every(key => {
+                const value = input[key];
+                if (undefined === value)
+                    return true;
+                return "string" === typeof value;
+            }); const _io17 = input => (undefined === input.authorizationUrl || "string" === typeof input.authorizationUrl) && (undefined === input.refreshUrl || "string" === typeof input.refreshUrl) && (undefined === input.scopes || "object" === typeof input.scopes && null !== input.scopes && false === Array.isArray(input.scopes) && _io16(input.scopes)); const _io18 = input => (undefined === input.tokenUrl || "string" === typeof input.tokenUrl) && (undefined === input.refreshUrl || "string" === typeof input.refreshUrl) && (undefined === input.scopes || "object" === typeof input.scopes && null !== input.scopes && false === Array.isArray(input.scopes) && _io16(input.scopes)); const _io19 = input => "openIdConnect" === input.type && "string" === typeof input.openIdConnectUrl && (undefined === input.description || "string" === typeof input.description); const _io20 = input => "string" === typeof input.name && (undefined === input.description || "string" === typeof input.description); const _iu0 = input => (() => {
+                if ("apiKey" === input.type)
+                    return _io10(input);
+                else if ("basic" === input.scheme)
+                    return _io11(input);
+                else if ("bearer" === input.scheme)
+                    return _io12(input);
+                else if ("oauth2" === input.type)
+                    return _io13(input);
+                else if ("openIdConnect" === input.type)
+                    return _io19(input);
+                else
+                    return false;
+            })(); const _ao0 = (input, _path, _exceptionable = true) => (null !== input.input || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".input",
+                expected: "(Array<string> | INestiaConfig.IInput | string)",
+                value: input.input
+            }, _errorFactory)) && (undefined !== input.input || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".input",
+                expected: "(Array<string> | INestiaConfig.IInput | string)",
+                value: input.input
+            }, _errorFactory)) && ("function" === typeof input.input || "string" === typeof input.input || (Array.isArray(input.input) && input.input.every((elem, _index9) => "string" === typeof elem || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".input[" + _index9 + "]",
+                expected: "string",
+                value: elem
+            }, _errorFactory)) || "object" === typeof input.input && null !== input.input && _ao1(input.input, _path + ".input", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".input",
+                expected: "(Array<string> | INestiaConfig.IInput | string)",
+                value: input.input
+            }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".input",
+                expected: "(Array<string> | INestiaConfig.IInput | string)",
+                value: input.input
+            }, _errorFactory)) && (undefined === input.swagger || ("object" === typeof input.swagger && null !== input.swagger || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".swagger",
+                expected: "(INestiaConfig.ISwaggerConfig | undefined)",
+                value: input.swagger
+            }, _errorFactory)) && _ao2(input.swagger, _path + ".swagger", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".swagger",
+                expected: "(INestiaConfig.ISwaggerConfig | undefined)",
+                value: input.swagger
+            }, _errorFactory)) && (undefined === input.output || "string" === typeof input.output || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".output",
+                expected: "(string | undefined)",
+                value: input.output
+            }, _errorFactory)) && (undefined === input.distribute || "string" === typeof input.distribute || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".distribute",
+                expected: "(string | undefined)",
+                value: input.distribute
+            }, _errorFactory)) && (undefined === input.keyword || "boolean" === typeof input.keyword || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".keyword",
+                expected: "(boolean | undefined)",
+                value: input.keyword
+            }, _errorFactory)) && (undefined === input.simulate || "boolean" === typeof input.simulate || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".simulate",
+                expected: "(boolean | undefined)",
+                value: input.simulate
+            }, _errorFactory)) && (undefined === input.e2e || "string" === typeof input.e2e || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".e2e",
+                expected: "(string | undefined)",
+                value: input.e2e
+            }, _errorFactory)) && (undefined === input.propagate || "boolean" === typeof input.propagate || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".propagate",
+                expected: "(boolean | undefined)",
+                value: input.propagate
+            }, _errorFactory)) && (undefined === input.clone || "boolean" === typeof input.clone || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".clone",
+                expected: "(boolean | undefined)",
+                value: input.clone
+            }, _errorFactory)) && (undefined === input.primitive || "boolean" === typeof input.primitive || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".primitive",
+                expected: "(boolean | undefined)",
+                value: input.primitive
+            }, _errorFactory)) && (undefined === input.assert || "boolean" === typeof input.assert || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".assert",
+                expected: "(boolean | undefined)",
+                value: input.assert
+            }, _errorFactory)) && (undefined === input.json || "boolean" === typeof input.json || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".json",
+                expected: "(boolean | undefined)",
+                value: input.json
+            }, _errorFactory)); const _ao1 = (input, _path, _exceptionable = true) => ((Array.isArray(input.include) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".include",
+                expected: "Array<string>",
+                value: input.include
+            }, _errorFactory)) && input.include.every((elem, _index10) => "string" === typeof elem || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".include[" + _index10 + "]",
+                expected: "string",
+                value: elem
+            }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".include",
+                expected: "Array<string>",
+                value: input.include
+            }, _errorFactory)) && (undefined === input.exclude || (Array.isArray(input.exclude) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".exclude",
+                expected: "(Array<string> | undefined)",
+                value: input.exclude
+            }, _errorFactory)) && input.exclude.every((elem, _index11) => "string" === typeof elem || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".exclude[" + _index11 + "]",
+                expected: "string",
+                value: elem
+            }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".exclude",
+                expected: "(Array<string> | undefined)",
+                value: input.exclude
+            }, _errorFactory)); const _ao2 = (input, _path, _exceptionable = true) => ("string" === typeof input.output || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".output",
+                expected: "string",
+                value: input.output
+            }, _errorFactory)) && (undefined === input.openapi || "2.0" === input.openapi || "3.0" === input.openapi || "3.1" === input.openapi || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".openapi",
+                expected: "(\"2.0\" | \"3.0\" | \"3.1\" | undefined)",
+                value: input.openapi
+            }, _errorFactory)) && (undefined === input.beautify || "number" === typeof input.beautify || "boolean" === typeof input.beautify || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".beautify",
+                expected: "(boolean | number | undefined)",
+                value: input.beautify
+            }, _errorFactory)) && (undefined === input.additional || "boolean" === typeof input.additional || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".additional",
+                expected: "(boolean | undefined)",
+                value: input.additional
+            }, _errorFactory)) && (undefined === input.info || ("object" === typeof input.info && null !== input.info && false === Array.isArray(input.info) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".info",
+                expected: "(Partial<OpenApi.IDocument.IInfo> | undefined)",
+                value: input.info
+            }, _errorFactory)) && _ao3(input.info, _path + ".info", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".info",
+                expected: "(Partial<OpenApi.IDocument.IInfo> | undefined)",
+                value: input.info
+            }, _errorFactory)) && (undefined === input.servers || (Array.isArray(input.servers) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".servers",
+                expected: "(Array<OpenApi.IServer> | undefined)",
+                value: input.servers
+            }, _errorFactory)) && input.servers.every((elem, _index12) => ("object" === typeof elem && null !== elem || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".servers[" + _index12 + "]",
+                expected: "OpenApi.IServer",
+                value: elem
+            }, _errorFactory)) && _ao6(elem, _path + ".servers[" + _index12 + "]", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".servers[" + _index12 + "]",
+                expected: "OpenApi.IServer",
+                value: elem
+            }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".servers",
+                expected: "(Array<OpenApi.IServer> | undefined)",
+                value: input.servers
+            }, _errorFactory)) && (undefined === input.security || ("object" === typeof input.security && null !== input.security && false === Array.isArray(input.security) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".security",
+                expected: "(Record<string, OpenApi.ISecurityScheme> | undefined)",
+                value: input.security
+            }, _errorFactory)) && _ao9(input.security, _path + ".security", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".security",
+                expected: "(Record<string, OpenApi.ISecurityScheme> | undefined)",
+                value: input.security
+            }, _errorFactory)) && (undefined === input.tags || (Array.isArray(input.tags) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".tags",
+                expected: "(Array<OpenApi.IDocument.ITag> | undefined)",
+                value: input.tags
+            }, _errorFactory)) && input.tags.every((elem, _index13) => ("object" === typeof elem && null !== elem || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".tags[" + _index13 + "]",
+                expected: "OpenApi.IDocument.ITag",
+                value: elem
+            }, _errorFactory)) && _ao20(elem, _path + ".tags[" + _index13 + "]", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".tags[" + _index13 + "]",
+                expected: "OpenApi.IDocument.ITag",
+                value: elem
+            }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".tags",
+                expected: "(Array<OpenApi.IDocument.ITag> | undefined)",
+                value: input.tags
+            }, _errorFactory)) && (undefined === input.decompose || "boolean" === typeof input.decompose || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".decompose",
+                expected: "(boolean | undefined)",
+                value: input.decompose
+            }, _errorFactory)); const _ao3 = (input, _path, _exceptionable = true) => (undefined === input.title || "string" === typeof input.title || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".title",
+                expected: "(string | undefined)",
+                value: input.title
+            }, _errorFactory)) && (undefined === input.summary || "string" === typeof input.summary || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".summary",
+                expected: "(string | undefined)",
+                value: input.summary
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)) && (undefined === input.termsOfService || "string" === typeof input.termsOfService || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".termsOfService",
+                expected: "(string | undefined)",
+                value: input.termsOfService
+            }, _errorFactory)) && (undefined === input.contact || ("object" === typeof input.contact && null !== input.contact && false === Array.isArray(input.contact) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".contact",
+                expected: "(OpenApi.IDocument.IContact | undefined)",
+                value: input.contact
+            }, _errorFactory)) && _ao4(input.contact, _path + ".contact", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".contact",
+                expected: "(OpenApi.IDocument.IContact | undefined)",
+                value: input.contact
+            }, _errorFactory)) && (undefined === input.license || ("object" === typeof input.license && null !== input.license || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".license",
+                expected: "(OpenApi.IDocument.ILicense | undefined)",
+                value: input.license
+            }, _errorFactory)) && _ao5(input.license, _path + ".license", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".license",
+                expected: "(OpenApi.IDocument.ILicense | undefined)",
+                value: input.license
+            }, _errorFactory)) && (undefined === input.version || "string" === typeof input.version || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".version",
+                expected: "(string | undefined)",
+                value: input.version
+            }, _errorFactory)); const _ao4 = (input, _path, _exceptionable = true) => (undefined === input.name || "string" === typeof input.name || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".name",
+                expected: "(string | undefined)",
+                value: input.name
+            }, _errorFactory)) && (undefined === input.url || "string" === typeof input.url || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".url",
+                expected: "(string | undefined)",
+                value: input.url
+            }, _errorFactory)) && (undefined === input.email || "string" === typeof input.email && (/^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(input.email) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".email",
+                expected: "string & Format<\"email\">",
+                value: input.email
+            }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".email",
+                expected: "((string & Format<\"email\">) | undefined)",
+                value: input.email
+            }, _errorFactory)); const _ao5 = (input, _path, _exceptionable = true) => ("string" === typeof input.name || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".name",
+                expected: "string",
+                value: input.name
+            }, _errorFactory)) && (undefined === input.identifier || "string" === typeof input.identifier || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".identifier",
+                expected: "(string | undefined)",
+                value: input.identifier
+            }, _errorFactory)) && (undefined === input.url || "string" === typeof input.url || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".url",
+                expected: "(string | undefined)",
+                value: input.url
+            }, _errorFactory)); const _ao6 = (input, _path, _exceptionable = true) => ("string" === typeof input.url || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".url",
+                expected: "string",
+                value: input.url
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)) && (undefined === input.variables || ("object" === typeof input.variables && null !== input.variables && false === Array.isArray(input.variables) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".variables",
+                expected: "(Record<string, OpenApi.IServer.IVariable> | undefined)",
+                value: input.variables
+            }, _errorFactory)) && _ao7(input.variables, _path + ".variables", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".variables",
+                expected: "(Record<string, OpenApi.IServer.IVariable> | undefined)",
+                value: input.variables
+            }, _errorFactory)); const _ao7 = (input, _path, _exceptionable = true) => false === _exceptionable || Object.keys(input).every(key => {
+                const value = input[key];
+                if (undefined === value)
+                    return true;
+                return ("object" === typeof value && null !== value || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.assert",
+                    path: _path + __typia_transform__accessExpressionAsString._accessExpressionAsString(key),
+                    expected: "OpenApi.IServer.IVariable",
+                    value: value
+                }, _errorFactory)) && _ao8(value, _path + __typia_transform__accessExpressionAsString._accessExpressionAsString(key), true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.assert",
+                    path: _path + __typia_transform__accessExpressionAsString._accessExpressionAsString(key),
+                    expected: "OpenApi.IServer.IVariable",
+                    value: value
+                }, _errorFactory);
+            }); const _ao8 = (input, _path, _exceptionable = true) => ("string" === typeof input["default"] || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + "[\"default\"]",
+                expected: "string",
+                value: input["default"]
+            }, _errorFactory)) && (undefined === input["enum"] || (Array.isArray(input["enum"]) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + "[\"enum\"]",
+                expected: "(Array<string> | undefined)",
+                value: input["enum"]
+            }, _errorFactory)) && input["enum"].every((elem, _index14) => "string" === typeof elem || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + "[\"enum\"][" + _index14 + "]",
+                expected: "string",
+                value: elem
+            }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + "[\"enum\"]",
+                expected: "(Array<string> | undefined)",
+                value: input["enum"]
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)); const _ao9 = (input, _path, _exceptionable = true) => false === _exceptionable || Object.keys(input).every(key => {
+                const value = input[key];
+                if (undefined === value)
+                    return true;
+                return ("object" === typeof value && null !== value || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.assert",
+                    path: _path + __typia_transform__accessExpressionAsString._accessExpressionAsString(key),
+                    expected: "(OpenApi.ISecurityScheme.IApiKey | OpenApi.ISecurityScheme.IHttpBasic | OpenApi.ISecurityScheme.IHttpBearer | OpenApi.ISecurityScheme.IOAuth2 | OpenApi.ISecurityScheme.IOpenId)",
+                    value: value
+                }, _errorFactory)) && _au0(value, _path + __typia_transform__accessExpressionAsString._accessExpressionAsString(key), true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.assert",
+                    path: _path + __typia_transform__accessExpressionAsString._accessExpressionAsString(key),
+                    expected: "(OpenApi.ISecurityScheme.IApiKey | OpenApi.ISecurityScheme.IHttpBasic | OpenApi.ISecurityScheme.IHttpBearer | OpenApi.ISecurityScheme.IOAuth2 | OpenApi.ISecurityScheme.IOpenId)",
+                    value: value
+                }, _errorFactory);
+            }); const _ao10 = (input, _path, _exceptionable = true) => ("apiKey" === input.type || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".type",
+                expected: "\"apiKey\"",
+                value: input.type
+            }, _errorFactory)) && (undefined === input["in"] || "query" === input["in"] || "header" === input["in"] || "cookie" === input["in"] || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + "[\"in\"]",
+                expected: "(\"cookie\" | \"header\" | \"query\" | undefined)",
+                value: input["in"]
+            }, _errorFactory)) && (undefined === input.name || "string" === typeof input.name || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".name",
+                expected: "(string | undefined)",
+                value: input.name
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)); const _ao11 = (input, _path, _exceptionable = true) => ("http" === input.type || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".type",
+                expected: "\"http\"",
+                value: input.type
+            }, _errorFactory)) && ("basic" === input.scheme || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scheme",
+                expected: "\"basic\"",
+                value: input.scheme
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)); const _ao12 = (input, _path, _exceptionable = true) => ("http" === input.type || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".type",
+                expected: "\"http\"",
+                value: input.type
+            }, _errorFactory)) && ("bearer" === input.scheme || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scheme",
+                expected: "\"bearer\"",
+                value: input.scheme
+            }, _errorFactory)) && (undefined === input.bearerFormat || "string" === typeof input.bearerFormat || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".bearerFormat",
+                expected: "(string | undefined)",
+                value: input.bearerFormat
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)); const _ao13 = (input, _path, _exceptionable = true) => ("oauth2" === input.type || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".type",
+                expected: "\"oauth2\"",
+                value: input.type
+            }, _errorFactory)) && (("object" === typeof input.flows && null !== input.flows && false === Array.isArray(input.flows) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".flows",
+                expected: "OpenApi.ISecurityScheme.IOAuth2.IFlowSet",
+                value: input.flows
+            }, _errorFactory)) && _ao14(input.flows, _path + ".flows", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".flows",
+                expected: "OpenApi.ISecurityScheme.IOAuth2.IFlowSet",
+                value: input.flows
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)); const _ao14 = (input, _path, _exceptionable = true) => (undefined === input.authorizationCode || ("object" === typeof input.authorizationCode && null !== input.authorizationCode && false === Array.isArray(input.authorizationCode) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".authorizationCode",
+                expected: "(OpenApi.ISecurityScheme.IOAuth2.IFlow | undefined)",
+                value: input.authorizationCode
+            }, _errorFactory)) && _ao15(input.authorizationCode, _path + ".authorizationCode", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".authorizationCode",
+                expected: "(OpenApi.ISecurityScheme.IOAuth2.IFlow | undefined)",
+                value: input.authorizationCode
+            }, _errorFactory)) && (undefined === input.implicit || ("object" === typeof input.implicit && null !== input.implicit && false === Array.isArray(input.implicit) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".implicit",
+                expected: "(Omit<OpenApi.ISecurityScheme.IOAuth2.IFlow, \"tokenUrl\"> | undefined)",
+                value: input.implicit
+            }, _errorFactory)) && _ao17(input.implicit, _path + ".implicit", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".implicit",
+                expected: "(Omit<OpenApi.ISecurityScheme.IOAuth2.IFlow, \"tokenUrl\"> | undefined)",
+                value: input.implicit
+            }, _errorFactory)) && (undefined === input.password || ("object" === typeof input.password && null !== input.password && false === Array.isArray(input.password) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".password",
+                expected: "(Omit<OpenApi.ISecurityScheme.IOAuth2.IFlow, \"authorizationUrl\"> | undefined)",
+                value: input.password
+            }, _errorFactory)) && _ao18(input.password, _path + ".password", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".password",
+                expected: "(Omit<OpenApi.ISecurityScheme.IOAuth2.IFlow, \"authorizationUrl\"> | undefined)",
+                value: input.password
+            }, _errorFactory)) && (undefined === input.clientCredentials || ("object" === typeof input.clientCredentials && null !== input.clientCredentials && false === Array.isArray(input.clientCredentials) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".clientCredentials",
+                expected: "(Omit<OpenApi.ISecurityScheme.IOAuth2.IFlow, \"authorizationUrl\"> | undefined)",
+                value: input.clientCredentials
+            }, _errorFactory)) && _ao18(input.clientCredentials, _path + ".clientCredentials", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".clientCredentials",
+                expected: "(Omit<OpenApi.ISecurityScheme.IOAuth2.IFlow, \"authorizationUrl\"> | undefined)",
+                value: input.clientCredentials
+            }, _errorFactory)); const _ao15 = (input, _path, _exceptionable = true) => (undefined === input.authorizationUrl || "string" === typeof input.authorizationUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".authorizationUrl",
+                expected: "(string | undefined)",
+                value: input.authorizationUrl
+            }, _errorFactory)) && (undefined === input.tokenUrl || "string" === typeof input.tokenUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".tokenUrl",
+                expected: "(string | undefined)",
+                value: input.tokenUrl
+            }, _errorFactory)) && (undefined === input.refreshUrl || "string" === typeof input.refreshUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".refreshUrl",
+                expected: "(string | undefined)",
+                value: input.refreshUrl
+            }, _errorFactory)) && (undefined === input.scopes || ("object" === typeof input.scopes && null !== input.scopes && false === Array.isArray(input.scopes) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scopes",
+                expected: "(Record<string, string> | undefined)",
+                value: input.scopes
+            }, _errorFactory)) && _ao16(input.scopes, _path + ".scopes", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scopes",
+                expected: "(Record<string, string> | undefined)",
+                value: input.scopes
+            }, _errorFactory)); const _ao16 = (input, _path, _exceptionable = true) => false === _exceptionable || Object.keys(input).every(key => {
+                const value = input[key];
+                if (undefined === value)
+                    return true;
+                return "string" === typeof value || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.assert",
+                    path: _path + __typia_transform__accessExpressionAsString._accessExpressionAsString(key),
+                    expected: "string",
+                    value: value
+                }, _errorFactory);
+            }); const _ao17 = (input, _path, _exceptionable = true) => (undefined === input.authorizationUrl || "string" === typeof input.authorizationUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".authorizationUrl",
+                expected: "(string | undefined)",
+                value: input.authorizationUrl
+            }, _errorFactory)) && (undefined === input.refreshUrl || "string" === typeof input.refreshUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".refreshUrl",
+                expected: "(string | undefined)",
+                value: input.refreshUrl
+            }, _errorFactory)) && (undefined === input.scopes || ("object" === typeof input.scopes && null !== input.scopes && false === Array.isArray(input.scopes) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scopes",
+                expected: "(Record<string, string> | undefined)",
+                value: input.scopes
+            }, _errorFactory)) && _ao16(input.scopes, _path + ".scopes", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scopes",
+                expected: "(Record<string, string> | undefined)",
+                value: input.scopes
+            }, _errorFactory)); const _ao18 = (input, _path, _exceptionable = true) => (undefined === input.tokenUrl || "string" === typeof input.tokenUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".tokenUrl",
+                expected: "(string | undefined)",
+                value: input.tokenUrl
+            }, _errorFactory)) && (undefined === input.refreshUrl || "string" === typeof input.refreshUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".refreshUrl",
+                expected: "(string | undefined)",
+                value: input.refreshUrl
+            }, _errorFactory)) && (undefined === input.scopes || ("object" === typeof input.scopes && null !== input.scopes && false === Array.isArray(input.scopes) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scopes",
+                expected: "(Record<string, string> | undefined)",
+                value: input.scopes
+            }, _errorFactory)) && _ao16(input.scopes, _path + ".scopes", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".scopes",
+                expected: "(Record<string, string> | undefined)",
+                value: input.scopes
+            }, _errorFactory)); const _ao19 = (input, _path, _exceptionable = true) => ("openIdConnect" === input.type || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".type",
+                expected: "\"openIdConnect\"",
+                value: input.type
+            }, _errorFactory)) && ("string" === typeof input.openIdConnectUrl || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".openIdConnectUrl",
+                expected: "string",
+                value: input.openIdConnectUrl
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)); const _ao20 = (input, _path, _exceptionable = true) => ("string" === typeof input.name || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".name",
+                expected: "string",
+                value: input.name
+            }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                method: "typia.assert",
+                path: _path + ".description",
+                expected: "(string | undefined)",
+                value: input.description
+            }, _errorFactory)); const _au0 = (input, _path, _exceptionable = true) => (() => {
+                if ("apiKey" === input.type)
+                    return _ao10(input, _path, true && _exceptionable);
+                else if ("basic" === input.scheme)
+                    return _ao11(input, _path, true && _exceptionable);
+                else if ("bearer" === input.scheme)
+                    return _ao12(input, _path, true && _exceptionable);
+                else if ("oauth2" === input.type)
+                    return _ao13(input, _path, true && _exceptionable);
+                else if ("openIdConnect" === input.type)
+                    return _ao19(input, _path, true && _exceptionable);
+                else
+                    return __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                        method: "typia.assert",
+                        path: _path,
+                        expected: "(OpenApi.ISecurityScheme.IApiKey | OpenApi.ISecurityScheme.IHttpBasic | OpenApi.ISecurityScheme.IHttpBearer | OpenApi.ISecurityScheme.IOAuth2 | OpenApi.ISecurityScheme.IOpenId)",
+                        value: input
+                    }, _errorFactory);
+            })(); const __is = input => Array.isArray(input) && input.every(elem => "object" === typeof elem && null !== elem && _io0(elem)); let _errorFactory; return (input, errorFactory) => {
+                if (false === __is(input)) {
+                    _errorFactory = errorFactory;
+                    ((input, _path, _exceptionable = true) => (Array.isArray(input) || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia.assert",
+                        path: _path + "",
+                        expected: "Array<INestiaConfig>",
+                        value: input
+                    }, _errorFactory)) && input.every((elem, _index8) => ("object" === typeof elem && null !== elem || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia.assert",
+                        path: _path + "[" + _index8 + "]",
+                        expected: "INestiaConfig",
+                        value: elem
+                    }, _errorFactory)) && _ao0(elem, _path + "[" + _index8 + "]", true) || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia.assert",
+                        path: _path + "[" + _index8 + "]",
+                        expected: "INestiaConfig",
+                        value: elem
+                    }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(true, {
+                        method: "typia.assert",
+                        path: _path + "",
+                        expected: "Array<INestiaConfig>",
+                        value: input
+                    }, _errorFactory))(input, "$input", true);
+                }
+                return input;
+            }; })()(configurations);
+        }
+        catch (exp) {
+            if ((() => { const _io0 = input => "string" === typeof input.method && (undefined === input.path || "string" === typeof input.path) && "string" === typeof input.expected && true && (undefined === input.description || "string" === typeof input.description) && "string" === typeof input.name && "string" === typeof input.message && (undefined === input.stack || "string" === typeof input.stack); return input => "object" === typeof input && null !== input && _io0(input); })()(exp))
+                exp.message = `invalid "${file}" data.`;
+            throw exp;
+        }
+    });
+})(NestiaConfigLoader || (exports.NestiaConfigLoader = NestiaConfigLoader = {}));
+//# sourceMappingURL=NestiaConfigLoader.js.map

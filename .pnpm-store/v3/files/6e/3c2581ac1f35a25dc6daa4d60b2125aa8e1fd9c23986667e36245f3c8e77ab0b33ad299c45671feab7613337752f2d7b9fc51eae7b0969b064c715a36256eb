@@ -1,0 +1,5 @@
+import ts from "typescript";
+import { INestiaTransformContext } from "../options/INestiaTransformProject";
+export declare namespace FileTransformer {
+    const transform: (context: Omit<INestiaTransformContext, "importer" | "transformer">) => (transformer: ts.TransformationContext) => (file: ts.SourceFile) => ts.SourceFile;
+}

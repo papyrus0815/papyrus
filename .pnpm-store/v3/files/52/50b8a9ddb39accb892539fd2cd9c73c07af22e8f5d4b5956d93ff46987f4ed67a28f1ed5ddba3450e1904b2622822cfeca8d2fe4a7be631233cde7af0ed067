@@ -1,0 +1,221 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkTypeProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const ExpressionFactory_1 = require("typia/lib/factories/ExpressionFactory");
+const TypeFactory_1 = require("typia/lib/factories/TypeFactory");
+const Escaper_1 = require("typia/lib/utils/Escaper");
+const FilePrinter_1 = require("./FilePrinter");
+const SdkTypeTagProgrammer_1 = require("./SdkTypeTagProgrammer");
+var SdkTypeProgrammer;
+(function (SdkTypeProgrammer) {
+    /* -----------------------------------------------------------
+      FACADE
+    ----------------------------------------------------------- */
+    SdkTypeProgrammer.write = (project) => (importer) => (meta, parentEscaped = false) => {
+        var _a;
+        const union = [];
+        // COALESCES
+        if (meta.any)
+            union.push(TypeFactory_1.TypeFactory.keyword("any"));
+        if (meta.nullable)
+            union.push(writeNode("null"));
+        if (meta.isRequired() === false)
+            union.push(writeNode("undefined"));
+        if (parentEscaped === false && meta.escaped)
+            union.push(write_escaped(project)(importer)(meta.escaped));
+        // ATOMIC TYPES
+        for (const c of meta.constants)
+            for (const value of c.values)
+                union.push(write_constant(value));
+        for (const tpl of meta.templates)
+            union.push(write_template(project)(importer)((_a = tpl.row) !== null && _a !== void 0 ? _a : tpl));
+        for (const atom of meta.atomics)
+            union.push(write_atomic(importer)(atom));
+        // OBJECT TYPES
+        for (const tuple of meta.tuples)
+            union.push(write_tuple(project)(importer)(tuple));
+        for (const array of meta.arrays)
+            union.push(write_array(project)(importer)(array));
+        for (const object of meta.objects)
+            if (object.type.name === "object" ||
+                object.type.name === "__type" ||
+                object.type.name.startsWith("__type.") ||
+                object.type.name === "__object" ||
+                object.type.name.startsWith("__object."))
+                union.push(SdkTypeProgrammer.write_object(project)(importer)(object.type));
+            else
+                union.push(writeAlias(project)(importer)(object.type));
+        for (const alias of meta.aliases)
+            union.push(writeAlias(project)(importer)(alias.type));
+        for (const native of meta.natives)
+            if (native.name === "Blob" || native.name === "File")
+                union.push(write_native(native.name));
+        return union.length === 1
+            ? union[0]
+            : typescript_1.default.factory.createUnionTypeNode(union);
+    };
+    SdkTypeProgrammer.write_object = (project) => (importer) => (object) => {
+        const regular = object.properties.filter((p) => p.key.isSoleLiteral());
+        const dynamic = object.properties.filter((p) => !p.key.isSoleLiteral());
+        return regular.length && dynamic.length
+            ? typescript_1.default.factory.createIntersectionTypeNode([
+                write_regular_property(project)(importer)(regular),
+                ...dynamic.map(write_dynamic_property(project)(importer)),
+            ])
+            : dynamic.length
+                ? typescript_1.default.factory.createIntersectionTypeNode(dynamic.map(write_dynamic_property(project)(importer)))
+                : write_regular_property(project)(importer)(regular);
+    };
+    const write_escaped = (project) => (importer) => (meta) => {
+        if (meta.original.size() === 1 &&
+            meta.original.natives.length === 1 &&
+            meta.original.natives[0].name === "Date")
+            return typescript_1.default.factory.createIntersectionTypeNode([
+                TypeFactory_1.TypeFactory.keyword("string"),
+                SdkTypeTagProgrammer_1.SdkTypeTagProgrammer.write(importer, "string", {
+                    name: "Format",
+                    value: "date-time",
+                }),
+            ]);
+        return SdkTypeProgrammer.write(project)(importer)(meta.returns, true);
+    };
+    /* -----------------------------------------------------------
+      ATOMICS
+    ----------------------------------------------------------- */
+    const write_constant = (value) => {
+        if (typeof value.value === "boolean")
+            return typescript_1.default.factory.createLiteralTypeNode(value ? typescript_1.default.factory.createTrue() : typescript_1.default.factory.createFalse());
+        else if (typeof value.value === "bigint")
+            return typescript_1.default.factory.createLiteralTypeNode(value.value < BigInt(0)
+                ? typescript_1.default.factory.createPrefixUnaryExpression(typescript_1.default.SyntaxKind.MinusToken, typescript_1.default.factory.createBigIntLiteral((-value).toString()))
+                : typescript_1.default.factory.createBigIntLiteral(value.toString()));
+        else if (typeof value.value === "number")
+            return typescript_1.default.factory.createLiteralTypeNode(ExpressionFactory_1.ExpressionFactory.number(value.value));
+        return typescript_1.default.factory.createLiteralTypeNode(typescript_1.default.factory.createStringLiteral(value.value));
+    };
+    const write_template = (project) => (importer) => (meta) => {
+        var _a;
+        const head = meta[0].isSoleLiteral();
+        const spans = [];
+        for (const elem of meta.slice(head ? 1 : 0)) {
+            const last = (_a = spans.at(-1)) !== null && _a !== void 0 ? _a : (() => {
+                const tuple = [null, null];
+                spans.push(tuple);
+                return tuple;
+            })();
+            if (elem.isSoleLiteral())
+                if (last[1] === null)
+                    last[1] = String(elem.constants[0].values[0].value);
+                else
+                    spans.push([
+                        typescript_1.default.factory.createLiteralTypeNode(typescript_1.default.factory.createStringLiteral(String(elem.constants[0].values[0].value))),
+                        null,
+                    ]);
+            else if (last[0] === null)
+                last[0] = SdkTypeProgrammer.write(project)(importer)(elem);
+            else
+                spans.push([SdkTypeProgrammer.write(project)(importer)(elem), null]);
+        }
+        return typescript_1.default.factory.createTemplateLiteralType(typescript_1.default.factory.createTemplateHead(head ? meta[0].constants[0].values[0].value : ""), spans
+            .filter(([node]) => node !== null)
+            .map(([node, str], i, array) => typescript_1.default.factory.createTemplateLiteralTypeSpan(node, (i !== array.length - 1
+            ? typescript_1.default.factory.createTemplateMiddle
+            : typescript_1.default.factory.createTemplateTail)(str !== null && str !== void 0 ? str : ""))));
+    };
+    const write_atomic = (importer) => (meta) => write_type_tag_matrix(importer)(meta.type, typescript_1.default.factory.createKeywordTypeNode(meta.type === "boolean"
+        ? typescript_1.default.SyntaxKind.BooleanKeyword
+        : meta.type === "bigint"
+            ? typescript_1.default.SyntaxKind.BigIntKeyword
+            : meta.type === "number"
+                ? typescript_1.default.SyntaxKind.NumberKeyword
+                : typescript_1.default.SyntaxKind.StringKeyword), meta.tags);
+    /* -----------------------------------------------------------
+      INSTANCES
+    ----------------------------------------------------------- */
+    const write_array = (project) => (importer) => (meta) => write_type_tag_matrix(importer)("array", typescript_1.default.factory.createArrayTypeNode(SdkTypeProgrammer.write(project)(importer)(meta.type.value)), meta.tags);
+    const write_tuple = (project) => (importer) => (meta) => typescript_1.default.factory.createTupleTypeNode(meta.type.elements.map((elem) => elem.rest
+        ? typescript_1.default.factory.createRestTypeNode(typescript_1.default.factory.createArrayTypeNode(SdkTypeProgrammer.write(project)(importer)(elem.rest)))
+        : elem.optional
+            ? typescript_1.default.factory.createOptionalTypeNode(SdkTypeProgrammer.write(project)(importer)(elem))
+            : SdkTypeProgrammer.write(project)(importer)(elem)));
+    const write_regular_property = (project) => (importer) => (properties) => typescript_1.default.factory.createTypeLiteralNode(properties
+        .map((p) => {
+        const description = writeComment(p.value.atomics)(p.description, p.jsDocTags);
+        const signature = typescript_1.default.factory.createPropertySignature(undefined, Escaper_1.Escaper.variable(String(p.key.constants[0].values[0].value))
+            ? typescript_1.default.factory.createIdentifier(String(p.key.constants[0].values[0].value))
+            : typescript_1.default.factory.createStringLiteral(String(p.key.constants[0].values[0].value)), p.value.isRequired() === false
+            ? typescript_1.default.factory.createToken(typescript_1.default.SyntaxKind.QuestionToken)
+            : undefined, SdkTypeProgrammer.write(project)(importer)(p.value));
+        return !!description.length
+            ? [
+                typescript_1.default.factory.createIdentifier("\n"),
+                FilePrinter_1.FilePrinter.description(signature, description),
+            ]
+            : signature;
+    })
+        .flat());
+    const write_dynamic_property = (project) => (importer) => (property) => typescript_1.default.factory.createTypeLiteralNode([
+        FilePrinter_1.FilePrinter.description(typescript_1.default.factory.createIndexSignature(undefined, [
+            typescript_1.default.factory.createParameterDeclaration(undefined, undefined, typescript_1.default.factory.createIdentifier("key"), undefined, SdkTypeProgrammer.write(project)(importer)(property.key)),
+        ], SdkTypeProgrammer.write(project)(importer)(property.value)), writeComment(property.value.atomics)(property.description, property.jsDocTags)),
+    ]);
+    const writeAlias = (project) => (importer) => (meta) => {
+        importInternalFile(project)(importer)(meta.name);
+        return typescript_1.default.factory.createTypeReferenceNode(meta.name);
+    };
+    const write_native = (name) => typescript_1.default.factory.createTypeReferenceNode(name);
+    /* -----------------------------------------------------------
+      MISCELLANEOUS
+    ----------------------------------------------------------- */
+    const write_type_tag_matrix = (importer) => (from, base, matrix) => {
+        matrix = matrix.filter((row) => row.length !== 0);
+        if (matrix.length === 0)
+            return base;
+        else if (matrix.length === 1)
+            return typescript_1.default.factory.createIntersectionTypeNode([
+                base,
+                ...matrix[0].map((tag) => SdkTypeTagProgrammer_1.SdkTypeTagProgrammer.write(importer, from, tag)),
+            ]);
+        return typescript_1.default.factory.createIntersectionTypeNode([
+            base,
+            typescript_1.default.factory.createUnionTypeNode(matrix.map((row) => row.length === 1
+                ? SdkTypeTagProgrammer_1.SdkTypeTagProgrammer.write(importer, from, row[0])
+                : typescript_1.default.factory.createIntersectionTypeNode(row.map((tag) => SdkTypeTagProgrammer_1.SdkTypeTagProgrammer.write(importer, from, tag))))),
+        ]);
+    };
+})(SdkTypeProgrammer || (exports.SdkTypeProgrammer = SdkTypeProgrammer = {}));
+const writeNode = (text) => typescript_1.default.factory.createTypeReferenceNode(text);
+const writeComment = (atomics) => (description, jsDocTags) => {
+    const lines = [];
+    if (description === null || description === void 0 ? void 0 : description.length)
+        lines.push(...description.split("\n").map((s) => `${s}`));
+    const filtered = !!atomics.length && !!(jsDocTags === null || jsDocTags === void 0 ? void 0 : jsDocTags.length)
+        ? jsDocTags.filter((tag) => !atomics.some((a) => a.tags.some((r) => r.some((t) => t.kind === tag.name))))
+        : (jsDocTags !== null && jsDocTags !== void 0 ? jsDocTags : []);
+    if ((description === null || description === void 0 ? void 0 : description.length) && filtered.length)
+        lines.push("");
+    if (filtered.length)
+        lines.push(...filtered.map((t) => {
+            var _a;
+            return ((_a = t.text) === null || _a === void 0 ? void 0 : _a.length)
+                ? `@${t.name} ${t.text.map((e) => e.text).join("")}`
+                : `@${t.name}`;
+        }));
+    return lines.join("\n");
+};
+const importInternalFile = (project) => (importer) => (name) => {
+    const top = name.split(".")[0];
+    if (importer.file === `${project.config.output}/structures/${top}.ts`)
+        return;
+    importer.internal({
+        declaration: true,
+        file: `${project.config.output}/structures/${name.split(".")[0]}`,
+        type: "element",
+        name: top,
+    });
+};
+//# sourceMappingURL=SdkTypeProgrammer.js.map

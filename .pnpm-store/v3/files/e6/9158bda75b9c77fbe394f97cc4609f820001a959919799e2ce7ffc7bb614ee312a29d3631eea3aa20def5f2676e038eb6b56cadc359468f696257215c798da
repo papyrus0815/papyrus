@@ -1,0 +1,29 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HttpHeadersValidator = void 0;
+const MetadataArrayType_1 = require("typia/lib/schemas/metadata/MetadataArrayType");
+var HttpHeadersValidator;
+(function (HttpHeadersValidator) {
+    HttpHeadersValidator.validate = (meta, explore) => {
+        const errors = [];
+        const insert = (msg) => errors.push(msg);
+        if (explore.top === true) {
+            const expected = meta.atomics.length +
+                meta.templates.length +
+                meta.constants.map((c) => c.values.length).reduce((a, b) => a + b, 0) +
+                meta.arrays.length;
+            if (meta.size() !== expected)
+                insert("Only atomic or array of atomic types are allowed.");
+        }
+        else if (explore.nested !== null &&
+            explore.nested instanceof MetadataArrayType_1.MetadataArrayType) {
+            const expected = meta.atomics.length +
+                meta.templates.length +
+                meta.constants.map((c) => c.values.length).reduce((a, b) => a + b, 0);
+            if (meta.size() !== expected)
+                insert("Only atomic types are allowed in array.");
+        }
+        return errors;
+    };
+})(HttpHeadersValidator || (exports.HttpHeadersValidator = HttpHeadersValidator = {}));
+//# sourceMappingURL=HttpHeadersValidator.js.map

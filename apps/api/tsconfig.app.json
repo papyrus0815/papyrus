@@ -14,14 +14,10 @@
     "plugins": [
       { "transform": "typescript-transform-paths" },
       { "transform": "typescript-transform-paths", "afterDeclarations": true },
-      {
-        "transform": "typia/lib/transform"
-      },
-      {
-        "transform": "@nestia/core/lib/transform"
-      }
+      { "transform": "typia/lib/transform" },
+      { "transform": "@nestia/core/lib/transform" }
     ]
   },
-  "include": ["src/**/*.ts", "prisma/generated/**/*.ts", "prisma/**/*.ts"],
-  "exclude": ["**/*.spec.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.spec.ts", "test/**/*", "jest.config.ts"]
 }

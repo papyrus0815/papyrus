@@ -1,0 +1,43 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedBody = TypedBody;
+const common_1 = require("@nestjs/common");
+const is_request_body_undefined_1 = require("./internal/is_request_body_undefined");
+const validate_request_body_1 = require("./internal/validate_request_body");
+/**
+ * Type safe body decorator.
+ *
+ * `TypedBody` is a decorator function getting `application/json` typed data
+ * from request body. Also, it validates the request body data type through
+ * [typia](https://github.com/samchon/typia) and the validation speed is maximum
+ * 20,000x times faster than `class-validator`.
+ *
+ * For reference, when the request body data is not following the promised type
+ * `T`, `BadRequestException` error (status code: 400) would be thrown.
+ *
+ * @author Jeongho Nam - https://github.com/samchon
+ * @param validator Custom validator if required. Default is `typia.assert()`
+ */
+function TypedBody(validator) {
+    const checker = (0, validate_request_body_1.validate_request_body)("TypedBody")(validator);
+    return (0, common_1.createParamDecorator)(function TypedBody(_unknown, context) {
+        const request = context
+            .switchToHttp()
+            .getRequest();
+        if ((0, is_request_body_undefined_1.is_request_body_undefined)(request) && checker(undefined) === null)
+            return undefined;
+        else if (isApplicationJson(request.headers["content-type"]) === false)
+            throw new common_1.BadRequestException(`Request body type is not "application/json".`);
+        const error = checker(request.body);
+        if (error !== null)
+            throw error;
+        return request.body;
+    })();
+}
+/** @internal */
+const isApplicationJson = (text) => text !== undefined &&
+    text
+        .split(";")
+        .map((str) => str.trim())
+        .some((str) => str === "application/json");
+//# sourceMappingURL=TypedBody.js.map

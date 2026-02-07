@@ -1,0 +1,15 @@
+import { Singleton } from "tstl";
+import ts from "typescript";
+import { IReflectImport } from "../structures/IReflectImport";
+import { IOperationMetadata } from "./IOperationMetadata";
+import { ISdkOperationTransformerContext } from "./ISdkOperationTransformerContext";
+export declare namespace SdkOperationProgrammer {
+    interface IProps {
+        context: ISdkOperationTransformerContext;
+        imports: Singleton<IReflectImport[]>;
+        node: ts.MethodDeclaration;
+        symbol: ts.Symbol | undefined;
+        exceptions: ts.TypeNode[];
+    }
+    const write: (p: IProps) => IOperationMetadata;
+}

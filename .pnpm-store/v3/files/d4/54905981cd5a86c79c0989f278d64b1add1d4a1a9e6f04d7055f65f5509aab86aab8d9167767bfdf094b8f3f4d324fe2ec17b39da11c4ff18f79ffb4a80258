@@ -1,0 +1,302 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SwaggerGenerator = void 0;
+const __typia_transform__assertGuard = __importStar(require("typia/lib/internal/_assertGuard.js"));
+const openapi_1 = require("@samchon/openapi");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const tstl_1 = require("tstl");
+const typia_1 = __importDefault(require("typia"));
+const JsonSchemasProgrammer_1 = require("typia/lib/programmers/json/JsonSchemasProgrammer");
+const FileRetriever_1 = require("../utils/FileRetriever");
+const SdkHttpParameterProgrammer_1 = require("./internal/SdkHttpParameterProgrammer");
+const SwaggerOperationComposer_1 = require("./internal/SwaggerOperationComposer");
+var SwaggerGenerator;
+(function (SwaggerGenerator) {
+    SwaggerGenerator.generate = (app) => __awaiter(this, void 0, void 0, function* () {
+        // GET CONFIGURATION
+        console.log("Generating Swagger Document");
+        if (app.project.config.swagger === undefined)
+            throw new Error("Swagger configuration is not defined.");
+        const config = app.project.config.swagger;
+        // TARGET LOCATION
+        const parsed = path_1.default.parse(config.output);
+        const directory = path_1.default.dirname(parsed.dir);
+        if (fs_1.default.existsSync(directory) === false)
+            try {
+                yield fs_1.default.promises.mkdir(directory);
+            }
+            catch (_a) { }
+        if (fs_1.default.existsSync(directory) === false)
+            throw new Error(`Error on NestiaApplication.swagger(): failed to create output directory: ${directory}`);
+        const location = !!parsed.ext
+            ? path_1.default.resolve(config.output)
+            : path_1.default.join(path_1.default.resolve(config.output), "swagger.json");
+        // COMPOSE SWAGGER DOCUMENT
+        const document = SwaggerGenerator.compose({
+            config,
+            routes: app.routes.filter((route) => route.protocol === "http"),
+            document: yield SwaggerGenerator.initialize(config),
+        });
+        const specified = config.openapi === "2.0"
+            ? openapi_1.OpenApi.downgrade(document, config.openapi)
+            : config.openapi === "3.0"
+                ? openapi_1.OpenApi.downgrade(document, config.openapi)
+                : document;
+        yield fs_1.default.promises.writeFile(location, !config.beautify
+            ? JSON.stringify(specified)
+            : JSON.stringify(specified, null, typeof config.beautify === "number" ? config.beautify : 2), "utf8");
+    });
+    SwaggerGenerator.compose = (props) => {
+        var _a;
+        var _b;
+        // GATHER METADATA
+        const routes = props.routes.filter((r) => r.jsDocTags.every((tag) => tag.name !== "internal" && tag.name !== "hidden"));
+        const metadatas = routes
+            .map((r) => [
+            r.success.metadata,
+            ...SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getAll(r).map((p) => p.metadata),
+            ...Object.values(r.exceptions).map((e) => e.metadata),
+        ])
+            .flat()
+            .filter((m) => m.size() !== 0);
+        // COMPOSE JSON SCHEMAS
+        const json = JsonSchemasProgrammer_1.JsonSchemasProgrammer.write({
+            version: "3.1",
+            metadatas,
+        });
+        const dict = new WeakMap();
+        json.schemas.forEach((schema, i) => dict.set(metadatas[i], schema));
+        const schema = (metadata) => dict.get(metadata);
+        // COMPOSE DOCUMENT
+        const document = props.document;
+        (_a = (_b = document.components).schemas) !== null && _a !== void 0 ? _a : (_b.schemas = {});
+        Object.assign(document.components.schemas, json.components.schemas);
+        fillPaths(Object.assign(Object.assign({}, props), { routes,
+            schema,
+            document }));
+        return document;
+    };
+    SwaggerGenerator.initialize = (config) => __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
+        const pack = new tstl_1.Singleton(() => __awaiter(this, void 0, void 0, function* () {
+            const location = yield FileRetriever_1.FileRetriever.file("package.json")(process.cwd());
+            if (location === null)
+                return null;
+            try {
+                const content = yield fs_1.default.promises.readFile(location, "utf8");
+                const data = (() => { const _io0 = input => (undefined === input.name || "string" === typeof input.name) && (undefined === input.version || "string" === typeof input.version) && (undefined === input.description || "string" === typeof input.description) && (null !== input.license && (undefined === input.license || "string" === typeof input.license || "object" === typeof input.license && null !== input.license && _io1(input.license))); const _io1 = input => "string" === typeof input.type && ("string" === typeof input.url && (/\/|:/.test(input.url) && /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i.test(input.url))); const _ao0 = (input, _path, _exceptionable = true) => (undefined === input.name || "string" === typeof input.name || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".name",
+                    expected: "(string | undefined)",
+                    value: input.name
+                }, _errorFactory)) && (undefined === input.version || "string" === typeof input.version || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".version",
+                    expected: "(string | undefined)",
+                    value: input.version
+                }, _errorFactory)) && (undefined === input.description || "string" === typeof input.description || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".description",
+                    expected: "(string | undefined)",
+                    value: input.description
+                }, _errorFactory)) && ((null !== input.license || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".license",
+                    expected: "(__type.o1 | string | undefined)",
+                    value: input.license
+                }, _errorFactory)) && (undefined === input.license || "string" === typeof input.license || ("object" === typeof input.license && null !== input.license || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".license",
+                    expected: "(__type.o1 | string | undefined)",
+                    value: input.license
+                }, _errorFactory)) && _ao1(input.license, _path + ".license", true && _exceptionable) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".license",
+                    expected: "(__type.o1 | string | undefined)",
+                    value: input.license
+                }, _errorFactory))); const _ao1 = (input, _path, _exceptionable = true) => ("string" === typeof input.type || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".type",
+                    expected: "string",
+                    value: input.type
+                }, _errorFactory)) && ("string" === typeof input.url && (/\/|:/.test(input.url) && /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i.test(input.url) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".url",
+                    expected: "string & Format<\"uri\">",
+                    value: input.url
+                }, _errorFactory)) || __typia_transform__assertGuard._assertGuard(_exceptionable, {
+                    method: "typia.json.assertParse",
+                    path: _path + ".url",
+                    expected: "(string & Format<\"uri\">)",
+                    value: input.url
+                }, _errorFactory)); const __is = input => "object" === typeof input && null !== input && false === Array.isArray(input) && _io0(input); let _errorFactory; const __assert = (input, errorFactory) => {
+                    if (false === __is(input)) {
+                        _errorFactory = errorFactory;
+                        ((input, _path, _exceptionable = true) => ("object" === typeof input && null !== input && false === Array.isArray(input) || __typia_transform__assertGuard._assertGuard(true, {
+                            method: "typia.json.assertParse",
+                            path: _path + "",
+                            expected: "__type",
+                            value: input
+                        }, _errorFactory)) && _ao0(input, _path + "", true) || __typia_transform__assertGuard._assertGuard(true, {
+                            method: "typia.json.assertParse",
+                            path: _path + "",
+                            expected: "__type",
+                            value: input
+                        }, _errorFactory))(input, "$input", true);
+                    }
+                    return input;
+                }; return (input, errorFactory) => __assert(JSON.parse(input), errorFactory); })()(content);
+                return {
+                    title: data.name,
+                    version: data.version,
+                    description: data.description,
+                    license: data.license
+                        ? typeof data.license === "string"
+                            ? { name: data.license }
+                            : typeof data.license === "object"
+                                ? {
+                                    name: data.license.type,
+                                    url: data.license.url,
+                                }
+                                : undefined
+                        : undefined,
+                };
+            }
+            catch (_a) {
+                return null;
+            }
+        }));
+        return {
+            openapi: "3.1.0",
+            servers: (_a = config.servers) !== null && _a !== void 0 ? _a : [
+                {
+                    url: "https://github.com/samchon/nestia",
+                    description: "insert your server url",
+                },
+            ],
+            info: Object.assign(Object.assign({}, ((_b = config.info) !== null && _b !== void 0 ? _b : {})), { version: (_f = (_d = (_c = config.info) === null || _c === void 0 ? void 0 : _c.version) !== null && _d !== void 0 ? _d : (_e = (yield pack.get())) === null || _e === void 0 ? void 0 : _e.version) !== null && _f !== void 0 ? _f : "0.1.0", title: (_k = (_h = (_g = config.info) === null || _g === void 0 ? void 0 : _g.title) !== null && _h !== void 0 ? _h : (_j = (yield pack.get())) === null || _j === void 0 ? void 0 : _j.title) !== null && _k !== void 0 ? _k : "Swagger Documents", description: (_p = (_m = (_l = config.info) === null || _l === void 0 ? void 0 : _l.description) !== null && _m !== void 0 ? _m : (_o = (yield pack.get())) === null || _o === void 0 ? void 0 : _o.description) !== null && _p !== void 0 ? _p : "Generated by nestia - https://github.com/samchon/nestia", license: (_r = (_q = config.info) === null || _q === void 0 ? void 0 : _q.license) !== null && _r !== void 0 ? _r : (_s = (yield pack.get())) === null || _s === void 0 ? void 0 : _s.license }),
+            paths: {},
+            components: {
+                schemas: {},
+                securitySchemes: config.security,
+            },
+            tags: (_t = config.tags) !== null && _t !== void 0 ? _t : [],
+            "x-samchon-emended-v4": true,
+        };
+    });
+    const fillPaths = (props) => {
+        var _a, _b;
+        var _c, _d;
+        // SWAGGER CUSTOMIZER
+        const customizers = [];
+        const neighbor = {
+            at: new tstl_1.Singleton(() => {
+                var _a, _b;
+                const functor = new Map();
+                for (const r of props.routes) {
+                    const method = r.method.toLowerCase();
+                    const path = getPath(r);
+                    const operation = (_b = (_a = props.document.paths) === null || _a === void 0 ? void 0 : _a[path]) === null || _b === void 0 ? void 0 : _b[method];
+                    if (operation === undefined)
+                        continue;
+                    functor.set(r.function, {
+                        method,
+                        path,
+                        route: operation,
+                    });
+                }
+                return functor;
+            }),
+            get: new tstl_1.Singleton(() => (key) => {
+                var _a, _b;
+                const method = key.method.toLowerCase();
+                const path = "/" +
+                    key.path
+                        .split("/")
+                        .filter((str) => !!str.length)
+                        .map((str) => str.startsWith(":") ? `{${str.substring(1)}}` : str)
+                        .join("/");
+                return (_b = (_a = props.document.paths) === null || _a === void 0 ? void 0 : _a[path]) === null || _b === void 0 ? void 0 : _b[method];
+            }),
+        };
+        // COMPOSE OPERATIONS
+        for (const r of props.routes) {
+            const operation = SwaggerOperationComposer_1.SwaggerOperationComposer.compose(Object.assign(Object.assign({}, props), { route: r }));
+            const path = getPath(r);
+            (_a = (_c = props.document).paths) !== null && _a !== void 0 ? _a : (_c.paths = {});
+            (_b = (_d = props.document.paths)[path]) !== null && _b !== void 0 ? _b : (_d[path] = {});
+            props.document.paths[path][r.method.toLowerCase()] = operation;
+            const closure = Reflect.getMetadata("nestia/SwaggerCustomizer", r.controller.class.prototype, r.name);
+            if (closure !== undefined) {
+                const array = Array.isArray(closure) ? closure : [closure];
+                customizers.push(() => {
+                    for (const closure of array)
+                        closure({
+                            swagger: props.document,
+                            method: r.method,
+                            path,
+                            route: operation,
+                            at: (func) => neighbor.at.get().get(func),
+                            get: (accessor) => neighbor.get.get()(accessor),
+                        });
+                });
+            }
+        }
+        // DO CUSTOMIZE
+        for (const fn of customizers)
+            fn();
+    };
+    const getPath = (route) => {
+        let str = route.path;
+        for (const param of route.pathParameters)
+            str = str.replace(`:${param.field}`, `{${param.field}}`);
+        return str;
+    };
+})(SwaggerGenerator || (exports.SwaggerGenerator = SwaggerGenerator = {}));
+//# sourceMappingURL=SwaggerGenerator.js.map

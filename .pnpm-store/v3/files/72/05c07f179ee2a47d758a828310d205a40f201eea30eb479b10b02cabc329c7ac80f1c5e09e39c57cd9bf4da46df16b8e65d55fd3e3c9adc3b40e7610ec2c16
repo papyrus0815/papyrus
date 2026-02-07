@@ -1,0 +1,32 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedParamProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const HttpParameterProgrammer_1 = require("typia/lib/programmers/http/HttpParameterProgrammer");
+var TypedParamProgrammer;
+(function (TypedParamProgrammer) {
+    TypedParamProgrammer.generate = (props) => {
+        var _a, _b;
+        // ALREADY BEING TRANSFORMED
+        if (props.arguments.length !== 1)
+            return props.arguments;
+        return [
+            props.arguments[0],
+            HttpParameterProgrammer_1.HttpParameterProgrammer.write({
+                context: Object.assign(Object.assign({}, props.context), { options: {
+                        numeric: true,
+                    } }),
+                modulo: props.modulo,
+                type: props.type,
+                name: undefined,
+            }),
+            ...(((_b = (_a = props.context.options) === null || _a === void 0 ? void 0 : _a.validate) === null || _b === void 0 ? void 0 : _b.startsWith("validate"))
+                ? [typescript_1.default.factory.createTrue()]
+                : []),
+        ];
+    };
+})(TypedParamProgrammer || (exports.TypedParamProgrammer = TypedParamProgrammer = {}));
+//# sourceMappingURL=TypedParamProgrammer.js.map

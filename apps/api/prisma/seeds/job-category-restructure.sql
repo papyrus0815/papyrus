@@ -44,6 +44,7 @@ INSERT INTO category_job (id, name, thumbnailUrl, parentId, created_at, updated_
 -- 정치/행정 하위 카테고리
 SET @politics_id = (SELECT id FROM category_job WHERE name = '정치/행정' LIMIT 1);
 INSERT INTO category_job (id, name, thumbnailUrl, parentId, created_at, updated_at) VALUES
+(UUID(), '국가원수', NULL, @politics_id, NOW(), NOW()),
 (UUID(), '행정부', NULL, @politics_id, NOW(), NOW()),
 (UUID(), '입법부', NULL, @politics_id, NOW(), NOW()),
 (UUID(), '사법부', NULL, @politics_id, NOW(), NOW()),
@@ -122,10 +123,25 @@ INSERT INTO category_job (id, name, thumbnailUrl, parentId, created_at, updated_
 -- 직업 데이터 (ref_job)
 -- ========================================
 
+-- 정치/행정 > 국가원수 (왕/군주)
+SET @head_of_state_id = (SELECT id FROM category_job WHERE name = '국가원수' AND parentId = @politics_id LIMIT 1);
+INSERT INTO ref_job (id, categoryId, name, name_en, description, created_at, updated_at) VALUES
+(UUID(), @head_of_state_id, '왕', 'King', '왕국의 군주', NOW(), NOW()),
+(UUID(), @head_of_state_id, '여왕', 'Queen', '왕국의 여성 군주', NOW(), NOW()),
+(UUID(), @head_of_state_id, '황제', 'Emperor', '제국의 군주', NOW(), NOW()),
+(UUID(), @head_of_state_id, '황후', 'Empress', '제국의 여성 군주', NOW(), NOW()),
+(UUID(), @head_of_state_id, '국왕', 'King', '국왕', NOW(), NOW()),
+(UUID(), @head_of_state_id, '천황', 'Emperor', '일본 군주', NOW(), NOW()),
+(UUID(), @head_of_state_id, '술탄', 'Sultan', '이슬람 군주', NOW(), NOW()),
+(UUID(), @head_of_state_id, '차르', 'Tsar', '러시아 황제', NOW(), NOW()),
+(UUID(), @head_of_state_id, '칸', 'Khan', '유목민족 군주', NOW(), NOW()),
+(UUID(), @head_of_state_id, '왕세자', 'Crown Prince', '왕위 계승자', NOW(), NOW()),
+(UUID(), @head_of_state_id, '황태자', 'Crown Prince', '황위 계승자', NOW(), NOW()),
+(UUID(), @head_of_state_id, '대통령', 'President', '공화국 국가원수', NOW(), NOW());
+
 -- 정치/행정 > 행정부
 SET @exec_id = (SELECT id FROM category_job WHERE name = '행정부' AND parentId = @politics_id LIMIT 1);
 INSERT INTO ref_job (id, categoryId, name, created_at, updated_at) VALUES
-(UUID(), @exec_id, '대통령', NOW(), NOW()),
 (UUID(), @exec_id, '총리', NOW(), NOW()),
 (UUID(), @exec_id, '부통령', NOW(), NOW()),
 (UUID(), @exec_id, '국무위원', NOW(), NOW()),

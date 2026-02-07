@@ -1,0 +1,126 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedHttpRouteAnalyzer = void 0;
+const MetadataFactory_1 = require("typia/lib/factories/MetadataFactory");
+const Metadata_1 = require("typia/lib/schemas/metadata/Metadata");
+const MetadataComponents_1 = require("typia/lib/schemas/metadata/MetadataComponents");
+const Escaper_1 = require("typia/lib/utils/Escaper");
+const PathUtil_1 = require("../utils/PathUtil");
+var TypedHttpRouteAnalyzer;
+(function (TypedHttpRouteAnalyzer) {
+    TypedHttpRouteAnalyzer.dictionary = (controllers) => {
+        const individual = [];
+        for (const c of controllers)
+            for (const o of c.operations) {
+                if (o.protocol !== "http")
+                    continue;
+                if (o.success)
+                    individual.push(o.success.components);
+                for (const p of o.parameters)
+                    individual.push(p.components);
+                for (const e of Object.values(o.exceptions))
+                    individual.push(e.components);
+            }
+        const components = MetadataComponents_1.MetadataComponents.from({
+            objects: Object.values(Object.fromEntries(individual.map((c) => c.objects.map((o) => [o.name, o])).flat())),
+            arrays: Object.values(Object.fromEntries(individual.map((c) => c.arrays.map((a) => [a.name, a])).flat())),
+            tuples: Object.values(Object.fromEntries(individual.map((c) => c.tuples.map((t) => [t.name, t])).flat())),
+            aliases: Object.values(Object.fromEntries(individual.map((c) => c.aliases.map((a) => [a.name, a])).flat())),
+        });
+        return components.dictionary;
+    };
+    TypedHttpRouteAnalyzer.analyze = (props) => {
+        const errors = [];
+        const cast = (next, from, escape) => {
+            const metadata = Metadata_1.Metadata.from(next.metadata, props.dictionary);
+            const metaErrors = MetadataFactory_1.MetadataFactory.validate({
+                options: {
+                    escape,
+                    constant: true,
+                    absorb: true,
+                    validate: next.validate, // @todo -> CHECK IN TYPIA
+                },
+                functor: next.validate, // @todo -> CHECK IN TYPIA
+                metadata,
+            });
+            if (metaErrors.length)
+                errors.push({
+                    file: props.controller.file,
+                    class: props.controller.class.name,
+                    function: props.operation.name,
+                    from,
+                    contents: metaErrors.map((e) => ({
+                        name: e.name,
+                        accessor: e.explore.object !== null
+                            ? join({
+                                object: e.explore.object,
+                                key: e.explore.property,
+                            })
+                            : null,
+                        messages: e.messages,
+                    })),
+                });
+            return metadata;
+        };
+        const exceptions = Object.fromEntries(Object.entries(props.operation.exceptions).map(([key, value]) => [
+            key,
+            {
+                status: value.status,
+                description: value.description,
+                example: value.example,
+                examples: value.examples,
+                type: value.type,
+                metadata: cast(value, `exception (status: ${key})`, true),
+            },
+        ]));
+        const parameters = props.operation.parameters.map((p) => (Object.assign(Object.assign({}, p), { metadata: cast(p, `parameter (name: ${JSON.stringify(p.name)})`, p.category === "body" &&
+                (p.contentType === "application/json" || p.encrypted === true)) })));
+        const success = Object.assign(Object.assign({}, props.operation.success), { metadata: cast(props.operation.success, "success", props.operation.success.encrypted ||
+                props.operation.success.contentType === "application/json"), setHeaders: props.operation.jsDocTags
+                .filter((t) => {
+                var _a;
+                return ((_a = t.text) === null || _a === void 0 ? void 0 : _a.length) &&
+                    t.text[0].text &&
+                    (t.name === "setHeader" || t.name === "assignHeaders");
+            })
+                .map((t) => {
+                var _a;
+                return t.name === "setHeader"
+                    ? {
+                        type: "setter",
+                        source: t.text[0].text.split(" ")[0].trim(),
+                        target: (_a = t.text[0].text.split(" ")[1]) === null || _a === void 0 ? void 0 : _a.trim(),
+                    }
+                    : {
+                        type: "assigner",
+                        source: t.text[0].text,
+                    };
+            }) });
+        if (errors.length) {
+            props.errors.push(...errors);
+            return [];
+        }
+        return props.paths.map((path) => {
+            var _a, _b, _c;
+            return (Object.assign(Object.assign({}, props.operation), { controller: props.controller, path, accessor: [...PathUtil_1.PathUtil.accessors(path), props.operation.name], exceptions, pathParameters: parameters.filter((p) => p.category === "param"), queryParameters: parameters
+                    .filter((p) => p.category === "query")
+                    .filter((p) => p.field !== null), headerParameters: parameters
+                    .filter((p) => p.category === "headers")
+                    .filter((p) => p.field !== null), queryObject: (_a = parameters
+                    .filter((p) => p.category === "query")
+                    .filter((p) => p.field === null)[0]) !== null && _a !== void 0 ? _a : null, body: (_b = parameters.filter((p) => p.category === "body")[0]) !== null && _b !== void 0 ? _b : null, headerObject: (_c = parameters
+                    .filter((p) => p.category === "headers")
+                    .filter((p) => p.field === null)[0]) !== null && _c !== void 0 ? _c : null, success, extensions: props.operation.extensions }));
+        });
+    };
+})(TypedHttpRouteAnalyzer || (exports.TypedHttpRouteAnalyzer = TypedHttpRouteAnalyzer = {}));
+const join = ({ object, key, }) => {
+    if (key === null)
+        return object.name;
+    else if (typeof key === "object")
+        return `${object.name}[key]`;
+    else if (Escaper_1.Escaper.variable(key))
+        return `${object.name}.${key}`;
+    return `${object.name}[${JSON.stringify(key)}]`;
+};
+//# sourceMappingURL=TypedHttpRouteAnalyzer.js.map

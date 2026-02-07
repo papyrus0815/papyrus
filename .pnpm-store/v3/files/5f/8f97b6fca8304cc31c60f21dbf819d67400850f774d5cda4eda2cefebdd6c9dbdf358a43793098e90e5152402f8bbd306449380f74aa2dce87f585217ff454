@@ -1,0 +1,23 @@
+import { IJsDocTagInfo } from "typia";
+export declare namespace SwaggerDescriptionComposer {
+    const compose: <Kind extends "summary" | "title">(props: {
+        description: string | null;
+        jsDocTags: IJsDocTagInfo[];
+        kind: Kind;
+    }) => Kind extends "summary" ? {
+        summary?: string;
+        description?: string;
+    } : {
+        title?: string;
+        description?: string;
+    };
+    const descriptionFromJsDocTag: (props: {
+        jsDocTags: IJsDocTagInfo[];
+        tag: string;
+        parameter?: string;
+    }) => string | undefined;
+    const getJsDocTexts: (props: {
+        jsDocTags: IJsDocTagInfo[];
+        name: string;
+    }) => string[];
+}

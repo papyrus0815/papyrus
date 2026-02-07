@@ -1,0 +1,61 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PlainBodyProgrammer = void 0;
+const MetadataCollection_1 = require("typia/lib/factories/MetadataCollection");
+const MetadataFactory_1 = require("typia/lib/factories/MetadataFactory");
+const AssertProgrammer_1 = require("typia/lib/programmers/AssertProgrammer");
+const TransformerError_1 = require("typia/lib/transformers/TransformerError");
+var PlainBodyProgrammer;
+(function (PlainBodyProgrammer) {
+    PlainBodyProgrammer.generate = (props) => {
+        const result = MetadataFactory_1.MetadataFactory.analyze({
+            checker: props.context.checker,
+            transformer: props.context.transformer,
+            options: {
+                escape: false,
+                constant: true,
+                absorb: true,
+                validate,
+            },
+            collection: new MetadataCollection_1.MetadataCollection(),
+            type: props.type,
+        });
+        if (result.success === false)
+            throw TransformerError_1.TransformerError.from({
+                code: "nestia.core.TypedParam",
+                errors: result.errors,
+            });
+        return AssertProgrammer_1.AssertProgrammer.write({
+            context: Object.assign(Object.assign({}, props.context), { options: {
+                    numeric: false,
+                    finite: false,
+                    functional: false,
+                } }),
+            modulo: props.modulo,
+            config: {
+                equals: false,
+                guard: false,
+            },
+            type: props.type,
+            name: undefined,
+        });
+    };
+})(PlainBodyProgrammer || (exports.PlainBodyProgrammer = PlainBodyProgrammer = {}));
+const validate = (metadata) => {
+    const errors = [];
+    const insert = (msg) => errors.push(msg);
+    const expected = (metadata.atomics.some((a) => a.type === "string") ? 1 : 0) +
+        metadata.templates.length +
+        metadata.constants
+            .filter((c) => c.type === "string")
+            .map((c) => c.values.length)
+            .reduce((a, b) => a + b, 0);
+    if (expected === 0 || expected !== metadata.size())
+        insert(`only string type is allowed`);
+    if (metadata.nullable === true)
+        insert(`do not allow nullable type`);
+    else if (metadata.any === true)
+        insert(`do not allow any type`);
+    return errors;
+};
+//# sourceMappingURL=PlainBodyProgrammer.js.map

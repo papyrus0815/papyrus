@@ -5,7 +5,7 @@ import type { HistoricalEventCategory } from './create/events.types'
 
 export const getApiHost = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL
-  
+
   console.log('🔍 VITE_API_BASE_URL:', envUrl, typeof envUrl)
 
   if (envUrl === '') {
@@ -25,7 +25,8 @@ export const getApiHost = (): string => {
 
 export const getImageUrl = (url: string): string => {
   console.log('🔍 getImageUrl 입력:', url)
-  
+
+  // 절대 URL(http://, https://, blob:)은 그대로 반환
   if (
     url.startsWith('http://') ||
     url.startsWith('https://') ||
@@ -34,15 +35,18 @@ export const getImageUrl = (url: string): string => {
     console.log('✅ 절대 URL 반환:', url)
     return url
   }
-  
-  const apiHost = getApiHost()
-  const fullUrl = `${apiHost}${url.startsWith('/') ? url : `/${url}`}`
-  
-  console.log('🔗 변환된 URL:', fullUrl)
-  console.log('   - apiHost:', apiHost)
-  console.log('   - 원본 URL:', url)
-  
-  return fullUrl
+
+  // 상대 경로(/uploads/...)는 그대로 반환하여 Vite 프록시가 처리하도록 함
+  // Vite는 /uploads를 자동으로 API 서버(localhost:8000 또는 네트워크 IP)로 프록시
+  if (url.startsWith('/')) {
+    console.log('✅ 상대 경로 그대로 반환:', url)
+    return url
+  }
+
+  // / 없이 시작하는 경로는 / 추가
+  const relativePath = `/${url}`
+  console.log('✅ 상대 경로로 변환:', relativePath)
+  return relativePath
 }
 
 /**

@@ -1,0 +1,8 @@
+import ts from "typescript";
+import { INestiaTransformContext } from "../options/INestiaTransformProject";
+export declare namespace ParameterTransformer {
+    const transform: (props: {
+        context: INestiaTransformContext;
+        param: ts.ParameterDeclaration;
+    }) => ts.ParameterDeclaration;
+}

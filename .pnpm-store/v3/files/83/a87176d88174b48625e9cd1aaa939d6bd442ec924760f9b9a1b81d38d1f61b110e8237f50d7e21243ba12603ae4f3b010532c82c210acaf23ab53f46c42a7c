@@ -1,0 +1,10 @@
+import { INestApplication } from "@nestjs/common";
+export declare class WebSocketAdaptor {
+    static upgrade(app: INestApplication): Promise<WebSocketAdaptor>;
+    readonly close: () => Promise<void>;
+    private constructor();
+    private readonly handleUpgrade;
+    private readonly http;
+    private readonly operators;
+    private readonly ws;
+}

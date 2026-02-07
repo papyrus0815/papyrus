@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { runNpx, success, error } from '../utils/common.js'
+import { error, runNpx, success } from '../utils/common.js'
 
 async function main(options = {}) {
   try {
@@ -26,14 +26,12 @@ async function main(options = {}) {
   }
 }
 
-// CLI 인수 처리
-if (import.meta.url === `file://${process.argv[1]}`) {
+export default async function (providedOptions) {
+  // run.js에서 호출될 때 옵션 파싱
   const args = process.argv.slice(2)
-  const options = {
+  const options = providedOptions || {
     network: args.includes('--network'),
     tunnel: args.includes('--tunnel'),
   }
-  main(options)
+  return main(options)
 }
-
-export default main

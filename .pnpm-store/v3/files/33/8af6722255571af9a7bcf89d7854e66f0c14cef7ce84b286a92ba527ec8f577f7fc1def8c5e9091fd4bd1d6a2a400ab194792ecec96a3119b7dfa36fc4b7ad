@@ -1,0 +1,76 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReflectControllerAnalyzer = void 0;
+const constants_1 = require("@nestjs/common/constants");
+const ArrayUtil_1 = require("../utils/ArrayUtil");
+const ReflectHttpOperationAnalyzer_1 = require("./ReflectHttpOperationAnalyzer");
+const ReflectMetadataAnalyzer_1 = require("./ReflectMetadataAnalyzer");
+const ReflectWebSocketOperationAnalyzer_1 = require("./ReflectWebSocketOperationAnalyzer");
+var ReflectControllerAnalyzer;
+(function (ReflectControllerAnalyzer) {
+    /* ---------------------------------------------------------
+      CONTROLLER
+    --------------------------------------------------------- */
+    ReflectControllerAnalyzer.analyze = (props) => {
+        var _a, _b;
+        // MUST BE TYPE OF A CREATOR WHO HAS THE CONSTRUCTOR
+        if (ArrayUtil_1.ArrayUtil.has(Reflect.getMetadataKeys(props.controller.class), constants_1.PATH_METADATA, constants_1.HOST_METADATA, constants_1.SCOPE_OPTIONS_METADATA) === false)
+            return null;
+        // BASIC INFO
+        const controller = {
+            class: props.controller.class,
+            file: props.controller.location,
+            operations: [],
+            prefixes: props.controller.prefixes,
+            paths: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.paths(props.controller.class).filter((str) => {
+                if (str.includes("*") === true) {
+                    props.project.warnings.push({
+                        file: props.controller.location,
+                        class: props.controller.class.name,
+                        function: null,
+                        from: null,
+                        contents: ["@nestia/sdk does not compose wildcard controller."],
+                    });
+                    return false;
+                }
+                return true;
+            }),
+            versions: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.versions(props.controller.class),
+            security: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.securities(props.controller.class),
+            tags: (_a = Reflect.getMetadata("swagger/apiUseTags", props.controller.class)) !== null && _a !== void 0 ? _a : [],
+        };
+        // OPERATORS
+        for (const [key, value] of _Get_prototype_entries(props.controller.class)) {
+            if (typeof value !== "function")
+                continue;
+            const metadata = Reflect.getMetadata("nestia/OperationMetadata", props.controller.class.prototype, key);
+            if (metadata === undefined)
+                continue;
+            else if (metadata.jsDocTags.some((tag) => tag.name === "ignore"))
+                continue;
+            const next = {
+                project: props.project,
+                controller: controller,
+                name: key,
+                function: value,
+                metadata,
+            };
+            const child = (_b = ReflectWebSocketOperationAnalyzer_1.ReflectWebSocketOperationAnalyzer.analyze(next)) !== null && _b !== void 0 ? _b : ReflectHttpOperationAnalyzer_1.ReflectHttpOperationAnalyzer.analyze(next);
+            if (child !== null)
+                controller.operations.push(child);
+        }
+        return controller;
+    };
+    function _Get_prototype_entries(creator) {
+        const keyList = Object.getOwnPropertyNames(creator.prototype);
+        const entries = keyList.map((key) => [
+            key,
+            creator.prototype[key],
+        ]);
+        const parent = Object.getPrototypeOf(creator);
+        if (parent.prototype !== undefined)
+            entries.push(..._Get_prototype_entries(parent));
+        return entries;
+    }
+})(ReflectControllerAnalyzer || (exports.ReflectControllerAnalyzer = ReflectControllerAnalyzer = {}));
+//# sourceMappingURL=ReflectControllerAnalyzer.js.map

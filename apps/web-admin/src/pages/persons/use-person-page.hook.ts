@@ -8,23 +8,24 @@
  * - 페이지네이션
  * - 폼 상태 관리
  */
+import { useEffect, useMemo, useState } from 'react'
 
-import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'react-hot-toast'
+
 import {
-  usePersons,
-  useCreatePerson,
-  useUpdatePerson,
-  useDeletePerson,
-  type Person,
   type CreatePersonData,
   type Era,
+  type Person,
+  useCreatePerson,
+  useDeletePerson,
+  usePersons,
+  useUpdatePerson,
 } from '@/entities/person/api'
-import { useCountries } from '@/features/country/api'
 import { useContinents } from '@/features/continent/use-continents.hook'
-import { useReligions } from '@/shared/api/religion'
+import { useCountries } from '@/features/country/api'
 import { useDynasties } from '@/shared/api/dynasty'
 import { useJobs } from '@/shared/api/job'
+import { useReligions } from '@/shared/api/religion'
 
 export interface PersonFormData {
   name: string
@@ -291,10 +292,13 @@ export function usePersonPage() {
 
   /**
    * 인물 수정 핸들러
+   * @description 이제 수정 페이지(/persons/:id/edit)로 이동합니다
    */
   const handleEdit = (person: Person) => {
+    // 수정 페이지로 이동하도록 변경
+    // navigate 함수는 hook에서 사용 불가, 대신 person 객체만 반환
+    // 실제 navigate는 person.page.tsx에서 처리
     setEditingPerson(person)
-    setShowSidebar(true)
   }
 
   /**
@@ -333,8 +337,12 @@ export function usePersonPage() {
       let birthDate: string | undefined = undefined
       if (formData.birthYear) {
         const year = String(formData.birthYear).padStart(4, '0')
-        const month = formData.birthMonth ? String(formData.birthMonth).padStart(2, '0') : '01'
-        const day = formData.birthDay ? String(formData.birthDay).padStart(2, '0') : '01'
+        const month = formData.birthMonth
+          ? String(formData.birthMonth).padStart(2, '0')
+          : '01'
+        const day = formData.birthDay
+          ? String(formData.birthDay).padStart(2, '0')
+          : '01'
         birthDate = `${year}-${month}-${day}`
       }
 
@@ -342,8 +350,12 @@ export function usePersonPage() {
       let deathDate: string | undefined = undefined
       if (formData.deathYear) {
         const year = String(formData.deathYear).padStart(4, '0')
-        const month = formData.deathMonth ? String(formData.deathMonth).padStart(2, '0') : '01'
-        const day = formData.deathDay ? String(formData.deathDay).padStart(2, '0') : '01'
+        const month = formData.deathMonth
+          ? String(formData.deathMonth).padStart(2, '0')
+          : '01'
+        const day = formData.deathDay
+          ? String(formData.deathDay).padStart(2, '0')
+          : '01'
         deathDate = `${year}-${month}-${day}`
       }
 
@@ -411,14 +423,17 @@ export function usePersonPage() {
 
   /**
    * 새 인물 등록 시작
+   * @deprecated 이제 별도 등록 페이지(/persons/create)로 이동합니다
    */
   const handleOpenCreate = () => {
-    setEditingPerson(null)
-    setShowSidebar(true)
+    // 등록 페이지로 이동하도록 변경됨
+    // setEditingPerson(null)
+    // setShowSidebar(true)
   }
 
   /**
    * 사이드바 닫기
+   * @deprecated 사이드바 사용 안 함
    */
   const handleCloseSidebar = () => {
     setShowSidebar(false)

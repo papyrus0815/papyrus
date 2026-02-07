@@ -1,0 +1,110 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkHttpParameterProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const SdkAliasCollection_1 = require("./SdkAliasCollection");
+var SdkHttpParameterProgrammer;
+(function (SdkHttpParameterProgrammer) {
+    SdkHttpParameterProgrammer.getAll = (route) => [
+        ...route.pathParameters,
+        ...route.queryParameters,
+        ...route.headerParameters,
+        ...(route.queryObject ? [route.queryObject] : []),
+        ...(route.body ? [route.body] : []),
+        ...(route.headerObject ? [route.headerObject] : []),
+    ];
+    SdkHttpParameterProgrammer.getSignificant = (route, body) => [
+        ...route.pathParameters,
+        ...route.queryParameters,
+        ...(route.queryObject ? [route.queryObject] : []),
+        ...(body && route.body ? [route.body] : []),
+    ];
+    SdkHttpParameterProgrammer.getEntries = (props) => {
+        if (props.route.pathParameters.length === 0 &&
+            props.route.queryParameters.length === 0 &&
+            props.route.queryObject === null &&
+            (props.body === false || props.route.body === null))
+            return [];
+        const prefix = typeof props.prefix === "string"
+            ? props.prefix
+            : props.prefix === true
+                ? `${props.route.name}.`
+                : "";
+        return [
+            ...[...props.route.pathParameters, ...props.route.queryParameters].map((p) => ({
+                key: p.name,
+                required: p.metadata.isRequired(),
+                type: props.project.config.clone === true
+                    ? SdkAliasCollection_1.SdkAliasCollection.from(props.project)(props.importer)(p.metadata)
+                    : SdkAliasCollection_1.SdkAliasCollection.name(p),
+                parameter: p,
+            })),
+            ...(props.route.queryObject
+                ? [
+                    {
+                        key: props.route.queryObject.name,
+                        required: props.route.queryObject.metadata.isRequired(),
+                        type: props.e2e === true
+                            ? props.project.config.clone === true
+                                ? SdkAliasCollection_1.SdkAliasCollection.from(props.project)(props.importer)(props.route.queryObject.metadata)
+                                : SdkAliasCollection_1.SdkAliasCollection.name(props.route.queryObject)
+                            : typescript_1.default.factory.createTypeReferenceNode(`${prefix}Query`),
+                        parameter: props.route.queryObject,
+                    },
+                ]
+                : []),
+            ...(props.body && props.route.body
+                ? [
+                    {
+                        key: props.route.body.name,
+                        required: props.route.body.metadata.isRequired(),
+                        type: props.e2e === true
+                            ? props.project.config.clone === true
+                                ? SdkAliasCollection_1.SdkAliasCollection.from(props.project)(props.importer)(props.route.body.metadata)
+                                : SdkAliasCollection_1.SdkAliasCollection.name(props.route.body)
+                            : typescript_1.default.factory.createTypeReferenceNode(`${prefix}Body`),
+                        parameter: props.route.body,
+                    },
+                ]
+                : []),
+        ];
+    };
+    SdkHttpParameterProgrammer.getParameterDeclarations = (props) => {
+        const entries = SdkHttpParameterProgrammer.getEntries(props);
+        if (entries.length === 0)
+            return [];
+        else if (props.project.config.keyword === true) {
+            const typeName = props.prefix
+                ? `${props.route.name}.Props`
+                : "Props";
+            const node = props.body === false && props.route.body !== null
+                ? typescript_1.default.factory.createTypeReferenceNode("Omit", [
+                    typescript_1.default.factory.createTypeReferenceNode(typeName),
+                    typescript_1.default.factory.createLiteralTypeNode(typescript_1.default.factory.createStringLiteral(props.route.body.name)),
+                ])
+                : typescript_1.default.factory.createTypeReferenceNode(typeName);
+            return [
+                typescript_1.default.factory.createParameterDeclaration(undefined, undefined, "props", undefined, node, undefined),
+            ];
+        }
+        return entries.map((e) => typescript_1.default.factory.createParameterDeclaration(undefined, undefined, e.key, e.required
+            ? undefined
+            : typescript_1.default.factory.createToken(typescript_1.default.SyntaxKind.QuestionToken), e.type, undefined));
+    };
+    SdkHttpParameterProgrammer.getArguments = (props) => {
+        const parameters = SdkHttpParameterProgrammer.getSignificant(props.route, props.body);
+        if (parameters.length === 0)
+            return [];
+        else if (props.project.config.keyword === true)
+            return [typescript_1.default.factory.createIdentifier("props")];
+        return parameters.map((p) => typescript_1.default.factory.createIdentifier(p.name));
+    };
+    SdkHttpParameterProgrammer.getAccessors = (props) => {
+        const prefix = props.project.config.keyword === true ? "props." : "";
+        return SdkHttpParameterProgrammer.getSignificant(props.route, props.body).map((p) => typescript_1.default.factory.createIdentifier(`${prefix}${p.name}`));
+    };
+})(SdkHttpParameterProgrammer || (exports.SdkHttpParameterProgrammer = SdkHttpParameterProgrammer = {}));
+//# sourceMappingURL=SdkHttpParameterProgrammer.js.map

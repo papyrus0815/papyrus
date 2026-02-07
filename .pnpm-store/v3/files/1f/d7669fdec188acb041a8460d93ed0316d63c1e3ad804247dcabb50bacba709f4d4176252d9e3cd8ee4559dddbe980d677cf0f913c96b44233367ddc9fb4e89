@@ -1,0 +1,61 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.validate_request_body = void 0;
+const common_1 = require("@nestjs/common");
+const typia_1 = __importDefault(require("typia"));
+const NoTransformConfigurationError_1 = require("../NoTransformConfigurationError");
+/** @internal */
+const validate_request_body = (method) => (validator) => {
+    if (!validator) {
+        (0, NoTransformConfigurationError_1.NoTransformConfigurationError)(method);
+        return () => null;
+    }
+    else if (validator.type === "assert")
+        return assert(validator.assert);
+    else if (validator.type === "is")
+        return is(validator.is);
+    else if (validator.type === "validate")
+        return validate(validator.validate);
+    return () => new Error(`Error on nestia.core.${method}(): invalid typed validator.`);
+};
+exports.validate_request_body = validate_request_body;
+/** @internal */
+const assert = (closure) => (input) => {
+    try {
+        closure(input);
+        return null;
+    }
+    catch (exp) {
+        if ((() => { const _io0 = input => "string" === typeof input.method && (undefined === input.path || "string" === typeof input.path) && "string" === typeof input.expected && true && (undefined === input.description || "string" === typeof input.description) && "string" === typeof input.name && "string" === typeof input.message && (undefined === input.stack || "string" === typeof input.stack); return input => "object" === typeof input && null !== input && _io0(input); })()(exp)) {
+            return new common_1.BadRequestException({
+                path: exp.path,
+                reason: exp.message,
+                expected: exp.expected,
+                value: exp.value,
+                message: MESSAGE,
+            });
+        }
+        throw exp;
+    }
+};
+/** @internal */
+const is = (closure) => (input) => {
+    const success = closure(input);
+    return success ? null : new common_1.BadRequestException(MESSAGE);
+};
+/** @internal */
+const validate = (closure) => (input) => {
+    const result = closure(input);
+    return result.success
+        ? null
+        : new common_1.BadRequestException({
+            errors: result.errors,
+            message: MESSAGE,
+        });
+};
+/** @internal */
+const MESSAGE = "Request body data is not following the promised type.";
+//# sourceMappingURL=validate_request_body.js.map

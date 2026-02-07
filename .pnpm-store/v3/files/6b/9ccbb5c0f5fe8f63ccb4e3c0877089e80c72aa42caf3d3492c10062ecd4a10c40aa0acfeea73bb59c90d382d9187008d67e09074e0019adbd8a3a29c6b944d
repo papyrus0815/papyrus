@@ -1,0 +1,9 @@
+import { OpenApi } from "@samchon/openapi";
+import { Metadata } from "typia/lib/schemas/metadata/Metadata";
+import { ITypedHttpRoute } from "../../structures/ITypedHttpRoute";
+export declare namespace SwaggerOperationResponseComposer {
+    const compose: (props: {
+        schema: (metadata: Metadata) => OpenApi.IJsonSchema | undefined;
+        route: ITypedHttpRoute;
+    }) => Record<string, OpenApi.IOperation.IResponse>;
+}

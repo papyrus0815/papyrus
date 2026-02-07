@@ -34,11 +34,16 @@ import {
   VIEW_MODES,
   type ViewMode,
 } from '@/features/event-list/lib'
+import { getAllCountries } from '@/shared/api/countries'
+import type { CountryResponseDto } from '@/shared/api/countries'
 import {
   type EventCategoryDto,
   getAllEventCategories,
 } from '@/shared/api/event-categories'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
+import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
 import { CategorySummaryGrid } from '@/widgets/event-category-summary/ui'
 import { FiltersPanel } from '@/widgets/event-filters-panel/ui'
 import { EventCompactList } from '@/widgets/event-list-compact/ui'
@@ -62,21 +67,43 @@ import { MOCK_POSITION_TYPES } from './mock-government-positions'
 export const EventsCatalogPageRefactored: React.FC = () => {
   const navigate = useNavigate()
 
+  // ===== Pagination State (useEvents보다 먼저 선언) =====
+  const [pageSize, setPageSize] = useState(20)
+
   // ===== Entity: Events Data =====
-  const { events, personsWithGovPositions, isLoading } = useEvents()
+  const {
+    events,
+    personsWithGovPositions,
+    isLoading,
+    hasMore,
+    fetchMoreEvents,
+    resetAndFetch,
+  } = useEvents(pageSize)
 
   // ===== Entity: Categories Data =====
   const [dbCategories, setDbCategories] = useState<EventCategoryDto[]>([])
+  const [countries, setCountries] = useState<CountryResponseDto[]>([])
+  const [historicalCountries, setHistoricalCountries] = useState<
+    HistoricalCountryResponseDto[]
+  >([])
 
   useEffect(() => {
-    getAllEventCategories()
-      .then((categories) => {
+    Promise.all([
+      getAllEventCategories(),
+      getAllCountries(),
+      getAllHistoricalCountries(),
+    ])
+      .then(([categories, countriesData, historicalCountriesData]) => {
         console.log('✅ 카테고리 목록 로드:', categories)
         setDbCategories(categories)
+        setCountries(countriesData)
+        setHistoricalCountries(historicalCountriesData)
       })
       .catch((error) => {
-        console.error('❌ 카테고리 로드 실패:', error)
+        console.error('❌ 데이터 로드 실패:', error)
         setDbCategories([])
+        setCountries([])
+        setHistoricalCountries([])
       })
   }, [])
 
@@ -140,6 +167,26 @@ export const EventsCatalogPageRefactored: React.FC = () => {
   const [summaryViewMode, setSummaryViewMode] = useState<SummaryViewMode>(
     SUMMARY_VIEW_MODES.TIMELINE,
   )
+
+  // ===== Pagination: 페이지 크기 변경 핸들러 =====
+  const handlePageSizeChange = (newSize: number) => {
+    console.log(`📏 페이지 크기 변경: ${pageSize} → ${newSize}`)
+    setPageSize(newSize)
+    resetAndFetch(newSize)
+  }
+
+  // ===== Pagination: 스크롤 감지 (서버 페이징) =====
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget
+    const scrollBottom =
+      target.scrollHeight - target.scrollTop - target.clientHeight
+
+    // 하단 300px 이내에 도달하고, 더 불러올 데이터가 있으면 서버에서 로드
+    if (scrollBottom < 300 && hasMore && !isLoading) {
+      console.log('📥 서버에서 추가 데이터 요청...')
+      fetchMoreEvents()
+    }
+  }
 
   // ===== 선택된 이벤트 정보 =====
   const selectedEvent = useMemo(() => {
@@ -254,6 +301,8 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             dbCategories={dbCategories}
             availableCenturies={availableCenturies}
             events={events}
+            countries={countries}
+            historicalCountries={historicalCountries}
             onKeywordChange={setKeyword}
             onShowCategoryModal={() => setShowCategoryModal(true)}
             onShowCountryModal={() => setShowCountryModal(true)}
@@ -265,7 +314,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
 
           {/* ===== Widget: Event Compact List ===== */}
           <EventCompactList
-            isLoading={isLoading}
+            isLoading={false}
             flattenedHierarchy={flattenedHierarchy}
             events={events}
             filteredEvents={filteredEvents}
@@ -278,6 +327,10 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             hasActiveFilters={hasActiveFilters}
             tenureGroups={tenureGroups}
             dbCategories={dbCategories}
+            totalCount={flattenedHierarchy.length}
+            isLoadingMore={isLoading}
+            displayedCount={flattenedHierarchy.length}
+            hasMoreData={hasMore}
             onToggleExpansion={toggleEventExpansion}
             onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
             onSelectEvent={setSelectedEventId}
@@ -290,6 +343,9 @@ export const EventsCatalogPageRefactored: React.FC = () => {
               setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
             }
             onResetFilters={handleResetFilters}
+            onScroll={handleScroll}
+            pageSize={pageSize}
+            onPageSizeChange={handlePageSizeChange}
           />
 
           {/* ===== Widget: Event Detail Panel ===== */}
@@ -328,19 +384,27 @@ export const EventsCatalogPageRefactored: React.FC = () => {
       />
 
       {/* ===== Modal: Country Selection ===== */}
-      <SimpleSelectModal
+      <AdvancedCountrySelectModal
         isOpen={showCountryModal}
         onClose={() => setShowCountryModal(false)}
-        title="국가 선택"
-        selectedValue={selectedCountry}
-        options={availableCountries.map((country) => ({
-          value: country,
-          label: country,
-        }))}
-        onSelect={(value) => setSelectedCountry(value)}
-        allLabel="전체 국가"
-        allDescription="모든 참전국/관련국"
-        Icon={FiGlobe}
+        onSelect={(country) => {
+          if (country.id === FILTER_ALL) {
+            setSelectedCountry(FILTER_ALL)
+          } else {
+            setSelectedCountry(country.id)
+          }
+          setShowCountryModal(false)
+        }}
+        modernCountries={[
+          { id: FILTER_ALL, name: '전체 국가', flagEmoji: '🌍' } as any,
+          ...countries,
+        ]}
+        historicalCountries={historicalCountries}
+        title="국가 필터"
+        selectedCountryIds={
+          selectedCountry === FILTER_ALL ? [] : [selectedCountry as string]
+        }
+        multiSelect={false}
       />
 
       {/* ===== Modal: Position Type Selection ===== */}

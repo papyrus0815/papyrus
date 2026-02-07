@@ -1,4 +1,4 @@
-import { UserRole, CurationVisibility, CurationStatus } from '@prisma/client'
+import { CurationStatus, CurationVisibility, UserRole } from '@prisma/client'
 
 /**
  * User Entity

@@ -1,0 +1,1 @@
+{"version":3,"file":"WebSocketPolyfill.js","sourceRoot":"","sources":["../../../../src/protocols/web/internal/WebSocketPolyfill.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;AAAA,iEAAgE;AAEhE;;GAEG;AACH,SAAsB,iBAAiB;;;;;wBACtB,qBAAM,uBAAU,CAAC,EAAE,CAAC,GAAG,EAAE,EAAA;;oBAAlC,MAAM,GAAG,SAAyB;oBACxC,sBAAO,MAAM,CAAC,OAAO,EAAC;;;;CACvB;AAHD,8CAGC"}

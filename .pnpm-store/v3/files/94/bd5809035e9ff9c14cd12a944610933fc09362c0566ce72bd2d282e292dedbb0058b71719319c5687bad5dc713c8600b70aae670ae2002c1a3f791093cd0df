@@ -1,0 +1,173 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ConfigAnalyzer = void 0;
+/// <reference path="../typings/get-function-location.d.ts" />
+const common_1 = require("@nestjs/common");
+const constants_1 = require("@nestjs/common/constants");
+const fs_1 = __importDefault(require("fs"));
+const get_function_location_1 = __importDefault(require("get-function-location"));
+const path_1 = __importDefault(require("path"));
+const tstl_1 = require("tstl");
+const SdkGenerator_1 = require("../generates/SdkGenerator");
+const ArrayUtil_1 = require("../utils/ArrayUtil");
+const MapUtil_1 = require("../utils/MapUtil");
+const SourceFinder_1 = require("../utils/SourceFinder");
+var ConfigAnalyzer;
+(function (ConfigAnalyzer) {
+    ConfigAnalyzer.input = (config) => __awaiter(this, void 0, void 0, function* () {
+        return MapUtil_1.MapUtil.take(memory, config, () => __awaiter(this, void 0, void 0, function* () {
+            var _a;
+            if (typeof config.input === "function")
+                return ConfigAnalyzer.application(yield config.input());
+            const sources = yield SourceFinder_1.SourceFinder.find({
+                include: Array.isArray(config.input)
+                    ? config.input
+                    : typeof config.input === "object"
+                        ? config.input.include
+                        : [config.input],
+                exclude: typeof config.input === "object" && !Array.isArray(config.input)
+                    ? ((_a = config.input.exclude) !== null && _a !== void 0 ? _a : [])
+                    : [],
+                filter: filter(config),
+            });
+            const controllers = [];
+            for (const file of sources) {
+                const external = yield Promise.resolve(`${file}`).then(s => __importStar(require(s)));
+                for (const key in external) {
+                    const instance = external[key];
+                    if (Reflect.getMetadata("path", instance) !== undefined)
+                        controllers.push({
+                            class: instance,
+                            location: file,
+                            prefixes: [],
+                        });
+                }
+            }
+            return {
+                controllers,
+            };
+        }));
+    });
+    ConfigAnalyzer.application = (app) => __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        const container = app.container;
+        const modules = [...container.getModules().values()].filter((m) => !!m.controllers.size);
+        const unique = new tstl_1.HashMap();
+        for (const m of modules) {
+            const path = (_b = (_a = Reflect.getMetadata(constants_1.MODULE_PATH + container.getModules().applicationId, m.metatype)) !== null && _a !== void 0 ? _a : Reflect.getMetadata(constants_1.MODULE_PATH, m.metatype)) !== null && _b !== void 0 ? _b : "";
+            for (const controller of [...m.controllers.keys()])
+                if (typeof controller === "function")
+                    unique.take(controller, () => new Set()).add(path);
+        }
+        const controllers = [];
+        for (const it of unique) {
+            const file = (_d = (_c = (yield (0, get_function_location_1.default)(it.first))) === null || _c === void 0 ? void 0 : _c.source) !== null && _d !== void 0 ? _d : null;
+            if (file === null)
+                continue;
+            const location = normalize_file(file);
+            if (location.length === 0)
+                continue;
+            controllers.push({
+                class: it.first,
+                prefixes: Array.from(it.second),
+                location,
+            });
+        }
+        const versioning = (_e = app.config) === null || _e === void 0 ? void 0 : _e.versioningOptions;
+        return {
+            controllers,
+            globalPrefix: typeof ((_f = app.config) === null || _f === void 0 ? void 0 : _f.globalPrefix) === "string"
+                ? {
+                    prefix: app.config.globalPrefix,
+                    exclude: (_h = (_g = app.config.globalPrefixOptions) === null || _g === void 0 ? void 0 : _g.exclude) !== null && _h !== void 0 ? _h : {},
+                }
+                : undefined,
+            versioning: versioning === undefined || versioning.type !== common_1.VersioningType.URI
+                ? undefined
+                : {
+                    prefix: versioning.prefix === undefined || versioning.prefix === false
+                        ? "v"
+                        : versioning.prefix,
+                    defaultVersion: versioning.defaultVersion,
+                },
+        };
+    });
+})(ConfigAnalyzer || (exports.ConfigAnalyzer = ConfigAnalyzer = {}));
+const memory = new Map();
+const normalize_file = (str) => str.substring(str.startsWith("file:///")
+    ? process.cwd()[0] === "/"
+        ? 7
+        : 8
+    : str.startsWith("file://")
+        ? 7
+        : 0);
+const filter = (config) => (location) => __awaiter(void 0, void 0, void 0, function* () {
+    return location.endsWith(".ts") &&
+        !location.endsWith(".d.ts") &&
+        (config.output === undefined ||
+            (location.indexOf(path_1.default.join(config.output, "functional")) === -1 &&
+                (yield (yield bundler.get(config.output))(location))) === false);
+});
+const bundler = new tstl_1.Singleton((output) => __awaiter(void 0, void 0, void 0, function* () {
+    const assets = yield fs_1.default.promises.readdir(SdkGenerator_1.SdkGenerator.BUNDLE_PATH);
+    const tuples = yield ArrayUtil_1.ArrayUtil.asyncMap(assets, (file) => __awaiter(void 0, void 0, void 0, function* () {
+        const relative = path_1.default.join(output, file);
+        const location = path_1.default.join(SdkGenerator_1.SdkGenerator.BUNDLE_PATH, file);
+        const stats = yield fs_1.default.promises.stat(location);
+        return new tstl_1.Pair(relative, stats.isDirectory());
+    }));
+    return (file) => __awaiter(void 0, void 0, void 0, function* () {
+        for (const it of tuples)
+            if (it.second === false && file === it.first)
+                return true;
+            else if (it.second === true && file.indexOf(it.first) === 0)
+                return true;
+        return false;
+    });
+}));
+//# sourceMappingURL=ConfigAnalyzer.js.map

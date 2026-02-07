@@ -10,18 +10,24 @@
 ///   • 가문별 특징과 역사적 의미
 ///   • 대표 이미지 및 상징 관리
 /// 
+/// - 왕조 통치 기록(DynastyRule): 왕조-국가 연결
+///   • 특정 왕조가 특정 국가를 통치한 기간 추적
+///   • 왕조 교체 이력 (예: 고려→조선, 명→청)
+///   • 동시대 여러 국가 통치 (예: 합스부르크 가문)
+/// 
 /// 활용 사례:
-/// - 조선 왕조, 이씨 조선 왕가
-/// - 유럽의 합스부르크 가문
+/// - 조선 왕조 → 조선 국가 (1392-1910)
+/// - 합스부르크 가문 → 신성로마제국, 오스트리아, 스페인 (동시)
 /// - 로마의 율리우스 가문
 /// - 일본의 후지와라 가문
-/// - 중국의 각 왕조별 황실
+/// - 중국의 왕조 교체 (한→당→송→원→명→청)
 /// 
 /// 특징:
 /// - 인물(Person) 도메인과 긴밀한 연관
+/// - 국가(HistoricalCountry)와 N:M 관계
 /// - 정치적 권력과 혈통의 결합
 /// - 장기간에 걸친 가계 추적
-/// - 문화적/사회적 영향력 기록
+/// - 왕조 교체와 동시 통치 모두 지원
 
 // ========================
 // Dynasty (가문)
@@ -36,21 +42,155 @@ model Dynasty {
   /// 설명
   description String? @db.Text
 
-  /// 시작일
+  /// 가문 시작일 (최초 등장 또는 중요 인물의 시작)
   startDate DateTime? @map("start_date")
 
-  /// 종료일
+  /// 가문 종료일 (멸문 또는 권력 상실)
   endDate DateTime? @map("end_date")
 
   /// 썸네일
   thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
 
   //--- 관계 필드
+  /// 이 가문에 속한 인물들
   persons Person[]
+
+  /// 이 가문이 통치한 역사적 국가들 (시기별)
+  historicalCountryRules DynastyRule[] @relation("DynastyHistoricalRules")
+
+  /// 이 가문이 통치한 현대 국가들 (시기별, 입헌군주제 등)
+  modernCountryRules DynastyModernRule[] @relation("DynastyModernRules")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("dynasty")
+}
+
+// ========================
+// DynastyRule (왕조 통치 기록 - 역사적 국가)
+// ========================
+/// 특정 왕조가 특정 역사적 국가를 통치한 기간을 기록합니다.
+/// 예시:
+/// - 이씨 조선 왕조 → 조선 (1392-1910)
+/// - 합스부르크 가문 → 신성로마제국 (1273-1806)
+/// - 합스부르크 가문 → 스페인 (1516-1700)
+/// - 명나라 주씨 왕조 → 명나라 (1368-1644)
+/// - 청나라 애신각라씨 → 청나라 (1644-1912)
+model DynastyRule {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 왕조/가문 ID
+  dynastyId String @map("dynasty_id") @db.Char(36)
+
+  /// 역사적 국가 ID
+  historicalCountryId String @map("historical_country_id") @db.Char(36)
+
+  /// 통치 시작 기원 (BC/AD)
+  startEra Era? @map("start_era")
+
+  /// 통치 시작 연도
+  startYear Int? @map("start_year")
+
+  /// 통치 시작 월
+  startMonth Int? @map("start_month")
+
+  /// 통치 시작 일
+  startDay Int? @map("start_day")
+
+  /// 통치 종료 기원 (BC/AD)
+  endEra Era? @map("end_era")
+
+  /// 통치 종료 연도
+  endYear Int? @map("end_year")
+
+  /// 통치 종료 월
+  endMonth Int? @map("end_month")
+
+  /// 통치 종료 일
+  endDay Int? @map("end_day")
+
+  /// 통치 종료 사유 (왕조 교체, 멸망, 혁명 등)
+  endReason String? @map("end_reason") @db.VarChar(200)
+
+  /// 설명/특이사항
+  notes String? @db.Text
+
+  //--- 관계 필드
+  dynasty           Dynasty           @relation("DynastyHistoricalRules", fields: [dynastyId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry @relation("CountryDynastyRules", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([dynastyId], name: "idx_dynasty_rule_dynasty")
+  @@index([historicalCountryId], name: "idx_dynasty_rule_country")
+  @@index([startYear], name: "idx_dynasty_rule_start")
+  @@index([endYear], name: "idx_dynasty_rule_end")
+  @@map("dynasty_rule")
+}
+
+// ========================
+// DynastyModernRule (왕조 통치 기록 - 현대 국가)
+// ========================
+/// 특정 왕조가 특정 현대 국가를 통치한/통치하는 기간을 기록합니다.
+/// 예시:
+/// - 영국 윈저 왕조 → 영국 (1917-현재)
+/// - 일본 천황가 → 일본 (고대-현재)
+/// - 사우디 왕가 → 사우디아라비아 (1932-현재)
+model DynastyModernRule {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 왕조/가문 ID
+  dynastyId String @map("dynasty_id") @db.Char(36)
+
+  /// 현대 국가 ID
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 통치 시작 기원 (항상 AD)
+  startEra Era? @default(AD) @map("start_era")
+
+  /// 통치 시작 연도
+  startYear Int? @map("start_year")
+
+  /// 통치 시작 월
+  startMonth Int? @map("start_month")
+
+  /// 통치 시작 일
+  startDay Int? @map("start_day")
+
+  /// 통치 종료 기원 (항상 AD)
+  endEra Era? @default(AD) @map("end_era")
+
+  /// 통치 종료 연도 (현재 통치 중이면 NULL)
+  endYear Int? @map("end_year")
+
+  /// 통치 종료 월
+  endMonth Int? @map("end_month")
+
+  /// 통치 종료 일
+  endDay Int? @map("end_day")
+
+  /// 통치 종료 사유 (왕조 교체, 혁명, 공화정 전환 등)
+  endReason String? @map("end_reason") @db.VarChar(200)
+
+  /// 설명/특이사항
+  notes String? @db.Text
+
+  //--- 관계 필드
+  dynasty Dynasty @relation("DynastyModernRules", fields: [dynastyId], references: [id], onDelete: Cascade)
+  country Country @relation("CountryDynastyRules", fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([dynastyId], name: "idx_dynasty_modern_rule_dynasty")
+  @@index([countryId], name: "idx_dynasty_modern_rule_country")
+  @@index([startYear], name: "idx_dynasty_modern_rule_start")
+  @@map("dynasty_modern_rule")
 }

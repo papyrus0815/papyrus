@@ -1,0 +1,14 @@
+import { INestiaProject } from "../structures/INestiaProject";
+import { IReflectController } from "../structures/IReflectController";
+import { IReflectWebSocketOperation } from "../structures/IReflectWebSocketOperation";
+import { IOperationMetadata } from "../transformers/IOperationMetadata";
+export declare namespace ReflectWebSocketOperationAnalyzer {
+    interface IProps {
+        project: Omit<INestiaProject, "config">;
+        controller: IReflectController;
+        function: Function;
+        name: string;
+        metadata: IOperationMetadata;
+    }
+    const analyze: (ctx: IProps) => IReflectWebSocketOperation | null;
+}

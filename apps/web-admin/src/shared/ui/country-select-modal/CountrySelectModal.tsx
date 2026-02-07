@@ -1,8 +1,8 @@
 /**
  * 국가 선택 모달 컴포넌트
  */
-
 import React, { useEffect, useState } from 'react'
+
 import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -22,6 +22,8 @@ interface CountrySelectModalProps {
   historicalCountries: HistoricalCountryResponseDto[]
   title?: string
   selectedCountryId?: string
+  selectedCountryIds?: string[] // 복수 선택용
+  multiSelect?: boolean // 복수 선택 모드
 }
 
 type CountryType = 'modern' | 'historical'
@@ -34,6 +36,8 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
   historicalCountries,
   title = '국가 선택',
   selectedCountryId,
+  selectedCountryIds = [],
+  multiSelect = false,
 }) => {
   const playClickSound = useClickSound()
   const [searchQuery, setSearchQuery] = useState('')
@@ -73,7 +77,10 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
       name: country.name,
       isHistorical,
     })
-    onClose()
+    // 복수 선택 모드가 아니면 모달 닫기
+    if (!multiSelect) {
+      onClose()
+    }
   }
 
   const displayCountries =
@@ -158,7 +165,9 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
               </EmptyState>
             ) : (
               displayCountries.map((country) => {
-                const isSelected = selectedCountryId === country.id
+                const isSelected = multiSelect
+                  ? selectedCountryIds.includes(country.id)
+                  : selectedCountryId === country.id
                 return (
                   <CountryItem
                     key={country.id}
@@ -354,9 +363,7 @@ const Tab = styled.button<{ $active: boolean }>`
   font-weight: 600;
   color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
   background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'transparent'};
+    $active ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent'};
   border: none;
   border-radius: 10px;
   cursor: pointer;
@@ -471,4 +478,3 @@ const EmptyText = styled.div`
   font-weight: 500;
   color: #64748b;
 `
-

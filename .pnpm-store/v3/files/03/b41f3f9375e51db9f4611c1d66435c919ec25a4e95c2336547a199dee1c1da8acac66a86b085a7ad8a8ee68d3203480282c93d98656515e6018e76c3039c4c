@@ -1,0 +1,11 @@
+export declare namespace SwaggerExample {
+    function Response<T>(value: T): MethodDecorator;
+    function Response<T>(key: string, value: T): MethodDecorator;
+    function Parameter<T>(value: T): ParameterDecorator;
+    function Parameter<T>(key: string, value: T): ParameterDecorator;
+    interface IData<T> {
+        examples?: Record<string, T>;
+        example?: T;
+        index?: number;
+    }
+}

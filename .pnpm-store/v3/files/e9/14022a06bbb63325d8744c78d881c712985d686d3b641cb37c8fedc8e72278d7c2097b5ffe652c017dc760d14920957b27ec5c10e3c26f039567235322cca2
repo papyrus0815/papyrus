@@ -1,0 +1,5 @@
+import { Creator } from "../../typings/Creator";
+export declare const load_controllers: (path: string | string[] | {
+    include: string[];
+    exclude?: string[];
+}, isTsNode?: boolean) => Promise<Creator<object>[]>;

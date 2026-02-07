@@ -1,0 +1,21 @@
+import ts from "typescript";
+import { Metadata } from "typia/lib/schemas/metadata/Metadata";
+import { INestiaProject } from "../../structures/INestiaProject";
+import { IReflectType } from "../../structures/IReflectType";
+import { ITypedHttpRoute } from "../../structures/ITypedHttpRoute";
+import { ITypedHttpRouteParameter } from "../../structures/ITypedHttpRouteParameter";
+import { ITypedWebSocketRoute } from "../../structures/ITypedWebSocketRoute";
+import { ImportDictionary } from "./ImportDictionary";
+export declare namespace SdkAliasCollection {
+    const name: ({ type }: {
+        type: IReflectType;
+    }) => ts.TypeNode;
+    const from: (project: INestiaProject) => (importer: ImportDictionary) => (metadata: Metadata) => ts.TypeNode;
+    const httpProps: (project: INestiaProject) => (importer: ImportDictionary) => (route: ITypedHttpRoute) => ts.TypeNode;
+    const websocketProps: (route: ITypedWebSocketRoute) => ts.TypeNode;
+    const headers: (project: INestiaProject) => (importer: ImportDictionary) => (param: ITypedHttpRouteParameter.IHeaders) => ts.TypeNode;
+    const query: (project: INestiaProject) => (importer: ImportDictionary) => (param: ITypedHttpRouteParameter.IQuery) => ts.TypeNode;
+    const body: (project: INestiaProject) => (importer: ImportDictionary) => (param: ITypedHttpRouteParameter.IBody) => ts.TypeNode;
+    const response: (project: INestiaProject) => (importer: ImportDictionary) => (route: ITypedHttpRoute) => ts.TypeNode;
+    const responseBody: (project: INestiaProject) => (importer: ImportDictionary) => (route: ITypedHttpRoute) => ts.TypeNode;
+}

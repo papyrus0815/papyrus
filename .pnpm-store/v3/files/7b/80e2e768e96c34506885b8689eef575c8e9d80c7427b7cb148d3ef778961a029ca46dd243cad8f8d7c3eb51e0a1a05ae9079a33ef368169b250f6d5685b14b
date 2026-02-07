@@ -1,0 +1,8 @@
+import ts from "typescript";
+import { INestiaTransformContext } from "../options/INestiaTransformProject";
+export declare namespace MethodTransformer {
+    const transform: (props: {
+        context: INestiaTransformContext;
+        method: ts.MethodDeclaration;
+    }) => ts.MethodDeclaration;
+}

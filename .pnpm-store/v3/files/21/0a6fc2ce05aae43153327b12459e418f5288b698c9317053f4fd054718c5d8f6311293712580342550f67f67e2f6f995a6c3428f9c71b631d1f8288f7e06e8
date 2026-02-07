@@ -1,0 +1,56 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HttpQuerifyProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const IdentifierFactory_1 = require("typia/lib/factories/IdentifierFactory");
+const MetadataCollection_1 = require("typia/lib/factories/MetadataCollection");
+const MetadataFactory_1 = require("typia/lib/factories/MetadataFactory");
+const StatementFactory_1 = require("typia/lib/factories/StatementFactory");
+const FunctionProgrammer_1 = require("typia/lib/programmers/helpers/FunctionProgrammer");
+const HttpQueryProgrammer_1 = require("typia/lib/programmers/http/HttpQueryProgrammer");
+const TransformerError_1 = require("typia/lib/transformers/TransformerError");
+var HttpQuerifyProgrammer;
+(function (HttpQuerifyProgrammer) {
+    HttpQuerifyProgrammer.write = (props) => {
+        // GET OBJECT TYPE
+        const functor = new FunctionProgrammer_1.FunctionProgrammer(props.modulo.getText());
+        const collection = new MetadataCollection_1.MetadataCollection();
+        const result = MetadataFactory_1.MetadataFactory.analyze({
+            checker: props.context.checker,
+            transformer: props.context.transformer,
+            options: {
+                escape: false,
+                constant: true,
+                absorb: true,
+                validate: HttpQueryProgrammer_1.HttpQueryProgrammer.validate,
+            },
+            type: props.type,
+            collection,
+        });
+        if (result.success === false)
+            throw TransformerError_1.TransformerError.from({
+                code: functor.method,
+                errors: result.errors,
+            });
+        const object = result.data.objects[0];
+        return typescript_1.default.factory.createArrowFunction(undefined, undefined, [IdentifierFactory_1.IdentifierFactory.parameter("input")], undefined, undefined, typescript_1.default.factory.createBlock([
+            ...functor.declare(),
+            StatementFactory_1.StatementFactory.constant({
+                name: "output",
+                value: typescript_1.default.factory.createNewExpression(typescript_1.default.factory.createIdentifier("URLSearchParams"), undefined, []),
+            }),
+            ...object.type.properties.map((p) => typescript_1.default.factory.createExpressionStatement(decode(p.key.constants[0].values[0].value)(p.value))),
+            typescript_1.default.factory.createReturnStatement(typescript_1.default.factory.createIdentifier("output")),
+        ], true));
+    };
+    const decode = (key) => (value) => !!value.arrays.length
+        ? typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier("input"), key), "forEach"), undefined, [
+            typescript_1.default.factory.createArrowFunction(undefined, undefined, [IdentifierFactory_1.IdentifierFactory.parameter("elem")], undefined, undefined, append(key)(typescript_1.default.factory.createIdentifier("elem"))),
+        ])
+        : append(key)(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier("input"), key));
+    const append = (key) => (elem) => typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier("output"), "append"), undefined, [typescript_1.default.factory.createStringLiteral(key), elem]);
+})(HttpQuerifyProgrammer || (exports.HttpQuerifyProgrammer = HttpQuerifyProgrammer = {}));
+//# sourceMappingURL=HttpQuerifyProgrammer.js.map

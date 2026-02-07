@@ -2,18 +2,18 @@
  * Event Filters Panel Widget
  * FSD: widgets/event-filters-panel/ui
  */
-
 import React from 'react'
+
 import { FiChevronRight, FiX } from 'react-icons/fi'
 
+import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
-import type { CenturyFilter } from '@/entities/event/model'
 
+import type { HistoricalEvent } from '../../../pages/events/create/events.types'
+import { MOCK_POSITION_TYPES } from '../../../pages/events/list/mock-government-positions'
 import * as Filter from '../../../pages/events/styles/filter.styles'
 import * as Skeleton from '../../../pages/events/styles/skeleton.styles'
-import { MOCK_POSITION_TYPES } from '../../../pages/events/list/mock-government-positions'
-import type { HistoricalEvent } from '../../../pages/events/create/events.types'
 import {
   formatCenturyLabel,
   formatCenturyRange,
@@ -35,6 +35,8 @@ interface FiltersPanelProps {
   dbCategories: EventCategoryDto[]
   availableCenturies: number[]
   events: HistoricalEvent[]
+  countries?: Array<{ id: string; name: string; flagEmoji?: string }>
+  historicalCountries?: Array<{ id: string; name: string }>
 
   // 핸들러
   onKeywordChange: (value: string) => void
@@ -58,6 +60,8 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   dbCategories,
   availableCenturies,
   events,
+  countries = [],
+  historicalCountries = [],
   onKeywordChange,
   onShowCategoryModal,
   onShowCountryModal,
@@ -102,7 +106,12 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           style={{ marginTop: '6px' }}
         >
           <span>
-            {selectedCountry === FILTER_ALL ? '전체 국가' : selectedCountry}
+            {selectedCountry === FILTER_ALL
+              ? '전체 국가'
+              : countries.find((c) => c.id === selectedCountry)?.name ||
+                historicalCountries.find((c) => c.id === selectedCountry)
+                  ?.name ||
+                '전체 국가'}
           </span>
           <FiChevronRight size={14} />
         </Filter.FilterTriggerButton>
@@ -171,7 +180,9 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
               <strong>전체 시대</strong>
               <span>모든 연대</span>
             </Filter.CenturyLabel>
-            <Filter.CenturyEventCount>{events.length}건</Filter.CenturyEventCount>
+            <Filter.CenturyEventCount>
+              {events.length}건
+            </Filter.CenturyEventCount>
           </Filter.CenturyButton>
           {availableCenturies.map((century) => {
             const centuryEvents = events.filter((event) => {
@@ -201,4 +212,3 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
     </Filter.FilterColumn>
   )
 }
-

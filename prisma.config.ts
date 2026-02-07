@@ -1,7 +1,7 @@
-import { defineConfig, env } from 'prisma/config'
 import { config } from 'dotenv'
-import * as path from 'path'
 import * as fs from 'fs'
+import * as path from 'path'
+import { defineConfig, env } from 'prisma/config'
 
 // env.development 파일 로드
 const envPath = path.join(__dirname, 'env.development')
@@ -12,14 +12,13 @@ if (fs.existsSync(envPath)) {
 }
 
 export default defineConfig({
-  schema: "apps/api/prisma/schema.prisma", 
+  schema: 'apps/api/prisma/schema.prisma',
   migrations: {
-    path: "apps/api/prisma/migrations",
-    seed: "npx tsx apps/api/prisma/seed.ts",
+    path: 'apps/api/prisma/migrations',
+    seed: 'npx tsx apps/api/prisma/seed.ts',
   },
   datasource: {
     url: env('DATABASE_URL'),
     shadowDatabaseUrl: env('SHADOW_DATABASE_URL'),
   },
 })
-

@@ -2,7 +2,6 @@
  * Event Hierarchy Feature - Hierarchy Logic Hook
  * FSD: features/event-hierarchy/model
  */
-
 import { useMemo, useState } from 'react'
 
 import type {
@@ -40,8 +39,8 @@ export const useEventHierarchy = (
     }> = []
 
     if (showFlatView) {
-      // 플랫 뷰: 모든 사건을 depth 0으로 평평하게 표시
-      events.forEach((event) => {
+      // 플랫 뷰: 정렬된 사건을 depth 0으로 평평하게 표시
+      sortedEvents.forEach((event) => {
         result.push({
           node: event.hierarchy,
           depth: 0,
@@ -82,4 +81,3 @@ export const useEventHierarchy = (
     flattenedHierarchy,
   }
 }
-

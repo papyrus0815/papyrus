@@ -1,0 +1,10 @@
+import { INestiaConfig } from "./INestiaConfig";
+export declare class NestiaSdkApplication {
+    private readonly config;
+    constructor(config: INestiaConfig);
+    all(): Promise<void>;
+    e2e(): Promise<void>;
+    sdk(): Promise<void>;
+    swagger(): Promise<void>;
+    private generate;
+}

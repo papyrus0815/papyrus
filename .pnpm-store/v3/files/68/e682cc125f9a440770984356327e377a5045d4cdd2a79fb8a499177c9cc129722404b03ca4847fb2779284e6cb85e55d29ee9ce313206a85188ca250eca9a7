@@ -1,0 +1,107 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReflectWebSocketOperationAnalyzer = void 0;
+const tstl_1 = require("tstl");
+const StringUtil_1 = require("../utils/StringUtil");
+const ImportAnalyzer_1 = require("./ImportAnalyzer");
+const PathAnalyzer_1 = require("./PathAnalyzer");
+const ReflectMetadataAnalyzer_1 = require("./ReflectMetadataAnalyzer");
+var ReflectWebSocketOperationAnalyzer;
+(function (ReflectWebSocketOperationAnalyzer) {
+    ReflectWebSocketOperationAnalyzer.analyze = (ctx) => {
+        var _a, _b;
+        const route = Reflect.getMetadata("nestia/WebSocketRoute", ctx.function);
+        if (route === undefined)
+            return null;
+        // @todo -> detailing is required
+        const errors = [];
+        const preconfigured = ((_a = Reflect.getMetadata("nestia/WebSocketRoute/Parameters", ctx.controller.class.prototype, ctx.name)) !== null && _a !== void 0 ? _a : []).sort((a, b) => a.index - b.index);
+        if (preconfigured.find((p) => (p.category === "acceptor") === undefined))
+            errors.push("@WebSocketRoute.Acceptor() is essentially required");
+        if (preconfigured.length !== ctx.function.length)
+            errors.push([
+                "Every parameters must be one of below:",
+                "  - @WebSocketRoute.Acceptor()",
+                "  - @WebSocketRoute.Driver()",
+                "  - @WebSocketRoute.Header()",
+                "  - @WebSocketRoute.Param()",
+                "  - @WebSocketRoute.Query()",
+            ].join("\n"));
+        const imports = [];
+        const parameters = preconfigured
+            .map((p) => {
+            var _a, _b, _c, _d, _e;
+            // METADATA INFO
+            const matched = ctx.metadata.parameters.find((m) => p.index === m.index);
+            // VALIDATE PARAMETER
+            if (matched === undefined)
+                return errors.push(`Unable to find parameter type of the ${p.index} (th).`);
+            else if (matched.type === null)
+                return errors.push(`Failed to analyze the parameter type of the ${JSON.stringify(matched.name)}.`);
+            else if (p.category === "param" &&
+                !((_a = p.field) === null || _a === void 0 ? void 0 : _a.length))
+                return errors.push(`@WebSocketRoute.Param() must have a field name.`);
+            else if (p.category === "acceptor" &&
+                ((_c = (_b = matched.type) === null || _b === void 0 ? void 0 : _b.typeArguments) === null || _c === void 0 ? void 0 : _c.length) !== 3)
+                return `@WebSocketRoute.Acceptor() must have three type arguments.`;
+            else if (p.category === "driver" &&
+                ((_e = (_d = matched.type) === null || _d === void 0 ? void 0 : _d.typeArguments) === null || _e === void 0 ? void 0 : _e.length) !== 1)
+                return errors.push(`@WebSocketRoute.Driver() must have one type argument.`);
+            // COMPLETE COMPOSITION
+            imports.push(...matched.imports.filter((i) => !(i.file.includes("tgrid/lib") &&
+                (i.file.endsWith("Driver.d.ts") ||
+                    i.file.endsWith("WebSocketAcceptor.d.ts")))));
+            if (p.category === "acceptor" ||
+                p.category === "driver" ||
+                p.category === "query")
+                return Object.assign(Object.assign({}, p), { name: matched.name, type: matched.type });
+            else if (p.category === "param")
+                return Object.assign(Object.assign({}, p), { category: "param", field: p.field, name: matched.name, type: matched.type, imports: matched.imports, description: matched.description, jsDocTags: matched.jsDocTags });
+            // UNKNOWN TYPE, MAYBE NEW FEATURE
+            else {
+                if (p.category !== "header")
+                    errors.push(`@WebSocketRoute.${StringUtil_1.StringUtil.capitalize(p.category)}() has not been supported yet. How about upgrading the nestia packages?`);
+                return null;
+            }
+        })
+            .filter((p) => !!p);
+        const fields = preconfigured
+            .filter((p) => p.category === "param")
+            .map((p) => { var _a; return (_a = p.field) !== null && _a !== void 0 ? _a : ""; })
+            .filter((field) => !!(field === null || field === void 0 ? void 0 : field.length))
+            .sort();
+        for (const cLoc of ctx.controller.paths)
+            for (const mLoc of route.paths) {
+                const location = PathAnalyzer_1.PathAnalyzer.join(cLoc, mLoc);
+                if (location.includes("*"))
+                    continue;
+                const binded = PathAnalyzer_1.PathAnalyzer.parameters(location);
+                if (binded === null)
+                    errors.push(`invalid path (${JSON.stringify(location)})`);
+                else if (tstl_1.ranges.equal(binded.sort(), fields) === false)
+                    errors.push(`binded arguments in the "path" between function's decorator and parameters' decorators are different (function: [${binded.join(", ")}], parameters: [${fields.join(", ")}]).`);
+            }
+        if (errors.length) {
+            ctx.project.errors.push({
+                file: ctx.controller.file,
+                class: ctx.controller.class.name,
+                function: ctx.function.name,
+                from: ctx.name,
+                contents: errors,
+            });
+            return null;
+        }
+        return {
+            protocol: "websocket",
+            name: ctx.name,
+            paths: route.paths,
+            function: ctx.function,
+            versions: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.versions(ctx.function),
+            parameters,
+            imports: ImportAnalyzer_1.ImportAnalyzer.merge(imports),
+            description: (_b = ctx.metadata.description) !== null && _b !== void 0 ? _b : null,
+            jsDocTags: ctx.metadata.jsDocTags,
+        };
+    };
+})(ReflectWebSocketOperationAnalyzer || (exports.ReflectWebSocketOperationAnalyzer = ReflectWebSocketOperationAnalyzer = {}));
+//# sourceMappingURL=ReflectWebSocketOperationAnalyzer.js.map

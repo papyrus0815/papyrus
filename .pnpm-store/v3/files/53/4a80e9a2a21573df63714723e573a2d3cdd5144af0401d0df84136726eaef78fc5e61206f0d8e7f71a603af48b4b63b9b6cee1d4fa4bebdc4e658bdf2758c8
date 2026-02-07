@@ -1,0 +1,72 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedQueryRouteProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const MetadataCollection_1 = require("typia/lib/factories/MetadataCollection");
+const MetadataFactory_1 = require("typia/lib/factories/MetadataFactory");
+const HttpQueryProgrammer_1 = require("typia/lib/programmers/http/HttpQueryProgrammer");
+const LlmSchemaProgrammer_1 = require("typia/lib/programmers/llm/LlmSchemaProgrammer");
+const TransformerError_1 = require("typia/lib/transformers/TransformerError");
+const HttpAssertQuerifyProgrammer_1 = require("./http/HttpAssertQuerifyProgrammer");
+const HttpIsQuerifyProgrammer_1 = require("./http/HttpIsQuerifyProgrammer");
+const HttpQuerifyProgrammer_1 = require("./http/HttpQuerifyProgrammer");
+const HttpValidateQuerifyProgrammer_1 = require("./http/HttpValidateQuerifyProgrammer");
+var TypedQueryRouteProgrammer;
+(function (TypedQueryRouteProgrammer) {
+    TypedQueryRouteProgrammer.generate = (props) => {
+        // VALIDATE TYPE
+        if (props.context.options.llm) {
+            const llm = props.context.options.llm;
+            const result = MetadataFactory_1.MetadataFactory.analyze({
+                checker: props.context.checker,
+                transformer: props.context.transformer,
+                options: {
+                    escape: false,
+                    constant: true,
+                    absorb: true,
+                    validate: (meta, explore) => {
+                        const errors = HttpQueryProgrammer_1.HttpQueryProgrammer.validate(meta, explore, true);
+                        errors.push(...LlmSchemaProgrammer_1.LlmSchemaProgrammer.validate({
+                            config: {
+                                strict: llm.strict,
+                            },
+                            metadata: meta,
+                        }));
+                        return errors;
+                    },
+                },
+                collection: new MetadataCollection_1.MetadataCollection(),
+                type: props.type,
+            });
+            if (result.success === false)
+                throw TransformerError_1.TransformerError.from({
+                    code: props.modulo.getText(),
+                    errors: result.errors,
+                });
+        }
+        // GENERATE STRINGIFY PLAN
+        const parameter = (key, programmer) => typescript_1.default.factory.createObjectLiteralExpression([
+            typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier("type"), typescript_1.default.factory.createStringLiteral(key)),
+            typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier(key), programmer({
+                context: Object.assign(Object.assign({}, props.context), { options: {} }),
+                modulo: props.modulo,
+                type: props.type,
+            })),
+        ]);
+        // RETURNS
+        if (props.context.options.stringify === "is")
+            return parameter("is", HttpIsQuerifyProgrammer_1.HttpIsQuerifyProgrammer.write);
+        else if (props.context.options.stringify === "validate")
+            return parameter("validate", HttpValidateQuerifyProgrammer_1.HttpValidateQuerifyProgrammer.write);
+        else if (props.context.options.stringify === "stringify")
+            return parameter("stringify", HttpQuerifyProgrammer_1.HttpQuerifyProgrammer.write);
+        else if (props.context.options.stringify === null)
+            return typescript_1.default.factory.createNull();
+        // ASSERT IS DEFAULT
+        return parameter("assert", HttpAssertQuerifyProgrammer_1.HttpAssertQuerifyProgrammer.write);
+    };
+})(TypedQueryRouteProgrammer || (exports.TypedQueryRouteProgrammer = TypedQueryRouteProgrammer = {}));
+//# sourceMappingURL=TypedQueryRouteProgrammer.js.map

@@ -1,0 +1,22 @@
+import ts from "typescript";
+import { INestiaProject } from "../../structures/INestiaProject";
+import { ITypedWebSocketRoute } from "../../structures/ITypedWebSocketRoute";
+export declare namespace SdkWebSocketParameterProgrammer {
+    interface IEntry {
+        key: string;
+        type: ts.TypeNode;
+    }
+    const getEntries: (props: {
+        project: INestiaProject;
+        route: ITypedWebSocketRoute;
+        provider: boolean;
+        prefix: boolean;
+    }) => IEntry[];
+    const getParameterDeclarations: (props: {
+        project: INestiaProject;
+        route: ITypedWebSocketRoute;
+        provider: boolean;
+        prefix: boolean;
+    }) => ts.ParameterDeclaration[];
+    const isPathEmpty: (route: ITypedWebSocketRoute) => boolean;
+}

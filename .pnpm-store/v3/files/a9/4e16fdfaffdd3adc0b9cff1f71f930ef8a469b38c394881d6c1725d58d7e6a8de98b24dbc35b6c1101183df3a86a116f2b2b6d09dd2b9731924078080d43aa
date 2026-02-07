@@ -1,0 +1,5 @@
+export declare namespace ArrayUtil {
+    function has<T>(array: T[], ...items: T[]): boolean;
+    function asyncMap<X, Y>(array: X[], closure: (input: X) => Promise<Y>): Promise<Y[]>;
+    function asyncFilter<T>(array: T[], closure: (input: T) => Promise<boolean>): Promise<T[]>;
+}

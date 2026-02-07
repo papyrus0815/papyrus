@@ -1,0 +1,42 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HttpValidateQuerifyProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const IdentifierFactory_1 = require("typia/lib/factories/IdentifierFactory");
+const StatementFactory_1 = require("typia/lib/factories/StatementFactory");
+const ValidateProgrammer_1 = require("typia/lib/programmers/ValidateProgrammer");
+const HttpQuerifyProgrammer_1 = require("./HttpQuerifyProgrammer");
+var HttpValidateQuerifyProgrammer;
+(function (HttpValidateQuerifyProgrammer) {
+    HttpValidateQuerifyProgrammer.write = (props) => typescript_1.default.factory.createArrowFunction(undefined, undefined, [IdentifierFactory_1.IdentifierFactory.parameter("input")], undefined, undefined, typescript_1.default.factory.createBlock([
+        StatementFactory_1.StatementFactory.constant({
+            name: "validate",
+            value: ValidateProgrammer_1.ValidateProgrammer.write({
+                config: {
+                    equals: false,
+                },
+                context: Object.assign(Object.assign({}, props.context), { options: Object.assign(Object.assign({}, props.context.options), { functional: false, numeric: true }) }),
+                modulo: props.modulo,
+                type: props.type,
+                name: undefined,
+            }),
+        }),
+        StatementFactory_1.StatementFactory.constant({
+            name: "query",
+            value: HttpQuerifyProgrammer_1.HttpQuerifyProgrammer.write({
+                context: Object.assign(Object.assign({}, props.context), { options: Object.assign(Object.assign({}, props.context.options), { functional: false, numeric: false }) }),
+                modulo: props.modulo,
+                type: props.type,
+            }),
+        }),
+        StatementFactory_1.StatementFactory.constant({
+            name: "output",
+            value: typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier("query"), undefined, [typescript_1.default.factory.createIdentifier("input")]),
+        }),
+        typescript_1.default.factory.createReturnStatement(typescript_1.default.factory.createAsExpression(typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier("validate"), undefined, [typescript_1.default.factory.createIdentifier("output")]), typescript_1.default.factory.createTypeReferenceNode("any"))),
+    ]));
+})(HttpValidateQuerifyProgrammer || (exports.HttpValidateQuerifyProgrammer = HttpValidateQuerifyProgrammer = {}));
+//# sourceMappingURL=HttpValidateQuerifyProgrammer.js.map

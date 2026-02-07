@@ -1,0 +1,219 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DtoAnalyzer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const ImportAnalyzer_1 = require("./ImportAnalyzer");
+var DtoAnalyzer;
+(function (DtoAnalyzer) {
+    DtoAnalyzer.analyzeNode = (props) => {
+        try {
+            const container = [];
+            const type = exploreNode({
+                checker: props.checker,
+                imports: props.imports,
+                container,
+            }, props.typeNode);
+            return {
+                type,
+                imports: ImportAnalyzer_1.ImportAnalyzer.merge(container),
+            };
+        }
+        catch (_a) {
+            return null;
+        }
+    };
+    DtoAnalyzer.analyzeType = (props) => {
+        try {
+            const container = [];
+            const type = exploreType({
+                checker: props.checker,
+                imports: props.imports,
+                container,
+            }, props.type);
+            return {
+                type,
+                imports: ImportAnalyzer_1.ImportAnalyzer.merge(container),
+            };
+        }
+        catch (_a) {
+            return null;
+        }
+    };
+    const exploreNode = (ctx, typeNode) => {
+        var _a;
+        // Analyze symbol, and take special cares
+        if (typescript_1.default.isIntersectionTypeNode(typeNode))
+            return {
+                name: typeNode.types
+                    .map((child) => exploreNode(ctx, child))
+                    .map(getEscapedText)
+                    .join(" & "),
+            };
+        else if (typescript_1.default.isUnionTypeNode(typeNode))
+            return {
+                name: typeNode.types
+                    .map((child) => exploreNode(ctx, child))
+                    .map(getEscapedText)
+                    .join(" | "),
+            };
+        else if (typescript_1.default.isArrayTypeNode(typeNode)) {
+            const element = exploreNode(ctx, typeNode.elementType);
+            return {
+                name: "Array",
+                typeArguments: [element],
+            };
+        }
+        else if (typescript_1.default.isParenthesizedTypeNode(typeNode))
+            return {
+                name: `(${exploreNode(ctx, typeNode.type).name})`,
+            };
+        else if (typescript_1.default.isTypeOperatorNode(typeNode)) {
+            const prefix = typeNode.operator === typescript_1.default.SyntaxKind.KeyOfKeyword
+                ? "keyof"
+                : typeNode.operator === typescript_1.default.SyntaxKind.UniqueKeyword
+                    ? "unique"
+                    : typeNode.operator === typescript_1.default.SyntaxKind.ReadonlyKeyword
+                        ? "readonly"
+                        : null;
+            if (prefix === null)
+                return exploreType(ctx, ctx.checker.getTypeFromTypeNode(typeNode));
+            return {
+                name: `${prefix} ${exploreNode(ctx, typeNode.type).name}`,
+            };
+        }
+        else if (typescript_1.default.isTypePredicateNode(typeNode) || typescript_1.default.isTypeQueryNode(typeNode))
+            return exploreType(ctx, ctx.checker.getTypeFromTypeNode(typeNode));
+        else if (typescript_1.default.isTypeReferenceNode(typeNode) === false)
+            return {
+                name: typeNode.getText(),
+            };
+        // Find matched import statement
+        const name = typeNode.typeName.getText();
+        const prefix = name.split(".")[0];
+        let matched = false;
+        const insert = (imp) => {
+            matched || (matched = true);
+            ctx.container.push(imp);
+        };
+        for (const imp of ctx.imports)
+            if (prefix === imp.default)
+                insert({
+                    file: imp.file,
+                    asterisk: null,
+                    default: prefix,
+                    elements: [],
+                });
+            else if (prefix === imp.asterisk)
+                insert({
+                    file: imp.file,
+                    asterisk: prefix,
+                    default: null,
+                    elements: [],
+                });
+            else if (imp.elements.includes(prefix))
+                insert({
+                    file: imp.file,
+                    asterisk: null,
+                    default: null,
+                    elements: [prefix],
+                });
+        if (prefix !== "Promise" && matched === false)
+            return exploreType(ctx, ctx.checker.getTypeFromTypeNode(typeNode));
+        // Finalize with generic arguments
+        if (!!((_a = typeNode.typeArguments) === null || _a === void 0 ? void 0 : _a.length)) {
+            const top = typeNode.typeArguments[0];
+            if (name === "Promise")
+                return exploreNode(ctx, top);
+            return {
+                name,
+                typeArguments: typeNode.typeArguments.map((child) => exploreNode(ctx, child)),
+            };
+        }
+        return { name };
+    };
+    const exploreType = (ctx, type) => {
+        var _a, _b;
+        // Analyze symbol, and take special cares
+        const symbol = (_a = type.aliasSymbol) !== null && _a !== void 0 ? _a : type.symbol;
+        if (type.aliasSymbol === undefined && type.isUnionOrIntersection()) {
+            const joiner = type.isIntersection() ? " & " : " | ";
+            return {
+                name: type.types
+                    .map((child) => exploreType(ctx, child))
+                    .map(getEscapedText)
+                    .join(joiner),
+            };
+        }
+        else if (ctx.checker.isArrayLikeType(type)) {
+            const arrayItem = ctx.checker.getElementTypeOfArrayType(type);
+            if (arrayItem === undefined)
+                return { name: "Array<any>" };
+            return {
+                name: "Array",
+                typeArguments: [exploreType(ctx, arrayItem)],
+            };
+        }
+        else if (symbol === undefined)
+            return {
+                name: ctx.checker.typeToString(type, undefined, typescript_1.default.TypeFormatFlags.NoTruncation),
+            };
+        // Find matched import statement
+        const name = getNameOfSymbol(symbol);
+        const prefix = name.split(".")[0];
+        let matched = false;
+        const insert = (imp) => {
+            matched || (matched = true);
+            ctx.container.push(imp);
+        };
+        for (const imp of ctx.imports)
+            if (imp.elements.includes(prefix))
+                insert({
+                    file: imp.file,
+                    asterisk: null,
+                    default: null,
+                    elements: [prefix],
+                });
+        if (prefix !== "Promise" && matched === false)
+            emplaceSymbol(ctx, symbol, prefix);
+        // Finalize with generic arguments
+        const generic = type.aliasSymbol
+            ? ((_b = type.aliasTypeArguments) !== null && _b !== void 0 ? _b : [])
+            : ctx.checker.getTypeArguments(type);
+        return generic.length
+            ? name === "Promise"
+                ? exploreType(ctx, generic[0])
+                : {
+                    name,
+                    typeArguments: generic.map((child) => exploreType(ctx, child)),
+                }
+            : { name };
+    };
+    const emplaceSymbol = (ctx, symbol, prefix) => {
+        var _a, _b;
+        // GET SOURCE FILE
+        const sourceFile = (_b = (_a = symbol.declarations) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.getSourceFile();
+        if (sourceFile === undefined)
+            return;
+        if (sourceFile.fileName.indexOf("/typescript/lib") === -1)
+            ctx.container.push({
+                file: sourceFile.fileName,
+                asterisk: null,
+                default: null,
+                elements: [prefix],
+            });
+    };
+})(DtoAnalyzer || (exports.DtoAnalyzer = DtoAnalyzer = {}));
+const getEscapedText = (type) => type.typeArguments
+    ? `${type.name}<${type.typeArguments.map(getEscapedText).join(", ")}>`
+    : type.name;
+const getNameOfSymbol = (symbol) => {
+    var _a, _b;
+    return exploreName(symbol.escapedName.toString(), (_b = (_a = symbol.getDeclarations()) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.parent);
+};
+const exploreName = (name, decl) => decl && typescript_1.default.isModuleBlock(decl)
+    ? exploreName(`${decl.parent.name.getFullText().trim()}.${name}`, decl.parent.parent)
+    : name;
+//# sourceMappingURL=DtoAnalyzer.js.map

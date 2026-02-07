@@ -1,0 +1,58 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MethodTransformer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const TypedRouteTransformer_1 = require("./TypedRouteTransformer");
+const WebSocketRouteTransformer_1 = require("./WebSocketRouteTransformer");
+var MethodTransformer;
+(function (MethodTransformer) {
+    MethodTransformer.transform = (props) => {
+        const decorators = typescript_1.default.getDecorators
+            ? typescript_1.default.getDecorators(props.method)
+            : props.method.decorators;
+        if (!(decorators === null || decorators === void 0 ? void 0 : decorators.length))
+            return props.method;
+        const signature = props.context.checker.getSignatureFromDeclaration(props.method);
+        const original = signature && props.context.checker.getReturnTypeOfSignature(signature);
+        const type = original && get_escaped_type(props.context.checker)(original);
+        if (type === undefined)
+            return props.method;
+        const operator = (decorator) => {
+            decorator = TypedRouteTransformer_1.TypedRouteTransformer.transform({
+                context: props.context,
+                decorator,
+                type,
+            });
+            decorator = WebSocketRouteTransformer_1.WebSocketRouteTransformer.validate({
+                context: props.context,
+                method: props.method,
+                decorator,
+            });
+            return decorator;
+        };
+        if (typescript_1.default.getDecorators !== undefined)
+            return typescript_1.default.factory.updateMethodDeclaration(props.method, (props.method.modifiers || []).map((mod) => typescript_1.default.isDecorator(mod) ? operator(mod) : mod), props.method.asteriskToken, props.method.name, props.method.questionToken, props.method.typeParameters, props.method.parameters, props.method.type, props.method.body);
+        // eslint-disable-next-line
+        return typescript_1.default.factory.updateMethodDeclaration(props.method, decorators.map(operator), props.method.modifiers, props.method.asteriskToken, props.method.name, props.method.questionToken, props.method.typeParameters, props.method.parameters, props.method.type, props.method.body);
+    };
+})(MethodTransformer || (exports.MethodTransformer = MethodTransformer = {}));
+const get_escaped_type = (checker) => (type) => {
+    const symbol = type.getSymbol() || type.aliasSymbol;
+    return symbol && get_name(symbol) === "Promise"
+        ? escape_promise(checker)(type)
+        : type;
+};
+const escape_promise = (checker) => (type) => {
+    const generic = checker.getTypeArguments(type);
+    if (generic.length !== 1)
+        throw new Error("Error on ImportAnalyzer.analyze(): invalid promise type.");
+    return generic[0];
+};
+const get_name = (symbol) => explore_name(symbol.getDeclarations()[0].parent)(symbol.escapedName.toString());
+const explore_name = (decl) => (name) => typescript_1.default.isModuleBlock(decl)
+    ? explore_name(decl.parent.parent)(`${decl.parent.name.getFullText().trim()}.${name}`)
+    : name;
+//# sourceMappingURL=MethodTransformer.js.map

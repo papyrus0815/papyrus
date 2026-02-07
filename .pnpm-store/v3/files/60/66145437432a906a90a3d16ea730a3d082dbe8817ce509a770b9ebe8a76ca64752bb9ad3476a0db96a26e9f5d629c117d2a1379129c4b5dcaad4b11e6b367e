@@ -1,0 +1,9 @@
+import { PackageManager } from "./PackageManager";
+export declare namespace ArgumentParser {
+    interface IArguments {
+        manager: "npm" | "pnpm" | "yarn" | "bun";
+        project: string | null;
+        runtime: boolean;
+    }
+    function parse(pack: PackageManager): Promise<IArguments>;
+}

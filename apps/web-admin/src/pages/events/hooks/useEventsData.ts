@@ -84,16 +84,8 @@ function convertToHistoricalEvent(event: any): HistoricalEvent {
     countries: [],
     influence: [],
     visuals: {
-      heroImageUrl: event.thumbnail
-        ? event.thumbnail.startsWith('http')
-          ? event.thumbnail
-          : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${event.thumbnail}`
-        : '',
-      thumbnailUrl: event.thumbnail
-        ? event.thumbnail.startsWith('http')
-          ? event.thumbnail
-          : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${event.thumbnail}`
-        : '',
+      heroImageUrl: event.thumbnail || '',
+      thumbnailUrl: event.thumbnail || '',
       gallery: [],
     },
     map: {

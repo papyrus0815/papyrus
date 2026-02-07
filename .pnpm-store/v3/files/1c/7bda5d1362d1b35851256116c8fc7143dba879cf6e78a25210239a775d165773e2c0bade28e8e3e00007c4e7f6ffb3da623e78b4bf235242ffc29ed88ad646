@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.is_request_body_undefined = void 0;
+/** @internal */
+const is_request_body_undefined = (request) => request.headers["content-type"] === undefined &&
+    (request.body === undefined ||
+        (typeof request.body === "object" &&
+            request.body !== null &&
+            Object.keys(request.body).length === 0));
+exports.is_request_body_undefined = is_request_body_undefined;
+//# sourceMappingURL=is_request_body_undefined.js.map

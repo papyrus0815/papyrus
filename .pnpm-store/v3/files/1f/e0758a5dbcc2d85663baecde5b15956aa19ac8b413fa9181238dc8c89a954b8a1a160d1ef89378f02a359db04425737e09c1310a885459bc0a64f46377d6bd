@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.StringUtil = void 0;
+var StringUtil;
+(function (StringUtil) {
+    StringUtil.capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+    StringUtil.escapeDuplicate = (keep) => (change) => keep.includes(change) ? StringUtil.escapeDuplicate(keep)(`_${change}`) : change;
+    StringUtil.isImplicit = (str) => str === "object" ||
+        str === "__type" ||
+        str === "__object" ||
+        str.startsWith("__type.") ||
+        str.startsWith("__object.") ||
+        str.includes("readonly [");
+})(StringUtil || (exports.StringUtil = StringUtil = {}));
+//# sourceMappingURL=StringUtil.js.map

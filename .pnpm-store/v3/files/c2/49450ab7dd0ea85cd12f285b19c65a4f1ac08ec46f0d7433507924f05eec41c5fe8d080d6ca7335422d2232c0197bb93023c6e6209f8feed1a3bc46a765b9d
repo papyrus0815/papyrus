@@ -1,0 +1,4 @@
+import { ITypedApplication } from "../structures/ITypedApplication";
+export declare namespace E2eGenerator {
+    const generate: (app: ITypedApplication) => Promise<void>;
+}

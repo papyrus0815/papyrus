@@ -1,0 +1,44 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SwaggerDescriptionComposer = void 0;
+var SwaggerDescriptionComposer;
+(function (SwaggerDescriptionComposer) {
+    SwaggerDescriptionComposer.compose = (props) => {
+        var _a;
+        const title = (() => {
+            var _a;
+            const [explicit] = SwaggerDescriptionComposer.getJsDocTexts({
+                jsDocTags: props.jsDocTags,
+                name: props.kind,
+            });
+            if (explicit === null || explicit === void 0 ? void 0 : explicit.length)
+                return explicit;
+            else if (!((_a = props.description) === null || _a === void 0 ? void 0 : _a.length))
+                return undefined;
+            const index = props.description.indexOf("\n");
+            const top = (index === -1 ? props.description : props.description.substring(0, index)).trim();
+            return top.endsWith(".") ? top.substring(0, top.length - 1) : undefined;
+        })();
+        return {
+            [props.kind]: title,
+            description: ((_a = props.description) === null || _a === void 0 ? void 0 : _a.length) ? props.description : undefined,
+        };
+    };
+    SwaggerDescriptionComposer.descriptionFromJsDocTag = (props) => {
+        var _a;
+        const parametric = props.parameter
+            ? (tag) => tag.text.find((elem) => elem.kind === "parameterName" && elem.text === props.parameter) !== undefined
+            : () => true;
+        const tag = props.jsDocTags.find((tag) => tag.name === props.tag && tag.text && parametric(tag));
+        return tag && tag.text
+            ? (_a = tag.text.find((elem) => elem.kind === "text")) === null || _a === void 0 ? void 0 : _a.text
+            : undefined;
+    };
+    SwaggerDescriptionComposer.getJsDocTexts = (props) => props.jsDocTags
+        .filter((tag) => tag.name === props.name &&
+        tag.text &&
+        tag.text.find((elem) => elem.kind === "text" && elem.text.length) !==
+            undefined)
+        .map((tag) => tag.text.find((elem) => elem.kind === "text").text);
+})(SwaggerDescriptionComposer || (exports.SwaggerDescriptionComposer = SwaggerDescriptionComposer = {}));
+//# sourceMappingURL=SwaggerDescriptionComposer.js.map

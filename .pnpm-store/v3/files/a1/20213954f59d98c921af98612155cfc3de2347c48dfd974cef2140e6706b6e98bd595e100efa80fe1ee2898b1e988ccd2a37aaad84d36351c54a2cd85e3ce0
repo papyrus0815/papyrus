@@ -1,0 +1,15 @@
+import { IReflectController } from "../structures/IReflectController";
+import { IReflectHttpOperationSuccess } from "../structures/IReflectHttpOperationSuccess";
+import { IReflectOperationError } from "../structures/IReflectOperationError";
+import { IOperationMetadata } from "../transformers/IOperationMetadata";
+export declare namespace ReflectHttpOperationResponseAnalyzer {
+    interface IContext {
+        controller: IReflectController;
+        function: Function;
+        functionName: string;
+        httpMethod: string;
+        metadata: IOperationMetadata;
+        errors: IReflectOperationError[];
+    }
+    const analyze: (ctx: IContext) => IReflectHttpOperationSuccess | null;
+}

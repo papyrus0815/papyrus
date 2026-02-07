@@ -1,0 +1,7 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NoTransformConfigureError = void 0;
+// For very old legay versions
+var NoTransformConfigurationError_1 = require("../NoTransformConfigurationError");
+Object.defineProperty(exports, "NoTransformConfigureError", { enumerable: true, get: function () { return NoTransformConfigurationError_1.NoTransformConfigurationError; } });
+//# sourceMappingURL=NoTransformConfigureError.js.map

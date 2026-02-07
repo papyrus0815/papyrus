@@ -1,0 +1,58 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkWebSocketParameterProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const SdkAliasCollection_1 = require("./SdkAliasCollection");
+var SdkWebSocketParameterProgrammer;
+(function (SdkWebSocketParameterProgrammer) {
+    SdkWebSocketParameterProgrammer.getEntries = (props) => {
+        const prefix = props.prefix ? `${props.route.name}.` : "";
+        return [
+            ...props.route.pathParameters.map((p) => ({
+                key: p.name,
+                type: SdkAliasCollection_1.SdkAliasCollection.name(p),
+            })),
+            ...(props.route.query
+                ? [
+                    {
+                        key: "query",
+                        type: typescript_1.default.factory.createTypeReferenceNode(`${prefix}Query`),
+                    },
+                ]
+                : []),
+            ...(props.provider
+                ? [
+                    {
+                        key: "provider",
+                        type: typescript_1.default.factory.createTypeReferenceNode(`${prefix}Provider`),
+                    },
+                ]
+                : []),
+        ];
+    };
+    SdkWebSocketParameterProgrammer.getParameterDeclarations = (props) => {
+        const entries = SdkWebSocketParameterProgrammer.getEntries(props);
+        if (entries.length === 0)
+            return [];
+        else if (props.project.config.keyword === true) {
+            const typeName = props.prefix
+                ? `${props.route.name}.Props`
+                : "Props";
+            const node = props.provider
+                ? typescript_1.default.factory.createTypeReferenceNode(typeName)
+                : typescript_1.default.factory.createTypeReferenceNode("Omit", [
+                    typescript_1.default.factory.createTypeReferenceNode(typeName),
+                    typescript_1.default.factory.createLiteralTypeNode(typescript_1.default.factory.createStringLiteral("provider")),
+                ]);
+            return [
+                typescript_1.default.factory.createParameterDeclaration(undefined, undefined, "props", undefined, node),
+            ];
+        }
+        return entries.map((entry) => typescript_1.default.factory.createParameterDeclaration(undefined, undefined, entry.key, undefined, entry.type));
+    };
+    SdkWebSocketParameterProgrammer.isPathEmpty = (route) => route.pathParameters.length === 0 && route.query === null;
+})(SdkWebSocketParameterProgrammer || (exports.SdkWebSocketParameterProgrammer = SdkWebSocketParameterProgrammer = {}));
+//# sourceMappingURL=SdkWebSocketParameterProgrammer.js.map

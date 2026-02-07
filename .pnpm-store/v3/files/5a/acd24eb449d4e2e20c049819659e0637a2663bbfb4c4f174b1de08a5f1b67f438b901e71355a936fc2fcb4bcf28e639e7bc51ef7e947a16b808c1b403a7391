@@ -1,0 +1,66 @@
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NodeModule = void 0;
+var import2_1 = __importDefault(require("import2"));
+var tstl_1 = require("tstl");
+/**
+ * @internal
+ */
+var NodeModule;
+(function (NodeModule) {
+    NodeModule.cp = new tstl_1.Singleton(function () {
+        return (0, import2_1.default)("child_process");
+    });
+    NodeModule.fs = new tstl_1.Singleton(function () {
+        return (0, import2_1.default)("fs");
+    });
+    NodeModule.http = new tstl_1.Singleton(function () {
+        return (0, import2_1.default)("http");
+    });
+    NodeModule.https = new tstl_1.Singleton(function () {
+        return (0, import2_1.default)("https");
+    });
+    NodeModule.os = new tstl_1.Singleton(function () {
+        return (0, import2_1.default)("os");
+    });
+    NodeModule.thread = new tstl_1.Singleton(function () {
+        return (0, import2_1.default)("worker_threads");
+    });
+    NodeModule.ws = new tstl_1.Singleton(function () { return Promise.resolve().then(function () { return __importStar(require("ws")); }); });
+    NodeModule.process = function () {
+        if (__global === undefined)
+            throw new Error("Not a node environment");
+        return __global.process;
+    };
+})(NodeModule || (exports.NodeModule = NodeModule = {}));
+/**
+ * @internal
+ */
+var __global = (0, tstl_1.is_node)() ? global : undefined;
+//# sourceMappingURL=NodeModule.js.map

@@ -1,0 +1,9 @@
+import ts from "typescript";
+import { Metadata } from "typia/lib/schemas/metadata/Metadata";
+import { MetadataObjectType } from "typia/lib/schemas/metadata/MetadataObjectType";
+import { INestiaProject } from "../../structures/INestiaProject";
+import { ImportDictionary } from "./ImportDictionary";
+export declare namespace SdkTypeProgrammer {
+    const write: (project: INestiaProject) => (importer: ImportDictionary) => (meta: Metadata, parentEscaped?: boolean) => ts.TypeNode;
+    const write_object: (project: INestiaProject) => (importer: ImportDictionary) => (object: MetadataObjectType) => ts.TypeNode;
+}

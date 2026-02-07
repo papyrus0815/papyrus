@@ -1,0 +1,179 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedQuery = TypedQuery;
+const common_1 = require("@nestjs/common");
+const rxjs_1 = require("rxjs");
+const typia_1 = __importDefault(require("typia"));
+const get_path_and_querify_1 = require("./internal/get_path_and_querify");
+const route_error_1 = require("./internal/route_error");
+const validate_request_query_1 = require("./internal/validate_request_query");
+/**
+ * Type safe URL query decorator.
+ *
+ * `TypedQuery` is a decorator function that can parse URL query string. It is
+ * almost same with {@link nest.Query}, but it can automatically cast property
+ * type following its DTO definition. Also, `TypedQuery` performs type
+ * validation.
+ *
+ * For reference, target type `T` must follow such restriction. Also, if actual
+ * URL query parameter values are different with their promised type `T`,
+ * `BadRequestException` error (status code: 400) would be thrown.
+ *
+ * 1. Type `T` must be an object type
+ * 2. Do not allow dynamic property
+ * 3. Only `boolean`, `bigint`, `number`, `string` or their array types are allowed
+ * 4. By the way, union type never be not allowed
+ *
+ * @author Jeongho Nam - https://github.com/samchon
+ * @returns Parameter decorator
+ */
+function TypedQuery(validator) {
+    const checker = (0, validate_request_query_1.validate_request_query)("TypedQuery")(validator);
+    return (0, common_1.createParamDecorator)(function TypedQuery(_unknown, context) {
+        const request = context
+            .switchToHttp()
+            .getRequest();
+        const params = new URLSearchParams(tail(request.url));
+        const output = checker(params);
+        if (output instanceof Error)
+            throw output;
+        return output;
+    })();
+}
+(function (TypedQuery) {
+    /**
+     * Request body decorator.
+     *
+     * Request body decorator for the `application/x-www-form-urlencoded` type.
+     */
+    function Body(validator) {
+        const checker = (0, validate_request_query_1.validate_request_query)("TypedQuery.Body")(validator);
+        return (0, common_1.createParamDecorator)(function TypedQueryBody(_unknown, context) {
+            const request = context
+                .switchToHttp()
+                .getRequest();
+            if (isApplicationQuery(request.headers["content-type"]) === false)
+                throw new common_1.BadRequestException(`Request body type is not "application/x-www-form-urlencoded".`);
+            const params = request.body instanceof URLSearchParams
+                ? request.body
+                : new FakeURLSearchParams(request.body);
+            const output = checker(params);
+            if (output instanceof Error)
+                throw output;
+            return output;
+        })();
+    }
+    TypedQuery.Body = Body;
+    /**
+     * Router decorator function for the GET method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedQuery.Get = Generator("Get");
+    /**
+     * Router decorator function for the POST method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedQuery.Post = Generator("Post");
+    /**
+     * Router decorator function for the PATH method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedQuery.Patch = Generator("Patch");
+    /**
+     * Router decorator function for the PUT method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedQuery.Put = Generator("Put");
+    /**
+     * Router decorator function for the DELETE method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedQuery.Delete = Generator("Delete");
+    /** @internal */
+    function Generator(method) {
+        function route(...args) {
+            const [path, stringify] = (0, get_path_and_querify_1.get_path_and_querify)(`TypedQuery.${method}`)(...args);
+            return (0, common_1.applyDecorators)(ROUTERS[method](path), (0, common_1.UseInterceptors)(new TypedQueryRouteInterceptor(stringify)));
+        }
+        return route;
+    }
+    for (const method of [typia_1.default.assert, typia_1.default.is, typia_1.default.validate])
+        for (const [key, value] of Object.entries(method))
+            for (const deco of [
+                TypedQuery.Get,
+                TypedQuery.Delete,
+                TypedQuery.Post,
+                TypedQuery.Put,
+                TypedQuery.Patch,
+            ])
+                deco[key] = value;
+})(TypedQuery || (exports.TypedQuery = TypedQuery = {}));
+/** @internal */
+function tail(url) {
+    const index = url.indexOf("?");
+    return index === -1 ? "" : url.substring(index + 1);
+}
+/** @internal */
+function isApplicationQuery(text) {
+    return (text !== undefined &&
+        text
+            .split(";")
+            .map((str) => str.trim())
+            .some((str) => str === "application/x-www-form-urlencoded"));
+}
+/** @internal */
+class FakeURLSearchParams {
+    constructor(target) {
+        this.target = target;
+    }
+    has(key) {
+        return this.target[key] !== undefined;
+    }
+    get(key) {
+        var _a;
+        const value = this.target[key];
+        return value === undefined
+            ? null
+            : Array.isArray(value)
+                ? ((_a = value[0]) !== null && _a !== void 0 ? _a : null)
+                : value;
+    }
+    getAll(key) {
+        const value = this.target[key];
+        return value === undefined ? [] : Array.isArray(value) ? value : [value];
+    }
+}
+/** @internal */
+class TypedQueryRouteInterceptor {
+    constructor(toSearchParams) {
+        this.toSearchParams = toSearchParams;
+    }
+    intercept(context, next) {
+        const http = context.switchToHttp();
+        const response = http.getResponse();
+        response.header("Content-Type", "application/x-www-form-urlencoded");
+        return next.handle().pipe((0, rxjs_1.map)((value) => this.toSearchParams(value).toString()), (0, rxjs_1.catchError)((err) => (0, route_error_1.route_error)(http.getRequest(), err)));
+    }
+}
+/** @internal */
+const ROUTERS = {
+    Get: common_1.Get,
+    Post: common_1.Post,
+    Patch: common_1.Patch,
+    Put: common_1.Put,
+    Delete: common_1.Delete,
+};
+//# sourceMappingURL=TypedQuery.js.map

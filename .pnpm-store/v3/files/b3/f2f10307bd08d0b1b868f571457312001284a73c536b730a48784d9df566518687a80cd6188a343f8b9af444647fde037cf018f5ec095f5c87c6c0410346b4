@@ -1,0 +1,100 @@
+import { IServer } from "../internal/IServer";
+import { SharedWorkerAcceptor } from "./SharedWorkerAcceptor";
+/**
+ * SharedWorker server.
+ *
+ *  - available only in the Web Browser.
+ *
+ * The `SharedWorkerServer` is a class representing a server in `SharedWorker`
+ * environment. Clients connecting to the `SharedWorkerServer` would communicate
+ * with this server through {@link SharedWorkerAcceptor} instances using RPC
+ * (Remote Procedure Call) concept.
+ *
+ * To open the server, call the {@link open} method with your callback function
+ * which would be called whenever a {@link SharedWorkerAcceptor} has been newly
+ * created by a new client's connection.
+ *
+ * Also, when declaring this `SharedWorkerServer` type, you have to define three
+ * generic arguments; `Header`, `Provider` and `Remote`. Those generic arguments
+ * would be propagated to the {@link SharedWorkerAcceptor}, so that
+ * {@link SharedWorkerAcceptor} would have the same generic arguments, too.
+ *
+ * For reference, the first `Header` type represents an initial data from the
+ * remote client after the connection. I recommend utilize it as an activation tool
+ * for security enhancement. The second generic argument `Provider` represents a
+ * provider from server to client, and the other `Remote` means a provider from the
+ * remote client to server.
+ *
+ * @template Header Type of header containing initialization data like activation.
+ * @template Provider Type of features provided for the remote client.
+ * @template Remote Type of features provided by remote client.
+ * @author Jeongho Nam - https://github.com/samchon
+ */
+export declare class SharedWorkerServer<Header, Provider extends object | null, Remote extends object | null> implements IServer<SharedWorkerServer.State> {
+    /**
+     * @hidden
+     */
+    private state_;
+    /**
+     * @hidden
+     */
+    private acceptors_;
+    /**
+     * Default Constructor.
+     */
+    constructor();
+    /**
+     * Open shared worker server.
+     *
+     * Open a server through the shared worker protocol, with *handler* function
+     * determining whether to accept the client's connection or not. After the server
+     * has been opened, clients can connect to that server by using the
+     * {@link SharedWorkerServer} class.
+     *
+     * When implementing the *handler* function with the {@link SharedWorkerServer}
+     * instance, calls the {@link SharedWorkerAcceptor.accept} method if you want to
+     * accept the new client's connection. Otherwise you don't want to accept the
+     * client and reject its connection, just calls the
+     * {@link SharedWorkerAcceptor.reject} instead.
+     *
+     * @param handler Callback function called whenever client connects.
+     */
+    open(handler: (acceptor: SharedWorkerAcceptor<Header, Provider, Remote>) => Promise<void>): Promise<void>;
+    /**
+     * Close server.
+     *
+     * Close all connections between its remote clients ({@link SharedWorkerConnector}s).
+     *
+     * It destroys all RFCs (remote function calls) between this server and remote clients
+     * (through `Driver<Controller>`) that are not returned (completed) yet. The destruction
+     * causes all incomplete RFCs to throw exceptions.
+     */
+    close(): Promise<void>;
+    /**
+     * @hidden
+     */
+    private _Handle_connect;
+    /**
+     * Get server state.
+     *
+     * Get current state of the websocket server.
+     *
+     * List of values are such like below:
+     *
+     *   - `NONE`: The `{@link SharedWorkerServer} instance is newly created, but did nothing yet.
+     *   - `OPENING`: The {@link SharedWorkerServer.open} method is on running.
+     *   - `OPEN`: The websocket server is online.
+     *   - `CLOSING`: The {@link SharedWorkerServer.close} method is on running.
+     *   - `CLOSED`: The websocket server is offline.
+     */
+    get state(): SharedWorkerServer.State;
+}
+/**
+ *
+ */
+export declare namespace SharedWorkerServer {
+    /**
+     * Current state of the {@link SharedWorkerServer}.
+     */
+    export import State = IServer.State;
+}

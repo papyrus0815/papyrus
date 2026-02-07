@@ -1,0 +1,151 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkAliasCollection = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const TypeFactory_1 = require("typia/lib/factories/TypeFactory");
+const FilePrinter_1 = require("./FilePrinter");
+const SdkHttpParameterProgrammer_1 = require("./SdkHttpParameterProgrammer");
+const SdkTypeProgrammer_1 = require("./SdkTypeProgrammer");
+var SdkAliasCollection;
+(function (SdkAliasCollection) {
+    SdkAliasCollection.name = ({ type }) => typescript_1.default.factory.createTypeReferenceNode(type.name, type.typeArguments
+        ? type.typeArguments.map((a) => SdkAliasCollection.name({ type: a }))
+        : undefined);
+    SdkAliasCollection.from = (project) => (importer) => (metadata) => SdkTypeProgrammer_1.SdkTypeProgrammer.write(project)(importer)(metadata);
+    SdkAliasCollection.httpProps = (project) => (importer) => (route) => typescript_1.default.factory.createTypeLiteralNode(SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getEntries({
+        project,
+        importer,
+        route,
+        body: true,
+        prefix: false,
+    })
+        .map((e) => {
+        var _a, _b, _c, _d, _e, _f;
+        const signature = typescript_1.default.factory.createPropertySignature(undefined, e.key, e.required
+            ? undefined
+            : typescript_1.default.factory.createToken(typescript_1.default.SyntaxKind.QuestionToken), e.type);
+        const description = (_f = (_a = e.parameter.description) !== null && _a !== void 0 ? _a : (_e = (_d = (_c = (_b = route.jsDocTags) === null || _b === void 0 ? void 0 : _b.find((tag) => {
+            var _a, _b, _c, _d;
+            return tag.name === "param" &&
+                ((_b = (_a = tag.text) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.kind) === "parameterName" &&
+                ((_d = (_c = tag.text) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.text) === e.key;
+        })) === null || _c === void 0 ? void 0 : _c.text) === null || _d === void 0 ? void 0 : _d.find((t) => t.kind === "text")) === null || _e === void 0 ? void 0 : _e.text) !== null && _f !== void 0 ? _f : null;
+        return (description === null || description === void 0 ? void 0 : description.length)
+            ? [
+                typescript_1.default.factory.createIdentifier("\n"),
+                FilePrinter_1.FilePrinter.description(signature, description),
+            ]
+            : [signature];
+    })
+        .flat());
+    SdkAliasCollection.websocketProps = (route) => typescript_1.default.factory.createTypeLiteralNode([
+        ...route.pathParameters.map((p) => typescript_1.default.factory.createPropertySignature(undefined, p.name, undefined, SdkAliasCollection.name(p))),
+        ...(route.query
+            ? [
+                typescript_1.default.factory.createPropertySignature(undefined, "query", undefined, typescript_1.default.factory.createTypeReferenceNode("Query")),
+            ]
+            : []),
+        typescript_1.default.factory.createPropertySignature(undefined, "provider", undefined, typescript_1.default.factory.createTypeReferenceNode("Provider")),
+    ]);
+    SdkAliasCollection.headers = (project) => (importer) => (param) => {
+        if (project.config.clone === true)
+            return SdkAliasCollection.from(project)(importer)(param.metadata);
+        const type = SdkAliasCollection.name(param);
+        if (project.config.primitive === false)
+            return type;
+        return typescript_1.default.factory.createTypeReferenceNode(importer.external({
+            file: "typia",
+            declaration: true,
+            type: "element",
+            name: "Resolved",
+        }), [type]);
+    };
+    SdkAliasCollection.query = (project) => (importer) => (param) => {
+        if (project.config.clone === true)
+            return SdkAliasCollection.from(project)(importer)(param.metadata);
+        const type = SdkAliasCollection.name(param);
+        if (project.config.primitive === false)
+            return type;
+        return typescript_1.default.factory.createTypeReferenceNode(importer.external({
+            file: "typia",
+            declaration: true,
+            type: "element",
+            name: "Resolved",
+        }), [type]);
+    };
+    SdkAliasCollection.body = (project) => (importer) => (param) => {
+        if (project.config.clone === true) {
+            const type = SdkAliasCollection.from(project)(importer)(param.metadata);
+            return param.contentType === "multipart/form-data"
+                ? formDataInput(importer)(type)
+                : type;
+        }
+        const type = SdkAliasCollection.name(param);
+        if (param.contentType === "multipart/form-data")
+            return formDataInput(importer)(type);
+        else if (project.config.primitive === false)
+            return type;
+        return typescript_1.default.factory.createTypeReferenceNode(importer.external({
+            file: "typia",
+            declaration: true,
+            type: "element",
+            name: param.contentType === "application/json" || param.encrypted === true
+                ? "Primitive"
+                : "Resolved",
+        }), [type]);
+    };
+    SdkAliasCollection.response = (project) => (importer) => (route) => {
+        var _a;
+        const schema = (p) => p.metadata.size() === 0
+            ? TypeFactory_1.TypeFactory.keyword("void")
+            : project.config.clone === true
+                ? SdkAliasCollection.from(project)(importer)(p.metadata)
+                : project.config.primitive !== false
+                    ? typescript_1.default.factory.createTypeReferenceNode(importer.external({
+                        file: "typia",
+                        declaration: true,
+                        type: "element",
+                        name: route.success.contentType === "application/json" ||
+                            route.success.encrypted === true
+                            ? "Primitive"
+                            : "Resolved",
+                    }), [SdkAliasCollection.name(p)])
+                    : SdkAliasCollection.name(p);
+        if (project.config.propagate !== true)
+            return schema(route.success);
+        const branches = [
+            {
+                status: String((_a = route.success.status) !== null && _a !== void 0 ? _a : (route.method === "POST" ? 201 : 200)),
+                type: schema(route.success),
+            },
+            ...Object.entries(route.exceptions).map(([status, value]) => ({
+                status,
+                type: schema(value),
+            })),
+        ];
+        return typescript_1.default.factory.createTypeReferenceNode(importer.external({
+            file: "@nestia/fetcher",
+            declaration: true,
+            type: "element",
+            name: "IPropagation",
+        }), [
+            typescript_1.default.factory.createTypeLiteralNode(branches.map((b) => typescript_1.default.factory.createPropertySignature(undefined, typescript_1.default.factory.createNumericLiteral(b.status), undefined, b.type))),
+            ...(route.success.status
+                ? [
+                    typescript_1.default.factory.createLiteralTypeNode(typescript_1.default.factory.createNumericLiteral(route.success.status)),
+                ]
+                : []),
+        ]);
+    };
+    SdkAliasCollection.responseBody = (project) => (importer) => (route) => SdkAliasCollection.response(Object.assign(Object.assign({}, project), { config: Object.assign(Object.assign({}, project.config), { propagate: false }) }))(importer)(route);
+    const formDataInput = (importer) => (type) => typescript_1.default.factory.createTypeReferenceNode(importer.external({
+        file: "@nestia/fetcher",
+        declaration: true,
+        type: "element",
+        name: "FormDataInput",
+    }), [type]);
+})(SdkAliasCollection || (exports.SdkAliasCollection = SdkAliasCollection = {}));
+//# sourceMappingURL=SdkAliasCollection.js.map

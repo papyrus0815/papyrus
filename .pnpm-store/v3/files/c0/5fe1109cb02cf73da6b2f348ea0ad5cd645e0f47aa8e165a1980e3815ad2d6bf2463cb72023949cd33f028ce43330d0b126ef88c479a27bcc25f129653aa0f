@@ -1,0 +1,122 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkHttpSimulationProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const ExpressionFactory_1 = require("typia/lib/factories/ExpressionFactory");
+const IdentifierFactory_1 = require("typia/lib/factories/IdentifierFactory");
+const LiteralFactory_1 = require("typia/lib/factories/LiteralFactory");
+const StatementFactory_1 = require("typia/lib/factories/StatementFactory");
+const TypeFactory_1 = require("typia/lib/factories/TypeFactory");
+const SdkAliasCollection_1 = require("./SdkAliasCollection");
+const SdkHttpParameterProgrammer_1 = require("./SdkHttpParameterProgrammer");
+const SdkImportWizard_1 = require("./SdkImportWizard");
+var SdkHttpSimulationProgrammer;
+(function (SdkHttpSimulationProgrammer) {
+    SdkHttpSimulationProgrammer.random = (project) => (importer) => (route) => {
+        const output = SdkAliasCollection_1.SdkAliasCollection.responseBody(project)(importer)(route);
+        return constant("random")(typescript_1.default.factory.createArrowFunction(undefined, undefined, [], project.config.primitive === false
+            ? output
+            : typescript_1.default.factory.createTypeReferenceNode(SdkImportWizard_1.SdkImportWizard.Resolved(importer), [output]), undefined, typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.typia(importer)), "random"), [output], undefined)));
+    };
+    SdkHttpSimulationProgrammer.simulate = (project) => (importer) => (route) => {
+        var _a;
+        const output = project.config.propagate === true ||
+            route.success.metadata.size() !== 0;
+        const caller = () => typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier("random"), undefined, undefined);
+        return constant("simulate")(typescript_1.default.factory.createArrowFunction(undefined, undefined, [
+            IdentifierFactory_1.IdentifierFactory.parameter(SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getSignificant(route, true).length !==
+                0
+                ? "connection"
+                : "_connection", typescript_1.default.factory.createTypeReferenceNode(SdkImportWizard_1.SdkImportWizard.IConnection(importer), route.headerObject
+                ? [
+                    typescript_1.default.factory.createTypeReferenceNode(`${route.name}.Headers`),
+                ]
+                : [])),
+            ...SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getParameterDeclarations({
+                project,
+                importer,
+                route,
+                body: true,
+                prefix: false,
+            }),
+        ], typescript_1.default.factory.createTypeReferenceNode(output ? "Output" : "void"), undefined, typescript_1.default.factory.createBlock([
+            ...assert(project)(importer)(route),
+            typescript_1.default.factory.createReturnStatement(project.config.propagate
+                ? typescript_1.default.factory.createAsExpression(typescript_1.default.factory.createObjectLiteralExpression([
+                    typescript_1.default.factory.createPropertyAssignment("success", typescript_1.default.factory.createTrue()),
+                    typescript_1.default.factory.createPropertyAssignment("status", ExpressionFactory_1.ExpressionFactory.number((_a = route.success.status) !== null && _a !== void 0 ? _a : (route.method === "POST" ? 201 : 200))),
+                    typescript_1.default.factory.createPropertyAssignment("headers", LiteralFactory_1.LiteralFactory.write({
+                        "Content-Type": route.success.contentType,
+                    })),
+                    typescript_1.default.factory.createPropertyAssignment("data", caller()),
+                ], true), typescript_1.default.factory.createTypeReferenceNode("Output"))
+                : caller()),
+        ], true)));
+    };
+    const assert = (project) => (importer) => (route) => {
+        const parameters = SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getSignificant(route, true);
+        if (parameters.length === 0)
+            return [];
+        const typia = SdkImportWizard_1.SdkImportWizard.typia(importer);
+        const validator = StatementFactory_1.StatementFactory.constant({
+            name: "assert",
+            value: typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(importer.external({
+                file: `@nestia/fetcher/lib/NestiaSimulator`,
+                declaration: false,
+                type: "element",
+                name: "NestiaSimulator",
+            })), "assert"), undefined, [
+                typescript_1.default.factory.createObjectLiteralExpression([
+                    typescript_1.default.factory.createPropertyAssignment("method", typescript_1.default.factory.createIdentifier("METADATA.method")),
+                    typescript_1.default.factory.createPropertyAssignment("host", typescript_1.default.factory.createIdentifier("connection.host")),
+                    typescript_1.default.factory.createPropertyAssignment("path", typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier("path"), undefined, SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getArguments({
+                        project,
+                        route,
+                        body: false,
+                    }))),
+                    typescript_1.default.factory.createPropertyAssignment("contentType", typescript_1.default.factory.createIdentifier(JSON.stringify(route.success.contentType))),
+                ], true),
+            ]),
+        });
+        const individual = parameters
+            .map((p) => typescript_1.default.factory.createCallExpression((() => {
+            const base = IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier("assert"), p.category);
+            if (p.category !== "param")
+                return base;
+            return typescript_1.default.factory.createCallExpression(base, undefined, [
+                typescript_1.default.factory.createStringLiteral(p.name),
+            ]);
+        })(), undefined, [
+            typescript_1.default.factory.createArrowFunction(undefined, undefined, [], undefined, undefined, typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(typia), "assert"), undefined, [
+                project.config.keyword === true
+                    ? typescript_1.default.factory.createIdentifier(`props.${p.name}`)
+                    : typescript_1.default.factory.createIdentifier(p.name),
+            ])),
+        ]))
+            .map(typescript_1.default.factory.createExpressionStatement);
+        return [
+            validator,
+            ...(project.config.propagate !== true
+                ? individual
+                : [tryAndCatch(importer)(individual)]),
+        ];
+    };
+    const tryAndCatch = (importer) => (individual) => typescript_1.default.factory.createTryStatement(typescript_1.default.factory.createBlock(individual, true), typescript_1.default.factory.createCatchClause("exp", typescript_1.default.factory.createBlock([
+        typescript_1.default.factory.createIfStatement(typescript_1.default.factory.createLogicalNot(typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.typia(importer)), "is"), [
+            typescript_1.default.factory.createTypeReferenceNode(SdkImportWizard_1.SdkImportWizard.HttpError(importer)),
+        ], [typescript_1.default.factory.createIdentifier("exp")])), typescript_1.default.factory.createThrowStatement(typescript_1.default.factory.createIdentifier("exp"))),
+        typescript_1.default.factory.createReturnStatement(typescript_1.default.factory.createAsExpression(typescript_1.default.factory.createObjectLiteralExpression([
+            typescript_1.default.factory.createPropertyAssignment("success", typescript_1.default.factory.createFalse()),
+            typescript_1.default.factory.createPropertyAssignment("status", typescript_1.default.factory.createIdentifier("exp.status")),
+            typescript_1.default.factory.createPropertyAssignment("headers", typescript_1.default.factory.createIdentifier("exp.headers")),
+            typescript_1.default.factory.createPropertyAssignment("data", typescript_1.default.factory.createIdentifier("exp.toJSON().message")),
+        ], true), TypeFactory_1.TypeFactory.keyword("any"))),
+    ], true)), undefined);
+})(SdkHttpSimulationProgrammer || (exports.SdkHttpSimulationProgrammer = SdkHttpSimulationProgrammer = {}));
+const constant = (name) => (expression) => typescript_1.default.factory.createVariableStatement([typescript_1.default.factory.createModifier(typescript_1.default.SyntaxKind.ExportKeyword)], typescript_1.default.factory.createVariableDeclarationList([
+    typescript_1.default.factory.createVariableDeclaration(typescript_1.default.factory.createIdentifier(name), undefined, undefined, expression),
+], typescript_1.default.NodeFlags.Const));
+//# sourceMappingURL=SdkHttpSimulationProgrammer.js.map

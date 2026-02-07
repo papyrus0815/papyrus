@@ -1,0 +1,137 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkHttpFunctionProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const IdentifierFactory_1 = require("typia/lib/factories/IdentifierFactory");
+const TypeFactory_1 = require("typia/lib/factories/TypeFactory");
+const StringUtil_1 = require("../../utils/StringUtil");
+const SdkAliasCollection_1 = require("./SdkAliasCollection");
+const SdkHttpParameterProgrammer_1 = require("./SdkHttpParameterProgrammer");
+const SdkImportWizard_1 = require("./SdkImportWizard");
+var SdkHttpFunctionProgrammer;
+(function (SdkHttpFunctionProgrammer) {
+    SdkHttpFunctionProgrammer.write = (project) => (importer) => (route) => {
+        return typescript_1.default.factory.createFunctionDeclaration([
+            typescript_1.default.factory.createModifier(typescript_1.default.SyntaxKind.ExportKeyword),
+            typescript_1.default.factory.createModifier(typescript_1.default.SyntaxKind.AsyncKeyword),
+        ], undefined, route.name, undefined, [
+            IdentifierFactory_1.IdentifierFactory.parameter("connection", typescript_1.default.factory.createTypeReferenceNode(SdkImportWizard_1.SdkImportWizard.IConnection(importer), route.headerObject !== null
+                ? [typescript_1.default.factory.createTypeReferenceNode(`${route.name}.Headers`)]
+                : undefined)),
+            ...SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getParameterDeclarations({
+                project,
+                importer,
+                route,
+                body: true,
+                prefix: true,
+            }),
+        ], typescript_1.default.factory.createTypeReferenceNode("Promise", [
+            project.config.propagate === true ||
+                route.success.metadata.size() !== 0
+                ? typescript_1.default.factory.createTypeReferenceNode(`${route.name}.Output`)
+                : typescript_1.default.factory.createTypeReferenceNode("void"),
+        ]), typescript_1.default.factory.createBlock(writeBody(project)(importer)(route), true));
+    };
+    const writeBody = (project) => (importer) => (route) => {
+        const access = (name) => project.config.keyword === true
+            ? IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier("props"), name)
+            : typescript_1.default.factory.createIdentifier(name);
+        const fetch = () => {
+            var _a, _b, _c;
+            return typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.Fetcher(!!((_a = route.body) === null || _a === void 0 ? void 0 : _a.encrypted) || route.success.encrypted)(importer)), project.config.propagate ? "propagate" : "fetch"), project.config.propagate
+                ? route.method.toLowerCase() === "get" ||
+                    route.method.toLowerCase() === "head"
+                    ? [TypeFactory_1.TypeFactory.keyword("any")]
+                    : [TypeFactory_1.TypeFactory.keyword("any"), TypeFactory_1.TypeFactory.keyword("any")]
+                : undefined, [
+                route.body && route.body.contentType !== "multipart/form-data"
+                    ? typescript_1.default.factory.createObjectLiteralExpression([
+                        typescript_1.default.factory.createSpreadAssignment(typescript_1.default.factory.createIdentifier("connection")),
+                        typescript_1.default.factory.createPropertyAssignment("headers", typescript_1.default.factory.createObjectLiteralExpression([
+                            typescript_1.default.factory.createSpreadAssignment(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier("connection"), "headers")),
+                            typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createStringLiteral("Content-Type"), typescript_1.default.factory.createStringLiteral((_c = (_b = route.body) === null || _b === void 0 ? void 0 : _b.contentType) !== null && _c !== void 0 ? _c : "application/json")),
+                        ], true)),
+                    ], true)
+                    : typescript_1.default.factory.createIdentifier("connection"),
+                typescript_1.default.factory.createObjectLiteralExpression([
+                    typescript_1.default.factory.createSpreadAssignment(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(route.name), "METADATA")),
+                    typescript_1.default.factory.createPropertyAssignment("template", IdentifierFactory_1.IdentifierFactory.access(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(route.name), "METADATA"), "path")),
+                    typescript_1.default.factory.createPropertyAssignment("path", typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(route.name), "path"), undefined, SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getArguments({
+                        project,
+                        route,
+                        body: false,
+                    }))),
+                ], true),
+                ...(route.body ? [access(route.body.name)] : []),
+                ...(project.config.json &&
+                    route.body !== null &&
+                    (route.body.contentType === "application/json" ||
+                        route.body.encrypted === true)
+                    ? [typescript_1.default.factory.createIdentifier(`${route.name}.stringify`)]
+                    : []),
+            ]);
+        };
+        const output = (awaiter) => project.config.simulate
+            ? typescript_1.default.factory.createConditionalExpression(typescript_1.default.factory.createStrictEquality(typescript_1.default.factory.createTrue(), typescript_1.default.factory.createIdentifier("connection.simulate")), undefined, typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier(`${route.name}.simulate`), [], [
+                typescript_1.default.factory.createIdentifier("connection"),
+                ...SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getArguments({
+                    project,
+                    route,
+                    body: true,
+                }),
+            ]), undefined, awaiter ? typescript_1.default.factory.createAwaitExpression(fetch()) : fetch())
+            : awaiter
+                ? typescript_1.default.factory.createAwaitExpression(fetch())
+                : fetch();
+        return [
+            ...(project.config.assert
+                ? SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getSignificant(route, true).map((p) => typescript_1.default.factory.createExpressionStatement(typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.typia(importer)), "assert"), [
+                    typescript_1.default.factory.createTypeQueryNode(typescript_1.default.factory.createIdentifier(p.name)),
+                ], [typescript_1.default.factory.createIdentifier(p.name)])))
+                : []),
+            ...(route.success.setHeaders.length === 0
+                ? [typescript_1.default.factory.createReturnStatement(output(false))]
+                : writeSetHeaders(project)(importer)(route)(output(true))),
+        ];
+    };
+    const writeSetHeaders = (project) => (importer) => (route) => (condition) => {
+        const accessor = (x) => (y) => x[0] === "[" ? `${x}${y}` : `${x}.${y}`;
+        const output = StringUtil_1.StringUtil.escapeDuplicate([
+            "connection",
+            ...SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getSignificant(route, true).map((p) => p.name),
+        ])("output");
+        const headers = accessor("connection")("headers");
+        const data = project.config.propagate
+            ? accessor(output)("data")
+            : output;
+        const assigners = [
+            typescript_1.default.factory.createBinaryExpression(typescript_1.default.factory.createIdentifier(headers), typescript_1.default.factory.createToken(typescript_1.default.SyntaxKind.QuestionQuestionEqualsToken), typescript_1.default.factory.createObjectLiteralExpression([])),
+            ...route.success.setHeaders.map((tuple) => {
+                var _a;
+                return tuple.type === "assigner"
+                    ? typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier("Object.assign"), [], [
+                        typescript_1.default.factory.createIdentifier(headers),
+                        typescript_1.default.factory.createIdentifier(accessor(data)(tuple.source)),
+                    ])
+                    : typescript_1.default.factory.createBinaryExpression(typescript_1.default.factory.createIdentifier(accessor(headers)((_a = tuple.target) !== null && _a !== void 0 ? _a : tuple.source)), typescript_1.default.factory.createToken(typescript_1.default.SyntaxKind.EqualsToken), typescript_1.default.factory.createIdentifier(accessor(data)(tuple.source)));
+            }),
+        ].map(typescript_1.default.factory.createExpressionStatement);
+        return [
+            typescript_1.default.factory.createVariableStatement([], typescript_1.default.factory.createVariableDeclarationList([
+                typescript_1.default.factory.createVariableDeclaration(output, undefined, SdkAliasCollection_1.SdkAliasCollection.response(project)(importer)(route), condition),
+            ], typescript_1.default.NodeFlags.Const)),
+            ...(project.config.propagate
+                ? [
+                    typescript_1.default.factory.createIfStatement(typescript_1.default.factory.createIdentifier(accessor(output)("success")), assigners.length === 1
+                        ? assigners[0]
+                        : typescript_1.default.factory.createBlock(assigners, true), undefined),
+                ]
+                : assigners),
+            typescript_1.default.factory.createReturnStatement(typescript_1.default.factory.createIdentifier(output)),
+        ];
+    };
+})(SdkHttpFunctionProgrammer || (exports.SdkHttpFunctionProgrammer = SdkHttpFunctionProgrammer = {}));
+//# sourceMappingURL=SdkHttpFunctionProgrammer.js.map

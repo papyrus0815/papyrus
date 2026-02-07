@@ -1,0 +1,78 @@
+{
+  "name": "@nestia/sdk",
+  "version": "10.0.1",
+  "description": "Nestia SDK and Swagger generator",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "bin": {
+    "@nestia/sdk": "lib/executable/sdk.js"
+  },
+  "scripts": {
+    "build": "rimraf lib && tsc",
+    "dev": "tsc -p tsconfig.test.json --watch",
+    "eslint": "eslint ./**/*.ts",
+    "prepare": "ts-patch install && typia patch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samchon/nestia"
+  },
+  "keywords": [
+    "nestia",
+    "sdk",
+    "swagger",
+    "generator",
+    "nestjs",
+    "typia"
+  ],
+  "author": "Jeongho Nam",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/samchon/nestia/issues"
+  },
+  "homepage": "https://nestia.io",
+  "dependencies": {
+    "@nestia/core": "^10.0.1",
+    "@nestia/fetcher": "^10.0.1",
+    "@samchon/openapi": "^6.0.0",
+    "cli": "^1.0.1",
+    "get-function-location": "^2.0.0",
+    "glob": "^11.0.3",
+    "path-to-regexp": "^6.2.1",
+    "prettier": "^3.2.5",
+    "ts-node": ">=10.6.0",
+    "tsconfck": "^2.1.2",
+    "tsconfig-paths": "^4.1.1",
+    "tstl": "^3.0.0",
+    "typia": "^11.0.0"
+  },
+  "peerDependencies": {
+    "@nestia/core": ">=10.0.1"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.0.13",
+    "@nestjs/core": "^11.0.13",
+    "@trivago/prettier-plugin-sort-imports": "^4.3.0",
+    "@types/cli": "^0.11.21",
+    "@types/express": "^4.17.15",
+    "@types/node": "^18.11.15",
+    "@types/ts-expose-internals": "npm:ts-expose-internals@5.4.5",
+    "@typescript-eslint/eslint-plugin": "^5.46.1",
+    "@typescript-eslint/parser": "^5.46.1",
+    "eslint": "^8.29.0",
+    "eslint-plugin-deprecation": "^1.4.1",
+    "rimraf": "^6.0.1",
+    "tgrid": "^1.1.0",
+    "ts-patch": "^3.3.0",
+    "typescript": "~5.9.3",
+    "typescript-transform-paths": "^3.4.4"
+  },
+  "files": [
+    "assets",
+    "lib",
+    "src",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

@@ -1,0 +1,18 @@
+import { OpenApi } from "@samchon/openapi";
+import { IJsDocTagInfo } from "typia";
+import { INestiaConfig } from "../../INestiaConfig";
+import { ITypedHttpRouteParameter } from "../../structures/ITypedHttpRouteParameter";
+export declare namespace SwaggerOperationParameterComposer {
+    interface IProps<Parameter extends ITypedHttpRouteParameter> {
+        config: Omit<INestiaConfig.ISwaggerConfig, "output">;
+        document: OpenApi.IDocument;
+        schema: OpenApi.IJsonSchema;
+        jsDocTags: IJsDocTagInfo[];
+        parameter: Parameter;
+    }
+    const compose: (props: IProps<ITypedHttpRouteParameter>) => OpenApi.IOperation.IParameter[];
+    const body: (props: Omit<IProps<ITypedHttpRouteParameter.IBody>, "config" | "document">) => OpenApi.IOperation.IRequestBody;
+    const path: (props: Omit<IProps<ITypedHttpRouteParameter.IPath>, "config" | "document">) => OpenApi.IOperation.IParameter;
+    const query: (props: IProps<ITypedHttpRouteParameter.IQuery>) => OpenApi.IOperation.IParameter[];
+    const header: (props: IProps<ITypedHttpRouteParameter.IHeaders>) => OpenApi.IOperation.IParameter[];
+}

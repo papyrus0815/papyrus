@@ -1,0 +1,15 @@
+import { IMetadataDictionary } from "typia/lib/schemas/metadata/IMetadataDictionary";
+import { IReflectController } from "../structures/IReflectController";
+import { IReflectHttpOperation } from "../structures/IReflectHttpOperation";
+import { IReflectOperationError } from "../structures/IReflectOperationError";
+import { ITypedHttpRoute } from "../structures/ITypedHttpRoute";
+export declare namespace TypedHttpRouteAnalyzer {
+    const dictionary: (controllers: IReflectController[]) => IMetadataDictionary;
+    const analyze: (props: {
+        controller: IReflectController;
+        errors: IReflectOperationError[];
+        dictionary: IMetadataDictionary;
+        operation: IReflectHttpOperation;
+        paths: string[];
+    }) => ITypedHttpRoute[];
+}

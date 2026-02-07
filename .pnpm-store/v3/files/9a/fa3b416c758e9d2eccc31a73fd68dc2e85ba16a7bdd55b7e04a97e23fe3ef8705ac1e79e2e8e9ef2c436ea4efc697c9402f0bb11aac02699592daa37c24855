@@ -1,0 +1,10 @@
+import ts from "typescript";
+import { INestiaTransformContext } from "../options/INestiaTransformProject";
+export declare namespace TypedParamProgrammer {
+    const generate: (props: {
+        context: INestiaTransformContext;
+        modulo: ts.LeftHandSideExpression;
+        arguments: readonly ts.Expression[];
+        type: ts.Type;
+    }) => readonly ts.Expression[];
+}

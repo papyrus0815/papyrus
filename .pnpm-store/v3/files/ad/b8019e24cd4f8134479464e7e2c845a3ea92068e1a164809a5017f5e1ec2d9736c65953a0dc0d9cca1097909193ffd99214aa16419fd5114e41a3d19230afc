@@ -1,0 +1,10 @@
+import { IReflectController } from "../structures/IReflectController";
+import { IReflectWebSocketOperation } from "../structures/IReflectWebSocketOperation";
+import { ITypedWebSocketRoute } from "../structures/ITypedWebSocketRoute";
+export declare namespace TypedWebSocketRouteAnalyzer {
+    const analyze: (props: {
+        controller: IReflectController;
+        operation: IReflectWebSocketOperation;
+        paths: string[];
+    }) => ITypedWebSocketRoute[];
+}

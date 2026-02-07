@@ -121,7 +121,8 @@ export class AuthController {
 @Controller('account')
 export class AccountController {
   constructor(
-    private readonly authService: AuthService, 
+    private readonly authService: AuthService,
+    private readonly accountRepository: AccountsPrismaRepository,
   ) {}
 
   @Get('me')
@@ -130,15 +131,13 @@ export class AccountController {
     const userId = req.user?.userId;
     if (!userId) return null;
 
-    // Prisma v7 findUnique 스타일 적용 (내부에서 처리됨)
-    // TODO: 메서드 구현 필요
-    return null;
-    
-    // if (!account) return null;
-    // return { 
-    //   id: account.id, 
-    //   account: account.username, 
-    //   heroId: account.heroId 
-    // };
+    const account = await this.accountRepository.findById(userId);
+    if (!account) return null;
+
+    return { 
+      id: account.id, 
+      account: account.username, 
+      heroId: account.heroId 
+    };
   }
 }

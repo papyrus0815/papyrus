@@ -96,14 +96,18 @@ model Country {
   eventCountryRelations     EventCountryRelation[]
 
   // 🆕 정규화된 군사 사건 관계
-  countriesInSides               CountryInSide[]
-  fromCountryRelations           EventCountryRelationNew[] @relation("FromCountry")
-  toCountryRelations             EventCountryRelationNew[] @relation("ToCountry")
-  treatySignatories              TreatySignatory[]
-  allianceMembers                AllianceMember[]
+  countriesInSides     CountryInSide[]
+  fromCountryRelations EventCountryRelationNew[] @relation("FromCountry")
+  toCountryRelations   EventCountryRelationNew[] @relation("ToCountry")
+  treatySignatories    TreatySignatory[]
+  allianceMembers      AllianceMember[]
 
   // 분야별 경력 관계
   governmentCareers GovernmentCareer[] @relation("GovernmentCountry")
+
+  // 🆕 왕조 통치 관계
+  /// 이 국가를 통치한/통치하는 왕조들의 역사 (입헌군주제 등)
+  dynastyRules DynastyModernRule[] @relation("CountryDynastyRules")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

@@ -1,0 +1,34 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReflectMetadataAnalyzer = void 0;
+const constants_1 = require("@nestjs/common/constants");
+const SecurityAnalyzer_1 = require("./SecurityAnalyzer");
+var ReflectMetadataAnalyzer;
+(function (ReflectMetadataAnalyzer) {
+    ReflectMetadataAnalyzer.paths = (target) => {
+        const value = Reflect.getMetadata(constants_1.PATH_METADATA, target);
+        if (typeof value === "string")
+            return [value];
+        else if (value.length === 0)
+            return [""];
+        else
+            return value;
+    };
+    ReflectMetadataAnalyzer.extensions = (value) => {
+        const entire = Reflect.getMetadata("swagger/apiExtension", value);
+        return entire !== null && entire !== void 0 ? entire : {};
+    };
+    ReflectMetadataAnalyzer.securities = (value) => {
+        const entire = Reflect.getMetadata("swagger/apiSecurity", value);
+        return entire ? SecurityAnalyzer_1.SecurityAnalyzer.merge(...entire) : [];
+    };
+    ReflectMetadataAnalyzer.versions = (target) => {
+        const value = Reflect.getMetadata(constants_1.VERSION_METADATA, target);
+        return value === undefined
+            ? undefined
+            : Array.isArray(value)
+                ? value
+                : [value];
+    };
+})(ReflectMetadataAnalyzer || (exports.ReflectMetadataAnalyzer = ReflectMetadataAnalyzer = {}));
+//# sourceMappingURL=ReflectMetadataAnalyzer.js.map

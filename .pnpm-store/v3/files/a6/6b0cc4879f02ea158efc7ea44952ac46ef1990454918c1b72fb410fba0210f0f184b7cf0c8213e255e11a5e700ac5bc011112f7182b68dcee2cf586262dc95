@@ -1,0 +1,50 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReflectHttpOperationExceptionAnalyzer = void 0;
+const JsonMetadataFactory_1 = require("typia/lib/factories/JsonMetadataFactory");
+var ReflectHttpOperationExceptionAnalyzer;
+(function (ReflectHttpOperationExceptionAnalyzer) {
+    ReflectHttpOperationExceptionAnalyzer.analyze = (ctx) => {
+        const preconfigured = analyzePreconfigured(ctx.function)
+            .slice()
+            .reverse();
+        const errors = [];
+        const exceptions = preconfigured
+            .map((pre, i) => {
+            var _a;
+            const matched = ctx.metadata.exceptions[i];
+            if (matched === undefined) {
+                errors.push({
+                    file: ctx.controller.file,
+                    class: ctx.controller.class.name,
+                    function: ctx.functionName,
+                    from: `exception (status: ${pre.status})`,
+                    contents: ["Unable to find exception type."],
+                });
+                return null;
+            }
+            else if (matched.type === null) {
+                errors.push({
+                    file: ctx.controller.file,
+                    class: ctx.controller.class.name,
+                    function: ctx.functionName,
+                    from: `exception (status: ${pre.status})`,
+                    contents: ["Failed to get the type info."],
+                });
+            }
+            const schema = matched.primitive
+                .success
+                ? matched.primitive.data
+                : null;
+            if (schema === null || matched.type === null)
+                return null; // unreachable
+            return Object.assign(Object.assign({ status: pre.status, description: (_a = pre.description) !== null && _a !== void 0 ? _a : null, example: pre.example, examples: pre.examples, type: matched.type }, schema), { validate: JsonMetadataFactory_1.JsonMetadataFactory.validate });
+        })
+            .filter((e) => e !== null);
+        if (errors.length)
+            ctx.errors.push(...errors);
+        return Object.fromEntries(exceptions.map((e) => [e.status, e]));
+    };
+    const analyzePreconfigured = (func) => { var _a; return (_a = Reflect.getMetadata("nestia/TypedException", func)) !== null && _a !== void 0 ? _a : []; };
+})(ReflectHttpOperationExceptionAnalyzer || (exports.ReflectHttpOperationExceptionAnalyzer = ReflectHttpOperationExceptionAnalyzer = {}));
+//# sourceMappingURL=ReflectHttpOperationExceptionAnalyzer.js.map

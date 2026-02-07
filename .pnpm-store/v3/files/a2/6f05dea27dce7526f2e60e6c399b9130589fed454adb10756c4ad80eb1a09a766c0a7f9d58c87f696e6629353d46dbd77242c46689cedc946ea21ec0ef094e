@@ -1,0 +1,5 @@
+export declare namespace PathAnalyzer {
+    const join: (...args: string[]) => string;
+    const escape: (str: string) => string | null;
+    const parameters: (str: string) => string[] | null;
+}

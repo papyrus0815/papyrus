@@ -1,0 +1,6 @@
+import ts from "typescript";
+import { IMetadataTypeTag } from "typia/lib/schemas/metadata/IMetadataTypeTag";
+import { ImportDictionary } from "./ImportDictionary";
+export declare namespace SdkTypeTagProgrammer {
+    const write: (importer: ImportDictionary, from: "object" | "array" | "boolean" | "number" | "bigint" | "string", tag: IMetadataTypeTag) => ts.TypeReferenceNode;
+}

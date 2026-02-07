@@ -103,6 +103,17 @@ model Person {
   /// 이벤트 목록에 생몰년 표시 여부
   showLifespanOnEventList Boolean @default(true) @map("show_lifespan_on_event_list")
 
+  //--- 왕/군주 관련 필드 (인물 고유)
+  /// 왕호/재위명 (예: Louis, Henry, 선덕)
+  /// 주의: 재위 번호는 국가마다 다르므로 GovernmentPositionTenure에 저장
+  regnalName String? @map("regnal_name") @db.VarChar(50)
+
+  /// 묘호 (동아시아 군주, 예: 세종, 태종, 고종)
+  templeName String? @map("temple_name") @db.VarChar(50)
+
+  /// 시호 (예: 문종, 무열왕, 효종)
+  posthumousName String? @map("posthumous_name") @db.VarChar(100)
+
   //--- 외래키
   dynastyId      String? @map("dynasty_id") @db.Char(36)
   religionId     String? @map("religion_id") @db.Char(36)
@@ -343,8 +354,8 @@ model PersonEducation {
   notes String? @db.Text
 
   //--- 관계 필드
-  person       Person                @relation("PersonEducations", fields: [personId], references: [id], onDelete: Cascade)
-  organization Organization          @relation("EducationOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  person       Person           @relation("PersonEducations", fields: [personId], references: [id], onDelete: Cascade)
+  organization Organization     @relation("EducationOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
   images       EducationImage[]
 
   //--- 메타데이터
@@ -430,9 +441,9 @@ model MilitaryCareer {
   notes String? @db.Text
 
   //--- 관계 필드
-  person       Person            @relation("PersonMilitaryCareers", fields: [personId], references: [id], onDelete: Cascade)
-  rank         Job               @relation("MilitaryRank", fields: [rankId], references: [id], onDelete: Restrict)
-  organization Organization      @relation("MilitaryOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  person       Person                @relation("PersonMilitaryCareers", fields: [personId], references: [id], onDelete: Cascade)
+  rank         Job                   @relation("MilitaryRank", fields: [rankId], references: [id], onDelete: Restrict)
+  organization Organization          @relation("MilitaryOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
   images       MilitaryCareerImage[]
 
   //--- 메타데이터
@@ -475,8 +486,31 @@ model MilitaryCareerImage {
 // ========================
 // GovernmentCareer (공무원/정치인 경력 전용)
 // ========================
-/// 공무원/정치인 경력 전용 테이블
-/// 예시: 김대중 대통령 - 대통령, 대한민국, 15대
+/// 🔷 일반 공무원/정치인의 경력 타임라인 기록
+/// 
+/// ⚠️ 중요: government.prisma의 GovernmentPositionTenure와의 차이
+/// ┌──────────────────────────────────────────────────────────────────────┐
+/// │ GovernmentCareer (이 테이블)                                          │
+/// │ ✓ 용도: 일반 공무원/정치인의 career path                              │
+/// │ ✓ 대상: 장관, 차관, 국회의원, 지방정부, 일반 관직                      │
+/// │ ✓ 참조: Job 테이블 (일반 직업 분류)                                   │
+/// │ ✓ 국가: Country만 지원 (현대 국가)                                    │
+/// │ ✓ 예시: 외교부 장관, 국회의원, 서울시장, 국방부 차관                   │
+/// │                                                                        │
+/// │ GovernmentPositionTenure (government.prisma)                          │
+/// │ ✓ 용도: 국가 최고 지도자의 공식 재임 기록                              │
+/// │ ✓ 대상: 국가원수, 왕, 황제, 대통령, 총리, 왕세자                       │
+/// │ ✓ 참조: GovernmentPositionDefinition (공식 관직 정의)                 │
+/// │ ✓ 국가: Country + HistoricalCountry 모두 지원                         │
+/// │ ✓ 상세: 연호, 재위번호, 묘호, 시호, 왕조 연결                          │
+/// │ ✓ 예시: 제20대 대통령, 조선 제4대 국왕 세종, 루이 14세                 │
+/// └──────────────────────────────────────────────────────────────────────┘
+/// 
+/// 활용 사례:
+/// - 외교부 장관 (2020~2022) → 국방부 장관 (2022~2024)
+/// - 국회의원 20대 (2016~2020) → 21대 (2020~2024)
+/// - 서울시장 (2018~2022)
+/// - 조선 이조판서 (1450~1455)
 model GovernmentCareer {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
@@ -715,6 +749,7 @@ model ReligiousCareer {
   @@index([religionId], name: "idx_religious_career_religionId")
   @@map("religious_career")
 }
+
 // 이 파일은 person.prisma 끝에 추가될 내용입니다
 
 // GovernmentCareer, BusinessCareer, AcademicCareer, ReligiousCareer의 JSON 제거는
@@ -884,13 +919,13 @@ model ArtistCareer {
 }
 
 model ArtistCareerImage {
-  id          String        @id @default(uuid()) @db.Char(36)
-  careerId    String        @map("career_id") @db.Char(36)
-  url         String        @db.VarChar(500)
-  description String?       @db.Text
-  career      ArtistCareer  @relation(fields: [careerId], references: [id], onDelete: Cascade)
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  id          String       @id @default(uuid()) @db.Char(36)
+  careerId    String       @map("career_id") @db.Char(36)
+  url         String       @db.VarChar(500)
+  description String?      @db.Text
+  career      ArtistCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
 
   @@index([careerId])
   @@map("artist_career_image")
@@ -925,13 +960,13 @@ model AthleteCareer {
 }
 
 model AthleteCareerImage {
-  id          String         @id @default(uuid()) @db.Char(36)
-  careerId    String         @map("career_id") @db.Char(36)
-  url         String         @db.VarChar(500)
-  description String?        @db.Text
-  career      AthleteCareer  @relation(fields: [careerId], references: [id], onDelete: Cascade)
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
+  id          String        @id @default(uuid()) @db.Char(36)
+  careerId    String        @map("career_id") @db.Char(36)
+  url         String        @db.VarChar(500)
+  description String?       @db.Text
+  career      AthleteCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
   @@index([careerId])
   @@map("athlete_career_image")
@@ -1044,13 +1079,13 @@ model MedicalCareer {
 }
 
 model MedicalCareerImage {
-  id          String         @id @default(uuid()) @db.Char(36)
-  careerId    String         @map("career_id") @db.Char(36)
-  url         String         @db.VarChar(500)
-  description String?        @db.Text
-  career      MedicalCareer  @relation(fields: [careerId], references: [id], onDelete: Cascade)
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
+  id          String        @id @default(uuid()) @db.Char(36)
+  careerId    String        @map("career_id") @db.Char(36)
+  url         String        @db.VarChar(500)
+  description String?       @db.Text
+  career      MedicalCareer @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
   @@index([careerId])
   @@map("medical_career_image")
@@ -1060,30 +1095,30 @@ model MedicalCareerImage {
 // PersonAward (수상/훈장)
 // ========================
 model PersonAward {
-  id              String            @id @default(uuid()) @db.Char(36)
-  personId        String            @map("person_id") @db.Char(36)
-  awardName       String            @map("award_name") @db.VarChar(200) // 노벨상, 올림픽 금메달 등
-  category        String?           @db.VarChar(100) // 물리학상, 100m 달리기 등
-  awardingBody    String?           @map("awarding_body") @db.VarChar(200) // 수여 기관
-  awardDate       DateTime?         @map("award_date")
-  description     String?           @db.Text
-  person          Person            @relation(fields: [personId], references: [id], onDelete: Cascade)
-  images          PersonAwardImage[]
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  id           String             @id @default(uuid()) @db.Char(36)
+  personId     String             @map("person_id") @db.Char(36)
+  awardName    String             @map("award_name") @db.VarChar(200) // 노벨상, 올림픽 금메달 등
+  category     String?            @db.VarChar(100) // 물리학상, 100m 달리기 등
+  awardingBody String?            @map("awarding_body") @db.VarChar(200) // 수여 기관
+  awardDate    DateTime?          @map("award_date")
+  description  String?            @db.Text
+  person       Person             @relation(fields: [personId], references: [id], onDelete: Cascade)
+  images       PersonAwardImage[]
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
 
   @@index([personId])
   @@map("person_award")
 }
 
 model PersonAwardImage {
-  id          String       @id @default(uuid()) @db.Char(36)
-  awardId     String       @map("award_id") @db.Char(36)
-  url         String       @db.VarChar(500)
-  description String?      @db.Text
-  award       PersonAward  @relation(fields: [awardId], references: [id], onDelete: Cascade)
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+  id          String      @id @default(uuid()) @db.Char(36)
+  awardId     String      @map("award_id") @db.Char(36)
+  url         String      @db.VarChar(500)
+  description String?     @db.Text
+  award       PersonAward @relation(fields: [awardId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
 
   @@index([awardId])
   @@map("person_award_image")

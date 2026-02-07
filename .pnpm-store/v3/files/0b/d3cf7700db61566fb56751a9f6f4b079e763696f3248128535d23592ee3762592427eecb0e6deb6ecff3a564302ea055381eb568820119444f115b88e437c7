@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.headers_to_object = headers_to_object;
+/** @internal */
+function headers_to_object(headers) {
+    const output = {};
+    for (const [key, value] of Object.entries(headers))
+        output[key] = value instanceof Array ? value[0] : value || "";
+    return output;
+}
+//# sourceMappingURL=headers_to_object.js.map

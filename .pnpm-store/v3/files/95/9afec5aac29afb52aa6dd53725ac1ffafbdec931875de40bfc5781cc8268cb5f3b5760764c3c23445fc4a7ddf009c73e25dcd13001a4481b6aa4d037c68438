@@ -1,0 +1,14 @@
+import { INestiaProject } from "../structures/INestiaProject";
+import { IReflectController } from "../structures/IReflectController";
+import { IReflectHttpOperation } from "../structures/IReflectHttpOperation";
+import { IOperationMetadata } from "../transformers/IOperationMetadata";
+export declare namespace ReflectHttpOperationAnalyzer {
+    interface IProps {
+        project: Omit<INestiaProject, "config">;
+        controller: IReflectController;
+        function: Function;
+        name: string;
+        metadata: IOperationMetadata;
+    }
+    const analyze: (props: IProps) => IReflectHttpOperation | null;
+}

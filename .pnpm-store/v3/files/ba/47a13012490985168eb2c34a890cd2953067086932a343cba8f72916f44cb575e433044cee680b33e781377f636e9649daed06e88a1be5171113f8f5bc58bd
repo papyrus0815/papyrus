@@ -1,0 +1,6 @@
+import { INestApplication } from "@nestjs/common";
+import { OpenApi, OpenApiV3, SwaggerV2 } from "@samchon/openapi";
+import { INestiaConfig } from "./INestiaConfig";
+export declare namespace NestiaSwaggerComposer {
+    const document: (app: INestApplication, config: Omit<INestiaConfig.ISwaggerConfig, "output">) => Promise<OpenApi.IDocument | OpenApiV3.IDocument | SwaggerV2.IDocument>;
+}

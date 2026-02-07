@@ -2,15 +2,18 @@
  * Event Filters Feature - Filter Logic Hook
  * FSD: features/event-filters/model
  */
-
 import { useMemo, useState } from 'react'
 
-import { FILTER_ALL, type SortOption, SORT_OPTIONS } from '@/features/event-list/lib'
 import type { CenturyFilter, FilterChip } from '@/entities/event/model'
+import {
+  FILTER_ALL,
+  SORT_OPTIONS,
+  type SortOption,
+} from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
-import { MOCK_POSITION_TYPES } from '../../../pages/events/list/mock-government-positions'
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
+import { MOCK_POSITION_TYPES } from '../../../pages/events/list/mock-government-positions'
 import { getCenturyFromDate } from '../../../pages/events/utils/events.utils'
 
 export const useEventFilters = (
@@ -22,7 +25,7 @@ export const useEventFilters = (
     typeof FILTER_ALL | string
   >(FILTER_ALL)
   const [keyword, setKeyword] = useState('')
-  const [sortBy, setSortBy] = useState<SortOption>(SORT_OPTIONS.IMPACT)
+  const [sortBy, setSortBy] = useState<SortOption>(SORT_OPTIONS.RECENT)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [selectedCentury, setSelectedCentury] =
     useState<CenturyFilter>(FILTER_ALL)
@@ -84,7 +87,12 @@ export const useEventFilters = (
         })()
         const countryOk =
           selectedCountry === FILTER_ALL ||
-          event.countries.some((country) => country.name === selectedCountry)
+          (event as any).relatedCountries?.some(
+            (country: any) => country.id === selectedCountry,
+          ) ||
+          (event as any).relatedHistoricalCountries?.some(
+            (country: any) => country.id === selectedCountry,
+          )
 
         return categoryOk && keywordOk && centuryOk && countryOk
       })
@@ -98,9 +106,10 @@ export const useEventFilters = (
 
   // ===== 이벤트 정렬 =====
   const sortedEvents = useMemo(() => {
+    console.log('🔄 정렬 실행:', { sortBy, sortDirection })
     const eventsCopy = [...filteredEvents]
 
-    return eventsCopy.sort((eventA, eventB) => {
+    const sorted = eventsCopy.sort((eventA, eventB) => {
       let comparison = 0
 
       switch (sortBy) {
@@ -113,15 +122,21 @@ export const useEventFilters = (
           comparison =
             eventA.stats.durationInYears - eventB.stats.durationInYears
           break
-        case 'impact':
         default:
           comparison =
-            eventA.stats.casualties.total - eventB.stats.casualties.total
+            new Date(eventA.startDate).getTime() -
+            new Date(eventB.startDate).getTime()
           break
       }
 
       return sortDirection === 'asc' ? comparison : -comparison
     })
+
+    console.log(
+      '✅ 정렬 완료:',
+      sorted.slice(0, 3).map((e) => ({ title: e.title, date: e.startDate })),
+    )
+    return sorted
   }, [filteredEvents, sortBy, sortDirection])
 
   // ===== 필터 칩 생성 =====
@@ -136,7 +151,23 @@ export const useEventFilters = (
     },
     selectedCountry !== FILTER_ALL && {
       key: 'country',
-      label: `국가 · ${selectedCountry}`,
+      label: `국가 · ${(() => {
+        // events에서 해당 국가 정보 찾기
+        for (const event of events) {
+          const country = (event as any).relatedCountries?.find(
+            (c: any) => c.id === selectedCountry,
+          )
+          if (country) return country.name
+
+          const historicalCountry = (
+            event as any
+          ).relatedHistoricalCountries?.find(
+            (c: any) => c.id === selectedCountry,
+          )
+          if (historicalCountry) return historicalCountry.name
+        }
+        return '알 수 없음'
+      })()}`,
       onClear: () => setSelectedCountry(FILTER_ALL),
     },
     selectedPositionType !== FILTER_ALL && {
@@ -160,7 +191,8 @@ export const useEventFilters = (
   const handleResetFilters = () => {
     setSelectedCategory(FILTER_ALL)
     setKeyword('')
-    setSortBy('impact')
+    setSortBy('recent')
+    setSortDirection('desc')
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
     setSelectedPositionType(FILTER_ALL)
@@ -199,4 +231,3 @@ export const useEventFilters = (
     handleResetFilters,
   }
 }
-

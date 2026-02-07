@@ -1,0 +1,6 @@
+import ts from "typescript";
+import { INestiaConfig } from "../../INestiaConfig";
+export declare namespace NestiaConfigLoader {
+    const compilerOptions: (project: string) => Promise<ts.ParsedCommandLine>;
+    const configurations: (file: string, compilerOptions: Record<string, any>) => Promise<INestiaConfig[]>;
+}

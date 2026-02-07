@@ -8,13 +8,7 @@ export const FilterColumn = styled.aside`
   display: flex;
   flex-direction: column;
   gap: 14px;
-  position: sticky;
-  top: calc(var(--header-height) + 4px);
   align-self: flex-start;
-  max-height: calc(100vh - var(--header-height) - 28px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
 
   &::-webkit-scrollbar {
     width: 5px;
@@ -41,66 +35,61 @@ export const FilterColumn = styled.aside`
 `
 
 export const FilterBlock = styled.div`
-  background: linear-gradient(
-    135deg,
-    #ffffff 0%,
-    rgba(249, 250, 251, 0.8) 100%
-  );
-  border: 1px solid rgba(99, 102, 241, 0.12);
-  border-radius: 16px;
-  padding: 16px 18px;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+  background: #ffffff;
+  border: 1.5px solid rgba(20, 19, 34, 0.08);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   transition: all 0.2s ease;
 
   &:hover {
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.18);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 `
 
 export const FilterBlockLabel = styled.h4`
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: #1e293b;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  letter-spacing: 0.3px;
 
   &::before {
     content: '';
-    width: 3px;
-    height: 14px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border-radius: 2px;
+    width: 2px;
+    height: 12px;
+    background: #64748b;
+    border-radius: 1px;
   }
 `
 
 export const FilterSearchInput = styled.input`
-  border: 1.5px solid rgba(99, 102, 241, 0.15);
-  border-radius: 12px;
-  padding: 11px 14px 11px 40px;
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  padding: 10px 14px 10px 38px;
   font-size: 13px;
-  background: #ffffff
-    url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="%236366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-search"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
-    no-repeat 14px 50%;
-  background-size: 16px;
+  background: #f8fafc
+    url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
+    no-repeat 12px 50%;
+  background-size: 15px;
   color: #0f172a;
   transition: all 0.2s ease;
   width: 100%;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
 
   &::placeholder {
     color: #94a3b8;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
-    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.08);
+    background-color: #ffffff;
+    border-color: rgba(99, 102, 241, 0.2);
   }
 
   &:focus {
@@ -115,13 +104,13 @@ export const FilterSearchInput = styled.input`
 `
 
 export const FilterTriggerButton = styled.button`
-  border: 1.5px solid rgba(99, 102, 241, 0.15);
-  border-radius: 12px;
-  padding: 11px 14px;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  color: #1e293b;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   width: 100%;
@@ -129,10 +118,9 @@ export const FilterTriggerButton = styled.button`
   align-items: center;
   justify-content: space-between;
   text-align: left;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
 
   svg {
-    color: #6366f1;
+    color: #64748b;
     flex-shrink: 0;
     transition: transform 0.2s ease;
   }
@@ -192,11 +180,11 @@ export const FilterResetButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
   border-radius: 10px;
-  padding: 10px 14px;
-  background: rgba(99, 102, 241, 0.08);
-  color: #6366f1;
+  padding: 9px 14px;
+  background: #f8fafc;
+  color: #64748b;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -204,9 +192,9 @@ export const FilterResetButton = styled.button`
   width: 100%;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.12);
+    background: #ffffff;
+    border-color: rgba(99, 102, 241, 0.2);
+    color: #6366f1;
   }
 
   &:focus-visible {
@@ -271,13 +259,11 @@ export const CenturyList = styled.div`
 export const CenturyButton = styled.button<{ $active: boolean }>`
   border: 1.5px solid
     ${({ $active }) =>
-      $active ? 'rgba(99, 102, 241, 0.5)' : 'rgba(99, 102, 241, 0.12)'};
-  border-radius: 12px;
+      $active ? 'rgba(99, 102, 241, 0.3)' : 'rgba(203, 213, 225, 0.6)'};
+  border-radius: 10px;
   padding: 12px 14px;
   background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
-      : '#ffffff'};
+    $active ? 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)' : '#f8fafc'};
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -285,9 +271,7 @@ export const CenturyButton = styled.button<{ $active: boolean }>`
   flex-direction: column;
   gap: 6px;
   box-shadow: ${({ $active }) =>
-    $active
-      ? '0 4px 12px rgba(99, 102, 241, 0.2)'
-      : '0 1px 2px rgba(99, 102, 241, 0.04)'};
+    $active ? '0 2px 8px rgba(99, 102, 241, 0.12)' : 'none'};
   position: relative;
   overflow: hidden;
 
@@ -464,31 +448,21 @@ export const FilterToggleLabel = styled.span`
 
 export const Switch = styled.button<{ $active?: boolean }>`
   position: relative;
-  width: 44px;
-  height: 24px;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'rgba(203, 213, 225, 0.5)'};
+  width: 42px;
+  height: 22px;
+  background: ${({ $active }) => ($active ? '#6366f1' : '#cbd5e1')};
   border: none;
-  border-radius: 12px;
+  border-radius: 11px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   padding: 0;
-  box-shadow: ${({ $active }) =>
-    $active
-      ? '0 2px 6px rgba(99, 102, 241, 0.3)'
-      : '0 1px 2px rgba(0, 0, 0, 0.1)'};
 
   &:hover {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #4f46e5, #7c3aed)'
-        : 'rgba(203, 213, 225, 0.7)'};
+    background: ${({ $active }) => ($active ? '#4f46e5' : '#94a3b8')};
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
 `
 

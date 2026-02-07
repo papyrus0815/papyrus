@@ -1,0 +1,4 @@
+import { Metadata } from "typia/lib/schemas/metadata/Metadata";
+export declare namespace TextPlainValidator {
+    const validate: (metadata: Metadata) => string[];
+}

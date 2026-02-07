@@ -1,0 +1,130 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkOperationTransformer = void 0;
+const path_1 = __importDefault(require("path"));
+const tstl_1 = require("tstl");
+const typescript_1 = __importDefault(require("typescript"));
+const LiteralFactory_1 = require("typia/lib/factories/LiteralFactory");
+const MetadataCollection_1 = require("typia/lib/factories/MetadataCollection");
+const TypeFactory_1 = require("typia/lib/factories/TypeFactory");
+const ImportAnalyzer_1 = require("../analyses/ImportAnalyzer");
+const SdkOperationProgrammer_1 = require("./SdkOperationProgrammer");
+var SdkOperationTransformer;
+(function (SdkOperationTransformer) {
+    SdkOperationTransformer.iterateFile = (checker) => (api) => {
+        const context = {
+            checker,
+            transformer: api,
+            collection: collection.get(),
+        };
+        return (file) => {
+            if (file.isDeclarationFile === true)
+                return file;
+            const visitor = {
+                done: false,
+                visited: new tstl_1.HashSet(),
+            };
+            file = typescript_1.default.visitEachChild(file, (node) => iterateNode({
+                context,
+                imports: new tstl_1.Singleton(() => ImportAnalyzer_1.ImportAnalyzer.analyze(file)),
+                visitor,
+                node,
+            }), api);
+            if (visitor.done === false)
+                return file;
+            return typescript_1.default.factory.updateSourceFile(file, [
+                typescript_1.default.factory.createImportDeclaration(undefined, typescript_1.default.factory.createImportClause(false, undefined, typescript_1.default.factory.createNamespaceImport(typescript_1.default.factory.createIdentifier("__OperationMetadata"))), typescript_1.default.factory.createStringLiteral("@nestia/sdk/lib/decorators/OperationMetadata"), undefined),
+                ...file.statements,
+            ]);
+        };
+    };
+    const iterateNode = (props) => typescript_1.default.visitEachChild(transformNode(props), (child) => iterateNode(Object.assign(Object.assign({}, props), { node: child })), props.context.transformer);
+    const transformNode = (props) => {
+        return typescript_1.default.isClassDeclaration(props.node)
+            ? transformClass(Object.assign(Object.assign({}, props), { node: props.node }))
+            : props.node;
+    };
+    const transformClass = (props) => {
+        // TO AVOID COMMENT COMPILATION BUG
+        const symbolDict = new Map();
+        const classType = props.context.checker.getTypeAtLocation(props.node);
+        for (const symbol of classType.getProperties()) {
+            const declaration = (symbol.declarations ||
+                [])[0];
+            if (!declaration || !typescript_1.default.isMethodDeclaration(declaration))
+                continue;
+            const identifier = declaration.name;
+            if (!typescript_1.default.isIdentifier(identifier))
+                continue;
+            symbolDict.set(identifier.escapedText.toString(), symbol);
+        }
+        return typescript_1.default.factory.updateClassDeclaration(props.node, props.node.modifiers, props.node.name, props.node.typeParameters, props.node.heritageClauses, props.node.members.map((m) => typescript_1.default.isMethodDeclaration(m)
+            ? transformMethod(Object.assign(Object.assign({}, props), { class: props.node, node: m, symbol: symbolDict.get(m.name.getText()) }))
+            : m));
+    };
+    const transformMethod = (props) => {
+        var _a, _b, _c;
+        var _d;
+        const decorators = typescript_1.default.getDecorators
+            ? typescript_1.default.getDecorators(props.node)
+            : props.node.decorators;
+        if (!(decorators === null || decorators === void 0 ? void 0 : decorators.length))
+            return props.node;
+        const key = new MethodKey((_b = (_a = props.class.name) === null || _a === void 0 ? void 0 : _a.getText()) !== null && _b !== void 0 ? _b : "", props.node.name.getText());
+        (_d = props.visitor).done || (_d.done = true);
+        if (props.visitor.visited.has(key))
+            return props.node;
+        else
+            props.visitor.visited.insert(key);
+        const metadata = SdkOperationProgrammer_1.SdkOperationProgrammer.write(Object.assign(Object.assign({}, props), { exceptions: getExceptionTypes({
+                checker: props.context.checker,
+                decorators,
+            }) }));
+        return typescript_1.default.factory.updateMethodDeclaration(props.node, [
+            ...((_c = props.node.modifiers) !== null && _c !== void 0 ? _c : []),
+            typescript_1.default.factory.createDecorator(typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier("__OperationMetadata.OperationMetadata"), undefined, [
+                typescript_1.default.factory.createAsExpression(LiteralFactory_1.LiteralFactory.write(metadata), TypeFactory_1.TypeFactory.keyword("any")),
+            ])),
+        ], props.node.asteriskToken, props.node.name, props.node.questionToken, props.node.typeParameters, props.node.parameters, props.node.type, props.node.body);
+    };
+    const getExceptionTypes = (props) => props.decorators
+        .map((deco) => {
+        var _a, _b, _c;
+        if (false === typescript_1.default.isCallExpression(deco.expression))
+            return null;
+        const signature = props.checker.getResolvedSignature(deco.expression);
+        if (signature === undefined)
+            return null;
+        else if (!signature.declaration)
+            return null;
+        const location = path_1.default.resolve((_b = (_a = signature.declaration.getSourceFile()) === null || _a === void 0 ? void 0 : _a.fileName) !== null && _b !== void 0 ? _b : "");
+        if (location.includes(TYPED_EXCEPTION_LIB_PATH) === false &&
+            location.includes(TYPED_EXCEPTION_MONO_PATH) === false)
+            return null;
+        else if (((_c = deco.expression.typeArguments) === null || _c === void 0 ? void 0 : _c.length) !== 1)
+            return null;
+        return deco.expression.typeArguments[0];
+    })
+        .filter((t) => t !== null);
+})(SdkOperationTransformer || (exports.SdkOperationTransformer = SdkOperationTransformer = {}));
+class MethodKey {
+    constructor(className, methodName) {
+        this.className = className;
+        this.methodName = methodName;
+    }
+    equals(o) {
+        return this.className === o.className && this.methodName === o.methodName;
+    }
+    hashCode() {
+        return (0, tstl_1.hash)(this.className, this.methodName);
+    }
+}
+const TYPED_EXCEPTION_LIB_PATH = path_1.default.join("@nestia", "core", "lib", "decorators", `TypedException.d.ts`);
+const TYPED_EXCEPTION_MONO_PATH = path_1.default.join("packages", "core", "lib", "decorators", `TypedException.d.ts`);
+const collection = new tstl_1.Singleton(() => new MetadataCollection_1.MetadataCollection({
+    replace: MetadataCollection_1.MetadataCollection.replace,
+}));
+//# sourceMappingURL=SdkOperationTransformer.js.map

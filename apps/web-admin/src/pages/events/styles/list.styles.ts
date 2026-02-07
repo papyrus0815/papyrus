@@ -10,10 +10,12 @@ import { CATEGORY_BADGE_COLORS } from './theme'
 export const CompactList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: calc(100vh - var(--header-height) - 270px);
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 4px 2px 4px 0;
+  overflow-x: hidden;
+  padding: 4px 16px 120px 0;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -38,7 +40,7 @@ export const CompactList = styled.div`
   }
 `
 
-export const CompactListItem = styled.button<{
+export const CompactListItem = styled.div<{
   $active: boolean
   $depth: number
 }>`
@@ -52,14 +54,13 @@ export const CompactListItem = styled.button<{
   border-radius: 14px;
   padding: 0;
   margin-left: ${({ $depth }) => $depth * 24}px;
-  min-height: ${({ $depth }) => Math.max(70, 90 - $depth * 10)}px;
+  width: 100%;
   background: ${({ $active, $depth }) =>
     $active
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))'
       : $depth > 0
         ? 'rgba(248, 250, 252, 0.8)'
         : '#ffffff'};
-  text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: ${({ $active, $depth }) =>
@@ -69,7 +70,6 @@ export const CompactListItem = styled.button<{
         ? '0 1px 2px rgba(99, 102, 241, 0.04)'
         : '0 1px 3px rgba(0, 0, 0, 0.04)'};
   position: relative;
-  overflow: hidden;
   display: flex;
 
   ${({ $depth }) =>
@@ -190,7 +190,7 @@ export const CompactListContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 14px;
+  padding: 12px 14px 12px 14px;
   min-width: 0;
 `
 
@@ -199,6 +199,7 @@ export const CompactListHeader = styled.div`
   align-items: flex-start;
   gap: 8px;
   width: 100%;
+  min-width: 0;
 `
 
 export const ExpandButton = styled.button`
@@ -253,9 +254,11 @@ export const CompactListTitle = styled.h4`
   color: #0f172a;
   line-height: 1.4;
   flex: 1;
-  display: flex;
+  min-width: 0;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 
   @media (max-width: 768px) {
     font-size: 14px;
@@ -269,7 +272,6 @@ export const CompactListMeta = styled.div<{ $depth: number }>`
   gap: 6px;
   font-size: 11px;
   color: #64748b;
-  padding-left: 28px;
 
   span {
     line-height: 1;
@@ -280,16 +282,110 @@ export const CompactListMeta = styled.div<{ $depth: number }>`
   }
 `
 
+export const TimelineDateWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+`
+
+export const TimelineDateRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+
+  &::before {
+    content: '━━━';
+    color: #cbd5e1;
+    letter-spacing: -2px;
+  }
+`
+
+export const TimelineDuration = styled.div`
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+  font-weight: 600;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  padding: 2px 8px;
+  border-radius: 10px;
+  display: inline-block;
+`
+
+export const LoadingSpinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e0e7ff;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`
+
+export const YearDivider = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 24px 0 16px 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover span {
+    background: #f1f5f9;
+    border-color: rgba(99, 102, 241, 0.25);
+  }
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(203, 213, 225, 0.5);
+  }
+
+  span {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6366f1;
+    background: #fafafa;
+    padding: 5px 14px;
+    border-radius: 12px;
+    border: 1.5px solid rgba(203, 213, 225, 0.5);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+
+    svg {
+      transition: transform 0.2s ease;
+    }
+  }
+`
+
 export const CompactListSummary = styled.p<{ $depth: number }>`
   margin: 0;
-  padding-left: 28px;
   font-size: 12px;
   color: #475569;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: break-word;
 
   @media (max-width: 768px) {
     font-size: 13px;
@@ -541,11 +637,12 @@ export const SummaryIconButton = styled.button`
 
 // Catalog Section (Main Container)
 export const CatalogSection = styled.section`
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 0;
+  height: 100%;
+  max-height: calc(100vh - var(--header-height) - 60px);
+  overflow: hidden;
 `
 
 // Result Controls (Toolbar)
@@ -554,14 +651,10 @@ export const ResultControls = styled.div`
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  background: linear-gradient(
-    135deg,
-    #ffffff 0%,
-    rgba(249, 250, 251, 0.8) 100%
-  );
-  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: #ffffff;
+  border: 1.5px solid rgba(20, 19, 34, 0.08);
   border-radius: 14px;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   transition: all 0.2s ease;
 
   &:hover {

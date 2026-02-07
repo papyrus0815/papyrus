@@ -53,6 +53,7 @@ import { uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
 import type { MilitaryEvent } from '@/shared/types/military-event.types'
+import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import {
   BasicInfoSection,
@@ -165,7 +166,6 @@ export const EventCreatePageRefactored: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<FormStep>(FORM_STEPS.BASIC)
   const [isLoadingEvent, setIsLoadingEvent] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
-  const [countrySearchTerm, setCountrySearchTerm] = useState('')
 
   // 군사 카테고리 전용 필드
   const [militaryEvent, setMilitaryEvent] = useState<MilitaryEvent>({
@@ -319,6 +319,19 @@ export const EventCreatePageRefactored: React.FC = () => {
             '✅ 카테고리 로드:',
             event.categoryId,
             event.category?.name,
+          )
+        }
+
+        // 관련 국가 로드
+        if (event.relatedCountryIds) {
+          setRelatedCountryIds(event.relatedCountryIds)
+          console.log('✅ 관련 현대 국가 로드:', event.relatedCountryIds)
+        }
+        if (event.relatedHistoricalCountryIds) {
+          setRelatedHistoricalCountryIds(event.relatedHistoricalCountryIds)
+          console.log(
+            '✅ 관련 역사적 국가 로드:',
+            event.relatedHistoricalCountryIds,
           )
         }
 
@@ -498,6 +511,13 @@ export const EventCreatePageRefactored: React.FC = () => {
               setThumbnail={setThumbnail}
               setThumbnailFile={setThumbnailFile}
               dbCategories={dbCategories}
+              relatedCountryIds={relatedCountryIds}
+              setRelatedCountryIds={setRelatedCountryIds}
+              relatedHistoricalCountryIds={relatedHistoricalCountryIds}
+              setRelatedHistoricalCountryIds={setRelatedHistoricalCountryIds}
+              availableCountries={availableCountries}
+              availableHistoricalCountries={availableHistoricalCountries}
+              onOpenCountryModal={() => setShowCountryModal(true)}
               conflictType={militaryDetails.type}
               setConflictType={(type) =>
                 setMilitaryDetails({ ...militaryDetails, type })
@@ -1349,125 +1369,41 @@ export const EventCreatePageRefactored: React.FC = () => {
         </S.FormArea>
       </S.ContentWrapper>
 
-      {/* 국가 선택 모달 */}
-      {showCountryModal &&
-        createPortal(
-          <>
-            <S.ModalOverlay
-              onClick={() => setShowCountryModal(false)}
-              as={motion.div}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            />
-            <S.Modal
-              as={motion.div}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-            >
-              <S.ModalHeader>
-                <h3>국가 선택</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowCountryModal(false)}
-                >
-                  <FiX size={20} />
-                </button>
-              </S.ModalHeader>
-              <S.ModalContent>
-                <S.Input
-                  type="text"
-                  placeholder="국가명 검색..."
-                  value={countrySearchTerm}
-                  onChange={(e) => setCountrySearchTerm(e.target.value)}
-                  autoFocus
-                />
-                <S.CountryModalSection>
-                  <S.CountryModalTitle>현대 국가</S.CountryModalTitle>
-                  <S.CountryModalList>
-                    {availableCountries
-                      .filter((country) =>
-                        country.name
-                          .toLowerCase()
-                          .includes(countrySearchTerm.toLowerCase()),
-                      )
-                      .map((country) => {
-                        const isSelected = relatedCountryIds.includes(
-                          country.id,
-                        )
-                        return (
-                          <S.CountryModalItem
-                            key={country.id}
-                            $selected={isSelected}
-                            onClick={() => {
-                              playClickSound()
-                              if (isSelected) {
-                                setRelatedCountryIds((prev) =>
-                                  prev.filter((id) => id !== country.id),
-                                )
-                              } else {
-                                setRelatedCountryIds([
-                                  ...relatedCountryIds,
-                                  country.id,
-                                ])
-                              }
-                            }}
-                          >
-                            <FiGlobe size={16} />
-                            <span>{country.name}</span>
-                            {isSelected && (
-                              <FiCheck size={16} color="#22c55e" />
-                            )}
-                          </S.CountryModalItem>
-                        )
-                      })}
-                  </S.CountryModalList>
-                </S.CountryModalSection>
-                <S.CountryModalSection>
-                  <S.CountryModalTitle>역사적 국가</S.CountryModalTitle>
-                  <S.CountryModalList>
-                    {availableHistoricalCountries
-                      .filter((country) =>
-                        country.name
-                          .toLowerCase()
-                          .includes(countrySearchTerm.toLowerCase()),
-                      )
-                      .map((country) => {
-                        const isSelected = relatedHistoricalCountryIds.includes(
-                          country.id,
-                        )
-                        return (
-                          <S.CountryModalItem
-                            key={country.id}
-                            $selected={isSelected}
-                            onClick={() => {
-                              playClickSound()
-                              if (isSelected) {
-                                setRelatedHistoricalCountryIds((prev) =>
-                                  prev.filter((id) => id !== country.id),
-                                )
-                              } else {
-                                setRelatedHistoricalCountryIds([
-                                  ...relatedHistoricalCountryIds,
-                                  country.id,
-                                ])
-                              }
-                            }}
-                          >
-                            <FiGlobe size={16} />
-                            <span>{country.name}</span>
-                            {isSelected && (
-                              <FiCheck size={16} color="#22c55e" />
-                            )}
-                          </S.CountryModalItem>
-                        )
-                      })}
-                  </S.CountryModalList>
-                </S.CountryModalSection>
-              </S.ModalContent>
-            </S.Modal>
-          </>,
-          document.body,
-        )}
+      {/* 국가 선택 모달 - 인물 페이지와 동일한 스타일 */}
+      <AdvancedCountrySelectModal
+        isOpen={showCountryModal}
+        onClose={() => setShowCountryModal(false)}
+        onSelect={(country) => {
+          if (country.isHistorical) {
+            if (relatedHistoricalCountryIds.includes(country.id)) {
+              setRelatedHistoricalCountryIds(
+                relatedHistoricalCountryIds.filter((id) => id !== country.id),
+              )
+            } else {
+              setRelatedHistoricalCountryIds([
+                ...relatedHistoricalCountryIds,
+                country.id,
+              ])
+            }
+          } else {
+            if (relatedCountryIds.includes(country.id)) {
+              setRelatedCountryIds(
+                relatedCountryIds.filter((id) => id !== country.id),
+              )
+            } else {
+              setRelatedCountryIds([...relatedCountryIds, country.id])
+            }
+          }
+        }}
+        modernCountries={availableCountries}
+        historicalCountries={availableHistoricalCountries}
+        title="관련 국가 선택"
+        selectedCountryIds={[
+          ...relatedCountryIds,
+          ...relatedHistoricalCountryIds,
+        ]}
+        multiSelect={true}
+      />
     </S.PageWrapper>
   )
 }

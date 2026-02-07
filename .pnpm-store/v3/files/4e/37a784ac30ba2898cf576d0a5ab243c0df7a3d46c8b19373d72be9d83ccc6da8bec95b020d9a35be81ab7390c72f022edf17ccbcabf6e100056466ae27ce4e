@@ -1,0 +1,5 @@
+export declare namespace StringUtil {
+    const capitalize: (text: string) => string;
+    const escapeDuplicate: (keep: string[]) => (change: string) => string;
+    const isImplicit: (str: string) => boolean;
+}

@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ArrayUtil = void 0;
+var ArrayUtil;
+(function (ArrayUtil) {
+    function has(array, ...items) {
+        return items.every((elem) => array.find((org) => org === elem) !== undefined);
+    }
+    ArrayUtil.has = has;
+})(ArrayUtil || (exports.ArrayUtil = ArrayUtil = {}));
+//# sourceMappingURL=ArrayUtil.js.map

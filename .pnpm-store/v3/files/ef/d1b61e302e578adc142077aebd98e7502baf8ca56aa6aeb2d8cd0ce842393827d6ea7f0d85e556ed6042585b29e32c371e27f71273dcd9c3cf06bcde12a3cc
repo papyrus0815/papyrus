@@ -1,0 +1,72 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkTypeTagProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const LiteralFactory_1 = require("typia/lib/factories/LiteralFactory");
+var SdkTypeTagProgrammer;
+(function (SdkTypeTagProgrammer) {
+    SdkTypeTagProgrammer.write = (importer, from, tag) => {
+        var _a;
+        const name = tag.name.split("<")[0];
+        if (((_a = PREDEFINED[from]) === null || _a === void 0 ? void 0 : _a.has(name)) === true)
+            return typescript_1.default.factory.createTypeReferenceNode(importer.external({
+                declaration: true,
+                file: `typia/lib/tags/${name}`,
+                type: "element",
+                name: name,
+            }), [
+                typescript_1.default.factory.createLiteralTypeNode(LiteralFactory_1.LiteralFactory.write(tag.value)),
+            ]);
+        return typescript_1.default.factory.createTypeReferenceNode(importer.external({
+            declaration: true,
+            file: `typia/lib/tags/TagBase`,
+            type: "element",
+            name: "TagBase",
+        }), [
+            typescript_1.default.factory.createLiteralTypeNode(LiteralFactory_1.LiteralFactory.write({
+                target: from,
+                kind: tag.kind,
+                value: tag.value,
+                validate: tag.validate,
+                exclusive: tag.exclusive,
+                schema: tag.schema,
+            })),
+        ]);
+    };
+})(SdkTypeTagProgrammer || (exports.SdkTypeTagProgrammer = SdkTypeTagProgrammer = {}));
+const COMMON_KINDS = ["Default", "Example", "Examples", "Sequence"];
+const PREDEFINED = {
+    object: new Set([...COMMON_KINDS]),
+    array: new Set([...COMMON_KINDS, "MinItems", "MaxItems", "UniqueItems"]),
+    boolean: new Set([...COMMON_KINDS]),
+    number: new Set([
+        ...COMMON_KINDS,
+        "Minimum",
+        "Maximum",
+        "ExclusiveMinimum",
+        "ExclusiveMaximum",
+        "MultipleOf",
+        "Type",
+    ]),
+    bigint: new Set([
+        ...COMMON_KINDS,
+        "Minimum",
+        "Maximum",
+        "ExclusiveMinimum",
+        "ExclusiveMaximum",
+        "MultipleOf",
+        "Type",
+    ]),
+    string: new Set([
+        ...COMMON_KINDS,
+        "ContentMediaType",
+        "Format",
+        "MaxLength",
+        "MinLength",
+        "Pattern",
+    ]),
+};
+//# sourceMappingURL=SdkTypeTagProgrammer.js.map

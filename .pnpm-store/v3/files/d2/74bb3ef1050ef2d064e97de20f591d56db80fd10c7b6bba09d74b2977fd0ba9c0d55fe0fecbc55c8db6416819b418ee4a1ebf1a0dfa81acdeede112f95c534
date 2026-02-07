@@ -1,0 +1,54 @@
+{
+  "name": "nestia",
+  "version": "10.0.1",
+  "description": "Nestia CLI tool",
+  "main": "bin/index.js",
+  "bin": {
+    "nestia": "bin/index.js"
+  },
+  "scripts": {
+    "build": "rimraf bin && tsc",
+    "package:latest": "npm run build && npm publish --access public --tag latest",
+    "package:next": "npm run build && npm publish --access public --tag next"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/samchon/nestia"
+  },
+  "keywords": [
+    "nestia",
+    "cli",
+    "sdk",
+    "swagger",
+    "generator",
+    "nestjs",
+    "typia"
+  ],
+  "author": "Jeongho Nam",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/samchon/nestia/issues"
+  },
+  "homepage": "https://nestia.io",
+  "dependencies": {
+    "commander": "^10.0.0",
+    "comment-json": "^4.2.3",
+    "inquirer": "^8.2.5",
+    "package-manager-detector": "^0.2.0"
+  },
+  "devDependencies": {
+    "@nestia/core": "^10.0.1",
+    "@nestia/sdk": "^10.0.1",
+    "@types/inquirer": "^9.0.3",
+    "@types/node": "^18.11.16",
+    "rimraf": "^6.0.1",
+    "typescript": "~5.9.3"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

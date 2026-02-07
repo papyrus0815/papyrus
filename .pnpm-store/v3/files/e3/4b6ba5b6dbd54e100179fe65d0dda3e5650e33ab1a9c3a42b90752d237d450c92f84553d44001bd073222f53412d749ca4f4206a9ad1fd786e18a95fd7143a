@@ -1,0 +1,11 @@
+import { INestiaProject } from "../structures/INestiaProject";
+import { INestiaSdkInput } from "../structures/INestiaSdkInput";
+import { IReflectController } from "../structures/IReflectController";
+export declare namespace ReflectControllerAnalyzer {
+    interface IProps {
+        project: Omit<INestiaProject, "config">;
+        controller: INestiaSdkInput.IController;
+        unique: WeakSet<Function>;
+    }
+    const analyze: (props: IProps) => IReflectController | null;
+}

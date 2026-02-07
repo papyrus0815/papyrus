@@ -1,0 +1,6 @@
+export declare namespace NestiaSdkCommand {
+    const sdk: () => Promise<void>;
+    const swagger: () => Promise<void>;
+    const e2e: () => Promise<void>;
+    const all: () => Promise<void>;
+}

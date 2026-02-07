@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import {
   FiActivity,
+  FiAlertCircle,
   FiArrowRight,
   FiBook,
   FiBriefcase,
@@ -10,11 +11,13 @@ import {
   FiCheck,
   FiChevronDown,
   FiChevronRight,
+  FiCopy,
   FiEdit2,
   FiFileText,
   FiFolder,
   FiGlobe,
   FiHeart,
+  FiInfo,
   FiLayers,
   FiMusic,
   FiPackage,
@@ -22,19 +25,16 @@ import {
   FiSave,
   FiSearch,
   FiShield,
-  FiTrendingUp,
   FiTrash2,
+  FiTrendingUp,
   FiUser,
   FiUsers,
   FiX,
-  FiCopy,
-  FiAlertCircle,
-  FiInfo,
 } from 'react-icons/fi'
-import { GiCrossedSwords } from 'react-icons/gi'
+import { GiCrossedSwords, GiCrown } from 'react-icons/gi'
 import { IoFemaleSharp, IoMaleSharp } from 'react-icons/io5'
 import { RiGovernmentLine } from 'react-icons/ri'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import {
@@ -60,8 +60,8 @@ import { getAllContinents } from '@/shared/api/continents'
 import { getAllCountries } from '@/shared/api/countries'
 import { dynastyApi } from '@/shared/api/dynasty'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
-import { getAllJobs } from '@/shared/api/jobs'
 import { jobCategoryApi } from '@/shared/api/job-category'
+import { getAllJobs } from '@/shared/api/jobs'
 import {
   type CreatePersonInput,
   type Era,
@@ -73,6 +73,18 @@ import { uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { StepNavigation } from '@/widgets/event-form/ui'
+
+import {
+  MonarchField,
+  MonarchFieldBadge,
+  MonarchFieldGroup,
+  MonarchFieldLabel,
+  MonarchHint,
+  MonarchIcon,
+  MonarchSection,
+  MonarchSectionHeader,
+  MonarchTitle,
+} from './person-create-styles'
 
 // 디자인 토큰
 const DESIGN_TOKENS = {
@@ -170,6 +182,9 @@ interface Career {
 
 interface FormData {
   // 기본 정보
+  fullName: string // 전체 이름 (간편 입력용)
+  nameInputMode: 'simple' | 'detailed' // 입력 모드
+  nameFormat: 'korean' | 'western' // 이름 형식
   name: string // 이름 (First Name)
   middleName: string // 중간 이름 (Middle Name)
   surname: string // 성 (Last Name/Family Name)
@@ -188,9 +203,14 @@ interface FormData {
   profileImageUrl: string
   profileImageUrls: string[]
 
+  // 왕/군주 관련 필드
+  regnalName: string // 왕호/재위명 (예: Louis, Henry, 선덕)
+  templeName: string // 묘호 (예: 세종, 태종, 고종)
+  posthumousName: string // 시호 (예: 세종장헌영문예무인성명효대왕)
+
   // 소속 정보
   birthCountryId: string // 출생 국가
-  countryTransfers: Array<{ 
+  countryTransfers: Array<{
     countryId: string
     year: string
     month?: string
@@ -210,7 +230,7 @@ interface FormData {
   isDeathDateUnknown: boolean
   isAlive: boolean // 생존 중 플래그 추가
   showLifespanOnEventList: boolean
-  
+
   // 임시 이적 정보 입력
   transferMonth?: string
   transferDay?: string
@@ -229,10 +249,16 @@ interface FormErrors {
 export default function PersonCreatePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { id } = useParams<{ id: string }>() // 수정 모드: ID가 있으면 수정
   const presetCountryId = searchParams.get('countryId')
   const playClick = useClickSound()
 
+  const isEditMode = !!id // 수정 모드 여부
+
   const [formData, setFormData] = useState<FormData>({
+    fullName: '', // 전체 이름 (간편 모드용)
+    nameInputMode: 'simple', // 기본은 간편 모드
+    nameFormat: 'korean', // 기본은 한국식
     name: '',
     middleName: '', // 중간 이름
     surname: '',
@@ -250,6 +276,11 @@ export default function PersonCreatePage() {
     biography: '',
     profileImageUrl: '',
     profileImageUrls: [],
+    // 왕/군주 필드
+    regnalName: '',
+    templeName: '',
+    posthumousName: '',
+    // 소속 정보
     birthCountryId: presetCountryId || '', // 출생 국가
     countryTransfers: [], // 이적 이력
     dynastyId: '',
@@ -285,7 +316,9 @@ export default function PersonCreatePage() {
   //   fetchOrganizations().then(setOrganizations)
   // }, [])
 
-  const [organizationType, setOrganizationType] = useState<'all' | Organization['type']>('all')
+  const [organizationType, setOrganizationType] = useState<
+    'all' | Organization['type']
+  >('all')
 
   // 경력 상태
   const [careers, setCareers] = useState<Career[]>([])
@@ -294,8 +327,11 @@ export default function PersonCreatePage() {
 
   // 모달 상태
   const [showCountryModal, setShowCountryModal] = useState(false)
-  const [countryModalContext, setCountryModalContext] = useState<'birth' | 'career'>('birth')
-  const [showCountryTransferModal, setShowCountryTransferModal] = useState(false)
+  const [countryModalContext, setCountryModalContext] = useState<
+    'birth' | 'career'
+  >('birth')
+  const [showCountryTransferModal, setShowCountryTransferModal] =
+    useState(false)
   const [showDynastyModal, setShowDynastyModal] = useState(false)
   const [showReligionModal, setShowReligionModal] = useState(false)
   const [showJobModal, setShowJobModal] = useState(false)
@@ -316,7 +352,8 @@ export default function PersonCreatePage() {
   const [jobSearchTerm, setJobSearchTerm] = useState('')
   const [organizationSearchTerm, setOrganizationSearchTerm] = useState('')
   const [selectedJobCategoryId, setSelectedJobCategoryId] = useState('all')
-  const [selectedJobParentCategoryId, setSelectedJobParentCategoryId] = useState('all')
+  const [selectedJobParentCategoryId, setSelectedJobParentCategoryId] =
+    useState('all')
   const [fatherSearchTerm, setFatherSearchTerm] = useState('')
   const [motherSearchTerm, setMotherSearchTerm] = useState('')
   const [countryType, setCountryType] = useState<'modern' | 'historical'>(
@@ -330,10 +367,14 @@ export default function PersonCreatePage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
-  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null)
-  const [draggedCareerImageIndex, setDraggedCareerImageIndex] = useState<number | null>(null)
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(
+    null,
+  )
+  const [draggedCareerImageIndex, setDraggedCareerImageIndex] = useState<
+    number | null
+  >(null)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  
+
   // 별명 입력 상태
   const [nicknameInput, setNicknameInput] = useState('')
 
@@ -351,7 +392,7 @@ export default function PersonCreatePage() {
       if (saved) {
         const parsed = JSON.parse(saved)
         const shouldRestore = window.confirm(
-          '작성 중이던 내용이 있습니다. 불러오시겠습니까?'
+          '작성 중이던 내용이 있습니다. 불러오시겠습니까?',
         )
         if (shouldRestore) {
           setFormData(parsed.formData)
@@ -373,7 +414,7 @@ export default function PersonCreatePage() {
         try {
           localStorage.setItem(
             STORAGE_KEY,
-            JSON.stringify({ formData, careers })
+            JSON.stringify({ formData, careers }),
           )
         } catch (error) {
           console.error('Failed to save draft:', error)
@@ -387,10 +428,7 @@ export default function PersonCreatePage() {
   // 수동 임시 저장
   const handleSaveDraft = () => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ formData, careers })
-      )
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, careers }))
       toast.success('임시 저장되었습니다.')
     } catch (error) {
       console.error('Failed to save draft:', error)
@@ -434,10 +472,6 @@ export default function PersonCreatePage() {
         personApi.getAll(),
       ])
 
-      console.log('Modern countries:', countriesData)
-      console.log('Historical countries:', historicalCountriesData)
-      console.log('Continents:', continentsData)
-
       setCountries(countriesData || [])
       setHistoricalCountries(historicalCountriesData || [])
       setDynasties(dynastiesData || [])
@@ -446,6 +480,61 @@ export default function PersonCreatePage() {
       setJobs(jobsData || [])
       setJobCategories(jobCategoriesData || [])
       setPersons(personsData || [])
+
+      // 수정 모드: 기존 인물 데이터 로드
+      if (isEditMode && id) {
+        try {
+          const personData = await personApi.getById(id)
+
+          // 폼 데이터 채우기
+          setFormData((prev) => ({
+            ...prev,
+            name: personData.name || '',
+            surname: personData.surname || '',
+            middleName: personData.middleName || '',
+            originalName: personData.originalName || '',
+            fullName:
+              personData.surname && personData.name
+                ? `${personData.surname}${personData.name}`
+                : personData.name || '',
+            gender: personData.gender || '',
+            // 생몰 정보
+            birthEra: (personData.birthEra || 'AD') as Era,
+            birthYear: personData.birthYear?.toString() || '',
+            birthMonth: personData.birthMonth?.toString() || '',
+            birthDay: personData.birthDay?.toString() || '',
+            deathEra: (personData.deathEra || 'AD') as Era,
+            deathYear: personData.deathYear?.toString() || '',
+            deathMonth: personData.deathMonth?.toString() || '',
+            deathDay: personData.deathDay?.toString() || '',
+            isBirthDateUnknown: !personData.birthYear,
+            isDeathDateUnknown: !personData.deathYear,
+            isAlive: !personData.deathYear,
+            biography: personData.biography || '',
+            profileImageUrl: personData.profileImageUrl || '',
+            profileImageUrls: personData.profileImageUrl
+              ? [personData.profileImageUrl]
+              : [],
+            // 왕/군주 필드
+            regnalName: personData.regnalName || '',
+            templeName: personData.templeName || '',
+            posthumousName: personData.posthumousName || '',
+            // 관계
+            birthCountryId: personData.countryId || '',
+            dynastyId: personData.dynastyId || '',
+            religionId: personData.religionId || '',
+            jobIds: personData.jobId ? [personData.jobId] : [],
+            fatherId: personData.fatherId || '',
+            motherId: personData.motherId || '',
+          }))
+
+          toast.success('데이터를 불러왔습니다')
+        } catch (error) {
+          console.error('Failed to load person:', error)
+          toast.error('인물 데이터를 불러오는데 실패했습니다')
+          navigate('/persons')
+        }
+      }
     } catch (error) {
       console.error('Failed to load entities:', error)
       toast.error('데이터를 불러오는데 실패했습니다.')
@@ -463,16 +552,21 @@ export default function PersonCreatePage() {
     // 생존 중인 경우 현재 나이 계산
     if (formData.isAlive) {
       const currentYear = new Date().getFullYear()
-      const birthMonth = formData.birthMonth ? parseInt(formData.birthMonth, 10) : 1
+      const birthMonth = formData.birthMonth
+        ? parseInt(formData.birthMonth, 10)
+        : 1
       const birthDay = formData.birthDay ? parseInt(formData.birthDay, 10) : 1
       const currentMonth = new Date().getMonth() + 1
       const currentDay = new Date().getDate()
 
       let age = currentYear - birthYear
-      
+
       // 생일이 아직 안 지났으면 -1
       if (formData.birthEra === 'AD' && birthMonth && birthDay) {
-        if (currentMonth < birthMonth || (currentMonth === birthMonth && currentDay < birthDay)) {
+        if (
+          currentMonth < birthMonth ||
+          (currentMonth === birthMonth && currentDay < birthDay)
+        ) {
           age -= 1
         }
       }
@@ -537,15 +631,18 @@ export default function PersonCreatePage() {
 
   const birthCountry = useMemo(() => {
     if (!formData.birthCountryId) return null
-    return countries.find((c) => c.id === formData.birthCountryId) ||
+    return (
+      countries.find((c) => c.id === formData.birthCountryId) ||
       historicalCountries.find((c) => c.id === formData.birthCountryId)
+    )
   }, [formData.birthCountryId, countries, historicalCountries])
 
   const transferCountries = useMemo(() => {
-    return formData.countryTransfers.map(transfer => ({
+    return formData.countryTransfers.map((transfer) => ({
       ...transfer,
-      country: countries.find((c) => c.id === transfer.countryId) ||
-        historicalCountries.find((c) => c.id === transfer.countryId)
+      country:
+        countries.find((c) => c.id === transfer.countryId) ||
+        historicalCountries.find((c) => c.id === transfer.countryId),
     }))
   }, [formData.countryTransfers, countries, historicalCountries])
 
@@ -663,15 +760,15 @@ export default function PersonCreatePage() {
   const getCategoryIcon = (categoryName: string) => {
     const iconMap: Record<string, any> = {
       '정치/행정': <RiGovernmentLine />,
-      '군사': <GiCrossedSwords />,
+      군사: <GiCrossedSwords />,
       '학문/교육': <FiBook />,
-      '종교': <FiHeart />,
+      종교: <FiHeart />,
       '예술/문화': <FiMusic />,
       '경제/산업': <FiTrendingUp />,
-      '법조': <FiShield />,
-      '의료': <FiActivity />,
+      법조: <FiShield />,
+      의료: <FiActivity />,
       '언론/출판': <FiFileText />,
-      '기타': <FiPackage />,
+      기타: <FiPackage />,
     }
     return iconMap[categoryName] || <FiFolder />
   }
@@ -685,7 +782,7 @@ export default function PersonCreatePage() {
   const childJobCategories = useMemo(() => {
     if (selectedJobParentCategoryId === 'all') return []
     return jobCategories.filter(
-      (cat: any) => cat.parentId === selectedJobParentCategoryId
+      (cat: any) => cat.parentId === selectedJobParentCategoryId,
     )
   }, [jobCategories, selectedJobParentCategoryId])
 
@@ -788,7 +885,9 @@ export default function PersonCreatePage() {
 
   const selectedJobCategory = useMemo(() => {
     if (selectedJobCategoryId === 'all') return null
-    return jobCategories.find((category) => category.id === selectedJobCategoryId)
+    return jobCategories.find(
+      (category) => category.id === selectedJobCategoryId,
+    )
   }, [jobCategories, selectedJobCategoryId])
 
   const orderedCareers = useMemo(() => {
@@ -991,11 +1090,11 @@ export default function PersonCreatePage() {
     setCareers((prev) =>
       prev.map((career) => {
         if (career.id !== careerId) return career
-        
+
         const newImages = [...career.images]
         const [movedImage] = newImages.splice(fromIndex, 1)
         newImages.splice(toIndex, 0, movedImage)
-        
+
         return { ...career, images: newImages }
       }),
     )
@@ -1012,9 +1111,7 @@ export default function PersonCreatePage() {
           ? {
               ...career,
               images: career.images.map((image, imageIndex) =>
-                imageIndex === index
-                  ? { ...image, description: value }
-                  : image,
+                imageIndex === index ? { ...image, description: value } : image,
               ),
             }
           : career,
@@ -1078,13 +1175,22 @@ export default function PersonCreatePage() {
       }
 
       // 월/일 비교 (같은 연도인 경우)
-      if (isValid && startYear === endYear && career.startMonth && career.endMonth) {
+      if (
+        isValid &&
+        startYear === endYear &&
+        career.startMonth &&
+        career.endMonth
+      ) {
         const startMonth = parseInt(career.startMonth, 10)
         const endMonth = parseInt(career.endMonth, 10)
-        
+
         if (startMonth > endMonth) {
           errors.push('시작월이 종료월보다 늦습니다.')
-        } else if (startMonth === endMonth && career.startDay && career.endDay) {
+        } else if (
+          startMonth === endMonth &&
+          career.startDay &&
+          career.endDay
+        ) {
           const startDay = parseInt(career.startDay, 10)
           const endDay = parseInt(career.endDay, 10)
           if (startDay > endDay) {
@@ -1186,7 +1292,7 @@ export default function PersonCreatePage() {
     if (files.length === 0) return
 
     const imageFiles = files.filter((file) => file.type.startsWith('image/'))
-    
+
     if (imageFiles.length === 0) {
       toast.error('이미지 파일만 업로드할 수 있습니다.')
       return
@@ -1196,7 +1302,9 @@ export default function PersonCreatePage() {
       toast.error('일부 파일은 이미지가 아니어서 제외되었습니다.')
     }
 
-    const oversizedFile = imageFiles.find((file) => file.size > 10 * 1024 * 1024)
+    const oversizedFile = imageFiles.find(
+      (file) => file.size > 10 * 1024 * 1024,
+    )
     if (oversizedFile) {
       toast.error('이미지 크기는 10MB 이하여야 합니다.')
       return
@@ -1204,7 +1312,9 @@ export default function PersonCreatePage() {
 
     setIsUploadingImage(true)
     try {
-      const uploaded = await Promise.all(imageFiles.map((file) => uploadImage(file)))
+      const uploaded = await Promise.all(
+        imageFiles.map((file) => uploadImage(file)),
+      )
       const urls = uploaded.map((response) => response.url).filter(Boolean)
 
       setFormData((prev) => {
@@ -1275,14 +1385,14 @@ export default function PersonCreatePage() {
       const newUrls = [...prev.profileImageUrls]
       const [draggedItem] = newUrls.splice(draggedImageIndex, 1)
       newUrls.splice(dropIndex, 0, draggedItem)
-      
+
       return {
         ...prev,
         profileImageUrls: newUrls,
         profileImageUrl: newUrls[0] || '',
       }
     })
-    
+
     setDraggedImageIndex(null)
     toast.success('이미지 순서가 변경되었습니다.')
   }
@@ -1333,7 +1443,7 @@ export default function PersonCreatePage() {
       birthDay: day.toString(),
     }))
     setShowBirthDateModal(false)
-    
+
     // 출생일 선택 후 자동으로 사망일 선택 모달 열기
     if (!formData.isDeathDateUnknown) {
       setTimeout(() => {
@@ -1417,32 +1527,32 @@ export default function PersonCreatePage() {
       const careerErrors: { [key: string]: string[] } = {}
       careers.forEach((career, index) => {
         const errors: string[] = []
-        
+
         if (!career.timelineTitle?.trim()) {
           errors.push(ERROR_MESSAGES.REQUIRED_CAREER_TITLE)
         }
-        
+
         if (!career.startYear) {
           errors.push(ERROR_MESSAGES.REQUIRED_CAREER_START)
         }
-        
+
         // 날짜 검증
         const dateValidation = validateCareerDates(career)
         if (dateValidation.length > 0) {
           errors.push(...dateValidation)
         }
-        
+
         if (errors.length > 0) {
           careerErrors[career.id] = errors
         }
       })
-      
+
       if (Object.keys(careerErrors).length > 0) {
         newErrors.careers = careerErrors
         // 첫 번째 에러가 있는 경력으로 이동
         const firstErrorCareerId = Object.keys(careerErrors)[0]
         setActiveCareerId(firstErrorCareerId)
-        
+
         const errorMessages = Object.values(careerErrors)
           .flat()
           .slice(0, 3)
@@ -1456,19 +1566,23 @@ export default function PersonCreatePage() {
       formData.birthYear,
       formData.birthMonth,
       formData.birthDay,
-      '출생'
+      '출생',
     )
     if (birthDateError && !formData.isBirthDateUnknown) {
       newErrors.lifespan = birthDateError
     }
 
     // 사망일 검증
-    if (!formData.isAlive && !formData.isDeathDateUnknown && formData.deathYear) {
+    if (
+      !formData.isAlive &&
+      !formData.isDeathDateUnknown &&
+      formData.deathYear
+    ) {
       const deathDateError = validateDate(
         formData.deathYear,
         formData.deathMonth,
         formData.deathDay,
-        '사망'
+        '사망',
       )
       if (deathDateError) {
         newErrors.lifespan = deathDateError
@@ -1479,12 +1593,12 @@ export default function PersonCreatePage() {
         const birthDate = new Date(
           parseInt(formData.birthYear),
           formData.birthMonth ? parseInt(formData.birthMonth) - 1 : 0,
-          formData.birthDay ? parseInt(formData.birthDay) : 1
+          formData.birthDay ? parseInt(formData.birthDay) : 1,
         )
         const deathDate = new Date(
           parseInt(formData.deathYear),
           formData.deathMonth ? parseInt(formData.deathMonth) - 1 : 0,
-          formData.deathDay ? parseInt(formData.deathDay) : 1
+          formData.deathDay ? parseInt(formData.deathDay) : 1,
         )
 
         if (deathDate <= birthDate) {
@@ -1500,7 +1614,8 @@ export default function PersonCreatePage() {
       const age = currentYear - birthYear
 
       if (age > 150) {
-        newErrors.lifespan = '생존자의 나이가 비현실적입니다. 생몰 정보를 확인해주세요.'
+        newErrors.lifespan =
+          '생존자의 나이가 비현실적입니다. 생몰 정보를 확인해주세요.'
       }
     }
 
@@ -1509,7 +1624,12 @@ export default function PersonCreatePage() {
   }
 
   // 날짜 유효성 검사 함수
-  const validateDate = (year: string, month: string, day: string, label: string): string | null => {
+  const validateDate = (
+    year: string,
+    month: string,
+    day: string,
+    label: string,
+  ): string | null => {
     if (!year) return null
 
     const y = parseInt(year)
@@ -1605,13 +1725,19 @@ export default function PersonCreatePage() {
     try {
       // 임시 저장 데이터 삭제
       localStorage.removeItem('person-create-draft')
-      
+
       const input: CreatePersonInput = {
         name: formData.name.trim(),
         surname: formData.surname.trim() || undefined,
         gender: formData.gender,
         biography: formData.biography.trim() || undefined,
-        profileImageUrl: formData.profileImageUrls[0] || formData.profileImageUrl || undefined,
+        profileImageUrl:
+          formData.profileImageUrls[0] || formData.profileImageUrl || undefined,
+        // 왕/군주 필드
+        regnalName: formData.regnalName.trim() || undefined,
+        templeName: formData.templeName.trim() || undefined,
+        posthumousName: formData.posthumousName.trim() || undefined,
+        // 소속 정보
         countryId: formData.birthCountryId || undefined, // 출생 국가를 primary로
         dynastyId: formData.dynastyId || undefined,
         religionId: formData.religionId || undefined,
@@ -1644,48 +1770,60 @@ export default function PersonCreatePage() {
         }
       }
 
-      console.log('Submitting person data:', input)
+      console.log(`${isEditMode ? 'Updating' : 'Creating'} person data:`, input)
 
-      const createdPerson = await personApi.create(input)
-      console.log('Person created:', createdPerson)
-      
-      // Person ID 추출 (응답 구조에 따라 조정 필요)
-      const personId = createdPerson?.id || createdPerson?.data?.id
-      
-      if (!personId) {
-        throw new Error('Person ID를 가져올 수 없습니다.')
+      let personId: string
+
+      if (isEditMode && id) {
+        // 수정 모드
+        await personApi.update(id, input)
+        personId = id
+        toast.success('인물이 수정되었습니다.')
+      } else {
+        // 등록 모드
+        const createdPerson = await personApi.create(input)
+        personId = createdPerson?.id || createdPerson?.data?.id
+
+        if (!personId) {
+          throw new Error('Person ID를 가져올 수 없습니다.')
+        }
+        toast.success('인물이 등록되었습니다.')
       }
 
-      // Career 데이터 저장 (순차적으로)
-      if (careers.length > 0) {
+      // Career 데이터 저장 (등록 모드만)
+      if (!isEditMode && careers.length > 0) {
         toast.loading(`경력 정보 저장 중... (0/${careers.length})`)
-        
+
         for (let i = 0; i < careers.length; i++) {
           const career = careers[i]
           toast.loading(`경력 정보 저장 중... (${i + 1}/${careers.length})`)
-          
+
           try {
             // Career 시작/종료일 포맷팅
-            const startDate = career.startYear 
+            const startDate = career.startYear
               ? `${career.startEra === 'BC' ? '-' : ''}${career.startYear.padStart(4, '0')}-${(career.startMonth || '01').padStart(2, '0')}-${(career.startDay || '01').padStart(2, '0')}`
               : undefined
 
-            const endDate = !career.isCurrent && career.endYear
-              ? `${career.endEra === 'BC' ? '-' : ''}${career.endYear.padStart(4, '0')}-${(career.endMonth || '12').padStart(2, '0')}-${(career.endDay || '31').padStart(2, '0')}`
-              : undefined
+            const endDate =
+              !career.isCurrent && career.endYear
+                ? `${career.endEra === 'BC' ? '-' : ''}${career.endYear.padStart(4, '0')}-${(career.endMonth || '12').padStart(2, '0')}-${(career.endDay || '31').padStart(2, '0')}`
+                : undefined
 
             // Career 이미지 변환
-            const images = career.images.map(img => ({
+            const images = career.images.map((img) => ({
               url: img.url,
-              description: img.description || undefined
+              description: img.description || undefined,
             }))
 
             // 직업 카테고리 이름 가져오기
-            const jobCategory = jobCategories.find(c => c.id === career.jobCategoryId)
-            const parentCategory = jobCategory?.parentId 
-              ? jobCategories.find(c => c.id === jobCategory.parentId)
+            const jobCategory = jobCategories.find(
+              (c) => c.id === career.jobCategoryId,
+            )
+            const parentCategory = jobCategory?.parentId
+              ? jobCategories.find((c) => c.id === jobCategory.parentId)
               : null
-            const topLevelCategoryName = parentCategory?.name || jobCategory?.name || ''
+            const topLevelCategoryName =
+              parentCategory?.name || jobCategory?.name || ''
 
             // Career 타입 판별 및 API 호출
             const baseCareerData = {
@@ -1698,7 +1836,7 @@ export default function PersonCreatePage() {
               startDate,
               endDate,
               notes: career.note || undefined,
-              images: images.length > 0 ? images : undefined
+              images: images.length > 0 ? images : undefined,
             }
 
             // 카테고리 이름에 따라 적절한 API 호출
@@ -1708,25 +1846,38 @@ export default function PersonCreatePage() {
                 ...baseCareerData,
                 branch: undefined, // TODO: UI에서 군종 선택 추가
                 position: career.title || undefined,
-                termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
+                termNumber: career.termNumber
+                  ? parseInt(career.termNumber)
+                  : undefined,
               })
-            } else if (topLevelCategoryName.includes('정치') || topLevelCategoryName.includes('행정')) {
+            } else if (
+              topLevelCategoryName.includes('정치') ||
+              topLevelCategoryName.includes('행정')
+            ) {
               // 정치인/공무원 경력
               await personCareerApi.addGovernmentCareer({
                 ...baseCareerData,
                 countryId: career.countryId || undefined,
                 department: undefined,
                 role: career.title || undefined,
-                termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
+                termNumber: career.termNumber
+                  ? parseInt(career.termNumber)
+                  : undefined,
               })
-            } else if (topLevelCategoryName.includes('경제') || topLevelCategoryName.includes('산업')) {
+            } else if (
+              topLevelCategoryName.includes('경제') ||
+              topLevelCategoryName.includes('산업')
+            ) {
               // 기업인 경력
               await personCareerApi.addBusinessCareer({
                 ...baseCareerData,
                 title: career.title || undefined,
                 level: undefined,
               })
-            } else if (topLevelCategoryName.includes('학문') || topLevelCategoryName.includes('교육')) {
+            } else if (
+              topLevelCategoryName.includes('학문') ||
+              topLevelCategoryName.includes('교육')
+            ) {
               // 학자 경력
               await personCareerApi.addAcademicCareer({
                 ...baseCareerData,
@@ -1749,14 +1900,20 @@ export default function PersonCreatePage() {
                 denomination: undefined,
                 rank: career.title || undefined,
               })
-            } else if (topLevelCategoryName.includes('예술') || topLevelCategoryName.includes('문화')) {
+            } else if (
+              topLevelCategoryName.includes('예술') ||
+              topLevelCategoryName.includes('문화')
+            ) {
               // 예술가 경력
               await personCareerApi.addArtistCareer({
                 ...baseCareerData,
                 artForm: undefined,
                 style: undefined,
               })
-            } else if (topLevelCategoryName.includes('언론') || topLevelCategoryName.includes('출판')) {
+            } else if (
+              topLevelCategoryName.includes('언론') ||
+              topLevelCategoryName.includes('출판')
+            ) {
               // 언론인 경력
               await personCareerApi.addMediaCareer({
                 ...baseCareerData,
@@ -1784,43 +1941,54 @@ export default function PersonCreatePage() {
                 countryId: career.countryId || undefined,
                 department: undefined,
                 role: career.title || undefined,
-                termNumber: career.termNumber ? parseInt(career.termNumber) : undefined,
+                termNumber: career.termNumber
+                  ? parseInt(career.termNumber)
+                  : undefined,
               })
             }
-            
-            console.log(`Career ${i + 1}/${careers.length} saved as ${topLevelCategoryName}`)
+
+            console.log(
+              `Career ${i + 1}/${careers.length} saved as ${topLevelCategoryName}`,
+            )
           } catch (careerError) {
             console.error(`Career ${i + 1} save failed:`, careerError)
             // Career 저장 실패는 경고만 표시하고 계속 진행
             toast.error(`경력 ${i + 1} 저장 실패: ${career.timelineTitle}`)
           }
         }
-        
+
         toast.dismiss()
       }
-      
-      // 임시 저장 삭제
-      handleClearDraft()
-      
-      toast.success('인물이 등록되었습니다.')
+
+      // 임시 저장 삭제 (등록 모드만)
+      if (!isEditMode) {
+        handleClearDraft()
+      }
+
+      // 성공 메시지는 위에서 이미 표시됨
       navigate('/persons')
     } catch (error: any) {
-      console.error('Person creation failed:', error)
+      console.error(
+        `Person ${isEditMode ? 'update' : 'creation'} failed:`,
+        error,
+      )
+
+      const actionName = isEditMode ? '수정' : '등록'
 
       if (error.response?.data) {
         const errorData = error.response.data
         if (errorData.error?.details?.errors) {
           const validationErrors = errorData.error.details.errors
           toast.error(
-            `등록 실패: ${validationErrors.map((e: any) => Object.values(e.constraints || {}).join(', ')).join(', ')}`,
+            `${actionName} 실패: ${validationErrors.map((e: any) => Object.values(e.constraints || {}).join(', ')).join(', ')}`,
           )
         } else {
           toast.error(
-            `등록 실패: ${errorData.error?.message || '알 수 없는 오류'}`,
+            `${actionName} 실패: ${errorData.error?.message || '알 수 없는 오류'}`,
           )
         }
       } else {
-        toast.error('인물 등록에 실패했습니다.')
+        toast.error(`인물 ${actionName}에 실패했습니다.`)
       }
     } finally {
       setIsSubmitting(false)
@@ -1869,15 +2037,19 @@ export default function PersonCreatePage() {
         {/* 우측: 폼 영역 */}
         <FormArea>
           <FormAreaHeader>
-            <FormAreaTitle>인물 등록</FormAreaTitle>
+            <FormAreaTitle>
+              {isEditMode ? '인물 수정' : '인물 등록'}
+            </FormAreaTitle>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <ActionButton
-                type="button"
-                $variant="secondary"
-                onClick={handleSaveDraft}
-              >
-                임시 저장
-              </ActionButton>
+              {!isEditMode && (
+                <ActionButton
+                  type="button"
+                  $variant="secondary"
+                  onClick={handleSaveDraft}
+                >
+                  임시 저장
+                </ActionButton>
+              )}
               <ActionButton
                 type="button"
                 $variant="primary"
@@ -1885,7 +2057,13 @@ export default function PersonCreatePage() {
                 disabled={isSubmitting}
               >
                 <FiSave />
-                {isSubmitting ? '등록 중...' : '등록'}
+                {isSubmitting
+                  ? isEditMode
+                    ? '수정 중...'
+                    : '등록 중...'
+                  : isEditMode
+                    ? '수정'
+                    : '등록'}
               </ActionButton>
             </div>
           </FormAreaHeader>
@@ -1899,7 +2077,8 @@ export default function PersonCreatePage() {
                   <FormLabel>
                     프로필 이미지
                     <FormLabelHint>
-                      여러 이미지를 업로드할 수 있습니다. 썸네일을 클릭하여 대표 이미지를 선택하거나, 드래그하여 순서를 변경하세요.
+                      여러 이미지를 업로드할 수 있습니다. 썸네일을 클릭하여 대표
+                      이미지를 선택하거나, 드래그하여 순서를 변경하세요.
                     </FormLabelHint>
                   </FormLabel>
                   <FormField>
@@ -1965,14 +2144,14 @@ export default function PersonCreatePage() {
                           </ProfileImagePlaceholder>
                         )}
                       </ProfileImagePreview>
-                      
+
                       {formData.profileImageUrls.length > 0 && (
                         <ImageCountBadge>
-                          <FiLayers size={14} />
-                          총 {formData.profileImageUrls.length}개의 이미지
+                          <FiLayers size={14} />총{' '}
+                          {formData.profileImageUrls.length}개의 이미지
                         </ImageCountBadge>
                       )}
-                      
+
                       <ProfileImageThumbnails>
                         {formData.profileImageUrls.map((url, index) => (
                           <ProfileImageThumb
@@ -1985,9 +2164,15 @@ export default function PersonCreatePage() {
                             onDrop={(e) => handleImageDrop(e, index)}
                             onDragEnd={handleImageDragEnd}
                             onClick={() => handleSetPrimaryProfileImage(url)}
-                            style={{ opacity: draggedImageIndex === index ? 0.5 : 1 }}
+                            style={{
+                              opacity: draggedImageIndex === index ? 0.5 : 1,
+                            }}
                           >
-                            <img src={url} alt="프로필 썸네일" draggable={false} />
+                            <img
+                              src={url}
+                              alt="프로필 썸네일"
+                              draggable={false}
+                            />
                             {url === primaryProfileImage && (
                               <PrimaryBadgeThumb>
                                 <FiCheck size={12} />
@@ -2042,65 +2227,237 @@ export default function PersonCreatePage() {
                       <ImagePreviewClose onClick={closeImagePreview}>
                         <FiX size={24} />
                       </ImagePreviewClose>
-                      <ImagePreviewImg src={imagePreviewUrl} alt="이미지 미리보기" />
+                      <ImagePreviewImg
+                        src={imagePreviewUrl}
+                        alt="이미지 미리보기"
+                      />
                     </ImagePreviewContent>
                   </ImagePreviewModal>
                 )}
 
-                {/* 이름 입력 (성, 중간이름, 이름) */}
-            <FormRow>
+                {/* 이름 입력 - 간편/상세 모드 */}
+                <FormRow>
                   <FormLabel>
-                  이름 <Required>*</Required>
+                    이름 <Required>*</Required>
                   </FormLabel>
                   <FormField>
-                    <NameRow>
-                      <NameInputWrapper>
-                        <NameLabel>성 <Required>*</Required></NameLabel>
+                    {/* 입력 모드 토글 */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '8px',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      <SelectButton
+                        type="button"
+                        $selected={formData.nameInputMode === 'simple'}
+                        onClick={() =>
+                          handleInputChange('nameInputMode', 'simple')
+                        }
+                      >
+                        ⚡ 간편 입력
+                      </SelectButton>
+                      <SelectButton
+                        type="button"
+                        $selected={formData.nameInputMode === 'detailed'}
+                        onClick={() =>
+                          handleInputChange('nameInputMode', 'detailed')
+                        }
+                      >
+                        📝 상세 입력
+                      </SelectButton>
+                    </div>
+
+                    {/* 간편 입력 모드 */}
+                    {formData.nameInputMode === 'simple' && (
+                      <>
+                        {/* 이름 형식 선택 */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '8px',
+                            marginBottom: '12px',
+                          }}
+                        >
+                          <SelectButton
+                            type="button"
+                            $selected={formData.nameFormat === 'korean'}
+                            onClick={() =>
+                              handleInputChange('nameFormat', 'korean')
+                            }
+                            style={{ flex: 1, fontSize: '0.875rem' }}
+                          >
+                            🇰🇷 한국식 (김철수)
+                          </SelectButton>
+                          <SelectButton
+                            type="button"
+                            $selected={formData.nameFormat === 'western'}
+                            onClick={() =>
+                              handleInputChange('nameFormat', 'western')
+                            }
+                            style={{ flex: 1, fontSize: '0.875rem' }}
+                          >
+                            🌍 서양식 (George Bush)
+                          </SelectButton>
+                        </div>
+
+                        {/* 전체 이름 입력 */}
                         <ErrorInput
                           type="text"
-                          placeholder="예: 김, Bush"
-                          value={formData.surname}
-                          onChange={(e) =>
-                            handleInputChange('surname', e.target.value)
+                          placeholder={
+                            formData.nameFormat === 'korean'
+                              ? '예: 김철수, 이순신, 박영희'
+                              : '예: George Bush, Louis XIV, Elizabeth Windsor'
                           }
-                          $hasError={!!errors.surname}
+                          value={formData.fullName}
+                          onChange={(e) => {
+                            const fullName = e.target.value
+                            handleInputChange('fullName', fullName)
+
+                            // 자동 파싱
+                            if (fullName.trim()) {
+                              if (formData.nameFormat === 'korean') {
+                                // 한국식: 첫 글자가 성
+                                const surname = fullName.trim()[0]
+                                const name = fullName.trim().substring(1)
+                                handleInputChange('surname', surname)
+                                handleInputChange('name', name)
+                                handleInputChange('middleName', '')
+                              } else {
+                                // 서양식: 공백으로 분리
+                                const parts = fullName.trim().split(/\s+/)
+                                if (parts.length === 1) {
+                                  handleInputChange('name', parts[0])
+                                  handleInputChange('surname', '')
+                                  handleInputChange('middleName', '')
+                                } else if (parts.length === 2) {
+                                  handleInputChange('name', parts[0])
+                                  handleInputChange('surname', parts[1])
+                                  handleInputChange('middleName', '')
+                                } else {
+                                  // 3개 이상: 첫번째=이름, 중간들=중간이름, 마지막=성
+                                  handleInputChange('name', parts[0])
+                                  handleInputChange(
+                                    'middleName',
+                                    parts.slice(1, -1).join(' '),
+                                  )
+                                  handleInputChange(
+                                    'surname',
+                                    parts[parts.length - 1],
+                                  )
+                                }
+                              }
+                            }
+                          }}
+                          $hasError={!!errors.name || !!errors.surname}
                           $flash={errorFlashOn}
                         />
-                        {errors.surname && <ErrorText>{errors.surname}</ErrorText>}
-                      </NameInputWrapper>
-                      <NameInputWrapper>
-                        <NameLabel>이름 <Required>*</Required></NameLabel>
-                        <ErrorInput
-                          type="text"
-                          placeholder="예: 철수, George"
-                  value={formData.name}
-                          onChange={(e) =>
-                            handleInputChange('name', e.target.value)
-                          }
-                          $hasError={!!errors.name}
-                          $flash={errorFlashOn}
-                        />
-                      </NameInputWrapper>
-                      <NameInputWrapper>
-                        <NameLabel>중간이름 (선택)</NameLabel>
-                        <ErrorInput
-                          type="text"
-                          placeholder="예: Walker"
-                          value={formData.middleName}
-                          onChange={(e) =>
-                            handleInputChange('middleName', e.target.value)
-                          }
-                          $hasError={false}
-                          $flash={false}
-                        />
-                      </NameInputWrapper>
-                    </NameRow>
-                {errors.name && <ErrorText>{errors.name}</ErrorText>}
-                    <Hint>
-                      성과 이름은 필수입니다. 중간이름은 선택사항입니다.
-                      <br />
-                      예시: 한국 (성: 김, 이름: 철수) | 유럽 (성: Bush, 이름: George, 중간이름: Walker)
-                    </Hint>
+
+                        {/* 파싱 결과 미리보기 */}
+                        {formData.fullName && (
+                          <div
+                            style={{
+                              marginTop: '8px',
+                              padding: '12px',
+                              background: '#f0fdf4',
+                              border: '1px solid #86efac',
+                              borderRadius: '8px',
+                              fontSize: '0.875rem',
+                              color: '#166534',
+                            }}
+                          >
+                            ✓ 파싱 결과:
+                            {formData.surname && (
+                              <strong> 성: {formData.surname}</strong>
+                            )}
+                            {formData.name && (
+                              <strong> | 이름: {formData.name}</strong>
+                            )}
+                            {formData.middleName && (
+                              <strong>
+                                {' '}
+                                | 중간이름: {formData.middleName}
+                              </strong>
+                            )}
+                          </div>
+                        )}
+
+                        {errors.name && <ErrorText>{errors.name}</ErrorText>}
+                        {errors.surname && (
+                          <ErrorText>{errors.surname}</ErrorText>
+                        )}
+
+                        <Hint>
+                          💡 전체 이름을 입력하면 자동으로 성/이름이 분리됩니다.
+                          <br />• 한국식: "김철수" → 성: 김, 이름: 철수
+                          <br />• 서양식: "George Bush" → 성: Bush, 이름: George
+                          <br />• 서양식(3단어): "George Walker Bush" → 성:
+                          Bush, 이름: George, 중간이름: Walker
+                        </Hint>
+                      </>
+                    )}
+
+                    {/* 상세 입력 모드 */}
+                    {formData.nameInputMode === 'detailed' && (
+                      <>
+                        <NameRow>
+                          <NameInputWrapper>
+                            <NameLabel>
+                              성 <Required>*</Required>
+                            </NameLabel>
+                            <ErrorInput
+                              type="text"
+                              placeholder="예: 김, Bush"
+                              value={formData.surname}
+                              onChange={(e) =>
+                                handleInputChange('surname', e.target.value)
+                              }
+                              $hasError={!!errors.surname}
+                              $flash={errorFlashOn}
+                            />
+                            {errors.surname && (
+                              <ErrorText>{errors.surname}</ErrorText>
+                            )}
+                          </NameInputWrapper>
+                          <NameInputWrapper>
+                            <NameLabel>
+                              이름 <Required>*</Required>
+                            </NameLabel>
+                            <ErrorInput
+                              type="text"
+                              placeholder="예: 철수, George"
+                              value={formData.name}
+                              onChange={(e) =>
+                                handleInputChange('name', e.target.value)
+                              }
+                              $hasError={!!errors.name}
+                              $flash={errorFlashOn}
+                            />
+                          </NameInputWrapper>
+                          <NameInputWrapper>
+                            <NameLabel>중간이름 (선택)</NameLabel>
+                            <ErrorInput
+                              type="text"
+                              placeholder="예: Walker"
+                              value={formData.middleName}
+                              onChange={(e) =>
+                                handleInputChange('middleName', e.target.value)
+                              }
+                              $hasError={false}
+                              $flash={false}
+                            />
+                          </NameInputWrapper>
+                        </NameRow>
+                        {errors.name && <ErrorText>{errors.name}</ErrorText>}
+                        <Hint>
+                          성과 이름은 필수입니다. 중간이름은 선택사항입니다.
+                          <br />
+                          예시: 한국 (성: 김, 이름: 철수) | 유럽 (성: Bush,
+                          이름: George, 중간이름: Walker)
+                        </Hint>
+                      </>
+                    )}
                   </FormField>
                 </FormRow>
 
@@ -2108,7 +2465,9 @@ export default function PersonCreatePage() {
                 <FormRow>
                   <FormLabel>
                     이름 원어 (선택)
-                    <FormLabelHint>영어, 한자, 또는 원어로 된 이름을 입력하세요</FormLabelHint>
+                    <FormLabelHint>
+                      영어, 한자, 또는 원어로 된 이름을 입력하세요
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
                     <Input
@@ -2120,7 +2479,8 @@ export default function PersonCreatePage() {
                       }
                     />
                     <Hint>
-                      예시: 조지 부시 → George Bush | 마오쩌둥 → 毛澤東 | 블라디미르 푸틴 → Владимир Путин
+                      예시: 조지 부시 → George Bush | 마오쩌둥 → 毛澤東 |
+                      블라디미르 푸틴 → Владимир Путин
                     </Hint>
                   </FormField>
                 </FormRow>
@@ -2132,19 +2492,19 @@ export default function PersonCreatePage() {
                   </FormLabel>
                   <FormField>
                     <GenderButtonGroup>
-                    <SelectButton
-                      $selected={formData.gender === '남'}
-                      $hasError={!!errors.gender}
-                      $flash={errorFlashOn}
+                      <SelectButton
+                        $selected={formData.gender === '남'}
+                        $hasError={!!errors.gender}
+                        $flash={errorFlashOn}
                         onClick={() => handleInputChange('gender', '남')}
                       >
                         <IoMaleSharp style={{ color: '#3b82f6' }} />
                         남성
                       </SelectButton>
-                    <SelectButton
-                      $selected={formData.gender === '여'}
-                      $hasError={!!errors.gender}
-                      $flash={errorFlashOn}
+                      <SelectButton
+                        $selected={formData.gender === '여'}
+                        $hasError={!!errors.gender}
+                        $flash={errorFlashOn}
                         onClick={() => handleInputChange('gender', '여')}
                       >
                         <IoFemaleSharp style={{ color: '#ec4899' }} />
@@ -2159,7 +2519,9 @@ export default function PersonCreatePage() {
                 <FormRow>
                   <FormLabel>
                     생몰 정보
-                    <FormLabelHint>출생일은 필수이며, 사망일은 선택사항입니다</FormLabelHint>
+                    <FormLabelHint>
+                      출생일은 필수이며, 사망일은 선택사항입니다
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
                     <LifespanContainer>
@@ -2214,13 +2576,21 @@ export default function PersonCreatePage() {
                             <RadioGroup>
                               <RadioOption
                                 type="button"
-                                $selected={!formData.isAlive && !formData.isDeathDateUnknown}
+                                $selected={
+                                  !formData.isAlive &&
+                                  !formData.isDeathDateUnknown
+                                }
                                 onClick={() => {
                                   handleInputChange('isAlive', false)
                                   handleInputChange('isDeathDateUnknown', false)
                                 }}
                               >
-                                <RadioDot $selected={!formData.isAlive && !formData.isDeathDateUnknown} />
+                                <RadioDot
+                                  $selected={
+                                    !formData.isAlive &&
+                                    !formData.isDeathDateUnknown
+                                  }
+                                />
                                 <span>날짜 입력</span>
                               </RadioOption>
                               <RadioOption
@@ -2248,7 +2618,9 @@ export default function PersonCreatePage() {
                                   handleInputChange('deathDay', '')
                                 }}
                               >
-                                <RadioDot $selected={formData.isDeathDateUnknown} />
+                                <RadioDot
+                                  $selected={formData.isDeathDateUnknown}
+                                />
                                 <span>미상</span>
                               </RadioOption>
                             </RadioGroup>
@@ -2271,7 +2643,12 @@ export default function PersonCreatePage() {
                               $flash={errorFlashOn}
                             >
                               <FiCalendar />
-                              <span>{formatDeathDate()}{calculatedAge && !formData.isAlive ? ` (향년 ${calculatedAge}세)` : ''}</span>
+                              <span>
+                                {formatDeathDate()}
+                                {calculatedAge && !formData.isAlive
+                                  ? ` (향년 ${calculatedAge}세)`
+                                  : ''}
+                              </span>
                             </DateButton>
                           )}
                         </LifespanItem>
@@ -2281,14 +2658,18 @@ export default function PersonCreatePage() {
                       {calculatedAge !== null && (
                         <AgeDisplayRow>
                           <AgeDisplay>
-                            {formData.isAlive ? `현재 ${calculatedAge}세` : `향년 ${calculatedAge}세`}
+                            {formData.isAlive
+                              ? `현재 ${calculatedAge}세`
+                              : `향년 ${calculatedAge}세`}
                           </AgeDisplay>
                         </AgeDisplayRow>
                       )}
 
                       <LifespanToggleRow>
                         <ToggleRow>
-                          <ToggleLabel>사건 타임라인에 출생/사망 포함</ToggleLabel>
+                          <ToggleLabel>
+                            사건 타임라인에 출생/사망 포함
+                          </ToggleLabel>
                           <ToggleButton
                             type="button"
                             $active={formData.showLifespanOnEventList}
@@ -2305,7 +2686,9 @@ export default function PersonCreatePage() {
                           </ToggleButton>
                         </ToggleRow>
                         <InfoBox>
-                          활성화 시, 사건 목록 페이지에 "출생"과 "사망"이 자동으로 추가되어 다른 역사적 사건들과 함께 연대순으로 표시됩니다.
+                          활성화 시, 사건 목록 페이지에 "출생"과 "사망"이
+                          자동으로 추가되어 다른 역사적 사건들과 함께 연대순으로
+                          표시됩니다.
                         </InfoBox>
                       </LifespanToggleRow>
                     </LifespanContainer>
@@ -2315,12 +2698,14 @@ export default function PersonCreatePage() {
                   </FormField>
                 </FormRow>
 
-
                 {/* 별명/호/필명 */}
                 <FormRow>
                   <FormLabel>
                     별명 및 칭호
-                    <FormLabelHint>본명 외에 알려진 별명, 호, 필명, 칭호 등을 입력하세요 (복수 입력 가능)</FormLabelHint>
+                    <FormLabelHint>
+                      본명 외에 알려진 별명, 호, 필명, 칭호 등을 입력하세요
+                      (복수 입력 가능)
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
                     <NicknameInputRow>
@@ -2332,21 +2717,28 @@ export default function PersonCreatePage() {
                         onKeyPress={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                          if (nicknameInput.trim()) {
-                            if (formData.nicknames.includes(nicknameInput.trim())) {
-                              toast.error(ERROR_MESSAGES.DUPLICATE_NICKNAME)
-                              return
-                            }
-                            if (formData.nicknames.length >= 10) {
-                              toast.error(ERROR_MESSAGES.MAX_NICKNAMES)
-                              return
-                            }
-                            if (nicknameInput.trim().length > 50) {
-                              toast.error(ERROR_MESSAGES.NICKNAME_TOO_LONG)
-                              return
-                            }
+                            if (nicknameInput.trim()) {
+                              if (
+                                formData.nicknames.includes(
+                                  nicknameInput.trim(),
+                                )
+                              ) {
+                                toast.error(ERROR_MESSAGES.DUPLICATE_NICKNAME)
+                                return
+                              }
+                              if (formData.nicknames.length >= 10) {
+                                toast.error(ERROR_MESSAGES.MAX_NICKNAMES)
+                                return
+                              }
+                              if (nicknameInput.trim().length > 50) {
+                                toast.error(ERROR_MESSAGES.NICKNAME_TOO_LONG)
+                                return
+                              }
                               playClick()
-                              handleInputChange('nicknames', [...formData.nicknames, nicknameInput.trim()])
+                              handleInputChange('nicknames', [
+                                ...formData.nicknames,
+                                nicknameInput.trim(),
+                              ])
                               setNicknameInput('')
                             }
                           }
@@ -2356,7 +2748,9 @@ export default function PersonCreatePage() {
                         type="button"
                         onClick={() => {
                           if (nicknameInput.trim()) {
-                            if (formData.nicknames.includes(nicknameInput.trim())) {
+                            if (
+                              formData.nicknames.includes(nicknameInput.trim())
+                            ) {
                               toast.error(ERROR_MESSAGES.DUPLICATE_NICKNAME)
                               return
                             }
@@ -2369,7 +2763,10 @@ export default function PersonCreatePage() {
                               return
                             }
                             playClick()
-                            handleInputChange('nicknames', [...formData.nicknames, nicknameInput.trim()])
+                            handleInputChange('nicknames', [
+                              ...formData.nicknames,
+                              nicknameInput.trim(),
+                            ])
                             setNicknameInput('')
                           }
                         }}
@@ -2380,25 +2777,35 @@ export default function PersonCreatePage() {
                       </AddNicknameButton>
                     </NicknameInputRow>
                     {formData.nicknames.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '0.5rem',
+                          marginBottom: '0.75rem',
+                        }}
+                      >
                         {formData.nicknames.map((nickname, index) => (
                           <NicknameTag key={index}>
                             {index === 0 && (
-                              <span style={{ 
-                                fontSize: '0.65rem',
-                                background: '#3b82f6',
-                                color: 'white',
-                                padding: '0.125rem 0.375rem',
-                                borderRadius: '4px',
-                                fontWeight: '600',
-                                marginRight: '0.375rem'
-                              }} title="첫 번째 별명이 대표 별명으로 표시됩니다">
+                              <span
+                                style={{
+                                  fontSize: '0.65rem',
+                                  background: '#3b82f6',
+                                  color: 'white',
+                                  padding: '0.125rem 0.375rem',
+                                  borderRadius: '4px',
+                                  fontWeight: '600',
+                                  marginRight: '0.375rem',
+                                }}
+                                title="첫 번째 별명이 대표 별명으로 표시됩니다"
+                              >
                                 대표
                               </span>
                             )}
                             <span style={{ flex: 1 }}>{nickname}</span>
                             {index > 0 && (
-                              <span 
+                              <span
                                 className="action-icon"
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -2416,11 +2823,16 @@ export default function PersonCreatePage() {
                                 <FiTrendingUp size={12} />
                               </span>
                             )}
-                            <span 
+                            <span
                               className="remove-icon"
                               onClick={() => {
                                 playClick()
-                                handleInputChange('nicknames', formData.nicknames.filter((_, i) => i !== index))
+                                handleInputChange(
+                                  'nicknames',
+                                  formData.nicknames.filter(
+                                    (_, i) => i !== index,
+                                  ),
+                                )
                               }}
                             >
                               <FiX size={14} />
@@ -2430,7 +2842,8 @@ export default function PersonCreatePage() {
                       </div>
                     )}
                     <Hint>
-                      예시: 이오시프 주가시빌리 → 스탈린, 강철의 사나이 | 블라디미르 울리야노프 → 레닌 | 리처드 1세 → 사자심왕
+                      예시: 이오시프 주가시빌리 → 스탈린, 강철의 사나이 |
+                      블라디미르 울리야노프 → 레닌 | 리처드 1세 → 사자심왕
                     </Hint>
                   </FormField>
                 </FormRow>
@@ -2439,7 +2852,9 @@ export default function PersonCreatePage() {
                 <FormRow>
                   <FormLabel>
                     소속 국가 및 가문
-                    <FormLabelHint>출생 국가와 소속 가문을 선택하세요</FormLabelHint>
+                    <FormLabelHint>
+                      출생 국가와 소속 가문을 선택하세요
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
                     <ModernSelectionGrid>
@@ -2460,10 +2875,20 @@ export default function PersonCreatePage() {
                           <ModernCardLabel>
                             출생 국가 <Required>*</Required>
                           </ModernCardLabel>
-                          <ModernCardValue $hasValue={!!formData.birthCountryId}>
+                          <ModernCardValue
+                            $hasValue={!!formData.birthCountryId}
+                          >
                             {birthCountry ? (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ fontSize: '1.25rem' }}>{birthCountry.flagEmoji || '🌍'}</span>
+                              <span
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.5rem',
+                                }}
+                              >
+                                <span style={{ fontSize: '1.25rem' }}>
+                                  {birthCountry.flagEmoji || '🌍'}
+                                </span>
                                 <span>{birthCountry.name}</span>
                               </span>
                             ) : (
@@ -2489,7 +2914,9 @@ export default function PersonCreatePage() {
                         onClick={() => setShowDynastyModal(true)}
                         type="button"
                       >
-                        <ModernCardIcon $color={DESIGN_TOKENS.colors.organization}>
+                        <ModernCardIcon
+                          $color={DESIGN_TOKENS.colors.organization}
+                        >
                           <GiCrossedSwords size={22} />
                         </ModernCardIcon>
                         <ModernCardContent>
@@ -2512,7 +2939,9 @@ export default function PersonCreatePage() {
                         )}
                       </ModernSelectionCard>
                     </ModernSelectionGrid>
-                    {errors.birthCountry && <ErrorText>{errors.birthCountry}</ErrorText>}
+                    {errors.birthCountry && (
+                      <ErrorText>{errors.birthCountry}</ErrorText>
+                    )}
                   </FormField>
                 </FormRow>
 
@@ -2520,10 +2949,18 @@ export default function PersonCreatePage() {
                 <FormRow>
                   <FormLabel>
                     국가 이적 이력
-                    <FormLabelHint>시민권 변경이나 국적 이동 이력을 기록하세요</FormLabelHint>
+                    <FormLabelHint>
+                      시민권 변경이나 국적 이동 이력을 기록하세요
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem',
+                      }}
+                    >
                       {transferCountries.map((transfer, index) => (
                         <CountryTransferItem key={index}>
                           <TransferArrow>
@@ -2531,16 +2968,21 @@ export default function PersonCreatePage() {
                           </TransferArrow>
                           <TransferInfo>
                             <TransferCountryName>
-                              <span style={{ fontSize: '1.125rem' }}>{transfer.country?.flagEmoji || '🌍'}</span>
-                              <span>{transfer.country?.name || '알 수 없음'}</span>
+                              <span style={{ fontSize: '1.125rem' }}>
+                                {transfer.country?.flagEmoji || '🌍'}
+                              </span>
+                              <span>
+                                {transfer.country?.name || '알 수 없음'}
+                              </span>
                             </TransferCountryName>
                             <TransferYear>
                               {transfer.year}년
                               {transfer.month && ` ${transfer.month}월`}
-                              {transfer.day && ` ${transfer.day}일`}
-                              {' '}이적
+                              {transfer.day && ` ${transfer.day}일`} 이적
                             </TransferYear>
-                            {transfer.note && <TransferNote>{transfer.note}</TransferNote>}
+                            {transfer.note && (
+                              <TransferNote>{transfer.note}</TransferNote>
+                            )}
                           </TransferInfo>
                           <TransferRemoveButton
                             type="button"
@@ -2548,7 +2990,9 @@ export default function PersonCreatePage() {
                               playClick()
                               handleInputChange(
                                 'countryTransfers',
-                                formData.countryTransfers.filter((_, i) => i !== index)
+                                formData.countryTransfers.filter(
+                                  (_, i) => i !== index,
+                                ),
                               )
                             }}
                           >
@@ -2566,6 +3010,166 @@ export default function PersonCreatePage() {
                     </div>
                   </FormField>
                 </FormRow>
+
+                {/* 👑 왕/군주 칭호 - 직업이 왕/군주이거나 가문이 있을 때 표시 */}
+                {(() => {
+                  // 선택된 직업 이름들 가져오기
+                  const selectedJobNames = formData.jobIds
+                    .map((id) => jobs.find((j) => j.id === id)?.name)
+                    .filter(Boolean) as string[]
+
+                  // 왕/군주 관련 직업인지 확인
+                  const monarchKeywords = [
+                    '왕',
+                    '여왕',
+                    '황제',
+                    '황후',
+                    '국왕',
+                    '천황',
+                    '술탄',
+                    '차르',
+                    '칸',
+                    '왕세자',
+                    '황태자',
+                  ]
+                  const isMonarch = selectedJobNames.some((name) =>
+                    monarchKeywords.some((keyword) => name.includes(keyword)),
+                  )
+
+                  // 왕/군주이거나 가문이 있으면 표시
+                  if (!isMonarch && !formData.dynastyId) return null
+
+                  return (
+                    <FormRow>
+                      <FormLabel>왕/군주 칭호</FormLabel>
+                      <FormField>
+                        <MonarchSection>
+                          <MonarchSectionHeader>
+                            <MonarchIcon>
+                              <GiCrown />
+                            </MonarchIcon>
+                            <MonarchTitle>왕/군주 칭호</MonarchTitle>
+                          </MonarchSectionHeader>
+
+                          <MonarchHint>
+                            {isMonarch
+                              ? '✨ 직업이 왕/군주로 선택되었습니다. 왕호, 묘호, 시호 등을 입력하세요.'
+                              : '가문에 속한 왕족의 경우 왕호, 묘호, 시호 등을 입력할 수 있습니다.'}
+                          </MonarchHint>
+
+                          <MonarchFieldGroup>
+                            {/* 왕호/재위명 */}
+                            <MonarchField>
+                              <MonarchFieldLabel>
+                                왕호/재위명
+                                <MonarchFieldBadge>서양식</MonarchFieldBadge>
+                              </MonarchFieldLabel>
+                              <Input
+                                type="text"
+                                placeholder="예: Louis, Henry, Elizabeth, James"
+                                value={formData.regnalName}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    'regnalName',
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                              <Hint
+                                style={{
+                                  fontSize: '0.75rem',
+                                  marginTop: '0.5rem',
+                                  color: '#78350f',
+                                }}
+                              >
+                                서양 군주의 재위명을 입력하세요. 재위 번호(14세
+                                등)는 경력 등록 시 입력합니다.
+                              </Hint>
+                            </MonarchField>
+
+                            {/* 묘호 */}
+                            <MonarchField>
+                              <MonarchFieldLabel>
+                                묘호
+                                <MonarchFieldBadge>
+                                  동아시아식
+                                </MonarchFieldBadge>
+                              </MonarchFieldLabel>
+                              <Input
+                                type="text"
+                                placeholder="예: 세종, 태종, 고종, 성조(聖祖)"
+                                value={formData.templeName}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    'templeName',
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                              <Hint
+                                style={{
+                                  fontSize: '0.75rem',
+                                  marginTop: '0.5rem',
+                                  color: '#78350f',
+                                }}
+                              >
+                                한중일 군주의 묘호를 입력하세요. (예: 조선 세종,
+                                청 강희제/성조)
+                              </Hint>
+                            </MonarchField>
+
+                            {/* 시호 */}
+                            <MonarchField>
+                              <MonarchFieldLabel>
+                                시호
+                                <MonarchFieldBadge>선택사항</MonarchFieldBadge>
+                              </MonarchFieldLabel>
+                              <Input
+                                type="text"
+                                placeholder="예: 세종장헌영문예무인성명효대왕, 무열왕"
+                                value={formData.posthumousName}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    'posthumousName',
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                              <Hint
+                                style={{
+                                  fontSize: '0.75rem',
+                                  marginTop: '0.5rem',
+                                  color: '#78350f',
+                                }}
+                              >
+                                군주의 완전한 시호를 입력하세요. 매우 길 수
+                                있으므로 선택사항입니다.
+                              </Hint>
+                            </MonarchField>
+                          </MonarchFieldGroup>
+
+                          <Hint
+                            style={{
+                              marginTop: '16px',
+                              color: '#92400e',
+                              fontSize: '0.875rem',
+                            }}
+                          >
+                            💡 예시:
+                            <br />• 조선 제4대 국왕 세종: 묘호 "세종", 시호
+                            "세종장헌영문예무인성명효대왕"
+                            <br />• 프랑스 루이 14세: 왕호 "Louis" (재위 번호
+                            "14"는 경력에서 입력)
+                            <br />• 영국 제임스 1세/6세: 왕호 "James" (잉글랜드
+                            "1", 스코틀랜드 "6"은 각 재위 기록에서 입력)
+                            <br />• 청나라 강희제: 묘호 "성조(聖祖)", 연호
+                            "강희(康熙)"는 경력에서 입력
+                          </Hint>
+                        </MonarchSection>
+                      </FormField>
+                    </FormRow>
+                  )
+                })()}
 
                 {/* 소속 및 관계 정보 - 개선된 디자인 */}
                 <FormRow>
@@ -2620,15 +3224,34 @@ export default function PersonCreatePage() {
                           <ModernCardLabel>아버지</ModernCardLabel>
                           <ModernCardValue $hasValue={!!formData.fatherId}>
                             {selectedFather ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
-                                <span>{`${selectedFather.surname || ''} ${selectedFather.name}`.trim()}</span>
-                                {(selectedFather.birthYear || selectedFather.deathYear) && (
-                                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '400' }}>
-                                    {selectedFather.birthYear || '?'} ~ {selectedFather.deathYear || (selectedFather.isAlive ? '생존' : '?')}
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '0.125rem',
+                                }}
+                              >
+                                <span>
+                                  {`${selectedFather.surname || ''} ${selectedFather.name}`.trim()}
+                                </span>
+                                {(selectedFather.birthYear ||
+                                  selectedFather.deathYear) && (
+                                  <span
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      color: '#94a3b8',
+                                      fontWeight: '400',
+                                    }}
+                                  >
+                                    {selectedFather.birthYear || '?'} ~{' '}
+                                    {selectedFather.deathYear ||
+                                      (selectedFather.isAlive ? '생존' : '?')}
                                   </span>
                                 )}
                               </div>
-                            ) : '아버지를 선택하세요'}
+                            ) : (
+                              '아버지를 선택하세요'
+                            )}
                           </ModernCardValue>
                         </ModernCardContent>
                         {formData.fatherId && (
@@ -2656,15 +3279,34 @@ export default function PersonCreatePage() {
                           <ModernCardLabel>어머니</ModernCardLabel>
                           <ModernCardValue $hasValue={!!formData.motherId}>
                             {selectedMother ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
-                                <span>{`${selectedMother.surname || ''} ${selectedMother.name}`.trim()}</span>
-                                {(selectedMother.birthYear || selectedMother.deathYear) && (
-                                  <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '400' }}>
-                                    {selectedMother.birthYear || '?'} ~ {selectedMother.deathYear || (selectedMother.isAlive ? '생존' : '?')}
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '0.125rem',
+                                }}
+                              >
+                                <span>
+                                  {`${selectedMother.surname || ''} ${selectedMother.name}`.trim()}
+                                </span>
+                                {(selectedMother.birthYear ||
+                                  selectedMother.deathYear) && (
+                                  <span
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      color: '#94a3b8',
+                                      fontWeight: '400',
+                                    }}
+                                  >
+                                    {selectedMother.birthYear || '?'} ~{' '}
+                                    {selectedMother.deathYear ||
+                                      (selectedMother.isAlive ? '생존' : '?')}
                                   </span>
                                 )}
                               </div>
-                            ) : '어머니를 선택하세요'}
+                            ) : (
+                              '어머니를 선택하세요'
+                            )}
                           </ModernCardValue>
                         </ModernCardContent>
                         {formData.motherId && (
@@ -2686,18 +3328,24 @@ export default function PersonCreatePage() {
                 <FormRow>
                   <FormLabel>
                     약력
-                    <FormLabelHint>인물의 주요 생애와 업적을 간략히 작성하세요</FormLabelHint>
+                    <FormLabelHint>
+                      인물의 주요 생애와 업적을 간략히 작성하세요
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
                     <BiographyTextarea
                       placeholder="예: 대한민국의 정치인이자 독립운동가로, 1919년 3·1 운동에 참여하였으며..."
                       value={formData.biography}
-                      onChange={(e) => handleInputChange('biography', e.target.value)}
+                      onChange={(e) =>
+                        handleInputChange('biography', e.target.value)
+                      }
                       rows={6}
                       maxLength={2000}
                     />
                     <CharacterCountRow>
-                      <CharacterCount $warning={formData.biography.length > 1800}>
+                      <CharacterCount
+                        $warning={formData.biography.length > 1800}
+                      >
                         {formData.biography.length} / 2,000자
                       </CharacterCount>
                       {formData.biography.length > 1800 && (
@@ -2707,7 +3355,8 @@ export default function PersonCreatePage() {
                       )}
                     </CharacterCountRow>
                     <Hint>
-                      인물의 생애, 주요 업적, 역사적 의의 등을 포함하여 작성하세요.
+                      인물의 생애, 주요 업적, 역사적 의의 등을 포함하여
+                      작성하세요.
                     </Hint>
                   </FormField>
                 </FormRow>
@@ -2716,7 +3365,9 @@ export default function PersonCreatePage() {
                 <FormRow>
                   <FormLabel>
                     직업 분류 (대표 직업)
-                    <FormLabelHint>이 인물을 대표하는 직업을 선택하세요 (복수 선택 가능)</FormLabelHint>
+                    <FormLabelHint>
+                      이 인물을 대표하는 직업을 선택하세요 (복수 선택 가능)
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
                     {/* 카테고리 미선택 시: 카테고리 선택 유도 */}
@@ -2738,7 +3389,13 @@ export default function PersonCreatePage() {
                       </ModernSelectionCard>
                     ) : (
                       /* 카테고리 선택됨: 통합 직업 선택 카드 */
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '0.75rem',
+                        }}
+                      >
                         {/* 통합 직업 카드 */}
                         <ModernSelectionCard
                           $hasValue={formData.jobIds.length > 0}
@@ -2749,38 +3406,63 @@ export default function PersonCreatePage() {
                             <FiBriefcase size={22} />
                           </ModernCardIcon>
                           <ModernCardContent style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                              <ModernCardLabel>직업</ModernCardLabel>
-                              <span style={{ 
-                                fontSize: '0.7rem', 
-                                color: '#94a3b8',
+                            <div
+                              style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '0.25rem'
-                              }}>
+                                gap: '0.5rem',
+                                marginBottom: '0.25rem',
+                              }}
+                            >
+                              <ModernCardLabel>직업</ModernCardLabel>
+                              <span
+                                style={{
+                                  fontSize: '0.7rem',
+                                  color: '#94a3b8',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                }}
+                              >
                                 <FiLayers size={10} />
-                                {parentJobCategories.find((c: any) => c.id === selectedJobParentCategoryId)?.name}
-                                {selectedJobCategoryId !== 'all' && selectedJobCategory && (
-                                  <> › {selectedJobCategory.name}</>
-                                )}
+                                {
+                                  parentJobCategories.find(
+                                    (c: any) =>
+                                      c.id === selectedJobParentCategoryId,
+                                  )?.name
+                                }
+                                {selectedJobCategoryId !== 'all' &&
+                                  selectedJobCategory && (
+                                    <> › {selectedJobCategory.name}</>
+                                  )}
                               </span>
                             </div>
                             {formData.jobIds.length > 0 ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  gap: '0.5rem',
+                                  marginTop: '0.5rem',
+                                }}
+                              >
                                 {selectedJobs.map((job) => (
-                                  <JobBadgeInCard 
+                                  <JobBadgeInCard
                                     key={job.id}
                                     onClick={(e) => {
                                       e.stopPropagation()
                                     }}
                                   >
                                     <span>{getJobLabel(job)}</span>
-                                    <span 
+                                    <span
                                       className="remove-icon"
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         playClick()
-                                        const newJobIds = formData.jobIds.filter(id => id !== job.id)
+                                        const newJobIds =
+                                          formData.jobIds.filter(
+                                            (id) => id !== job.id,
+                                          )
                                         handleInputChange('jobIds', newJobIds)
                                       }}
                                     >
@@ -2795,7 +3477,14 @@ export default function PersonCreatePage() {
                               </ModernCardValue>
                             )}
                           </ModernCardContent>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.5rem',
+                              alignItems: 'flex-end',
+                            }}
+                          >
                             <JobCategoryChangeButton
                               type="button"
                               onClick={(e) => {
@@ -2816,7 +3505,8 @@ export default function PersonCreatePage() {
                       </div>
                     )}
                     <Hint>
-                      이 인물의 대표적인 직업을 선택하세요. 시기별 세부 경력은 "경력사항" 탭에서 등록할 수 있습니다.
+                      이 인물의 대표적인 직업을 선택하세요. 시기별 세부 경력은
+                      "경력사항" 탭에서 등록할 수 있습니다.
                     </Hint>
                   </FormField>
                 </FormRow>
@@ -2840,23 +3530,49 @@ export default function PersonCreatePage() {
                   </CareerHeader>
 
                   {careers.length === 0 && (
-                    <div style={{
-                      padding: '3rem 2rem',
-                      textAlign: 'center',
-                      background: '#f8fafc',
-                      border: '2px dashed #e2e8f0',
-                      borderRadius: '12px',
-                      margin: '1rem 0 2rem 0'
-                    }}>
-                      <FiAlertCircle size={48} style={{ color: '#cbd5e1', marginBottom: '1rem' }} />
-                      <div style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1e293b', marginBottom: '0.5rem' }}>
+                    <div
+                      style={{
+                        padding: '3rem 2rem',
+                        textAlign: 'center',
+                        background: '#f8fafc',
+                        border: '2px dashed #e2e8f0',
+                        borderRadius: '12px',
+                        margin: '1rem 0 2rem 0',
+                      }}
+                    >
+                      <FiAlertCircle
+                        size={48}
+                        style={{ color: '#cbd5e1', marginBottom: '1rem' }}
+                      />
+                      <div
+                        style={{
+                          fontSize: '1.125rem',
+                          fontWeight: '600',
+                          color: '#1e293b',
+                          marginBottom: '0.5rem',
+                        }}
+                      >
                         타임라인 항목이 없습니다
                       </div>
-                      <div style={{ fontSize: '0.938rem', color: '#64748b', marginBottom: '1.5rem' }}>
-                        상단의 "타임라인 항목 추가" 버튼을 눌러서 경력을 추가하세요
+                      <div
+                        style={{
+                          fontSize: '0.938rem',
+                          color: '#64748b',
+                          marginBottom: '1.5rem',
+                        }}
+                      >
+                        상단의 "타임라인 항목 추가" 버튼을 눌러서 경력을
+                        추가하세요
                       </div>
-                      <div style={{ fontSize: '0.875rem', color: '#94a3b8', lineHeight: '1.6' }}>
-                        💡 타임라인 항목을 추가하면 임기/활동 기간, 활동 국가, 소속 조직 등을 입력할 수 있습니다
+                      <div
+                        style={{
+                          fontSize: '0.875rem',
+                          color: '#94a3b8',
+                          lineHeight: '1.6',
+                        }}
+                      >
+                        💡 타임라인 항목을 추가하면 임기/활동 기간, 활동 국가,
+                        소속 조직 등을 입력할 수 있습니다
                       </div>
                     </div>
                   )}
@@ -2867,17 +3583,24 @@ export default function PersonCreatePage() {
                         {orderedCareers.map((career, index) => {
                           // 타임라인 제목 생성 로직
                           let displayTitle = career.timelineTitle
-                          if (!displayTitle && career.termNumber && career.title) {
+                          if (
+                            !displayTitle &&
+                            career.termNumber &&
+                            career.title
+                          ) {
                             displayTitle = `제${career.termNumber}대 ${career.title}`
                           } else if (!displayTitle && career.title) {
                             displayTitle = career.title
                           } else if (!displayTitle) {
                             displayTitle = `항목 ${index + 1}`
                           }
-                          
+
                           const careerErrors = validateCareerDates(career)
-                          const hasErrors = (errors.careers as { [key: string]: string[] })?.[career.id]?.length > 0
-                          
+                          const hasErrors =
+                            (errors.careers as { [key: string]: string[] })?.[
+                              career.id
+                            ]?.length > 0
+
                           return (
                             <React.Fragment key={career.id}>
                               <TimelineItem
@@ -2887,7 +3610,7 @@ export default function PersonCreatePage() {
                                 onClick={() => setActiveCareerId(career.id)}
                               >
                                 <TimelineMarker>
-                                  <TimelineDot 
+                                  <TimelineDot
                                     $active={activeCareerId === career.id}
                                     $isCurrent={career.isCurrent}
                                   />
@@ -2896,13 +3619,42 @@ export default function PersonCreatePage() {
                                   )}
                                 </TimelineMarker>
                                 <TimelineContent>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <strong style={{ color: career.isCurrent ? '#10b981' : undefined }}>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.5rem',
+                                    }}
+                                  >
+                                    <strong
+                                      style={{
+                                        color: career.isCurrent
+                                          ? '#10b981'
+                                          : undefined,
+                                      }}
+                                    >
                                       {displayTitle}
-                                      {career.isCurrent && <span style={{ marginLeft: '0.25rem', fontSize: '0.7rem' }}>(진행중)</span>}
+                                      {career.isCurrent && (
+                                        <span
+                                          style={{
+                                            marginLeft: '0.25rem',
+                                            fontSize: '0.7rem',
+                                          }}
+                                        >
+                                          (진행중)
+                                        </span>
+                                      )}
                                     </strong>
                                     {(careerErrors.length > 0 || hasErrors) && (
-                                      <span style={{ color: '#ef4444', fontSize: '0.75rem' }} title={careerErrors.join('\n')}>⚠️</span>
+                                      <span
+                                        style={{
+                                          color: '#ef4444',
+                                          fontSize: '0.75rem',
+                                        }}
+                                        title={careerErrors.join('\n')}
+                                      >
+                                        ⚠️
+                                      </span>
                                     )}
                                   </div>
                                   <span>
@@ -2926,7 +3678,9 @@ export default function PersonCreatePage() {
                                         e.stopPropagation()
                                         handleMoveCareerDown(career.id)
                                       }}
-                                      disabled={index === orderedCareers.length - 1}
+                                      disabled={
+                                        index === orderedCareers.length - 1
+                                      }
                                       title="아래로 이동"
                                     >
                                       ↓
@@ -2951,9 +3705,9 @@ export default function PersonCreatePage() {
                                       <FiX size={14} />
                                     </TimelineItemButton>
                                   </TimelineItemActions>
-                              </TimelineContent>
-                            </TimelineItem>
-                          </React.Fragment>
+                                </TimelineContent>
+                              </TimelineItem>
+                            </React.Fragment>
                           )
                         })}
                       </TimelineList>
@@ -2962,520 +3716,682 @@ export default function PersonCreatePage() {
                     <CareerFormPanel>
                       {activeCareer ? (
                         <CareerEditForm>
-                      <CareerFormHeader>
-                        <CareerFormTitle>
-                          <FiBriefcase />
-                          타임라인 항목 편집
-                        </CareerFormTitle>
-                      </CareerFormHeader>
+                          <CareerFormHeader>
+                            <CareerFormTitle>
+                              <FiBriefcase />
+                              타임라인 항목 편집
+                            </CareerFormTitle>
+                          </CareerFormHeader>
 
-                      <CareerFormBody>
-                        {/* 1. 제목 (필수) */}
-                        <FormRow>
-                          <FormLabel>
-                            제목 <Required>*</Required>
-                          </FormLabel>
-                          <FormField>
-                <Input
-                  type="text"
-                              placeholder="예: 대통령 재임, 파리 유학, 애플 CEO 재직"
-                              value={activeCareer.timelineTitle}
-                              onChange={(e) =>
-                                handleCareerInputChange(
-                                  activeCareer.id,
-                                  'timelineTitle',
-                                  e.target.value,
-                                )
-                              }
-                              style={{
-                                borderColor: !activeCareer.timelineTitle?.trim() && (errors.careers as any)?.[activeCareer.id] ? '#ef4444' : undefined
-                              }}
-                            />
-                            {!activeCareer.timelineTitle?.trim() && (errors.careers as any)?.[activeCareer.id] && (
-                              <ErrorText>제목을 입력해주세요</ErrorText>
-                            )}
-                          </FormField>
-            </FormRow>
-
-                        {/* 2. 임기/활동 기간 (필수) */}
-                        <FormRow>
-                          <FormLabel>임기/활동 기간 <Required>*</Required></FormLabel>
-                          <FormField>
-                            <PeriodRow>
-                              <DateRangeInline>
-                                <DateRangeColumn>
-                                  <DateRangeLabel>시작</DateRangeLabel>
-                                  <DateButton
-                                    type="button"
-                                    onClick={() =>
-                                      setShowCareerStartDateModal(true)
-                                    }
-                                    $hasValue={!!activeCareer.startYear}
-                                    style={{
-                                      borderColor: !activeCareer.startYear && (errors.careers as any)?.[activeCareer.id] ? '#ef4444' : undefined
-                                    }}
-                                  >
-                                    <FiCalendar />
-                                    <span>
-                                      {activeCareer.startYear
-                                        ? formatCareerDate(activeCareer, 'start')
-                                        : '시작일 선택'}
-                                    </span>
-                                  </DateButton>
-                                </DateRangeColumn>
-                                <DateRangeInlineSeparator>~</DateRangeInlineSeparator>
-                                <DateRangeColumn>
-                                  <DateRangeLabel>종료</DateRangeLabel>
-                                  {activeCareer.isCurrent ? (
-                                    <DateRangeCurrent>현재</DateRangeCurrent>
-                                  ) : (
-                                    <DateButton
-                                      type="button"
-                                      onClick={() =>
-                                        setShowCareerEndDateModal(true)
-                                      }
-                                      $hasValue={!!activeCareer.endYear}
-                                    >
-                                      <FiCalendar />
-                                      <span>
-                                        {activeCareer.endYear
-                                          ? formatCareerDate(activeCareer, 'end')
-                                          : '종료일 선택'}
-                                      </span>
-                                    </DateButton>
+                          <CareerFormBody>
+                            {/* 1. 제목 (필수) */}
+                            <FormRow>
+                              <FormLabel>
+                                제목 <Required>*</Required>
+                              </FormLabel>
+                              <FormField>
+                                <Input
+                                  type="text"
+                                  placeholder="예: 대통령 재임, 파리 유학, 애플 CEO 재직"
+                                  value={activeCareer.timelineTitle}
+                                  onChange={(e) =>
+                                    handleCareerInputChange(
+                                      activeCareer.id,
+                                      'timelineTitle',
+                                      e.target.value,
+                                    )
+                                  }
+                                  style={{
+                                    borderColor:
+                                      !activeCareer.timelineTitle?.trim() &&
+                                      (errors.careers as any)?.[activeCareer.id]
+                                        ? '#ef4444'
+                                        : undefined,
+                                  }}
+                                />
+                                {!activeCareer.timelineTitle?.trim() &&
+                                  (errors.careers as any)?.[
+                                    activeCareer.id
+                                  ] && (
+                                    <ErrorText>제목을 입력해주세요</ErrorText>
                                   )}
-                                </DateRangeColumn>
-                              </DateRangeInline>
-                              <PeriodStatus>
+                              </FormField>
+                            </FormRow>
+
+                            {/* 2. 임기/활동 기간 (필수) */}
+                            <FormRow>
+                              <FormLabel>
+                                임기/활동 기간 <Required>*</Required>
+                              </FormLabel>
+                              <FormField>
+                                <PeriodRow>
+                                  <DateRangeInline>
+                                    <DateRangeColumn>
+                                      <DateRangeLabel>시작</DateRangeLabel>
+                                      <DateButton
+                                        type="button"
+                                        onClick={() =>
+                                          setShowCareerStartDateModal(true)
+                                        }
+                                        $hasValue={!!activeCareer.startYear}
+                                        style={{
+                                          borderColor:
+                                            !activeCareer.startYear &&
+                                            (errors.careers as any)?.[
+                                              activeCareer.id
+                                            ]
+                                              ? '#ef4444'
+                                              : undefined,
+                                        }}
+                                      >
+                                        <FiCalendar />
+                                        <span>
+                                          {activeCareer.startYear
+                                            ? formatCareerDate(
+                                                activeCareer,
+                                                'start',
+                                              )
+                                            : '시작일 선택'}
+                                        </span>
+                                      </DateButton>
+                                    </DateRangeColumn>
+                                    <DateRangeInlineSeparator>
+                                      ~
+                                    </DateRangeInlineSeparator>
+                                    <DateRangeColumn>
+                                      <DateRangeLabel>종료</DateRangeLabel>
+                                      {activeCareer.isCurrent ? (
+                                        <DateRangeCurrent>
+                                          현재
+                                        </DateRangeCurrent>
+                                      ) : (
+                                        <DateButton
+                                          type="button"
+                                          onClick={() =>
+                                            setShowCareerEndDateModal(true)
+                                          }
+                                          $hasValue={!!activeCareer.endYear}
+                                        >
+                                          <FiCalendar />
+                                          <span>
+                                            {activeCareer.endYear
+                                              ? formatCareerDate(
+                                                  activeCareer,
+                                                  'end',
+                                                )
+                                              : '종료일 선택'}
+                                          </span>
+                                        </DateButton>
+                                      )}
+                                    </DateRangeColumn>
+                                  </DateRangeInline>
+                                  <PeriodStatus>
+                                    <ToggleRow>
+                                      <ToggleLabel>현재 진행 중</ToggleLabel>
+                                      <ToggleButton
+                                        type="button"
+                                        $active={activeCareer.isCurrent}
+                                        onClick={() =>
+                                          handleCareerInputChange(
+                                            activeCareer.id,
+                                            'isCurrent',
+                                            !activeCareer.isCurrent,
+                                          )
+                                        }
+                                      >
+                                        <ToggleThumb
+                                          $active={activeCareer.isCurrent}
+                                        />
+                                      </ToggleButton>
+                                    </ToggleRow>
+                                  </PeriodStatus>
+                                </PeriodRow>
+                                {!activeCareer.startYear &&
+                                  (errors.careers as any)?.[
+                                    activeCareer.id
+                                  ] && (
+                                    <ErrorText>시작일을 입력해주세요</ErrorText>
+                                  )}
+                                {validateCareerDates(activeCareer).length >
+                                  0 && (
+                                  <ErrorText>
+                                    {validateCareerDates(activeCareer).join(
+                                      ', ',
+                                    )}
+                                  </ErrorText>
+                                )}
+                                {getAgeAtCareerStart(activeCareer) !== null && (
+                                  <AgeHint>
+                                    만 {getAgeAtCareerStart(activeCareer)}세에
+                                    시작
+                                    {activeCareer.endYear &&
+                                      !activeCareer.isCurrent &&
+                                      (() => {
+                                        const birthYear = parseInt(
+                                          formData.birthYear,
+                                        )
+                                        const endYear = parseInt(
+                                          activeCareer.endYear,
+                                        )
+                                        let endAge = 0
+
+                                        if (
+                                          formData.birthEra === 'BC' &&
+                                          activeCareer.endEra === 'BC'
+                                        ) {
+                                          endAge = birthYear - endYear
+                                        } else if (
+                                          formData.birthEra === 'BC' &&
+                                          activeCareer.endEra === 'AD'
+                                        ) {
+                                          endAge = birthYear + endYear - 1
+                                        } else {
+                                          endAge = endYear - birthYear
+                                        }
+
+                                        const startAge =
+                                          getAgeAtCareerStart(activeCareer) || 0
+                                        const duration = endAge - startAge
+
+                                        return `, ${endAge}세에 종료 (${duration}년간 재임)`
+                                      })()}
+                                  </AgeHint>
+                                )}
+                              </FormField>
+                            </FormRow>
+
+                            {/* 3. 활동 국가 */}
+                            <FormRow>
+                              <FormLabel>활동 국가</FormLabel>
+                              <FormField>
+                                <ModernSelectionCard
+                                  $hasValue={!!activeCareer.countryId}
+                                  onClick={() => {
+                                    setCountryModalContext('career')
+                                    setShowCountryModal(true)
+                                  }}
+                                  type="button"
+                                >
+                                  <ModernCardIcon
+                                    $color={DESIGN_TOKENS.colors.geography}
+                                  >
+                                    <FiGlobe size={22} />
+                                  </ModernCardIcon>
+                                  <ModernCardContent>
+                                    <ModernCardLabel>활동 국가</ModernCardLabel>
+                                    <ModernCardValue
+                                      $hasValue={!!activeCareer.countryId}
+                                    >
+                                      {(() => {
+                                        const country =
+                                          countries.find(
+                                            (c) =>
+                                              c.id === activeCareer.countryId,
+                                          ) ||
+                                          historicalCountries.find(
+                                            (c) =>
+                                              c.id === activeCareer.countryId,
+                                          )
+                                        return country ? (
+                                          <span
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '0.5rem',
+                                            }}
+                                          >
+                                            <span
+                                              style={{ fontSize: '1.25rem' }}
+                                            >
+                                              {country.flagEmoji || '🌍'}
+                                            </span>
+                                            <span>{country.name}</span>
+                                          </span>
+                                        ) : (
+                                          '활동 국가를 선택하세요'
+                                        )
+                                      })()}
+                                    </ModernCardValue>
+                                  </ModernCardContent>
+                                  {activeCareer.countryId && (
+                                    <ModernCardClear
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleCareerInputChange(
+                                          activeCareer.id,
+                                          'countryId',
+                                          '',
+                                        )
+                                      }}
+                                    >
+                                      <FiX size={16} />
+                                    </ModernCardClear>
+                                  )}
+                                </ModernSelectionCard>
+                                <Hint>
+                                  해당 경력을 수행한 국가를 선택하세요.
+                                </Hint>
+                              </FormField>
+                            </FormRow>
+
+                            {/* 4. 직책 정보 표시 여부 토글 */}
+                            <FormRow>
+                              <FormLabel>직책 정보 표시</FormLabel>
+                              <FormField>
                                 <ToggleRow>
-                                  <ToggleLabel>현재 진행 중</ToggleLabel>
+                                  <ToggleLabel>
+                                    타임라인에 직책 정보를 표시합니다
+                                  </ToggleLabel>
                                   <ToggleButton
                                     type="button"
-                                    $active={activeCareer.isCurrent}
+                                    $active={activeCareer.showPositionInfo}
                                     onClick={() =>
                                       handleCareerInputChange(
                                         activeCareer.id,
-                                        'isCurrent',
-                                        !activeCareer.isCurrent,
+                                        'showPositionInfo',
+                                        !activeCareer.showPositionInfo,
                                       )
                                     }
                                   >
                                     <ToggleThumb
-                                      $active={activeCareer.isCurrent}
+                                      $active={activeCareer.showPositionInfo}
                                     />
                                   </ToggleButton>
                                 </ToggleRow>
-                              </PeriodStatus>
-                            </PeriodRow>
-                            {!activeCareer.startYear && (errors.careers as any)?.[activeCareer.id] && (
-                              <ErrorText>시작일을 입력해주세요</ErrorText>
-                            )}
-                            {validateCareerDates(activeCareer).length > 0 && (
-                              <ErrorText>{validateCareerDates(activeCareer).join(', ')}</ErrorText>
-                            )}
-                            {getAgeAtCareerStart(activeCareer) !== null && (
-                              <AgeHint>
-                                만 {getAgeAtCareerStart(activeCareer)}세에 시작
-                                {activeCareer.endYear && !activeCareer.isCurrent && (() => {
-                                  const birthYear = parseInt(formData.birthYear)
-                                  const endYear = parseInt(activeCareer.endYear)
-                                  let endAge = 0
-                                  
-                                  if (formData.birthEra === 'BC' && activeCareer.endEra === 'BC') {
-                                    endAge = birthYear - endYear
-                                  } else if (formData.birthEra === 'BC' && activeCareer.endEra === 'AD') {
-                                    endAge = birthYear + endYear - 1
-                                  } else {
-                                    endAge = endYear - birthYear
-                                  }
-                                  
-                                  const startAge = getAgeAtCareerStart(activeCareer) || 0
-                                  const duration = endAge - startAge
-                                  
-                                  return `, ${endAge}세에 종료 (${duration}년간 재임)`
-                                })()}
-                              </AgeHint>
-                            )}
-                          </FormField>
-                        </FormRow>
-
-                        {/* 3. 활동 국가 */}
-                        <FormRow>
-                          <FormLabel>활동 국가</FormLabel>
-                          <FormField>
-                            <ModernSelectionCard
-                              $hasValue={!!activeCareer.countryId}
-                              onClick={() => {
-                                setCountryModalContext('career')
-                                setShowCountryModal(true)
-                              }}
-                              type="button"
-                            >
-                              <ModernCardIcon $color={DESIGN_TOKENS.colors.geography}>
-                                <FiGlobe size={22} />
-                              </ModernCardIcon>
-                              <ModernCardContent>
-                                <ModernCardLabel>활동 국가</ModernCardLabel>
-                                <ModernCardValue $hasValue={!!activeCareer.countryId}>
-                                  {(() => {
-                                    const country = countries.find((c) => c.id === activeCareer.countryId) ||
-                                      historicalCountries.find((c) => c.id === activeCareer.countryId)
-                                    return country ? (
-                                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <span style={{ fontSize: '1.25rem' }}>{country.flagEmoji || '🌍'}</span>
-                                        <span>{country.name}</span>
-                                      </span>
-                                    ) : (
-                                      '활동 국가를 선택하세요'
-                                    )
-                                  })()}
-                                </ModernCardValue>
-                              </ModernCardContent>
-                              {activeCareer.countryId && (
-                                <ModernCardClear
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleCareerInputChange(activeCareer.id, 'countryId', '')
-                                  }}
-                                >
-                                  <FiX size={16} />
-                                </ModernCardClear>
-                              )}
-                            </ModernSelectionCard>
-                            <Hint>
-                              해당 경력을 수행한 국가를 선택하세요.
-                            </Hint>
-                          </FormField>
-                        </FormRow>
-
-                        {/* 4. 직책 정보 표시 여부 토글 */}
-                        <FormRow>
-                          <FormLabel>직책 정보 표시</FormLabel>
-                          <FormField>
-                            <ToggleRow>
-                              <ToggleLabel>
-                                타임라인에 직책 정보를 표시합니다
-                              </ToggleLabel>
-                              <ToggleButton
-                                type="button"
-                                $active={activeCareer.showPositionInfo}
-                                onClick={() =>
-                                  handleCareerInputChange(
-                                    activeCareer.id,
-                                    'showPositionInfo',
-                                    !activeCareer.showPositionInfo,
-                                  )
-                                }
-                              >
-                                <ToggleThumb
-                                  $active={activeCareer.showPositionInfo}
-                                />
-                              </ToggleButton>
-                            </ToggleRow>
-                            <Hint>
-                              활성화하면 타임라인에 "제32대 대통령" 같은 직책 정보가 표시됩니다
-                            </Hint>
-                          </FormField>
-                        </FormRow>
-
-                        {/* 5. 직책 정보 (선택) */}
-                        <FormRow>
-                          <FormLabel>직책 정보 (선택)</FormLabel>
-                          <FormField>
-                            <ToggleRow>
-                              <ToggleLabel>직책/직업 상세 입력</ToggleLabel>
-                              <ToggleButton
-                                type="button"
-                                $active={activeCareer.showPositionInfo}
-                                onClick={() =>
-                                  handleCareerInputChange(
-                                    activeCareer.id,
-                                    'showPositionInfo',
-                                    !activeCareer.showPositionInfo,
-                                  )
-                                }
-                              >
-                                <ToggleThumb
-                                  $active={activeCareer.showPositionInfo}
-                                />
-                              </ToggleButton>
-                            </ToggleRow>
-                            <ToggleHint>
-                              이 시기의 구체적인 직책을 입력합니다. 예: 대령, 대통령, CEO 등
-                            </ToggleHint>
-                          </FormField>
-                        </FormRow>
-
-                        {activeCareer.showPositionInfo && (
-                          <>
-                            <FormRow>
-                              <FormLabel>
-                                계급/직급 <Required>*</Required>
-                                <FormLabelHint>이 사람의 지위 (예: 대장, CEO, 장관)</FormLabelHint>
-                              </FormLabel>
-                              <FormField>
-                                <ModernSelectionCard
-                                  $hasValue={!!activeCareer.jobId}
-                                  onClick={() => setShowJobModal(true)}
-                                  type="button"
-                                >
-                                  <ModernCardIcon $color={DESIGN_TOKENS.colors.job}>
-                                    <FiBriefcase size={22} />
-                                  </ModernCardIcon>
-                                  <ModernCardContent>
-                                    <ModernCardLabel>계급/직급</ModernCardLabel>
-                                    <ModernCardValue $hasValue={!!activeCareer.jobId}>
-                                      {activeCareer.jobId && activeCareer.jobName ? (
-                                        activeCareer.jobName
-                                      ) : (
-                                        '계급/직급 선택 (예: 대장, CEO, 장관)'
-                                      )}
-                                    </ModernCardValue>
-                                  </ModernCardContent>
-                                  {activeCareer.jobId && (
-                                    <ModernCardClear
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        playClick()
-                                        setSelectedJobParentCategoryId('all')
-                                        setSelectedJobCategoryId('all')
-                                        handleCareerInputChange(activeCareer.id, 'jobId', '')
-                                        handleCareerInputChange(activeCareer.id, 'jobName', '')
-                                        handleCareerInputChange(activeCareer.id, 'jobCategoryId', '')
-                                      }}
-                                    >
-                                      <FiX size={16} />
-                                    </ModernCardClear>
-                                  )}
-                                </ModernSelectionCard>
-                              </FormField>
-                            </FormRow>
-
-                            <FormRow>
-                              <FormLabel>
-                                소속 조직 <Required>*</Required>
-                                <FormLabelHint>근무한 조직/부대/기업</FormLabelHint>
-                              </FormLabel>
-                              <FormField>
-                                <ModernSelectionCard
-                                  $hasValue={!!activeCareer.organizationId}
-                                  onClick={() => setShowOrganizationModal(true)}
-                                  type="button"
-                                >
-                                  <ModernCardIcon $color={DESIGN_TOKENS.colors.organization}>
-                                    <FiPackage size={22} />
-                                  </ModernCardIcon>
-                                  <ModernCardContent>
-                                    <ModernCardLabel>소속 조직</ModernCardLabel>
-                                    <ModernCardValue $hasValue={!!activeCareer.organizationId}>
-                                      {(() => {
-                                        const org = organizations.find((o) => o.id === activeCareer.organizationId)
-                                        return org ? org.name : '소속 조직 선택 (예: 제8군단, 삼성전자, 국방부)'
-                                      })()}
-                                    </ModernCardValue>
-                                  </ModernCardContent>
-                                  {activeCareer.organizationId && (
-                                    <ModernCardClear
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleCareerInputChange(activeCareer.id, 'organizationId', '')
-                                        handleCareerInputChange(activeCareer.id, 'organization', '')
-                                      }}
-                                    >
-                                      <FiX size={16} />
-                                    </ModernCardClear>
-                                  )}
-                                </ModernSelectionCard>
-                              </FormField>
-                            </FormRow>
-                            
-                            <FormRow>
-                              <FormLabel>
-                                역할/보직
-                                <FormLabelHint>구체적인 역할이나 보직명 (선택)</FormLabelHint>
-                              </FormLabel>
-                              <FormField>
-                                <TermNumberRow>
-                                  <TermNumberInput>
-                                    <TermNumberPrefix>제</TermNumberPrefix>
-                                    <Input
-                                      type="text"
-                                      placeholder="32"
-                                      value={activeCareer.termNumber}
-                                      onChange={(e) =>
-                                        handleCareerInputChange(
-                                          activeCareer.id,
-                                          'termNumber',
-                                          e.target.value.replace(/[^0-9]/g, ''),
-                                        )
-                                      }
-                                      style={{ width: '80px', textAlign: 'center' }}
-                                    />
-                                    <TermNumberSuffix>대</TermNumberSuffix>
-                                  </TermNumberInput>
-                                  <Input
-                                    type="text"
-                                    placeholder="예: 군단장, 최고경영자, 국방부장관"
-                                    value={activeCareer.title}
-                                    onChange={(e) =>
-                                      handleCareerInputChange(
-                                        activeCareer.id,
-                                        'title',
-                                        e.target.value,
-                                      )
-                                    }
-                                    style={{ flex: 1 }}
-                                  />
-                                </TermNumberRow>
                                 <Hint>
-                                  조직에서 맡은 구체적인 역할이나 직책을 입력하세요
+                                  활성화하면 타임라인에 "제32대 대통령" 같은
+                                  직책 정보가 표시됩니다
                                 </Hint>
                               </FormField>
                             </FormRow>
-                          </>
-                        )}
 
-                        {/* 6. 활동 내용/설명 */}
-                        <FormRow>
-                          <FormLabel>활동 내용 / 설명</FormLabel>
-                          <FormField>
-                            <TextArea
-                              placeholder="이 기간 동안의 주요 활동이나 업적을 입력하세요"
-                              value={activeCareer.note}
-                              onChange={(e) =>
-                                handleCareerInputChange(
-                                  activeCareer.id,
-                                  'note',
-                                  e.target.value,
-                                )
-                              }
-                              rows={3}
-                            />
-                          </FormField>
-                        </FormRow>
-
-                        {/* 7. 주요 경력 표시 토글 */}
-                        <FormRow>
-                          <FormLabel>주요 경력</FormLabel>
-                          <FormField>
-                            <ToggleRow>
-                              <ToggleLabel>주요 경력으로 표시</ToggleLabel>
-                              <ToggleButton
-                                type="button"
-                                $active={activeCareer.priority === 0}
-                                onClick={() =>
-                                  handleCareerInputChange(
-                                    activeCareer.id,
-                                    'priority',
-                                    activeCareer.priority === 0
-                                      ? careers.length
-                                      : 0,
-                                  )
-                                }
-                              >
-                                <ToggleThumb
-                                  $active={activeCareer.priority === 0}
-                                />
-                              </ToggleButton>
-                            </ToggleRow>
-                            <ToggleHint>
-                              사건 리스트에서 각종 사건들 사이에 노출됩니다.
-                            </ToggleHint>
-                          </FormField>
-                        </FormRow>
-
-                        {/* 8. 이미지 */}
-                        <FormRow>
-                          <FormLabel>이미지</FormLabel>
-                          <FormField>
-                            <CareerImageGrid>
-                              {activeCareer.images.map((image, index) => (
-                                <CareerImageItem 
-                                  key={`${image.url}-${index}`}
-                                  draggable
-                                  onDragStart={() => setDraggedCareerImageIndex(index)}
-                                  onDragOver={(e) => e.preventDefault()}
-                                  onDrop={(e) => {
-                                    e.preventDefault()
-                                    if (draggedCareerImageIndex !== null && draggedCareerImageIndex !== index) {
-                                      handleCareerImageReorder(activeCareer.id, draggedCareerImageIndex, index)
-                                    }
-                                    setDraggedCareerImageIndex(null)
-                                  }}
-                                  onDragEnd={() => setDraggedCareerImageIndex(null)}
-                                  style={{
-                                    opacity: draggedCareerImageIndex === index ? 0.5 : 1,
-                                    cursor: 'move'
-                                  }}
-                                >
-                                  <CareerImageThumb
+                            {/* 5. 직책 정보 (선택) */}
+                            <FormRow>
+                              <FormLabel>직책 정보 (선택)</FormLabel>
+                              <FormField>
+                                <ToggleRow>
+                                  <ToggleLabel>직책/직업 상세 입력</ToggleLabel>
+                                  <ToggleButton
                                     type="button"
-                                    data-tooltip={image.description || undefined}
+                                    $active={activeCareer.showPositionInfo}
+                                    onClick={() =>
+                                      handleCareerInputChange(
+                                        activeCareer.id,
+                                        'showPositionInfo',
+                                        !activeCareer.showPositionInfo,
+                                      )
+                                    }
                                   >
-                                    <img src={image.url} alt="경력 이미지" />
-                                    <CareerImageRemove
+                                    <ToggleThumb
+                                      $active={activeCareer.showPositionInfo}
+                                    />
+                                  </ToggleButton>
+                                </ToggleRow>
+                                <ToggleHint>
+                                  이 시기의 구체적인 직책을 입력합니다. 예:
+                                  대령, 대통령, CEO 등
+                                </ToggleHint>
+                              </FormField>
+                            </FormRow>
+
+                            {activeCareer.showPositionInfo && (
+                              <>
+                                <FormRow>
+                                  <FormLabel>
+                                    계급/직급 <Required>*</Required>
+                                    <FormLabelHint>
+                                      이 사람의 지위 (예: 대장, CEO, 장관)
+                                    </FormLabelHint>
+                                  </FormLabel>
+                                  <FormField>
+                                    <ModernSelectionCard
+                                      $hasValue={!!activeCareer.jobId}
+                                      onClick={() => setShowJobModal(true)}
                                       type="button"
-                                      onClick={(e) => {
+                                    >
+                                      <ModernCardIcon
+                                        $color={DESIGN_TOKENS.colors.job}
+                                      >
+                                        <FiBriefcase size={22} />
+                                      </ModernCardIcon>
+                                      <ModernCardContent>
+                                        <ModernCardLabel>
+                                          계급/직급
+                                        </ModernCardLabel>
+                                        <ModernCardValue
+                                          $hasValue={!!activeCareer.jobId}
+                                        >
+                                          {activeCareer.jobId &&
+                                          activeCareer.jobName
+                                            ? activeCareer.jobName
+                                            : '계급/직급 선택 (예: 대장, CEO, 장관)'}
+                                        </ModernCardValue>
+                                      </ModernCardContent>
+                                      {activeCareer.jobId && (
+                                        <ModernCardClear
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            playClick()
+                                            setSelectedJobParentCategoryId(
+                                              'all',
+                                            )
+                                            setSelectedJobCategoryId('all')
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'jobId',
+                                              '',
+                                            )
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'jobName',
+                                              '',
+                                            )
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'jobCategoryId',
+                                              '',
+                                            )
+                                          }}
+                                        >
+                                          <FiX size={16} />
+                                        </ModernCardClear>
+                                      )}
+                                    </ModernSelectionCard>
+                                  </FormField>
+                                </FormRow>
+
+                                <FormRow>
+                                  <FormLabel>
+                                    소속 조직 <Required>*</Required>
+                                    <FormLabelHint>
+                                      근무한 조직/부대/기업
+                                    </FormLabelHint>
+                                  </FormLabel>
+                                  <FormField>
+                                    <ModernSelectionCard
+                                      $hasValue={!!activeCareer.organizationId}
+                                      onClick={() =>
+                                        setShowOrganizationModal(true)
+                                      }
+                                      type="button"
+                                    >
+                                      <ModernCardIcon
+                                        $color={
+                                          DESIGN_TOKENS.colors.organization
+                                        }
+                                      >
+                                        <FiPackage size={22} />
+                                      </ModernCardIcon>
+                                      <ModernCardContent>
+                                        <ModernCardLabel>
+                                          소속 조직
+                                        </ModernCardLabel>
+                                        <ModernCardValue
+                                          $hasValue={
+                                            !!activeCareer.organizationId
+                                          }
+                                        >
+                                          {(() => {
+                                            const org = organizations.find(
+                                              (o) =>
+                                                o.id ===
+                                                activeCareer.organizationId,
+                                            )
+                                            return org
+                                              ? org.name
+                                              : '소속 조직 선택 (예: 제8군단, 삼성전자, 국방부)'
+                                          })()}
+                                        </ModernCardValue>
+                                      </ModernCardContent>
+                                      {activeCareer.organizationId && (
+                                        <ModernCardClear
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'organizationId',
+                                              '',
+                                            )
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'organization',
+                                              '',
+                                            )
+                                          }}
+                                        >
+                                          <FiX size={16} />
+                                        </ModernCardClear>
+                                      )}
+                                    </ModernSelectionCard>
+                                  </FormField>
+                                </FormRow>
+
+                                <FormRow>
+                                  <FormLabel>
+                                    역할/보직
+                                    <FormLabelHint>
+                                      구체적인 역할이나 보직명 (선택)
+                                    </FormLabelHint>
+                                  </FormLabel>
+                                  <FormField>
+                                    <TermNumberRow>
+                                      <TermNumberInput>
+                                        <TermNumberPrefix>제</TermNumberPrefix>
+                                        <Input
+                                          type="text"
+                                          placeholder="32"
+                                          value={activeCareer.termNumber}
+                                          onChange={(e) =>
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'termNumber',
+                                              e.target.value.replace(
+                                                /[^0-9]/g,
+                                                '',
+                                              ),
+                                            )
+                                          }
+                                          style={{
+                                            width: '80px',
+                                            textAlign: 'center',
+                                          }}
+                                        />
+                                        <TermNumberSuffix>대</TermNumberSuffix>
+                                      </TermNumberInput>
+                                      <Input
+                                        type="text"
+                                        placeholder="예: 군단장, 최고경영자, 국방부장관"
+                                        value={activeCareer.title}
+                                        onChange={(e) =>
+                                          handleCareerInputChange(
+                                            activeCareer.id,
+                                            'title',
+                                            e.target.value,
+                                          )
+                                        }
+                                        style={{ flex: 1 }}
+                                      />
+                                    </TermNumberRow>
+                                    <Hint>
+                                      조직에서 맡은 구체적인 역할이나 직책을
+                                      입력하세요
+                                    </Hint>
+                                  </FormField>
+                                </FormRow>
+                              </>
+                            )}
+
+                            {/* 6. 활동 내용/설명 */}
+                            <FormRow>
+                              <FormLabel>활동 내용 / 설명</FormLabel>
+                              <FormField>
+                                <TextArea
+                                  placeholder="이 기간 동안의 주요 활동이나 업적을 입력하세요"
+                                  value={activeCareer.note}
+                                  onChange={(e) =>
+                                    handleCareerInputChange(
+                                      activeCareer.id,
+                                      'note',
+                                      e.target.value,
+                                    )
+                                  }
+                                  rows={3}
+                                />
+                              </FormField>
+                            </FormRow>
+
+                            {/* 7. 주요 경력 표시 토글 */}
+                            <FormRow>
+                              <FormLabel>주요 경력</FormLabel>
+                              <FormField>
+                                <ToggleRow>
+                                  <ToggleLabel>주요 경력으로 표시</ToggleLabel>
+                                  <ToggleButton
+                                    type="button"
+                                    $active={activeCareer.priority === 0}
+                                    onClick={() =>
+                                      handleCareerInputChange(
+                                        activeCareer.id,
+                                        'priority',
+                                        activeCareer.priority === 0
+                                          ? careers.length
+                                          : 0,
+                                      )
+                                    }
+                                  >
+                                    <ToggleThumb
+                                      $active={activeCareer.priority === 0}
+                                    />
+                                  </ToggleButton>
+                                </ToggleRow>
+                                <ToggleHint>
+                                  사건 리스트에서 각종 사건들 사이에 노출됩니다.
+                                </ToggleHint>
+                              </FormField>
+                            </FormRow>
+
+                            {/* 8. 이미지 */}
+                            <FormRow>
+                              <FormLabel>이미지</FormLabel>
+                              <FormField>
+                                <CareerImageGrid>
+                                  {activeCareer.images.map((image, index) => (
+                                    <CareerImageItem
+                                      key={`${image.url}-${index}`}
+                                      draggable
+                                      onDragStart={() =>
+                                        setDraggedCareerImageIndex(index)
+                                      }
+                                      onDragOver={(e) => e.preventDefault()}
+                                      onDrop={(e) => {
                                         e.preventDefault()
-                                        e.stopPropagation()
-                                        handleRemoveCareerImage(
-                                          activeCareer.id,
-                                          image.url,
-                                          index,
-                                        )
+                                        if (
+                                          draggedCareerImageIndex !== null &&
+                                          draggedCareerImageIndex !== index
+                                        ) {
+                                          handleCareerImageReorder(
+                                            activeCareer.id,
+                                            draggedCareerImageIndex,
+                                            index,
+                                          )
+                                        }
+                                        setDraggedCareerImageIndex(null)
+                                      }}
+                                      onDragEnd={() =>
+                                        setDraggedCareerImageIndex(null)
+                                      }
+                                      style={{
+                                        opacity:
+                                          draggedCareerImageIndex === index
+                                            ? 0.5
+                                            : 1,
+                                        cursor: 'move',
                                       }}
                                     >
-                                      <FiX size={12} />
-                                    </CareerImageRemove>
-                                  </CareerImageThumb>
-                                  <CareerImageDescriptionInput
-                                    type="text"
-                                    placeholder="이미지 설명"
-                                    value={image.description}
+                                      <CareerImageThumb
+                                        type="button"
+                                        data-tooltip={
+                                          image.description || undefined
+                                        }
+                                      >
+                                        <img
+                                          src={image.url}
+                                          alt="경력 이미지"
+                                        />
+                                        <CareerImageRemove
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            handleRemoveCareerImage(
+                                              activeCareer.id,
+                                              image.url,
+                                              index,
+                                            )
+                                          }}
+                                        >
+                                          <FiX size={12} />
+                                        </CareerImageRemove>
+                                      </CareerImageThumb>
+                                      <CareerImageDescriptionInput
+                                        type="text"
+                                        placeholder="이미지 설명"
+                                        value={image.description}
+                                        onChange={(e) =>
+                                          handleCareerImageDescriptionChange(
+                                            activeCareer.id,
+                                            index,
+                                            e.target.value,
+                                          )
+                                        }
+                                      />
+                                    </CareerImageItem>
+                                  ))}
+                                  <CareerImageAdd
+                                    as="label"
+                                    htmlFor={`career-images-${activeCareer.id}`}
+                                  >
+                                    <FiPlus />
+                                    이미지 추가
+                                  </CareerImageAdd>
+                                  <CareerImageInput
+                                    id={`career-images-${activeCareer.id}`}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
                                     onChange={(e) =>
-                                      handleCareerImageDescriptionChange(
+                                      handleCareerImagesUpload(
                                         activeCareer.id,
-                                        index,
-                                        e.target.value,
+                                        e,
                                       )
                                     }
                                   />
-                                </CareerImageItem>
-                              ))}
-                              <CareerImageAdd
-                                as="label"
-                                htmlFor={`career-images-${activeCareer.id}`}
-                              >
-                                <FiPlus />
-                                이미지 추가
-                              </CareerImageAdd>
-                              <CareerImageInput
-                                id={`career-images-${activeCareer.id}`}
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                onChange={(e) =>
-                                  handleCareerImagesUpload(
-                                    activeCareer.id,
-                                    e,
-                                  )
-                                }
-                              />
-                            </CareerImageGrid>
-                          </FormField>
-                        </FormRow>
-
-
-                      </CareerFormBody>
-                    </CareerEditForm>
+                                </CareerImageGrid>
+                              </FormField>
+                            </FormRow>
+                          </CareerFormBody>
+                        </CareerEditForm>
                       ) : (
                         <EmptyCareerFormHint>
-                          <FiBriefcase size={32} style={{ color: '#cbd5e1', marginBottom: '0.5rem' }} />
-                          <div style={{ fontSize: '1rem', fontWeight: '600', color: '#64748b', marginBottom: '0.25rem' }}>
+                          <FiBriefcase
+                            size={32}
+                            style={{ color: '#cbd5e1', marginBottom: '0.5rem' }}
+                          />
+                          <div
+                            style={{
+                              fontSize: '1rem',
+                              fontWeight: '600',
+                              color: '#64748b',
+                              marginBottom: '0.25rem',
+                            }}
+                          >
                             타임라인 항목을 선택하세요
                           </div>
-                          <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                            왼쪽 타임라인에서 항목을 클릭하거나 새 항목을 추가하세요
+                          <div
+                            style={{ fontSize: '0.875rem', color: '#94a3b8' }}
+                          >
+                            왼쪽 타임라인에서 항목을 클릭하거나 새 항목을
+                            추가하세요
                           </div>
                         </EmptyCareerFormHint>
                       )}
@@ -3491,9 +4407,18 @@ export default function PersonCreatePage() {
       {/* 직업 선택 모달 - 경력용 (STEP 2: 직업 선택) */}
       {showJobModal && activeCareer && currentStep === 'career' && (
         <Modal onClick={() => setShowJobModal(false)}>
-          <ModalContent onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px' }}>
+          <ModalContent
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '650px' }}
+          >
             <ModalHeader style={{ borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                }}
+              >
                 <JobCategoryModalStep>STEP 2</JobCategoryModalStep>
                 <ModalTitle style={{ fontSize: '1.1rem', fontWeight: '600' }}>
                   직업 선택
@@ -3505,16 +4430,22 @@ export default function PersonCreatePage() {
             </ModalHeader>
 
             {/* 현재 선택된 카테고리 표시 */}
-            {(selectedJobParentCategoryId !== 'all' || selectedJobCategoryId !== 'all') && (
+            {(selectedJobParentCategoryId !== 'all' ||
+              selectedJobCategoryId !== 'all') && (
               <CurrentCategoryBanner>
                 <CurrentCategoryText>
                   <FiLayers style={{ fontSize: '1rem' }} />
                   {selectedJobParentCategoryId !== 'all' && (
                     <>
-                      {parentJobCategories.find((c: any) => c.id === selectedJobParentCategoryId)?.name}
-                      {selectedJobCategoryId !== 'all' && selectedJobCategory && (
-                        <> › {selectedJobCategory.name}</>
-                      )}
+                      {
+                        parentJobCategories.find(
+                          (c: any) => c.id === selectedJobParentCategoryId,
+                        )?.name
+                      }
+                      {selectedJobCategoryId !== 'all' &&
+                        selectedJobCategory && (
+                          <> › {selectedJobCategory.name}</>
+                        )}
                     </>
                   )}
                 </CurrentCategoryText>
@@ -3532,7 +4463,12 @@ export default function PersonCreatePage() {
               </CurrentCategoryBanner>
             )}
 
-            <SearchWrapper style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9' }}>
+            <SearchWrapper
+              style={{
+                padding: '1rem 1.5rem',
+                borderBottom: '1px solid #f1f5f9',
+              }}
+            >
               <FiSearch />
               <SearchInput
                 type="text"
@@ -3552,7 +4488,11 @@ export default function PersonCreatePage() {
                   onClick={() => {
                     const jobLabel = getJobLabel(job)
                     handleCareerInputChange(activeCareer.id, 'jobId', job.id)
-                    handleCareerInputChange(activeCareer.id, 'jobCategoryId', selectedJobParentCategoryId)
+                    handleCareerInputChange(
+                      activeCareer.id,
+                      'jobCategoryId',
+                      selectedJobParentCategoryId,
+                    )
                     handleCareerInputChange(
                       activeCareer.id,
                       'jobName',
@@ -3578,12 +4518,27 @@ export default function PersonCreatePage() {
               ))}
               {filteredJobs.length === 0 && (
                 <EmptyJobMessage>
-                  <FiSearch style={{ fontSize: '2.5rem', color: '#cbd5e1', marginBottom: '0.5rem' }} />
-                  <div style={{ fontSize: '0.95rem', color: '#94a3b8', fontWeight: '500' }}>
+                  <FiSearch
+                    style={{
+                      fontSize: '2.5rem',
+                      color: '#cbd5e1',
+                      marginBottom: '0.5rem',
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: '0.95rem',
+                      color: '#94a3b8',
+                      fontWeight: '500',
+                    }}
+                  >
                     {jobSearchTerm ? '검색 결과가 없습니다' : '직업이 없습니다'}
                   </div>
-                  {(selectedJobParentCategoryId !== 'all' || selectedJobCategoryId !== 'all') && (
-                    <EmptyJobHint>카테고리를 초기화하거나 다른 카테고리를 선택해보세요</EmptyJobHint>
+                  {(selectedJobParentCategoryId !== 'all' ||
+                    selectedJobCategoryId !== 'all') && (
+                    <EmptyJobHint>
+                      카테고리를 초기화하거나 다른 카테고리를 선택해보세요
+                    </EmptyJobHint>
                   )}
                 </EmptyJobMessage>
               )}
@@ -3595,9 +4550,18 @@ export default function PersonCreatePage() {
       {/* 직업 카테고리 선택 모달 - 개선된 2단계 선택 디자인 */}
       {showJobCategoryModal && (
         <Modal onClick={() => setShowJobCategoryModal(false)}>
-          <ModalContent onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px' }}>
+          <ModalContent
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '900px' }}
+          >
             <ModalHeader style={{ borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                }}
+              >
                 <JobCategoryModalStep>STEP 1</JobCategoryModalStep>
                 <ModalTitle style={{ fontSize: '1.1rem', fontWeight: '600' }}>
                   직업 카테고리 선택
@@ -3612,7 +4576,9 @@ export default function PersonCreatePage() {
               <JobCategorySection>
                 <JobCategorySectionTitle>
                   대분류
-                  <JobCategorySectionHint>직업의 주요 분야를 선택하세요</JobCategorySectionHint>
+                  <JobCategorySectionHint>
+                    직업의 주요 분야를 선택하세요
+                  </JobCategorySectionHint>
                 </JobCategorySectionTitle>
                 <JobCategoryGrid>
                   {parentJobCategories.map((category: any) => (
@@ -3625,7 +4591,9 @@ export default function PersonCreatePage() {
                         setSelectedJobCategoryId('all')
                       }}
                     >
-                      <JobCategoryItemIcon $active={selectedJobParentCategoryId === category.id}>
+                      <JobCategoryItemIcon
+                        $active={selectedJobParentCategoryId === category.id}
+                      >
                         {getCategoryIcon(category.name)}
                       </JobCategoryItemIcon>
                       <JobCategoryItemText>{category.name}</JobCategoryItemText>
@@ -3635,40 +4603,45 @@ export default function PersonCreatePage() {
               </JobCategorySection>
 
               {/* 2단계 중분류 */}
-              {selectedJobParentCategoryId !== 'all' && childJobCategories.length > 0 && (
-                <JobCategorySection>
-                  <JobCategorySectionTitle>
-                    중분류
-                    <JobCategoryParentBadge>
-                      {parentJobCategories.find((c: any) => c.id === selectedJobParentCategoryId)?.name}
-                    </JobCategoryParentBadge>
-                  </JobCategorySectionTitle>
-                  <JobCategorySubGrid>
-                    <JobCategorySubItem
-                      $active={selectedJobCategoryId === 'all'}
-                      onClick={() => {
-                        playClick()
-                        setSelectedJobCategoryId('all')
-                      }}
-                    >
-                      전체
-                    </JobCategorySubItem>
-                    {childJobCategories.map((category: any) => (
+              {selectedJobParentCategoryId !== 'all' &&
+                childJobCategories.length > 0 && (
+                  <JobCategorySection>
+                    <JobCategorySectionTitle>
+                      중분류
+                      <JobCategoryParentBadge>
+                        {
+                          parentJobCategories.find(
+                            (c: any) => c.id === selectedJobParentCategoryId,
+                          )?.name
+                        }
+                      </JobCategoryParentBadge>
+                    </JobCategorySectionTitle>
+                    <JobCategorySubGrid>
                       <JobCategorySubItem
-                        key={category.id}
-                        $active={selectedJobCategoryId === category.id}
+                        $active={selectedJobCategoryId === 'all'}
                         onClick={() => {
                           playClick()
-                          setSelectedJobCategoryId(category.id)
+                          setSelectedJobCategoryId('all')
                         }}
                       >
-                        {category.name}
+                        전체
                       </JobCategorySubItem>
-                    ))}
-                  </JobCategorySubGrid>
-                </JobCategorySection>
-              )}
-              
+                      {childJobCategories.map((category: any) => (
+                        <JobCategorySubItem
+                          key={category.id}
+                          $active={selectedJobCategoryId === category.id}
+                          onClick={() => {
+                            playClick()
+                            setSelectedJobCategoryId(category.id)
+                          }}
+                        >
+                          {category.name}
+                        </JobCategorySubItem>
+                      ))}
+                    </JobCategorySubGrid>
+                  </JobCategorySection>
+                )}
+
               {/* 다음 단계 버튼 */}
               {selectedJobParentCategoryId !== 'all' && (
                 <JobCategoryModalFooter>
@@ -3714,124 +4687,130 @@ export default function PersonCreatePage() {
           <ModalContent onClick={(e) => e.stopPropagation()}>
             <ModalHeader>
               <ModalTitle>
-                {countryModalContext === 'birth' ? '출생 국가 선택' : '활동 국가 선택'}
+                {countryModalContext === 'birth'
+                  ? '출생 국가 선택'
+                  : '활동 국가 선택'}
               </ModalTitle>
               <ModalCloseButton onClick={() => setShowCountryModal(false)}>
                 <FiX />
               </ModalCloseButton>
             </ModalHeader>
 
-                <ModalBody>
-                  {/* 좌측 필터 영역 */}
-                  <FilterSidebar>
-                    <FilterSidebarSection>
-                      <FilterSidebarTitle>국가 타입</FilterSidebarTitle>
-                      <CountryTypeOption
-                        $active={countryType === 'modern'}
-                        onClick={() => {
-                          setCountryType('modern')
-                          setSelectedContinent('all')
-                          setSelectedParentCountry('all')
-                        }}
-                      >
-                        <RadioButton $active={countryType === 'modern'}>
-                          <ModalRadioDot $active={countryType === 'modern'} />
-                        </RadioButton>
-                        <span>현대 국가</span>
-                      </CountryTypeOption>
-                      <CountryTypeOption
-                        $active={countryType === 'historical'}
-                        onClick={() => {
-                          setCountryType('historical')
-                          setSelectedContinent('all')
-                          setSelectedParentCountry('all')
-                        }}
-                      >
-                        <RadioButton $active={countryType === 'historical'}>
-                          <ModalRadioDot $active={countryType === 'historical'} />
-                        </RadioButton>
-                        <span>역사적 국가</span>
-                      </CountryTypeOption>
-                    </FilterSidebarSection>
+            <ModalBody>
+              {/* 좌측 필터 영역 */}
+              <FilterSidebar>
+                <FilterSidebarSection>
+                  <FilterSidebarTitle>국가 타입</FilterSidebarTitle>
+                  <CountryTypeOption
+                    $active={countryType === 'modern'}
+                    onClick={() => {
+                      setCountryType('modern')
+                      setSelectedContinent('all')
+                      setSelectedParentCountry('all')
+                    }}
+                  >
+                    <RadioButton $active={countryType === 'modern'}>
+                      <ModalRadioDot $active={countryType === 'modern'} />
+                    </RadioButton>
+                    <span>현대 국가</span>
+                  </CountryTypeOption>
+                  <CountryTypeOption
+                    $active={countryType === 'historical'}
+                    onClick={() => {
+                      setCountryType('historical')
+                      setSelectedContinent('all')
+                      setSelectedParentCountry('all')
+                    }}
+                  >
+                    <RadioButton $active={countryType === 'historical'}>
+                      <ModalRadioDot $active={countryType === 'historical'} />
+                    </RadioButton>
+                    <span>역사적 국가</span>
+                  </CountryTypeOption>
+                </FilterSidebarSection>
 
-                    <FilterSidebarSection>
-                      <FilterSidebarTitle>대륙</FilterSidebarTitle>
-                      <FilterOptionButton
-                        $active={selectedContinent === 'all'}
-                        onClick={() => setSelectedContinent('all')}
-                      >
-                        전체
-                      </FilterOptionButton>
-                      {continents.map((continent) => (
-                        <FilterOptionButton
-                          key={continent}
-                          $active={selectedContinent === continent}
-                          onClick={() => setSelectedContinent(continent)}
-                        >
-                          {continent}
-                        </FilterOptionButton>
-                      ))}
-                    </FilterSidebarSection>
-                  </FilterSidebar>
+                <FilterSidebarSection>
+                  <FilterSidebarTitle>대륙</FilterSidebarTitle>
+                  <FilterOptionButton
+                    $active={selectedContinent === 'all'}
+                    onClick={() => setSelectedContinent('all')}
+                  >
+                    전체
+                  </FilterOptionButton>
+                  {continents.map((continent) => (
+                    <FilterOptionButton
+                      key={continent}
+                      $active={selectedContinent === continent}
+                      onClick={() => setSelectedContinent(continent)}
+                    >
+                      {continent}
+                    </FilterOptionButton>
+                  ))}
+                </FilterSidebarSection>
+              </FilterSidebar>
 
-                  {/* 우측 리스트 영역 */}
-                  <ListArea>
-                    <SearchWrapper>
-                      <FiSearch />
-                      <SearchInput
-                        type="text"
-                        placeholder="국가 검색..."
-                        value={countrySearchTerm}
-                        onChange={(e) => setCountrySearchTerm(e.target.value)}
-                      />
-                    </SearchWrapper>
+              {/* 우측 리스트 영역 */}
+              <ListArea>
+                <SearchWrapper>
+                  <FiSearch />
+                  <SearchInput
+                    type="text"
+                    placeholder="국가 검색..."
+                    value={countrySearchTerm}
+                    onChange={(e) => setCountrySearchTerm(e.target.value)}
+                  />
+                </SearchWrapper>
 
-                    <ModalList>
-                      {filteredCountries.map((country) => (
-                        <ModalListItem
-                          key={country.id}
-                          $selected={
-                            countryModalContext === 'birth' 
-                              ? formData.birthCountryId === country.id
-                              : activeCareer?.countryId === country.id
-                          }
-                          onClick={() => {
-                            playClick()
-                            if (countryModalContext === 'birth') {
-                              handleInputChange('birthCountryId', country.id)
-                            } else if (activeCareerId) {
-                              handleCareerInputChange(activeCareerId, 'countryId', country.id)
-                            }
-                            setShowCountryModal(false)
-                            setCountrySearchTerm('')
-                          }}
-                        >
-                          <CountryItemContent>
-                            {country.flagEmoji && (
-                              <CountryFlag>{country.flagEmoji}</CountryFlag>
-                            )}
-                            <CountryName>{country.name}</CountryName>
-                            {country.startYear && (
-                              <CountryPeriod>
-                                ({country.startYear}
-                                {country.endYear
-                                  ? ` - ${country.endYear}`
-                                  : ' - 현재'}
-                                )
-                              </CountryPeriod>
-                            )}
-                          </CountryItemContent>
-                        </ModalListItem>
-                      ))}
-                      {filteredCountries.length === 0 && (
-                        <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
-                      )}
-                    </ModalList>
-                  </ListArea>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          )}
+                <ModalList>
+                  {filteredCountries.map((country) => (
+                    <ModalListItem
+                      key={country.id}
+                      $selected={
+                        countryModalContext === 'birth'
+                          ? formData.birthCountryId === country.id
+                          : activeCareer?.countryId === country.id
+                      }
+                      onClick={() => {
+                        playClick()
+                        if (countryModalContext === 'birth') {
+                          handleInputChange('birthCountryId', country.id)
+                        } else if (activeCareerId) {
+                          handleCareerInputChange(
+                            activeCareerId,
+                            'countryId',
+                            country.id,
+                          )
+                        }
+                        setShowCountryModal(false)
+                        setCountrySearchTerm('')
+                      }}
+                    >
+                      <CountryItemContent>
+                        {country.flagEmoji && (
+                          <CountryFlag>{country.flagEmoji}</CountryFlag>
+                        )}
+                        <CountryName>{country.name}</CountryName>
+                        {country.startYear && (
+                          <CountryPeriod>
+                            ({country.startYear}
+                            {country.endYear
+                              ? ` - ${country.endYear}`
+                              : ' - 현재'}
+                            )
+                          </CountryPeriod>
+                        )}
+                      </CountryItemContent>
+                    </ModalListItem>
+                  ))}
+                  {filteredCountries.length === 0 && (
+                    <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
+                  )}
+                </ModalList>
+              </ListArea>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+      )}
 
       {/* 기존 모달들은 currentStep === 'basic'일 때만 표시 */}
       {currentStep === 'basic' && (
@@ -3891,34 +4870,48 @@ export default function PersonCreatePage() {
 
           {/* 국가 이적 모달 */}
           {showCountryTransferModal && (
-            <Modal onClick={() => {
-              setShowCountryTransferModal(false)
-              setTransferCountryId('')
-              setTransferYear('')
-              handleInputChange('transferMonth', '')
-              handleInputChange('transferDay', '')
-              setTransferNote('')
-              setCountrySearchTerm('')
-            }}>
+            <Modal
+              onClick={() => {
+                setShowCountryTransferModal(false)
+                setTransferCountryId('')
+                setTransferYear('')
+                handleInputChange('transferMonth', '')
+                handleInputChange('transferDay', '')
+                setTransferNote('')
+                setCountrySearchTerm('')
+              }}
+            >
               <ModalContent onClick={(e) => e.stopPropagation()}>
                 <ModalHeader>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                    }}
+                  >
                     {transferCountryId && (
                       <JobCategoryModalStep>STEP 2</JobCategoryModalStep>
                     )}
-                    <ModalTitle style={{ fontSize: transferCountryId ? '1.1rem' : '1.25rem' }}>
+                    <ModalTitle
+                      style={{
+                        fontSize: transferCountryId ? '1.1rem' : '1.25rem',
+                      }}
+                    >
                       국가 이적 추가
                     </ModalTitle>
                   </div>
-                  <ModalCloseButton onClick={() => {
-                    setShowCountryTransferModal(false)
-                    setTransferCountryId('')
-                    setTransferYear('')
-                    handleInputChange('transferMonth', '')
-                    handleInputChange('transferDay', '')
-                    setTransferNote('')
-                    setCountrySearchTerm('')
-                  }}>
+                  <ModalCloseButton
+                    onClick={() => {
+                      setShowCountryTransferModal(false)
+                      setTransferCountryId('')
+                      setTransferYear('')
+                      handleInputChange('transferMonth', '')
+                      handleInputChange('transferDay', '')
+                      setTransferNote('')
+                      setCountrySearchTerm('')
+                    }}
+                  >
                     <FiX />
                   </ModalCloseButton>
                 </ModalHeader>
@@ -3963,18 +4956,26 @@ export default function PersonCreatePage() {
                 ) : (
                   <>
                     {/* STEP 2: 상세정보 입력 */}
-                    
+
                     {/* 선택된 국가 배너 */}
-                    <CurrentCategoryBanner style={{ 
-                      background: DESIGN_TOKENS.gradients.info, 
-                      borderBottom: '1px solid #93c5fd' 
-                    }}>
+                    <CurrentCategoryBanner
+                      style={{
+                        background: DESIGN_TOKENS.gradients.info,
+                        borderBottom: '1px solid #93c5fd',
+                      }}
+                    >
                       <CurrentCategoryText>
                         <span style={{ fontSize: '1.5rem' }}>
-                          {filteredCountries.find(c => c.id === transferCountryId)?.flagEmoji || '🌍'}
+                          {filteredCountries.find(
+                            (c) => c.id === transferCountryId,
+                          )?.flagEmoji || '🌍'}
                         </span>
                         <span style={{ fontWeight: '600' }}>
-                          {filteredCountries.find(c => c.id === transferCountryId)?.name}
+                          {
+                            filteredCountries.find(
+                              (c) => c.id === transferCountryId,
+                            )?.name
+                          }
                         </span>
                       </CurrentCategoryText>
                       <ChangeCountryButton
@@ -3995,7 +4996,13 @@ export default function PersonCreatePage() {
                         <TransferLabel>
                           이적 일자 <Required>*</Required>
                         </TransferLabel>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.625rem' }}>
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr 1fr',
+                            gap: '0.625rem',
+                          }}
+                        >
                           <Input
                             type="text"
                             placeholder="년 (예: 1933)"
@@ -4007,13 +5014,17 @@ export default function PersonCreatePage() {
                             type="text"
                             placeholder="월 (선택)"
                             value={formData.transferMonth || ''}
-                            onChange={(e) => handleInputChange('transferMonth', e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange('transferMonth', e.target.value)
+                            }
                           />
                           <Input
                             type="text"
                             placeholder="일 (선택)"
                             value={formData.transferDay || ''}
-                            onChange={(e) => handleInputChange('transferDay', e.target.value)}
+                            onChange={(e) =>
+                              handleInputChange('transferDay', e.target.value)
+                            }
                           />
                         </div>
                       </TransferFormGroup>
@@ -4052,35 +5063,63 @@ export default function PersonCreatePage() {
                         onClick={() => {
                           if (transferCountryId && transferYear) {
                             // 중복 국가 검사
-                            if (formData.countryTransfers.some(t => t.countryId === transferCountryId)) {
+                            if (
+                              formData.countryTransfers.some(
+                                (t) => t.countryId === transferCountryId,
+                              )
+                            ) {
                               toast.error('이미 추가된 국가입니다')
                               return
                             }
 
                             // 날짜 유효성 검사
                             const yearNum = parseInt(transferYear)
-                            const monthNum = formData.transferMonth ? parseInt(formData.transferMonth) : 0
-                            const dayNum = formData.transferDay ? parseInt(formData.transferDay) : 0
+                            const monthNum = formData.transferMonth
+                              ? parseInt(formData.transferMonth)
+                              : 0
+                            const dayNum = formData.transferDay
+                              ? parseInt(formData.transferDay)
+                              : 0
 
-                            if (isNaN(yearNum) || yearNum < 1 || yearNum > new Date().getFullYear()) {
+                            if (
+                              isNaN(yearNum) ||
+                              yearNum < 1 ||
+                              yearNum > new Date().getFullYear()
+                            ) {
                               toast.error('유효한 연도를 입력해주세요')
                               return
                             }
 
-                            if (formData.transferMonth && (isNaN(monthNum) || monthNum < 1 || monthNum > 12)) {
+                            if (
+                              formData.transferMonth &&
+                              (isNaN(monthNum) || monthNum < 1 || monthNum > 12)
+                            ) {
                               toast.error('월은 1~12 사이여야 합니다')
                               return
                             }
 
-                            if (formData.transferDay && (isNaN(dayNum) || dayNum < 1 || dayNum > 31)) {
+                            if (
+                              formData.transferDay &&
+                              (isNaN(dayNum) || dayNum < 1 || dayNum > 31)
+                            ) {
                               toast.error('일은 1~31 사이여야 합니다')
                               return
                             }
 
                             // 실제 날짜 검증
-                            if (formData.transferMonth && formData.transferDay) {
-                              const date = new Date(yearNum, monthNum - 1, dayNum)
-                              if (date.getMonth() !== monthNum - 1 || date.getDate() !== dayNum) {
+                            if (
+                              formData.transferMonth &&
+                              formData.transferDay
+                            ) {
+                              const date = new Date(
+                                yearNum,
+                                monthNum - 1,
+                                dayNum,
+                              )
+                              if (
+                                date.getMonth() !== monthNum - 1 ||
+                                date.getDate() !== dayNum
+                              ) {
                                 toast.error('유효하지 않은 날짜입니다')
                                 return
                               }
@@ -4094,8 +5133,8 @@ export default function PersonCreatePage() {
                                 year: transferYear,
                                 month: formData.transferMonth || undefined,
                                 day: formData.transferDay || undefined,
-                                note: transferNote || undefined
-                              }
+                                note: transferNote || undefined,
+                              },
                             ])
                             setShowCountryTransferModal(false)
                             setTransferCountryId('')
@@ -4126,7 +5165,9 @@ export default function PersonCreatePage() {
                   </ModalHeaderIcon>
                   <ModalTitleGroup>
                     <ModalTitle>종교 선택</ModalTitle>
-                    <ModalSubtitle>신앙과 믿음의 체계를 선택하세요</ModalSubtitle>
+                    <ModalSubtitle>
+                      신앙과 믿음의 체계를 선택하세요
+                    </ModalSubtitle>
                   </ModalTitleGroup>
                   <ModalCloseButton onClick={() => setShowReligionModal(false)}>
                     <FiX />
@@ -4191,11 +5232,22 @@ export default function PersonCreatePage() {
           {/* 직업 선택 모달 - 기본 정보용 (STEP 2: 다중 선택) */}
           {showJobModal && currentStep === 'basic' && (
             <Modal onClick={() => setShowJobModal(false)}>
-              <ModalContent onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px' }}>
+              <ModalContent
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxWidth: '650px' }}
+              >
                 <ModalHeader style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                    }}
+                  >
                     <JobCategoryModalStep>STEP 2</JobCategoryModalStep>
-                    <ModalTitle style={{ fontSize: '1.1rem', fontWeight: '600' }}>
+                    <ModalTitle
+                      style={{ fontSize: '1.1rem', fontWeight: '600' }}
+                    >
                       직업 선택 (다중)
                     </ModalTitle>
                   </div>
@@ -4205,16 +5257,22 @@ export default function PersonCreatePage() {
                 </ModalHeader>
 
                 {/* 현재 선택된 카테고리 표시 */}
-                {(selectedJobParentCategoryId !== 'all' || selectedJobCategoryId !== 'all') && (
+                {(selectedJobParentCategoryId !== 'all' ||
+                  selectedJobCategoryId !== 'all') && (
                   <CurrentCategoryBanner>
                     <CurrentCategoryText>
                       <FiLayers style={{ fontSize: '1rem' }} />
                       {selectedJobParentCategoryId !== 'all' && (
                         <>
-                          {parentJobCategories.find((c: any) => c.id === selectedJobParentCategoryId)?.name}
-                          {selectedJobCategoryId !== 'all' && selectedJobCategory && (
-                            <> › {selectedJobCategory.name}</>
-                          )}
+                          {
+                            parentJobCategories.find(
+                              (c: any) => c.id === selectedJobParentCategoryId,
+                            )?.name
+                          }
+                          {selectedJobCategoryId !== 'all' &&
+                            selectedJobCategory && (
+                              <> › {selectedJobCategory.name}</>
+                            )}
                         </>
                       )}
                     </CurrentCategoryText>
@@ -4232,7 +5290,12 @@ export default function PersonCreatePage() {
                   </CurrentCategoryBanner>
                 )}
 
-                <SearchWrapper style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9' }}>
+                <SearchWrapper
+                  style={{
+                    padding: '1rem 1.5rem',
+                    borderBottom: '1px solid #f1f5f9',
+                  }}
+                >
                   <FiSearch />
                   <SearchInput
                     type="text"
@@ -4258,7 +5321,9 @@ export default function PersonCreatePage() {
                             onClick={(e) => {
                               e.stopPropagation()
                               playClick()
-                              const newJobIds = formData.jobIds.filter(id => id !== job.id)
+                              const newJobIds = formData.jobIds.filter(
+                                (id) => id !== job.id,
+                              )
                               handleInputChange('jobIds', newJobIds)
                             }}
                           >
@@ -4280,15 +5345,19 @@ export default function PersonCreatePage() {
                         onClick={() => {
                           playClick()
                           const newJobIds = isSelected
-                            ? formData.jobIds.filter(id => id !== job.id)
+                            ? formData.jobIds.filter((id) => id !== job.id)
                             : [...formData.jobIds, job.id]
                           handleInputChange('jobIds', newJobIds)
                         }}
                       >
                         <JobModalItemContent>
-                          <JobModalItemTitle>{getJobLabel(job)}</JobModalItemTitle>
+                          <JobModalItemTitle>
+                            {getJobLabel(job)}
+                          </JobModalItemTitle>
                           {job.description && (
-                            <JobModalItemDesc>{job.description}</JobModalItemDesc>
+                            <JobModalItemDesc>
+                              {job.description}
+                            </JobModalItemDesc>
                           )}
                         </JobModalItemContent>
                         {isSelected && (
@@ -4301,12 +5370,29 @@ export default function PersonCreatePage() {
                   })}
                   {filteredJobs.length === 0 && (
                     <EmptyJobMessage>
-                      <FiSearch style={{ fontSize: '2.5rem', color: '#cbd5e1', marginBottom: '0.5rem' }} />
-                      <div style={{ fontSize: '0.95rem', color: '#94a3b8', fontWeight: '500' }}>
-                        {jobSearchTerm ? '검색 결과가 없습니다' : '직업이 없습니다'}
+                      <FiSearch
+                        style={{
+                          fontSize: '2.5rem',
+                          color: '#cbd5e1',
+                          marginBottom: '0.5rem',
+                        }}
+                      />
+                      <div
+                        style={{
+                          fontSize: '0.95rem',
+                          color: '#94a3b8',
+                          fontWeight: '500',
+                        }}
+                      >
+                        {jobSearchTerm
+                          ? '검색 결과가 없습니다'
+                          : '직업이 없습니다'}
                       </div>
-                      {(selectedJobParentCategoryId !== 'all' || selectedJobCategoryId !== 'all') && (
-                        <EmptyJobHint>카테고리를 초기화하거나 다른 카테고리를 선택해보세요</EmptyJobHint>
+                      {(selectedJobParentCategoryId !== 'all' ||
+                        selectedJobCategoryId !== 'all') && (
+                        <EmptyJobHint>
+                          카테고리를 초기화하거나 다른 카테고리를 선택해보세요
+                        </EmptyJobHint>
                       )}
                     </EmptyJobMessage>
                   )}
@@ -4329,184 +5415,251 @@ export default function PersonCreatePage() {
               </ModalContent>
             </Modal>
           )}
-                </>
-              )}
+        </>
+      )}
 
       {/* 조직 선택 모달 - 경력사항에서 사용 */}
-      {showOrganizationModal && activeCareerId && (() => {
-        const career = careers.find((c) => c.id === activeCareerId)
-        if (!career) return null
+      {showOrganizationModal &&
+        activeCareerId &&
+        (() => {
+          const career = careers.find((c) => c.id === activeCareerId)
+          if (!career) return null
 
-        // 선택된 직책 카테고리 기반으로 추천 타입 결정
-        const category = parentJobCategories.find((c: any) => c.id === career.jobCategoryId)
-        const categoryName = category?.name || ''
-        
-        let recommendedType: Organization['type'] | 'all' = 'all'
-        if (categoryName === '기업인' || categoryName.includes('경영')) {
-          recommendedType = 'company'
-        } else if (categoryName === '정치인' || categoryName.includes('정치')) {
-          recommendedType = 'government'
-        } else if (categoryName === '군인' || categoryName.includes('군사')) {
-          recommendedType = 'military'
-            } else if (categoryName === '교육자' || categoryName.includes('학자')) {
-              recommendedType = 'education'
-            } else if (categoryName === '운동선수' || categoryName.includes('스포츠')) {
-              recommendedType = 'sports'
-            }
+          // 선택된 직책 카테고리 기반으로 추천 타입 결정
+          const category = parentJobCategories.find(
+            (c: any) => c.id === career.jobCategoryId,
+          )
+          const categoryName = category?.name || ''
 
-            // 모달이 열릴 때 추천 타입으로 자동 필터링
-            if (organizationType === 'all' && recommendedType !== 'all') {
-              setOrganizationType(recommendedType)
-            }
+          let recommendedType: Organization['type'] | 'all' = 'all'
+          if (categoryName === '기업인' || categoryName.includes('경영')) {
+            recommendedType = 'company'
+          } else if (
+            categoryName === '정치인' ||
+            categoryName.includes('정치')
+          ) {
+            recommendedType = 'government'
+          } else if (categoryName === '군인' || categoryName.includes('군사')) {
+            recommendedType = 'military'
+          } else if (
+            categoryName === '교육자' ||
+            categoryName.includes('학자')
+          ) {
+            recommendedType = 'education'
+          } else if (
+            categoryName === '운동선수' ||
+            categoryName.includes('스포츠')
+          ) {
+            recommendedType = 'sports'
+          }
 
-            return (
-              <Modal onClick={() => {
+          // 모달이 열릴 때 추천 타입으로 자동 필터링
+          if (organizationType === 'all' && recommendedType !== 'all') {
+            setOrganizationType(recommendedType)
+          }
+
+          return (
+            <Modal
+              onClick={() => {
                 setShowOrganizationModal(false)
                 setOrganizationType('all')
                 setOrganizationSearchTerm('')
-              }}>
-                <ModalContent onClick={(e) => e.stopPropagation()}>
-                  <ModalHeader>
-                    <ModalTitle>소속 조직 선택</ModalTitle>
-                    <ModalCloseButton onClick={() => {
+              }}
+            >
+              <ModalContent onClick={(e) => e.stopPropagation()}>
+                <ModalHeader>
+                  <ModalTitle>소속 조직 선택</ModalTitle>
+                  <ModalCloseButton
+                    onClick={() => {
                       setShowOrganizationModal(false)
                       setOrganizationType('all')
                       setOrganizationSearchTerm('')
-                    }}>
-                      <FiX />
-                    </ModalCloseButton>
-                  </ModalHeader>
+                    }}
+                  >
+                    <FiX />
+                  </ModalCloseButton>
+                </ModalHeader>
 
-                  <ModalBody>
-                    {/* 좌측 필터 영역 */}
-                    <FilterSidebar>
-                      <FilterSidebarSection>
-                        <FilterSidebarTitle>조직 타입</FilterSidebarTitle>
-                        <CountryTypeOption
-                          $active={organizationType === 'all'}
-                          onClick={() => setOrganizationType('all')}
-                        >
-                          <RadioButton $active={organizationType === 'all'}>
-                            <ModalRadioDot $active={organizationType === 'all'} />
-                          </RadioButton>
-                          <span>전체</span>
-                        </CountryTypeOption>
-                        <CountryTypeOption
-                          $active={organizationType === 'company'}
-                          onClick={() => setOrganizationType('company')}
-                        >
-                          <RadioButton $active={organizationType === 'company'}>
-                            <ModalRadioDot $active={organizationType === 'company'} />
-                          </RadioButton>
-                          <span>💼 기업</span>
-                        </CountryTypeOption>
-                        <CountryTypeOption
+                <ModalBody>
+                  {/* 좌측 필터 영역 */}
+                  <FilterSidebar>
+                    <FilterSidebarSection>
+                      <FilterSidebarTitle>조직 타입</FilterSidebarTitle>
+                      <CountryTypeOption
+                        $active={organizationType === 'all'}
+                        onClick={() => setOrganizationType('all')}
+                      >
+                        <RadioButton $active={organizationType === 'all'}>
+                          <ModalRadioDot $active={organizationType === 'all'} />
+                        </RadioButton>
+                        <span>전체</span>
+                      </CountryTypeOption>
+                      <CountryTypeOption
+                        $active={organizationType === 'company'}
+                        onClick={() => setOrganizationType('company')}
+                      >
+                        <RadioButton $active={organizationType === 'company'}>
+                          <ModalRadioDot
+                            $active={organizationType === 'company'}
+                          />
+                        </RadioButton>
+                        <span>💼 기업</span>
+                      </CountryTypeOption>
+                      <CountryTypeOption
+                        $active={organizationType === 'government'}
+                        onClick={() => setOrganizationType('government')}
+                      >
+                        <RadioButton
                           $active={organizationType === 'government'}
-                          onClick={() => setOrganizationType('government')}
                         >
-                          <RadioButton $active={organizationType === 'government'}>
-                            <ModalRadioDot $active={organizationType === 'government'} />
-                          </RadioButton>
-                          <span>🏛️ 정부</span>
-                        </CountryTypeOption>
-                        <CountryTypeOption
-                          $active={organizationType === 'military'}
-                          onClick={() => setOrganizationType('military')}
-                        >
-                          <RadioButton $active={organizationType === 'military'}>
-                            <ModalRadioDot $active={organizationType === 'military'} />
-                          </RadioButton>
-                          <span>🎖️ 군대</span>
-                        </CountryTypeOption>
-                        <CountryTypeOption
-                          $active={organizationType === 'education'}
-                          onClick={() => setOrganizationType('education')}
-                        >
-                          <RadioButton $active={organizationType === 'education'}>
-                            <ModalRadioDot $active={organizationType === 'education'} />
-                          </RadioButton>
-                          <span>🎓 교육</span>
-                        </CountryTypeOption>
-                        <CountryTypeOption
-                          $active={organizationType === 'sports'}
-                          onClick={() => setOrganizationType('sports')}
-                        >
-                          <RadioButton $active={organizationType === 'sports'}>
-                            <ModalRadioDot $active={organizationType === 'sports'} />
-                          </RadioButton>
-                          <span>⚽ 스포츠</span>
-                        </CountryTypeOption>
-                      </FilterSidebarSection>
-                    </FilterSidebar>
+                          <ModalRadioDot
+                            $active={organizationType === 'government'}
+                          />
+                        </RadioButton>
+                        <span>🏛️ 정부</span>
+                      </CountryTypeOption>
+                      <CountryTypeOption
+                        $active={organizationType === 'military'}
+                        onClick={() => setOrganizationType('military')}
+                      >
+                        <RadioButton $active={organizationType === 'military'}>
+                          <ModalRadioDot
+                            $active={organizationType === 'military'}
+                          />
+                        </RadioButton>
+                        <span>🎖️ 군대</span>
+                      </CountryTypeOption>
+                      <CountryTypeOption
+                        $active={organizationType === 'education'}
+                        onClick={() => setOrganizationType('education')}
+                      >
+                        <RadioButton $active={organizationType === 'education'}>
+                          <ModalRadioDot
+                            $active={organizationType === 'education'}
+                          />
+                        </RadioButton>
+                        <span>🎓 교육</span>
+                      </CountryTypeOption>
+                      <CountryTypeOption
+                        $active={organizationType === 'sports'}
+                        onClick={() => setOrganizationType('sports')}
+                      >
+                        <RadioButton $active={organizationType === 'sports'}>
+                          <ModalRadioDot
+                            $active={organizationType === 'sports'}
+                          />
+                        </RadioButton>
+                        <span>⚽ 스포츠</span>
+                      </CountryTypeOption>
+                    </FilterSidebarSection>
+                  </FilterSidebar>
 
-                    {/* 우측 조직 리스트 */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <SearchWrapper>
-                        <FiSearch />
-                        <SearchInput
-                          type="text"
-                          placeholder="조직 검색..."
-                          value={organizationSearchTerm}
-                          onChange={(e) => setOrganizationSearchTerm(e.target.value)}
-                          autoFocus
-                        />
-                      </SearchWrapper>
+                  {/* 우측 조직 리스트 */}
+                  <div
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <SearchWrapper>
+                      <FiSearch />
+                      <SearchInput
+                        type="text"
+                        placeholder="조직 검색..."
+                        value={organizationSearchTerm}
+                        onChange={(e) =>
+                          setOrganizationSearchTerm(e.target.value)
+                        }
+                        autoFocus
+                      />
+                    </SearchWrapper>
 
-                      <ModalList>
-                        {filteredOrganizations.map((org) => {
-                          const career = careers.find((c) => c.id === activeCareerId)
-                          if (!career) return null
-                          
-                          return (
-                            <ModalListItem
-                              key={org.id}
-                              $selected={career.organizationId === org.id}
-                              onClick={() => {
-                                playClick()
-                                handleCareerInputChange(activeCareerId, 'organizationId', org.id)
-                                handleCareerInputChange(activeCareerId, 'organization', org.name)
-                                setShowOrganizationModal(false)
-                                setOrganizationType('all')
-                                setOrganizationSearchTerm('')
+                    <ModalList>
+                      {filteredOrganizations.map((org) => {
+                        const career = careers.find(
+                          (c) => c.id === activeCareerId,
+                        )
+                        if (!career) return null
+
+                        return (
+                          <ModalListItem
+                            key={org.id}
+                            $selected={career.organizationId === org.id}
+                            onClick={() => {
+                              playClick()
+                              handleCareerInputChange(
+                                activeCareerId,
+                                'organizationId',
+                                org.id,
+                              )
+                              handleCareerInputChange(
+                                activeCareerId,
+                                'organization',
+                                org.name,
+                              )
+                              setShowOrganizationModal(false)
+                              setOrganizationType('all')
+                              setOrganizationSearchTerm('')
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                flex: 1,
                               }}
                             >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
-                                <span style={{ fontSize: '1.25rem' }}>
-                                  {org.type === 'company' && '💼'}
-                                  {org.type === 'government' && '🏛️'}
-                                  {org.type === 'military' && '🎖️'}
-                                  {org.type === 'education' && '🎓'}
-                                  {org.type === 'sports' && '⚽'}
-                                  {org.type === 'other' && '🏢'}
-                                </span>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: '600', color: '#1e293b' }}>{org.name}</div>
-                                  {org.foundedYear && (
-                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.125rem' }}>
-                                      설립: {org.foundedYear}년
-                                    </div>
-                                  )}
+                              <span style={{ fontSize: '1.25rem' }}>
+                                {org.type === 'company' && '💼'}
+                                {org.type === 'government' && '🏛️'}
+                                {org.type === 'military' && '🎖️'}
+                                {org.type === 'education' && '🎓'}
+                                {org.type === 'sports' && '⚽'}
+                                {org.type === 'other' && '🏢'}
+                              </span>
+                              <div style={{ flex: 1 }}>
+                                <div
+                                  style={{
+                                    fontWeight: '600',
+                                    color: '#1e293b',
+                                  }}
+                                >
+                                  {org.name}
                                 </div>
+                                {org.foundedYear && (
+                                  <div
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      color: '#94a3b8',
+                                      marginTop: '0.125rem',
+                                    }}
+                                  >
+                                    설립: {org.foundedYear}년
+                                  </div>
+                                )}
                               </div>
-                            </ModalListItem>
-                          )
-                        })}
-                        {filteredOrganizations.length === 0 && (
-                          <EmptyMessage>
-                            {organizations.length === 0 
-                              ? 'API에서 조직 데이터를 불러와야 합니다. TODO: fetchOrganizations() 구현 필요' 
-                              : organizationSearchTerm 
-                                ? '검색 결과가 없습니다.' 
-                                : '조직이 없습니다.'}
-                          </EmptyMessage>
-                        )}
-                      </ModalList>
-                    </div>
-                  </ModalBody>
+                            </div>
+                          </ModalListItem>
+                        )
+                      })}
+                      {filteredOrganizations.length === 0 && (
+                        <EmptyMessage>
+                          {organizations.length === 0
+                            ? 'API에서 조직 데이터를 불러와야 합니다. TODO: fetchOrganizations() 구현 필요'
+                            : organizationSearchTerm
+                              ? '검색 결과가 없습니다.'
+                              : '조직이 없습니다.'}
+                        </EmptyMessage>
+                      )}
+                    </ModalList>
+                  </div>
+                </ModalBody>
               </ModalContent>
             </Modal>
           )
-      })()}
+        })()}
 
       {/* 기존 모달들은 currentStep === 'basic'일 때만 표시 */}
       {currentStep === 'basic' && (
@@ -4573,7 +5726,8 @@ export default function PersonCreatePage() {
                         </PersonName>
                         {person.birthYear && (
                           <PersonLifespan $color="#059669">
-                            {person.birthEra === 'BC' ? 'BC ' : ''}{person.birthYear}
+                            {person.birthEra === 'BC' ? 'BC ' : ''}
+                            {person.birthYear}
                           </PersonLifespan>
                         )}
                       </PersonInfo>
@@ -4654,7 +5808,8 @@ export default function PersonCreatePage() {
                         </PersonName>
                         {person.birthYear && (
                           <PersonLifespan $color="#db2777">
-                            {person.birthEra === 'BC' ? 'BC ' : ''}{person.birthYear}
+                            {person.birthEra === 'BC' ? 'BC ' : ''}
+                            {person.birthYear}
                           </PersonLifespan>
                         )}
                       </PersonInfo>
@@ -4704,8 +5859,8 @@ export default function PersonCreatePage() {
               title="사망일 선택"
             />
           )}
-                </>
-              )}
+        </>
+      )}
 
       {/* 경력 시작일 선택 모달 - 경력사항에서 사용 */}
       {showCareerStartDateModal && activeCareer && (
@@ -4738,57 +5893,63 @@ export default function PersonCreatePage() {
           title="종료일 선택"
         />
       )}
-          
+
       {/* 확인 모달 */}
       {showConfirmModal && (
-            <Modal onClick={() => setShowConfirmModal(false)}>
-              <ConfirmModalContent onClick={(e) => e.stopPropagation()}>
-                <ConfirmModalHeader>
-                  <ConfirmModalTitle>인물 등록 확인</ConfirmModalTitle>
-                </ConfirmModalHeader>
-                <ConfirmModalBody>
-                  <ConfirmMessage>
-                    <strong>{formData.surname} {formData.name}</strong> 님의 정보를 등록하시겠습니까?
-                  </ConfirmMessage>
-                  <ConfirmDetails>
-                    <ConfirmDetailItem>
-                      <span>성별:</span> <strong>{formData.gender}</strong>
-                    </ConfirmDetailItem>
-                    <ConfirmDetailItem>
-                      <span>생몰:</span> <strong>{formatBirthDate()} ~ {formatDeathDate()}</strong>
-                    </ConfirmDetailItem>
-                    {calculatedAge && (
-                      <ConfirmDetailItem>
-                        <span>향년:</span> <strong>{calculatedAge}세</strong>
-                      </ConfirmDetailItem>
-                    )}
-                    {careers.length > 0 && (
-                      <ConfirmDetailItem>
-                        <span>경력:</span> <strong>{careers.length}개</strong>
-                      </ConfirmDetailItem>
-                    )}
-                  </ConfirmDetails>
-                </ConfirmModalBody>
-                <ConfirmModalActions>
-                  <ActionButton
-                    type="button"
-                    $variant="secondary"
-                    onClick={() => setShowConfirmModal(false)}
-                  >
-                    취소
-                  </ActionButton>
-                  <ActionButton
-                    type="button"
-                    $variant="primary"
-                    onClick={handleConfirmSubmit}
-                  >
-                    <FiCheck />
-                    확인
-                  </ActionButton>
-                </ConfirmModalActions>
-              </ConfirmModalContent>
-            </Modal>
-          )}
+        <Modal onClick={() => setShowConfirmModal(false)}>
+          <ConfirmModalContent onClick={(e) => e.stopPropagation()}>
+            <ConfirmModalHeader>
+              <ConfirmModalTitle>인물 등록 확인</ConfirmModalTitle>
+            </ConfirmModalHeader>
+            <ConfirmModalBody>
+              <ConfirmMessage>
+                <strong>
+                  {formData.surname} {formData.name}
+                </strong>{' '}
+                님의 정보를 등록하시겠습니까?
+              </ConfirmMessage>
+              <ConfirmDetails>
+                <ConfirmDetailItem>
+                  <span>성별:</span> <strong>{formData.gender}</strong>
+                </ConfirmDetailItem>
+                <ConfirmDetailItem>
+                  <span>생몰:</span>{' '}
+                  <strong>
+                    {formatBirthDate()} ~ {formatDeathDate()}
+                  </strong>
+                </ConfirmDetailItem>
+                {calculatedAge && (
+                  <ConfirmDetailItem>
+                    <span>향년:</span> <strong>{calculatedAge}세</strong>
+                  </ConfirmDetailItem>
+                )}
+                {careers.length > 0 && (
+                  <ConfirmDetailItem>
+                    <span>경력:</span> <strong>{careers.length}개</strong>
+                  </ConfirmDetailItem>
+                )}
+              </ConfirmDetails>
+            </ConfirmModalBody>
+            <ConfirmModalActions>
+              <ActionButton
+                type="button"
+                $variant="secondary"
+                onClick={() => setShowConfirmModal(false)}
+              >
+                취소
+              </ActionButton>
+              <ActionButton
+                type="button"
+                $variant="primary"
+                onClick={handleConfirmSubmit}
+              >
+                <FiCheck />
+                확인
+              </ActionButton>
+            </ConfirmModalActions>
+          </ConfirmModalContent>
+        </Modal>
+      )}
     </PageWrapper>
   )
 }
@@ -4836,8 +5997,7 @@ const SelectButton = styled.button<{
   $flash?: boolean
 }>`
   padding: 1rem 1.5rem;
-  background: ${(props) =>
-    props.$selected ? '#f3f4f6' : 'white'};
+  background: ${(props) => (props.$selected ? '#f3f4f6' : 'white')};
   border: 1px solid
     ${(props) =>
       props.$hasError ? '#fca5a5' : props.$selected ? '#9ca3af' : '#e5e7eb'};
@@ -4854,10 +6014,13 @@ const SelectButton = styled.button<{
   gap: 0.5rem;
   width: 100%;
   box-shadow: ${(props) =>
-    props.$selected ? '0 2px 8px rgba(0, 0, 0, 0.08)' : '0 1px 2px rgba(0, 0, 0, 0.05)'};
+    props.$selected
+      ? '0 2px 8px rgba(0, 0, 0, 0.08)'
+      : '0 1px 2px rgba(0, 0, 0, 0.05)'};
 
   &:hover {
-    border-color: ${(props) => (props.$hasError ? '#fca5a5' : props.$selected ? '#6b7280' : '#9ca3af')};
+    border-color: ${(props) =>
+      props.$hasError ? '#fca5a5' : props.$selected ? '#6b7280' : '#9ca3af'};
     background: ${(props) => (props.$selected ? '#e5e7eb' : '#f9fafb')};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
@@ -4930,10 +6093,11 @@ const ProfileImagePreview = styled.label<{ $isDragging?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  border: ${(props) => (props.$isDragging ? '2px solid #3b82f6' : '1px solid #e5e7eb')};
-  box-shadow: ${(props) => 
-    props.$isDragging 
-      ? '0 8px 32px rgba(59, 130, 246, 0.2)' 
+  border: ${(props) =>
+    props.$isDragging ? '2px solid #3b82f6' : '1px solid #e5e7eb'};
+  box-shadow: ${(props) =>
+    props.$isDragging
+      ? '0 8px 32px rgba(59, 130, 246, 0.2)'
       : '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)'};
   transition: all 0.2s ease;
   cursor: pointer;
@@ -4959,7 +6123,7 @@ const ProfileImage = styled.img`
   height: 100%;
   object-fit: cover;
   transition: opacity 0.2s ease;
-  
+
   ${ProfileImagePreview}:hover & {
     opacity: 0.95;
   }
@@ -5091,7 +6255,8 @@ const ProfileImageThumb = styled.button<{ $active?: boolean }>`
   aspect-ratio: 3 / 4;
   border-radius: 16px;
   overflow: hidden;
-  border: ${(props) => (props.$active ? '3px solid #374151' : '3px solid #f0f0f0')};
+  border: ${(props) =>
+    props.$active ? '3px solid #374151' : '3px solid #f0f0f0'};
   background: white;
   position: relative;
   padding: 0;
@@ -5155,7 +6320,8 @@ const ThumbActionButton = styled.button<{ $danger?: boolean }>`
   height: 28px;
   border-radius: 8px;
   border: none;
-  background: ${(props) => (props.$danger ? '#ef4444' : 'rgba(255, 255, 255, 0.95)')};
+  background: ${(props) =>
+    props.$danger ? '#ef4444' : 'rgba(255, 255, 255, 0.95)'};
   color: ${(props) => (props.$danger ? 'white' : '#374151')};
   display: flex;
   align-items: center;
@@ -5651,7 +6817,7 @@ const CustomCheckbox = styled.label`
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
   transition: all 0.2s;
-    background: #f9fafb;
+  background: #f9fafb;
 
   &:hover {
     background: #f3f4f6;
@@ -6208,10 +7374,7 @@ const DateButton = styled.button<{
 const SelectionCard = styled.button<{ $hasValue: boolean; $color?: string }>`
   width: 100%;
   padding: 1.25rem 1.5rem;
-  background: ${(props) =>
-    props.$hasValue
-      ? '#f9fafb'
-      : 'white'};
+  background: ${(props) => (props.$hasValue ? '#f9fafb' : 'white')};
   border: 1px solid
     ${(props) => (props.$hasValue ? props.$color || '#3b82f6' : '#e5e7eb')};
   border-radius: 12px;
@@ -6229,10 +7392,7 @@ const SelectionCard = styled.button<{ $hasValue: boolean; $color?: string }>`
   &:hover {
     border-color: ${(props) => props.$color || '#3b82f6'};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    background: ${(props) =>
-      props.$hasValue
-        ? '#f3f4f6'
-        : '#fafafa'};
+    background: ${(props) => (props.$hasValue ? '#f3f4f6' : '#fafafa')};
   }
 
   &:active {
@@ -6477,15 +7637,18 @@ const ModernSelectionGrid = styled.div`
   }
 `
 
-const ModernSelectionCard = styled.button<{ $hasValue?: boolean; $error?: boolean }>`
+const ModernSelectionCard = styled.button<{
+  $hasValue?: boolean
+  $error?: boolean
+}>`
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 1.25rem 1.5rem;
   background: ${({ $hasValue }) => ($hasValue ? '#f8fafc' : '#ffffff')};
-  border: 2px solid ${({ $hasValue, $error }) => 
-    $error ? '#ef4444' : 
-    $hasValue ? '#cbd5e1' : '#e2e8f0'};
+  border: 2px solid
+    ${({ $hasValue, $error }) =>
+      $error ? '#ef4444' : $hasValue ? '#cbd5e1' : '#e2e8f0'};
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -6493,9 +7656,8 @@ const ModernSelectionCard = styled.button<{ $hasValue?: boolean; $error?: boolea
   position: relative;
 
   &:hover {
-    border-color: ${({ $hasValue, $error }) => 
-      $error ? '#dc2626' : 
-      $hasValue ? '#94a3b8' : '#cbd5e1'};
+    border-color: ${({ $hasValue, $error }) =>
+      $error ? '#dc2626' : $hasValue ? '#94a3b8' : '#cbd5e1'};
     background: #f8fafc;
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
@@ -6802,7 +7964,7 @@ const JobBadgeInCard = styled.span`
   &:hover {
     background: #e2e8f0;
     border-color: #cbd5e1;
-    
+
     .remove-icon {
       opacity: 1;
     }
@@ -6814,7 +7976,7 @@ const JobBadgeInCard = styled.span`
     display: flex;
     align-items: center;
     color: #94a3b8;
-    
+
     &:hover {
       color: #64748b;
     }
@@ -6837,8 +7999,9 @@ const NicknameTag = styled.span`
   &:hover {
     background: #e2e8f0;
     border-color: #94a3b8;
-    
-    .remove-icon, .action-icon {
+
+    .remove-icon,
+    .action-icon {
       opacity: 1;
     }
   }
@@ -6850,7 +8013,7 @@ const NicknameTag = styled.span`
     align-items: center;
     color: #3b82f6;
     cursor: pointer;
-    
+
     &:hover {
       opacity: 1;
       color: #2563eb;
@@ -6864,7 +8027,7 @@ const NicknameTag = styled.span`
     align-items: center;
     color: #64748b;
     cursor: pointer;
-    
+
     &:hover {
       opacity: 1;
       color: #dc2626;
@@ -6924,7 +8087,7 @@ const CountryBadge = styled.div`
   &:hover {
     background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
     border-color: #60a5fa;
-    
+
     .remove-icon {
       opacity: 1;
     }
@@ -6941,7 +8104,7 @@ const CountryBadge = styled.div`
     align-items: center;
     color: #3b82f6;
     cursor: pointer;
-    
+
     &:hover {
       opacity: 1;
       color: #2563eb;
@@ -7003,10 +8166,7 @@ const PrimarySelectionCard = styled.button<{
   width: 100%;
   aspect-ratio: 1;
   padding: 0.75rem;
-  background: ${(props) =>
-    props.$hasValue
-      ? '#f9fafb'
-      : 'white'};
+  background: ${(props) => (props.$hasValue ? '#f9fafb' : 'white')};
   border: 1px solid
     ${(props) => (props.$hasValue ? props.$color || '#3b82f6' : '#e5e7eb')};
   border-radius: 10px;
@@ -7033,19 +8193,14 @@ const PrimarySelectionCard = styled.button<{
     right: 0;
     height: 2px;
     background: ${(props) =>
-      props.$hasValue
-        ? props.$color || '#3b82f6'
-        : 'transparent'};
+      props.$hasValue ? props.$color || '#3b82f6' : 'transparent'};
     transition: all 0.2s;
   }
 
   &:hover {
     border-color: ${(props) => props.$color || '#3b82f6'};
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    background: ${(props) =>
-      props.$hasValue
-        ? '#f3f4f6'
-        : '#fafafa'};
+    background: ${(props) => (props.$hasValue ? '#f3f4f6' : '#fafafa')};
 
     &::before {
       height: 3px;
@@ -7314,8 +8469,7 @@ const JobSelectButton = styled.button<{ $selected?: boolean }>`
   padding: 0.75rem;
   border-radius: 12px;
   border: 2px solid ${({ $selected }) => ($selected ? '#3b82f6' : '#e5e7eb')};
-  background: ${({ $selected }) =>
-    $selected ? '#eff6ff' : '#ffffff'};
+  background: ${({ $selected }) => ($selected ? '#eff6ff' : '#ffffff')};
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -7534,7 +8688,8 @@ const JobModalListItem = styled.button<{ $selected?: boolean }>`
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  border: 1.5px solid ${({ $selected }) => ($selected ? '#3b82f6' : 'transparent')};
+  border: 1.5px solid
+    ${({ $selected }) => ($selected ? '#3b82f6' : 'transparent')};
   border-radius: 12px;
   background: ${({ $selected }) => ($selected ? '#eff6ff' : '#ffffff')};
   cursor: pointer;
@@ -7732,7 +8887,7 @@ const CountryPeriod = styled.span`
 const EmptyMessage = styled.div`
   padding: 3rem 2rem;
   text-align: center;
-    color: #9ca3af;
+  color: #9ca3af;
   font-size: 0.95rem;
 `
 
@@ -7832,12 +8987,14 @@ const TimelineDot = styled.span<{ $active?: boolean; $isCurrent?: boolean }>`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: ${({ $active, $isCurrent }) => 
-    $isCurrent ? '#3b82f6' : 
-    $active ? '#3b82f6' : '#d1d5db'};
+  background: ${({ $active, $isCurrent }) =>
+    $isCurrent ? '#3b82f6' : $active ? '#3b82f6' : '#d1d5db'};
   box-shadow: ${({ $active, $isCurrent }) =>
-    $isCurrent ? '0 0 0 4px rgba(59, 130, 246, 0.15)' :
-    $active ? '0 0 0 4px rgba(59, 130, 246, 0.15)' : 'none'};
+    $isCurrent
+      ? '0 0 0 4px rgba(59, 130, 246, 0.15)'
+      : $active
+        ? '0 0 0 4px rgba(59, 130, 246, 0.15)'
+        : 'none'};
   ${({ $isCurrent }) =>
     $isCurrent &&
     `
@@ -7869,7 +9026,7 @@ const TimelineGap = styled.div`
   font-size: 0.7rem;
   color: #9ca3af;
   font-weight: 500;
-  
+
   &::before {
     content: '⋮';
     font-size: 1rem;
@@ -8580,7 +9737,8 @@ const JobCategoryItemIcon = styled.div<{ $active?: boolean }>`
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  background: ${({ $active }) => ($active ? 'rgba(59, 130, 246, 0.12)' : '#f8fafc')};
+  background: ${({ $active }) =>
+    $active ? 'rgba(59, 130, 246, 0.12)' : '#f8fafc'};
   color: ${({ $active }) => ($active ? '#3b82f6' : '#94a3b8')};
   font-size: 1.4rem;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
@@ -8781,7 +9939,6 @@ const CareerJobButton = styled.button<{ $selected?: boolean }>`
   }
 `
 
-
 const CheckboxLabel = styled.label`
   display: flex;
   align-items: center;
@@ -8886,13 +10043,21 @@ const CountryTransferItem = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  background: linear-gradient(135deg, rgba(249, 250, 251, 0.8), rgba(243, 244, 246, 0.6));
+  background: linear-gradient(
+    135deg,
+    rgba(249, 250, 251, 0.8),
+    rgba(243, 244, 246, 0.6)
+  );
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    background: linear-gradient(135deg, rgba(249, 250, 251, 1), rgba(243, 244, 246, 0.9));
+    background: linear-gradient(
+      135deg,
+      rgba(249, 250, 251, 1),
+      rgba(243, 244, 246, 0.9)
+    );
     border-color: #d1d5db;
     transform: translateX(2px);
   }

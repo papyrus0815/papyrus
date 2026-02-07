@@ -2,7 +2,6 @@
  * Event Entity - Data Transformers
  * FSD: entities/event/model
  */
-
 import { extractCategoryKey } from '@/features/event-create/lib'
 import { getAllEvents } from '@/shared/api/events'
 
@@ -116,16 +115,8 @@ export const transformEventsFromApi = (
       countries: [],
       influence: [],
       visuals: {
-        heroImageUrl: evt.thumbnail
-          ? evt.thumbnail.startsWith('http')
-            ? evt.thumbnail
-            : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${evt.thumbnail}`
-          : '',
-        thumbnailUrl: evt.thumbnail
-          ? evt.thumbnail.startsWith('http')
-            ? evt.thumbnail
-            : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${evt.thumbnail}`
-          : '',
+        heroImageUrl: evt.thumbnail || '',
+        thumbnailUrl: evt.thumbnail || '',
         gallery: [],
       },
       map: {
@@ -142,6 +133,9 @@ export const transformEventsFromApi = (
       parentEventId: isChild ? evt.parentEventId || undefined : undefined,
       // ✅ 섹션 제목 추가
       sectionTitles: evt.sectionTitles || [],
+      // ✅ 관련 국가 추가
+      relatedCountries: evt.relatedCountries,
+      relatedHistoricalCountries: evt.relatedHistoricalCountries,
     }
   }
 
@@ -211,4 +205,3 @@ export const transformEventsFromApi = (
 
   return allEvents
 }
-

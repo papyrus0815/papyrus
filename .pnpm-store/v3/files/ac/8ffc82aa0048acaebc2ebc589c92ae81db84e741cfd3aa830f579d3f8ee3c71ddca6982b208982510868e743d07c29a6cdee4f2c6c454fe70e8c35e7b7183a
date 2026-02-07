@@ -1,0 +1,72 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.WebSocketRouteTransformer = void 0;
+const path_1 = __importDefault(require("path"));
+const typescript_1 = __importDefault(require("typescript"));
+var WebSocketRouteTransformer;
+(function (WebSocketRouteTransformer) {
+    WebSocketRouteTransformer.validate = (props) => {
+        if (!typescript_1.default.isCallExpression(props.decorator.expression))
+            return props.decorator;
+        // CHECK SIGNATURE
+        const signature = props.context.checker.getResolvedSignature(props.decorator.expression);
+        if (!signature || !signature.declaration)
+            return props.decorator;
+        else if (isLocated(signature) === false)
+            return props.decorator;
+        const errors = [];
+        let accepted = false;
+        const report = (node, message) => {
+            errors.push(typescript_1.default.createDiagnosticForNode(node, {
+                category: typescript_1.default.DiagnosticCategory.Error,
+                key: "nestia.core.WebSocketRoute",
+                code: "(nestia.core.WebSocketRoute)",
+                message,
+            }));
+        };
+        props.method.parameters.forEach((param) => {
+            var _a, _b, _c, _d, _e, _f, _g;
+            const paramDecos = ((_a = param.modifiers) !== null && _a !== void 0 ? _a : []).filter((m) => typescript_1.default.isDecorator(m));
+            const category = (() => {
+                var _a, _b;
+                if (paramDecos.length !== 1)
+                    return null;
+                const decorator = paramDecos[0];
+                const signature = typescript_1.default.isCallExpression(decorator.expression)
+                    ? props.context.checker.getResolvedSignature(decorator.expression)
+                    : undefined;
+                if (signature === undefined || isLocated(signature) === false)
+                    return null;
+                return ((_b = (_a = decorator.expression.getText().split(".").at(-1)) === null || _a === void 0 ? void 0 : _a.split("(")[0]) !== null && _b !== void 0 ? _b : null);
+            })();
+            if (category === null)
+                report(param, `parameter ${JSON.stringify(param.name.getText())} is not decorated with nested function of WebSocketRoute module.`);
+            else if (category === "Acceptor") {
+                accepted = true;
+                if (((_d = (_c = (_b = param.type) === null || _b === void 0 ? void 0 : _b.getText().split("<")[0]) === null || _c === void 0 ? void 0 : _c.split(".").at(-1)) === null || _d === void 0 ? void 0 : _d.startsWith("WebSocketAcceptor")) !== true)
+                    report(param, `parameter ${JSON.stringify(param.name.getText())} must have WebSocketAcceptor<Header, Provider, Listener> type.`);
+            }
+            else if (category === "Driver") {
+                if (((_g = (_f = (_e = param.type) === null || _e === void 0 ? void 0 : _e.getText().split("<")[0]) === null || _f === void 0 ? void 0 : _f.split(".").at(-1)) === null || _g === void 0 ? void 0 : _g.startsWith("Driver")) !== true)
+                    report(param, `parameter ${JSON.stringify(param.name.getText())} must have Driver<Listener> type.`);
+            }
+        });
+        if (accepted === false)
+            report(props.method, `method ${JSON.stringify(props.method.name.getText())} must have at least one parameter decorated by @WebSocketRoute.Acceptor().`);
+        for (const e of errors)
+            props.context.extras.addDiagnostic(e);
+        return props.decorator;
+    };
+})(WebSocketRouteTransformer || (exports.WebSocketRouteTransformer = WebSocketRouteTransformer = {}));
+const isLocated = (signature) => {
+    if (!signature.declaration)
+        return false;
+    const location = path_1.default.resolve(signature.declaration.getSourceFile().fileName);
+    return (location.indexOf(LIB_PATH) !== -1 || location.indexOf(MONO_PATH) !== -1);
+};
+const LIB_PATH = path_1.default.join("@nestia", "core", "lib", "decorators", `WebSocketRoute.d.ts`);
+const MONO_PATH = path_1.default.join("packages", "core", "lib", "decorators", `WebSocketRoute.d.ts`);
+//# sourceMappingURL=WebSocketRouteTransformer.js.map

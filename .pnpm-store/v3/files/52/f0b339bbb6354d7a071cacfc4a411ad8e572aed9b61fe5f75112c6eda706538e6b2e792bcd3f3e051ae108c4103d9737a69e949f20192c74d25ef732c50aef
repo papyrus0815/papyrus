@@ -1,0 +1,6 @@
+import ts from "typescript";
+import { IReflectImport } from "../structures/IReflectImport";
+export declare namespace ImportAnalyzer {
+    const analyze: (file: ts.SourceFile) => IReflectImport[];
+    const merge: (imports: IReflectImport[]) => IReflectImport[];
+}

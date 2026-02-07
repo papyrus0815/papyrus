@@ -1,0 +1,90 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.get_path_and_stringify = void 0;
+const common_1 = require("@nestjs/common");
+const typia_1 = __importDefault(require("typia"));
+const NoTransformConfigurationError_1 = require("../NoTransformConfigurationError");
+/** @internal */
+const get_path_and_stringify = (logger) => (method) => (...args) => {
+    const path = args[0] === undefined ||
+        typeof args[0] === "string" ||
+        Array.isArray(args[0])
+        ? args[0]
+        : null;
+    const functor = path === null ? args[0] : args[1];
+    return [path !== null && path !== void 0 ? path : undefined, take(logger)(method)(functor)];
+};
+exports.get_path_and_stringify = get_path_and_stringify;
+/** @internal */
+const take = (logger) => (method) => (functor) => {
+    if (functor === undefined) {
+        (0, NoTransformConfigurationError_1.NoTransformConfigurationError)(method);
+        return (input, _method, _path) => JSON.stringify(input);
+    }
+    else if (functor === null)
+        return (input, _method, _path) => JSON.stringify(input);
+    else if (functor.type === "stringify")
+        return functor.stringify;
+    else if (functor.type === "assert")
+        return assert(functor.assert);
+    else if (functor.type === "is")
+        return is(functor.is);
+    else if (functor.type === "validate")
+        return validate(functor.validate);
+    else if (functor.type === "validate.log")
+        return validateLog(logger)(functor.validate);
+    throw new Error(`Error on nestia.core.${method}(): invalid typed stringify function.`);
+};
+/** @internal */
+const assert = (closure) => (data) => {
+    try {
+        return closure(data);
+    }
+    catch (exp) {
+        if ((() => { const _io0 = input => "string" === typeof input.method && (undefined === input.path || "string" === typeof input.path) && "string" === typeof input.expected && true && (undefined === input.description || "string" === typeof input.description) && "string" === typeof input.name && "string" === typeof input.message && (undefined === input.stack || "string" === typeof input.stack); return input => "object" === typeof input && null !== input && _io0(input); })()(exp))
+            throw new common_1.InternalServerErrorException({
+                path: exp.path,
+                reason: exp.message,
+                expected: exp.expected,
+                value: exp.value,
+                message: MESSAGE,
+            });
+        throw exp;
+    }
+};
+/** @internal */
+const is = (closure) => (data, _method, _path) => {
+    const result = closure(data);
+    if (result === null)
+        throw new common_1.InternalServerErrorException(MESSAGE);
+    return result;
+};
+/** @internal */
+const validate = (closure) => (data, _method, _path) => {
+    const result = closure(data);
+    if (result.success === false)
+        throw new common_1.InternalServerErrorException({
+            errors: result.errors,
+            message: MESSAGE,
+        });
+    return result.data;
+};
+const validateLog = (logger) => (closure) => (data, method, path) => {
+    const result = closure(data);
+    if (result.success === true)
+        return result.data;
+    if (result.success === false)
+        logger()({
+            errors: result.errors,
+            method,
+            path,
+            data,
+        });
+    return JSON.stringify(data);
+};
+/** @internal */
+const MESSAGE = "Response body data is not following the promised type.";
+//# sourceMappingURL=get_path_and_stringify.js.map

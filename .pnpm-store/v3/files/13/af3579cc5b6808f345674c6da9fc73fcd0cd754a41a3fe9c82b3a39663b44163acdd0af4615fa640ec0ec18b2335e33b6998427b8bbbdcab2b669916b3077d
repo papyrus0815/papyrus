@@ -1,0 +1,16 @@
+import { IComparable } from "tstl";
+import { IOperationMetadata } from "../transformers/IOperationMetadata";
+export interface IReflectOperationError {
+    file: string;
+    class: string;
+    function: string | null;
+    from: string | null;
+    contents: Array<string | IOperationMetadata.IError>;
+}
+export declare namespace IReflectOperationError {
+    class Key implements Pick<IComparable<Key>, "less"> {
+        readonly error: IReflectOperationError;
+        constructor(error: IReflectOperationError);
+        less(obj: Key): boolean;
+    }
+}

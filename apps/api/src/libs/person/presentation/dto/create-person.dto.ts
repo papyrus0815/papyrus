@@ -211,6 +211,31 @@ export class CreatePersonDto {
   @IsBoolean()
   showLifespanOnEventList?: boolean
 
+  //--- 왕/군주 관련 필드
+  /**
+   * 왕호/재위명 (예: Louis, Henry, 선덕)
+   * @example "Louis"
+   */
+  @IsOptional()
+  @IsString()
+  regnalName?: string
+
+  /**
+   * 묘호 (동아시아 군주, 예: 세종, 태종, 고종)
+   * @example "세종"
+   */
+  @IsOptional()
+  @IsString()
+  templeName?: string
+
+  /**
+   * 시호 (예: 문종, 무열왕, 효종)
+   * @example "세종장헌영문예무인성명효대왕"
+   */
+  @IsOptional()
+  @IsString()
+  posthumousName?: string
+
   /**
    * 가문 ID (선택)
    */

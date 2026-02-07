@@ -1,0 +1,115 @@
+import { Invoke } from "../../components/Invoke";
+import { ConnectorBase } from "../internal/ConnectorBase";
+import { IWorkerSystem } from "./internal/IWorkerSystem";
+/**
+ * SharedWorker Connector
+ *
+ *  - available only in the Web Browser.
+ *
+ * The `SharedWorkerConnector` is a communicator class which connects to an
+ * `SharedWorker` instance, and interacts with it through RFC (Remote Function Call)
+ * concept.
+ *
+ * You can connect to the {@link SharedWorkerServer} using {@link connect} method.
+ * The interaction would be started if the server accepts your connection by calling
+ * the {@link SharedWorkerAcceptor.accept} method. If the remote server rejects your
+ * connection through {@link SharedWorkerAcceptor.reject} method, the exception
+ * would be thrown.
+ *
+ * After the connection, don't forget to {@link closing} the connection, if your
+ * business logics have been completed, to clean up the resources. Otherwise, the
+ * closing must be performed by the remote shared worker server, you can wait the
+ * remote server's closing signal through the {@link join} method.
+ *
+ * Also, when declaring this `SharedWorkerConnector` type, you've to define three
+ * generic arguments; `Header`, `Provider` and `Remote`. Those generic arguments must
+ * be same with the ones defined in the target {@link WebSocketServer} and
+ * {@link SharedWorkerAcceptor} classes (`Provider` and `Remote` must be reversed).
+ *
+ * For reference, the first `Header` type represents an initial data from the
+ * remote client after the connection. I recommend utilize it as an activation tool
+ * for security enhancement. The second generic argument `Provider` represents a
+ * provider from client to server, and the other `Remote` means a provider from the
+ * remote server to client.
+ *
+ * @template Header Type of the header containing initial data.
+ * @template Provider Type of features provided for the remote server.
+ * @template Remote Type of features supported by remote server.
+ */
+export declare class SharedWorkerConnector<Header, Provider extends object | null, Remote extends object | null> extends ConnectorBase<Header, Provider, Remote> implements IWorkerSystem {
+    /**
+     * @hidden
+     */
+    private port_?;
+    /**
+     * Connect to remote server.
+     *
+     * The {@link connect}() method tries to connect an `SharedWorker` instance. If the
+     * `SharedWorker` instance is not created yet, the `SharedWorker` instance would be newly
+     * created. After the creation, the `SharedWorker` program must open that server using
+     * the {@link SharedWorkerServer.open}() method.
+     *
+     * After you business has been completed, you've to close the `SharedWorker` using one of
+     * them below. If you don't close that, vulnerable memory usage and communication channel
+     * would not be destroyed and it may cause the memory leak:
+     *
+     *  - {@link close}()
+     *  - {@link ShareDWorkerAcceptor.close}()
+     *  - {@link SharedWorkerServer.close}()
+     *
+     * @param jsFile JS File to be {@link SharedWorkerServer}.
+     * @param options Detailed options like timeout.
+     */
+    connect(jsFile: string, options?: Partial<SharedWorkerConnector.IConnectOptions>): Promise<void>;
+    /**
+     * @hidden
+     */
+    private _Handshake;
+    /**
+     * @inheritDoc
+     */
+    close(): Promise<void>;
+    /**
+     * @hidden
+     */
+    protected sendData(invoke: Invoke): Promise<void>;
+    /**
+     * @hidden
+     */
+    private _Handle_message;
+    /**
+     * @hidden
+     */
+    private _Handle_close;
+}
+/**
+ *
+ */
+export declare namespace SharedWorkerConnector {
+    /**
+     * Current state of the {@link SharedWorkerConnector}.
+     */
+    export import State = ConnectorBase.State;
+    /**
+     * Connection options for the {@link SharedWorkerConnector.connect}.
+     */
+    interface IConnectOptions {
+        /**
+         * Milliseconds to wait the shared-worker server to accept or reject it. If omitted, the waiting would be forever.
+         */
+        timeout: number;
+    }
+    /**
+     * Compile JS source code.
+     *
+     * @param content Source code
+     * @return Temporary URL.
+     */
+    function compile(content: string): Promise<string>;
+    /**
+     * Remove compiled JS file.
+     *
+     * @param url Temporary URL.
+     */
+    function remove(url: string): Promise<void>;
+}

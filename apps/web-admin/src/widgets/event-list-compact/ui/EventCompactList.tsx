@@ -2,9 +2,17 @@
  * Event Compact List Widget
  * FSD: widgets/event-list-compact/ui
  */
+import React, { useState } from 'react'
 
-import React from 'react'
-import { FiArrowDown, FiArrowUp, FiFilter, FiPlus, FiX } from 'react-icons/fi'
+import {
+  FiArrowDown,
+  FiArrowUp,
+  FiChevronDown,
+  FiChevronRight,
+  FiFilter,
+  FiPlus,
+  FiX,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
 import type { SortOption } from '@/features/event-list/lib'
@@ -18,9 +26,9 @@ import type {
 import * as List from '../../../pages/events/styles/list.styles'
 import * as Skeleton from '../../../pages/events/styles/skeleton.styles'
 import {
-  TenureGroupHeader,
   OtherHeadsOfStateList,
   TenureGroupFooter,
+  TenureGroupHeader,
 } from '../../tenure-group/ui'
 import { EventListItem } from './EventListItem'
 
@@ -50,6 +58,10 @@ interface EventCompactListProps {
   hasActiveFilters: boolean
   tenureGroups: TenureGroup[]
   dbCategories: EventCategoryDto[]
+  totalCount?: number // 총 개수
+  isLoadingMore?: boolean // 추가 로딩 상태
+  displayedCount?: number // 현재 표시된 개수
+  hasMoreData?: boolean // 더 불러올 데이터가 있는지
   onToggleExpansion: (eventId: string) => void
   onToggleTenureGroupExpansion: (tenureKey: string) => void
   onSelectEvent: (eventId: string) => void
@@ -57,6 +69,9 @@ interface EventCompactListProps {
   onSortChange: (sortBy: SortOption) => void
   onSortDirectionToggle: () => void
   onResetFilters: () => void
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
+  pageSize?: number
+  onPageSizeChange?: (size: number) => void
 }
 
 export const EventCompactList: React.FC<EventCompactListProps> = ({
@@ -73,6 +88,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   hasActiveFilters,
   tenureGroups,
   dbCategories,
+  totalCount,
+  isLoadingMore = false,
+  displayedCount = 0,
+  hasMoreData = false,
   onToggleExpansion,
   onToggleTenureGroupExpansion,
   onSelectEvent,
@@ -80,8 +99,24 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onSortChange,
   onSortDirectionToggle,
   onResetFilters,
+  onScroll,
+  pageSize = 20,
+  onPageSizeChange,
 }) => {
   const navigate = useNavigate()
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
+
+  const toggleYearCollapse = (year: number) => {
+    setCollapsedYears((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(year)) {
+        newSet.delete(year)
+      } else {
+        newSet.add(year)
+      }
+      return newSet
+    })
+  }
 
   return (
     <List.CatalogSection>
@@ -89,7 +124,28 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         <List.ToolbarMeta>
           <span>{sortedEvents.length}건</span>
         </List.ToolbarMeta>
-        <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '10px',
+            marginLeft: 'auto',
+            alignItems: 'center',
+          }}
+        >
+          {onPageSizeChange && (
+            <List.SortSelect
+              value={pageSize}
+              aria-label="페이지 크기 선택"
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                onPageSizeChange(Number(e.target.value))
+              }
+              style={{ width: '110px' }}
+            >
+              <option value={20}>20개씩</option>
+              <option value={50}>50개씩</option>
+              <option value={100}>100개씩</option>
+            </List.SortSelect>
+          )}
           <List.SortSelect
             value={sortBy}
             aria-label="정렬 기준 선택"
@@ -97,11 +153,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               onSortChange(e.target.value as SortOption)
             }
           >
-            <option value="impact">파급력 높은 순</option>
             <option value="recent">최근 발생 순</option>
             <option value="duration">장기 지속 순</option>
           </List.SortSelect>
-          <List.SortDirectionToggle type="button" onClick={onSortDirectionToggle}>
+          <List.SortDirectionToggle
+            type="button"
+            onClick={onSortDirectionToggle}
+          >
             {sortDirection === 'asc' ? <FiArrowUp /> : <FiArrowDown />}
           </List.SortDirectionToggle>
         </div>
@@ -157,13 +215,45 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           </List.EmptyActions>
         </List.EmptyCatalogState>
       ) : (
-        <List.CompactList>
+        <List.CompactList onScroll={onScroll}>
           {flattenedHierarchy.map(({ node, depth, parentEvent }, index) => {
             const hasChildren = node.children && node.children.length > 0
             const isExpanded = expandedEventIds.has(node.id)
             const event = events.find((e) => e.id === node.id) ?? parentEvent
 
             if (!event) return null
+
+            // 년도 구분선 표시 여부 체크 (depth 0인 최상위 사건만)
+            const currentYear = new Date(node.period.start).getFullYear()
+            const prevEvent = index > 0 ? flattenedHierarchy[index - 1] : null
+            const prevYear = prevEvent
+              ? new Date(prevEvent.node.period.start).getFullYear()
+              : null
+            const showYearDivider =
+              depth === 0 &&
+              (index === 0 || (prevYear !== null && currentYear !== prevYear))
+
+            // 이 년도가 접혀있는지 확인
+            const isYearCollapsed = collapsedYears.has(currentYear)
+
+            // 접힌 년도의 사건은 렌더링하지 않음 (년도 구분선만 표시)
+            if (isYearCollapsed && depth === 0) {
+              return showYearDivider ? (
+                <List.YearDivider
+                  key={`year-${currentYear}`}
+                  type="button"
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    e.preventDefault()
+                    toggleYearCollapse(currentYear)
+                  }}
+                >
+                  <span>
+                    <FiChevronRight size={14} />
+                    {currentYear}년
+                  </span>
+                </List.YearDivider>
+              ) : null
+            }
 
             // 이 사건이 속한 집권 기간 그룹 찾기
             const tenureGroup =
@@ -173,9 +263,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
             // 이 사건이 그룹의 첫 번째/마지막 사건인지 확인
             const isGroupStart =
-              tenureGroup &&
-              tenureGroup.eventIds[0] === node.id &&
-              depth === 0
+              tenureGroup && tenureGroup.eventIds[0] === node.id && depth === 0
 
             const isGroupEnd =
               tenureGroup &&
@@ -191,6 +279,21 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
             return (
               <React.Fragment key={node.id}>
+                {/* 년도 구분선 */}
+                {showYearDivider && (
+                  <List.YearDivider
+                    type="button"
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                      e.preventDefault()
+                      toggleYearCollapse(currentYear)
+                    }}
+                  >
+                    <span>
+                      <FiChevronDown size={14} />
+                      {currentYear}년
+                    </span>
+                  </List.YearDivider>
+                )}
                 {/* 집권 기간 그룹 헤더 */}
                 {isGroupStart && tenureGroup && (
                   <>
@@ -235,9 +338,51 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               </React.Fragment>
             )
           })}
+
+          {/* 로딩 인디케이터 또는 끝 표시 */}
+          {isLoadingMore && (
+            <div
+              style={{
+                padding: '32px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '16px',
+                background:
+                  'linear-gradient(180deg, transparent 0%, #f8fafc 50%)',
+              }}
+            >
+              <List.LoadingSpinner />
+              <div
+                style={{
+                  color: '#6366f1',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  letterSpacing: '0.3px',
+                }}
+              >
+                데이터 불러오는 중...
+              </div>
+            </div>
+          )}
+          {!isLoadingMore && hasMoreData && (
+            <div
+              style={{
+                padding: '28px',
+                textAlign: 'center',
+                color: '#64748b',
+                fontSize: '13px',
+                fontWeight: '600',
+                background:
+                  'linear-gradient(180deg, transparent 0%, #f8fafc 100%)',
+              }}
+            >
+              ↓ 아래로 스크롤하여 더 보기
+            </div>
+          )}
         </List.CompactList>
       )}
     </List.CatalogSection>
   )
 }
-

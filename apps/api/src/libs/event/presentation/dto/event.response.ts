@@ -66,6 +66,49 @@ export class EventResponseDto {
   })
   sectionTitles?: string[]
 
+  @ApiProperty({
+    description: '관련 현대 국가 ID 목록',
+    required: false,
+    type: [String]
+  })
+  relatedCountryIds?: string[]
+
+  @ApiProperty({
+    description: '관련 역사적 국가 ID 목록',
+    required: false,
+    type: [String]
+  })
+  relatedHistoricalCountryIds?: string[]
+
+  @ApiProperty({
+    description: '관련 현대 국가 정보 목록',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+        flagEmoji: { type: 'string' },
+      },
+    },
+  })
+  relatedCountries?: Array<{ id: string; name: string; flagEmoji?: string }>
+
+  @ApiProperty({
+    description: '관련 역사적 국가 정보 목록',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+      },
+    },
+  })
+  relatedHistoricalCountries?: Array<{ id: string; name: string }>
+
   @ApiProperty({ description: '교전 세력 정보 (통합 구조)', required: false })
   belligerents?:
     | {

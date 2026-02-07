@@ -1,0 +1,8 @@
+import { INestiaProject } from "../../structures/INestiaProject";
+import { ITypedHttpRoute } from "../../structures/ITypedHttpRoute";
+export declare namespace E2eFileProgrammer {
+    const generate: (project: INestiaProject) => (props: {
+        api: string;
+        current: string;
+    }) => (route: ITypedHttpRoute) => Promise<void>;
+}

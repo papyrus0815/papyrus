@@ -1,0 +1,1 @@
+{"version":3,"file":"OperationMetadata.js","sourceRoot":"","sources":["../../src/decorators/OperationMetadata.ts"],"names":[],"mappings":";;AAEA,8CAYC;AAZD,SAAgB,iBAAiB,CAC/B,QAA4B;IAE5B,OAAO,SAAS,iBAAiB,CAAC,MAAM,EAAE,WAAW,EAAE,UAAU;QAC/D,OAAO,CAAC,cAAc,CACpB,0BAA0B,EAC1B,QAAQ,EACR,MAAM,EACN,WAAW,CACZ,CAAC;QACF,OAAO,UAAU,CAAC;IACpB,CAAC,CAAC;AACJ,CAAC"}

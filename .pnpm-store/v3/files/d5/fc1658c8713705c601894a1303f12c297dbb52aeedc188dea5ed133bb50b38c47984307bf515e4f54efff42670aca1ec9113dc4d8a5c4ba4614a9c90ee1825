@@ -1,0 +1,4 @@
+import ts from "typescript";
+export declare namespace SdkOperationTransformer {
+    const iterateFile: (checker: ts.TypeChecker) => (api: ts.TransformationContext) => (file: ts.SourceFile) => ts.SourceFile;
+}

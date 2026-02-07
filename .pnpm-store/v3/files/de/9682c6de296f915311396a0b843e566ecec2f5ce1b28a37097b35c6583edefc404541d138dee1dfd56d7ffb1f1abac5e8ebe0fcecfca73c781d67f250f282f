@@ -1,0 +1,7 @@
+import ts from "typescript";
+import { INestiaProject } from "../../structures/INestiaProject";
+import { ITypedWebSocketRoute } from "../../structures/ITypedWebSocketRoute";
+import { ImportDictionary } from "./ImportDictionary";
+export declare namespace SdkWebSocketNamespaceProgrammer {
+    const write: (project: INestiaProject) => (importer: ImportDictionary) => (route: ITypedWebSocketRoute) => ts.ModuleDeclaration;
+}

@@ -1,0 +1,284 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.WebSocketAdaptor = void 0;
+/// <reference path="../typings/get-function-location.d.ts" />
+const common_1 = require("@nestjs/common");
+const constants_1 = require("@nestjs/common/constants");
+const get_function_location_1 = __importDefault(require("get-function-location"));
+const path_1 = __importDefault(require("path"));
+const path_parser_1 = require("path-parser");
+const tgrid_1 = require("tgrid");
+const typia_1 = __importDefault(require("typia"));
+const ws_1 = __importDefault(require("ws"));
+const ArrayUtil_1 = require("../utils/ArrayUtil");
+const VersioningStrategy_1 = require("../utils/VersioningStrategy");
+class WebSocketAdaptor {
+    static upgrade(app) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return new this(app, yield visitApplication(app));
+        });
+    }
+    constructor(app, operations) {
+        this.close = () => __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve) => {
+                this.http.off("close", this.close);
+                this.http.off("upgrade", this.handleUpgrade);
+                this.ws.close(() => resolve());
+            });
+        });
+        this.handleUpgrade = (request, duplex, head) => {
+            this.ws.handleUpgrade(request, duplex, head, (client, request) => tgrid_1.WebSocketAcceptor.upgrade(request, client, (acceptor) => __awaiter(this, void 0, void 0, function* () {
+                const path = (() => {
+                    const index = acceptor.path.indexOf("?");
+                    return index === -1 ? acceptor.path : acceptor.path.slice(0, index);
+                })();
+                for (const op of this.operators) {
+                    const params = op.parser.test(path);
+                    if (params !== null)
+                        try {
+                            yield op.handler({ params, acceptor });
+                        }
+                        catch (error) {
+                            if (acceptor.state === 1 /* WebSocketAcceptor.State.OPEN */ ||
+                                acceptor.state === 0 /* WebSocketAcceptor.State.ACCEPTING */)
+                                yield acceptor.reject(1008, error instanceof Error
+                                    ? JSON.stringify(Object.assign({}, error))
+                                    : "unknown error");
+                        }
+                        finally {
+                            return;
+                        }
+                }
+                yield acceptor.reject(1002, `WebSocket API not found`);
+            })));
+        };
+        this.operators = operations;
+        this.ws = new ws_1.default.Server({ noServer: true });
+        this.http = app.getHttpServer();
+        this.http.on("close", this.close);
+        this.http.on("upgrade", this.handleUpgrade);
+    }
+}
+exports.WebSocketAdaptor = WebSocketAdaptor;
+const visitApplication = (app) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b, _c;
+    const operators = [];
+    const errors = [];
+    const config = {
+        globalPrefix: typeof ((_a = app.config) === null || _a === void 0 ? void 0 : _a.globalPrefix) === "string"
+            ? app.config.globalPrefix
+            : undefined,
+        versioning: (() => {
+            var _a;
+            const versioning = (_a = app.config) === null || _a === void 0 ? void 0 : _a.versioningOptions;
+            return versioning === undefined || versioning.type !== common_1.VersioningType.URI
+                ? undefined
+                : {
+                    prefix: versioning.prefix === undefined || versioning.prefix === false
+                        ? "v"
+                        : versioning.prefix,
+                    defaultVersion: versioning.defaultVersion,
+                };
+        })(),
+    };
+    const container = app.container;
+    const modules = [...container.getModules().values()].filter((m) => { var _a; return !!((_a = m.controllers) === null || _a === void 0 ? void 0 : _a.size); });
+    for (const m of modules) {
+        const modulePrefix = (_c = (_b = Reflect.getMetadata(constants_1.MODULE_PATH + container.getModules().applicationId, m.metatype)) !== null && _b !== void 0 ? _b : Reflect.getMetadata(constants_1.MODULE_PATH, m.metatype)) !== null && _c !== void 0 ? _c : "";
+        for (const controller of m.controllers.values())
+            yield visitController({
+                config,
+                errors,
+                operators,
+                controller,
+                modulePrefix,
+            });
+    }
+    if (errors.length)
+        throw new Error([
+            `WebSocketAdaptor: ${errors.length} error(s) found:`,
+            ``,
+            ...errors.map((e) => [
+                `  - controller: ${e.name}`,
+                `    methods:`,
+                ...e.methods.map((m) => [
+                    `    - name: ${m.name}`,
+                    `      file: ${m.source}:${m.line}:${m.column}`,
+                    `      reasons:`,
+                    ...m.messages.map((msg) => `        - ${msg
+                        .split("\n")
+                        .map((str, i) => (i == 0 ? str : `        ${str}`))
+                        .join("\n")}`),
+                ].join("\n")),
+            ].join("\n")),
+        ].join("\n"));
+    return operators;
+});
+const visitController = (props) => __awaiter(void 0, void 0, void 0, function* () {
+    if (ArrayUtil_1.ArrayUtil.has(Reflect.getMetadataKeys(props.controller.metatype), constants_1.PATH_METADATA, constants_1.HOST_METADATA, constants_1.SCOPE_OPTIONS_METADATA) === false)
+        return;
+    const methodErrors = [];
+    const controller = {
+        name: props.controller.name,
+        instance: props.controller.instance,
+        constructor: props.controller.metatype,
+        prototype: Object.getPrototypeOf(props.controller.instance),
+        prefixes: (() => {
+            const value = Reflect.getMetadata(constants_1.PATH_METADATA, props.controller.metatype);
+            if (typeof value === "string")
+                return [value];
+            else if (value.length === 0)
+                return [""];
+            else
+                return value;
+        })(),
+        versions: props.config.versioning
+            ? VersioningStrategy_1.VersioningStrategy.cast(Reflect.getMetadata(constants_1.VERSION_METADATA, props.controller.metatype))
+            : undefined,
+        modulePrefix: props.modulePrefix,
+    };
+    for (const mk of getOwnPropertyNames(controller.prototype).filter((key) => key !== "constructor" && typeof controller.prototype[key] === "function")) {
+        const errorMessages = [];
+        visitMethod({
+            config: props.config,
+            operators: props.operators,
+            controller,
+            method: {
+                key: mk,
+                value: controller.prototype[mk],
+            },
+            report: (msg) => errorMessages.push(msg),
+        });
+        if (errorMessages.length) {
+            const file = yield (0, get_function_location_1.default)(controller.prototype[mk]);
+            methodErrors.push(Object.assign(Object.assign({ name: mk, messages: errorMessages }, file), { source: path_1.default.relative(process.cwd(), file.source.replace("file:///", "")) }));
+        }
+    }
+    if (methodErrors.length)
+        props.errors.push({
+            name: controller.name,
+            methods: methodErrors,
+        });
+});
+const visitMethod = (props) => {
+    var _a, _b, _c;
+    const route = Reflect.getMetadata("nestia/WebSocketRoute", props.method.value);
+    if ((() => { const _io0 = input => Array.isArray(input.paths) && input.paths.every(elem => "string" === typeof elem); return input => "object" === typeof input && null !== input && _io0(input); })()(route) === false)
+        return;
+    const parameters = ((_a = Reflect.getMetadata("nestia/WebSocketRoute/Parameters", props.controller.prototype, props.method.key)) !== null && _a !== void 0 ? _a : []).sort((a, b) => a.index - b.index);
+    // acceptor must be
+    if (parameters.some((p) => p.category === "acceptor") === false)
+        return props.report("@WebSocketRoute.Acceptor() decorated parameter must be.");
+    // length of parameters must be fulfilled
+    if (parameters.length !== props.method.value.length)
+        return props.report([
+            "Every parameters must be one of below:",
+            "  - @WebSocketRoute.Acceptor()",
+            "  - @WebSocketRoute.Driver()",
+            "  - @WebSocketRoute.Header()",
+            "  - @WebSocketRoute.Param()",
+            "  - @WebSocketRoute.Query()",
+        ].join("\n"));
+    const versions = VersioningStrategy_1.VersioningStrategy.merge(props.config.versioning)([
+        ...((_b = props.controller.versions) !== null && _b !== void 0 ? _b : []),
+        ...VersioningStrategy_1.VersioningStrategy.cast(Reflect.getMetadata(constants_1.VERSION_METADATA, props.method.value)),
+    ]);
+    for (const v of versions)
+        for (const cp of wrapPaths(props.controller.prefixes))
+            for (const mp of wrapPaths(route.paths)) {
+                const parser = new path_parser_1.Path("/" +
+                    [
+                        (_c = props.config.globalPrefix) !== null && _c !== void 0 ? _c : "",
+                        v,
+                        props.controller.modulePrefix,
+                        cp,
+                        mp,
+                    ]
+                        .filter((str) => !!str.length)
+                        .join("/")
+                        .split("/")
+                        .filter((str) => str.length)
+                        .join("/"));
+                const pathParams = parameters.filter((p) => p.category === "param");
+                if (parser.params.length !== pathParams.length) {
+                    props.report([
+                        `Path "${parser}" must have same number of parameters with @WebSocketRoute.Param()`,
+                        `  - path: ${JSON.stringify(parser.params)}`,
+                        `  - arguments: ${JSON.stringify(pathParams.map((p) => p.field))}`,
+                    ].join("\n"));
+                    continue;
+                }
+                const meet = pathParams
+                    .map((p) => {
+                    const has = parser.params.includes(p.field);
+                    if (has === false)
+                        props.report(`Path "${parser}" must have parameter "${p.field}" with @WebSocketRoute.Param()`);
+                    return has;
+                })
+                    .every((b) => b);
+                if (meet === false)
+                    continue;
+                props.operators.push({
+                    parser,
+                    handler: (input) => __awaiter(void 0, void 0, void 0, function* () {
+                        const args = [];
+                        try {
+                            for (const p of parameters)
+                                if (p.category === "acceptor")
+                                    args.push(input.acceptor);
+                                else if (p.category === "driver")
+                                    args.push(input.acceptor.getDriver());
+                                else if (p.category === "header") {
+                                    const error = p.validate(input.acceptor.header);
+                                    if (error !== null)
+                                        throw error;
+                                    args.push(input.acceptor.header);
+                                }
+                                else if (p.category === "param")
+                                    args.push(p.assert(input.params[p.field]));
+                                else if (p.category === "query") {
+                                    const query = p.validate(new URLSearchParams(input.acceptor.path.indexOf("?") !== -1
+                                        ? input.acceptor.path.split("?")[1]
+                                        : ""));
+                                    if (query instanceof Error)
+                                        throw query;
+                                    args.push(query);
+                                }
+                        }
+                        catch (exp) {
+                            yield input.acceptor.reject(1003, exp instanceof Error
+                                ? JSON.stringify(Object.assign({}, exp))
+                                : "unknown error");
+                            return;
+                        }
+                        yield props.method.value.call(props.controller.instance, ...args);
+                    }),
+                });
+            }
+};
+const wrapPaths = (value) => (value.length === 0 ? [""] : value);
+const getOwnPropertyNames = (prototype) => {
+    const result = new Set();
+    const iterate = (m) => {
+        if (m === null)
+            return;
+        for (const k of Object.getOwnPropertyNames(m))
+            result.add(k);
+        iterate(Object.getPrototypeOf(m));
+    };
+    iterate(prototype);
+    return Array.from(result);
+};
+//# sourceMappingURL=WebSocketAdaptor.js.map

@@ -1,0 +1,5 @@
+import { ITypedHttpRoute } from "../structures/ITypedHttpRoute";
+import { ITypedWebSocketRoute } from "../structures/ITypedWebSocketRoute";
+export declare namespace AccessorAnalyzer {
+    const analyze: (routes: Array<ITypedHttpRoute | ITypedWebSocketRoute>) => void;
+}

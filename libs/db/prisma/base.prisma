@@ -19,8 +19,8 @@ datasource db {
 }
 
 generator client {
-  provider  = "prisma-client"
-  output   = "./generated"
+  provider = "prisma-client-js"
+  // output   = "./generated"
 }
 
 // ERD 생성기는 일시적으로 비활성화됨 (mmdc 권한 문제)

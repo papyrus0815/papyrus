@@ -1,0 +1,74 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedFormDataBodyProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const LiteralFactory_1 = require("typia/lib/factories/LiteralFactory");
+const MetadataCollection_1 = require("typia/lib/factories/MetadataCollection");
+const MetadataFactory_1 = require("typia/lib/factories/MetadataFactory");
+const HttpAssertFormDataProgrammer_1 = require("typia/lib/programmers/http/HttpAssertFormDataProgrammer");
+const HttpFormDataProgrammer_1 = require("typia/lib/programmers/http/HttpFormDataProgrammer");
+const HttpIsFormDataProgrammer_1 = require("typia/lib/programmers/http/HttpIsFormDataProgrammer");
+const HttpValidateFormDataProgrammer_1 = require("typia/lib/programmers/http/HttpValidateFormDataProgrammer");
+const TransformerError_1 = require("typia/lib/transformers/TransformerError");
+var TypedFormDataBodyProgrammer;
+(function (TypedFormDataBodyProgrammer) {
+    TypedFormDataBodyProgrammer.generate = (props) => {
+        // VALIDATE TYPE
+        const collection = new MetadataCollection_1.MetadataCollection();
+        const result = MetadataFactory_1.MetadataFactory.analyze({
+            checker: props.context.checker,
+            transformer: props.context.transformer,
+            options: {
+                escape: false,
+                constant: true,
+                absorb: true,
+                validate: HttpFormDataProgrammer_1.HttpFormDataProgrammer.validate,
+            },
+            type: props.type,
+            collection,
+        });
+        if (result.success === false)
+            throw TransformerError_1.TransformerError.from({
+                code: "nestia.core.TypedFormData.Body",
+                errors: result.errors,
+            });
+        const files = result.data.objects[0].type.properties
+            .filter((p) => isFile(p.value) || p.value.arrays.some((a) => isFile(a.type.value)))
+            .map((p) => ({
+            name: p.key.constants[0].values[0].value,
+            limit: !!p.value.natives.length ? 1 : null,
+        }));
+        // GENERATE VALIDATION PLAN
+        const parameter = (key) => (programmer) => typescript_1.default.factory.createObjectLiteralExpression([
+            typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier("files"), LiteralFactory_1.LiteralFactory.write(files)),
+            typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier("validator"), typescript_1.default.factory.createObjectLiteralExpression([
+                typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier("type"), typescript_1.default.factory.createStringLiteral(key)),
+                typescript_1.default.factory.createPropertyAssignment(typescript_1.default.factory.createIdentifier(key), programmer({
+                    context: Object.assign(Object.assign({}, props.context), { options: {
+                            numeric: false,
+                            finite: false,
+                            functional: false,
+                        } }),
+                    modulo: props.modulo,
+                    type: props.type,
+                    name: undefined,
+                })),
+            ], true)),
+        ], true);
+        // RETURNS
+        const category = props.context.options.validate;
+        if (category === "is" || category === "equals")
+            return parameter("is")(HttpIsFormDataProgrammer_1.HttpIsFormDataProgrammer.write);
+        else if (category === "validate" ||
+            category === "validateEquals" ||
+            category === "validateClone" ||
+            category === "validatePrune")
+            return parameter("validate")(HttpValidateFormDataProgrammer_1.HttpValidateFormDataProgrammer.write);
+        return parameter("assert")(HttpAssertFormDataProgrammer_1.HttpAssertFormDataProgrammer.write);
+    };
+})(TypedFormDataBodyProgrammer || (exports.TypedFormDataBodyProgrammer = TypedFormDataBodyProgrammer = {}));
+const isFile = (meta) => meta.natives.some(({ name }) => name === "File" || name === "Blob");
+//# sourceMappingURL=TypedFormDataBodyProgrammer.js.map

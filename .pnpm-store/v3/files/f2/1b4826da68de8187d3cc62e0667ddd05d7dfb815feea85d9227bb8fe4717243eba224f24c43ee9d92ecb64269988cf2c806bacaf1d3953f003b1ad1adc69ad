@@ -1,0 +1,50 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkImportWizard = void 0;
+var SdkImportWizard;
+(function (SdkImportWizard) {
+    SdkImportWizard.Fetcher = (encrypted) => encrypted ? EncryptedFetcher : PlainFetcher;
+    SdkImportWizard.HttpError = (importer) => importer.external({
+        declaration: true,
+        file: "@nestia/fetcher",
+        type: "element",
+        name: "HttpError",
+    });
+    SdkImportWizard.IConnection = (importer) => importer.external({
+        declaration: true,
+        file: "@nestia/fetcher",
+        type: "element",
+        name: "IConnection",
+    });
+    SdkImportWizard.Primitive = (importer) => importer.external({
+        declaration: true,
+        file: "typia",
+        type: "element",
+        name: "Primitive",
+    });
+    SdkImportWizard.Resolved = (importer) => importer.external({
+        declaration: true,
+        file: "typia",
+        type: "element",
+        name: "Resolved",
+    });
+    SdkImportWizard.typia = (importer) => importer.external({
+        declaration: false,
+        file: "typia",
+        type: "default",
+        name: "typia",
+    });
+})(SdkImportWizard || (exports.SdkImportWizard = SdkImportWizard = {}));
+const PlainFetcher = (importer) => importer.external({
+    declaration: false,
+    file: "@nestia/fetcher/lib/PlainFetcher",
+    type: "element",
+    name: "PlainFetcher",
+});
+const EncryptedFetcher = (importer) => importer.external({
+    declaration: false,
+    file: "@nestia/fetcher/lib/EncryptedFetcher",
+    type: "element",
+    name: "EncryptedFetcher",
+});
+//# sourceMappingURL=SdkImportWizard.js.map

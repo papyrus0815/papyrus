@@ -1,0 +1,154 @@
+/// <reference types="node" />
+import type http from "http";
+import type WebSocket from "ws";
+import { Invoke } from "../../components/Invoke";
+import { AcceptorBase } from "../internal/AcceptorBase";
+import { IWebSocketCommunicator } from "./internal/IWebSocketCommunicator";
+/**
+ * Web Socket Acceptor.
+ *
+ *  - available only in the NodeJS.
+ *
+ * The `WebSocketAcceptor` is a communicator class interacting with the remote
+ * {@link WebSocketConnector websocket client} through RPC (Remote Procedure Call),
+ * created by the {@link WebSocketServer} class whenever a remote client
+ * connects to the websocket server.
+ *
+ * When a remote client connects to the {@link WebSocketServer websocket server},
+ * so that a new `WebSocketAcceptor` instance being created, you can determine
+ * whether to {@link accept} the client's connection or {@link reject not},
+ * reading the {@link header} and {@link path} properties. If you've decided to
+ * accept the connection, call the {@link accept} method with `Provider` instance.
+ * Otherwise, reject it through the {@link reject} method.
+ *
+ * After {@link accept accepting} the connection, don't forget to
+ * {@link close closing} the connection after your business has been completed
+ * to clean up the resources. Otherwise the closing must be performed by the remote
+ * client, you can wait the remote client's closing signal by the {@link join} method.
+ *
+ * Also, when declaring this {@link WebSocketAcceptor} type, you have to define three
+ * generic arguments; `Header`, `Provider` and `Remote`. Those generic arguments must
+ * be same with the ones defined in the {@link WebSocketServer} class.
+ *
+ * For reference, the first `Header` type represents an initial data from the
+ * remote client after the connection. I recommend utilize it as an activation tool
+ * for security enhancement. The second generic argument `Provider` represents a
+ * provider from server to client, and the other `Remote` means a provider from the
+ * remote client to server.
+ *
+ * @template Header Type of the header containing initial data.
+ * @template Provider Type of features provided for the remote client.
+ * @template Remote Type of features provided by remote client.
+ * @author Jeongho Nam - https://github.com/samchon
+ */
+export declare class WebSocketAcceptor<Header, Provider extends object | null, Remote extends object | null> extends AcceptorBase<Header, Provider, Remote> implements IWebSocketCommunicator {
+    /**
+     * @hidden
+     */
+    private request_;
+    /**
+     * @hidden
+     */
+    private socket_;
+    /**
+     * Upgrade to WebSocket protocol.
+     *
+     * If you've not opened websocket server from {@link WebSocketServer}, you can
+     * still compose the `WebSocketAcceptor` instance by yourself, by upgrading
+     * the HTTP connection to the websocket protocol.
+     *
+     * For reference, this `upgrade()` method is useful when you're planning to
+     * make a server supporting both HTTP and WebSocket protocols, and
+     * distinguishing the protocol by the path of URL.
+     *
+     * - ex) [NestJS `@WebSocketRoute()` case](https://nestia.io/docs/core/WebSocketRoute/)
+     *
+     * @param request HTTP incoming message.
+     * @param socket WebSocket instance
+     * @param handler A callback function after the connection has been established.
+     */
+    static upgrade<Header, Provider extends object | null, Remote extends object | null>(request: http.IncomingMessage, socket: WebSocket, handler?: (acceptor: WebSocketAcceptor<Header, Provider, Remote>) => Promise<any>): void;
+    /**
+     * @hidden
+     */
+    private constructor();
+    /**
+     * @inheritDoc
+     */
+    close(code?: number, reason?: string): Promise<void>;
+    /**
+     * @hidden
+     */
+    protected destructor(error?: Error): Promise<void>;
+    /**
+     * IP Address of client.
+     */
+    get ip(): string;
+    /**
+     * Path of client has connected.
+     */
+    get path(): string;
+    /**
+     * Get state.
+     *
+     * Get current state of connection state with the remote client.
+     *
+     * List of values are such like below:
+     *
+     *   - `REJECTING`: The {@link WebSocketAcceptor.reject} method is on running.
+     *   - `NONE`: The {@link WebSocketAcceptor} instance is newly created, but did nothing yet.
+     *   - `ACCEPTING`: The {@link WebSocketAcceptor.accept} method is on running.
+     *   - `OPEN`: The connection is online.
+     *   - `CLOSING`: The {@link WebSocketAcceptor.close} method is on running.
+     *   - `CLOSED`: The connection is offline.
+     */
+    get state(): WebSocketAcceptor.State;
+    /**
+     * @inheritDoc
+     */
+    accept(provider: Provider): Promise<void>;
+    /**
+     * Reject connection.
+     *
+     * Reject without acceptance, any interaction. The connection would be closed immediately.
+     *
+     * @param status Status code.
+     * @param reason Detailed reason to reject.
+     */
+    reject(status?: number, reason?: string): Promise<void>;
+    /**
+     * Ping to the remote client.
+     *
+     * Send a ping message to the remote client repeatedly.
+     *
+     * The ping message would be sent every internal milliseconds, until the
+     * connection be disconnected. The remote client will reply with a pong
+     * message, so that the connection would be alive until be explicitly
+     * disconnected.
+     *
+     * @param ms Interval milliseconds
+     * @throws Error when the connection is not accepted.
+     */
+    ping(ms: number): void;
+    /**
+     * @hidden
+     */
+    protected sendData(invoke: Invoke): Promise<void>;
+    /**
+     * @hidden
+     */
+    private _Handle_message;
+    /**
+     * @hidden
+     */
+    private _Handle_close;
+}
+/**
+ *
+ */
+export declare namespace WebSocketAcceptor {
+    /**
+     * Current state of the {@link WebSocketAcceptor}.
+     */
+    export import State = AcceptorBase.State;
+}

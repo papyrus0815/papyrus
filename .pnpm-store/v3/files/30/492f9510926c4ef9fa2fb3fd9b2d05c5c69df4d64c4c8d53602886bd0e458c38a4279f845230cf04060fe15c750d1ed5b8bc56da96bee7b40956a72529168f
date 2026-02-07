@@ -1,0 +1,113 @@
+import { IValidation } from "typia";
+import { IResponseBodyStringifier } from "../options/IResponseBodyStringifier";
+/**
+ * Type safe router decorator functions.
+ *
+ * `TypedRoute` is a module containing router decorator functions which can
+ * boost up JSON string conversion speed about 200x times faster than
+ * `class-transformer`. Furthermore, such JSON string conversion is even type
+ * safe through [typia](https://github.com/samchon/typia).
+ *
+ * For reference, if you try to invalid data that is not following the promised
+ * type `T`, 500 internal server error would be thrown. Also, as `TypedRoute`
+ * composes JSON string through `typia.assertStringify<T>()` function, it is not
+ * possible to modify response data through interceptors.
+ *
+ * @author Jeongho Nam - https://github.com/samchon
+ */
+export declare namespace TypedRoute {
+    /**
+     * Router decorator function for the GET method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    const Get: {
+        (path?: string | string[]): MethodDecorator;
+        <T>(stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+        <T>(path: string | string[], stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+    };
+    /**
+     * Router decorator function for the POST method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    const Post: {
+        (path?: string | string[]): MethodDecorator;
+        <T>(stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+        <T>(path: string | string[], stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+    };
+    /**
+     * Router decorator function for the PATH method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    const Patch: {
+        (path?: string | string[]): MethodDecorator;
+        <T>(stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+        <T>(path: string | string[], stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+    };
+    /**
+     * Router decorator function for the PUT method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    const Put: {
+        (path?: string | string[]): MethodDecorator;
+        <T>(stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+        <T>(path: string | string[], stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+    };
+    /**
+     * Router decorator function for the DELETE method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    const Delete: {
+        (path?: string | string[]): MethodDecorator;
+        <T>(stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+        <T>(path: string | string[], stringify?: IResponseBodyStringifier<T>): MethodDecorator;
+    };
+    /**
+     * Set the logger function for the response validation failure.
+     *
+     * If you've configured the transformation option to `validate.log` in the
+     * `tsconfig.json` file, then the error log information of the response
+     * validation failure would be logged through this function instead of
+     * throwing the 400 bad request error.
+     *
+     * By the way, be careful. If you've configured the response transformation
+     * option to be `validate.log`, client may get wrong response data. Therefore,
+     * this way is not recommended in the common backend server case.
+     *
+     * @default console.log
+     * @param func Logger function
+     */
+    function setValidateErrorLogger(func: (log: IValidateErrorLog) => void): void;
+    /**
+     * Error log information of the response validation failure.
+     *
+     * `IValidationErrorLog` is a structure representing the error log information
+     * when the returned value from the `@TypedRoute` or `@EncryptedRoute`
+     * decorated controller method is not following the promised type `T`.
+     *
+     * If you've configured the transformation option to `validate.log` or
+     * `validateEquals.log` in the `tsconfig.json` file, then this error log
+     * information `IValidateErrorLog` would be logged through the
+     * {@link setValidateErrorLogger} function instead of throwing the 400 bad
+     * request error.
+     */
+    interface IValidateErrorLog {
+        /** HTTP method of the request. */
+        method: string;
+        /** HTTP path of the request. */
+        path: string;
+        /** Validation error information with detailed reasons. */
+        errors: IValidation.IError[];
+        /** Data that is not following the promised type `T`. */
+        data: unknown;
+    }
+}

@@ -31,7 +31,7 @@ import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { pathKeys } from '@/shared/router'
 
-type SortOption = 'impact' | 'recent' | 'duration'
+type SortOption = 'recent' | 'duration'
 
 interface EventListSectionProps {
   // 데이터
@@ -114,7 +114,6 @@ export const EventListSection: React.FC<EventListSectionProps> = ({
               setSortBy(e.target.value as SortOption)
             }
           >
-            <option value="impact">파급력 높은 순</option>
             <option value="recent">최근 발생 순</option>
             <option value="duration">장기 지속 순</option>
           </List.SortSelect>

@@ -1,0 +1,22 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.VersioningStrategy = void 0;
+var VersioningStrategy;
+(function (VersioningStrategy) {
+    VersioningStrategy.cast = (value) => value === undefined ? [] : Array.isArray(value) ? value : [value];
+    VersioningStrategy.merge = (project) => (values) => {
+        var _a;
+        if (project.input.versioning === undefined)
+            return [""];
+        const set = new Set(values);
+        const array = set.size === 0
+            ? VersioningStrategy.cast((_a = project.input.versioning) === null || _a === void 0 ? void 0 : _a.defaultVersion)
+            : Array.from(set);
+        return !!(array === null || array === void 0 ? void 0 : array.length)
+            ? array.map((x) => typeof x === "symbol"
+                ? ""
+                : `${project.input.versioning.prefix}${x}`)
+            : [];
+    };
+})(VersioningStrategy || (exports.VersioningStrategy = VersioningStrategy = {}));
+//# sourceMappingURL=VersioningStrategy.js.map

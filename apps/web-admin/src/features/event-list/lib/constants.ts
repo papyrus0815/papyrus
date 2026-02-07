@@ -7,7 +7,6 @@
  * 정렬 옵션
  */
 export const SORT_OPTIONS = {
-  IMPACT: 'impact',
   RECENT: 'recent',
   DURATION: 'duration',
 } as const

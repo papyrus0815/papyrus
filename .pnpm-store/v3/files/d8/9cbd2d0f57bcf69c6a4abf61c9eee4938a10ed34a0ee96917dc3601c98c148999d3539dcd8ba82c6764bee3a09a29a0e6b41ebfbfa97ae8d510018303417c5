@@ -1,0 +1,42 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.GenericAnalyzer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+var GenericAnalyzer;
+(function (GenericAnalyzer) {
+    function analyze(checker, classNode) {
+        const dict = new WeakMap();
+        explore(checker, dict, classNode);
+        return dict;
+    }
+    GenericAnalyzer.analyze = analyze;
+    function explore(checker, dict, classNode) {
+        var _a, _b, _c;
+        if (classNode.heritageClauses === undefined)
+            return;
+        for (const heritage of classNode.heritageClauses)
+            for (const hType of heritage.types) {
+                // MUST BE CLASS
+                const expression = checker.getTypeAtLocation(hType.expression);
+                const superNode = (_c = (_b = (_a = expression.symbol) === null || _a === void 0 ? void 0 : _a.getDeclarations) === null || _b === void 0 ? void 0 : _b.call(_a)) === null || _c === void 0 ? void 0 : _c[0];
+                if (superNode === undefined || !typescript_1.default.isClassDeclaration(superNode))
+                    continue;
+                // SPECIFY GENERICS
+                const usages = hType.typeArguments || [];
+                const parameters = superNode.typeParameters || [];
+                parameters.forEach((param, index) => {
+                    const paramType = checker.getTypeAtLocation(param);
+                    const usageType = usages[index] !== undefined
+                        ? checker.getTypeAtLocation(usages[index])
+                        : checker.getTypeAtLocation(param.default);
+                    dict.set(paramType, usageType);
+                });
+                // RECURSIVE EXPLORATION
+                explore(checker, dict, superNode);
+            }
+    }
+})(GenericAnalyzer || (exports.GenericAnalyzer = GenericAnalyzer = {}));
+//# sourceMappingURL=GenericAnalyzer.js.map

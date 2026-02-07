@@ -1,0 +1,68 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedRouteTransformer = void 0;
+const path_1 = __importDefault(require("path"));
+const typescript_1 = __importDefault(require("typescript"));
+const TypedQueryRouteProgrammer_1 = require("../programmers/TypedQueryRouteProgrammer");
+const TypedRouteProgrammer_1 = require("../programmers/TypedRouteProgrammer");
+var TypedRouteTransformer;
+(function (TypedRouteTransformer) {
+    TypedRouteTransformer.transform = (props) => {
+        if (!typescript_1.default.isCallExpression(props.decorator.expression))
+            return props.decorator;
+        // CHECK SIGNATURE
+        const signature = props.context.checker.getResolvedSignature(props.decorator.expression);
+        if (!signature || !signature.declaration)
+            return props.decorator;
+        // CHECK TO BE TRANSFORMED
+        const modulo = (() => {
+            var _a;
+            // CHECK FILENAME
+            const location = path_1.default.resolve(signature.declaration.getSourceFile().fileName);
+            if (LIB_PATHS.every((str) => location.indexOf(str) === -1))
+                return null;
+            // CHECK DUPLICATE BOOSTER
+            if (props.decorator.expression.arguments.length >= 2)
+                return false;
+            else if (props.decorator.expression.arguments.length === 1) {
+                const last = props.decorator.expression.arguments[props.decorator.expression.arguments.length - 1];
+                const type = props.context.checker.getTypeAtLocation(last);
+                if (isObject(props.context.checker)(type))
+                    return false;
+            }
+            return ((_a = location.split(path_1.default.sep).at(-1)) === null || _a === void 0 ? void 0 : _a.split(".")[0]) === "TypedQuery"
+                ? "TypedQuery"
+                : "TypedRoute";
+        })();
+        if (modulo === null)
+            return props.decorator;
+        // CHECK TYPE NODE
+        const typeNode = props.context.checker.typeToTypeNode(props.type, undefined, undefined);
+        if (typeNode === undefined)
+            return props.decorator;
+        // DO TRANSFORM
+        return typescript_1.default.factory.createDecorator(typescript_1.default.factory.updateCallExpression(props.decorator.expression, props.decorator.expression.expression, props.decorator.expression.typeArguments, [
+            ...props.decorator.expression.arguments,
+            (modulo === "TypedQuery"
+                ? TypedQueryRouteProgrammer_1.TypedQueryRouteProgrammer
+                : TypedRouteProgrammer_1.TypedRouteProgrammer).generate({
+                context: props.context,
+                type: props.type,
+                modulo: props.decorator.expression.expression,
+            }),
+        ]));
+    };
+    const isObject = (checker) => (type) => (type.getFlags() & typescript_1.default.TypeFlags.Object) !== 0 &&
+        !checker.isTupleType(type) &&
+        !checker.isArrayType(type) &&
+        !checker.isArrayLikeType(type);
+    const CLASSES = ["EncryptedRoute", "TypedRoute", "TypedQuery"];
+    const LIB_PATHS = CLASSES.map((cla) => [
+        path_1.default.join("@nestia", "core", "lib", "decorators", `${cla}.d.ts`),
+        path_1.default.join("packages", "core", "lib", "decorators", `${cla}.d.ts`),
+    ]).flat();
+})(TypedRouteTransformer || (exports.TypedRouteTransformer = TypedRouteTransformer = {}));
+//# sourceMappingURL=TypedRouteTransformer.js.map

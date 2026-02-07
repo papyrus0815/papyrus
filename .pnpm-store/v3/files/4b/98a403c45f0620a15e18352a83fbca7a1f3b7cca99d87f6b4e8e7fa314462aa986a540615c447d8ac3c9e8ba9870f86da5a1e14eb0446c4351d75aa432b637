@@ -1,0 +1,135 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedFormData = void 0;
+const common_1 = require("@nestjs/common");
+const Singleton_1 = require("../utils/Singleton");
+const validate_request_form_data_1 = require("./internal/validate_request_form_data");
+/**
+ * Type safe multipart/form-data decorator.
+ *
+ * `TypedFormData.Body()` is a request body decorator function for the
+ * `multipart/form-data` content type. It automatically casts property type
+ * following its DTO definition, and performs the type validation too.
+ *
+ * Also, `TypedFormData.Body()` is much easier and type safer than
+ * `@nest.UploadFile()`. If you're considering the [SDK
+ * library](https://nestia.io/docs/sdk/sdk) generation, only
+ * `TypedFormData.Body()` can do it. Therefore, I recommend you to use
+ * `TypedFormData.Body()` instead of the `@nest.UploadFile()` function.
+ *
+ * For reference, target type `T` must follow such restriction. Of course, if
+ * actual form-data values are different with their promised type `T`,
+ * `BadRequestException` error (status code: 400) would be thrown.
+ *
+ * 1. Type `T` must be an object type
+ * 2. Do not allow dynamic property
+ * 3. Only `boolean`, `bigint`, `number`, `string`, `Blob`, `File` or their array
+ *    types are allowed
+ * 4. By the way, union type never be not allowed
+ *
+ * By the way, if you're using `fastify`, you have to setup `fastify-multer` and
+ * configure like below when composing the NestJS application. If you don't do
+ * that, `@TypedFormData.Body()` will not work properly, and throw 500 internal
+ * server error when `Blob` or `File` type being utilized.
+ *
+ * ```typescript
+ * import { NestFactory } from "@nestjs/core";
+ * import {
+ *   FastifyAdapter,
+ *   NestFastifyApplication,
+ * } from "@nestjs/platform-fastify";
+ * import fastifyMulter from "fastify-multer";
+ *
+ * export async function main() {
+ *   const app = await NestFactory.create<NestFastifyApplication>(
+ *     AppModule,
+ *     new FastifyAdapter(),
+ *   );
+ *   app.register(fastifyMulter.contentParser);
+ *   await app.listen(3000);
+ * }
+ * ```
+ *
+ * @author Jeongho Nam - https://github.com/samchon
+ * @todo Change to ReadableStream through configuring storage engine of multer
+ */
+var TypedFormData;
+(function (TypedFormData) {
+    /** @internal */
+    function Body(factory, props) {
+        if (typeof File === "undefined")
+            throw new Error("Error on TypedFormData.Body(): 'File' class is not supported in the older version of NodeJS. Upgrade the NodeJS to the modern.");
+        const checker = (0, validate_request_form_data_1.validate_request_form_data)(props);
+        const uploader = new Singleton_1.Singleton(() => __awaiter(this, void 0, void 0, function* () { return decode((yield factory()), props); }));
+        return (0, common_1.createParamDecorator)(function TypedFormDataBody(_unknown, context) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const http = context.switchToHttp();
+                const request = http.getRequest();
+                if (isMultipartFormData(request.headers["content-type"]) === false)
+                    throw new common_1.BadRequestException(`Request body type is not "multipart/form-data".`);
+                const data = yield (yield uploader.get())({
+                    request: request,
+                    response: http.getResponse(),
+                });
+                const output = checker(data);
+                if (output instanceof Error)
+                    throw output;
+                return output;
+            });
+        })();
+    }
+    TypedFormData.Body = Body;
+})(TypedFormData || (exports.TypedFormData = TypedFormData = {}));
+/** @internal */
+const decode = (multer, props) => {
+    const upload = multer.fields(props.files.map((file) => (Object.assign({ name: file.name }, (file.limit === 1 ? { maxCount: 1 } : {})))));
+    const interceptor = (request, response) => new Promise((resolve, reject) => upload(request, response, (error) => {
+        if (error)
+            reject(error);
+        else
+            resolve();
+    }));
+    return (socket) => __awaiter(void 0, void 0, void 0, function* () {
+        yield interceptor(socket.request, socket.response);
+        const data = new FormData();
+        for (const [key, value] of Object.entries(socket.request.body))
+            if (Array.isArray(value))
+                for (const elem of value)
+                    data.append(key, String(elem));
+            else
+                data.append(key, String(value));
+        if (socket.request.files)
+            parseFiles(data)(socket.request.files);
+        return data;
+    });
+};
+/** @internal */
+const parseFiles = (data) => (files) => {
+    if (Array.isArray(files))
+        for (const file of files)
+            data.append(file.fieldname, new File([file.buffer], file.originalname, {
+                type: file.mimetype,
+            }));
+    else
+        for (const [key, value] of Object.entries(files))
+            for (const file of value)
+                data.append(key, new File([file.buffer], file.originalname, {
+                    type: file.mimetype,
+                }));
+};
+/** @internal */
+const isMultipartFormData = (text) => text !== undefined &&
+    text
+        .split(";")
+        .map((str) => str.trim())
+        .some((str) => str === "multipart/form-data");
+//# sourceMappingURL=TypedFormData.js.map

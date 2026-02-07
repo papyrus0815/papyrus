@@ -1,0 +1,4 @@
+import { ITypedApplication } from "../structures/ITypedApplication";
+export declare namespace CloneGenerator {
+    const write: (app: ITypedApplication) => Promise<void>;
+}

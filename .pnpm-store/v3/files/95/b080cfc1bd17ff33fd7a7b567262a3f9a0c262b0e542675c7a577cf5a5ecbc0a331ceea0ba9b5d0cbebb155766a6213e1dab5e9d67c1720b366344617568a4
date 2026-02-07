@@ -1,0 +1,123 @@
+import { IServer } from "../internal/IServer";
+import { WebSocketAcceptor } from "./WebSocketAcceptor";
+/**
+ * Web Socket Server.
+ *
+ *  - available only in the NodeJS.
+ *
+ * The `WebSocketServer` is a class who can open an websocket server. Clients
+ * connecting to the `WebSocketServer` would communicate with this websocket server
+ * through {@link WebSocketAcceptor} instances with RPC (Remote Procedure Call)
+ * concept.
+ *
+ * To open the websocket server, call the {@link open} method with your callback
+ * function which would be called whenever a {@link WebSocketAcceptor} has been
+ * newly created by a new client's connection.
+ *
+ * Also, when declaring this {@link WebSocketServer} type, you have to define three
+ * generic arguments; `Header`, `Provider` and `Remote`. Those generic arguments
+ * would be propagated to the {@link WebSocketAcceptor}, so that
+ * {@link WebSocketAcceptor} would have the same generic arguments, too.
+ *
+ * For reference, the first `Header` type represents an initial data from the
+ * remote client after the connection. I recommend utilize it as an activation tool
+ * for security enhancement. The second generic argument `Provider` represents a
+ * provider from server to client, and the other `Remote` means a provider from the
+ * remote client to server.
+ *
+ * @template Header Type of header containing initialization data like activation.
+ * @template Provider Type of features provided for the remote client.
+ * @template Remote Type of features provided by remote client.
+ * @author Jeongho Nam - https://github.com/samchon
+ */
+export declare class WebSocketServer<Header, Provider extends object | null, Remote extends object | null> implements IServer<WebSocketServer.State> {
+    /**
+     * @hidden
+     */
+    private state_;
+    /**
+     * @hidden
+     */
+    private options_;
+    /**
+     * @hidden
+     */
+    private server_;
+    /**
+     * @hidden
+     */
+    private protocol_;
+    /**
+     * Default Constructor for the `ws` server..
+     *
+     * Create an websocket server (`ws://`).
+     */
+    constructor();
+    /**
+     * Initializer Constructor for the `wss` server.
+     *
+     * Create a secured websocket server (`wss://`).
+     *
+     * @param key Key string.
+     * @param cert Certification string.
+     */
+    constructor(key: string, cert: string);
+    /**
+     * Open websocket server.
+     *
+     * Open a server through the web-socket protocol, with its *port* number and *handler*
+     * function determining whether to accept the client's connection or not. After the server has
+     * been opened, clients can connect to that websocket server by using the {@link WebSocketConnector}
+     * class.
+     *
+     * When implementing the *handler* function with the {@link WebSocketAcceptor} instance, calls the
+     * {@link WebSocketAcceptor.accept} method if you want to accept the new client's connection.
+     * Otherwise you don't want to accept the client and reject its connection, just calls the
+     * {@link WebSocketAcceptor.reject} instead.
+     *
+     * @param port Port number to listen.
+     * @param handler Callback function for client connection.
+     */
+    open(port: number, handler: (acceptor: WebSocketAcceptor<Header, Provider, Remote>) => Promise<void>): Promise<void>;
+    /**
+     * Close server.
+     *
+     * Close all connections between its remote clients ({@link WebSocketConnector}s).
+     *
+     * It destroys all RFCs (remote function calls) between this server and remote clients
+     * (through `Driver<Controller>`) that are not returned (completed) yet. The destruction
+     * causes all incomplete RFCs to throw exceptions.
+     */
+    close(): Promise<void>;
+    /**
+     * @hidden
+     */
+    private static _Open;
+    /**
+     * @hidden
+     */
+    private _Close;
+    /**
+     * Get server state.
+     *
+     * Get current state of the websocket server.
+     *
+     * List of values are such like below:
+     *
+     *   - `NONE`: The `{@link WebSocketServer} instance is newly created, but did nothing yet.
+     *   - `OPENING`: The {@link WebSocketServer.open} method is on running.
+     *   - `OPEN`: The websocket server is online.
+     *   - `CLOSING`: The {@link WebSocketServer.close} method is on running.
+     *   - `CLOSED`: The websocket server is offline.
+     */
+    get state(): WebSocketServer.State;
+}
+/**
+ *
+ */
+export declare namespace WebSocketServer {
+    /**
+     * Current state of the {@link WebSocketServer}.
+     */
+    export import State = IServer.State;
+}

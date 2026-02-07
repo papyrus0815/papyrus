@@ -1,0 +1,82 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReflectHttpOperationResponseAnalyzer = void 0;
+const constants_1 = require("@nestjs/common/constants");
+const typia_1 = __importDefault(require("typia"));
+const JsonMetadataFactory_1 = require("typia/lib/factories/JsonMetadataFactory");
+const HttpQueryProgrammer_1 = require("typia/lib/programmers/http/HttpQueryProgrammer");
+const TextPlainValidator_1 = require("../transformers/TextPlainValidator");
+var ReflectHttpOperationResponseAnalyzer;
+(function (ReflectHttpOperationResponseAnalyzer) {
+    ReflectHttpOperationResponseAnalyzer.analyze = (ctx) => {
+        var _a, _b, _c, _d, _e, _f;
+        const errors = [];
+        const report = () => {
+            ctx.errors.push({
+                file: ctx.controller.file,
+                class: ctx.controller.class.name,
+                function: ctx.functionName,
+                from: "return",
+                contents: errors,
+            });
+            return null;
+        };
+        const encrypted = hasInterceptor({
+            name: "EncryptedRouteInterceptor",
+            function: ctx.function,
+        });
+        const contentType = encrypted
+            ? "text/plain"
+            : hasInterceptor({
+                name: "TypedQueryRouteInterceptor",
+                function: ctx.function,
+            })
+                ? "application/x-www-form-urlencoded"
+                : ((_e = (_c = (_b = (_a = Reflect.getMetadata(constants_1.HEADERS_METADATA, ctx.function)) === null || _a === void 0 ? void 0 : _a.find((h) => typeof (h === null || h === void 0 ? void 0 : h.name) === "string" &&
+                    typeof (h === null || h === void 0 ? void 0 : h.value) === "string" &&
+                    h.name.toLowerCase() === "content-type")) === null || _b === void 0 ? void 0 : _b.value) !== null && _c !== void 0 ? _c : (_d = Reflect.getMetadata("swagger/apiProduces", ctx.function)) === null || _d === void 0 ? void 0 : _d[0]) !== null && _e !== void 0 ? _e : (ctx.httpMethod === "HEAD" ? null : "application/json"));
+        const schema = contentType === "application/json"
+            ? ctx.metadata.success.primitive
+            : ctx.metadata.success.resolved;
+        if (schema.success === false)
+            errors.push(...schema.errors);
+        if (ctx.httpMethod === "HEAD" && contentType !== null)
+            errors.push(`HEAD method must not have a content type.`);
+        if ((() => { return input => null === input || "application/json" === input || "application/x-www-form-urlencoded" === input || "text/plain" === input; })()(contentType) ===
+            false)
+            errors.push(`@nestia/sdk does not support ${JSON.stringify(contentType)} content type.`);
+        if (errors.length)
+            return report();
+        else if (ctx.metadata.success.type === null ||
+            schema.success === false ||
+            !(() => { return input => null === input || "application/json" === input || "application/x-www-form-urlencoded" === input || "text/plain" === input; })()(contentType))
+            return null;
+        const example = Reflect.getMetadata("nestia/SwaggerExample/Response", ctx.function);
+        return Object.assign(Object.assign({ contentType: contentType, encrypted, status: (_f = getStatus(ctx.function)) !== null && _f !== void 0 ? _f : (ctx.httpMethod === "POST" ? 201 : 200), type: ctx.metadata.success.type }, schema.data), { validate: contentType === "application/json" || encrypted === true
+                ? JsonMetadataFactory_1.JsonMetadataFactory.validate
+                : contentType === "application/x-www-form-urlencoded"
+                    ? HttpQueryProgrammer_1.HttpQueryProgrammer.validate
+                    : contentType === "text/plain"
+                        ? TextPlainValidator_1.TextPlainValidator.validate
+                        : (meta) => meta.size()
+                            ? ["HEAD method must not have any return value."]
+                            : [], example: example === null || example === void 0 ? void 0 : example.example, examples: example === null || example === void 0 ? void 0 : example.examples });
+    };
+    const getStatus = (func) => {
+        const text = Reflect.getMetadata(constants_1.HTTP_CODE_METADATA, func);
+        if (text === undefined)
+            return null;
+        const value = Number(text);
+        return isNaN(value) ? null : value;
+    };
+    const hasInterceptor = (props) => {
+        const meta = Reflect.getMetadata(constants_1.INTERCEPTORS_METADATA, props.function);
+        if (Array.isArray(meta) === false)
+            return false;
+        return meta.some((elem) => { var _a; return ((_a = elem === null || elem === void 0 ? void 0 : elem.constructor) === null || _a === void 0 ? void 0 : _a.name) === props.name; });
+    };
+})(ReflectHttpOperationResponseAnalyzer || (exports.ReflectHttpOperationResponseAnalyzer = ReflectHttpOperationResponseAnalyzer = {}));
+//# sourceMappingURL=ReflectHttpOperationResponseAnalyzer.js.map

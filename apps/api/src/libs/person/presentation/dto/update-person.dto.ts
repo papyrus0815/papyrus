@@ -127,6 +127,28 @@ export class UpdatePersonDto {
   @IsBoolean()
   showLifespanOnEventList?: boolean
 
+  //--- 왕/군주 관련 필드
+  /**
+   * 왕호/재위명
+   */
+  @IsOptional()
+  @IsString()
+  regnalName?: string
+
+  /**
+   * 묘호 (동아시아 군주)
+   */
+  @IsOptional()
+  @IsString()
+  templeName?: string
+
+  /**
+   * 시호
+   */
+  @IsOptional()
+  @IsString()
+  posthumousName?: string
+
   /**
    * 가문 ID (선택)
    */

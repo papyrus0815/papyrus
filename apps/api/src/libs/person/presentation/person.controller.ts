@@ -28,6 +28,19 @@ import {
   CreateMedicalCareerDto,
   CreateEducationDto,
   CreatePersonAwardDto,
+  AllCareersResponseDto,
+  MilitaryCareerResponseDto,
+  GovernmentCareerResponseDto,
+  BusinessCareerResponseDto,
+  AcademicCareerResponseDto,
+  AthleteCareerResponseDto,
+  ReligiousCareerResponseDto,
+  ArtistCareerResponseDto,
+  MediaCareerResponseDto,
+  LegalCareerResponseDto,
+  MedicalCareerResponseDto,
+  PersonEducationResponseDto,
+  PersonAwardResponseDto,
 } from './dto'
 
 /**
@@ -43,32 +56,7 @@ export class PersonController {
    */
   @Get()
   async getAll(): Promise<PersonResponseDto[]> {
-    const persons = await this.personService.findAll()
-    return persons.map((person) => ({
-      id: person.id,
-      name: person.name,
-      surname: person.surname,
-      birthEra: person.birthEra as any,
-      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getDate() : null,
-      deathEra: person.deathEra as any,
-      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getDate() : null,
-      gender: person.gender,
-      biography: person.biography,
-      profileImageUrl: person.profileImageUrl,
-      dynastyId: person.dynastyId,
-      religionId: person.religionId,
-      denominationId: person.denominationId,
-      fatherId: person.fatherId,
-      motherId: person.motherId,
-      jobId: person.jobId,
-      countryId: person.countryId,
-      createdAt: person.createdAt.toISOString(),
-      updatedAt: person.updatedAt.toISOString(),
-    }))
+    return this.personService.findAll()
   }
 
   /**
@@ -107,32 +95,7 @@ export class PersonController {
    */
   @Get(':id')
   async getById(@Param('id') id: string): Promise<PersonResponseDto> {
-    const person = await this.personService.findById(id)
-    return {
-      id: person.id,
-      name: person.name,
-      surname: person.surname,
-      birthEra: person.birthEra as any,
-      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getDate() : null,
-      deathEra: person.deathEra as any,
-      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getDate() : null,
-      gender: person.gender,
-      biography: person.biography,
-      profileImageUrl: person.profileImageUrl,
-      dynastyId: person.dynastyId,
-      religionId: person.religionId,
-      denominationId: person.denominationId,
-      fatherId: person.fatherId,
-      motherId: person.motherId,
-      jobId: person.jobId,
-      countryId: person.countryId,
-      createdAt: person.createdAt.toISOString(),
-      updatedAt: person.updatedAt.toISOString(),
-    }
+    return this.personService.findById(id)
   }
 
   /**
@@ -271,7 +234,7 @@ export class PersonController {
       deathDate = new Date(dto.deathDate)
     }
 
-    const person = await this.personService.create({
+    return this.personService.create({
       name: dto.name,
       middleName: dto.middleName,
       surname: dto.surname,
@@ -293,32 +256,6 @@ export class PersonController {
       jobId: dto.jobId,
       countryId: dto.countryId,
     })
-
-    return {
-      id: person.id,
-      name: person.name,
-      surname: person.surname,
-      birthEra: person.birthEra as any,
-      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getDate() : null,
-      deathEra: person.deathEra as any,
-      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getDate() : null,
-      gender: person.gender,
-      biography: person.biography,
-      profileImageUrl: person.profileImageUrl,
-      dynastyId: person.dynastyId,
-      religionId: person.religionId,
-      denominationId: person.denominationId,
-      fatherId: person.fatherId,
-      motherId: person.motherId,
-      jobId: person.jobId,
-      countryId: person.countryId,
-      createdAt: person.createdAt.toISOString(),
-      updatedAt: person.updatedAt.toISOString(),
-    }
   }
 
   /**
@@ -353,7 +290,7 @@ export class PersonController {
       deathDate = new Date(dto.deathDate)
     }
 
-    const person = await this.personService.update(id, {
+    return this.personService.update(id, {
       name: dto.name,
       middleName: dto.middleName,
       surname: dto.surname,
@@ -375,32 +312,6 @@ export class PersonController {
       jobId: dto.jobId,
       countryId: dto.countryId,
     })
-
-    return {
-      id: person.id,
-      name: person.name,
-      surname: person.surname,
-      birthEra: person.birthEra as any,
-      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getDate() : null,
-      deathEra: person.deathEra as any,
-      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getDate() : null,
-      gender: person.gender,
-      biography: person.biography,
-      profileImageUrl: person.profileImageUrl,
-      dynastyId: person.dynastyId,
-      religionId: person.religionId,
-      denominationId: person.denominationId,
-      fatherId: person.fatherId,
-      motherId: person.motherId,
-      jobId: person.jobId,
-      countryId: person.countryId,
-      createdAt: person.createdAt.toISOString(),
-      updatedAt: person.updatedAt.toISOString(),
-    }
   }
 
   /**
@@ -420,7 +331,7 @@ export class PersonController {
    * 인물의 모든 경력 조회
    */
   @Get(':personId/careers')
-  async getAllCareers(@Param('personId') personId: string) {
+  async getAllCareers(@Param('personId') personId: string): Promise<AllCareersResponseDto> {
     return this.personService.findAllCareers(personId)
   }
 
@@ -428,7 +339,7 @@ export class PersonController {
    * 군인 경력 추가
    */
   @Post('careers/military')
-  async addMilitaryCareer(@Body() dto: CreateMilitaryCareerDto) {
+  async addMilitaryCareer(@Body() dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
     return this.personService.addMilitaryCareer(dto)
   }
 
@@ -436,7 +347,7 @@ export class PersonController {
    * 정치인/공무원 경력 추가
    */
   @Post('careers/government')
-  async addGovernmentCareer(@Body() dto: CreateGovernmentCareerDto) {
+  async addGovernmentCareer(@Body() dto: CreateGovernmentCareerDto): Promise<GovernmentCareerResponseDto> {
     return this.personService.addGovernmentCareer(dto)
   }
 
@@ -444,7 +355,7 @@ export class PersonController {
    * 기업인 경력 추가
    */
   @Post('careers/business')
-  async addBusinessCareer(@Body() dto: CreateBusinessCareerDto) {
+  async addBusinessCareer(@Body() dto: CreateBusinessCareerDto): Promise<BusinessCareerResponseDto> {
     return this.personService.addBusinessCareer(dto)
   }
 
@@ -452,7 +363,7 @@ export class PersonController {
    * 학자 경력 추가
    */
   @Post('careers/academic')
-  async addAcademicCareer(@Body() dto: CreateAcademicCareerDto) {
+  async addAcademicCareer(@Body() dto: CreateAcademicCareerDto): Promise<AcademicCareerResponseDto> {
     return this.personService.addAcademicCareer(dto)
   }
 
@@ -460,7 +371,7 @@ export class PersonController {
    * 운동선수 경력 추가
    */
   @Post('careers/athlete')
-  async addAthleteCareer(@Body() dto: CreateAthleteCareerDto) {
+  async addAthleteCareer(@Body() dto: CreateAthleteCareerDto): Promise<AthleteCareerResponseDto> {
     return this.personService.addAthleteCareer(dto)
   }
 
@@ -468,7 +379,7 @@ export class PersonController {
    * 종교인 경력 추가
    */
   @Post('careers/religious')
-  async addReligiousCareer(@Body() dto: CreateReligiousCareerDto) {
+  async addReligiousCareer(@Body() dto: CreateReligiousCareerDto): Promise<ReligiousCareerResponseDto> {
     return this.personService.addReligiousCareer(dto)
   }
 
@@ -476,7 +387,7 @@ export class PersonController {
    * 예술가 경력 추가
    */
   @Post('careers/artist')
-  async addArtistCareer(@Body() dto: CreateArtistCareerDto) {
+  async addArtistCareer(@Body() dto: CreateArtistCareerDto): Promise<ArtistCareerResponseDto> {
     return this.personService.addArtistCareer(dto)
   }
 
@@ -484,7 +395,7 @@ export class PersonController {
    * 언론인 경력 추가
    */
   @Post('careers/media')
-  async addMediaCareer(@Body() dto: CreateMediaCareerDto) {
+  async addMediaCareer(@Body() dto: CreateMediaCareerDto): Promise<MediaCareerResponseDto> {
     return this.personService.addMediaCareer(dto)
   }
 
@@ -492,7 +403,7 @@ export class PersonController {
    * 법조인 경력 추가
    */
   @Post('careers/legal')
-  async addLegalCareer(@Body() dto: CreateLegalCareerDto) {
+  async addLegalCareer(@Body() dto: CreateLegalCareerDto): Promise<LegalCareerResponseDto> {
     return this.personService.addLegalCareer(dto)
   }
 
@@ -500,7 +411,7 @@ export class PersonController {
    * 의료인 경력 추가
    */
   @Post('careers/medical')
-  async addMedicalCareer(@Body() dto: CreateMedicalCareerDto) {
+  async addMedicalCareer(@Body() dto: CreateMedicalCareerDto): Promise<MedicalCareerResponseDto> {
     return this.personService.addMedicalCareer(dto)
   }
 
@@ -508,7 +419,7 @@ export class PersonController {
    * 학력 추가
    */
   @Post('educations')
-  async addEducation(@Body() dto: CreateEducationDto) {
+  async addEducation(@Body() dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
     return this.personService.addEducation(dto)
   }
 
@@ -516,7 +427,7 @@ export class PersonController {
    * 수상/훈장 추가
    */
   @Post('awards')
-  async addAward(@Body() dto: CreatePersonAwardDto) {
+  async addAward(@Body() dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto> {
     return this.personService.addAward(dto)
   }
 }

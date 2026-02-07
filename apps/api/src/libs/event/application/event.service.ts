@@ -75,6 +75,8 @@ export class EventService {
     },
     relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
     relatedEventIds?: string[],
+    relatedCountryIds?: string[],
+    relatedHistoricalCountryIds?: string[],
     sections?: Array<{
       id: string
       title: string
@@ -189,6 +191,35 @@ export class EventService {
       )
     }
 
+    // 관련 국가 연결
+    if (relatedCountryIds && relatedCountryIds.length > 0) {
+      await Promise.all(
+        relatedCountryIds.map((countryId) =>
+          this.prisma.eventCountryRelation.create({
+            data: {
+              eventId: event.id,
+              countryId,
+              role: 'PARTICIPANT', // 기본값: 참여국
+            },
+          }),
+        ),
+      )
+    }
+
+    if (relatedHistoricalCountryIds && relatedHistoricalCountryIds.length > 0) {
+      await Promise.all(
+        relatedHistoricalCountryIds.map((historicalCountryId) =>
+          this.prisma.eventCountryRelation.create({
+            data: {
+              eventId: event.id,
+              historicalCountryId,
+              role: 'PARTICIPANT', // 기본값: 참여국
+            },
+          }),
+        ),
+      )
+    }
+
     // 관련 사건 연결 (추후 구현 가능 - 현재는 parentEventId만 지원)
 
     // 🆕 하위 사건 자동 생성
@@ -236,6 +267,8 @@ export class EventService {
   async updateEvent(
     id: string,
     data: Partial<Omit<Event, 'id'>>,
+    relatedCountryIds?: string[],
+    relatedHistoricalCountryIds?: string[],
   ): Promise<Event> {
     // 존재 여부 확인
     await this.getEventById(id)
@@ -256,6 +289,43 @@ export class EventService {
         throw new ConflictException('Event cannot be its own parent')
       }
       await this.getEventById(data.parentEventId)
+    }
+
+    // 관련 국가 업데이트
+    if (relatedCountryIds !== undefined || relatedHistoricalCountryIds !== undefined) {
+      // 기존 관련 국가 삭제
+      await this.prisma.eventCountryRelation.deleteMany({
+        where: { eventId: id },
+      })
+
+      // 새로운 관련 국가 추가
+      if (relatedCountryIds && relatedCountryIds.length > 0) {
+        await Promise.all(
+          relatedCountryIds.map((countryId) =>
+            this.prisma.eventCountryRelation.create({
+              data: {
+                eventId: id,
+                countryId,
+                role: 'PARTICIPANT', // 기본값: 참여국
+              },
+            }),
+          ),
+        )
+      }
+
+      if (relatedHistoricalCountryIds && relatedHistoricalCountryIds.length > 0) {
+        await Promise.all(
+          relatedHistoricalCountryIds.map((historicalCountryId) =>
+            this.prisma.eventCountryRelation.create({
+              data: {
+                eventId: id,
+                historicalCountryId,
+                role: 'PARTICIPANT', // 기본값: 참여국
+              },
+            }),
+          ),
+        )
+      }
     }
 
     return this.events.update(id, data)

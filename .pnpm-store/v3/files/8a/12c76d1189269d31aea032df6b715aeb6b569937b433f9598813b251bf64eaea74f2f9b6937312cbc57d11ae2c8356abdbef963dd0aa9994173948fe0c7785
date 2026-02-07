@@ -1,0 +1,13 @@
+export interface INestiaTransformOptions {
+    validate?: INestiaTransformOptions.Validate;
+    stringify?: INestiaTransformOptions.Stringify | null;
+    llm?: INestiaTransformOptions.ILlm;
+    throws?: boolean;
+}
+export declare namespace INestiaTransformOptions {
+    type Validate = "assert" | "is" | "validate" | "assertEquals" | "equals" | "validateEquals" | "assertClone" | "validateClone" | "assertPrune" | "validatePrune";
+    type Stringify = "stringify" | "assert" | "is" | "validate" | "validate.log";
+    interface ILlm {
+        strict?: boolean;
+    }
+}

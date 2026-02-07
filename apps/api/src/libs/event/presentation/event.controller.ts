@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common'
@@ -43,6 +44,32 @@ export class EventController {
       }
     }
 
+    // 관련 국가 정보 추출
+    const relatedCountryIds: string[] = []
+    const relatedHistoricalCountryIds: string[] = []
+    const relatedCountries: any[] = []
+    const relatedHistoricalCountries: any[] = []
+    
+    if (event.countryRelations && Array.isArray(event.countryRelations)) {
+      event.countryRelations.forEach((relation: any) => {
+        if (relation.countryId && relation.country) {
+          relatedCountryIds.push(relation.countryId)
+          relatedCountries.push({
+            id: relation.country.id,
+            name: relation.country.name,
+            flagEmoji: relation.country.flagEmoji,
+          })
+        }
+        if (relation.historicalCountryId && relation.historicalCountry) {
+          relatedHistoricalCountryIds.push(relation.historicalCountryId)
+          relatedHistoricalCountries.push({
+            id: relation.historicalCountry.id,
+            name: relation.historicalCountry.name,
+          })
+        }
+      })
+    }
+
     return {
       id: event.id,
       title: event.title,
@@ -67,6 +94,10 @@ export class EventController {
       thumbnail: event.thumbnail ?? null,
       sections: event.sections ?? null,
       sectionTitles: sectionTitles,
+      relatedCountryIds: relatedCountryIds.length > 0 ? relatedCountryIds : undefined,
+      relatedHistoricalCountryIds: relatedHistoricalCountryIds.length > 0 ? relatedHistoricalCountryIds : undefined,
+      relatedCountries: relatedCountries.length > 0 ? relatedCountries : undefined,
+      relatedHistoricalCountries: relatedHistoricalCountries.length > 0 ? relatedHistoricalCountries : undefined,
       warCost: event.warCost ?? null,
       createdAt: event.createdAt?.toISOString ? event.createdAt.toISOString() : event.createdAt,
       updatedAt: event.updatedAt?.toISOString ? event.updatedAt.toISOString() : event.updatedAt,
@@ -74,22 +105,43 @@ export class EventController {
   }
 
   /**
-   * 모든 사건 조회
+   * 모든 사건 조회 (페이징 지원)
    *
+   * @param offset 시작 위치 (기본값: 0)
+   * @param limit 가져올 개수 (기본값: 20, 최대: 100)
    * @returns 사건 목록
    * @tag events
    */
   @Get()
-  async getAllEvents(): Promise<EventResponseDto[]> {
+  async getAllEvents(
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string,
+  ): Promise<EventResponseDto[]> {
+    const skip = offset ? parseInt(offset, 10) : 0
+    const take = limit ? Math.min(parseInt(limit, 10), 100) : 20
+
+    console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}`)
+
     // Prisma로 직접 조회하여 category 관계 포함
     const events = await this.prisma.event.findMany({
+      skip,
+      take,
       orderBy: { startDate: 'desc' },
       include: {
         category: true,
         parentEvent: true,
         childEvents: true,
+        countryRelations: {
+          include: {
+            country: true,
+            historicalCountry: true,
+          },
+        },
       },
     })
+    
+    console.log(`✅ ${events.length}개 사건 반환`)
+    
     return events.map((event) => this.toResponseDto(event as any))
   }
 
@@ -124,6 +176,12 @@ export class EventController {
         category: true,
         parentEvent: true,
         childEvents: true,
+        countryRelations: {
+          include: {
+            country: true,
+            historicalCountry: true,
+          },
+        },
       },
     })
     if (!event) {
@@ -183,6 +241,8 @@ export class EventController {
       },
       dto.relatedPersons,
       dto.relatedEventIds,
+      dto.relatedCountryIds,
+      dto.relatedHistoricalCountryIds,
       dto.sections,
     )
 
@@ -239,23 +299,28 @@ export class EventController {
       }
     }
 
-    const event = await this.eventService.updateEvent(id, {
-      title: dto.title,
-      description: dto.description,
-      startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-      endDate: dto.endDate ? new Date(dto.endDate) : undefined,
-      location: dto.location,
-      categoryId: categoryId,
-      background: dto.background,
-      aftermath: dto.aftermath,
-      parentEventId: dto.parentEventId,
-      thumbnail: dto.thumbnail,
-      cityId: dto.cityId,
-      administrativeDivisionId: dto.administrativeDivisionId,
-      historicalCountryId: dto.historicalCountryId,
-      sections: dto.sections,
-      warCost: dto.warCost,
-    })
+    const event = await this.eventService.updateEvent(
+      id,
+      {
+        title: dto.title,
+        description: dto.description,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        location: dto.location,
+        categoryId: categoryId,
+        background: dto.background,
+        aftermath: dto.aftermath,
+        parentEventId: dto.parentEventId,
+        thumbnail: dto.thumbnail,
+        cityId: dto.cityId,
+        administrativeDivisionId: dto.administrativeDivisionId,
+        historicalCountryId: dto.historicalCountryId,
+        sections: dto.sections,
+        warCost: dto.warCost,
+      },
+      dto.relatedCountryIds,
+      dto.relatedHistoricalCountryIds,
+    )
 
     // 정규화된 군사 정보 저장
     if (dto.militaryEvent) {

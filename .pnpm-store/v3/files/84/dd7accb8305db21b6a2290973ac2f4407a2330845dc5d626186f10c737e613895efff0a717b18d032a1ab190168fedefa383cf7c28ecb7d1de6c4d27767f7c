@@ -1,0 +1,21 @@
+import ts from "typescript";
+import { IReflectImport } from "../../structures/IReflectImport";
+export declare class ImportDictionary {
+    readonly file: string;
+    private readonly components_;
+    constructor(file: string);
+    empty(): boolean;
+    declarations(imports: IReflectImport[]): void;
+    external(props: ImportDictionary.IProps): string;
+    internal(props: ImportDictionary.IProps): string;
+    toStatements(outDir: string): ts.Statement[];
+    private toImportClaude;
+}
+export declare namespace ImportDictionary {
+    interface IProps {
+        type: "default" | "element" | "asterisk";
+        file: string;
+        name: string;
+        declaration: boolean;
+    }
+}

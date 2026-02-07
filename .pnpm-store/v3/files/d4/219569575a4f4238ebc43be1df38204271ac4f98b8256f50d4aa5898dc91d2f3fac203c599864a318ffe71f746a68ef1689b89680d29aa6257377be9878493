@@ -1,0 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.NodeTransformer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const MethodTransformer_1 = require("./MethodTransformer");
+const ParameterTransformer_1 = require("./ParameterTransformer");
+var NodeTransformer;
+(function (NodeTransformer) {
+    NodeTransformer.transform = (props) => typescript_1.default.isMethodDeclaration(props.node)
+        ? MethodTransformer_1.MethodTransformer.transform({
+            context: props.context,
+            method: props.node,
+        })
+        : typescript_1.default.isParameter(props.node)
+            ? ParameterTransformer_1.ParameterTransformer.transform({
+                context: props.context,
+                param: props.node,
+            })
+            : props.node;
+})(NodeTransformer || (exports.NodeTransformer = NodeTransformer = {}));
+//# sourceMappingURL=NodeTransformer.js.map

@@ -1,8 +1,8 @@
 /**
  * 사건 API - Nestia SDK 기반
  */
-import { functional } from '@papyrus/api-sdk'
 import type { IConnection } from '@nestia/fetcher'
+import { functional } from '@papyrus/api-sdk'
 
 const api = functional
 
@@ -37,11 +37,32 @@ const getConnection = (): IConnection => ({
 })
 
 /**
- * 모든 사건 조회
+ * 모든 사건 조회 (페이징 지원)
  */
-export async function getAllEvents(): Promise<EventResponseDto[]> {
+export async function getAllEvents(params?: {
+  offset?: number
+  limit?: number
+}): Promise<EventResponseDto[]> {
   try {
-    return await api.events.getAllEvents(getConnection())
+    const connection = getConnection()
+    const url = new URL(`${connection.host}/events`)
+    if (params?.offset !== undefined) {
+      url.searchParams.set('offset', params.offset.toString())
+    }
+    if (params?.limit !== undefined) {
+      url.searchParams.set('limit', params.limit.toString())
+    }
+
+    console.log(`📡 사건 목록 요청: ${url.toString()}`)
+
+    const response = await fetch(url.toString())
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+
+    const data = await response.json()
+    console.log(`✅ ${data.length}개 사건 수신`)
+    return data
   } catch (error) {
     console.error('❌ 사건 목록 조회 실패:', error)
     throw new Error(`사건 목록 조회 실패: ${error}`)

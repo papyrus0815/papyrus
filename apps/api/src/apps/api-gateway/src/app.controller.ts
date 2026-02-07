@@ -25,7 +25,15 @@ export class AppController {
       },
     },
   })
-  getRoot() {
+  getRoot(): {
+    name: string
+    version: string
+    description: string
+    endpoints: {
+      health: string
+      docs: string
+    }
+  } {
     return {
       name: 'Papyrus API',
       version: '2.0.0',

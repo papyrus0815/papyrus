@@ -1,0 +1,64 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedParam = TypedParam;
+const common_1 = require("@nestjs/common");
+const typia_1 = __importDefault(require("typia"));
+const NoTransformConfigurationError_1 = require("./NoTransformConfigurationError");
+/**
+ * Type safe URL parameter decorator.
+ *
+ * `TypedParam` is a decorator function getting specific typed parameter from
+ * the HTTP request URL. It's almost same with the {@link nest.Param}, but
+ * `TypedParam` automatically casts parameter value to be following its type,
+ * and validates it.
+ *
+ * ```typescript
+ * import { tags } from "typia";
+ *
+ * \@TypedRoute.Get("shopping/sales/:id/:no/:paused")
+ * public async pause(
+ *   \@TypedParam("id", "uuid"), id: string & tags.Format<"uuid">,
+ *   \@TypedParam("no") id: number & tags.Type<"uint32">
+ *   \@TypedParam("paused") paused: boolean | null
+ * ): Promise<void>;
+ * ```
+ *
+ * @author Jeongho Nam - https://github.com/samchon
+ * @param name URL Parameter name
+ * @returns Parameter decorator
+ */
+function TypedParam(name, assert, validate) {
+    if (assert === undefined) {
+        (0, NoTransformConfigurationError_1.NoTransformConfigurationError)("TypedParam");
+        assert = (value) => value;
+    }
+    return (0, common_1.createParamDecorator)(function TypedParam({}, context) {
+        var _a;
+        const request = context
+            .switchToHttp()
+            .getRequest();
+        const str = request.params[name];
+        try {
+            return assert(str);
+        }
+        catch (exp) {
+            if ((() => { const _io0 = input => "string" === typeof input.method && (undefined === input.path || "string" === typeof input.path) && "string" === typeof input.expected && true && (undefined === input.description || "string" === typeof input.description) && "string" === typeof input.name && "string" === typeof input.message && (undefined === input.stack || "string" === typeof input.stack); return input => "object" === typeof input && null !== input && _io0(input); })()(exp)) {
+                const trace = {
+                    path: (_a = exp.path) !== null && _a !== void 0 ? _a : "$input",
+                    expected: exp.expected,
+                    value: exp.value,
+                };
+                throw new common_1.BadRequestException(Object.assign({ message: `Invalid URL parameter value on "${name}".` }, (validate === true
+                    ? {
+                        errors: [trace],
+                    }
+                    : Object.assign(Object.assign({}, trace), { reason: exp.message }))));
+            }
+            throw exp;
+        }
+    })(name);
+}
+//# sourceMappingURL=TypedParam.js.map

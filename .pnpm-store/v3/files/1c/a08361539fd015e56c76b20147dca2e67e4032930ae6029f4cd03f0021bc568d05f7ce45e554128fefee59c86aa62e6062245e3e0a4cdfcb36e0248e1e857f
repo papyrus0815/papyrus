@@ -1,0 +1,4 @@
+import { Metadata } from "typia/lib/schemas/metadata/Metadata";
+export declare namespace MetadataUtil {
+    const visit: (closure: (m: Metadata) => unknown) => (metadata: Metadata) => void;
+}

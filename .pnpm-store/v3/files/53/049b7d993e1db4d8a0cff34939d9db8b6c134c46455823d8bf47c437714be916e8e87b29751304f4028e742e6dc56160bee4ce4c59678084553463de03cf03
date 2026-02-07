@@ -1,0 +1,152 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReflectHttpOperationAnalyzer = void 0;
+const constants_1 = require("@nestjs/common/constants");
+const tstl_1 = require("tstl");
+const ArrayUtil_1 = require("../utils/ArrayUtil");
+const ImportAnalyzer_1 = require("./ImportAnalyzer");
+const PathAnalyzer_1 = require("./PathAnalyzer");
+const ReflectHttpOperationExceptionAnalyzer_1 = require("./ReflectHttpOperationExceptionAnalyzer");
+const ReflectHttpOperationParameterAnalyzer_1 = require("./ReflectHttpOperationParameterAnalyzer");
+const ReflectHttpOperationResponseAnalyzer_1 = require("./ReflectHttpOperationResponseAnalyzer");
+const ReflectMetadataAnalyzer_1 = require("./ReflectMetadataAnalyzer");
+var ReflectHttpOperationAnalyzer;
+(function (ReflectHttpOperationAnalyzer) {
+    ReflectHttpOperationAnalyzer.analyze = (props) => {
+        var _a, _b, _c;
+        if (ArrayUtil_1.ArrayUtil.has(Reflect.getMetadataKeys(props.function), constants_1.PATH_METADATA, constants_1.METHOD_METADATA) === false)
+            return null;
+        const errors = [];
+        const method = METHODS[Reflect.getMetadata(constants_1.METHOD_METADATA, props.function)];
+        if (method === undefined || method === "OPTIONS")
+            return null;
+        const parameters = ReflectHttpOperationParameterAnalyzer_1.ReflectHttpOperationParameterAnalyzer.analyze({
+            controller: props.controller,
+            metadata: props.metadata,
+            httpMethod: method,
+            function: props.function,
+            functionName: props.name,
+            errors,
+        });
+        const success = (() => {
+            const localErrors = [];
+            const success = ReflectHttpOperationResponseAnalyzer_1.ReflectHttpOperationResponseAnalyzer.analyze({
+                controller: props.controller,
+                function: props.function,
+                functionName: props.name,
+                httpMethod: method,
+                metadata: props.metadata,
+                errors,
+            });
+            if (localErrors.length) {
+                errors.push(...localErrors);
+                return null;
+            }
+            return success;
+        })();
+        if (errors.length) {
+            props.project.errors.push(...errors);
+            return null;
+        }
+        else if (success === null)
+            return null;
+        // DO CONSTRUCT
+        const operation = {
+            protocol: "http",
+            function: props.function,
+            name: props.name,
+            method: method === "ALL" ? "POST" : method,
+            paths: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.paths(props.function).filter((str) => {
+                if (str.includes("*") === true) {
+                    props.project.warnings.push({
+                        file: props.controller.file,
+                        class: props.controller.class.name,
+                        function: props.name,
+                        from: "",
+                        contents: ["@nestia/sdk does not compose wildcard method."],
+                    });
+                    return false;
+                }
+                return true;
+            }),
+            versions: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.versions(props.function),
+            parameters,
+            success,
+            security: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.securities(props.function),
+            exceptions: ReflectHttpOperationExceptionAnalyzer_1.ReflectHttpOperationExceptionAnalyzer.analyze({
+                controller: props.controller,
+                function: props.function,
+                functionName: props.name,
+                httpMethod: method,
+                metadata: props.metadata,
+                errors,
+            }),
+            tags: (_a = Reflect.getMetadata("swagger/apiUseTags", props.function)) !== null && _a !== void 0 ? _a : [],
+            imports: ImportAnalyzer_1.ImportAnalyzer.merge([
+                ...props.metadata.parameters
+                    .filter((x) => parameters.some((y) => x.index === y.index))
+                    .map((x) => x.imports),
+                ...props.metadata.success.imports,
+                ...Object.values(props.metadata.exceptions).map((e) => e.imports),
+            ].flat()),
+            description: props.metadata.description,
+            jsDocTags: props.metadata.jsDocTags,
+            operationId: (_c = (_b = props.metadata.jsDocTags
+                .find(({ name }) => name === "operationId")) === null || _b === void 0 ? void 0 : _b.text) === null || _c === void 0 ? void 0 : _c[0].text.split(" ")[0].trim(),
+            extensions: ReflectMetadataAnalyzer_1.ReflectMetadataAnalyzer.extensions(props.function),
+        };
+        // VALIDATE PATH ARGUMENTS
+        for (const controllerLocation of props.controller.paths)
+            for (const metaLocation of operation.paths) {
+                // NORMALIZE LOCATION
+                const location = PathAnalyzer_1.PathAnalyzer.join(controllerLocation, metaLocation);
+                if (location.includes("*"))
+                    continue;
+                // LIST UP PARAMETERS
+                const binded = PathAnalyzer_1.PathAnalyzer.parameters(location);
+                if (binded === null) {
+                    props.project.errors.push({
+                        file: props.controller.file,
+                        class: props.controller.class.name,
+                        function: props.name,
+                        from: "{parameters}",
+                        contents: [`invalid path (${JSON.stringify(location)})`],
+                    });
+                    continue;
+                }
+                const parameters = operation.parameters
+                    .filter((param) => param.category === "param")
+                    .map((param) => param.field)
+                    .sort();
+                // DO VALIDATE
+                if (tstl_1.ranges.equal(binded.sort(), parameters) === false)
+                    errors.push({
+                        file: props.controller.file,
+                        class: props.controller.class.name,
+                        function: props.name,
+                        from: "{parameters}",
+                        contents: [
+                            `binded arguments in the "path" between function's decorator and parameters' decorators are different (function: [${binded.join(", ")}], parameters: [${parameters.join(", ")}]).`,
+                        ],
+                    });
+            }
+        // RETURNS
+        if (errors.length) {
+            props.project.errors.push(...errors);
+            return null;
+        }
+        return operation;
+    };
+})(ReflectHttpOperationAnalyzer || (exports.ReflectHttpOperationAnalyzer = ReflectHttpOperationAnalyzer = {}));
+// node_modules/@nestjs/common/lib/enums/request-method.enum.ts
+const METHODS = [
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "ALL",
+    "OPTIONS",
+    "HEAD",
+];
+//# sourceMappingURL=ReflectHttpOperationAnalyzer.js.map

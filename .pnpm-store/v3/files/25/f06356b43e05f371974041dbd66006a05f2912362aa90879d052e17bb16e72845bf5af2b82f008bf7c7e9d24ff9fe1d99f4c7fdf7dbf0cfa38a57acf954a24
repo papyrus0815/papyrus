@@ -1,0 +1,2 @@
+import { IOperationMetadata } from "../transformers/IOperationMetadata";
+export declare function OperationMetadata(metadata: IOperationMetadata): MethodDecorator;

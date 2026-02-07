@@ -1,0 +1,150 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SdkGenerator = void 0;
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const CloneGenerator_1 = require("./CloneGenerator");
+const SdkDistributionComposer_1 = require("./internal/SdkDistributionComposer");
+const SdkFileProgrammer_1 = require("./internal/SdkFileProgrammer");
+const SdkHttpParameterProgrammer_1 = require("./internal/SdkHttpParameterProgrammer");
+var SdkGenerator;
+(function (SdkGenerator) {
+    SdkGenerator.generate = (app) => __awaiter(this, void 0, void 0, function* () {
+        if (app.project.config.output === undefined)
+            throw new Error("Output directory is not defined.");
+        // PREPARE NEW DIRECTORIES
+        console.log("Generating SDK Library");
+        try {
+            yield fs_1.default.promises.mkdir(app.project.config.output);
+        }
+        catch (_a) { }
+        // BUNDLING
+        const bundle = yield fs_1.default.promises.readdir(SdkGenerator.BUNDLE_PATH);
+        for (const file of bundle) {
+            const current = `${SdkGenerator.BUNDLE_PATH}/${file}`;
+            const target = `${app.project.config.output}/${file}`;
+            const stats = yield fs_1.default.promises.stat(current);
+            if (stats.isFile() === true) {
+                const content = yield fs_1.default.promises.readFile(current, "utf8");
+                if (fs_1.default.existsSync(target) === false)
+                    yield fs_1.default.promises.writeFile(target, content, "utf8");
+                else if (BUNDLE_CHANGES[file] !== undefined) {
+                    const r = {
+                        value: yield fs_1.default.promises.readFile(target, "utf8"),
+                    };
+                    for (const [before, after] of BUNDLE_CHANGES[file])
+                        r.value = r.value.replace(before, after);
+                    yield fs_1.default.promises.writeFile(target, r.value, "utf8");
+                }
+            }
+        }
+        // STRUCTURES
+        if (app.project.config.clone === true)
+            yield CloneGenerator_1.CloneGenerator.write(app);
+        // FUNCTIONAL
+        yield SdkFileProgrammer_1.SdkFileProgrammer.generate(app);
+        // DISTRIBUTION
+        if (app.project.config.distribute !== undefined)
+            yield SdkDistributionComposer_1.SdkDistributionComposer.compose({
+                config: app.project.config,
+                websocket: app.routes.some((r) => r.protocol === "websocket"),
+            });
+    });
+    SdkGenerator.validate = (app) => {
+        const errors = [];
+        if (app.project.config.clone === true)
+            return errors;
+        for (const route of app.routes)
+            if (route.protocol === "http")
+                validateImplicit({
+                    config: app.project.config,
+                    errors,
+                    route,
+                });
+        return errors;
+    };
+    const validateImplicit = (props) => {
+        for (const p of SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getAll(props.route)) {
+            if (isImplicitType(p.type))
+                props.errors.push({
+                    file: props.route.controller.file,
+                    class: props.route.controller.class.name,
+                    function: props.route.name,
+                    from: `parameter ${JSON.stringify(p.name)}`,
+                    contents: [`implicit (unnamed) parameter type.`],
+                });
+        }
+        if (props.config.propagate === true)
+            for (const [key, value] of Object.entries(props.route.exceptions))
+                if (isImplicitType(value.type))
+                    props.errors.push({
+                        file: props.route.controller.file,
+                        class: props.route.controller.class.name,
+                        function: props.route.name,
+                        from: `exception ${JSON.stringify(key)}`,
+                        contents: [`implicit (unnamed) exception type.`],
+                    });
+        if (isImplicitType(props.route.success.type))
+            props.errors.push({
+                file: props.route.controller.file,
+                class: props.route.controller.class.name,
+                function: props.route.name,
+                from: "success",
+                contents: [`implicit (unnamed) return type.`],
+            });
+    };
+    const isImplicitType = (type) => {
+        var _a;
+        return type.name === "__type" ||
+            type.name === "__object" ||
+            type.name.startsWith("__type.") ||
+            type.name.startsWith("__object.") ||
+            type.name.includes("readonly [") ||
+            (!!((_a = type.typeArguments) === null || _a === void 0 ? void 0 : _a.length) && type.typeArguments.some(isImplicitType));
+    };
+    SdkGenerator.BUNDLE_PATH = path_1.default.join(__dirname, "..", "..", "assets", "bundle", "api");
+})(SdkGenerator || (exports.SdkGenerator = SdkGenerator = {}));
+const BUNDLE_CHANGES = {
+    "IConnection.ts": [
+        [
+            `export { IConnection } from "@nestia/fetcher"`,
+            `export type { IConnection } from "@nestia/fetcher"`,
+        ],
+    ],
+    "module.ts": [
+        [`export * from "./IConnection"`, `export type * from "./IConnection"`],
+    ],
+    "Primitive.ts": [
+        [
+            `export { Primitive } from "@nestia/fetcher"`,
+            `export type { Primitive } from "typia"`,
+        ],
+        [
+            `export type { Primitive } from "@nestia/fetcher"`,
+            `export type { Primitive } from "typia"`,
+        ],
+    ],
+    "Resolved.ts": [
+        [
+            `export { Resolved } from "@nestia/fetcher"`,
+            `export type { Resolved } from "typia"`,
+        ],
+        [
+            `export type { Resolved } from "@nestia/fetcher"`,
+            `export type { Resolved } from "typia"`,
+        ],
+    ],
+};
+//# sourceMappingURL=SdkGenerator.js.map

@@ -1,0 +1,30 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SecurityAnalyzer = void 0;
+const MapUtil_1 = require("../utils/MapUtil");
+var SecurityAnalyzer;
+(function (SecurityAnalyzer) {
+    SecurityAnalyzer.merge = (...entire) => {
+        const dict = new Map();
+        for (const obj of entire) {
+            const entries = Object.entries(obj);
+            for (const [key, value] of entries) {
+                const set = MapUtil_1.MapUtil.take(dict, key, () => new Set());
+                for (const val of value)
+                    set.add(val);
+            }
+            if (entries.length === 0)
+                MapUtil_1.MapUtil.take(dict, none, () => new Set());
+        }
+        const output = [];
+        for (const [key, set] of dict)
+            key === none
+                ? output.push({})
+                : output.push({
+                    [key]: [...set],
+                });
+        return output;
+    };
+    const none = Symbol("none");
+})(SecurityAnalyzer || (exports.SecurityAnalyzer = SecurityAnalyzer = {}));
+//# sourceMappingURL=SecurityAnalyzer.js.map

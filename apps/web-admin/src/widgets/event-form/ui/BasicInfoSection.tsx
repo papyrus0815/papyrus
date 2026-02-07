@@ -55,9 +55,20 @@ interface BasicInfoSectionProps {
   // DB 카테고리
   dbCategories: EventCategoryDto[]
 
+  // 관련 국가 (선택적)
+  relatedCountryIds?: string[]
+  setRelatedCountryIds?: (value: string[]) => void
+  relatedHistoricalCountryIds?: string[]
+  setRelatedHistoricalCountryIds?: (value: string[]) => void
+  availableCountries?: CountryResponseDto[]
+  availableHistoricalCountries?: HistoricalCountryResponseDto[]
+  onOpenCountryModal?: () => void
+
   // 군사 카테고리 전용 필드
   conflictType?: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish'
-  setConflictType?: (value: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish') => void
+  setConflictType?: (
+    value: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish',
+  ) => void
   combatTypes?: ('land' | 'naval' | 'air')[]
   setCombatTypes?: (value: ('land' | 'naval' | 'air')[]) => void
 
@@ -86,6 +97,13 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   setThumbnail,
   setThumbnailFile,
   dbCategories,
+  relatedCountryIds = [],
+  setRelatedCountryIds = () => {},
+  relatedHistoricalCountryIds = [],
+  setRelatedHistoricalCountryIds = () => {},
+  availableCountries = [],
+  availableHistoricalCountries = [],
+  onOpenCountryModal,
   conflictType,
   setConflictType,
   combatTypes = [],
@@ -117,7 +135,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       }, 100)
       hasScrolledRef.current = true
     }
-    
+
     // 카테고리가 군사가 아니게 변경되면 스크롤 플래그 리셋
     if (!isMilitaryCategory(category)) {
       hasScrolledRef.current = false
@@ -385,76 +403,88 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         </S.FormLabel>
         <S.FormField>
           {/* 전쟁/군사 카테고리 선택 시 전투 유형 및 양상 선택 */}
-          {isMilitaryCategory(category) && setConflictType && setCombatTypes && (
-            <S.CombatTypeSection>
-              {/* 전투 유형 */}
-              <S.FormLabel style={{ marginBottom: '12px' }}>
-                <div>전투 유형</div>
-                <S.RequiredBadge>필수</S.RequiredBadge>
-              </S.FormLabel>
-              <S.Hint style={{ marginBottom: '12px' }}>
-                사건의 규모와 성격에 맞는 전투 유형을 선택하세요
-              </S.Hint>
-              <S.ConflictTypeGrid>
-                {[
-                  { value: 'battle' as const, icon: '⚔️', label: '전투' },
-                  { value: 'war' as const, icon: '🌍', label: '전쟁' },
-                  { value: 'siege' as const, icon: '🏰', label: '공성전' },
-                  { value: 'campaign' as const, icon: '🎯', label: '작전' },
-                  { value: 'skirmish' as const, icon: '💥', label: '소규모 교전' },
-                ].map((type) => (
-                  <S.ConflictTypeButton
-                    key={type.value}
-                    type="button"
-                    $selected={conflictType === type.value}
-                    onClick={() => {
-                      playClickSound()
-                      setConflictType(type.value)
-                    }}
-                  >
-                    <S.ConflictTypeIcon $selected={conflictType === type.value}>
-                      {type.icon}
-                    </S.ConflictTypeIcon>
-                    <S.ConflictTypeLabel>{type.label}</S.ConflictTypeLabel>
-                  </S.ConflictTypeButton>
-                ))}
-              </S.ConflictTypeGrid>
+          {isMilitaryCategory(category) &&
+            setConflictType &&
+            setCombatTypes && (
+              <S.CombatTypeSection>
+                {/* 전투 유형 */}
+                <S.FormLabel style={{ marginBottom: '12px' }}>
+                  <div>전투 유형</div>
+                  <S.RequiredBadge>필수</S.RequiredBadge>
+                </S.FormLabel>
+                <S.Hint style={{ marginBottom: '12px' }}>
+                  사건의 규모와 성격에 맞는 전투 유형을 선택하세요
+                </S.Hint>
+                <S.ConflictTypeGrid>
+                  {[
+                    { value: 'battle' as const, icon: '⚔️', label: '전투' },
+                    { value: 'war' as const, icon: '🌍', label: '전쟁' },
+                    { value: 'siege' as const, icon: '🏰', label: '공성전' },
+                    { value: 'campaign' as const, icon: '🎯', label: '작전' },
+                    {
+                      value: 'skirmish' as const,
+                      icon: '💥',
+                      label: '소규모 교전',
+                    },
+                  ].map((type) => (
+                    <S.ConflictTypeButton
+                      key={type.value}
+                      type="button"
+                      $selected={conflictType === type.value}
+                      onClick={() => {
+                        playClickSound()
+                        setConflictType(type.value)
+                      }}
+                    >
+                      <S.ConflictTypeIcon
+                        $selected={conflictType === type.value}
+                      >
+                        {type.icon}
+                      </S.ConflictTypeIcon>
+                      <S.ConflictTypeLabel>{type.label}</S.ConflictTypeLabel>
+                    </S.ConflictTypeButton>
+                  ))}
+                </S.ConflictTypeGrid>
 
-              {/* 전투 양상 */}
-              <S.FormLabel style={{ marginBottom: '12px', marginTop: '32px' }}>
-                <div>전투 양상</div>
-                <S.OptionalBadge>복수 선택 가능</S.OptionalBadge>
-              </S.FormLabel>
-              <S.Hint style={{ marginBottom: '12px' }}>
-                해당 사건의 전투 양상을 선택하세요 (지상전, 해전, 공중전 등)
-              </S.Hint>
-              <S.CombatTypeGrid>
-                {[
-                  { value: 'land' as const, icon: '🪖', label: '지상전' },
-                  { value: 'naval' as const, icon: '⚓', label: '해전' },
-                  { value: 'air' as const, icon: '✈️', label: '공중전' },
-                ].map((type) => (
-                  <S.CombatTypeButton
-                    key={type.value}
-                    type="button"
-                    $selected={combatTypes.includes(type.value)}
-                    onClick={() => {
-                      playClickSound()
-                      const updated = combatTypes.includes(type.value)
-                        ? combatTypes.filter((t) => t !== type.value)
-                        : [...combatTypes, type.value]
-                      setCombatTypes(updated)
-                    }}
-                  >
-                    <S.CombatTypeIcon $selected={combatTypes.includes(type.value)}>
-                      {type.icon}
-                    </S.CombatTypeIcon>
-                    <S.CombatTypeLabel>{type.label}</S.CombatTypeLabel>
-                  </S.CombatTypeButton>
-                ))}
-              </S.CombatTypeGrid>
-            </S.CombatTypeSection>
-          )}
+                {/* 전투 양상 */}
+                <S.FormLabel
+                  style={{ marginBottom: '12px', marginTop: '32px' }}
+                >
+                  <div>전투 양상</div>
+                  <S.OptionalBadge>복수 선택 가능</S.OptionalBadge>
+                </S.FormLabel>
+                <S.Hint style={{ marginBottom: '12px' }}>
+                  해당 사건의 전투 양상을 선택하세요 (지상전, 해전, 공중전 등)
+                </S.Hint>
+                <S.CombatTypeGrid>
+                  {[
+                    { value: 'land' as const, icon: '🪖', label: '지상전' },
+                    { value: 'naval' as const, icon: '⚓', label: '해전' },
+                    { value: 'air' as const, icon: '✈️', label: '공중전' },
+                  ].map((type) => (
+                    <S.CombatTypeButton
+                      key={type.value}
+                      type="button"
+                      $selected={combatTypes.includes(type.value)}
+                      onClick={() => {
+                        playClickSound()
+                        const updated = combatTypes.includes(type.value)
+                          ? combatTypes.filter((t) => t !== type.value)
+                          : [...combatTypes, type.value]
+                        setCombatTypes(updated)
+                      }}
+                    >
+                      <S.CombatTypeIcon
+                        $selected={combatTypes.includes(type.value)}
+                      >
+                        {type.icon}
+                      </S.CombatTypeIcon>
+                      <S.CombatTypeLabel>{type.label}</S.CombatTypeLabel>
+                    </S.CombatTypeButton>
+                  ))}
+                </S.CombatTypeGrid>
+              </S.CombatTypeSection>
+            )}
 
           {dbCategories.length > 0 ? (
             <S.CategoryGrid>
@@ -464,7 +494,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 const categoryKey = extractCategoryKey(categoryId)
                 const Icon = CATEGORY_ICON_MAP[categoryName] || FiFileText
                 const isSelected = category === categoryId
-                
+
                 return (
                   <S.CategoryCard
                     key={dbCat.id}
@@ -502,6 +532,82 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           <S.Hint>사건의 유형을 선택하세요</S.Hint>
         </S.FormField>
       </S.FormRow>
+
+      {/* 관련 국가 */}
+      {onOpenCountryModal && (
+        <S.FormRow>
+          <S.FormLabel>관련 국가</S.FormLabel>
+          <S.FormField>
+            <S.AddButton
+              type="button"
+              onClick={() => {
+                playClickSound()
+                onOpenCountryModal()
+              }}
+            >
+              <FiGlobe size={16} />
+              국가 추가
+            </S.AddButton>
+            {(relatedCountryIds.length > 0 ||
+              relatedHistoricalCountryIds.length > 0) && (
+              <S.SelectedItemsContainer>
+                {relatedCountryIds.map((countryId) => {
+                  const country = availableCountries.find(
+                    (c) => c.id === countryId,
+                  )
+                  if (!country) return null
+                  return (
+                    <S.SelectedItem key={countryId}>
+                      <span>
+                        {country.flagEmoji} {country.name}
+                      </span>
+                      <S.RemoveButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setRelatedCountryIds(
+                            relatedCountryIds.filter((id) => id !== countryId),
+                          )
+                        }}
+                      >
+                        <FiX size={14} />
+                      </S.RemoveButton>
+                    </S.SelectedItem>
+                  )
+                })}
+                {relatedHistoricalCountryIds.map((countryId) => {
+                  const country = availableHistoricalCountries.find(
+                    (c) => c.id === countryId,
+                  )
+                  if (!country) return null
+                  return (
+                    <S.SelectedItem key={countryId}>
+                      <span>🏛️ {country.name}</span>
+                      <S.RemoveButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setRelatedHistoricalCountryIds(
+                            relatedHistoricalCountryIds.filter(
+                              (id) => id !== countryId,
+                            ),
+                          )
+                        }}
+                      >
+                        <FiX size={14} />
+                      </S.RemoveButton>
+                    </S.SelectedItem>
+                  )
+                })}
+              </S.SelectedItemsContainer>
+            )}
+            <S.Hint>
+              이 사건과 관련된 국가들을 선택하세요 (예: 한국전쟁 → 대한민국,
+              북한, 미국, 중국 등)
+            </S.Hint>
+          </S.FormField>
+        </S.FormRow>
+      )}
     </S.FormSection>
   )
 }

@@ -1,0 +1,56 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SwaggerExample = void 0;
+var SwaggerExample;
+(function (SwaggerExample) {
+    function Response(...args) {
+        return function SwaggerExampleResponse(_target, _propertyKey, descriptor) {
+            emplaceValue(emplaceOfResponse(descriptor))(args);
+            return descriptor;
+        };
+    }
+    SwaggerExample.Response = Response;
+    function Parameter(...args) {
+        return function SwaggerExampleParameter(target, propertyKey, index) {
+            emplaceValue(emplaceOfParameter(target, propertyKey !== null && propertyKey !== void 0 ? propertyKey : "", index))(args);
+        };
+    }
+    SwaggerExample.Parameter = Parameter;
+})(SwaggerExample || (exports.SwaggerExample = SwaggerExample = {}));
+const emplaceValue = (data) => (args) => {
+    var _a;
+    if (args.length === 1)
+        data.example = args[0];
+    else {
+        const key = args[0];
+        const value = args[1];
+        (_a = data.examples) !== null && _a !== void 0 ? _a : (data.examples = {});
+        data.examples[key] = value;
+    }
+};
+const emplaceOfResponse = (descriptor) => {
+    const oldbie = Reflect.getMetadata("nestia/SwaggerExample/Response", descriptor.value);
+    if (oldbie !== undefined)
+        return oldbie;
+    const newbie = {};
+    Reflect.defineMetadata("nestia/SwaggerExample/Response", newbie, descriptor.value);
+    return newbie;
+};
+const emplaceOfParameter = (target, propertyKey, index) => {
+    const array = emplaceArrayOfParameters(target, propertyKey);
+    const oldibe = array.find((e) => e.index === index);
+    if (oldibe !== undefined)
+        return oldibe;
+    const data = { index };
+    array.push(data);
+    return data;
+};
+const emplaceArrayOfParameters = (target, propertyKey) => {
+    const array = Reflect.getMetadata("nestia/SwaggerExample/Parameters", target, propertyKey);
+    if (array !== undefined)
+        return array;
+    const newbie = [];
+    Reflect.defineMetadata("nestia/SwaggerExample/Parameters", newbie, target, propertyKey);
+    return newbie;
+};
+//# sourceMappingURL=SwaggerExample.js.map

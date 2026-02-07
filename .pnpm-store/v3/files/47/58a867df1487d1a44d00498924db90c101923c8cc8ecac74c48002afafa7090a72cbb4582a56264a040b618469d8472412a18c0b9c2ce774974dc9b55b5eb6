@@ -1,0 +1,9 @@
+import ts from "typescript";
+import { INestiaTransformContext } from "../options/INestiaTransformProject";
+export declare namespace WebSocketRouteTransformer {
+    const validate: (props: {
+        context: INestiaTransformContext;
+        decorator: ts.Decorator;
+        method: ts.MethodDeclaration;
+    }) => ts.Decorator;
+}

@@ -1,0 +1,32 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ProcessChannel = void 0;
+var NodeModule_1 = require("../../../../utils/internal/NodeModule");
+/**
+ * @internal
+ */
+var ProcessChannel = /** @class */ (function () {
+    function ProcessChannel() {
+    }
+    ProcessChannel.postMessage = function (message) {
+        NodeModule_1.NodeModule.process().send(message);
+    };
+    ProcessChannel.close = function () {
+        NodeModule_1.NodeModule.process().exit();
+    };
+    Object.defineProperty(ProcessChannel, "onmessage", {
+        set: function (listener) {
+            NodeModule_1.NodeModule.process().on("message", function (msg) {
+                listener({ data: msg });
+            });
+        },
+        enumerable: false,
+        configurable: true
+    });
+    ProcessChannel.is_worker_server = function () {
+        return !!NodeModule_1.NodeModule.process().send;
+    };
+    return ProcessChannel;
+}());
+exports.ProcessChannel = ProcessChannel;
+//# sourceMappingURL=ProcessChannel.js.map

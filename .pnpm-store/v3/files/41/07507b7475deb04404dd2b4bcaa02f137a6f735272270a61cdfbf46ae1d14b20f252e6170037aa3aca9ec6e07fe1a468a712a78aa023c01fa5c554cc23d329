@@ -1,0 +1,9 @@
+import ts from "typescript";
+import { INestiaTransformContext } from "../options/INestiaTransformProject";
+export declare namespace ParameterDecoratorTransformer {
+    const transform: (props: {
+        context: INestiaTransformContext;
+        type: ts.Type;
+        decorator: ts.Decorator;
+    }) => ts.Decorator;
+}

@@ -1,0 +1,4 @@
+import { ITypedApplication } from "../../structures/ITypedApplication";
+export declare namespace SdkFileProgrammer {
+    const generate: (app: ITypedApplication) => Promise<void>;
+}

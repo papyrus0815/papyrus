@@ -1,0 +1,130 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedRoute = void 0;
+const common_1 = require("@nestjs/common");
+const operators_1 = require("rxjs/operators");
+const typia_1 = __importDefault(require("typia"));
+const get_path_and_stringify_1 = require("./internal/get_path_and_stringify");
+const route_error_1 = require("./internal/route_error");
+/**
+ * Type safe router decorator functions.
+ *
+ * `TypedRoute` is a module containing router decorator functions which can
+ * boost up JSON string conversion speed about 200x times faster than
+ * `class-transformer`. Furthermore, such JSON string conversion is even type
+ * safe through [typia](https://github.com/samchon/typia).
+ *
+ * For reference, if you try to invalid data that is not following the promised
+ * type `T`, 500 internal server error would be thrown. Also, as `TypedRoute`
+ * composes JSON string through `typia.assertStringify<T>()` function, it is not
+ * possible to modify response data through interceptors.
+ *
+ * @author Jeongho Nam - https://github.com/samchon
+ */
+var TypedRoute;
+(function (TypedRoute) {
+    /**
+     * Router decorator function for the GET method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedRoute.Get = Generator("Get");
+    /**
+     * Router decorator function for the POST method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedRoute.Post = Generator("Post");
+    /**
+     * Router decorator function for the PATH method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedRoute.Patch = Generator("Patch");
+    /**
+     * Router decorator function for the PUT method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedRoute.Put = Generator("Put");
+    /**
+     * Router decorator function for the DELETE method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    TypedRoute.Delete = Generator("Delete");
+    /**
+     * Set the logger function for the response validation failure.
+     *
+     * If you've configured the transformation option to `validate.log` in the
+     * `tsconfig.json` file, then the error log information of the response
+     * validation failure would be logged through this function instead of
+     * throwing the 400 bad request error.
+     *
+     * By the way, be careful. If you've configured the response transformation
+     * option to be `validate.log`, client may get wrong response data. Therefore,
+     * this way is not recommended in the common backend server case.
+     *
+     * @default console.log
+     * @param func Logger function
+     */
+    function setValidateErrorLogger(func) {
+        TypedRoute.__logger = func;
+    }
+    TypedRoute.setValidateErrorLogger = setValidateErrorLogger;
+    /** @internal */
+    TypedRoute.__logger = console.log;
+    /** @internal */
+    function Generator(method) {
+        function route(...args) {
+            const [path, stringify] = (0, get_path_and_stringify_1.get_path_and_stringify)(() => TypedRoute.__logger)(`TypedRoute.${method}`)(...args);
+            return (0, common_1.applyDecorators)(ROUTERS[method](path), (0, common_1.UseInterceptors)(new TypedRouteInterceptor(stringify)));
+        }
+        return route;
+    }
+})(TypedRoute || (exports.TypedRoute = TypedRoute = {}));
+for (const method of [
+    typia_1.default.json.stringify,
+    typia_1.default.json.isStringify,
+    typia_1.default.json.assertStringify,
+    typia_1.default.json.validateStringify,
+])
+    for (const [key, value] of Object.entries(method))
+        for (const deco of [
+            TypedRoute.Get,
+            TypedRoute.Delete,
+            TypedRoute.Post,
+            TypedRoute.Put,
+            TypedRoute.Patch,
+        ])
+            deco[key] = value;
+/** @internal */
+class TypedRouteInterceptor {
+    constructor(stringify) {
+        this.stringify = stringify;
+    }
+    intercept(context, next) {
+        const http = context.switchToHttp();
+        const request = http.getRequest();
+        const response = http.getResponse();
+        response.header("Content-Type", "application/json");
+        return next.handle().pipe((0, operators_1.map)((value) => this.stringify(value, request.method, request.url)), (0, operators_1.catchError)((err) => (0, route_error_1.route_error)(http.getRequest(), err)));
+    }
+}
+/** @internal */
+const ROUTERS = {
+    Get: common_1.Get,
+    Post: common_1.Post,
+    Patch: common_1.Patch,
+    Put: common_1.Put,
+    Delete: common_1.Delete,
+};
+//# sourceMappingURL=TypedRoute.js.map

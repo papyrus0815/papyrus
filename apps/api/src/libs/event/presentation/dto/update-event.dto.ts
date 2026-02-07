@@ -80,6 +80,53 @@ export class UpdateEventDto {
   @IsOptional()
   historicalCountryId?: string
 
+  @ApiProperty({
+    description: '관련 인물 목록',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        personId: { type: 'string' },
+        role: { type: 'string' },
+        note: { type: 'string' },
+      },
+    },
+  })
+  @IsOptional()
+  relatedPersons?: Array<{
+    personId: string
+    role?: string
+    note?: string
+  }>
+
+  @ApiProperty({
+    description: '관련 사건 목록',
+    required: false,
+    type: 'array',
+    items: { type: 'string' },
+  })
+  @IsOptional()
+  relatedEventIds?: string[]
+
+  @ApiProperty({
+    description: '관련 현대 국가 ID 목록',
+    required: false,
+    type: 'array',
+    items: { type: 'string' },
+  })
+  @IsOptional()
+  relatedCountryIds?: string[]
+
+  @ApiProperty({
+    description: '관련 역사적 국가 ID 목록',
+    required: false,
+    type: 'array',
+    items: { type: 'string' },
+  })
+  @IsOptional()
+  relatedHistoricalCountryIds?: string[]
+
   @ApiProperty({ description: '섹션 목록', required: false })
   @IsObject()
   @IsOptional()

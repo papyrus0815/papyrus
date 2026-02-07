@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TypedWebSocketRouteAnalyzer = void 0;
+const PathUtil_1 = require("../utils/PathUtil");
+var TypedWebSocketRouteAnalyzer;
+(function (TypedWebSocketRouteAnalyzer) {
+    TypedWebSocketRouteAnalyzer.analyze = (props) => props.paths.map((path) => {
+        var _a, _b, _c;
+        return (Object.assign(Object.assign({}, props.operation), { controller: props.controller, path, accessor: [...PathUtil_1.PathUtil.accessors(path), props.operation.name], header: (_a = props.operation.parameters.filter((p) => p.category === "header")[0]) !== null && _a !== void 0 ? _a : null, pathParameters: props.operation.parameters.filter((p) => p.category === "param"), query: (_b = props.operation.parameters.filter((p) => p.category === "query")[0]) !== null && _b !== void 0 ? _b : null, acceptor: props.operation.parameters.filter((p) => p.category === "acceptor")[0], driver: (_c = props.operation.parameters.filter((p) => p.category === "driver")[0]) !== null && _c !== void 0 ? _c : null }));
+    });
+})(TypedWebSocketRouteAnalyzer || (exports.TypedWebSocketRouteAnalyzer = TypedWebSocketRouteAnalyzer = {}));
+//# sourceMappingURL=TypedWebSocketRouteAnalyzer.js.map

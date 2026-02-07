@@ -1,0 +1,19 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TextPlainValidator = void 0;
+var TextPlainValidator;
+(function (TextPlainValidator) {
+    TextPlainValidator.validate = (metadata) => {
+        const expected = metadata.atomics.filter((a) => a.type === "string").length +
+            metadata.constants
+                .filter((c) => c.type === "string")
+                .map((c) => c.values.length)
+                .reduce((a, b) => a + b, 0) +
+            metadata.templates.length +
+            metadata.natives.filter((n) => n.name === "String").length;
+        if (metadata.size() === 0 || metadata.size() !== expected)
+            return [`Only string type is allowed in the "text/plain" content type.`];
+        return [];
+    };
+})(TextPlainValidator || (exports.TextPlainValidator = TextPlainValidator = {}));
+//# sourceMappingURL=TextPlainValidator.js.map

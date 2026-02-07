@@ -1,0 +1,7 @@
+import { IReflectOperationError } from "../structures/IReflectOperationError";
+import { ITypedApplication } from "../structures/ITypedApplication";
+export declare namespace SdkGenerator {
+    const generate: (app: ITypedApplication) => Promise<void>;
+    const validate: (app: ITypedApplication) => IReflectOperationError[];
+    const BUNDLE_PATH: string;
+}

@@ -1,0 +1,91 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SwaggerOperationResponseComposer = void 0;
+const tstl_1 = require("tstl");
+const StringUtil_1 = require("../../utils/StringUtil");
+const SwaggerDescriptionComposer_1 = require("./SwaggerDescriptionComposer");
+var SwaggerOperationResponseComposer;
+(function (SwaggerOperationResponseComposer) {
+    SwaggerOperationResponseComposer.compose = (props) => {
+        var _a, _b, _c, _d, _e, _f;
+        const output = {};
+        // FROM DECORATOR
+        for (const [status, error] of Object.entries(props.route.exceptions))
+            output[status] = {
+                description: (_a = error.description) !== null && _a !== void 0 ? _a : undefined,
+                content: {
+                    "application/json": {
+                        schema: props.schema(error.metadata),
+                        example: error.example,
+                        examples: error.examples,
+                    },
+                },
+            };
+        // FROM COMMENTS
+        for (const tag of props.route.jsDocTags) {
+            if (tag.name !== "throw" && tag.name !== "throws")
+                continue;
+            const text = (_c = (_b = tag.text) === null || _b === void 0 ? void 0 : _b.find((elem) => elem.kind === "text")) === null || _c === void 0 ? void 0 : _c.text;
+            if (text === undefined)
+                continue;
+            const elements = text.split(" ").map((str) => str.trim());
+            const status = elements[0];
+            if (isNaN(Number(status)) &&
+                status !== "2XX" &&
+                status !== "3XX" &&
+                status !== "4XX" &&
+                status !== "5XX")
+                continue;
+            const description = elements.length === 1 ? undefined : elements.slice(1).join(" ");
+            const oldbie = output[status];
+            if (description && oldbie !== undefined)
+                (_d = oldbie.description) !== null && _d !== void 0 ? _d : (oldbie.description = description);
+            else if (oldbie === undefined)
+                output[status] = {
+                    description: description,
+                    content: {
+                        "application/json": {
+                            schema: {},
+                        },
+                    },
+                };
+        }
+        // SUCCESS
+        const description = (_e = SwaggerDescriptionComposer_1.SwaggerDescriptionComposer.descriptionFromJsDocTag({
+            jsDocTags: props.route.jsDocTags,
+            tag: "returns",
+        })) !== null && _e !== void 0 ? _e : SwaggerDescriptionComposer_1.SwaggerDescriptionComposer.descriptionFromJsDocTag({
+            jsDocTags: props.route.jsDocTags,
+            tag: "return",
+        });
+        output[(_f = props.route.success.status) !== null && _f !== void 0 ? _f : (props.route.method.toLowerCase() === "post" ? 201 : 200)] = Object.assign({ description: props.route.success.encrypted
+                ? `${warning.get(!!description, props.route.method)}${description !== null && description !== void 0 ? description : ""}`
+                : (description !== null && description !== void 0 ? description : ""), content: props.route.success.contentType
+                ? {
+                    [props.route.success.contentType]: {
+                        schema: props.schema(props.route.success.metadata),
+                        example: props.route.success.example,
+                        examples: props.route.success.examples,
+                    },
+                }
+                : undefined }, (props.route.success.encrypted ? { "x-nestia-encrypted": true } : {}));
+        return output;
+    };
+})(SwaggerOperationResponseComposer || (exports.SwaggerOperationResponseComposer = SwaggerOperationResponseComposer = {}));
+const warning = new tstl_1.VariadicSingleton((described, method) => {
+    const summary = "Response data have been encrypted.";
+    const component = `[EncryptedRoute.${StringUtil_1.StringUtil.capitalize(method)}](https://github.com/samchon/@nestia/core#encryptedroute)`;
+    const content = [
+        "## Warning",
+        "",
+        summary,
+        "",
+        `The response body data would be encrypted as "AES-128(256) / CBC mode / PKCS#5 Padding / Base64 Encoding", through the ${component} component.`,
+        "",
+        `Therefore, just utilize this swagger editor only for referencing. If you need to call the real API, using [SDK](https://github.com/samchon/nestia#software-development-kit) would be much better.`,
+    ];
+    if (described === true)
+        content.push("", "----------------", "", "");
+    return content.join("\n");
+});
+//# sourceMappingURL=SwaggerOperationResponseComposer.js.map

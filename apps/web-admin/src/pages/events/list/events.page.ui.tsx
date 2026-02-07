@@ -165,7 +165,7 @@ export const EventsCatalogPage: React.FC = () => {
 
   // ===== 필터 상태 =====
   const [keyword, setKeyword] = useState('')
-  const [sortBy, setSortBy] = useState<SortOption>(SORT_OPTIONS.IMPACT)
+  const [sortBy, setSortBy] = useState<SortOption>(SORT_OPTIONS.RECENT)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [viewMode, setViewMode] = useState<ViewMode>(VIEW_MODES.GRID)
   const [selectedCentury, setSelectedCentury] =
@@ -185,6 +185,7 @@ export const EventsCatalogPage: React.FC = () => {
   const [expandedTenureGroups, setExpandedTenureGroups] = useState<Set<string>>(
     new Set(),
   )
+  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
   const [isLoading, setIsLoading] = useState(true)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
@@ -388,16 +389,8 @@ export const EventsCatalogPage: React.FC = () => {
                 countries: [],
                 influence: [],
                 visuals: {
-                  heroImageUrl: evt.thumbnail
-                    ? evt.thumbnail.startsWith('http')
-                      ? evt.thumbnail
-                      : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${evt.thumbnail}`
-                    : '',
-                  thumbnailUrl: evt.thumbnail
-                    ? evt.thumbnail.startsWith('http')
-                      ? evt.thumbnail
-                      : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${evt.thumbnail}`
-                    : '',
+                  heroImageUrl: evt.thumbnail || '',
+                  thumbnailUrl: evt.thumbnail || '',
                   gallery: [],
                 },
                 map: {
@@ -414,6 +407,9 @@ export const EventsCatalogPage: React.FC = () => {
                 parentEventId: isChild
                   ? evt.parentEventId || undefined
                   : undefined,
+                sectionTitles: evt.sectionTitles,
+                relatedCountries: evt.relatedCountries,
+                relatedHistoricalCountries: evt.relatedHistoricalCountries,
               }
             }
 
@@ -628,10 +624,10 @@ export const EventsCatalogPage: React.FC = () => {
           comparison =
             eventA.stats.durationInYears - eventB.stats.durationInYears
           break
-        case 'impact':
         default:
           comparison =
-            eventA.stats.casualties.total - eventB.stats.casualties.total
+            new Date(eventA.startDate).getTime() -
+            new Date(eventB.startDate).getTime()
           break
       }
 
@@ -676,7 +672,7 @@ export const EventsCatalogPage: React.FC = () => {
   const handleResetFilters = () => {
     setSelectedCategory(FILTER_ALL)
     setKeyword('')
-    setSortBy('impact')
+    setSortBy('recent')
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
     setSelectedPositionType(FILTER_ALL)
@@ -690,6 +686,18 @@ export const EventsCatalogPage: React.FC = () => {
         next.delete(tenureKey)
       } else {
         next.add(tenureKey)
+      }
+      return next
+    })
+  }
+
+  const toggleYearCollapse = (year: number) => {
+    setCollapsedYears((prev) => {
+      const next = new Set(prev)
+      if (next.has(year)) {
+        next.delete(year)
+      } else {
+        next.add(year)
       }
       return next
     })
@@ -1177,11 +1185,10 @@ export const EventsCatalogPage: React.FC = () => {
                 <List.SortSelect
                   value={sortBy}
                   aria-label="정렬 기준 선택"
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                     setSortBy(e.target.value as SortOption)
-                  }
+                  }}
                 >
-                  <option value="impact">파급력 높은 순</option>
                   <option value="recent">최근 발생 순</option>
                   <option value="duration">장기 지속 순</option>
                 </List.SortSelect>
@@ -1260,6 +1267,42 @@ export const EventsCatalogPage: React.FC = () => {
 
                     if (!event) return null
 
+                    // 년도 구분선 표시 여부 체크 (depth 0인 최상위 사건만)
+                    const currentYear = new Date(
+                      node.period.start,
+                    ).getFullYear()
+                    const prevEvent =
+                      index > 0 ? flattenedHierarchy[index - 1] : null
+                    const prevYear = prevEvent
+                      ? new Date(prevEvent.node.period.start).getFullYear()
+                      : null
+                    const showYearDivider =
+                      depth === 0 &&
+                      (index === 0 ||
+                        (prevYear !== null && currentYear !== prevYear))
+
+                    // 이 년도가 접혀있는지 확인
+                    const isYearCollapsed = collapsedYears.has(currentYear)
+
+                    // 접힌 년도의 사건은 렌더링하지 않음 (년도 구분선만 표시)
+                    if (isYearCollapsed && depth === 0) {
+                      return showYearDivider ? (
+                        <List.YearDivider
+                          key={`year-${currentYear}`}
+                          type="button"
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.preventDefault()
+                            toggleYearCollapse(currentYear)
+                          }}
+                        >
+                          <span>
+                            <FiChevronRight size={14} />
+                            {currentYear}년
+                          </span>
+                        </List.YearDivider>
+                      ) : null
+                    }
+
                     // depth 0인 사건의 실제 인덱스 찾기
                     const topLevelIndex =
                       depth === 0
@@ -1296,13 +1339,32 @@ export const EventsCatalogPage: React.FC = () => {
                       showTenureMarkers && tenureGroup && depth === 0
 
                     const careerTimeline = tenureGroup
-                      ? getCareerTimeline(
-                          tenureGroup.headOfState.person,
-                        ).slice(0, 4)
+                      ? getCareerTimeline(tenureGroup.headOfState.person).slice(
+                          0,
+                          4,
+                        )
                       : []
 
                     return (
                       <React.Fragment key={node.id}>
+                        {/* 년도 구분선 */}
+                        {showYearDivider && (
+                          <List.YearDivider
+                            type="button"
+                            onClick={(
+                              e: React.MouseEvent<HTMLButtonElement>,
+                            ) => {
+                              e.preventDefault()
+                              toggleYearCollapse(currentYear)
+                            }}
+                          >
+                            <span>
+                              <FiChevronDown size={14} />
+                              {currentYear}년
+                            </span>
+                          </List.YearDivider>
+                        )}
+
                         {/* 집권 기간 그룹 헤더 */}
                         {isGroupStart && tenureGroup && (
                           <>
@@ -1395,7 +1457,9 @@ export const EventsCatalogPage: React.FC = () => {
                                           ?.name ||
                                         ''
                                       return (
-                                        <List.TenureTimelineItem key={career.id}>
+                                        <List.TenureTimelineItem
+                                          key={career.id}
+                                        >
                                           <List.TenureTimelinePeriod>
                                             {formatTenurePeriod(
                                               career.startDate,
@@ -1403,7 +1467,8 @@ export const EventsCatalogPage: React.FC = () => {
                                             )}
                                           </List.TenureTimelinePeriod>
                                           <List.TenureTimelineTitle>
-                                            {career.position?.title || '직책 미정'}
+                                            {career.position?.title ||
+                                              '직책 미정'}
                                           </List.TenureTimelineTitle>
                                           {countryName && (
                                             <List.TenureTimelineMeta>
@@ -1416,9 +1481,13 @@ export const EventsCatalogPage: React.FC = () => {
                                   </List.TenureTimeline>
                                 )}
                                 <List.TenureDetailRow>
-                                  <List.TenureDetailLabel>생몰</List.TenureDetailLabel>
+                                  <List.TenureDetailLabel>
+                                    생몰
+                                  </List.TenureDetailLabel>
                                   <List.TenureDetailValue>
-                                    {formatLifeSpan(tenureGroup.headOfState.person)}
+                                    {formatLifeSpan(
+                                      tenureGroup.headOfState.person,
+                                    )}
                                   </List.TenureDetailValue>
                                 </List.TenureDetailRow>
                               </List.TenureDetailsPanel>
@@ -1507,16 +1576,14 @@ export const EventsCatalogPage: React.FC = () => {
                                     : undefined
                                 }
                               >
-                                {event.visuals.thumbnailUrl && (
-                                  <List.CompactCategoryBadge
-                                    $category={event.category}
-                                  >
-                                    {getCategoryName(
-                                      event.category,
-                                      dbCategories,
-                                    )}
-                                  </List.CompactCategoryBadge>
-                                )}
+                                <List.CompactCategoryBadge
+                                  $category={event.category}
+                                >
+                                  {getCategoryName(
+                                    event.category,
+                                    dbCategories,
+                                  )}
+                                </List.CompactCategoryBadge>
                               </List.CompactThumbnail>
                               <List.CompactListContent>
                                 <List.CompactListHeader>
@@ -1563,7 +1630,14 @@ export const EventsCatalogPage: React.FC = () => {
                                   </List.CompactListTitle>
                                 </List.CompactListHeader>
                                 <List.CompactListMeta $depth={depth}>
-                                  <span>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '6px',
+                                      width: '100%',
+                                    }}
+                                  >
                                     {(() => {
                                       const start = new Date(node.period.start)
                                       const end = node.period.end
@@ -1578,7 +1652,9 @@ export const EventsCatalogPage: React.FC = () => {
                                         !end ||
                                         start.getTime() === end.getTime()
                                       ) {
-                                        return formatFullDate(start)
+                                        return (
+                                          <span>{formatFullDate(start)}</span>
+                                        )
                                       }
 
                                       const diffTime = Math.abs(
@@ -1588,9 +1664,54 @@ export const EventsCatalogPage: React.FC = () => {
                                         diffTime / (1000 * 60 * 60 * 24),
                                       )
 
-                                      return `${formatFullDate(start)} ~ ${formatFullDate(end)} (${diffDays}일)`
+                                      const years = Math.floor(diffDays / 365)
+                                      const remainingDaysAfterYears =
+                                        diffDays % 365
+                                      const months = Math.floor(
+                                        remainingDaysAfterYears / 30,
+                                      )
+                                      const days = remainingDaysAfterYears % 30
+
+                                      const parts = []
+                                      if (years > 0) parts.push(`${years}년`)
+                                      if (months > 0)
+                                        parts.push(`${months}개월`)
+                                      if (days > 0 || parts.length === 0)
+                                        parts.push(`${days}일`)
+                                      const durationText = parts.join(' ')
+
+                                      return (
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: '12px',
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              fontSize: '11px',
+                                              color: '#64748b',
+                                            }}
+                                          >
+                                            {formatFullDate(start)} ~{' '}
+                                            {formatFullDate(end)}
+                                          </div>
+                                          <div
+                                            style={{
+                                              fontSize: '11px',
+                                              fontWeight: '600',
+                                              color: '#64748b',
+                                              whiteSpace: 'nowrap',
+                                            }}
+                                          >
+                                            {durationText}
+                                          </div>
+                                        </div>
+                                      )
                                     })()}
-                                  </span>
+                                  </div>
                                   {node.importance === 'critical' && (
                                     <>
                                       <span>·</span>
@@ -1638,16 +1759,14 @@ export const EventsCatalogPage: React.FC = () => {
                                     : undefined
                                 }
                               >
-                                {event.visuals.thumbnailUrl && (
-                                  <List.CompactCategoryBadge
-                                    $category={event.category}
-                                  >
-                                    {getCategoryName(
-                                      event.category,
-                                      dbCategories,
-                                    )}
-                                  </List.CompactCategoryBadge>
-                                )}
+                                <List.CompactCategoryBadge
+                                  $category={event.category}
+                                >
+                                  {getCategoryName(
+                                    event.category,
+                                    dbCategories,
+                                  )}
+                                </List.CompactCategoryBadge>
                               </List.CompactThumbnail>
                               <List.CompactListContent>
                                 <List.CompactListHeader>
@@ -1694,7 +1813,14 @@ export const EventsCatalogPage: React.FC = () => {
                                   </List.CompactListTitle>
                                 </List.CompactListHeader>
                                 <List.CompactListMeta $depth={depth}>
-                                  <span>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '6px',
+                                      width: '100%',
+                                    }}
+                                  >
                                     {(() => {
                                       const start = new Date(node.period.start)
                                       const end = node.period.end
@@ -1709,10 +1835,11 @@ export const EventsCatalogPage: React.FC = () => {
                                         !end ||
                                         start.getTime() === end.getTime()
                                       ) {
-                                        return formatFullDate(start)
+                                        return (
+                                          <span>{formatFullDate(start)}</span>
+                                        )
                                       }
 
-                                      // 기간 계산
                                       const diffTime = Math.abs(
                                         end.getTime() - start.getTime(),
                                       )
@@ -1720,9 +1847,54 @@ export const EventsCatalogPage: React.FC = () => {
                                         diffTime / (1000 * 60 * 60 * 24),
                                       )
 
-                                      return `${formatFullDate(start)} ~ ${formatFullDate(end)} (${diffDays}일)`
+                                      const years = Math.floor(diffDays / 365)
+                                      const remainingDaysAfterYears =
+                                        diffDays % 365
+                                      const months = Math.floor(
+                                        remainingDaysAfterYears / 30,
+                                      )
+                                      const days = remainingDaysAfterYears % 30
+
+                                      const parts = []
+                                      if (years > 0) parts.push(`${years}년`)
+                                      if (months > 0)
+                                        parts.push(`${months}개월`)
+                                      if (days > 0 || parts.length === 0)
+                                        parts.push(`${days}일`)
+                                      const durationText = parts.join(' ')
+
+                                      return (
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: '12px',
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              fontSize: '11px',
+                                              color: '#64748b',
+                                            }}
+                                          >
+                                            {formatFullDate(start)} ~{' '}
+                                            {formatFullDate(end)}
+                                          </div>
+                                          <div
+                                            style={{
+                                              fontSize: '11px',
+                                              fontWeight: '600',
+                                              color: '#64748b',
+                                              whiteSpace: 'nowrap',
+                                            }}
+                                          >
+                                            {durationText}
+                                          </div>
+                                        </div>
+                                      )
                                     })()}
-                                  </span>
+                                  </div>
                                   {node.importance === 'critical' && (
                                     <>
                                       <span>·</span>

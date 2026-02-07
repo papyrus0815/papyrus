@@ -1,0 +1,13 @@
+import { OpenApi } from "@samchon/openapi";
+import { INestiaConfig } from "../INestiaConfig";
+import { ITypedApplication } from "../structures/ITypedApplication";
+import { ITypedHttpRoute } from "../structures/ITypedHttpRoute";
+export declare namespace SwaggerGenerator {
+    const generate: (app: ITypedApplication) => Promise<void>;
+    const compose: (props: {
+        config: Omit<INestiaConfig.ISwaggerConfig, "output">;
+        routes: ITypedHttpRoute[];
+        document: OpenApi.IDocument;
+    }) => OpenApi.IDocument;
+    const initialize: (config: Omit<INestiaConfig.ISwaggerConfig, "output">) => Promise<OpenApi.IDocument>;
+}

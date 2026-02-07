@@ -1,0 +1,98 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.E2eFileProgrammer = void 0;
+const typescript_1 = __importDefault(require("typescript"));
+const IdentifierFactory_1 = require("typia/lib/factories/IdentifierFactory");
+const LiteralFactory_1 = require("typia/lib/factories/LiteralFactory");
+const FilePrinter_1 = require("./FilePrinter");
+const ImportDictionary_1 = require("./ImportDictionary");
+const SdkAliasCollection_1 = require("./SdkAliasCollection");
+const SdkHttpParameterProgrammer_1 = require("./SdkHttpParameterProgrammer");
+const SdkImportWizard_1 = require("./SdkImportWizard");
+var E2eFileProgrammer;
+(function (E2eFileProgrammer) {
+    E2eFileProgrammer.generate = (project) => (props) => (route) => __awaiter(this, void 0, void 0, function* () {
+        const importer = new ImportDictionary_1.ImportDictionary(`${props.current}/${getFunctionName(route)}.ts`);
+        if (project.config.clone !== true)
+            importer.declarations(route.imports);
+        importer.internal({
+            file: props.api,
+            declaration: false,
+            type: "default",
+            name: "api",
+        });
+        const functor = generateFunctor(project)(importer)(route);
+        yield FilePrinter_1.FilePrinter.write({
+            location: importer.file,
+            statements: [
+                ...importer.toStatements(props.current),
+                FilePrinter_1.FilePrinter.enter(),
+                functor,
+            ],
+        });
+    });
+    const generateFunctor = (project) => (importer) => (route) => typescript_1.default.factory.createVariableStatement([typescript_1.default.factory.createModifier(typescript_1.default.SyntaxKind.ExportKeyword)], typescript_1.default.factory.createVariableDeclarationList([
+        typescript_1.default.factory.createVariableDeclaration(typescript_1.default.factory.createIdentifier(getFunctionName(route)), undefined, undefined, generateArrow(project)(importer)(route)),
+    ], typescript_1.default.NodeFlags.Const));
+    const generateArrow = (project) => (importer) => (route) => {
+        const random = IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.typia(importer)), "random");
+        const connection = route.headerObject
+            ? typescript_1.default.factory.createObjectLiteralExpression([
+                typescript_1.default.factory.createSpreadAssignment(typescript_1.default.factory.createIdentifier("connection")),
+                typescript_1.default.factory.createPropertyAssignment("headers", typescript_1.default.factory.createObjectLiteralExpression([
+                    typescript_1.default.factory.createSpreadAssignment(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier("connection"), "headers")),
+                    typescript_1.default.factory.createSpreadAssignment(typescript_1.default.factory.createCallExpression(random, [
+                        project.config.clone === true
+                            ? SdkAliasCollection_1.SdkAliasCollection.from(project)(importer)(route.headerObject.metadata)
+                            : SdkAliasCollection_1.SdkAliasCollection.name(route.headerObject),
+                    ], undefined)),
+                ], true)),
+            ], true)
+            : typescript_1.default.factory.createIdentifier("connection");
+        const entries = SdkHttpParameterProgrammer_1.SdkHttpParameterProgrammer.getEntries({
+            project,
+            importer,
+            route,
+            body: true,
+            e2e: true,
+            prefix: ["api", "functional", ...route.accessor].join(".") + ".",
+        });
+        const fetch = typescript_1.default.factory.createCallExpression(typescript_1.default.factory.createIdentifier(["api", "functional", ...route.accessor].join(".")), undefined, [
+            connection,
+            ...(project.config.keyword === true && entries.length !== 0
+                ? [
+                    LiteralFactory_1.LiteralFactory.write(Object.fromEntries(entries.map((e) => [
+                        e.key,
+                        typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.typia(importer)), "random"), [e.type], undefined),
+                    ]))),
+                ]
+                : entries.map((e) => typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.typia(importer)), "random"), [e.type], undefined))),
+        ]);
+        const assert = typescript_1.default.factory.createCallExpression(IdentifierFactory_1.IdentifierFactory.access(typescript_1.default.factory.createIdentifier(SdkImportWizard_1.SdkImportWizard.typia(importer)), "assert"), undefined, [typescript_1.default.factory.createIdentifier("output")]);
+        return typescript_1.default.factory.createArrowFunction([typescript_1.default.factory.createModifier(typescript_1.default.SyntaxKind.AsyncKeyword)], undefined, [
+            IdentifierFactory_1.IdentifierFactory.parameter("connection", typescript_1.default.factory.createTypeReferenceNode("api.IConnection")),
+        ], undefined, undefined, typescript_1.default.factory.createBlock([
+            typescript_1.default.factory.createVariableStatement([], typescript_1.default.factory.createVariableDeclarationList([
+                typescript_1.default.factory.createVariableDeclaration("output", undefined, project.config.propagate !== true &&
+                    route.success.type.name === "void"
+                    ? undefined
+                    : SdkAliasCollection_1.SdkAliasCollection.response(project)(importer)(route), typescript_1.default.factory.createAwaitExpression(fetch)),
+            ], typescript_1.default.NodeFlags.Const)),
+            typescript_1.default.factory.createExpressionStatement(assert),
+        ]));
+    };
+})(E2eFileProgrammer || (exports.E2eFileProgrammer = E2eFileProgrammer = {}));
+const getFunctionName = (route) => ["test", "api", ...route.accessor].join("_");
+//# sourceMappingURL=E2eFileProgrammer.js.map

@@ -1,0 +1,64 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CloneGenerator = void 0;
+const fs_1 = __importDefault(require("fs"));
+const typescript_1 = __importDefault(require("typescript"));
+const FilePrinter_1 = require("./internal/FilePrinter");
+const ImportDictionary_1 = require("./internal/ImportDictionary");
+const SdkHttpCloneProgrammer_1 = require("./internal/SdkHttpCloneProgrammer");
+const SdkHttpCloneReferencer_1 = require("./internal/SdkHttpCloneReferencer");
+var CloneGenerator;
+(function (CloneGenerator) {
+    CloneGenerator.write = (app) => __awaiter(this, void 0, void 0, function* () {
+        const dict = SdkHttpCloneProgrammer_1.SdkHttpCloneProgrammer.write(app);
+        if (dict.size === 0)
+            return;
+        SdkHttpCloneReferencer_1.SdkHttpCloneReferencer.replace(app);
+        try {
+            yield fs_1.default.promises.mkdir(`${app.project.config.output}/structures`);
+        }
+        catch (_a) { }
+        for (const [key, value] of dict)
+            yield writeDtoFile(app.project)(key, value);
+    });
+    const writeDtoFile = (project) => (key, value) => __awaiter(this, void 0, void 0, function* () {
+        const location = `${project.config.output}/structures/${key}.ts`;
+        const importer = new ImportDictionary_1.ImportDictionary(location);
+        const statements = iterate(importer)(value);
+        if (statements.length === 0)
+            return;
+        yield FilePrinter_1.FilePrinter.write({
+            location,
+            statements: [
+                ...importer.toStatements(`${project.config.output}/structures`),
+                ...(importer.empty() ? [] : [FilePrinter_1.FilePrinter.enter()]),
+                ...statements,
+            ],
+        });
+    });
+    const iterate = (importer) => (modulo) => {
+        const output = [];
+        if (modulo.programmer !== null)
+            output.push(modulo.programmer(importer));
+        if (modulo.children.size) {
+            const internal = [];
+            for (const child of modulo.children.values())
+                internal.push(...iterate(importer)(child));
+            output.push(typescript_1.default.factory.createModuleDeclaration([typescript_1.default.factory.createModifier(typescript_1.default.SyntaxKind.ExportKeyword)], typescript_1.default.factory.createIdentifier(modulo.name), typescript_1.default.factory.createModuleBlock(internal), typescript_1.default.NodeFlags.Namespace));
+        }
+        return output;
+    };
+})(CloneGenerator || (exports.CloneGenerator = CloneGenerator = {}));
+//# sourceMappingURL=CloneGenerator.js.map

@@ -1,0 +1,154 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EncryptedRoute = void 0;
+const AesPkcs5_1 = require("@nestia/fetcher/lib/AesPkcs5");
+const common_1 = require("@nestjs/common");
+const operators_1 = require("rxjs/operators");
+const typia_1 = __importDefault(require("typia"));
+const Singleton_1 = require("../utils/Singleton");
+const TypedRoute_1 = require("./TypedRoute");
+const EncryptedConstant_1 = require("./internal/EncryptedConstant");
+const get_path_and_stringify_1 = require("./internal/get_path_and_stringify");
+const headers_to_object_1 = require("./internal/headers_to_object");
+const route_error_1 = require("./internal/route_error");
+/**
+ * Encrypted router decorator functions.
+ *
+ * `EncryptedRoute` is a module containing router decorator functions which
+ * encrypts response body data through AES-128/256 encryption. Furthermore, they
+ * can boost up JSON string conversion speed about 50x times faster than
+ * `class-transformer`, even type safe through
+ * [typia](https://github.com/samchon/typia).
+ *
+ * For reference, if you try to invalid data that is not following the promised
+ * type `T`, 500 internal server error would be thrown. Also, as
+ * `EncryptedRoute` composes JSON string through `typia.assertStringify<T>()`
+ * function, it is not possible to modify response data through interceptors.
+ *
+ * - AES-128/256
+ * - CBC mode
+ * - PKCS #5 Padding
+ * - Base64 Encoding
+ *
+ * @author Jeongho Nam - https://github.com/samchon
+ */
+var EncryptedRoute;
+(function (EncryptedRoute) {
+    /**
+     * Encrypted router decorator function for the GET method.
+     *
+     * @param paths Path(s) of the HTTP request
+     * @returns Method decorator
+     */
+    EncryptedRoute.Get = Generator("Get");
+    /**
+     * Encrypted router decorator function for the GET method.
+     *
+     * @param paths Path(s) of the HTTP request
+     * @returns Method decorator
+     */
+    EncryptedRoute.Post = Generator("Post");
+    /**
+     * Encrypted router decorator function for the PATCH method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    EncryptedRoute.Patch = Generator("Patch");
+    /**
+     * Encrypted router decorator function for the PUT method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    EncryptedRoute.Put = Generator("Put");
+    /**
+     * Encrypted router decorator function for the DELETE method.
+     *
+     * @param path Path of the HTTP request
+     * @returns Method decorator
+     */
+    EncryptedRoute.Delete = Generator("Delete");
+    /**
+     * Set the logger function for the response validation failure.
+     *
+     * If you've configured the transformation option to `validate.log` in the
+     * `tsconfig.json` file, then the error log information of the response
+     * validation failure would be logged through this function instead of
+     * throwing the 400 bad request error.
+     *
+     * By the way, be careful. If you've configured the response transformation
+     * option to be `validate.log`, client may get wrong response data. Therefore,
+     * this way is not recommended in the common backend server case.
+     *
+     * @default console.log
+     * @param func Logger function
+     */
+    function setValidateErrorLogger(func) {
+        TypedRoute_1.TypedRoute.setValidateErrorLogger(func);
+    }
+    EncryptedRoute.setValidateErrorLogger = setValidateErrorLogger;
+    /** @internal */
+    function Generator(method) {
+        function route(...args) {
+            const [path, stringify] = (0, get_path_and_stringify_1.get_path_and_stringify)(() => TypedRoute_1.TypedRoute.__logger)(`EncryptedRoute.${method}`)(...args);
+            return (0, common_1.applyDecorators)(ROUTERS[method](path), (0, common_1.UseInterceptors)(new EncryptedRouteInterceptor(method, stringify)));
+        }
+        return route;
+    }
+})(EncryptedRoute || (exports.EncryptedRoute = EncryptedRoute = {}));
+for (const method of [
+    typia_1.default.json.isStringify,
+    typia_1.default.json.assertStringify,
+    typia_1.default.json.validateStringify,
+    typia_1.default.json.stringify,
+])
+    for (const [key, value] of Object.entries(method))
+        for (const deco of [
+            EncryptedRoute.Get,
+            EncryptedRoute.Delete,
+            EncryptedRoute.Post,
+            EncryptedRoute.Put,
+            EncryptedRoute.Patch,
+        ])
+            deco[key] = value;
+/** @internal */
+class EncryptedRouteInterceptor {
+    constructor(method, stringify) {
+        this.method = method;
+        this.stringify = stringify;
+    }
+    intercept(context, next) {
+        const http = context.switchToHttp();
+        return next.handle().pipe((0, operators_1.map)((value) => {
+            const param = Reflect.getMetadata(EncryptedConstant_1.ENCRYPTION_METADATA_KEY, context.getClass());
+            if (!param)
+                return Error(`Error on EncryptedRoute.${this.method}(): no password found.`);
+            const request = http.getRequest();
+            const headers = new Singleton_1.Singleton(() => (0, headers_to_object_1.headers_to_object)(request.headers));
+            const body = this.stringify(value, request.method, request.url);
+            const password = typeof param === "function"
+                ? param({
+                    headers: headers.get(),
+                    body,
+                    direction: "encode",
+                })
+                : param;
+            if (body === undefined)
+                return body;
+            return AesPkcs5_1.AesPkcs5.encrypt(body, password.key, password.iv);
+        }), (0, operators_1.catchError)((err) => (0, route_error_1.route_error)(http.getRequest(), err)));
+    }
+}
+/** @internal */
+const ROUTERS = {
+    Get: common_1.Get,
+    Post: common_1.Post,
+    Put: common_1.Put,
+    Patch: common_1.Patch,
+    Delete: common_1.Delete,
+};
+//# sourceMappingURL=EncryptedRoute.js.map

@@ -1,0 +1,21 @@
+import ts from "typescript";
+import { IReflectImport } from "../structures/IReflectImport";
+import { IReflectType } from "../structures/IReflectType";
+export declare namespace DtoAnalyzer {
+    interface INodeProps {
+        checker: ts.TypeChecker;
+        imports: IReflectImport[];
+        typeNode: ts.TypeNode;
+    }
+    interface ITypeProps {
+        checker: ts.TypeChecker;
+        imports: IReflectImport[];
+        type: ts.Type;
+    }
+    interface IOutput {
+        imports: IReflectImport[];
+        type: IReflectType;
+    }
+    const analyzeNode: (props: INodeProps) => IOutput | null;
+    const analyzeType: (props: ITypeProps) => IOutput | null;
+}

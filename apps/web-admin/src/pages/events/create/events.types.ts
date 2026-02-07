@@ -152,4 +152,6 @@ export interface HistoricalEvent {
   }
   parentEventId?: string
   sectionTitles?: string[] // 작성된 섹션 제목 리스트
+  relatedCountries?: Array<{ id: string; name: string; flagEmoji?: string }> // 관련 현대 국가
+  relatedHistoricalCountries?: Array<{ id: string; name: string }> // 관련 역사적 국가
 }

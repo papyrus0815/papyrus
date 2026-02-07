@@ -1,0 +1,220 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ReflectHttpOperationParameterAnalyzer = void 0;
+const constants_1 = require("@nestjs/common/constants");
+const route_paramtypes_enum_1 = require("@nestjs/common/enums/route-paramtypes.enum");
+const JsonMetadataFactory_1 = require("typia/lib/factories/JsonMetadataFactory");
+const HttpFormDataProgrammer_1 = require("typia/lib/programmers/http/HttpFormDataProgrammer");
+const HttpHeadersProgrammer_1 = require("typia/lib/programmers/http/HttpHeadersProgrammer");
+const HttpParameterProgrammer_1 = require("typia/lib/programmers/http/HttpParameterProgrammer");
+const HttpQueryProgrammer_1 = require("typia/lib/programmers/http/HttpQueryProgrammer");
+const TextPlainValidator_1 = require("../transformers/TextPlainValidator");
+const HttpHeadersValidator_1 = require("../validators/HttpHeadersValidator");
+const HttpQueryValidator_1 = require("../validators/HttpQueryValidator");
+var ReflectHttpOperationParameterAnalyzer;
+(function (ReflectHttpOperationParameterAnalyzer) {
+    ReflectHttpOperationParameterAnalyzer.analyze = (ctx) => {
+        const preconfigured = analyzePreconfigured(ctx);
+        const errors = [];
+        //----
+        // FIND CONTRADICTIONS
+        //----
+        // GET AND HEAD METHOD
+        const contradictErrors = [];
+        const contradict = (message) => {
+            contradictErrors.push(message);
+        };
+        if ((ctx.httpMethod === "GET" || ctx.httpMethod === "HEAD") &&
+            preconfigured.some((x) => x.category === "body"))
+            contradict(`@Body() is not allowed in the ${ctx.httpMethod} method.`);
+        // FIND DUPLICATED BODY
+        if (preconfigured.filter((x) => x.category === "body" && x.field === undefined).length > 1)
+            contradict(`Duplicated @Body() is not allowed.`);
+        if (preconfigured.filter((x) => x.category === "query" && x.field === undefined).length > 1)
+            contradict(`Duplicated @Query() without field name is not allowed.`);
+        if (preconfigured.filter((x) => x.category === "headers" && x.field === undefined).length > 1)
+            contradict(`Duplicated @Headers() without field name is not allowed.`);
+        // FIND DUPLICATED FIELDS
+        if (isUnique(preconfigured
+            .filter((x) => x.category === "param")
+            .map((x) => x.field)
+            .filter((field) => field !== undefined)) === false)
+            contradict(`Duplicated field names of path are not allowed.`);
+        if (isUnique(preconfigured
+            .filter((x) => x.category === "query")
+            .map((x) => x.field)
+            .filter((field) => field !== undefined)) === false)
+            contradict(`Duplicated field names of query are not allowed.`);
+        if (isUnique(preconfigured
+            .filter((x) => x.category === "headers")
+            .map((x) => x.field)
+            .filter((field) => field !== undefined)) === false)
+            contradict(`Duplicated field names of headers are not allowed.`);
+        if (contradictErrors.length)
+            errors.push({
+                file: ctx.controller.file,
+                class: ctx.controller.class.name,
+                function: ctx.functionName,
+                from: "",
+                contents: contradictErrors,
+            });
+        //----
+        // COMPOSE PARAMETERS
+        //----
+        const parameters = preconfigured
+            .map((p) => {
+            var _a, _b, _c;
+            // METADATA INFO
+            const pErrorContents = [];
+            const matched = ctx.metadata.parameters.find((x) => x.index === p.index);
+            const report = () => {
+                errors.push({
+                    file: ctx.controller.file,
+                    class: ctx.controller.class.name,
+                    function: ctx.functionName,
+                    from: `parameter ${matched ? JSON.stringify(matched.name) : `of ${p.index} th`}`,
+                    contents: pErrorContents,
+                });
+                return null;
+            };
+            // VALIDATE TYPE
+            if (matched === undefined)
+                pErrorContents.push(`Unable to find parameter type.`);
+            else if (matched.type === null)
+                pErrorContents.push(`Failed to get the type info.`);
+            // CONSIDER KIND
+            const schema = (() => {
+                if (matched === undefined)
+                    return null;
+                const result = p.category === "body" &&
+                    (p.contentType === "application/json" || p.encrypted === true)
+                    ? matched.primitive
+                    : matched.resolved;
+                return result.success ? result.data : null;
+            })();
+            if (p.category === "body" && p.field !== undefined)
+                pErrorContents.push(`@Body() must not have a field name.`);
+            else if (p.category === "param" && p.field === undefined)
+                pErrorContents.push(`@Param() must have a field name.`);
+            if (pErrorContents.length)
+                return report();
+            else if (matched === undefined ||
+                matched.type === null ||
+                schema === null)
+                return null; // unreachable
+            const example = ((_a = Reflect.getMetadata("nestia/SwaggerExample/Parameters", ctx.controller.class.prototype, ctx.functionName)) !== null && _a !== void 0 ? _a : []).find((x) => x.index === matched.index);
+            // COMPOSITION
+            if (p.category === "param")
+                return Object.assign({ category: p.category, index: p.index, field: p.field, name: matched.name, type: matched.type, validate: HttpParameterProgrammer_1.HttpParameterProgrammer.validate, description: matched.description, jsDocTags: matched.jsDocTags, example: example === null || example === void 0 ? void 0 : example.example, examples: example === null || example === void 0 ? void 0 : example.examples }, schema);
+            else if (p.category === "query")
+                return Object.assign({ category: p.category, index: p.index, field: (_b = p.field) !== null && _b !== void 0 ? _b : null, name: matched.name, type: matched.type, validate: p.field
+                        ? HttpQueryValidator_1.HttpQueryValidator.validate
+                        : HttpQueryProgrammer_1.HttpQueryProgrammer.validate, description: matched.description, jsDocTags: matched.jsDocTags, example: example === null || example === void 0 ? void 0 : example.example, examples: example === null || example === void 0 ? void 0 : example.examples }, schema);
+            else if (p.category === "headers")
+                return Object.assign({ category: p.category, index: p.index, field: (_c = p.field) !== null && _c !== void 0 ? _c : null, name: matched.name, type: matched.type, validate: p.field
+                        ? HttpHeadersValidator_1.HttpHeadersValidator.validate
+                        : HttpHeadersProgrammer_1.HttpHeadersProgrammer.validate, description: matched.description, jsDocTags: matched.jsDocTags, example: example === null || example === void 0 ? void 0 : example.example, examples: example === null || example === void 0 ? void 0 : example.examples }, schema);
+            else if (p.category === "body")
+                return Object.assign({ category: p.category, index: p.index, encrypted: !!p.encrypted, contentType: p.contentType, name: matched.name, type: matched.type, validate: p.contentType === "application/json" || p.encrypted === true
+                        ? JsonMetadataFactory_1.JsonMetadataFactory.validate
+                        : p.contentType === "application/x-www-form-urlencoded"
+                            ? HttpQueryProgrammer_1.HttpQueryProgrammer.validate
+                            : p.contentType === "multipart/form-data"
+                                ? HttpFormDataProgrammer_1.HttpFormDataProgrammer.validate
+                                : TextPlainValidator_1.TextPlainValidator.validate, description: matched.description, jsDocTags: matched.jsDocTags, example: example === null || example === void 0 ? void 0 : example.example, examples: example === null || example === void 0 ? void 0 : example.examples }, schema);
+            else {
+                pErrorContents.push(`Unknown kind of the parameter.`);
+                return report();
+            }
+        })
+            .filter((x) => x !== null);
+        if (errors.length)
+            ctx.errors.push(...errors);
+        return parameters;
+    };
+    const analyzePreconfigured = (props) => {
+        const dict = Reflect.getMetadata(constants_1.ROUTE_ARGS_METADATA, props.controller.class, props.functionName);
+        if (dict === undefined)
+            return [];
+        return Object.entries(dict)
+            .map(([key, param]) => analyzeHttpParameter(key, param))
+            .filter((x) => x !== null)
+            .sort((x, y) => x.index - y.index);
+    };
+    const analyzeHttpParameter = (key, param) => {
+        const symbol = key.split(":")[0];
+        if (symbol.indexOf("__custom") !== -1)
+            return analyzeCustomParameter(param);
+        const category = getNestParamType(Number(symbol[0]));
+        if (category === null)
+            return null;
+        if (category === "body")
+            return {
+                category: "body",
+                index: param.index,
+                field: param.data,
+                contentType: "application/json",
+            };
+        else
+            return {
+                category,
+                index: param.index,
+                field: param.data,
+            };
+    };
+    const analyzeCustomParameter = (param) => {
+        if (param.factory === undefined)
+            return null;
+        else if (param.factory.name === "EncryptedBody" ||
+            param.factory.name === "PlainBody" ||
+            param.factory.name === "TypedQueryBody" ||
+            param.factory.name === "TypedBody" ||
+            param.factory.name === "TypedFormDataBody")
+            return {
+                category: "body",
+                index: param.index,
+                encrypted: param.factory.name === "EncryptedBody",
+                contentType: param.factory.name === "PlainBody" ||
+                    param.factory.name === "EncryptedBody"
+                    ? "text/plain"
+                    : param.factory.name === "TypedQueryBody"
+                        ? "application/x-www-form-urlencoded"
+                        : param.factory.name === "TypedFormDataBody"
+                            ? "multipart/form-data"
+                            : "application/json",
+            };
+        else if (param.factory.name === "TypedHeaders")
+            return {
+                category: "headers",
+                index: param.index,
+                field: param.data,
+            };
+        else if (param.factory.name === "TypedParam")
+            return {
+                category: "param",
+                index: param.index,
+                field: param.data,
+            };
+        else if (param.factory.name === "TypedQuery")
+            return {
+                category: "query",
+                index: param.index,
+                field: undefined,
+            };
+        else
+            return null;
+    };
+    const isUnique = (values) => new Set(values).size === values.length;
+})(ReflectHttpOperationParameterAnalyzer || (exports.ReflectHttpOperationParameterAnalyzer = ReflectHttpOperationParameterAnalyzer = {}));
+const getNestParamType = (value) => {
+    if (value === route_paramtypes_enum_1.RouteParamtypes.BODY)
+        return "body";
+    else if (value === route_paramtypes_enum_1.RouteParamtypes.HEADERS)
+        return "headers";
+    else if (value === route_paramtypes_enum_1.RouteParamtypes.QUERY)
+        return "query";
+    else if (value === route_paramtypes_enum_1.RouteParamtypes.PARAM)
+        return "param";
+    return null;
+};
+//# sourceMappingURL=ReflectHttpOperationParameterAnalyzer.js.map

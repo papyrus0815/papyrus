@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.IReflectOperationError = void 0;
+var IReflectOperationError;
+(function (IReflectOperationError) {
+    class Key {
+        constructor(error) {
+            this.error = error;
+        }
+        less(obj) {
+            var _a, _b, _c, _d;
+            if (this.error.file !== obj.error.file)
+                return this.error.file < obj.error.file;
+            else if (this.error.class !== obj.error.class)
+                return this.error.class < obj.error.class;
+            else if (this.error.function !== obj.error.function)
+                return ((_a = this.error.function) !== null && _a !== void 0 ? _a : "") < ((_b = obj.error.function) !== null && _b !== void 0 ? _b : "");
+            return ((_c = this.error.from) !== null && _c !== void 0 ? _c : "") < ((_d = obj.error.from) !== null && _d !== void 0 ? _d : "");
+        }
+    }
+    IReflectOperationError.Key = Key;
+})(IReflectOperationError || (exports.IReflectOperationError = IReflectOperationError = {}));
+//# sourceMappingURL=IReflectOperationError.js.map

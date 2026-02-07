@@ -1,0 +1,12 @@
+import { OpenApi } from "@samchon/openapi";
+import { Metadata } from "typia/lib/schemas/metadata/Metadata";
+import { INestiaConfig } from "../../INestiaConfig";
+import { ITypedHttpRoute } from "../../structures/ITypedHttpRoute";
+export declare namespace SwaggerOperationComposer {
+    const compose: (props: {
+        config: Omit<INestiaConfig.ISwaggerConfig, "output">;
+        document: OpenApi.IDocument;
+        schema: (metadata: Metadata) => OpenApi.IJsonSchema | undefined;
+        route: ITypedHttpRoute;
+    }) => OpenApi.IOperation;
+}

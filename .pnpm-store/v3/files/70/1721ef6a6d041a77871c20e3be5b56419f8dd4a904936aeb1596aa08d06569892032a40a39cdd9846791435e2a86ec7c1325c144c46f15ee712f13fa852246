@@ -1,0 +1,7 @@
+import { VERSION_NEUTRAL } from "@nestjs/common";
+export declare namespace ReflectMetadataAnalyzer {
+    const paths: (target: Function) => string[];
+    const extensions: (value: any) => Record<string, any>;
+    const securities: (value: any) => Record<string, string[]>[];
+    const versions: (target: any) => Array<string | typeof VERSION_NEUTRAL> | undefined;
+}

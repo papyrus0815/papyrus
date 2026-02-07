@@ -1,0 +1,7 @@
+import { INestApplication } from "@nestjs/common";
+import { INestiaConfig } from "../INestiaConfig";
+import { INestiaSdkInput } from "../structures/INestiaSdkInput";
+export declare namespace ConfigAnalyzer {
+    const input: (config: INestiaConfig) => Promise<INestiaSdkInput>;
+    const application: (app: INestApplication) => Promise<INestiaSdkInput>;
+}

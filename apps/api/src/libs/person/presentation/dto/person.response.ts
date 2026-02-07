@@ -18,6 +18,11 @@ export interface PersonResponseDto {
   gender: string | null
   biography: string | null
   profileImageUrl: string | null
+  // 왕/군주 관련 필드
+  regnalName: string | null
+  templeName: string | null
+  posthumousName: string | null
+  // 관계
   dynastyId: string | null
   religionId: string | null
   denominationId: string | null

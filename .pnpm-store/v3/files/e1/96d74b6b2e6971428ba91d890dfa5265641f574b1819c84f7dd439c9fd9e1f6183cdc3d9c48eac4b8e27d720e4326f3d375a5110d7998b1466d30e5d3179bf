@@ -1,0 +1,61 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AccessorAnalyzer = void 0;
+const Escaper_1 = require("typia/lib/utils/Escaper");
+var AccessorAnalyzer;
+(function (AccessorAnalyzer) {
+    AccessorAnalyzer.analyze = (routes) => {
+        var _b;
+        shrink(routes);
+        variable(routes);
+        shrink(routes);
+        for (const r of routes)
+            r.name = (_b = r.accessor.at(-1)) !== null && _b !== void 0 ? _b : r.name;
+    };
+    const prepare = (routeList) => {
+        const dict = new Map();
+        for (const route of routeList)
+            route.accessor.forEach((_a, i) => {
+                var _b;
+                const key = route.accessor.slice(0, i + 1).join(".");
+                dict.set(key, ((_b = dict.get(key)) !== null && _b !== void 0 ? _b : 0) + 1);
+            });
+        return dict;
+    };
+    const variable = (routeList) => {
+        const dict = prepare(routeList);
+        for (const route of routeList) {
+            const emended = route.accessor.slice();
+            route.accessor.forEach((accessor, i) => {
+                if (Escaper_1.Escaper.variable(accessor))
+                    return;
+                while (true) {
+                    accessor = "_" + accessor;
+                    const partial = [
+                        ...route.accessor.slice(0, i),
+                        accessor,
+                    ].join(".");
+                    if (dict.has(partial) === false) {
+                        emended[i] = accessor;
+                        break;
+                    }
+                }
+            });
+            route.accessor.splice(0, route.accessor.length, ...emended);
+        }
+    };
+    const shrink = (routeList) => {
+        var _b;
+        const dict = prepare(routeList);
+        for (const route of routeList) {
+            if (route.accessor.length < 2 ||
+                route.accessor.at(-1) !== route.accessor.at(-2))
+                continue;
+            const cut = route.accessor.slice(0, -1);
+            if (((_b = dict.get(cut.join("."))) !== null && _b !== void 0 ? _b : 0) > 1)
+                continue;
+            route.accessor = cut;
+        }
+    };
+})(AccessorAnalyzer || (exports.AccessorAnalyzer = AccessorAnalyzer = {}));
+//# sourceMappingURL=AccessorAnalyzer.js.map

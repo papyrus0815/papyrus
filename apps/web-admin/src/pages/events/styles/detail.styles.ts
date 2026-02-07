@@ -8,14 +8,12 @@ import type { HistoricalEventCategory } from '../create/events.types'
 import { CATEGORY_BADGE_COLORS, IMPORTANCE_COLORS } from './theme'
 
 export const DetailPanel = styled.aside`
-  position: sticky;
-  top: calc(var(--header-height) + 4px);
   align-self: flex-start;
-  border: 1px solid rgba(20, 19, 34, 0.08);
-  border-radius: 20px;
+  border: 1.5px solid rgba(20, 19, 34, 0.08);
+  border-radius: 14px;
   background: #ffffff;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  max-height: calc(100vh - var(--header-height) - 28px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  max-height: calc(100vh - var(--header-height) - 60px);
   overflow-y: auto;
   overflow-x: hidden;
 

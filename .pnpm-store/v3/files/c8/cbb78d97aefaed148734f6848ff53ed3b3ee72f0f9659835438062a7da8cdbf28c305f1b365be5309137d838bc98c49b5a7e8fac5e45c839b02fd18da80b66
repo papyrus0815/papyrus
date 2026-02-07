@@ -1,0 +1,4 @@
+import ts from "typescript";
+export declare namespace GenericAnalyzer {
+    function analyze(checker: ts.TypeChecker, classNode: ts.ClassDeclaration): WeakMap<ts.Type, ts.Type>;
+}

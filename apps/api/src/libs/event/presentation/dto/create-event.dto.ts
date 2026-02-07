@@ -111,6 +111,24 @@ export class CreateEventDto {
   relatedEventIds?: string[]
 
   @ApiProperty({
+    description: '관련 현대 국가 ID 목록',
+    required: false,
+    type: 'array',
+    items: { type: 'string' },
+  })
+  @IsOptional()
+  relatedCountryIds?: string[]
+
+  @ApiProperty({
+    description: '관련 역사적 국가 ID 목록',
+    required: false,
+    type: 'array',
+    items: { type: 'string' },
+  })
+  @IsOptional()
+  relatedHistoricalCountryIds?: string[]
+
+  @ApiProperty({
     description: '섹션 기반 내용 (제목과 내용이 포함된 섹션 배열)',
     required: false,
   })
