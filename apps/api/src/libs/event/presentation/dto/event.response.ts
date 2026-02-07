@@ -53,18 +53,59 @@ export class EventResponseDto {
   @ApiProperty({ description: '역사적 국가 ID', required: false })
   historicalCountryId?: string | null
 
-  @ApiProperty({ description: '썸네일 이미지 URL', required: false })
-  thumbnail?: string | null
+  @ApiProperty({
+    description: '사건 섹션 목록',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        content: { type: 'string' },
+        order: { type: 'number' },
+        sectionType: { type: 'string' },
+      },
+    },
+  })
+  eventSections?: Array<{
+    id: string
+    title: string
+    content: string
+    order: number
+    sectionType: string
+  }>
 
-  @ApiProperty({ description: '섹션 기반 컨텐츠', required: false })
-  sections?: any | null
+  @ApiProperty({
+    description: '사건 이미지 목록',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        imageUrl: { type: 'string' },
+        caption: { type: 'string' },
+        source: { type: 'string' },
+        order: { type: 'number' },
+        isPrimary: { type: 'boolean' },
+      },
+    },
+  })
+  eventImages?: Array<{
+    id: string
+    imageUrl: string
+    caption?: string
+    source?: string
+    order: number
+    isPrimary: boolean
+  }>
 
   @ApiProperty({ 
-    description: '섹션 제목 목록 (리스트 미리보기용)', 
-    required: false,
-    type: [String]
+    description: '썸네일 URL (eventImages의 isPrimary=true인 이미지)', 
+    required: false
   })
-  sectionTitles?: string[]
+  thumbnail?: string | null
 
   @ApiProperty({
     description: '관련 현대 국가 ID 목록',

@@ -12,27 +12,32 @@ export const eventPageRoute: RouteObject = {
     {
       index: true,
       lazy: async () => {
-        const { EventsCatalogPageRefactored } = await import(
-          './list/events.page.ui.refactored'
-        )
+        const { EventsCatalogPageRefactored } =
+          await import('./list/events.page.ui.refactored')
         return { Component: EventsCatalogPageRefactored }
       },
     },
     {
       path: 'create',
       lazy: async () => {
-        const { default: EventCreatePage } = await import(
-          './create/event-create.page.refactored'
-        )
+        const { default: EventCreatePage } =
+          await import('./create/event-create.page.refactored')
+        return { Component: EventCreatePage }
+      },
+    },
+    {
+      path: ':eventId/edit',
+      lazy: async () => {
+        const { default: EventCreatePage } =
+          await import('./create/event-create.page.refactored')
         return { Component: EventCreatePage }
       },
     },
     {
       path: ':eventId',
       lazy: async () => {
-        const { default: EventDetailPage } = await import(
-          './detail/event-detail.page'
-        )
+        const { default: EventDetailPage } =
+          await import('./detail/event-detail.page')
         return { Component: EventDetailPage }
       },
     },

@@ -70,25 +70,27 @@ export class EventService {
       endDate?: string
       description?: string
       location?: string
-      thumbnail?: string
+      images?: Array<{ imageUrl: string; isPrimary?: boolean }>
     }>
     },
     relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
     relatedEventIds?: string[],
     relatedCountryIds?: string[],
     relatedHistoricalCountryIds?: string[],
-    sections?: Array<{
-      id: string
+    eventSections?: Array<{
       title: string
       content: string
-      mentions: Array<{
-        type: 'person' | 'event'
-        id: string
-        name: string
-        startIndex: number
-        endIndex: number
-      }>
+      order?: number
+      sectionType?: string
     }>,
+    eventImages?: Array<{
+      imageUrl: string
+      caption?: string
+      source?: string
+      order?: number
+      isPrimary?: boolean
+    }>,
+    childEventIds?: string[], // 기존 사건을 하위로 연결
   ): Promise<Event> {
     // 중복 체크
     const existing = await this.events.findByTitle(data.title)
@@ -110,50 +112,46 @@ export class EventService {
       }
     }
 
-    // 섹션 데이터를 background와 aftermath로 변환
-    let backgroundData = data.background
-    let aftermathData = data.aftermath
-
-    if (sections && sections.length > 0) {
-      // 첫 번째 섹션을 background로
-      backgroundData = sections[0]
-        ? `## ${sections[0].title}\n\n${sections[0].content}`
-        : data.background
-
-      // 나머지 섹션들을 aftermath로
-      if (sections.length > 1) {
-        aftermathData = sections
-          .slice(1)
-          .map((section) => `## ${section.title}\n\n${section.content}`)
-          .join('\n\n')
-      }
-    }
-
     // 사건 생성
-    const event = await this.events.create({
-      ...data,
-      background: backgroundData,
-      aftermath: aftermathData,
-    })
+    const event = await this.events.create(data)
 
-    // 섹션에서 멘션된 인물 추출 및 연결
-    const allMentionedPersons = new Map<string, string>() // personId -> role
-
-    if (sections) {
-      // sections가 {items: [...]} 형태인지 확인
-      const sectionArray = Array.isArray(sections) ? sections : (sections as any).items || []
-      
-      sectionArray.forEach((section: any) => {
-        if (section.mentions && Array.isArray(section.mentions)) {
-          section.mentions.forEach((mention: any) => {
-            if (mention.type === 'person') {
-              // 멘션된 인물의 역할은 섹션 제목이나 내용에서 추출 가능
-              allMentionedPersons.set(mention.id, '')
-            }
-          })
-        }
-      })
+    // EventSection 생성
+    if (eventSections && eventSections.length > 0) {
+      await Promise.all(
+        eventSections.map((section, index) =>
+          this.prisma.eventSection.create({
+            data: {
+              eventId: event.id,
+              title: section.title,
+              content: section.content,
+              order: section.order !== undefined ? section.order : index,
+              sectionType: section.sectionType || 'content',
+            },
+          }),
+        ),
+      )
     }
+
+    // EventImage 생성
+    if (eventImages && eventImages.length > 0) {
+      await Promise.all(
+        eventImages.map((image, index) =>
+          this.prisma.eventImage.create({
+            data: {
+              eventId: event.id,
+              imageUrl: image.imageUrl,
+              caption: image.caption,
+              source: image.source,
+              order: image.order !== undefined ? image.order : index,
+              isPrimary: image.isPrimary !== undefined ? image.isPrimary : index === 0,
+            },
+          }),
+        ),
+      )
+    }
+
+    // 멘션된 인물 추출 (제거 - 복잡도 감소)
+    const allMentionedPersons = new Map<string, string>()
 
     // 관련 인물 연결 (명시적으로 선택한 인물 + 멘션된 인물)
     const allRelatedPersons = new Map<string, { role?: string; note?: string }>()
@@ -239,7 +237,6 @@ export class EventService {
             // updatedAt: new Date(), // Prisma가 자동 관리
             background: null,
             aftermath: null,
-            thumbnail: childData.thumbnail || null,
             cityId: null,
             administrativeDivisionId: null,
             historicalCountryId: null,
@@ -251,6 +248,22 @@ export class EventService {
           // 하위 사건 생성 실패해도 상위 사건은 유지
         }
       }
+    }
+
+    // 🆕 기존 사건을 하위 사건으로 연결
+    if (childEventIds && childEventIds.length > 0) {
+      console.log(`🔗 기존 사건 ${childEventIds.length}개를 하위 사건으로 연결...`)
+      
+      await Promise.all(
+        childEventIds.map((childId) =>
+          this.prisma.event.update({
+            where: { id: childId },
+            data: { parentEventId: event.id },
+          })
+        )
+      )
+      
+      console.log(`✅ ${childEventIds.length}개 사건이 하위 사건으로 연결됨`)
     }
 
     return event
@@ -269,6 +282,20 @@ export class EventService {
     data: Partial<Omit<Event, 'id'>>,
     relatedCountryIds?: string[],
     relatedHistoricalCountryIds?: string[],
+    eventSections?: Array<{
+      title: string
+      content: string
+      order?: number
+      sectionType?: string
+    }>,
+    eventImages?: Array<{
+      imageUrl: string
+      caption?: string
+      source?: string
+      order?: number
+      isPrimary?: boolean
+    }>,
+    childEventIds?: string[], // 기존 사건을 하위로 연결
   ): Promise<Event> {
     // 존재 여부 확인
     await this.getEventById(id)
@@ -325,6 +352,81 @@ export class EventService {
             }),
           ),
         )
+      }
+    }
+
+    // EventSection 업데이트
+    if (eventSections !== undefined) {
+      // 기존 섹션 삭제
+      await this.prisma.eventSection.deleteMany({
+        where: { eventId: id },
+      })
+
+      // 새로운 섹션 생성
+      if (eventSections.length > 0) {
+        await Promise.all(
+          eventSections.map((section, index) =>
+            this.prisma.eventSection.create({
+              data: {
+                eventId: id,
+                title: section.title,
+                content: section.content,
+                order: section.order !== undefined ? section.order : index,
+                sectionType: section.sectionType || 'content',
+              },
+            }),
+          ),
+        )
+      }
+    }
+
+    // EventImage 업데이트
+    if (eventImages !== undefined) {
+      // 기존 이미지 삭제
+      await this.prisma.eventImage.deleteMany({
+        where: { eventId: id },
+      })
+
+      // 새로운 이미지 생성
+      if (eventImages.length > 0) {
+        await Promise.all(
+          eventImages.map((image, index) =>
+            this.prisma.eventImage.create({
+              data: {
+                eventId: id,
+                imageUrl: image.imageUrl,
+                caption: image.caption,
+                source: image.source,
+                order: image.order !== undefined ? image.order : index,
+                isPrimary: image.isPrimary !== undefined ? image.isPrimary : index === 0,
+              },
+            }),
+          ),
+        )
+      }
+    }
+
+    // 🆕 기존 사건을 하위 사건으로 연결
+    if (childEventIds !== undefined) {
+      console.log(`🔗 기존 사건 ${childEventIds.length}개를 하위 사건으로 연결...`)
+      
+      // 먼저 기존 하위 사건들의 연결 해제 (선택적)
+      await this.prisma.event.updateMany({
+        where: { parentEventId: id },
+        data: { parentEventId: null },
+      })
+      
+      // 새로운 하위 사건 연결
+      if (childEventIds.length > 0) {
+        await Promise.all(
+          childEventIds.map((childId) =>
+            this.prisma.event.update({
+              where: { id: childId },
+              data: { parentEventId: id },
+            })
+          )
+        )
+        console.log(`✅ ${childEventIds.length}개 사건이 하위 사건으로 연결됨`)
       }
     }
 

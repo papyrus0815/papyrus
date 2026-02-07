@@ -12,8 +12,6 @@ export class Event {
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null
-  thumbnail?: string | null
-  sections?: any | null
   belligerents?: any | null
   casualties?: any | null
   militaryDetails?: any | null
@@ -23,4 +21,3 @@ export class Event {
     Object.assign(this, data)
   }
 }
-

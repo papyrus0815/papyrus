@@ -87,23 +87,23 @@ export const CompactListItem = styled.div<{
     $active ? '4px solid #6366f1' : '1.5px solid rgba(20, 19, 34, 0.08)'};
   padding-left: ${({ $active }) => ($active ? '0' : '0')};
 
-  /* 타임라인 연결선 */
+  /* 타임라인 연결선 - depth에 따라 위치 조정 */
   &::before {
     content: '';
     position: absolute;
-    left: -41px;
+    left: ${({ $depth }) => -41 - $depth * 24}px;
     top: 50%;
-    width: 38px;
+    width: ${({ $depth }) => 38 + $depth * 24}px;
     height: 2px;
     background: rgba(99, 102, 241, 0.25);
     transition: all 0.2s ease;
   }
 
-  /* 타임라인 점 */
+  /* 타임라인 점 - depth에 따라 위치 조정 */
   &::after {
     content: '';
     position: absolute;
-    left: -41px;
+    left: ${({ $depth }) => -41 - $depth * 24}px;
     top: 50%;
     transform: translateY(-50%);
     width: ${({ $active }) => ($active ? '10px' : '8px')};
@@ -123,12 +123,12 @@ export const CompactListItem = styled.div<{
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
 
     &::before {
-      width: 40px;
+      width: ${({ $depth }) => 40 + $depth * 24}px;
     }
 
     &::after {
       background: #6366f1;
-      transform: translate(-50%, -50%) scale(1.15);
+      transform: translateY(-50%) scale(1.15);
     }
   }
 
@@ -428,6 +428,15 @@ export const CollapsedCount = styled.span`
   flex-shrink: 0;
 `
 
+export const SimpleYearLabel = styled.div`
+  margin: 12px 0 8px 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: transparent;
+`
+
 export const CollapsedPlaceholder = styled.div`
   margin: 0 0 16px 0;
   padding: 16px 20px;
@@ -509,29 +518,48 @@ export const EmptyCatalogState = styled.div`
   align-items: center;
   justify-content: center;
   min-height: 420px;
-  padding: 60px 40px;
+  padding: 80px 40px;
   position: relative;
+  margin-left: 40px;
 
+  /* 타임라인 세로선 연장 */
   &::before {
     content: '';
     position: absolute;
-    inset: 0;
-    border: 2px dashed rgba(99, 102, 241, 0.15);
-    border-radius: 16px;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
     background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.02) 0%,
-      rgba(168, 85, 247, 0.02) 100%
+      to bottom,
+      #e2e8f0 0%,
+      #cbd5e1 50%,
+      #e2e8f0 100%
     );
   }
 
+  /* 타임라인 점 */
+  &::after {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #f1f5f9;
+    border: 2px solid #cbd5e1;
+    box-shadow: 0 0 0 4px rgba(226, 232, 240, 0.3);
+  }
+
   @media (max-width: 768px) {
-    padding: 50px 30px;
+    padding: 60px 30px;
     min-height: 360px;
   }
 
   @media (max-width: 480px) {
-    padding: 40px 24px;
+    padding: 50px 24px;
     min-height: 320px;
   }
 `
@@ -539,54 +567,39 @@ export const EmptyCatalogState = styled.div`
 export const EmptyIcon = styled.div`
   position: relative;
   z-index: 1;
-  width: 72px;
-  height: 72px;
-  border-radius: 16px;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.08),
-    rgba(168, 85, 247, 0.06)
-  );
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  margin-bottom: 16px;
 
   svg {
-    color: #6366f1;
-    animation: iconFloat 3s ease-in-out infinite;
-  }
-
-  @keyframes iconFloat {
-    0%,
-    100% {
-      transform: translateY(0px) rotate(0deg);
-    }
-    50% {
-      transform: translateY(-6px) rotate(-5deg);
-    }
+    color: #94a3b8;
   }
 
   @media (max-width: 768px) {
-    width: 72px;
-    height: 72px;
-    margin-bottom: 20px;
+    width: 52px;
+    height: 52px;
+    margin-bottom: 14px;
 
     svg {
-      width: 40px;
-      height: 40px;
+      width: 24px;
+      height: 24px;
     }
   }
 
   @media (max-width: 480px) {
-    width: 64px;
-    height: 64px;
-    margin-bottom: 16px;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
 
     svg {
-      width: 36px;
-      height: 36px;
+      width: 22px;
+      height: 22px;
     }
   }
 `
@@ -604,33 +617,33 @@ export const EmptyContent = styled.div`
 
 export const EmptyTitle = styled.h3`
   margin: 0;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: #475569;
   letter-spacing: -0.01em;
   line-height: 1.4;
 
   @media (max-width: 768px) {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   @media (max-width: 480px) {
-    font-size: 15px;
+    font-size: 14px;
   }
 `
 
 export const EmptyDescription = styled.p`
   margin: 0;
-  font-size: 14px;
-  color: #64748b;
+  font-size: 13px;
+  color: #94a3b8;
   line-height: 1.6;
 
   @media (max-width: 768px) {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   @media (max-width: 480px) {
-    font-size: 13px;
+    font-size: 12px;
   }
 `
 
@@ -645,12 +658,12 @@ export const EmptyActions = styled.div`
 `
 
 export const EmptyResetButton = styled.button`
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  border-radius: 10px;
-  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 16px;
   background: #ffffff;
-  color: #6366f1;
-  font-size: 14px;
+  color: #64748b;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -665,9 +678,8 @@ export const EmptyResetButton = styled.button`
   }
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    background: rgba(99, 102, 241, 0.04);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+    background: #f8fafc;
+    border-color: #cbd5e1;
   }
 
   @media (max-width: 480px) {
@@ -677,19 +689,18 @@ export const EmptyResetButton = styled.button`
 `
 
 export const EmptyCreateButton = styled.button`
-  border: none;
-  border-radius: 10px;
-  padding: 11px 22px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 
   svg {
     width: 14px;
@@ -697,9 +708,8 @@ export const EmptyCreateButton = styled.button`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
-    transform: translateY(-1px);
+    background: #f8fafc;
+    border-color: #cbd5e1;
   }
 
   &:active {
@@ -1299,25 +1309,25 @@ export const CompactListItemInTenure = styled(CompactListItem)`
         ? '#6366f1'
         : 'linear-gradient(180deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.3))'};
 
-  /* 타임라인 연결선 - 8px 더 왼쪽 */
+  /* 타임라인 연결선 - InTenure는 8px 더 밀림 */
   &::before {
     content: '';
     position: absolute;
-    left: -45px;
+    left: ${({ $depth }) => -49 - $depth * 24}px;
     top: 50%;
-    width: 52px;
+    width: ${({ $depth }) => 46 + $depth * 24}px;
     height: 2px;
     background: rgba(99, 102, 241, 0.25);
     transition: all 0.2s ease;
   }
 
-  /* 타임라인 점 - 8px 더 왼쪽 */
+  /* 타임라인 점 - InTenure는 8px 더 밀림 */
   &::after {
     content: '';
     position: absolute;
-    left: -45px;
+    left: ${({ $depth }) => -49 - $depth * 24}px;
     top: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateY(-50%);
     width: ${({ $active }) => ($active ? '10px' : '8px')};
     height: ${({ $active }) => ($active ? '10px' : '8px')};
     background: ${({ $active }) => ($active ? '#6366f1' : '#ffffff')};

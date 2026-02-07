@@ -204,22 +204,32 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
             if (!event) return null
 
-            // 년도 구분선 표시 여부 체크 (depth 0인 최상위 사건만)
+            // 년도 구분선 표시 여부 체크
             const currentYear = new Date(node.period.start).getFullYear()
             const prevEvent = index > 0 ? flattenedHierarchy[index - 1] : null
             const prevYear = prevEvent
               ? new Date(prevEvent.node.period.start).getFullYear()
               : null
+
+            // depth에 관계없이 년도가 바뀌면 구분선 표시
             const showYearDivider =
-              depth === 0 &&
-              (index === 0 || (prevYear !== null && currentYear !== prevYear))
+              index === 0 || (prevYear !== null && currentYear !== prevYear)
 
             // 이 년도가 접혀있는지 확인
             const isYearCollapsed = collapsedYears.has(currentYear)
 
             // 접힌 년도의 사건은 렌더링하지 않음 (년도 구분선만 표시)
-            if (isYearCollapsed && depth === 0) {
-              if (showYearDivider) {
+            // 상위 사건(depth === 0)의 년도가 접혀있으면 하위 사건도 모두 접힘
+            const parentYear =
+              depth > 0 && prevEvent
+                ? new Date(prevEvent.node.period.start).getFullYear()
+                : currentYear
+
+            if (
+              isYearCollapsed ||
+              (depth > 0 && collapsedYears.has(parentYear))
+            ) {
+              if (depth === 0 && showYearDivider) {
                 // 이 년도의 사건 개수 계산
                 const yearEventCount = flattenedHierarchy.filter(
                   (item) =>
@@ -246,7 +256,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           }}
                         />
                         {currentYear}년
-                        <List.CollapsedCount>{yearEventCount}</List.CollapsedCount>
+                        <List.CollapsedCount>
+                          {yearEventCount}
+                        </List.CollapsedCount>
                       </span>
                     </List.YearDivider>
                     <List.CollapsedPlaceholder>
@@ -284,34 +296,47 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               <React.Fragment key={node.id}>
                 {/* 년도 구분선 */}
                 {showYearDivider && (
-                  <List.YearDivider
-                    type="button"
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                      e.preventDefault()
-                      toggleYearCollapse(currentYear)
-                    }}
-                  >
-                    <span>
-                      <FiChevronDown
-                        size={13}
-                        style={{
-                          transform: 'rotate(0deg)',
-                          transition: 'transform 0.3s ease',
+                  <>
+                    {depth === 0 ? (
+                      // 최상위: 메인 년도 뱃지 (접기 기능)
+                      <List.YearDivider
+                        type="button"
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                          e.preventDefault()
+                          toggleYearCollapse(currentYear)
                         }}
-                      />
-                      {currentYear}년
-                      <List.CollapsedCount>
-                        {
-                          flattenedHierarchy.filter(
-                            (item) =>
-                              item.depth === 0 &&
-                              new Date(item.node.period.start).getFullYear() ===
-                                currentYear
-                          ).length
-                        }
-                      </List.CollapsedCount>
-                    </span>
-                  </List.YearDivider>
+                      >
+                        <span>
+                          <FiChevronDown
+                            size={13}
+                            style={{
+                              transform: 'rotate(0deg)',
+                              transition: 'transform 0.3s ease',
+                            }}
+                          />
+                          {currentYear}년
+                          <List.CollapsedCount>
+                            {
+                              flattenedHierarchy.filter(
+                                (item) =>
+                                  item.depth === 0 &&
+                                  new Date(
+                                    item.node.period.start,
+                                  ).getFullYear() === currentYear,
+                              ).length
+                            }
+                          </List.CollapsedCount>
+                        </span>
+                      </List.YearDivider>
+                    ) : (
+                      // 하위 사건: 간단한 년도 표시
+                      <List.SimpleYearLabel
+                        style={{ marginLeft: `${depth * 24}px` }}
+                      >
+                        {currentYear}년
+                      </List.SimpleYearLabel>
+                    )}
+                  </>
                 )}
                 {/* 집권 기간 그룹 헤더 */}
                 {isGroupStart && tenureGroup && (
@@ -349,7 +374,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   onSelect={() => onSelectEvent(node.id)}
                   onToggleExpansion={() => onToggleExpansion(node.id)}
                   onShowSummary={() => onShowSummary(node.id)}
-                  onToggleBookmark={onToggleBookmark ? () => onToggleBookmark(node.id) : undefined}
+                  onToggleBookmark={
+                    onToggleBookmark
+                      ? () => onToggleBookmark(node.id)
+                      : undefined
+                  }
                 />
 
                 {/* 집권 기간 그룹 푸터 */}

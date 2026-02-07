@@ -64,6 +64,10 @@ export const useEventFilters = (
   const normalizedKeyword = trimmedKeyword.toLowerCase()
 
   const filteredEvents = useMemo(() => {
+    console.log(
+      `🔍 필터링 시작: 총 ${events.length}개 사건 (최상위만: ${events.filter((e) => !e.parentEventId).length}개)`,
+    )
+
     // ✅ 부모 이벤트만 필터링 (parentEventId가 없는 것만)
     return events
       .filter((event) => !event.parentEventId)
@@ -133,8 +137,18 @@ export const useEventFilters = (
     })
 
     console.log(
-      '✅ 정렬 완료:',
-      sorted.slice(0, 3).map((e) => ({ title: e.title, date: e.startDate })),
+      `✅ 정렬 완료 (${sortDirection}):`,
+      sorted.slice(0, 3).map((e) => ({
+        title: e.title,
+        date: e.startDate,
+        year: new Date(e.startDate).getFullYear(),
+      })),
+    )
+    console.log(
+      `   첫 번째: ${sorted[0]?.title} (${new Date(sorted[0]?.startDate).getFullYear()})`,
+    )
+    console.log(
+      `   마지막: ${sorted[sorted.length - 1]?.title} (${new Date(sorted[sorted.length - 1]?.startDate).getFullYear()})`,
     )
     return sorted
   }, [filteredEvents, sortBy, sortDirection])

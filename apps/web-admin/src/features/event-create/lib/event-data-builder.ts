@@ -282,6 +282,7 @@ export const buildEventSubmitData = (params: {
     location?: string
     thumbnail?: string
   }>
+  childEventIds?: string[] // 기존 사건을 하위 사건으로 연결
 }) => {
   return {
     title: params.title,
@@ -297,7 +298,6 @@ export const buildEventSubmitData = (params: {
     // 🔧 FIX: category는 이미 categoryId (cat-military-001)이므로 직접 전달
     categoryId: params.category || undefined,
     location: params.location.trim() || undefined,
-    thumbnail: params.thumbnail || undefined,
     parentEventId: params.parentEventId || undefined,
     tags: params.tags.length > 0 ? params.tags : undefined,
     relatedCountryIds:
@@ -316,13 +316,29 @@ export const buildEventSubmitData = (params: {
       [...params.relatedEventIds, ...params.mentionedEvents].length > 0
         ? [...params.relatedEventIds, ...params.mentionedEvents]
         : undefined,
-    sections:
+    // ✅ 새 구조: eventSections (배열로 직접 전송)
+    eventSections:
       params.sections.length > 0 &&
       params.sections.some((section) => section.content.trim())
-        ? {
-            items: params.sections,
-          }
+        ? params.sections.map((section, index) => ({
+            title: section.title,
+            content: section.content,
+            order: index,
+            sectionType: 'content',
+          }))
         : undefined,
+    // ✅ 새 구조: eventImages (썸네일을 이미지 배열로 변환)
+    eventImages: params.thumbnail
+      ? [
+          {
+            imageUrl: params.thumbnail,
+            caption: undefined,
+            source: undefined,
+            order: 0,
+            isPrimary: true,
+          },
+        ]
+      : undefined,
     militaryEvent:
       params.militaryEvent &&
       (params.militaryEvent.belligerentSides?.length ||
@@ -342,8 +358,13 @@ export const buildEventSubmitData = (params: {
         ? params.belligerentsGraph
         : undefined,
     warCost: params.warCost || undefined,
-    childEvents: params.childEvents && params.childEvents.length > 0
-      ? params.childEvents
-      : undefined, // 🆕 하위 사건 추가
+    childEvents:
+      params.childEvents && params.childEvents.length > 0
+        ? params.childEvents
+        : undefined, // 🆕 하위 사건 빠른 추가
+    childEventIds:
+      params.childEventIds && params.childEventIds.length > 0
+        ? params.childEventIds
+        : undefined, // 🆕 기존 사건을 하위 사건으로 연결
   }
 }

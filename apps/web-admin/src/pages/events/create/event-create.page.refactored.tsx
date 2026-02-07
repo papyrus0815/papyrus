@@ -23,7 +23,7 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { useFormEntities } from '@/entities/event-form/model'
 import {
@@ -78,11 +78,10 @@ import {
 
 export const EventCreatePageRefactored: React.FC = () => {
   const navigate = useNavigate()
-  const routerLocation = useLocation()
+  const { eventId: editEventId } = useParams<{ eventId?: string }>()
   const playClickSound = useClickSound()
 
   // 편집 모드 감지
-  const editEventId = routerLocation.state?.editEventId as string | undefined
   const isEditMode = Boolean(editEventId)
 
   // ===== Entity: Form Entities Data =====
@@ -214,32 +213,22 @@ export const EventCreatePageRefactored: React.FC = () => {
     Array<{ relation: EventBelligerentsGraph; sourceName: string }>
   >([])
 
-  // 🆕 하위 사건 빠른 등록
-  const [childEvents, setChildEvents] = useState<
-    Array<{
-      title: string
-      startDate?: string
-      endDate?: string
-      description?: string
-      location?: string
-      thumbnail?: string
-    }>
-  >([])
-  const [showChildEventForm, setShowChildEventForm] = useState(false)
-  const [newChildEvent, setNewChildEvent] = useState({
-    title: '',
-    startDate: '',
-    endDate: '',
-    description: '',
-    location: '',
-    thumbnail: '',
-  })
-  const [showChildStartDatePicker, setShowChildStartDatePicker] =
-    useState(false)
-  const [showChildEndDatePicker, setShowChildEndDatePicker] = useState(false)
-  const [childThumbnailFile, setChildThumbnailFile] = useState<File | null>(
-    null,
-  )
+  // 🆕 하위 사건 선택 (기존 사건 연결)
+  const [childEventIds, setChildEventIds] = useState<string[]>([])
+  const [childEventSearch, setChildEventSearch] = useState('')
+  const [showChildEventList, setShowChildEventList] = useState(false)
+  const childEventSelectorRef = React.useRef<HTMLDivElement>(null)
+  const [loadedChildEvents, setLoadedChildEvents] = useState<any[]>([])
+
+  // 빠른 등록 (deprecated - 사용 안 함)
+  const childEvents: Array<{
+    title: string
+    startDate?: string
+    endDate?: string
+    description?: string
+    location?: string
+    thumbnail?: string
+  }> = []
 
   // 멘션 시스템
   const [mentionState, setMentionState] = useState<{
@@ -262,6 +251,9 @@ export const EventCreatePageRefactored: React.FC = () => {
         const event = await getEventById(editEventId)
 
         console.log('📥 사건 로드:', event)
+        console.log('📚 eventSections:', event.eventSections)
+        console.log('🖼️ eventImages:', event.eventImages)
+        console.log('📜 sections (레거시):', event.sections)
 
         // 기본 정보 설정
         setTitle(event.title)
@@ -308,9 +300,18 @@ export const EventCreatePageRefactored: React.FC = () => {
         }
 
         setLocation(event.location || '')
-        setThumbnail(event.thumbnail || '')
 
-        console.log('🖼️ 썸네일 로드:', event.thumbnail)
+        // 썸네일 로드 (새 구조 우선, 레거시 fallback)
+        if (event.eventImages && event.eventImages.length > 0) {
+          const primaryImage = event.eventImages.find((img) => img.isPrimary)
+          setThumbnail(
+            primaryImage?.imageUrl || event.eventImages[0].imageUrl || '',
+          )
+          console.log('🖼️ eventImages에서 썸네일 로드:', primaryImage?.imageUrl)
+        } else if (event.thumbnail) {
+          setThumbnail(event.thumbnail)
+          console.log('🖼️ thumbnail (레거시) 로드:', event.thumbnail)
+        }
 
         // 🔧 FIX: 카테고리는 ID를 저장해야 함
         if (event.categoryId) {
@@ -335,7 +336,19 @@ export const EventCreatePageRefactored: React.FC = () => {
           )
         }
 
-        if (event.sections) {
+        // 섹션 로드 (새 구조 우선, 레거시 fallback)
+        if (event.eventSections && event.eventSections.length > 0) {
+          // 새 구조: EventSection[] → EventSection[]
+          const loadedSections = event.eventSections.map((section, index) => ({
+            id: section.id,
+            title: section.title,
+            content: section.content,
+            mentions: [], // 멘션은 별도 로직으로 추출 가능
+          }))
+          setSections(loadedSections)
+          console.log('✅ eventSections 로드:', loadedSections.length)
+        } else if (event.sections) {
+          // 레거시 구조
           if (
             typeof event.sections === 'object' &&
             !Array.isArray(event.sections)
@@ -346,6 +359,7 @@ export const EventCreatePageRefactored: React.FC = () => {
           } else if (Array.isArray(event.sections)) {
             setSections(event.sections)
           }
+          console.log('✅ sections (레거시) 로드')
         }
 
         // 군사 정보 설정 (간소화)
@@ -374,13 +388,20 @@ export const EventCreatePageRefactored: React.FC = () => {
   useEffect(() => {
     if (isEditMode && editEventId) {
       getEventsByParentId(editEventId)
-        .then((childEvents) => {
-          // 하위 사건 관계 처리 로직 (기존과 동일)
-          setChildEventsRelations([])
+        .then((childEventsData) => {
+          // 하위 사건 데이터와 ID 목록 설정
+          setLoadedChildEvents(childEventsData)
+          const childIds = childEventsData.map((child) => child.id)
+          setChildEventIds(childIds)
+          console.log(
+            `✅ ${childEventsData.length}개 하위 사건 로드됨:`,
+            childEventsData.map((c) => c.title),
+          )
         })
         .catch((error) => {
           console.error('하위 사건 관계 로드 실패:', error)
-          setChildEventsRelations([])
+          setLoadedChildEvents([])
+          setChildEventIds([])
         })
     }
   }, [isEditMode, editEventId])
@@ -427,7 +448,8 @@ export const EventCreatePageRefactored: React.FC = () => {
         warCost,
         mentionedPersons,
         mentionedEvents,
-        childEvents, // 🆕 하위 사건 추가
+        childEvents, // 🆕 하위 사건 빠른 추가 (deprecated)
+        childEventIds, // 🆕 하위 사건 연결 (기존 사건)
       })
 
       console.log('🔍 [디버깅] category 값:', category)
@@ -532,7 +554,7 @@ export const EventCreatePageRefactored: React.FC = () => {
             />
           )}
 
-          {/* 🆕 하위 사건 빠른 추가 */}
+          {/* 🆕 하위 사건 선택 (기존 사건 연결) */}
           {currentStep === FORM_STEPS.RELATIONSHIPS && (
             <S.FormSection
               as={motion.div}
@@ -543,316 +565,121 @@ export const EventCreatePageRefactored: React.FC = () => {
               <S.FormRow>
                 <S.FormLabel>하위 사건</S.FormLabel>
                 <S.FormField>
-                  {childEvents.length > 0 && (
-                    <S.ChildEventsList>
-                      {childEvents.map((child, idx) => (
-                        <S.ChildEventItem key={idx}>
-                          {child.thumbnail &&
-                            typeof child.thumbnail === 'string' &&
-                            child.thumbnail.trim() && (
-                              <S.ChildEventThumbnail
-                                src={getImageUrl(child.thumbnail)}
-                                alt={child.title}
-                              />
-                            )}
-                          <S.ChildEventInfo>
-                            <strong>{child.title}</strong>
-                            <div>
-                              {child.startDate && (
-                                <span>{child.startDate}</span>
-                              )}
-                              {child.startDate && child.endDate && (
-                                <span> ~ </span>
-                              )}
-                              {child.endDate && <span>{child.endDate}</span>}
-                              {child.location && (
-                                <span> · {child.location}</span>
-                              )}
-                            </div>
-                          </S.ChildEventInfo>
-                          <S.RemoveChildButton
-                            type="button"
-                            onClick={() => {
-                              playClickSound()
-                              setChildEvents(
-                                childEvents.filter((_, i) => i !== idx),
-                              )
-                            }}
-                          >
-                            <FiX size={14} />
-                          </S.RemoveChildButton>
-                        </S.ChildEventItem>
-                      ))}
-                    </S.ChildEventsList>
-                  )}
-
-                  {showChildEventForm ? (
-                    <S.ChildEventFormCard>
-                      {/* 사건명 */}
-                      <S.FormRow>
-                        <S.FormLabel>
-                          사건명 <S.Required>*</S.Required>
-                        </S.FormLabel>
-                        <S.Input
-                          type="text"
-                          placeholder="하위 사건명을 입력하세요"
-                          value={newChildEvent.title}
-                          onChange={(e) =>
-                            setNewChildEvent({
-                              ...newChildEvent,
-                              title: e.target.value,
-                            })
-                          }
+                  <S.ParentEventSelector ref={childEventSelectorRef}>
+                    <S.ParentEventInputWrapper>
+                      <FiSearch size={16} />
+                      <S.ParentEventInput
+                        type="text"
+                        placeholder="하위 사건으로 추가할 사건 검색..."
+                        value={childEventSearch}
+                        onChange={(e) => {
+                          setChildEventSearch(e.target.value)
+                          setShowChildEventList(true)
+                        }}
+                        onFocus={() => setShowChildEventList(true)}
+                      />
+                      <S.ToggleButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setShowChildEventList(!showChildEventList)
+                        }}
+                      >
+                        <FiChevronDown
+                          size={16}
+                          style={{
+                            transform: showChildEventList
+                              ? 'rotate(180deg)'
+                              : 'rotate(0deg)',
+                            transition: 'transform 0.2s',
+                          }}
                         />
-                      </S.FormRow>
-
-                      {/* 기간 */}
-                      <S.FormRow>
-                        <S.FormLabel>기간</S.FormLabel>
-                        <S.DateRangeRow>
-                          <S.DateRangeColumn>
-                            <S.DateRangeLabel>시작일</S.DateRangeLabel>
-                            <S.DateInputWrapper>
-                              <S.DateInputDisplay
+                      </S.ToggleButton>
+                    </S.ParentEventInputWrapper>
+                    {showChildEventList && (
+                      <S.ParentEventList>
+                        {availableEvents
+                          .filter((event) =>
+                            event.title
+                              .toLowerCase()
+                              .includes(childEventSearch.toLowerCase()),
+                          )
+                          .filter((event) => event.id !== editEventId)
+                          .filter((event) => !event.parentEventId)
+                          .map((event) => {
+                            const isSelected = childEventIds.includes(event.id)
+                            return (
+                              <S.ParentEventItem
+                                key={event.id}
+                                $selected={isSelected}
                                 onClick={() => {
                                   playClickSound()
-                                  setShowChildStartDatePicker(true)
+                                  if (isSelected) {
+                                    setChildEventIds((prev) =>
+                                      prev.filter((id) => id !== event.id),
+                                    )
+                                  } else {
+                                    setChildEventIds((prev) => [
+                                      ...prev,
+                                      event.id,
+                                    ])
+                                  }
                                 }}
                               >
-                                {newChildEvent.startDate || '날짜 선택'}
-                              </S.DateInputDisplay>
-                            </S.DateInputWrapper>
-                          </S.DateRangeColumn>
-                          <S.DateRangeColumn>
-                            <S.DateRangeLabel>종료일</S.DateRangeLabel>
-                            <S.DateInputWrapper>
-                              <S.DateInputDisplay
-                                onClick={() => {
-                                  playClickSound()
-                                  setShowChildEndDatePicker(true)
-                                }}
-                              >
-                                {newChildEvent.endDate || '날짜 선택'}
-                              </S.DateInputDisplay>
-                            </S.DateInputWrapper>
-                          </S.DateRangeColumn>
-                        </S.DateRangeRow>
-                      </S.FormRow>
-
-                      {/* 위치 */}
-                      <S.FormRow>
-                        <S.FormLabel>위치</S.FormLabel>
-                        <S.Input
-                          type="text"
-                          placeholder="발생 위치를 입력하세요"
-                          value={newChildEvent.location}
-                          onChange={(e) =>
-                            setNewChildEvent({
-                              ...newChildEvent,
-                              location: e.target.value,
-                            })
-                          }
-                        />
-                      </S.FormRow>
-
-                      {/* 썸네일 */}
-                      <S.FormRow>
-                        <S.FormLabel>썸네일 이미지</S.FormLabel>
-                        {newChildEvent.thumbnail &&
-                        typeof newChildEvent.thumbnail === 'string' &&
-                        newChildEvent.thumbnail.trim() ? (
-                          <S.ThumbnailPreview>
-                            <S.ThumbnailImage
-                              src={getImageUrl(newChildEvent.thumbnail)}
-                              alt="썸네일"
-                            />
-                            <S.ThumbnailDeleteButton
+                                {isSelected && <FiCheck size={14} />}
+                                <span>{event.title}</span>
+                                {event.startDate && (
+                                  <S.ParentEventDate>
+                                    {new Date(event.startDate).getFullYear()}
+                                  </S.ParentEventDate>
+                                )}
+                              </S.ParentEventItem>
+                            )
+                          })}
+                      </S.ParentEventList>
+                    )}
+                  </S.ParentEventSelector>
+                  {childEventIds.length > 0 && (
+                    <S.SelectedEventsList>
+                      {childEventIds.map((eventId) => {
+                        // availableEvents와 loadedChildEvents 모두에서 찾기
+                        const event =
+                          availableEvents.find((e) => e.id === eventId) ||
+                          loadedChildEvents.find((e) => e.id === eventId)
+                        return (
+                          <S.SelectedEventInfo key={eventId}>
+                            <FiCheck size={14} />
+                            <span>
+                              {event?.title || `알 수 없음 (${eventId})`}
+                            </span>
+                            <S.ClearButton
                               type="button"
                               onClick={() => {
                                 playClickSound()
-                                setNewChildEvent({
-                                  ...newChildEvent,
-                                  thumbnail: '',
-                                })
-                                setChildThumbnailFile(null)
+                                setChildEventIds((prev) =>
+                                  prev.filter((id) => id !== eventId),
+                                )
                               }}
                             >
-                              <FiX size={14} />
-                            </S.ThumbnailDeleteButton>
-                          </S.ThumbnailPreview>
-                        ) : (
-                          <S.ThumbnailUploadArea>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              style={{ display: 'none' }}
-                              id="child-thumbnail-upload"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0]
-                                if (file) {
-                                  setChildThumbnailFile(file)
-                                  try {
-                                    const uploadResponse =
-                                      await uploadImage(file)
-                                    setNewChildEvent({
-                                      ...newChildEvent,
-                                      thumbnail: uploadResponse.url, // 🔧 FIX: .url 추출
-                                    })
-                                    toast.success('이미지가 업로드되었습니다')
-                                  } catch (error) {
-                                    console.error('이미지 업로드 실패:', error)
-                                    toast.error('이미지 업로드에 실패했습니다')
-                                  }
-                                }
-                              }}
-                            />
-                            <label htmlFor="child-thumbnail-upload">
-                              <S.UploadButton as="span">
-                                <FiImage size={16} />
-                                이미지 선택
-                              </S.UploadButton>
-                            </label>
-                          </S.ThumbnailUploadArea>
-                        )}
-                      </S.FormRow>
-
-                      {/* 버튼 */}
-                      <S.FormRow>
-                        <S.ChildEventFormActions>
-                          <S.ActionButton
-                            type="button"
-                            $variant="secondary"
-                            onClick={() => {
-                              playClickSound()
-                              setShowChildEventForm(false)
-                              setNewChildEvent({
-                                title: '',
-                                startDate: '',
-                                endDate: '',
-                                description: '',
-                                location: '',
-                                thumbnail: '',
-                              })
-                              setChildThumbnailFile(null)
-                            }}
-                          >
-                            <FiX size={14} />
-                            취소
-                          </S.ActionButton>
-                          <S.ActionButton
-                            type="button"
-                            $variant="primary"
-                            onClick={() => {
-                              playClickSound()
-
-                              // 유효성 검사
-                              if (!newChildEvent.title.trim()) {
-                                toast.error('❌ 사건명은 필수 항목입니다')
-                                return
-                              }
-
-                              if (newChildEvent.title.trim().length < 2) {
-                                toast.error(
-                                  '❌ 사건명은 최소 2자 이상이어야 합니다',
-                                )
-                                return
-                              }
-
-                              if (
-                                newChildEvent.startDate &&
-                                newChildEvent.endDate
-                              ) {
-                                const start = new Date(newChildEvent.startDate)
-                                const end = new Date(newChildEvent.endDate)
-                                if (end < start) {
-                                  toast.error(
-                                    '❌ 종료일은 시작일보다 이후여야 합니다',
-                                  )
-                                  return
-                                }
-                              }
-
-                              // 중복 체크
-                              const isDuplicate = childEvents.some(
-                                (event) =>
-                                  event.title.trim() ===
-                                  newChildEvent.title.trim(),
-                              )
-                              if (isDuplicate) {
-                                toast.error(
-                                  '❌ 같은 이름의 하위 사건이 이미 있습니다',
-                                )
-                                return
-                              }
-
-                              setChildEvents([...childEvents, newChildEvent])
-                              setNewChildEvent({
-                                title: '',
-                                startDate: '',
-                                endDate: '',
-                                description: '',
-                                location: '',
-                                thumbnail: '',
-                              })
-                              setChildThumbnailFile(null)
-                              setShowChildEventForm(false)
-                              toast.success(
-                                `✅ "${newChildEvent.title}" 하위 사건이 추가되었습니다`,
-                              )
-                            }}
-                          >
-                            <FiCheck size={14} />
-                            추가
-                          </S.ActionButton>
-                        </S.ChildEventFormActions>
-                      </S.FormRow>
-                    </S.ChildEventFormCard>
-                  ) : (
-                    <S.AddButton
-                      type="button"
-                      onClick={() => {
-                        playClickSound()
-                        setShowChildEventForm(true)
-                      }}
-                    >
-                      <FiPlus size={16} />
-                      하위 사건 추가
-                    </S.AddButton>
+                              <FiX size={12} />
+                            </S.ClearButton>
+                          </S.SelectedEventInfo>
+                        )
+                      })}
+                    </S.SelectedEventsList>
                   )}
                   <S.Hint>
-                    💡 <strong>하위 사건 추가 안내:</strong>
+                    💡 <strong>하위 사건 연결 안내:</strong>
                     <br />
-                    • 이 사건에 포함되는 세부 사건들을 빠르게 등록할 수 있습니다
+                    • 기존 등록된 사건들 중에서 선택하여 이 사건의 하위 사건으로
+                    연결할 수 있습니다
                     <br />
-                    • 사건명만 필수이며, 나머지는 선택사항입니다
-                    <br />
-                    • 등록 후 각 하위 사건을 클릭하여 상세 내용을 작성할 수
-                    있습니다
-                    <br />• 예시: "2차 세계대전" → "폴란드 침공", "프랑스 침공",
-                    "노르망디 상륙작전" 등
+                    • 여러 개의 사건을 선택할 수 있습니다
+                    <br />• 예시: "제2차 세계대전"에 "폴란드 침공", "노르망디
+                    상륙작전" 등을 연결
                   </S.Hint>
                 </S.FormField>
               </S.FormRow>
-
-              {/* DatePicker 모달들 */}
-              <DatePickerModal
-                isOpen={showChildStartDatePicker}
-                onClose={() => setShowChildStartDatePicker(false)}
-                onSelect={(date: string) => {
-                  setNewChildEvent({ ...newChildEvent, startDate: date })
-                  setShowChildStartDatePicker(false)
-                }}
-                initialDate={newChildEvent.startDate}
-              />
-              <DatePickerModal
-                isOpen={showChildEndDatePicker}
-                onClose={() => setShowChildEndDatePicker(false)}
-                onSelect={(date: string) => {
-                  setNewChildEvent({ ...newChildEvent, endDate: date })
-                  setShowChildEndDatePicker(false)
-                }}
-                initialDate={newChildEvent.endDate}
-              />
             </S.FormSection>
           )}
 

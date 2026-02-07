@@ -1978,6 +1978,13 @@ export const ParentEventMeta = styled.div`
   text-overflow: ellipsis;
 `
 
+export const ParentEventDate = styled.span`
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+`
+
 export const EmptyState = styled.div`
   padding: 32px 16px;
   text-align: center;

@@ -203,7 +203,15 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           <option value="duration">기간순</option>
         </Filter.SortSelect>
 
-        <Filter.SortButton type="button" onClick={onSortDirectionToggle}>
+        <Filter.SortButton
+          type="button"
+          onClick={() => {
+            console.log(
+              `🔄 정렬 방향 버튼 클릭: ${sortDirection} → ${sortDirection === 'asc' ? 'desc' : 'asc'}`,
+            )
+            onSortDirectionToggle()
+          }}
+        >
           {sortDirection === 'asc' ? (
             <FiArrowUp size={14} />
           ) : (
@@ -217,10 +225,10 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           <Filter.FilterToggleLabel>계층</Filter.FilterToggleLabel>
           <Filter.Switch
             type="button"
-            $active={showFlatView}
+            $active={!showFlatView}
             onClick={onToggleFlatView}
           >
-            <Filter.SwitchThumb $active={showFlatView} />
+            <Filter.SwitchThumb $active={!showFlatView} />
           </Filter.Switch>
         </Filter.FilterToggle>
       </Filter.FilterBlock>

@@ -32,17 +32,27 @@ export class EventController {
    * @returns EventResponseDto
    */
   private toResponseDto(event: any): EventResponseDto {
-    // sections에서 제목만 추출
-    let sectionTitles: string[] | undefined
-    if (event.sections) {
-      // sections가 { items: [...] } 형태인 경우
-      const items = event.sections.items || event.sections
-      if (Array.isArray(items)) {
-        sectionTitles = items
-          .map((section: any) => section.title)
-          .filter((title: string) => title) // 빈 제목 제외
-      }
-    }
+    // EventSection 변환
+    const eventSections = event.eventSections?.map((section: any) => ({
+      id: section.id,
+      title: section.title,
+      content: section.content,
+      order: section.order,
+      sectionType: section.sectionType,
+    }))
+
+    // EventImage 변환
+    const eventImages = event.eventImages?.map((image: any) => ({
+      id: image.id,
+      imageUrl: image.imageUrl,
+      caption: image.caption,
+      source: image.source,
+      order: image.order,
+      isPrimary: image.isPrimary,
+    }))
+
+    // 썸네일: isPrimary=true인 이미지 URL
+    const thumbnail = eventImages?.find((img: any) => img.isPrimary)?.imageUrl || null
 
     // 관련 국가 정보 추출
     const relatedCountryIds: string[] = []
@@ -91,9 +101,9 @@ export class EventController {
       cityId: event.cityId,
       administrativeDivisionId: event.administrativeDivisionId,
       historicalCountryId: event.historicalCountryId,
-      thumbnail: event.thumbnail ?? null,
-      sections: event.sections ?? null,
-      sectionTitles: sectionTitles,
+      eventSections: eventSections,
+      eventImages: eventImages,
+      thumbnail: thumbnail,
       relatedCountryIds: relatedCountryIds.length > 0 ? relatedCountryIds : undefined,
       relatedHistoricalCountryIds: relatedHistoricalCountryIds.length > 0 ? relatedHistoricalCountryIds : undefined,
       relatedCountries: relatedCountries.length > 0 ? relatedCountries : undefined,
@@ -136,7 +146,10 @@ export class EventController {
         childEvents: {
           include: {
             category: true,
+            eventSections: true,
+            eventImages: true,
           },
+          orderBy: { startDate: 'asc' }, // 하위 사건 시간순 정렬
         },
         countryRelations: {
           include: {
@@ -144,10 +157,19 @@ export class EventController {
             historicalCountry: true,
           },
         },
+        eventSections: {
+          orderBy: { order: 'asc' },
+        },
+        eventImages: {
+          orderBy: { order: 'asc' },
+        },
       },
     })
     
-    console.log(`✅ ${events.length}개 최상위 사건 반환 (하위 사건 포함)`)
+    console.log(`✅ ${events.length}개 최상위 사건 반환`)
+    events.forEach(evt => {
+      console.log(`   - ${evt.title}: ${evt.childEvents?.length || 0}개 하위 사건`)
+    })
     
     return events.map((event) => this.toResponseDto(event as any))
   }
@@ -182,12 +204,24 @@ export class EventController {
       include: {
         category: true,
         parentEvent: true,
-        childEvents: true,
+        childEvents: {
+          include: {
+            eventSections: { orderBy: { order: 'asc' } },
+            eventImages: { orderBy: { order: 'asc' } },
+          },
+          orderBy: { startDate: 'asc' }, // 하위 사건 시간순 정렬
+        },
         countryRelations: {
           include: {
             country: true,
             historicalCountry: true,
           },
+        },
+        eventSections: {
+          orderBy: { order: 'asc' },
+        },
+        eventImages: {
+          orderBy: { order: 'asc' },
         },
       },
     })
@@ -241,8 +275,6 @@ export class EventController {
         cityId: dto.cityId,
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,
-        thumbnail: dto.thumbnail,
-        sections: dto.sections,
         warCost: dto.warCost,
         childEvents: dto.childEvents, // 🆕 하위 사건 정보 전달
       },
@@ -250,7 +282,9 @@ export class EventController {
       dto.relatedEventIds,
       dto.relatedCountryIds,
       dto.relatedHistoricalCountryIds,
-      dto.sections,
+      dto.eventSections,
+      dto.eventImages,
+      dto.childEventIds, // 🆕 기존 사건을 하위로 연결
     )
 
     // 정규화된 군사 정보 저장
@@ -318,15 +352,16 @@ export class EventController {
         background: dto.background,
         aftermath: dto.aftermath,
         parentEventId: dto.parentEventId,
-        thumbnail: dto.thumbnail,
         cityId: dto.cityId,
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,
-        sections: dto.sections,
         warCost: dto.warCost,
       },
       dto.relatedCountryIds,
       dto.relatedHistoricalCountryIds,
+      dto.eventSections,
+      dto.eventImages,
+      dto.childEventIds, // 🆕 기존 사건을 하위로 연결
     )
 
     // 정규화된 군사 정보 저장

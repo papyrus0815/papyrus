@@ -145,7 +145,13 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     setExpandedEventIds,
     toggleEventExpansion,
     flattenedHierarchy,
-  } = useEventHierarchy(sortedEvents, events, showFlatView)
+  } = useEventHierarchy(
+    sortedEvents,
+    events,
+    showFlatView,
+    sortBy,
+    sortDirection,
+  )
 
   // ===== Entity: Heads of State =====
   const {
@@ -349,13 +355,34 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             onShowCategoryModal={() => setShowCategoryModal(true)}
             onShowCountryModal={() => setShowCountryModal(true)}
             onShowPositionTypeModal={() => setShowPositionTypeModal(true)}
-            onToggleFlatView={() => setShowFlatView(!showFlatView)}
+            onToggleFlatView={() => {
+              console.log(
+                `🔀 계층 구조 버튼 클릭: ${showFlatView} → ${!showFlatView}`,
+              )
+              setShowFlatView(!showFlatView)
+            }}
             onResetFilters={handleResetFilters}
             onSelectCentury={setSelectedCentury}
-            onSortChange={setSortBy}
-            onSortDirectionToggle={() =>
-              setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-            }
+            onSortChange={(newSortBy) => {
+              console.log(`📊 정렬 기준 변경: ${sortBy} → ${newSortBy}`)
+              setSortBy(newSortBy)
+
+              // 정렬 기준 변경 시 적절한 방향으로 자동 설정
+              if (newSortBy === 'recent') {
+                console.log('   → 최근순이므로 desc로 설정')
+                setSortDirection('desc')
+              } else if (newSortBy === 'duration') {
+                console.log('   → 장기 지속순이므로 desc로 설정')
+                setSortDirection('desc')
+              }
+            }}
+            onSortDirectionToggle={() => {
+              setSortDirection((prev) => {
+                const newDirection = prev === 'asc' ? 'desc' : 'asc'
+                console.log(`🔃 정렬 방향 변경: ${prev} → ${newDirection}`)
+                return newDirection
+              })
+            }}
           />
           <Layout.CreateEventButton
             onClick={() => navigate(pathKeys.events.create())}
@@ -392,10 +419,24 @@ export const EventsCatalogPageRefactored: React.FC = () => {
               setSummaryEventId(eventId)
               setShowSummaryModal(true)
             }}
-            onSortChange={setSortBy}
-            onSortDirectionToggle={() =>
-              setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-            }
+            onSortChange={(newSortBy) => {
+              console.log(
+                `📊 정렬 기준 변경 (EventCompactList): ${sortBy} → ${newSortBy}`,
+              )
+              setSortBy(newSortBy)
+              if (newSortBy === 'recent' || newSortBy === 'duration') {
+                setSortDirection('desc')
+              }
+            }}
+            onSortDirectionToggle={() => {
+              setSortDirection((prev) => {
+                const newDirection = prev === 'asc' ? 'desc' : 'asc'
+                console.log(
+                  `🔃 정렬 방향 변경 (EventCompactList): ${prev} → ${newDirection}`,
+                )
+                return newDirection
+              })
+            }}
             onResetFilters={handleResetFilters}
             onToggleBookmark={toggleBookmark}
             onScroll={handleScroll}

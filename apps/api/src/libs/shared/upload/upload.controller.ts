@@ -25,6 +25,12 @@ export class UploadController {
   constructor(private readonly configService: AppConfigService) {
     // 생성자에서 uploadPath를 미리 계산하여 저장
     this.uploadPath = this.configService.app.uploadPath
+    
+    // 업로드 디렉토리가 없으면 생성
+    const imagePath = join(this.uploadPath, 'images')
+    if (!existsSync(imagePath)) {
+      mkdirSync(imagePath, { recursive: true })
+    }
   }
 
   @Post('image')

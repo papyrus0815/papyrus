@@ -58,9 +58,10 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   const navigate = useNavigate()
 
   // 현재 선택된 사건의 국가 원수 정보 가져오기
-  const currentHeadsOfState = selectedEvent && eventHeadsOfState
-    ? eventHeadsOfState.get(selectedEvent.id) || []
-    : []
+  const currentHeadsOfState =
+    selectedEvent && eventHeadsOfState
+      ? eventHeadsOfState.get(selectedEvent.id) || []
+      : []
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -70,7 +71,9 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   const calculateDuration = () => {
     if (!selectedNode) return ''
     const start = new Date(selectedNode.period.start)
-    const end = selectedNode.period.end ? new Date(selectedNode.period.end) : null
+    const end = selectedNode.period.end
+      ? new Date(selectedNode.period.end)
+      : null
 
     if (!end || start.getTime() === end.getTime()) {
       return '1일'
@@ -78,13 +81,13 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 
     const diffTime = Math.abs(end.getTime() - start.getTime())
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
+
     if (diffDays >= 365) {
       const years = Math.floor(diffDays / 365)
       const remainingDays = diffDays % 365
       return remainingDays > 0 ? `${years}년 ${remainingDays}일` : `${years}년`
     }
-    
+
     return `${diffDays}일`
   }
 
@@ -128,20 +131,24 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
           </Detail.DetailHeroImage>
 
           {/* 제목 및 액션 버튼 */}
-          <Detail.DetailPanelHeader style={{ position: 'relative', paddingRight: '0' }}>
+          <Detail.DetailPanelHeader
+            style={{ position: 'relative', paddingRight: '0' }}
+          >
             <Detail.DetailTitle>{selectedNode.title}</Detail.DetailTitle>
             {selectedNode.summary && (
               <Detail.DetailDescription>
                 {selectedNode.summary}
               </Detail.DetailDescription>
             )}
-            
+
             {/* 액션 버튼 */}
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              marginTop: '16px'
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                marginTop: '16px',
+              }}
+            >
               <button
                 onClick={() => {
                   const url = `${window.location.origin}${pathKeys.events.detail(selectedNode.id)}`
@@ -177,11 +184,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 공유
               </button>
               <button
-                onClick={() =>
-                  navigate(pathKeys.events.create(), {
-                    state: { editEventId: selectedNode.id },
-                  })
-                }
+                onClick={() => navigate(pathKeys.events.edit(selectedNode.id))}
                 style={{
                   padding: '10px 16px',
                   background: 'white',
@@ -244,28 +247,47 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 
           {/* 핵심 정보 - 한눈에 보기 */}
           <div style={{ padding: '0 20px 16px 20px' }}>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'auto 1fr',
-              gap: '8px 16px',
-              fontSize: '13px',
-              lineHeight: '1.8'
-            }}>
-              <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr',
+                gap: '8px 16px',
+                fontSize: '13px',
+                lineHeight: '1.8',
+              }}
+            >
+              <div
+                style={{
+                  color: '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
                 <FiCalendar size={14} />
                 <span>기간</span>
               </div>
               <div style={{ color: '#1e293b', fontWeight: 500 }}>
                 {formatDate(selectedNode.period.start)}
-                {selectedNode.period.end && selectedNode.period.start !== selectedNode.period.end && (
-                  <> ~ {formatDate(selectedNode.period.end)}</>
-                )}
-                <span style={{ color: '#94a3b8', marginLeft: '8px' }}>({calculateDuration()})</span>
+                {selectedNode.period.end &&
+                  selectedNode.period.start !== selectedNode.period.end && (
+                    <> ~ {formatDate(selectedNode.period.end)}</>
+                  )}
+                <span style={{ color: '#94a3b8', marginLeft: '8px' }}>
+                  ({calculateDuration()})
+                </span>
               </div>
 
               {selectedEvent.location && (
                 <>
-                  <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div
+                    style={{
+                      color: '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
                     <FiMapPin size={14} />
                     <span>위치</span>
                   </div>
@@ -277,7 +299,14 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 
               {selectedNode.children && selectedNode.children.length > 0 && (
                 <>
-                  <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div
+                    style={{
+                      color: '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
                     <FiLayers size={14} />
                     <span>하위 사건</span>
                   </div>
@@ -291,7 +320,14 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 <>
                   {selectedEvent.stats.participatingNations > 0 && (
                     <>
-                      <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div
+                        style={{
+                          color: '#64748b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
                         <FiGlobe size={14} />
                         <span>참전국</span>
                       </div>
@@ -303,12 +339,22 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 
                   {selectedEvent.stats.casualties.total > 0 && (
                     <>
-                      <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div
+                        style={{
+                          color: '#64748b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
                         <FiUsers size={14} />
                         <span>사상자</span>
                       </div>
                       <div style={{ color: '#1e293b', fontWeight: 500 }}>
-                        {formatCompactNumber(selectedEvent.stats.casualties.total)}명
+                        {formatCompactNumber(
+                          selectedEvent.stats.casualties.total,
+                        )}
+                        명
                       </div>
                     </>
                   )}
@@ -317,61 +363,94 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 
               {/* 관련 국가 */}
               {((selectedEvent as any).relatedCountries?.length > 0 ||
-                (selectedEvent as any).relatedHistoricalCountries?.length > 0) && (
+                (selectedEvent as any).relatedHistoricalCountries?.length >
+                  0) && (
                 <>
-                  <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div
+                    style={{
+                      color: '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
                     <FiGlobe size={14} />
                     <span>관련 국가</span>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {(selectedEvent as any).relatedCountries?.map((country: any) => (
-                      <span
-                        key={country.id}
-                        style={{
-                          fontSize: '13px',
-                          padding: '4px 10px',
-                          background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
-                          borderRadius: '8px',
-                          fontWeight: '600',
-                          color: '#4f46e5',
-                          border: '1px solid rgba(99, 102, 241, 0.2)',
-                        }}
-                      >
-                        {country.flagEmoji} {country.name}
-                      </span>
-                    ))}
-                    {(selectedEvent as any).relatedHistoricalCountries?.map((country: any) => (
-                      <span
-                        key={country.id}
-                        style={{
-                          fontSize: '13px',
-                          padding: '4px 10px',
-                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                          borderRadius: '8px',
-                          fontWeight: '600',
-                          color: '#92400e',
-                          border: '1px solid rgba(245, 158, 11, 0.2)',
-                        }}
-                      >
-                        🏛️ {country.name}
-                      </span>
-                    ))}
+                  <div
+                    style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}
+                  >
+                    {(selectedEvent as any).relatedCountries?.map(
+                      (country: any) => (
+                        <span
+                          key={country.id}
+                          style={{
+                            fontSize: '13px',
+                            padding: '4px 10px',
+                            background:
+                              'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+                            borderRadius: '8px',
+                            fontWeight: '600',
+                            color: '#4f46e5',
+                            border: '1px solid rgba(99, 102, 241, 0.2)',
+                          }}
+                        >
+                          {country.flagEmoji} {country.name}
+                        </span>
+                      ),
+                    )}
+                    {(selectedEvent as any).relatedHistoricalCountries?.map(
+                      (country: any) => (
+                        <span
+                          key={country.id}
+                          style={{
+                            fontSize: '13px',
+                            padding: '4px 10px',
+                            background:
+                              'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                            borderRadius: '8px',
+                            fontWeight: '600',
+                            color: '#92400e',
+                            border: '1px solid rgba(245, 158, 11, 0.2)',
+                          }}
+                        >
+                          🏛️ {country.name}
+                        </span>
+                      ),
+                    )}
                   </div>
                 </>
               )}
 
               {/* 작성된 섹션 */}
-              {selectedEvent.sectionTitles && selectedEvent.sectionTitles.length > 0 && (
+              {((selectedEvent.eventSections &&
+                selectedEvent.eventSections.length > 0) ||
+                (selectedEvent.sectionTitles &&
+                  selectedEvent.sectionTitles.length > 0)) && (
                 <>
-                  <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div
+                    style={{
+                      color: '#64748b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
                     <FiBookOpen size={14} />
                     <span>본문 구성</span>
                   </div>
                   <div style={{ color: '#1e293b' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px' }}>
-                      {selectedEvent.sectionTitles.map((title, idx) => (
-                        <span 
-                          key={idx}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '4px',
+                        marginTop: '2px',
+                      }}
+                    >
+                      {selectedEvent.eventSections?.map((section) => (
+                        <span
+                          key={section.id}
                           style={{
                             display: 'inline-block',
                             fontSize: '12px',
@@ -379,12 +458,28 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                             background: '#f1f5f9',
                             borderRadius: '4px',
                             color: '#475569',
-                            fontWeight: 500
+                            fontWeight: 500,
                           }}
                         >
-                          {title}
+                          {section.title}
                         </span>
-                      ))}
+                      )) ||
+                        selectedEvent.sectionTitles?.map((title, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '12px',
+                              padding: '2px 8px',
+                              background: '#f1f5f9',
+                              borderRadius: '4px',
+                              color: '#475569',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {title}
+                          </span>
+                        ))}
                     </div>
                   </div>
                 </>
@@ -396,9 +491,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
           {selectedEvent.id === selectedNode.id && selectedEvent.background && (
             <Detail.DetailSection>
               <Detail.DetailSectionTitle>배경</Detail.DetailSectionTitle>
-              <Detail.DetailText>
-                {selectedEvent.background}
-              </Detail.DetailText>
+              <Detail.DetailText>{selectedEvent.background}</Detail.DetailText>
             </Detail.DetailSection>
           )}
 

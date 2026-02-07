@@ -95,8 +95,10 @@ coverage/
 # ========================================
 # Uploads / User Content
 # ========================================
-uploads/*
-!uploads/.gitkeep
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+!apps/api/uploads/images/.gitkeep
+!apps/api/uploads/README.md
 
 # ========================================
 # Docker

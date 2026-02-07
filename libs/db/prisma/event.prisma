@@ -226,12 +226,6 @@ model Event {
   /// 부모-자식 사건
   parentEventId String? @map("parent_event_id") @db.Char(36)
 
-  /// 썸네일 이미지 URL
-  thumbnail String? @db.VarChar(500)
-
-  /// 섹션 기반 컨텐츠 (JSON 형태로 저장)
-  sections Json? @db.Json
-
   /// 전쟁 비용 (텍스트)
   warCost String? @map("war_cost") @db.Text
 
@@ -267,11 +261,84 @@ model Event {
   militaryDetailsNorm   MilitaryDetailsNorm?
   casualties            CasualtiesData[]
 
+  // 🆕 정규화된 섹션 (본문 내용)
+  eventSections EventSection[]
+
+  // 🆕 이미지 (썸네일 포함)
+  eventImages EventImage[]
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("event")
+}
+
+// ========================
+// EventSection (사건 본문 섹션)
+// ========================
+model EventSection {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 섹션 제목
+  title String @db.VarChar(500)
+
+  /// 섹션 내용 (HTML)
+  content String @db.Text
+
+  /// 표시 순서
+  order Int @default(0)
+
+  /// 섹션 타입 (선택적: background, process, aftermath 등)
+  sectionType String? @map("section_type") @db.VarChar(100)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_event_section_eventId")
+  @@index([eventId, order], name: "idx_event_section_eventId_order")
+  @@map("event_section")
+}
+
+// ========================
+// EventImage (사건 이미지)
+// ========================
+model EventImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 이미지 URL
+  imageUrl String @map("image_url") @db.VarChar(1000)
+
+  /// 이미지 제목/설명
+  caption String? @db.VarChar(500)
+
+  /// 출처
+  source String? @db.VarChar(500)
+
+  /// 표시 순서
+  order Int @default(0)
+
+  /// 대표 이미지 여부 (썸네일)
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId], name: "idx_event_image_eventId")
+  @@index([eventId, isPrimary], name: "idx_event_image_eventId_primary")
+  @@map("event_image")
 }
 
 // ========================

@@ -81,8 +81,6 @@ export class EventPrismaRepository implements EventRepository {
         cityId: data.cityId,
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,
-        thumbnail: data.thumbnail,
-        sections: data.sections as Prisma.InputJsonValue,
         warCost: data.warCost,
       },
       include: {
@@ -120,8 +118,6 @@ export class EventPrismaRepository implements EventRepository {
         cityId: data.cityId,
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,
-        thumbnail: data.thumbnail,
-        sections: data.sections,
         warCost: data.warCost,
       },
       include: {
@@ -163,8 +159,6 @@ export class EventPrismaRepository implements EventRepository {
       cityId: event.cityId,
       administrativeDivisionId: event.administrativeDivisionId,
       historicalCountryId: event.historicalCountryId,
-      thumbnail: event.thumbnail,
-      sections: event.sections,
       warCost: event.warCost,
     })
   }

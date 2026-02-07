@@ -7,6 +7,7 @@ import {
   IsNotEmpty,
   IsObject,
   ValidateNested,
+  IsArray,
 } from 'class-validator'
 import { MilitaryEventDto } from './military-event.dto'
 
@@ -61,10 +62,29 @@ export class CreateEventDto {
   @IsOptional()
   parentEventId?: string
 
-  @ApiProperty({ description: '썸네일 이미지 URL', required: false })
-  @IsString()
+  @ApiProperty({
+    description: '이미지 목록',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        imageUrl: { type: 'string' },
+        caption: { type: 'string' },
+        source: { type: 'string' },
+        order: { type: 'number' },
+        isPrimary: { type: 'boolean' },
+      },
+    },
+  })
   @IsOptional()
-  thumbnail?: string
+  eventImages?: Array<{
+    imageUrl: string
+    caption?: string
+    source?: string
+    order?: number
+    isPrimary?: boolean
+  }>
 
   @ApiProperty({ description: '도시 ID', required: false })
   @IsString()
@@ -129,12 +149,26 @@ export class CreateEventDto {
   relatedHistoricalCountryIds?: string[]
 
   @ApiProperty({
-    description: '섹션 기반 내용 (제목과 내용이 포함된 섹션 배열)',
+    description: '섹션 목록',
     required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        content: { type: 'string' },
+        order: { type: 'number' },
+        sectionType: { type: 'string' },
+      },
+    },
   })
   @IsOptional()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sections?: any
+  eventSections?: Array<{
+    title: string
+    content: string
+    order?: number
+    sectionType?: string
+  }>
 
   @ApiProperty({
     description: '교전 세력 정보 (레거시 - JSON)',
@@ -217,7 +251,17 @@ export class CreateEventDto {
     endDate?: string
     description?: string
     location?: string
-    thumbnail?: string
+        images?: Array<{ imageUrl: string; isPrimary?: boolean }>
   }>
+
+  @ApiProperty({
+    description: '하위 사건 ID 목록 (기존 사건을 하위로 연결)',
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  childEventIds?: string[]
 }
 

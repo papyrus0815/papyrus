@@ -35,7 +35,7 @@ export class AppConfigService {
         .filter(Boolean),
       sslKeyPath: this.configService.get<string>('SSL_KEY_PATH'),
       sslCertPath: this.configService.get<string>('SSL_CRT_PATH'),
-      uploadPath: this.configService.get<string>('UPLOAD_PATH', './uploads'),
+      uploadPath: this.configService.get<string>('UPLOAD_PATH', './apps/api/uploads'),
       maxFileSize: this.configService.get<number>(
         'MAX_FILE_SIZE',
         10 * 1024 * 1024,

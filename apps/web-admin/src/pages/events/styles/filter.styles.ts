@@ -37,17 +37,19 @@ export const FilterColumn = styled.div`
 
 export const FilterBlock = styled.div`
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+  padding: 0;
 `
 
 export const FilterBlockLabel = styled.div`
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: #94a3b8;
   white-space: nowrap;
+  letter-spacing: 0.02em;
 `
 
 export const FilterSearchInput = styled.input`
@@ -559,4 +561,29 @@ export const SwitchThumb = styled.div<{ $active?: boolean }>`
   border-radius: 50%;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+`
+
+export const ChildSortButtons = styled.div`
+  display: flex;
+  gap: 4px;
+  width: 100%;
+`
+
+export const ChildSortButton = styled.button<{ $active: boolean }>`
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid ${({ $active }) => ($active ? '#6366f1' : '#e2e8f0')};
+  background: ${({ $active }) =>
+    $active ? 'rgba(99, 102, 241, 0.08)' : '#ffffff'};
+  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
+  font-size: 11px;
+  font-weight: ${({ $active }) => ($active ? '600' : '500')};
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.05);
+  }
 `

@@ -1,7 +1,7 @@
 /**
  * 사건 즐겨찾기 Hook
  */
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'papyrus_event_bookmarks'
 
@@ -23,13 +23,16 @@ export const useBookmarks = () => {
   // localStorage에 저장
   const saveToStorage = (newBookmarks: Set<string>) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newBookmarks)))
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(Array.from(newBookmarks)),
+      )
     } catch (error) {
       console.error('즐겨찾기 저장 실패:', error)
     }
   }
 
-  const toggleBookmark = (eventId: string) => {
+  const toggleBookmark = useCallback((eventId: string) => {
     setBookmarks((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(eventId)) {
@@ -40,9 +43,12 @@ export const useBookmarks = () => {
       saveToStorage(newSet)
       return newSet
     })
-  }
+  }, [])
 
-  const isBookmarked = (eventId: string) => bookmarks.has(eventId)
+  const isBookmarked = useCallback(
+    (eventId: string) => bookmarks.has(eventId),
+    [bookmarks],
+  )
 
   return {
     bookmarks,

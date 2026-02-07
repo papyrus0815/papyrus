@@ -28,6 +28,7 @@ export const pathKeys = {
   events: {
     root: () => `/${ROUTES.HISTORY.EVENTS}/`,
     create: () => `/${ROUTES.HISTORY.EVENTS}/create/`,
+    edit: (eventId: string) => `/${ROUTES.HISTORY.EVENTS}/${eventId}/edit/`,
     detail: (eventId: string) => `/${ROUTES.HISTORY.EVENTS}/${eventId}/`,
   },
 

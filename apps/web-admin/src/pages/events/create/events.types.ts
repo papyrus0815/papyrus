@@ -95,6 +95,23 @@ export interface EventVisualAsset {
   source?: string
 }
 
+export interface EventSection {
+  id: string
+  title: string
+  content: string
+  order: number
+  sectionType: string
+}
+
+export interface EventImage {
+  id: string
+  imageUrl: string
+  caption?: string
+  source?: string
+  order: number
+  isPrimary: boolean
+}
+
 export interface EventVisuals {
   heroImageUrl: string
   thumbnailUrl: string
@@ -151,7 +168,9 @@ export interface HistoricalEvent {
     logisticalScale: string
   }
   parentEventId?: string
-  sectionTitles?: string[] // 작성된 섹션 제목 리스트
+  sectionTitles?: string[] // 작성된 섹션 제목 리스트 (deprecated)
+  eventSections?: EventSection[] // 사건 섹션 목록 (새 구조)
+  eventImages?: EventImage[] // 사건 이미지 목록 (새 구조)
   relatedCountries?: Array<{ id: string; name: string; flagEmoji?: string }> // 관련 현대 국가
   relatedHistoricalCountries?: Array<{ id: string; name: string }> // 관련 역사적 국가
 }
