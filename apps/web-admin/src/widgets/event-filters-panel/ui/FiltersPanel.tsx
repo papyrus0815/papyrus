@@ -4,7 +4,16 @@
  */
 import React from 'react'
 
-import { FiChevronRight, FiX } from 'react-icons/fi'
+import {
+  FiArrowDown,
+  FiArrowUp,
+  FiCalendar,
+  FiChevronRight,
+  FiGlobe,
+  FiGrid,
+  FiLayers,
+  FiX,
+} from 'react-icons/fi'
 
 import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
@@ -80,9 +89,11 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
 }) => {
   // 활성 필터 칩 생성
   const activeFilters = []
-  
+
   if (selectedCategory !== FILTER_ALL) {
-    const categoryName = dbCategories.find((cat) => cat.id === selectedCategory)?.name
+    const categoryName = dbCategories.find(
+      (cat) => cat.id === selectedCategory,
+    )?.name
     if (categoryName) {
       activeFilters.push({
         key: 'category',
@@ -91,7 +102,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
       })
     }
   }
-  
+
   if (selectedCountry !== FILTER_ALL) {
     const countryName =
       countries.find((c) => c.id === selectedCountry)?.name ||
@@ -104,7 +115,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
       })
     }
   }
-  
+
   if (selectedCentury !== FILTER_ALL) {
     activeFilters.push({
       key: 'century',
@@ -140,56 +151,69 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
       <Filter.FilterBlock>
         {/* 카테고리 */}
         <Filter.FilterTriggerButton type="button" onClick={onShowCategoryModal}>
+          <FiGrid size={13} />
           <span>
             {selectedCategory === FILTER_ALL
-              ? '전체 카테고리'
+              ? '카테고리'
               : dbCategories.find((cat) => cat.id === selectedCategory)?.name ||
                 '알 수 없음'}
           </span>
-          <FiChevronRight size={14} />
         </Filter.FilterTriggerButton>
 
         {/* 국가 */}
         <Filter.FilterTriggerButton type="button" onClick={onShowCountryModal}>
+          <FiGlobe size={13} />
           <span>
             {selectedCountry === FILTER_ALL
-              ? '전체 국가'
+              ? '국가'
               : countries.find((c) => c.id === selectedCountry)?.name ||
                 historicalCountries.find((c) => c.id === selectedCountry)
                   ?.name ||
-                '전체 국가'}
+                '국가'}
           </span>
-          <FiChevronRight size={14} />
         </Filter.FilterTriggerButton>
 
         {/* 세기 선택 */}
-        <Filter.CenturySelect
-          value={selectedCentury === FILTER_ALL ? 'all' : selectedCentury}
-          onChange={(e) => {
-            const value = e.target.value
-            onSelectCentury(value === 'all' ? FILTER_ALL : parseInt(value, 10))
-          }}
-        >
-          <option value="all">전체</option>
-          {availableCenturies.map((century) => (
-            <option key={century} value={century}>
-              {century}C
-            </option>
-          ))}
-        </Filter.CenturySelect>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <FiCalendar size={13} style={{ color: '#64748b', flexShrink: 0 }} />
+          <Filter.CenturySelect
+            value={selectedCentury === FILTER_ALL ? 'all' : selectedCentury}
+            onChange={(e) => {
+              const value = e.target.value
+              onSelectCentury(
+                value === 'all' ? FILTER_ALL : parseInt(value, 10),
+              )
+            }}
+          >
+            <option value="all">전체</option>
+            {availableCenturies.map((century) => (
+              <option key={century} value={century}>
+                {century}C
+              </option>
+            ))}
+          </Filter.CenturySelect>
+        </div>
 
         {/* 정렬 */}
-        <Filter.SortSelect value={sortBy} onChange={(e) => onSortChange(e.target.value)}>
+        <Filter.SortSelect
+          value={sortBy}
+          onChange={(e) => onSortChange(e.target.value)}
+        >
           <option value="recent">최근순</option>
           <option value="duration">기간순</option>
         </Filter.SortSelect>
 
         <Filter.SortButton type="button" onClick={onSortDirectionToggle}>
-          {sortDirection === 'asc' ? '↑' : '↓'}
+          {sortDirection === 'asc' ? (
+            <FiArrowUp size={14} />
+          ) : (
+            <FiArrowDown size={14} />
+          )}
         </Filter.SortButton>
 
         {/* 계층 구조 토글 */}
         <Filter.FilterToggle>
+          <FiLayers size={12} style={{ color: '#64748b' }} />
           <Filter.FilterToggleLabel>계층</Filter.FilterToggleLabel>
           <Filter.Switch
             type="button"

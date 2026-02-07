@@ -94,22 +94,22 @@ export const FilterSearchInput = styled.input`
 export const FilterTriggerButton = styled.button`
   border: 1.5px solid rgba(203, 213, 225, 0.6);
   border-radius: 10px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   background: #f8fafc;
   color: #1e293b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   white-space: nowrap;
 
   svg {
-    color: #64748b;
+    color: #6366f1;
     flex-shrink: 0;
-    transition: transform 0.2s ease;
+    transition: all 0.2s ease;
   }
 
   &:hover {
@@ -503,22 +503,29 @@ export const CenturySelect = styled.select`
 export const SortButton = styled.button`
   border: 1.5px solid rgba(203, 213, 225, 0.6);
   border-radius: 10px;
-  padding: 9px 12px;
+  padding: 8px 10px;
   background: #f8fafc;
-  color: #1e293b;
-  font-size: 16px;
-  font-weight: 600;
+  color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
-  width: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
 
+  svg {
+    color: #6366f1;
+    transition: all 0.2s ease;
+  }
+
   &:hover {
     background: #ffffff;
     border-color: rgba(99, 102, 241, 0.2);
-    color: #6366f1;
+
+    svg {
+      color: #4f46e5;
+    }
   }
 `
 

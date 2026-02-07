@@ -42,10 +42,10 @@ import {
 } from '@/shared/api/event-categories'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
-import { pathKeys } from '@/shared/router'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
 import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
+import { pathKeys } from '@/shared/router'
+import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
 import { FiltersPanel } from '@/widgets/event-filters-panel/ui'
 import { EventCompactList } from '@/widgets/event-list-compact/ui'
 import {

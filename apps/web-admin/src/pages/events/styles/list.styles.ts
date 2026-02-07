@@ -330,58 +330,63 @@ export const YearDivider = styled.button`
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 24px 0 16px 0;
+  margin: 20px 0 12px 0;
   padding: 0;
   background: transparent;
   border: none;
   width: 100%;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
 
   &::before,
   &::after {
     content: '';
     flex: 1;
     height: 1px;
-    background: rgba(203, 213, 225, 0.3);
+    background: rgba(226, 232, 240, 0.6);
+    transition: all 0.25s ease;
   }
 
   span {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #64748b;
     background: #fafafa;
-    padding: 6px 16px;
-    border-radius: 10px;
-    border: 1.5px solid rgba(203, 213, 225, 0.5);
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(203, 213, 225, 0.4);
     letter-spacing: 0.2px;
     white-space: nowrap;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
+    gap: 5px;
+    transition: all 0.25s ease;
 
     svg {
-      transition: transform 0.2s ease;
+      transition: transform 0.25s ease;
       color: #6366f1;
-      font-size: 12px;
+      font-size: 10px;
+      flex-shrink: 0;
     }
   }
 
-  &:hover span {
-    background: #ffffff;
-    border-color: rgba(99, 102, 241, 0.25);
+  &:hover {
+    span {
+      background: #ffffff;
+      border-color: rgba(99, 102, 241, 0.25);
+    }
   }
 `
 
 export const CollapsedCount = styled.span`
   font-size: 10px;
   font-weight: 600;
-  color: #ffffff;
-  background: #94a3b8;
-  padding: 3px 8px;
-  border-radius: 8px;
-  margin-left: auto;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-left: 2px;
+  flex-shrink: 0;
 `
 
 export const CompactListSummary = styled.p<{ $depth: number }>`

@@ -238,11 +238,15 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     }}
                   >
                     <span>
-                      <FiChevronRight size={14} />
+                      <FiChevronRight
+                        size={13}
+                        style={{
+                          transform: 'rotate(0deg)',
+                          transition: 'transform 0.3s ease',
+                        }}
+                      />
                       {currentYear}년
-                      <List.CollapsedCount>
-                        {yearEventCount}건
-                      </List.CollapsedCount>
+                      <List.CollapsedCount>{yearEventCount}</List.CollapsedCount>
                     </span>
                   </List.YearDivider>
                 )
@@ -284,8 +288,24 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     }}
                   >
                     <span>
-                      <FiChevronDown size={14} />
+                      <FiChevronDown
+                        size={13}
+                        style={{
+                          transform: 'rotate(0deg)',
+                          transition: 'transform 0.3s ease',
+                        }}
+                      />
                       {currentYear}년
+                      <List.CollapsedCount>
+                        {
+                          flattenedHierarchy.filter(
+                            (item) =>
+                              item.depth === 0 &&
+                              new Date(item.node.period.start).getFullYear() ===
+                                currentYear
+                          ).length
+                        }
+                      </List.CollapsedCount>
                     </span>
                   </List.YearDivider>
                 )}
