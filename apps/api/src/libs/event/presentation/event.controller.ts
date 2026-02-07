@@ -122,15 +122,22 @@ export class EventController {
 
     console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}`)
 
-    // Prisma로 직접 조회하여 category 관계 포함
+    // 최상위 사건만 페이징 (parentEventId가 null인 것만)
     const events = await this.prisma.event.findMany({
+      where: {
+        parentEventId: null, // 최상위 사건만
+      },
       skip,
       take,
       orderBy: { startDate: 'desc' },
       include: {
         category: true,
         parentEvent: true,
-        childEvents: true,
+        childEvents: {
+          include: {
+            category: true,
+          },
+        },
         countryRelations: {
           include: {
             country: true,
@@ -140,7 +147,7 @@ export class EventController {
       },
     })
     
-    console.log(`✅ ${events.length}개 사건 반환`)
+    console.log(`✅ ${events.length}개 최상위 사건 반환 (하위 사건 포함)`)
     
     return events.map((event) => this.toResponseDto(event as any))
   }

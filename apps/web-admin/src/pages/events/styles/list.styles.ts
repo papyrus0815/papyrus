@@ -315,10 +315,10 @@ export const TimelineDuration = styled.div`
 `
 
 export const LoadingSpinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e0e7ff;
-  border-top-color: #6366f1;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #94a3b8;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 

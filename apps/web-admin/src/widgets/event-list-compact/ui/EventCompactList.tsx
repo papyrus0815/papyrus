@@ -339,46 +339,41 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             )
           })}
 
-          {/* 로딩 인디케이터 또는 끝 표시 */}
+          {/* 로딩 인디케이터 */}
           {isLoadingMore && (
             <div
               style={{
-                padding: '32px',
+                padding: '40px',
                 textAlign: 'center',
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '16px',
-                background:
-                  'linear-gradient(180deg, transparent 0%, #f8fafc 50%)',
+                justifyContent: 'center',
+                gap: '12px',
               }}
             >
               <List.LoadingSpinner />
               <div
                 style={{
-                  color: '#6366f1',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  letterSpacing: '0.3px',
+                  color: '#94a3b8',
+                  fontSize: '13px',
+                  fontWeight: '500',
                 }}
               >
-                데이터 불러오는 중...
+                로딩 중
               </div>
             </div>
           )}
           {!isLoadingMore && hasMoreData && (
             <div
               style={{
-                padding: '28px',
+                padding: '32px',
                 textAlign: 'center',
-                color: '#64748b',
-                fontSize: '13px',
-                fontWeight: '600',
-                background:
-                  'linear-gradient(180deg, transparent 0%, #f8fafc 100%)',
+                color: '#cbd5e1',
+                fontSize: '12px',
+                fontWeight: '500',
               }}
             >
-              ↓ 아래로 스크롤하여 더 보기
+              ↓
             </div>
           )}
         </List.CompactList>

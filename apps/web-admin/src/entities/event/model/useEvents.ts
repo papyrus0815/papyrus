@@ -28,6 +28,8 @@ export const useEvents = (pageSizeParam: number = 20) => {
     if (!hasMore && !reset) return
 
     setIsLoading(true)
+    const startTime = Date.now()
+
     try {
       const currentOffset = reset ? 0 : offset
       const limit = customLimit || pageSize
@@ -43,6 +45,13 @@ export const useEvents = (pageSizeParam: number = 20) => {
       console.log(`✅ ${eventsResponse.length}개 사건 수신`)
 
       const newEvents = transformEventsFromApi(eventsResponse)
+
+      // 최소 2초 지연 보장
+      const elapsed = Date.now() - startTime
+      const minDelay = 2000
+      if (elapsed < minDelay) {
+        await new Promise((resolve) => setTimeout(resolve, minDelay - elapsed))
+      }
 
       if (reset) {
         setEvents(newEvents)
