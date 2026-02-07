@@ -44,7 +44,6 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
-import { CategorySummaryGrid } from '@/widgets/event-category-summary/ui'
 import { FiltersPanel } from '@/widgets/event-filters-panel/ui'
 import { EventCompactList } from '@/widgets/event-list-compact/ui'
 import {
@@ -268,27 +267,8 @@ export const EventsCatalogPageRefactored: React.FC = () => {
   return (
     <Layout.PageScene>
       <Layout.PageWrapper>
-        <Layout.PageTopBar>
-          <Layout.PageTopTitle>
-            <h1>역사적 사건</h1>
-            <p>시대별 주요 사건과 계층적 관계를 탐색합니다</p>
-          </Layout.PageTopTitle>
-          <Layout.CreateEventButton
-            onClick={() => navigate(pathKeys.events.create())}
-          >
-            <FiPlus size={16} />새 사건 등록
-          </Layout.CreateEventButton>
-        </Layout.PageTopBar>
-
-        {/* ===== Widget: Category Summary Grid ===== */}
-        <CategorySummaryGrid
-          isLoading={isLoading}
-          dbCategories={dbCategories}
-          events={events}
-        />
-
-        <Layout.CatalogSplit>
-          {/* ===== Widget: Filters Panel ===== */}
+        {/* ===== 상단 필터 바 ===== */}
+        <Layout.TopFilterBar>
           <FiltersPanel
             keyword={keyword}
             selectedCategory={selectedCategory}
@@ -311,10 +291,17 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             onResetFilters={handleResetFilters}
             onSelectCentury={setSelectedCentury}
           />
+          <Layout.CreateEventButton
+            onClick={() => navigate(pathKeys.events.create())}
+          >
+            <FiPlus size={16} />새 사건 등록
+          </Layout.CreateEventButton>
+        </Layout.TopFilterBar>
 
+        <Layout.CatalogSplit>
           {/* ===== Widget: Event Compact List ===== */}
           <EventCompactList
-            isLoading={false}
+            isLoading={isLoading && events.length === 0}
             flattenedHierarchy={flattenedHierarchy}
             events={events}
             filteredEvents={filteredEvents}
@@ -328,7 +315,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             tenureGroups={tenureGroups}
             dbCategories={dbCategories}
             totalCount={flattenedHierarchy.length}
-            isLoadingMore={isLoading}
+            isLoadingMore={isLoading && events.length > 0}
             displayedCount={flattenedHierarchy.length}
             hasMoreData={hasMore}
             onToggleExpansion={toggleEventExpansion}
@@ -350,7 +337,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
 
           {/* ===== Widget: Event Detail Panel ===== */}
           <EventDetailPanel
-            isLoading={isLoading}
+            isLoading={false}
             selectedEvent={selectedEvent}
             selectedNode={selectedNode}
             dbCategories={dbCategories}

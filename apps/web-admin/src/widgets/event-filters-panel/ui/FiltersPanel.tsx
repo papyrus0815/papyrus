@@ -72,24 +72,17 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
 }) => {
   return (
     <Filter.FilterColumn>
-      {/* 통합된 필터 블록 */}
+      {/* 검색 */}
+      <Filter.FilterSearchInput
+        type="search"
+        placeholder="사건명, 태그, 인물 검색"
+        value={keyword}
+        onChange={(e) => onKeywordChange(e.target.value)}
+      />
+
       <Filter.FilterBlock>
-        <Filter.FilterBlockLabel>필터</Filter.FilterBlockLabel>
-
-        {/* 검색 */}
-        <Filter.FilterSearchInput
-          type="search"
-          placeholder="사건명, 태그, 인물 검색"
-          value={keyword}
-          onChange={(e) => onKeywordChange(e.target.value)}
-        />
-
         {/* 카테고리 */}
-        <Filter.FilterTriggerButton
-          type="button"
-          onClick={onShowCategoryModal}
-          style={{ marginTop: '10px' }}
-        >
+        <Filter.FilterTriggerButton type="button" onClick={onShowCategoryModal}>
           <span>
             {selectedCategory === FILTER_ALL
               ? '전체 카테고리'
@@ -100,11 +93,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
         </Filter.FilterTriggerButton>
 
         {/* 국가 */}
-        <Filter.FilterTriggerButton
-          type="button"
-          onClick={onShowCountryModal}
-          style={{ marginTop: '6px' }}
-        >
+        <Filter.FilterTriggerButton type="button" onClick={onShowCountryModal}>
           <span>
             {selectedCountry === FILTER_ALL
               ? '전체 국가'
@@ -116,25 +105,25 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           <FiChevronRight size={14} />
         </Filter.FilterTriggerButton>
 
-        {/* 직업 */}
-        <Filter.FilterTriggerButton
-          type="button"
-          onClick={onShowPositionTypeModal}
-          style={{ marginTop: '6px' }}
+        {/* 세기 선택 */}
+        <Filter.CenturySelect
+          value={selectedCentury === FILTER_ALL ? 'all' : selectedCentury}
+          onChange={(e) => {
+            const value = e.target.value
+            onSelectCentury(value === 'all' ? FILTER_ALL : parseInt(value, 10))
+          }}
         >
-          <span>
-            {selectedPositionType === FILTER_ALL
-              ? '전체 직업'
-              : MOCK_POSITION_TYPES.find(
-                  (type) => type.value === selectedPositionType,
-                )?.label || '전체 직업'}
-          </span>
-          <FiChevronRight size={14} />
-        </Filter.FilterTriggerButton>
+          <option value="all">전체 시대</option>
+          {availableCenturies.map((century) => (
+            <option key={century} value={century}>
+              {century}세기
+            </option>
+          ))}
+        </Filter.CenturySelect>
 
-        {/* 계층 분리 토글 */}
-        <Filter.FilterToggle style={{ marginTop: '12px' }}>
-          <Filter.FilterToggleLabel>계층 구조 해제</Filter.FilterToggleLabel>
+        {/* 계층 구조 토글 */}
+        <Filter.FilterToggle>
+          <Filter.FilterToggleLabel>계층 구조</Filter.FilterToggleLabel>
           <Filter.Switch
             type="button"
             $active={showFlatView}
@@ -150,64 +139,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           <FiX size={14} />
           초기화
         </Filter.FilterResetButton>
-      )}
-
-      <Filter.FilterDivider />
-
-      <Filter.CenturyHeader>
-        <Filter.CenturyTitle>시대 선택</Filter.CenturyTitle>
-        <Filter.CenturyCount>
-          {isLoading ? '...' : `${availableCenturies.length}개`}
-        </Filter.CenturyCount>
-      </Filter.CenturyHeader>
-      {isLoading ? (
-        <Filter.CenturyList>
-          {[...Array(6)].map((_, index) => (
-            <Skeleton.SkeletonCenturyButton key={index}>
-              <Skeleton.SkeletonCenturyLabel />
-              <Skeleton.SkeletonCenturyCount />
-            </Skeleton.SkeletonCenturyButton>
-          ))}
-        </Filter.CenturyList>
-      ) : (
-        <Filter.CenturyList>
-          <Filter.CenturyButton
-            $active={selectedCentury === FILTER_ALL}
-            type="button"
-            onClick={() => onSelectCentury('all')}
-          >
-            <Filter.CenturyLabel>
-              <strong>전체 시대</strong>
-              <span>모든 연대</span>
-            </Filter.CenturyLabel>
-            <Filter.CenturyEventCount>
-              {events.length}건
-            </Filter.CenturyEventCount>
-          </Filter.CenturyButton>
-          {availableCenturies.map((century) => {
-            const centuryEvents = events.filter((event) => {
-              const startCentury = getCenturyFromDate(event.startDate)
-              const endCentury = getCenturyFromDate(event.endDate)
-              return startCentury === century || endCentury === century
-            })
-            return (
-              <Filter.CenturyButton
-                key={century}
-                $active={selectedCentury === century}
-                type="button"
-                onClick={() => onSelectCentury(century)}
-              >
-                <Filter.CenturyLabel>
-                  <strong>{formatCenturyLabel(century)}</strong>
-                  <span>{formatCenturyRange(century)}</span>
-                </Filter.CenturyLabel>
-                <Filter.CenturyEventCount>
-                  {centuryEvents.length}건
-                </Filter.CenturyEventCount>
-              </Filter.CenturyButton>
-            )
-          })}
-        </Filter.CenturyList>
       )}
     </Filter.FilterColumn>
   )

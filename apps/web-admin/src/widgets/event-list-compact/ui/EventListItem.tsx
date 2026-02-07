@@ -196,9 +196,11 @@ export const EventListItem: React.FC<EventListItemProps> = ({
             </div>
           </List.CompactListMeta>
 
-          <List.CompactListSummary $depth={depth}>
-            {node.summary}
-          </List.CompactListSummary>
+          {node.summary && (
+            <List.CompactListSummary $depth={depth}>
+              {node.summary}
+            </List.CompactListSummary>
+          )}
 
           {/* 추가 정보 - 한눈에 보기 */}
           <div

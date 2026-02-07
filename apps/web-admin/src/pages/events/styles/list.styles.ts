@@ -10,12 +10,12 @@ import { CATEGORY_BADGE_COLORS } from './theme'
 export const CompactList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 16px 120px 0;
+  padding: 4px 12px 120px 0;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -53,8 +53,8 @@ export const CompactListItem = styled.div<{
           : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 14px;
   padding: 0;
-  margin-left: ${({ $depth }) => $depth * 24}px;
-  width: 100%;
+  margin-left: ${({ $depth }) => ($depth === 0 ? '40px' : $depth * 24 + 40)}px;
+  margin-right: 16px;
   background: ${({ $active, $depth }) =>
     $active
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))'
@@ -65,45 +65,14 @@ export const CompactListItem = styled.div<{
   transition: all 0.2s ease;
   box-shadow: ${({ $active, $depth }) =>
     $active
-      ? '0 4px 12px rgba(99, 102, 241, 0.15)'
-      : $depth > 0
-        ? '0 1px 2px rgba(99, 102, 241, 0.04)'
-        : '0 1px 3px rgba(0, 0, 0, 0.04)'};
+      ? '0 2px 8px rgba(99, 102, 241, 0.12)'
+      : '0 1px 3px rgba(0, 0, 0, 0.04)'};
   position: relative;
   display: flex;
 
-  ${({ $depth }) =>
-    $depth > 0 &&
-    `
-    &::before {
-      content: '';
-      position: absolute;
-      left: -12px;
-      top: 50%;
-      width: 8px;
-      height: 2px;
-      background: rgba(99, 102, 241, 0.25);
-    }
-    
-    &::after {
-      content: '';
-      position: absolute;
-      left: -12px;
-      top: 0;
-      bottom: 50%;
-      width: 2px;
-      background: rgba(99, 102, 241, 0.15);
-    }
-  `}
-
   &:hover {
-    border-color: rgba(99, 102, 241, 0.35);
-    background: ${({ $active, $depth }) =>
-      $active
-        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
-        : $depth > 0
-          ? 'rgba(240, 244, 255, 0.9)'
-          : '#f8fafc'};
+    border-color: rgba(99, 102, 241, 0.3);
+    transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
   }
 
@@ -332,7 +301,7 @@ export const LoadingSpinner = styled.div`
 export const YearDivider = styled.button`
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   margin: 24px 0 16px 0;
   padding: 0;
   background: transparent;
@@ -341,38 +310,50 @@ export const YearDivider = styled.button`
   cursor: pointer;
   transition: all 0.2s ease;
 
-  &:hover span {
-    background: #f1f5f9;
-    border-color: rgba(99, 102, 241, 0.25);
-  }
-
   &::before,
   &::after {
     content: '';
     flex: 1;
     height: 1px;
-    background: rgba(203, 213, 225, 0.5);
+    background: rgba(203, 213, 225, 0.3);
   }
 
   span {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    color: #6366f1;
+    color: #64748b;
     background: #fafafa;
-    padding: 5px 14px;
-    border-radius: 12px;
+    padding: 6px 16px;
+    border-radius: 10px;
     border: 1.5px solid rgba(203, 213, 225, 0.5);
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
     white-space: nowrap;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     transition: all 0.2s ease;
 
     svg {
       transition: transform 0.2s ease;
+      color: #6366f1;
+      font-size: 12px;
     }
   }
+
+  &:hover span {
+    background: #ffffff;
+    border-color: rgba(99, 102, 241, 0.25);
+  }
+`
+
+export const CollapsedCount = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #94a3b8;
+  padding: 3px 8px;
+  border-radius: 8px;
+  margin-left: auto;
 `
 
 export const CompactListSummary = styled.p<{ $depth: number }>`

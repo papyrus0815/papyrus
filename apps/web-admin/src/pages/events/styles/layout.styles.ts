@@ -29,9 +29,7 @@ export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 2400px;
   width: 100%;
-  margin: 0 auto;
   padding: 0 20px;
   flex: 1;
   min-height: 0;
@@ -106,25 +104,35 @@ export const CreateEventButton = styled.button`
   }
 `
 
+export const TopFilterBar = styled.div`
+  display: flex;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1.5px solid rgba(20, 19, 34, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+`
+
 export const CatalogSplit = styled.div`
   display: grid;
-  grid-template-columns: 280px minmax(650px, 920px) minmax(400px, 600px);
-  gap: 18px;
-  align-items: start;
-  max-width: 2400px;
-  margin: 0 auto;
+  grid-template-columns: 700px 1fr;
+  gap: 24px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 
-  @media (max-width: 1600px) {
-    grid-template-columns: 260px minmax(600px, 800px) minmax(350px, 500px);
-    gap: 16px;
+  @media (max-width: 1400px) {
+    grid-template-columns: 650px 1fr;
+    gap: 20px;
   }
 
   @media (max-width: 1200px) {
-    grid-template-columns: 240px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   @media (max-width: 768px) {

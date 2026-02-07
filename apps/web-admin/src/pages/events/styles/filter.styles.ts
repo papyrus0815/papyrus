@@ -4,11 +4,12 @@
  */
 import styled from 'styled-components'
 
-export const FilterColumn = styled.aside`
+export const FilterColumn = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  align-self: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: 1;
 
   &::-webkit-scrollbar {
     width: 5px;
@@ -35,52 +36,33 @@ export const FilterColumn = styled.aside`
 `
 
 export const FilterBlock = styled.div`
-  background: #ffffff;
-  border: 1.5px solid rgba(20, 19, 34, 0.08);
-  border-radius: 14px;
-  padding: 18px 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: all 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  }
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
 `
 
-export const FilterBlockLabel = styled.h4`
+export const FilterBlockLabel = styled.div`
   margin: 0;
   font-size: 13px;
-  font-weight: 700;
-  color: #1e293b;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  letter-spacing: 0.3px;
-
-  &::before {
-    content: '';
-    width: 2px;
-    height: 12px;
-    background: #64748b;
-    border-radius: 1px;
-  }
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
 `
 
 export const FilterSearchInput = styled.input`
   border: 1.5px solid rgba(203, 213, 225, 0.6);
   border-radius: 10px;
-  padding: 10px 14px 10px 38px;
+  padding: 9px 14px 9px 36px;
   font-size: 13px;
   background: #f8fafc
     url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
     no-repeat 12px 50%;
-  background-size: 15px;
+  background-size: 14px;
   color: #0f172a;
   transition: all 0.2s ease;
-  width: 100%;
+  min-width: 200px;
+  max-width: 300px;
 
   &::placeholder {
     color: #94a3b8;
@@ -90,6 +72,12 @@ export const FilterSearchInput = styled.input`
   &:hover {
     background-color: #ffffff;
     border-color: rgba(99, 102, 241, 0.2);
+  }
+
+  &:focus {
+    outline: none;
+    background-color: #ffffff;
+    border-color: #6366f1;
   }
 
   &:focus {
@@ -106,18 +94,17 @@ export const FilterSearchInput = styled.input`
 export const FilterTriggerButton = styled.button`
   border: 1.5px solid rgba(203, 213, 225, 0.6);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   background: #f8fafc;
   color: #1e293b;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  width: 100%;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  text-align: left;
+  gap: 8px;
+  white-space: nowrap;
 
   svg {
     color: #64748b;
@@ -176,25 +163,23 @@ export const FilterCheckbox = styled.label`
 `
 
 export const FilterResetButton = styled.button`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
-  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border: 1.5px solid rgba(239, 68, 68, 0.3);
   border-radius: 10px;
   padding: 9px 14px;
-  background: #f8fafc;
-  color: #64748b;
+  background: rgba(239, 68, 68, 0.05);
+  color: #ef4444;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  width: 100%;
+  white-space: nowrap;
 
   &:hover {
-    background: #ffffff;
-    border-color: rgba(99, 102, 241, 0.2);
-    color: #6366f1;
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.4);
   }
 
   &:focus-visible {
@@ -434,16 +419,47 @@ export const ToolbarMeta = styled.div`
 
 // 필터 토글 스위치
 export const FilterToggle = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f8fafc;
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #ffffff;
+  }
 `
 
 export const FilterToggleLabel = styled.span`
   font-size: 12px;
-  color: #475569;
+  color: #64748b;
   font-weight: 500;
+  white-space: nowrap;
+`
+
+export const CenturySelect = styled.select`
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #ffffff;
+    border-color: rgba(99, 102, 241, 0.2);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #6366f1;
+  }
 `
 
 export const Switch = styled.button<{ $active?: boolean }>`

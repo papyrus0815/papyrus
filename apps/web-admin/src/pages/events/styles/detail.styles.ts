@@ -8,14 +8,15 @@ import type { HistoricalEventCategory } from '../create/events.types'
 import { CATEGORY_BADGE_COLORS, IMPORTANCE_COLORS } from './theme'
 
 export const DetailPanel = styled.aside`
-  align-self: flex-start;
+  height: 100%;
   border: 1.5px solid rgba(20, 19, 34, 0.08);
   border-radius: 14px;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  max-height: calc(100vh - var(--header-height) - 60px);
   overflow-y: auto;
   overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -48,11 +49,13 @@ export const DetailPanelContent = styled.div`
 
 export const DetailHeroImage = styled.div<{ $isEmpty?: boolean }>`
   width: 100%;
-  height: 180px;
+  max-width: 400px;
+  height: 220px;
   background-size: cover;
   background-position: center;
   position: relative;
-  border-radius: 20px 20px 0 0;
+  border-radius: 12px;
+  margin: 20px auto;
   background-color: ${({ $isEmpty }) =>
     $isEmpty ? 'rgba(99, 102, 241, 0.04)' : 'transparent'};
 

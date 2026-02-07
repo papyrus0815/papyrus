@@ -238,21 +238,35 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
             // 접힌 년도의 사건은 렌더링하지 않음 (년도 구분선만 표시)
             if (isYearCollapsed && depth === 0) {
-              return showYearDivider ? (
-                <List.YearDivider
-                  key={`year-${currentYear}`}
-                  type="button"
-                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.preventDefault()
-                    toggleYearCollapse(currentYear)
-                  }}
-                >
-                  <span>
-                    <FiChevronRight size={14} />
-                    {currentYear}년
-                  </span>
-                </List.YearDivider>
-              ) : null
+              if (showYearDivider) {
+                // 이 년도의 사건 개수 계산
+                const yearEventCount = flattenedHierarchy.filter(
+                  (item) =>
+                    item.depth === 0 &&
+                    new Date(item.node.period.start).getFullYear() ===
+                      currentYear,
+                ).length
+
+                return (
+                  <List.YearDivider
+                    key={`year-${currentYear}`}
+                    type="button"
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                      e.preventDefault()
+                      toggleYearCollapse(currentYear)
+                    }}
+                  >
+                    <span>
+                      <FiChevronRight size={14} />
+                      {currentYear}년
+                      <List.CollapsedCount>
+                        {yearEventCount}건
+                      </List.CollapsedCount>
+                    </span>
+                  </List.YearDivider>
+                )
+              }
+              return null
             }
 
             // 이 사건이 속한 집권 기간 그룹 찾기

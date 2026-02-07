@@ -279,6 +279,51 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 </>
               )}
 
+              {/* 관련 국가 */}
+              {((selectedEvent as any).relatedCountries?.length > 0 ||
+                (selectedEvent as any).relatedHistoricalCountries?.length > 0) && (
+                <>
+                  <div style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FiGlobe size={14} />
+                    <span>관련 국가</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {(selectedEvent as any).relatedCountries?.map((country: any) => (
+                      <span
+                        key={country.id}
+                        style={{
+                          fontSize: '13px',
+                          padding: '4px 10px',
+                          background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          color: '#4f46e5',
+                          border: '1px solid rgba(99, 102, 241, 0.2)',
+                        }}
+                      >
+                        {country.flagEmoji} {country.name}
+                      </span>
+                    ))}
+                    {(selectedEvent as any).relatedHistoricalCountries?.map((country: any) => (
+                      <span
+                        key={country.id}
+                        style={{
+                          fontSize: '13px',
+                          padding: '4px 10px',
+                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                          borderRadius: '8px',
+                          fontWeight: '600',
+                          color: '#92400e',
+                          border: '1px solid rgba(245, 158, 11, 0.2)',
+                        }}
+                      >
+                        🏛️ {country.name}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+
               {/* 작성된 섹션 */}
               {selectedEvent.sectionTitles && selectedEvent.sectionTitles.length > 0 && (
                 <>

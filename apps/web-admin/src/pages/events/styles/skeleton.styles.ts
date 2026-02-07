@@ -2,9 +2,9 @@
  * Skeleton Loading Styled Components
  * 스켈레톤 로딩 관련 스타일
  */
-
 import styled from 'styled-components'
-import { shimmerAnimation, pulseAnimation } from './shared.styles'
+
+import { pulseAnimation, shimmerAnimation } from './shared.styles'
 
 // Skeleton 애니메이션 키프레임
 const shimmer = `
@@ -144,7 +144,8 @@ export const DetailPanelSkeleton = styled.div`
 
 export const SkeletonDetailHeroImage = styled.div`
   width: 100%;
-  height: 180px;
+  max-width: 400px;
+  height: 220px;
   background: linear-gradient(
     90deg,
     rgba(99, 102, 241, 0.15) 0%,
@@ -152,7 +153,8 @@ export const SkeletonDetailHeroImage = styled.div`
     rgba(99, 102, 241, 0.15) 100%
   );
   ${shimmerAnimation}
-  border-radius: 20px 20px 0 0;
+  border-radius: 12px;
+  margin: 20px auto;
   ${shimmer}
 `
 
@@ -329,21 +331,25 @@ export const CategorySummaryCard = styled.div<{ $category: string }>`
   align-items: center;
   gap: 16px;
   background: #ffffff;
-  border: 1px solid ${(props) => {
-    const colors = {
-      military: 'rgba(239, 68, 68, 0.2)',
-      political: 'rgba(99, 102, 241, 0.2)',
-      economic: 'rgba(245, 158, 11, 0.25)',
-      social: 'rgba(6, 182, 212, 0.22)',
-      technological: 'rgba(14, 165, 233, 0.22)',
-      cultural: 'rgba(236, 72, 153, 0.22)',
-      diplomatic: 'rgba(139, 92, 246, 0.22)',
-      conference: 'rgba(99, 102, 241, 0.2)',
-      religious: 'rgba(251, 146, 60, 0.22)',
-      other: 'rgba(107, 114, 128, 0.22)',
-    }
-    return colors[props.$category as keyof typeof colors] || 'rgba(99, 102, 241, 0.2)'
-  }};
+  border: 1px solid
+    ${(props) => {
+      const colors = {
+        military: 'rgba(239, 68, 68, 0.2)',
+        political: 'rgba(99, 102, 241, 0.2)',
+        economic: 'rgba(245, 158, 11, 0.25)',
+        social: 'rgba(6, 182, 212, 0.22)',
+        technological: 'rgba(14, 165, 233, 0.22)',
+        cultural: 'rgba(236, 72, 153, 0.22)',
+        diplomatic: 'rgba(139, 92, 246, 0.22)',
+        conference: 'rgba(99, 102, 241, 0.2)',
+        religious: 'rgba(251, 146, 60, 0.22)',
+        other: 'rgba(107, 114, 128, 0.22)',
+      }
+      return (
+        colors[props.$category as keyof typeof colors] ||
+        'rgba(99, 102, 241, 0.2)'
+      )
+    }};
   box-shadow: ${(props) => {
     const shadows = {
       military: '0 8px 24px rgba(239, 68, 68, 0.12)',
@@ -357,7 +363,10 @@ export const CategorySummaryCard = styled.div<{ $category: string }>`
       religious: '0 8px 24px rgba(251, 146, 60, 0.12)',
       other: '0 8px 24px rgba(107, 114, 128, 0.12)',
     }
-    return shadows[props.$category as keyof typeof shadows] || '0 8px 24px rgba(99, 102, 241, 0.12)'
+    return (
+      shadows[props.$category as keyof typeof shadows] ||
+      '0 8px 24px rgba(99, 102, 241, 0.12)'
+    )
   }};
   transition: all 0.3s ease;
   cursor: pointer;
@@ -377,7 +386,10 @@ export const CategorySummaryCard = styled.div<{ $category: string }>`
         religious: '0 12px 32px rgba(251, 146, 60, 0.18)',
         other: '0 12px 32px rgba(107, 114, 128, 0.18)',
       }
-      return shadows[props.$category as keyof typeof shadows] || '0 12px 32px rgba(99, 102, 241, 0.18)'
+      return (
+        shadows[props.$category as keyof typeof shadows] ||
+        '0 12px 32px rgba(99, 102, 241, 0.18)'
+      )
     }};
   }
 
@@ -404,7 +416,10 @@ export const CategoryIconBubble = styled.div<{ $category: string }>`
       religious: 'rgba(251, 146, 60, 0.15)',
       other: 'rgba(107, 114, 128, 0.15)',
     }
-    return backgrounds[props.$category as keyof typeof backgrounds] || 'rgba(99, 102, 241, 0.15)'
+    return (
+      backgrounds[props.$category as keyof typeof backgrounds] ||
+      'rgba(99, 102, 241, 0.15)'
+    )
   }};
   display: flex;
   align-items: center;
