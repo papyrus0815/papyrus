@@ -652,3 +652,72 @@ export class CreatePersonAwardDto {
   @Type(() => CareerImageDto)
   images?: CareerImageDto[]
 }
+
+/**
+ * 국가원수/왕위 재임 기록 생성 DTO
+ */
+export class CreateGovernmentPositionTenureDto {
+  @IsString()
+  personId!: string
+
+  @IsString()
+  positionType!: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입
+
+  @IsString()
+  title!: string // 직위명 (필수) - 예: "대통령", "국왕", "황제"
+
+  @IsOptional()
+  @IsString()
+  titleEn?: string // 영문 직위명
+
+  @IsOptional()
+  @IsBoolean()
+  showPositionInfo?: boolean // 사건 타임라인에 직책 정보 표시 여부
+
+  @IsOptional()
+  @IsString()
+  countryId?: string // 현대 국가 ID
+
+  @IsOptional()
+  @IsString()
+  historicalCountryId?: string // 역사적 국가 ID
+
+  @IsOptional()
+  @IsString()
+  positionDefinitionId?: string // 직위 정의 ID (선택사항)
+
+  @IsOptional()
+  @IsNumber()
+  termNumber?: number // 대수 (제20대)
+
+  @IsOptional()
+  @IsNumber()
+  regnalNumber?: number // 재위번호 (루이 14세의 "14")
+
+  @IsDateString()
+  startDate!: string // 취임일 (필수)
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string // 퇴임일
+
+  @IsOptional()
+  @IsString()
+  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER'
+
+  @IsOptional()
+  @IsString()
+  endReason?: 'TERM_COMPLETED' | 'RESIGNATION' | 'ABDICATION' | 'SUCCESSION_TRANSFER' | 'REMOVAL' | 'IMPEACHMENT' | 'DEATH_IN_OFFICE' | 'OVERTHROWN' | 'WAR_DEFEAT' | 'STATE_DISSOLVED' | 'OTHER'
+
+  @IsOptional()
+  @IsString()
+  endReasonDetail?: string
+
+  @IsOptional()
+  @IsString()
+  notes?: string
+
+  @IsOptional()
+  @IsNumber()
+  priority?: number
+}

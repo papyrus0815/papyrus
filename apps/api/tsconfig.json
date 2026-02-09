@@ -22,6 +22,6 @@
       "module": "commonjs"
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "prisma/**/*.ts"],
   "exclude": ["**/*.spec.ts"]
 }

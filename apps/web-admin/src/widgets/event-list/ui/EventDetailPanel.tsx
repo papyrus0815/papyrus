@@ -4,6 +4,7 @@
  */
 import React from 'react'
 
+import { toast } from 'react-hot-toast'
 import {
   FiArrowRight,
   FiBookOpen,
@@ -16,6 +17,7 @@ import {
   FiMapPin,
   FiShare2,
   FiTarget,
+  FiTrash2,
   FiUsers,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
@@ -30,6 +32,7 @@ import * as Modal from '@/pages/events/styles/modal.styles'
 import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { formatCompactNumber } from '@/pages/events/utils/events.utils'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import { deleteEvent } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 
 interface EventDetailPanelProps {
@@ -186,7 +189,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               <button
                 onClick={() => navigate(pathKeys.events.edit(selectedNode.id))}
                 style={{
-                  padding: '10px 16px',
+                  padding: '10px 14px',
                   background: 'white',
                   border: '1px solid #d1d5db',
                   borderRadius: '8px',
@@ -211,6 +214,48 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               >
                 <FiEdit2 size={15} />
                 수정
+              </button>
+              <button
+                onClick={async () => {
+                  if (
+                    confirm(
+                      '이 사건을 삭제하시겠습니까?\n\n3일 간 보관되며, 이후 자동으로 완전히 삭제됩니다.',
+                    )
+                  ) {
+                    try {
+                      await deleteEvent(selectedNode.id)
+                      toast.success('사건이 삭제되었습니다. (3일 간 복구 가능)')
+                      window.location.reload()
+                    } catch (error) {
+                      toast.error('사건 삭제에 실패했습니다.')
+                    }
+                  }
+                }}
+                style={{
+                  padding: '10px 14px',
+                  background: 'white',
+                  border: '1px solid #ef4444',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fef2f2'
+                  e.currentTarget.style.borderColor = '#dc2626'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'white'
+                  e.currentTarget.style.borderColor = '#ef4444'
+                }}
+              >
+                <FiTrash2 size={15} />
+                삭제
               </button>
               <button
                 onClick={() =>

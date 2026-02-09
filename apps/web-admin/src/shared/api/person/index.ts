@@ -75,7 +75,9 @@ export const personApi = {
   },
 
   getById: async (id: string) => {
-    return await personsApi.getById(apiConnection, id)
+    const result = await personsApi.getById(apiConnection, id)
+    // 인터셉터 등으로 { data } 래핑된 경우 실제 인물 객체 반환
+    return (result as any)?.data ?? result
   },
 
   create: async (data: CreatePersonInput) => {
@@ -87,6 +89,6 @@ export const personApi = {
   },
 
   delete: async (id: string) => {
-    await personsApi.$delete(apiConnection, id)
+    await personsApi._delete(apiConnection, id)
   },
 }

@@ -10,6 +10,7 @@ import {
   CreateBusinessCareerDto,
   CreateEducationDto,
   CreateGovernmentCareerDto,
+  CreateGovernmentPositionTenureDto,
   CreateLegalCareerDto,
   CreateMediaCareerDto,
   CreateMedicalCareerDto,
@@ -125,6 +126,7 @@ export interface IPersonRepository {
   addGovernmentCareer(
     dto: CreateGovernmentCareerDto,
   ): Promise<GovernmentCareerResponseDto>
+  deleteGovernmentCareer(id: string): Promise<void>
   addBusinessCareer(
     dto: CreateBusinessCareerDto,
   ): Promise<BusinessCareerResponseDto>
@@ -143,6 +145,15 @@ export interface IPersonRepository {
   addMedicalCareer(
     dto: CreateMedicalCareerDto,
   ): Promise<MedicalCareerResponseDto>
+  addGovernmentPositionTenure(
+    dto: CreateGovernmentPositionTenureDto,
+  ): Promise<any>
+  updateGovernmentPositionTenure(
+    id: string,
+    dto: Partial<CreateGovernmentPositionTenureDto>,
+  ): Promise<any>
+  deleteGovernmentPositionTenure(id: string): Promise<void>
+  findTenuresByPersonId(personId: string): Promise<any[]>
   addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto>
   addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto>
   findAllCareers(personId: string): Promise<AllCareersResponseDto>

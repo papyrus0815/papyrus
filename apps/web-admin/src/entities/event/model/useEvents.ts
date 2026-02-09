@@ -36,13 +36,16 @@ export const useEvents = (pageSizeParam: number = 20) => {
 
       console.log(`📥 사건 요청: offset=${currentOffset}, limit=${limit}`)
 
-      const eventsResponse = await getAllEvents({
-        offset: currentOffset,
-        limit,
-      })
-      const personsResponse = MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
+      const [eventsResponse, personsResponse] = await Promise.all([
+        getAllEvents({
+          offset: currentOffset,
+          limit,
+        }),
+        getAllPersonsWithGovernmentPositions(),
+      ])
 
       console.log(`✅ ${eventsResponse.length}개 사건 수신`)
+      console.log(`✅ ${personsResponse.length}명 인물 (정부 직위 포함) 수신`)
 
       const newEvents = transformEventsFromApi(eventsResponse)
 

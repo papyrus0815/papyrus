@@ -16,6 +16,7 @@ export class Event {
   casualties?: any | null
   militaryDetails?: any | null
   warCost?: string | null
+  createdById!: string
 
   constructor(data: Event) {
     Object.assign(this, data)

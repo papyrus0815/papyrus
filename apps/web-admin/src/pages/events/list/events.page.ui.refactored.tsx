@@ -40,6 +40,7 @@ import {
   type EventCategoryDto,
   getAllEventCategories,
 } from '@/shared/api/event-categories'
+import { getDeletedEvents } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
@@ -67,6 +68,10 @@ import { MOCK_POSITION_TYPES } from './mock-government-positions'
 
 export const EventsCatalogPageRefactored: React.FC = () => {
   const navigate = useNavigate()
+
+  // ===== Tab State =====
+  const [activeTab, setActiveTab] = useState<'active' | 'deleted'>('active')
+  const [deletedEvents, setDeletedEvents] = useState<HistoricalEvent[]>([])
 
   // ===== Pagination State (useEvents보다 먼저 선언) =====
   const [pageSize, setPageSize] = useState(20)
@@ -111,6 +116,21 @@ export const EventsCatalogPageRefactored: React.FC = () => {
         setHistoricalCountries([])
       })
   }, [])
+
+  // 삭제된 사건 로드
+  useEffect(() => {
+    if (activeTab === 'deleted') {
+      getDeletedEvents()
+        .then((events) => {
+          // EventResponseDto를 HistoricalEvent로 변환 필요
+          setDeletedEvents(events as any)
+        })
+        .catch((error) => {
+          console.error('❌ 삭제된 사건 로드 실패:', error)
+          setDeletedEvents([])
+        })
+    }
+  }, [activeTab])
 
   // ===== Feature: Event Filters =====
   const {
@@ -391,80 +411,142 @@ export const EventsCatalogPageRefactored: React.FC = () => {
           </Layout.CreateEventButton>
         </Layout.TopFilterBar>
 
-        <Layout.CatalogSplit>
-          {/* ===== Widget: Event Compact List ===== */}
-          <EventCompactList
-            isLoading={isLoading && events.length === 0}
-            flattenedHierarchy={flattenedHierarchy}
-            events={events}
-            filteredEvents={filteredEvents}
-            sortedEvents={sortedEvents}
-            expandedEventIds={expandedEventIds}
-            expandedTenureGroups={expandedTenureGroups}
-            selectedEventId={selectedEventId}
-            sortBy={sortBy}
-            sortDirection={sortDirection}
-            hasActiveFilters={hasActiveFilters}
-            tenureGroups={tenureGroups}
-            dbCategories={dbCategories}
-            totalCount={flattenedHierarchy.length}
-            isLoadingMore={isLoading && events.length > 0}
-            displayedCount={flattenedHierarchy.length}
-            hasMoreData={hasMore}
-            bookmarks={bookmarks}
-            onToggleExpansion={toggleEventExpansion}
-            onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
-            onSelectEvent={setSelectedEventId}
-            onShowSummary={(eventId) => {
-              setSummaryEventId(eventId)
-              setShowSummaryModal(true)
+        {/* 탭 네비게이션 */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            padding: '12px 16px',
+            borderBottom: '1px solid #e2e8f0',
+            background: '#ffffff',
+          }}
+        >
+          <button
+            onClick={() => setActiveTab('active')}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              borderBottom:
+                activeTab === 'active'
+                  ? '2px solid #6366f1'
+                  : '2px solid transparent',
+              background: 'transparent',
+              color: activeTab === 'active' ? '#6366f1' : '#64748b',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
             }}
-            onSortChange={(newSortBy) => {
-              console.log(
-                `📊 정렬 기준 변경 (EventCompactList): ${sortBy} → ${newSortBy}`,
-              )
-              setSortBy(newSortBy)
-              if (newSortBy === 'recent' || newSortBy === 'duration') {
-                setSortDirection('desc')
-              }
+          >
+            전체 사건
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('deleted')
+              getDeletedEvents().then(setDeletedEvents).catch(console.error)
             }}
-            onSortDirectionToggle={() => {
-              setSortDirection((prev) => {
-                const newDirection = prev === 'asc' ? 'desc' : 'asc'
-                console.log(
-                  `🔃 정렬 방향 변경 (EventCompactList): ${prev} → ${newDirection}`,
-                )
-                return newDirection
-              })
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              borderBottom:
+                activeTab === 'deleted'
+                  ? '2px solid #ef4444'
+                  : '2px solid transparent',
+              background: 'transparent',
+              color: activeTab === 'deleted' ? '#ef4444' : '#64748b',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
             }}
-            onResetFilters={handleResetFilters}
-            onToggleBookmark={toggleBookmark}
-            onScroll={handleScroll}
-            pageSize={pageSize}
-            onPageSizeChange={handlePageSizeChange}
-          />
+          >
+            삭제된 사건 ({deletedEvents.length})
+          </button>
+        </div>
 
-          {/* ===== Widget: Event Detail Panel ===== */}
-          <EventDetailPanel
-            isLoading={false}
-            selectedEvent={selectedEvent}
-            selectedNode={selectedNode}
-            dbCategories={dbCategories}
-            personsWithGovPositions={personsWithGovPositions}
-            eventHeadsOfState={eventHeadsOfState}
-            onSelectEvent={setSelectedEventId}
-            onExpandEvent={(eventId) => {
-              setExpandedEventIds((prev) => {
-                const next = new Set(prev)
-                next.add(eventId)
-                return next
-              })
-            }}
-            onShowSummary={(eventId) => {
-              setSummaryEventId(eventId)
-              setShowSummaryModal(true)
-            }}
-          />
+        <Layout.CatalogSplit>
+          {activeTab === 'active' ? (
+            <>
+              {/* ===== Widget: Event Compact List ===== */}
+              <EventCompactList
+                isLoading={isLoading && events.length === 0}
+                flattenedHierarchy={flattenedHierarchy}
+                events={events}
+                filteredEvents={filteredEvents}
+                sortedEvents={sortedEvents}
+                expandedEventIds={expandedEventIds}
+                expandedTenureGroups={expandedTenureGroups}
+                selectedEventId={selectedEventId}
+                sortBy={sortBy}
+                sortDirection={sortDirection}
+                hasActiveFilters={hasActiveFilters}
+                tenureGroups={tenureGroups}
+                periodHeadsOfState={
+                  eventHeadsOfState.get('__periodHeads__') ?? []
+                }
+                dbCategories={dbCategories}
+                totalCount={flattenedHierarchy.length}
+                isLoadingMore={isLoading && events.length > 0}
+                displayedCount={flattenedHierarchy.length}
+                hasMoreData={hasMore}
+                bookmarks={bookmarks}
+                onToggleExpansion={toggleEventExpansion}
+                onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
+                onSelectEvent={setSelectedEventId}
+                onShowSummary={(eventId) => {
+                  setSummaryEventId(eventId)
+                  setShowSummaryModal(true)
+                }}
+                onSortChange={(newSortBy) => {
+                  console.log(
+                    `📊 정렬 기준 변경 (EventCompactList): ${sortBy} → ${newSortBy}`,
+                  )
+                  setSortBy(newSortBy)
+                  if (newSortBy === 'recent' || newSortBy === 'duration') {
+                    setSortDirection('desc')
+                  }
+                }}
+                onSortDirectionToggle={() => {
+                  setSortDirection((prev) => {
+                    const newDirection = prev === 'asc' ? 'desc' : 'asc'
+                    console.log(
+                      `🔃 정렬 방향 변경 (EventCompactList): ${prev} → ${newDirection}`,
+                    )
+                    return newDirection
+                  })
+                }}
+                onResetFilters={handleResetFilters}
+                onToggleBookmark={toggleBookmark}
+                onScroll={handleScroll}
+                pageSize={pageSize}
+                onPageSizeChange={handlePageSizeChange}
+              />
+
+              {/* ===== Widget: Event Detail Panel ===== */}
+              <EventDetailPanel
+                isLoading={false}
+                selectedEvent={selectedEvent}
+                selectedNode={selectedNode}
+                dbCategories={dbCategories}
+                personsWithGovPositions={personsWithGovPositions}
+                eventHeadsOfState={eventHeadsOfState}
+                onSelectEvent={setSelectedEventId}
+                onExpandEvent={(eventId) => {
+                  setExpandedEventIds((prev) => {
+                    const next = new Set(prev)
+                    next.add(eventId)
+                    return next
+                  })
+                }}
+                onShowSummary={(eventId) => {
+                  setSummaryEventId(eventId)
+                  setShowSummaryModal(true)
+                }}
+              />
+            </>
+          ) : (
+            <div>삭제된 사건 목록</div>
+          )}
         </Layout.CatalogSplit>
       </Layout.PageWrapper>
 

@@ -18,6 +18,7 @@ import {
   CreateMedicalCareerDto,
   CreateEducationDto,
   CreatePersonAwardDto,
+  CreateGovernmentPositionTenureDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
   GovernmentCareerResponseDto,
@@ -118,6 +119,10 @@ export class PersonService {
     return this.personRepository.addGovernmentCareer(dto)
   }
 
+  async deleteGovernmentCareer(id: string): Promise<void> {
+    return this.personRepository.deleteGovernmentCareer(id)
+  }
+
   /**
    * 기업인 경력 추가
    */
@@ -172,6 +177,34 @@ export class PersonService {
    */
   async addMedicalCareer(dto: CreateMedicalCareerDto): Promise<MedicalCareerResponseDto> {
     return this.personRepository.addMedicalCareer(dto)
+  }
+
+  /**
+   * 국가원수/왕위 재임 기록 추가
+   */
+  async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto): Promise<any> {
+    return this.personRepository.addGovernmentPositionTenure(dto)
+  }
+
+  /**
+   * 국가원수/왕위 재임 기록 수정
+   */
+  async updateGovernmentPositionTenure(id: string, dto: Partial<CreateGovernmentPositionTenureDto>): Promise<any> {
+    return this.personRepository.updateGovernmentPositionTenure(id, dto)
+  }
+
+  /**
+   * 국가원수/왕위 재임 기록 삭제
+   */
+  async deleteGovernmentPositionTenure(id: string): Promise<void> {
+    return this.personRepository.deleteGovernmentPositionTenure(id)
+  }
+
+  /**
+   * 인물의 재임 기록만 조회 (수정 페이지 경력 로딩용)
+   */
+  async findTenuresByPersonId(personId: string): Promise<any[]> {
+    return this.personRepository.findTenuresByPersonId(personId)
   }
 
   /**

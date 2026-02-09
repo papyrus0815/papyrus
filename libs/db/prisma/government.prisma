@@ -18,6 +18,17 @@
 /// │ - 특징: 개인의 career path, 승진 이력, 부서 이동                       │
 /// │ - 예시: 외교부 장관, 국회의원, 서울시장, 조선 이조판서                  │
 /// └──────────────────────────────────────────────────────────────────────┘
+///
+/// 📌 테이블 통합 검토 (한 개로 합쳐도 되나?)
+/// - 통합 시: 한 테이블에 positionType/category로 구분, 대수·연호·역사적국가 등은
+///   nullable로 두면 가능. 단, 스키마가 비대해지고 "역대 대통령 목록" 같은 쿼리 시
+///   매번 타입 필터 필요, Job vs GovernmentPositionDefinition 참조가 섞임.
+/// - 분리 유지 시: 재임(역대 통치자)과 일반 경력(승진 이력)이 용도가 다르므로
+///   조회·표시 로직이 명확함. 사건 페이지는 두 소스를 합쳐서 한 UI로 보여주면 됨
+///   (현재 findHeadsOfStateDuringPeriod에서 tenures + governmentCareers 병합).
+/// - 결론: 지금처럼 두 테이블 유지하고, API/화면에서만 "직책 정보 표시" 기준으로
+///   합쳐서 쓰는 방식이 유지보수와 도메인 구분에 유리함. 통합은 도메인이 단순해지거나
+///   한쪽이 사실상 쓰이지 않을 때 재검토하는 것이 좋음.
 /// 
 /// 주요 기능:
 /// - 정부 직위 정의(GovernmentPositionDefinition): 관직 체계
@@ -226,11 +237,29 @@ model GovernmentPositionTenure {
   /// 고유 식별자 (PK)
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 직위 정의 ID
-  positionId String @map("position_id") @db.Char(36)
-
   /// 재임자 (인물) ID
   personId String @map("person_id") @db.Char(36)
+
+  /// 직위 타입 (필수)
+  positionType GovernmentPositionType @map("position_type")
+
+  /// 직위명 (필수) - 예: "대통령", "국왕", "총리", "황제"
+  title String @db.VarChar(100)
+
+  /// 영문 직위명
+  titleEn String? @map("title_en") @db.VarChar(100)
+
+  /// 사건 타임라인에 직책 정보 표시 여부 (기본값: true)
+  showPositionInfo Boolean @default(false) @map("show_position_info")
+
+  /// 소속 국가 (현대 국가)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 소속 국가 (역사적 국가)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 직위 정의 ID (선택사항, 공식 직위를 참조하고 싶을 때만)
+  positionDefinitionId String? @map("position_definition_id") @db.Char(36)
 
   /// 대수/회차 (예: 20 = 제20대, 100 = 제100대)
   /// NULL이면 대수 개념이 없는 직위 (예: 조선시대 관직)
@@ -263,16 +292,21 @@ model GovernmentPositionTenure {
   priority Int? @default(0)
 
   //--- 관계 필드
-  position   GovernmentPositionDefinition @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  person     Person                       @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
-  regnalEras RegnalEra[]                  @relation("TenureRegnalEras")
+  positionDefinition GovernmentPositionDefinition? @relation(fields: [positionDefinitionId], references: [id], onDelete: SetNull)
+  country            Country?                      @relation("TenureCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry  HistoricalCountry?            @relation("TenureHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  person             Person                        @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
+  regnalEras         RegnalEra[]                   @relation("TenureRegnalEras")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([positionId], name: "idx_gov_tenure_posId")
+  @@index([positionDefinitionId], name: "idx_gov_tenure_posDefId")
   @@index([personId], name: "idx_gov_tenure_personId")
+  @@index([countryId], name: "idx_gov_tenure_countryId")
+  @@index([historicalCountryId], name: "idx_gov_tenure_histCountryId")
+  @@index([positionType], name: "idx_gov_tenure_posType")
   @@index([termNumber], name: "idx_gov_tenure_termNum")
   @@index([startDate], name: "idx_gov_tenure_startDate")
   @@map("government_position_tenure")

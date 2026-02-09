@@ -201,6 +201,7 @@ model HistoricalCountry {
   organizationMemberships OrganizationCountryMembership[] @relation("OrgMembershipHistoricalCountry")
   PoliticalParty          PoliticalParty[]                @relation("PoliticalPartyHistoricalCountry")
   governmentPositions     GovernmentPositionDefinition[]  @relation("GovernmentPositionHistoricalCountry")
+  governmentTenures       GovernmentPositionTenure[]      @relation("TenureHistoricalCountry")
   EventTimeline           EventTimeline[]
   eventCountryRelations   EventCountryRelation[]
 

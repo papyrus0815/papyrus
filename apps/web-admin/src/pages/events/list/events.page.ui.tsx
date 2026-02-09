@@ -1920,14 +1920,17 @@ export const EventsCatalogPage: React.FC = () => {
                           </List.CompactListItem>
                         )}
 
-                        {/* 집권 기간 그룹 푸터 */}
-                        {isGroupEnd && tenureGroup && (
-                          <List.TenureGroupFooter>
-                            {tenureGroup.headOfState.person.surname || ''}
-                            {tenureGroup.headOfState.person.name}{' '}
-                            {tenureGroup.headOfState.position.title} 집권기 종료
-                          </List.TenureGroupFooter>
-                        )}
+                        {/* 집권 기간 그룹 푸터 (퇴임/종료가 있는 경우만: 진행 중이면 미표시) */}
+                        {isGroupEnd &&
+                          tenureGroup &&
+                          tenureGroup.headOfState.tenure.endDate && (
+                            <List.TenureGroupFooter>
+                              {tenureGroup.headOfState.person.surname || ''}
+                              {tenureGroup.headOfState.person.name}{' '}
+                              {tenureGroup.headOfState.position.title} 집권기
+                              종료
+                            </List.TenureGroupFooter>
+                          )}
                       </React.Fragment>
                     )
                   },

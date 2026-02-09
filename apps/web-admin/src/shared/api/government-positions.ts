@@ -91,6 +91,7 @@ export interface HeadOfStateDuringEvent {
     termNumber?: number
     startDate: string
     endDate?: string
+    showPositionInfo?: boolean
   }
   country: {
     id: string
@@ -116,80 +117,125 @@ export function findHeadsOfStateDuringPeriod(
   const eventStart = new Date(eventStartDate)
   const eventEnd = eventEndDate ? new Date(eventEndDate) : eventStart
 
-  persons.forEach((person) => {
-    if (
-      !person.governmentPositions ||
-      person.governmentPositions.length === 0
-    ) {
-      return
+  const pushPerson = (
+    person: any,
+    entry: Omit<HeadOfStateDuringEvent, 'person'> & { person?: any },
+  ) => {
+    const basePerson = {
+      id: person.id,
+      name: person.name,
+      surname: person.surname,
+      profileImageUrl: person.profileImageUrl,
+      birthEra: person.birthEra ?? null,
+      birthYear: person.birthYear ?? null,
+      birthMonth: person.birthMonth ?? null,
+      birthDay: person.birthDay ?? null,
+      birthDate: person.birthDate ?? null,
+      deathEra: person.deathEra ?? null,
+      deathYear: person.deathYear ?? null,
+      deathMonth: person.deathMonth ?? null,
+      deathDay: person.deathDay ?? null,
+      deathDate: person.deathDate ?? null,
+      governmentPositions: person.governmentPositions ?? [],
     }
+    result.push({ ...entry, person: basePerson })
+  }
 
-    person.governmentPositions.forEach((tenure: any) => {
-      // 직업 타입 필터링
-      if (positionTypeFilter && positionTypeFilter !== 'all') {
-        if (tenure.position?.positionType !== positionTypeFilter) {
-          return
+  const isOverlapping = (start: Date, end: Date | null) =>
+    (start <= eventEnd && (!end || end >= eventStart)) ||
+    (eventStart <= end! && eventEnd >= start)
+
+  persons.forEach((person) => {
+    // 1) 재임 기록 (GovernmentPositionTenure)
+    if (person.governmentPositions?.length > 0) {
+      person.governmentPositions.forEach((tenure: any) => {
+        if (positionTypeFilter && positionTypeFilter !== 'all') {
+          if (tenure.positionType !== positionTypeFilter) return
+        } else {
+          if (tenure.positionType !== 'HEAD_OF_STATE') return
         }
-      } else {
-        // 필터가 없으면 국가 원수만 필터링 (기본 동작)
-        if (tenure.position?.positionType !== 'HEAD_OF_STATE') {
+        const tenureStart = new Date(tenure.startDate)
+        const tenureEnd = tenure.endDate ? new Date(tenure.endDate) : new Date()
+        if (!isOverlapping(tenureStart, tenure.endDate ? tenureEnd : null))
           return
-        }
-      }
-
-      const tenureStart = new Date(tenure.startDate)
-      const tenureEnd = tenure.endDate ? new Date(tenure.endDate) : new Date()
-
-      // 기간이 겹치는지 확인
-      const isOverlapping =
-        (tenureStart <= eventEnd &&
-          (!tenure.endDate || tenureEnd >= eventStart)) ||
-        (eventStart <= tenureEnd && eventEnd >= tenureStart)
-
-      if (isOverlapping) {
-        const country =
-          tenure.position.country || tenure.position.historicalCountry
-
+        const country = tenure.country || tenure.historicalCountry
         if (country) {
-          result.push({
-            person: {
-              id: person.id,
-              name: person.name,
-              surname: person.surname,
-              profileImageUrl: person.profileImageUrl,
-              birthEra: person.birthEra ?? null,
-              birthYear: person.birthYear ?? null,
-              birthMonth: person.birthMonth ?? null,
-              birthDay: person.birthDay ?? null,
-              birthDate: person.birthDate ?? null,
-              deathEra: person.deathEra ?? null,
-              deathYear: person.deathYear ?? null,
-              deathMonth: person.deathMonth ?? null,
-              deathDay: person.deathDay ?? null,
-              deathDate: person.deathDate ?? null,
-              governmentPositions: person.governmentPositions ?? [],
+          pushPerson(person, {
+            position: {
+              id: tenure.id,
+              title: tenure.title,
+              titleEn: tenure.titleEn,
+              positionType: tenure.positionType,
+              rank: tenure.priority || 0,
             },
-            position: tenure.position,
             tenure: {
               termNumber: tenure.termNumber,
               startDate: tenure.startDate,
               endDate: tenure.endDate,
+              showPositionInfo: tenure.showPositionInfo,
             },
-            country: {
-              id: country.id,
-              name: country.name,
-            },
+            country: { id: country.id, name: country.name },
           })
         }
-      }
+      })
+    }
+
+    // 2) 정부/공무원 경력 (GovernmentCareer) - "직책 정보 표시" 체크된 것만
+    const careers = person.governmentCareers ?? []
+    careers.forEach((career: any) => {
+      if (career.showPositionInfo === false) return
+      const careerStart = career.startDate ? new Date(career.startDate) : null
+      if (!careerStart || isNaN(careerStart.getTime())) return
+      const careerEnd = career.endDate ? new Date(career.endDate) : null
+      if (!isOverlapping(careerStart, careerEnd)) return
+      const country = career.country
+      if (!country) return
+      const title =
+        career.roleTitle ||
+        career.timelineTitle ||
+        career.position?.title ||
+        '직책'
+      // 직급(Job)이 "대통령"이거나 제목에 국가원수 직함이 있으면 HEAD_OF_STATE (사건 페이지 필터/노출용)
+      const positionTitle = (career.position?.title || '').trim()
+      const titleStr = (title || '').trim()
+      const titleLower = titleStr.toLowerCase()
+      const isHeadOfState =
+        positionTitle === '대통령' ||
+        /대통령|국왕|황제|천황|emperor|king|president|head of state/i.test(
+          titleLower,
+        ) ||
+        /제\s*\d+\s*대\s*대통령/.test(titleStr)
+      const positionType = isHeadOfState
+        ? GovernmentPositionType.HEAD_OF_STATE
+        : GovernmentPositionType.CABINET_MINISTER
+      if (
+        positionTypeFilter &&
+        positionTypeFilter !== 'all' &&
+        positionType !== positionTypeFilter
+      )
+        return
+      pushPerson(person, {
+        position: {
+          id: career.positionId || career.id,
+          title,
+          titleEn: undefined,
+          positionType,
+          rank: 0,
+        },
+        tenure: {
+          termNumber: career.termNumber,
+          startDate: career.startDate,
+          endDate: career.endDate ?? undefined,
+          showPositionInfo: career.showPositionInfo !== false,
+        },
+        country: { id: country.id, name: country.name },
+      })
     })
   })
 
-  // 시작일 기준으로 정렬
-  return result.sort((a, b) => {
-    return (
+  return result.sort(
+    (a, b) =>
       new Date(a.tenure.startDate).getTime() -
-      new Date(b.tenure.startDate).getTime()
-    )
-  })
+      new Date(b.tenure.startDate).getTime(),
+  )
 }

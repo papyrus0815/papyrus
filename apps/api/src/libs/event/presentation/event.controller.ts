@@ -9,7 +9,11 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  Request,
+  Patch,
+  UseGuards,
 } from '@nestjs/common'
+import { AuthGuard } from '@nestjs/passport'
 import { ApiTags } from '@nestjs/swagger'
 import { EventService } from '../application/event.service'
 import { MilitaryEventService } from '../application/military-event.service'
@@ -19,6 +23,7 @@ import { PrismaClient } from '@prisma/client'
 
 @ApiTags('events')
 @Controller('events')
+@UseGuards(AuthGuard('jwt'))
 export class EventController {
   constructor(
     private readonly eventService: EventService,
@@ -126,16 +131,22 @@ export class EventController {
   async getAllEvents(
     @Query('offset') offset?: string,
     @Query('limit') limit?: string,
+    @Request() req?: any,
   ): Promise<EventResponseDto[]> {
+    const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
     const skip = offset ? parseInt(offset, 10) : 0
     const take = limit ? Math.min(parseInt(limit, 10), 100) : 20
 
     console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}`)
+    console.log(`👤 req.user:`, req.user)
+    console.log(`👤 userId:`, userId)
 
-    // 최상위 사건만 페이징 (parentEventId가 null인 것만)
+    // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
     const events = await this.prisma.event.findMany({
       where: {
         parentEventId: null, // 최상위 사건만
+        createdById: userId, // 본인 사건만
+        deletedAt: null, // 삭제되지 않은 사건만
       },
       skip,
       take,
@@ -184,7 +195,24 @@ export class EventController {
   @Get('parent/:parentEventId')
   async getEventsByParentId(
     @Param('parentEventId') parentEventId: string,
+    @Request() req?: any,
   ): Promise<EventResponseDto[]> {
+    const userId = req.user?.id // AuthGuard가 이미 인증 체크함
+    
+    // 상위 사건의 권한 체크
+    const parentEvent = await this.prisma.event.findUnique({
+      where: { id: parentEventId },
+      select: { createdById: true },
+    })
+    
+    if (!parentEvent) {
+      throw new Error('상위 사건을 찾을 수 없습니다.')
+    }
+    
+    if (parentEvent.createdById !== userId) {
+      throw new Error('본인이 등록한 사건의 하위 사건만 조회할 수 있습니다.')
+    }
+    
     const events = await this.eventService.getEventsByParentId(parentEventId)
     return events.map((event) => this.toResponseDto(event))
   }
@@ -197,7 +225,12 @@ export class EventController {
    * @tag events
    */
   @Get(':id')
-  async getEventById(@Param('id') id: string): Promise<EventResponseDto> {
+  async getEventById(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<EventResponseDto> {
+    const userId = req.user?.id // AuthGuard가 이미 인증 체크함
+    
     // Prisma로 직접 조회하여 category 관계 포함
     const event = await this.prisma.event.findUnique({
       where: { id },
@@ -228,6 +261,11 @@ export class EventController {
     if (!event) {
       throw new Error('Event not found')
     }
+    
+    // 권한 체크: 본인 사건만 조회 가능
+    if (event.createdById !== userId) {
+      throw new Error('본인이 등록한 사건만 조회할 수 있습니다.')
+    }
 
     // 정규화된 군사 정보 조회
     const militaryEvent = await this.militaryEventService.getMilitaryData(id)
@@ -249,7 +287,14 @@ export class EventController {
    * @tag events
    */
   @Post()
-  async createEvent(@Body() dto: CreateEventDto): Promise<EventResponseDto> {
+  async createEvent(
+    @Body() dto: CreateEventDto,
+    @Request() req?: any,
+  ): Promise<EventResponseDto> {
+    const userId = req.user?.id! // AuthGuard가 이미 인증 체크함
+    
+    console.log(`👤 사건 등록 사용자: ${userId}`)
+    
     // categoryName이 제공되면 categoryId로 변환 (우선순위: categoryName > categoryId)
     let categoryId = dto.categoryId
     if (dto.categoryName) {
@@ -277,6 +322,7 @@ export class EventController {
         historicalCountryId: dto.historicalCountryId,
         warCost: dto.warCost,
         childEvents: dto.childEvents, // 🆕 하위 사건 정보 전달
+        createdById: userId, // 🆕 등록자 ID
       },
       dto.relatedPersons,
       dto.relatedEventIds,
@@ -328,7 +374,26 @@ export class EventController {
   async updateEvent(
     @Param('id') id: string,
     @Body() dto: UpdateEventDto,
+    @Request() req?: any,
   ): Promise<EventResponseDto> {
+    const userId = req.user?.id! // AuthGuard가 이미 인증 체크함
+    
+    console.log(`👤 사건 수정 사용자: ${userId}`)
+    
+    // 권한 체크: 본인이 등록한 사건만 수정 가능
+    const existingEvent = await this.prisma.event.findUnique({
+      where: { id },
+      select: { createdById: true },
+    })
+    
+    if (!existingEvent) {
+      throw new Error('사건을 찾을 수 없습니다.')
+    }
+    
+    if (existingEvent.createdById !== userId) {
+      throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+    }
+    
     // categoryName이 제공되면 categoryId로 변환 (우선순위: categoryName > categoryId)
     let categoryId = dto.categoryId
     if (dto.categoryName) {
@@ -380,8 +445,66 @@ export class EventController {
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteEvent(@Param('id') id: string): Promise<void> {
-    await this.eventService.deleteEvent(id)
+  async deleteEvent(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<void> {
+    const userId = req.user?.id! // AuthGuard가 이미 인증 체크함
+    
+    console.log(`👤 사건 삭제 사용자: ${userId}`)
+    
+    // 권한 체크: 본인이 등록한 사건만 삭제 가능
+    const existingEvent = await this.prisma.event.findUnique({
+      where: { id },
+      select: { createdById: true },
+    })
+    
+    if (!existingEvent) {
+      throw new Error('사건을 찾을 수 없습니다.')
+    }
+    
+    if (existingEvent.createdById !== userId) {
+      throw new Error('본인이 등록한 사건만 삭제할 수 있습니다.')
+    }
+    
+    await this.eventService.deleteEvent(id, userId)
+  }
+
+  /**
+   * 삭제된 사건 목록 조회
+   */
+  @Get('deleted/list')
+  async getDeletedEvents(@Request() req?: any): Promise<EventResponseDto[]> {
+    const userId = req.user?.id!
+    const events = await this.eventService.getDeletedEvents(userId)
+    return events.map((event) => this.toResponseDto(event))
+  }
+
+  /**
+   * 사건 복구
+   */
+  @Post(':id/restore')
+  @HttpCode(HttpStatus.OK)
+  async restoreEvent(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<EventResponseDto> {
+    const userId = req.user?.id!
+    const event = await this.eventService.restoreEvent(id, userId)
+    return this.toResponseDto(event)
+  }
+
+  /**
+   * 사건 완전 삭제
+   */
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async permanentlyDeleteEvent(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<void> {
+    const userId = req.user?.id!
+    await this.eventService.permanentlyDeleteEvent(id, userId)
   }
 }
 

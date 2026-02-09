@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { 
   Person,
   MilitaryCareer,
@@ -33,6 +33,7 @@ import {
   CreateMedicalCareerDto,
   CreateEducationDto,
   CreatePersonAwardDto,
+  CreateGovernmentPositionTenureDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
   GovernmentCareerResponseDto,
@@ -59,7 +60,23 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * Prisma Person을 PersonResponseDto로 변환
    */
-  private mapToPersonResponse(person: Person): PersonResponseDto {
+  private mapToPersonResponse(person: any): PersonResponseDto {
+    // BigInt와 Date를 안전하게 변환
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString() // Date 객체는 ISO 문자열로
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) {
+          result[key] = serializeBigInt(obj[key])
+        }
+        return result
+      }
+      return obj
+    }
+
     return {
       id: person.id,
       name: person.name,
@@ -87,6 +104,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       motherId: person.motherId,
       jobId: person.jobId,
       countryId: person.countryId,
+      showLifespanOnEventList: person.showLifespanOnEventList,
+      // 정부 직위 재임 기록
+      governmentTenures: person.GovernmentTenures ? serializeBigInt(person.GovernmentTenures) : undefined,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
     }
@@ -337,7 +357,8 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 모든 인물 목록 조회 (정부 직책 포함)
+   * 모든 인물 목록 조회 (정부 직책 + 정부/공무원 경력 포함)
+   * 사건 페이지에서 "직책 정보 표시" 체크된 재임·정부경력 모두 표시용
    */
   async findAllWithGovernmentPositions() {
     return this.prisma.person.findMany({
@@ -346,13 +367,21 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             termNumber: true,
+            regnalNumber: true,
             startDate: true,
             endDate: true,
             appointmentMethod: true,
             endReason: true,
+            endReasonDetail: true,
             notes: true,
             priority: true,
-            position: {
+            positionType: true,
+            title: true,
+            titleEn: true,
+            showPositionInfo: true,
+            countryId: true,
+            historicalCountryId: true,
+            positionDefinition: {
               select: {
                 id: true,
                 title: true,
@@ -376,6 +405,46 @@ export class PersonPrismaRepository implements IPersonRepository {
                 },
               },
             },
+            country: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            historicalCountry: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            startDate: 'desc',
+          },
+        },
+        governmentCareers: {
+          select: {
+            id: true,
+            timelineTitle: true,
+            showPositionInfo: true,
+            positionId: true,
+            roleTitle: true,
+            termNumber: true,
+            startDate: true,
+            endDate: true,
+            countryId: true,
+            country: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            position: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
           },
           orderBy: {
             startDate: 'desc',
@@ -394,6 +463,18 @@ export class PersonPrismaRepository implements IPersonRepository {
   async findById(id: string): Promise<PersonResponseDto | null> {
     const person = await this.prisma.person.findUnique({
       where: { id },
+      include: {
+        GovernmentTenures: {
+          include: {
+            positionDefinition: true,
+            country: true,
+            historicalCountry: true,
+          },
+          orderBy: {
+            startDate: 'desc',
+          },
+        },
+      },
     })
     return person ? this.mapToPersonResponse(person) : null
   }
@@ -618,13 +699,19 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             termNumber: true,
+            regnalNumber: true,
+            positionType: true,
+            title: true,
+            titleEn: true,
+            showPositionInfo: true,
             startDate: true,
             endDate: true,
             appointmentMethod: true,
             endReason: true,
+            endReasonDetail: true,
             notes: true,
             priority: true,
-            position: {
+            positionDefinition: {
               select: {
                 id: true,
                 title: true,
@@ -642,6 +729,18 @@ export class PersonPrismaRepository implements IPersonRepository {
                     name: true,
                   },
                 },
+              },
+            },
+            country: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            historicalCountry: {
+              select: {
+                id: true,
+                name: true,
               },
             },
           },
@@ -708,20 +807,39 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   /**
    * 정치인/공무원 경력 추가
+   * positionId는 Job 테이블의 id를 참조하므로 유효한 직급(Job) ID가 필요합니다.
    */
   async addGovernmentCareer(dto: CreateGovernmentCareerDto): Promise<GovernmentCareerResponseDto> {
-    const { images, ...careerData } = dto
-    
+    const { images, role, ...careerData } = dto
+
+    const positionId = dto.positionId?.trim()
+    if (!positionId) {
+      throw new BadRequestException('정치인/공무원 경력에는 직급(직책)을 선택해주세요.')
+    }
+    const job = await this.prisma.job.findUnique({ where: { id: positionId } })
+    if (!job) {
+      throw new BadRequestException('선택한 직급(직책)이 존재하지 않습니다.')
+    }
+
     const career = await this.prisma.governmentCareer.create({
       data: {
         ...careerData,
+        roleTitle: role ?? (careerData as any).roleTitle,
+        positionId,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
       },
     })
-    
+
     return this.mapToGovernmentCareerResponse(career)
+  }
+
+  /**
+   * 정치인/공무원 경력 삭제
+   */
+  async deleteGovernmentCareer(id: string): Promise<void> {
+    await this.prisma.governmentCareer.delete({ where: { id } })
   }
 
   /**
@@ -871,6 +989,117 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 국가원수/왕위 재임 기록 추가
+   */
+  async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto): Promise<any> {
+    const tenure = await this.prisma.governmentPositionTenure.create({
+      data: {
+        personId: dto.personId,
+        positionType: dto.positionType as any,
+        title: dto.title,
+        titleEn: dto.titleEn,
+        showPositionInfo: dto.showPositionInfo !== false, // 기본값 true
+        countryId: dto.countryId,
+        historicalCountryId: dto.historicalCountryId,
+        positionDefinitionId: dto.positionDefinitionId, // 선택사항
+        termNumber: dto.termNumber,
+        regnalNumber: dto.regnalNumber,
+        startDate: new Date(dto.startDate),
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        appointmentMethod: dto.appointmentMethod as any,
+        endReason: dto.endReason as any,
+        endReasonDetail: dto.endReasonDetail,
+        notes: dto.notes,
+        priority: dto.priority,
+      },
+      include: {
+        positionDefinition: true,
+        country: true,
+        historicalCountry: true,
+        person: true,
+      },
+    })
+    
+    // BigInt를 문자열로 변환
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) {
+          result[key] = serializeBigInt(obj[key])
+        }
+        return result
+      }
+      return obj
+    }
+    
+    return serializeBigInt(tenure)
+  }
+
+  /**
+   * 국가원수/왕위 재임 기록 수정
+   */
+  async updateGovernmentPositionTenure(id: string, dto: Partial<CreateGovernmentPositionTenureDto>): Promise<any> {
+    const updateData: any = {}
+    
+    if (dto.positionType) updateData.positionType = dto.positionType as any
+    if (dto.title) updateData.title = dto.title
+    if (dto.titleEn !== undefined) updateData.titleEn = dto.titleEn
+    if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
+    if (dto.countryId !== undefined) updateData.countryId = dto.countryId
+    if (dto.historicalCountryId !== undefined) updateData.historicalCountryId = dto.historicalCountryId
+    if (dto.positionDefinitionId !== undefined) updateData.positionDefinitionId = dto.positionDefinitionId
+    if (dto.termNumber !== undefined) updateData.termNumber = dto.termNumber
+    if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
+    if (dto.startDate) updateData.startDate = new Date(dto.startDate)
+    if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
+    if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any
+    if (dto.endReasonDetail !== undefined) updateData.endReasonDetail = dto.endReasonDetail
+    if (dto.notes !== undefined) updateData.notes = dto.notes
+    if (dto.priority !== undefined) updateData.priority = dto.priority
+
+    const tenure = await this.prisma.governmentPositionTenure.update({
+      where: { id },
+      data: updateData,
+      include: {
+        positionDefinition: true,
+        country: true,
+        historicalCountry: true,
+        person: true,
+      },
+    })
+
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) {
+          result[key] = serializeBigInt(obj[key])
+        }
+        return result
+      }
+      return obj
+    }
+
+    return serializeBigInt(tenure)
+  }
+
+  /**
+   * 국가원수/왕위 재임 기록 삭제
+   */
+  async deleteGovernmentPositionTenure(id: string): Promise<void> {
+    await this.prisma.governmentPositionTenure.delete({
+      where: { id },
+    })
+  }
+
+  /**
    * 학력 추가
    */
   async addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
@@ -907,7 +1136,40 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 인물의 재임 기록만 조회 (GovernmentPositionTenure)
+   * 수정 페이지에서 경력을 확실히 불러오기 위해 전용 API로 사용
+   */
+  async findTenuresByPersonId(personId: string): Promise<any[]> {
+    const tenures = await this.prisma.governmentPositionTenure.findMany({
+      where: { personId },
+      include: {
+        positionDefinition: true,
+        country: true,
+        historicalCountry: true,
+      },
+      orderBy: { startDate: 'desc' },
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(tenures)
+  }
+
+  /**
    * 인물의 모든 경력 조회
+   *
+   * 경력 타입별로 테이블이 나뉘어 있어도, Prisma는 한 번의 findUnique + include로
+   * Person과 연결된 모든 경력 테이블을 한 번에 조회한다.
+   * (타입이 늘어나면 include에 키만 추가하면 되고, API 호출 횟수는 1회로 유지)
    */
   async findAllCareers(personId: string): Promise<AllCareersResponseDto> {
     const person = await this.prisma.person.findUnique({

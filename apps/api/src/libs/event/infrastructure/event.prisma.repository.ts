@@ -82,6 +82,7 @@ export class EventPrismaRepository implements EventRepository {
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,
         warCost: data.warCost,
+        createdById: data.createdById!, // 등록자 ID (필수)
       },
       include: {
         category: true,
@@ -160,6 +161,7 @@ export class EventPrismaRepository implements EventRepository {
       administrativeDivisionId: event.administrativeDivisionId,
       historicalCountryId: event.historicalCountryId,
       warCost: event.warCost,
+      createdById: event.createdById,
     })
   }
 }

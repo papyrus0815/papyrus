@@ -92,6 +92,7 @@ model Country {
   organizationMemberships   OrganizationCountryMembership[]  @relation("OrgMembershipCountry")
   PoliticalParty            PoliticalParty[]                 @relation("PoliticalPartyCountry")
   governmentPositions       GovernmentPositionDefinition[]   @relation("GovernmentPositionCountry")
+  governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
   eventTimelines            EventTimeline[]
   eventCountryRelations     EventCountryRelation[]
 

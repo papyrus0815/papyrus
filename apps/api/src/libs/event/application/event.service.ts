@@ -234,13 +234,13 @@ export class EventService {
             location: childData.location || null,
             parentEventId: event.id, // 방금 생성한 사건을 상위로 설정
             categoryId: data.categoryId || null, // 상위 사건의 카테고리 상속
-            // updatedAt: new Date(), // Prisma가 자동 관리
             background: null,
             aftermath: null,
             cityId: null,
             administrativeDivisionId: null,
             historicalCountryId: null,
             warCost: null,
+            createdById: data.createdById, // 상위 사건의 등록자 상속
           })
           console.log(`✅ 하위 사건 생성 완료: ${childData.title}`)
         } catch (error) {
@@ -434,14 +434,95 @@ export class EventService {
   }
 
   /**
-   * 사건 삭제
+   * 사건 삭제 (소프트 삭제)
    * @param id 사건 ID
+   * @param userId 삭제하는 사용자 ID
    * @throws NotFoundException 사건을 찾을 수 없는 경우
    */
-  async deleteEvent(id: string): Promise<void> {
+  async deleteEvent(id: string, userId?: string): Promise<void> {
     // 존재 여부 확인
     await this.getEventById(id)
+    
+    // 소프트 삭제: deletedAt 설정
+    await this.prisma.event.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        deletedById: userId || null,
+      },
+    })
+    
+    console.log(`🗑️ 사건 소프트 삭제: ${id} (3일 후 완전 삭제 예정)`)
+  }
+
+  /**
+   * 삭제된 사건 목록 조회
+   */
+  async getDeletedEvents(userId: string): Promise<any[]> {
+    const events = await this.prisma.event.findMany({
+      where: {
+        createdById: userId,
+        deletedAt: { not: null },
+      },
+      orderBy: { deletedAt: 'desc' },
+      include: {
+        category: true,
+      },
+    })
+    
+    return events
+  }
+
+  /**
+   * 사건 복구
+   */
+  async restoreEvent(id: string, userId: string): Promise<any> {
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+    })
+    
+    if (!event) {
+      throw new Error('사건을 찾을 수 없습니다.')
+    }
+    
+    if (event.createdById !== userId) {
+      throw new Error('본인이 삭제한 사건만 복구할 수 있습니다.')
+    }
+    
+    const restored = await this.prisma.event.update({
+      where: { id },
+      data: {
+        deletedAt: null,
+        deletedById: null,
+      },
+      include: {
+        category: true,
+      },
+    })
+    
+    console.log(`♻️ 사건 복구: ${id}`)
+    return restored
+  }
+
+  /**
+   * 사건 완전 삭제
+   */
+  async permanentlyDeleteEvent(id: string, userId: string): Promise<void> {
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+    })
+    
+    if (!event) {
+      throw new Error('사건을 찾을 수 없습니다.')
+    }
+    
+    if (event.createdById !== userId) {
+      throw new Error('본인이 삭제한 사건만 완전히 삭제할 수 있습니다.')
+    }
+    
+    // 완전 삭제
     await this.events.delete(id)
+    console.log(`🔥 사건 완전 삭제: ${id}`)
   }
 }
 

@@ -267,10 +267,19 @@ model Event {
   // 🆕 이미지 (썸네일 포함)
   eventImages EventImage[]
 
+  /// 등록자 
+  createdById String @map("created_by") @db.Char(36)
+
+  /// 소프트 삭제
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by") @db.Char(36)
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([createdById], name: "idx_event_createdBy")
+  @@index([deletedAt], name: "idx_event_deletedAt")
   @@map("event")
 }
 

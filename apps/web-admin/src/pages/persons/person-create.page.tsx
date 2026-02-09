@@ -156,6 +156,18 @@ interface Organization {
 
 interface Career {
   id: string
+  careerType:
+    | 'military'
+    | 'government'
+    | 'business'
+    | 'academic'
+    | 'religious'
+    | 'artist'
+    | 'athlete'
+    | 'media'
+    | 'legal'
+    | 'medical'
+    | 'government_position' // 경력 타입
   timelineTitle: string
   showPositionInfo: boolean
   jobId: string
@@ -178,6 +190,47 @@ interface Career {
   countryId: string
   note: string
   priority: number
+
+  // GovernmentPositionTenure 전용 필드
+  positionType?:
+    | 'HEAD_OF_STATE'
+    | 'HEAD_OF_GOVERNMENT'
+    | 'HEIR_APPARENT'
+    | 'REGENT'
+    | 'CABINET_MINISTER'
+    | 'VICE_MINISTER'
+    | 'LEGISLATOR'
+    | 'JUDICIARY'
+    | 'LOCAL_GOVERNMENT'
+    | 'SPECIAL_POSITION'
+    | 'MILITARY_COMMANDER'
+    | 'ROYAL_NOBLE_TITLE'
+    | 'OTHER' // 직위 타입
+  positionTitle?: string // 직위명 (예: "대통령", "국왕")
+  positionTitleEn?: string // 영문 직위명
+  positionDefinitionId?: string // 직위 정의 ID (선택사항)
+  regnalNumber?: string // 재위번호 (루이 14세의 "14")
+  appointmentMethod?:
+    | 'DIRECT_ELECTION'
+    | 'INDIRECT_ELECTION'
+    | 'APPOINTMENT'
+    | 'HEREDITARY'
+    | 'COUP'
+    | 'PARLIAMENTARY_ELECTION'
+    | 'OTHER' // 임명방식
+  endReason?:
+    | 'TERM_COMPLETED'
+    | 'RESIGNATION'
+    | 'ABDICATION'
+    | 'SUCCESSION_TRANSFER'
+    | 'REMOVAL'
+    | 'IMPEACHMENT'
+    | 'DEATH_IN_OFFICE'
+    | 'OVERTHROWN'
+    | 'WAR_DEFEAT'
+    | 'STATE_DISSOLVED'
+    | 'OTHER' // 종료사유
+  endReasonDetail?: string // 종료사유 상세
 }
 
 interface FormData {
@@ -308,6 +361,8 @@ export default function PersonCreatePage() {
   const [jobs, setJobs] = useState<any[]>([])
   const [jobCategories, setJobCategories] = useState<any[]>([])
   const [persons, setPersons] = useState<any[]>([])
+  const [governmentPositionDefinitions, setGovernmentPositionDefinitions] =
+    useState<any[]>([])
 
   // 조직 데이터 (샘플 - 향후 API로 대체)
   const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -481,10 +536,29 @@ export default function PersonCreatePage() {
       setJobCategories(jobCategoriesData || [])
       setPersons(personsData || [])
 
-      // 수정 모드: 기존 인물 데이터 로드
+      // 수정 모드: 기존 인물 데이터 + 재임 기록 + 정부/공무원 등 모든 경력 로드
       if (isEditMode && id) {
         try {
-          const personData = await personApi.getById(id)
+          const [personData, tenuresFromApi, allCareersRes] = await Promise.all(
+            [
+              personApi.getById(id),
+              personCareerApi.getTenuresByPersonId(id),
+              personCareerApi.getAllCareers(id).catch(() => ({
+                government: [],
+                military: [],
+                business: [],
+                academic: [],
+                athlete: [],
+                religious: [],
+                artist: [],
+                media: [],
+                legal: [],
+                medical: [],
+                education: [],
+                awards: [],
+              })),
+            ],
+          )
 
           // 폼 데이터 채우기
           setFormData((prev) => ({
@@ -510,6 +584,8 @@ export default function PersonCreatePage() {
             isBirthDateUnknown: !personData.birthYear,
             isDeathDateUnknown: !personData.deathYear,
             isAlive: !personData.deathYear,
+            showLifespanOnEventList:
+              personData.showLifespanOnEventList !== false, // DB 값 사용
             biography: personData.biography || '',
             profileImageUrl: personData.profileImageUrl || '',
             profileImageUrls: personData.profileImageUrl
@@ -527,6 +603,204 @@ export default function PersonCreatePage() {
             fatherId: personData.fatherId || '',
             motherId: personData.motherId || '',
           }))
+
+          // 재임 기록(tenures)을 Career 배열로 변환 (전용 API 결과 우선, 없으면 getById 응답 fallback)
+          const tenures =
+            Array.isArray(tenuresFromApi) && tenuresFromApi.length > 0
+              ? tenuresFromApi
+              : (personData.governmentTenures ?? [])
+          if (tenures.length > 0) {
+            console.log('📥 왕위 재임 기록 로드:', tenures.length, '건')
+
+            const tenureCareers: Career[] = tenures.map(
+              (tenure: any, index: number) => {
+                console.log(`  재임기록 ${index + 1}:`, {
+                  startDate: tenure.startDate,
+                  endDate: tenure.endDate,
+                  title: tenure.title,
+                  termNumber: tenure.termNumber,
+                  showPositionInfo: tenure.showPositionInfo,
+                })
+
+                const startDate = tenure.startDate
+                  ? new Date(tenure.startDate)
+                  : null
+                const endDate = tenure.endDate ? new Date(tenure.endDate) : null
+
+                // 날짜가 유효한지 확인
+                const isStartDateValid =
+                  startDate && !isNaN(startDate.getTime())
+                const isEndDateValid = endDate && !isNaN(endDate.getTime())
+
+                console.log(`  날짜 변환 결과:`, {
+                  isStartDateValid,
+                  startYear: isStartDateValid
+                    ? startDate.getFullYear().toString()
+                    : '',
+                  isEndDateValid,
+                  endYear: isEndDateValid
+                    ? endDate.getFullYear().toString()
+                    : '',
+                })
+
+                return {
+                  id: tenure.id,
+                  careerType: 'government_position',
+                  timelineTitle: tenure.timelineTitle || `${tenure.title} 재임`, // DB 값 우선 사용
+                  showPositionInfo: tenure.showPositionInfo !== false, // DB 값 사용
+                  jobId: '',
+                  jobName: '',
+                  jobCategoryId: '',
+                  title: '',
+                  termNumber: tenure.termNumber?.toString() || '',
+                  organization: '',
+                  organizationId: '',
+                  images: [],
+                  startEra: 'AD' as Era,
+                  startYear: isStartDateValid
+                    ? startDate.getFullYear().toString()
+                    : '',
+                  startMonth: isStartDateValid
+                    ? (startDate.getMonth() + 1).toString()
+                    : '',
+                  startDay: isStartDateValid
+                    ? startDate.getDate().toString()
+                    : '',
+                  endEra: 'AD' as Era,
+                  endYear: isEndDateValid
+                    ? endDate.getFullYear().toString()
+                    : '',
+                  endMonth: isEndDateValid
+                    ? (endDate.getMonth() + 1).toString()
+                    : '',
+                  endDay: isEndDateValid ? endDate.getDate().toString() : '',
+                  isCurrent: !tenure.endDate,
+                  countryId: tenure.countryId || '',
+                  note: tenure.notes || '',
+                  priority: index,
+                  // GovernmentPositionTenure 전용 필드
+                  positionType: tenure.positionType,
+                  positionTitle: tenure.title,
+                  positionTitleEn: tenure.titleEn || '',
+                  positionDefinitionId: tenure.positionDefinitionId || '',
+                  regnalNumber: tenure.regnalNumber?.toString() || '',
+                  appointmentMethod: tenure.appointmentMethod,
+                  endReason: tenure.endReason,
+                  endReasonDetail: tenure.endReasonDetail || '',
+                }
+              },
+            )
+
+            // 정부/공무원 경력(GovernmentCareer)을 Career[]로 변환
+            const governmentList = Array.isArray(allCareersRes?.government)
+              ? allCareersRes.government
+              : []
+            const governmentCareers: Career[] = governmentList.map(
+              (c: any, index: number) => {
+                const startDate = c.startDate ? new Date(c.startDate) : null
+                const endDate = c.endDate ? new Date(c.endDate) : null
+                const isStartValid = startDate && !isNaN(startDate.getTime())
+                const isEndValid = endDate && !isNaN(endDate.getTime())
+                return {
+                  id: c.id,
+                  careerType: 'government',
+                  timelineTitle:
+                    c.timelineTitle || c.roleTitle || '정부/공무원 경력',
+                  showPositionInfo: c.showPositionInfo !== false,
+                  jobId: c.positionId || '',
+                  jobName: '',
+                  jobCategoryId: c.jobCategoryId || '',
+                  title: c.roleTitle || c.timelineTitle || '',
+                  termNumber: c.termNumber != null ? String(c.termNumber) : '',
+                  organization: '',
+                  organizationId: c.organizationId || '',
+                  images: [],
+                  startEra: 'AD' as Era,
+                  startYear: isStartValid
+                    ? startDate.getFullYear().toString()
+                    : '',
+                  startMonth: isStartValid
+                    ? (startDate.getMonth() + 1).toString()
+                    : '',
+                  startDay: isStartValid ? startDate.getDate().toString() : '',
+                  endEra: 'AD' as Era,
+                  endYear: isEndValid ? endDate.getFullYear().toString() : '',
+                  endMonth: isEndValid
+                    ? (endDate.getMonth() + 1).toString()
+                    : '',
+                  endDay: isEndValid ? endDate.getDate().toString() : '',
+                  isCurrent: !c.endDate,
+                  countryId: c.countryId || '',
+                  note: c.notes || '',
+                  priority: tenureCareers.length + index,
+                }
+              },
+            )
+
+            const combined = [...tenureCareers, ...governmentCareers].sort(
+              (a, b) => {
+                const aYear = a.startYear ? parseInt(a.startYear, 10) : 0
+                const bYear = b.startYear ? parseInt(b.startYear, 10) : 0
+                return bYear - aYear
+              },
+            )
+            setCareers(combined)
+            console.log(
+              `✅ 경력 로드 완료: 재임 ${tenureCareers.length}건, 정부/공무원 ${governmentCareers.length}건`,
+            )
+          } else {
+            // 재임 기록 없어도 정부/공무원 등 다른 경력은 로드
+            const governmentList = Array.isArray(allCareersRes?.government)
+              ? allCareersRes.government
+              : []
+            const governmentCareers: Career[] = governmentList.map(
+              (c: any, index: number) => {
+                const startDate = c.startDate ? new Date(c.startDate) : null
+                const endDate = c.endDate ? new Date(c.endDate) : null
+                const isStartValid = startDate && !isNaN(startDate.getTime())
+                const isEndValid = endDate && !isNaN(endDate.getTime())
+                return {
+                  id: c.id,
+                  careerType: 'government',
+                  timelineTitle:
+                    c.timelineTitle || c.roleTitle || '정부/공무원 경력',
+                  showPositionInfo: c.showPositionInfo !== false,
+                  jobId: c.positionId || '',
+                  jobName: '',
+                  jobCategoryId: c.jobCategoryId || '',
+                  title: c.roleTitle || c.timelineTitle || '',
+                  termNumber: c.termNumber != null ? String(c.termNumber) : '',
+                  organization: '',
+                  organizationId: c.organizationId || '',
+                  images: [],
+                  startEra: 'AD' as Era,
+                  startYear: isStartValid
+                    ? startDate.getFullYear().toString()
+                    : '',
+                  startMonth: isStartValid
+                    ? (startDate.getMonth() + 1).toString()
+                    : '',
+                  startDay: isStartValid ? startDate.getDate().toString() : '',
+                  endEra: 'AD' as Era,
+                  endYear: isEndValid ? endDate.getFullYear().toString() : '',
+                  endMonth: isEndValid
+                    ? (endDate.getMonth() + 1).toString()
+                    : '',
+                  endDay: isEndValid ? endDate.getDate().toString() : '',
+                  isCurrent: !c.endDate,
+                  countryId: c.countryId || '',
+                  note: c.notes || '',
+                  priority: index,
+                }
+              },
+            )
+            setCareers(governmentCareers.length > 0 ? governmentCareers : [])
+            if (governmentCareers.length > 0) {
+              console.log(
+                `✅ 정부/공무원 경력 ${governmentCareers.length}건 로드 완료`,
+              )
+            }
+          }
 
           toast.success('데이터를 불러왔습니다')
         } catch (error) {
@@ -914,6 +1188,7 @@ export default function PersonCreatePage() {
     }
     const newCareer: Career = {
       id: Date.now().toString(),
+      careerType: 'government', // 기본값
       timelineTitle: '',
       showPositionInfo: true, // 기본값을 true로 변경
       jobId: '',
@@ -936,6 +1211,16 @@ export default function PersonCreatePage() {
       countryId: '',
       note: '',
       priority: careers.length,
+
+      // GovernmentPositionTenure 전용 필드
+      positionType: 'HEAD_OF_STATE',
+      positionTitle: '',
+      positionTitleEn: '',
+      positionDefinitionId: '',
+      regnalNumber: '',
+      appointmentMethod: undefined,
+      endReason: undefined,
+      endReasonDetail: '',
     }
     setCareers((prev) => [...prev, newCareer])
     setActiveCareerId(newCareer.id)
@@ -1135,7 +1420,8 @@ export default function PersonCreatePage() {
   }
 
   const getAgeAtCareerStart = (career: Career) => {
-    if (!formData.birthYear || !career.startYear) return null
+    if (!formData.birthYear || !career.startYear || !career.startYear.trim())
+      return null
     const birthYear = parseInt(formData.birthYear, 10)
     const targetYear = parseInt(career.startYear, 10)
     if (isNaN(birthYear) || isNaN(targetYear)) return null
@@ -1664,16 +1950,20 @@ export default function PersonCreatePage() {
     if (step === 'career') {
       // 기본정보만 검증 (경력은 검증하지 않음)
       const basicValid = validateForm(false)
+      // 생존 중: 출생일만 있으면 됨. 사망: 사망일 미상이거나 사망 연도 있으면 됨
       const lifespanValid =
         !formData.isBirthDateUnknown &&
-        !formData.isDeathDateUnknown &&
         !!formData.birthYear &&
-        !!formData.deathYear
+        (formData.isAlive ||
+          formData.isDeathDateUnknown ||
+          !!formData.deathYear)
 
       if (!lifespanValid) {
         setErrors((prev) => ({
           ...prev,
-          lifespan: '생몰정보를 입력해주세요.',
+          lifespan: formData.isAlive
+            ? '출생일을 입력해주세요.'
+            : '생몰정보를 입력해주세요.',
         }))
       } else if (errors.lifespan) {
         setErrors((prev) => ({ ...prev, lifespan: '' }))
@@ -1778,7 +2068,7 @@ export default function PersonCreatePage() {
         // 수정 모드
         await personApi.update(id, input)
         personId = id
-        toast.success('인물이 수정되었습니다.')
+        // 성공 메시지는 모든 작업 완료 후 표시
       } else {
         // 등록 모드
         const createdPerson = await personApi.create(input)
@@ -1787,26 +2077,78 @@ export default function PersonCreatePage() {
         if (!personId) {
           throw new Error('Person ID를 가져올 수 없습니다.')
         }
-        toast.success('인물이 등록되었습니다.')
+        // 성공 메시지는 모든 작업 완료 후 표시
       }
 
-      // Career 데이터 저장 (등록 모드만)
-      if (!isEditMode && careers.length > 0) {
-        toast.loading(`경력 정보 저장 중... (0/${careers.length})`)
+      // Career 데이터 저장
+      if (careers.length > 0 || isEditMode) {
+        // 수정 모드: 기존 재임(tenure)·정부 경력(government) 목록 가져오기
+        let originalTenures: any[] = []
+        let originalGovernmentCareers: { id: string }[] = []
+        if (isEditMode && id) {
+          try {
+            const [currentData, allCareersRes] = await Promise.all([
+              personApi.getById(id),
+              personCareerApi
+                .getAllCareers(id)
+                .catch(() => ({ government: [] })),
+            ])
+            originalTenures = currentData.governmentTenures || []
+            originalGovernmentCareers = Array.isArray(allCareersRes?.government)
+              ? allCareersRes.government.map((c: any) => ({ id: c.id }))
+              : []
+          } catch (error) {
+            console.error('기존 경력 로드 실패:', error)
+          }
+        }
+
+        // 수정 모드: 삭제된 재임(tenure) → 서버에서 삭제
+        if (isEditMode && originalTenures.length > 0) {
+          const deletedTenures = originalTenures.filter(
+            (original: any) => !careers.find((c) => c.id === original.id),
+          )
+          for (const deleted of deletedTenures) {
+            try {
+              await personCareerApi.deleteGovernmentPositionTenure(deleted.id)
+              console.log(`🗑️ 재임 삭제: ${deleted.title}`)
+            } catch (error) {
+              console.error('재임 삭제 실패:', error)
+            }
+          }
+        }
+
+        // 수정 모드: 삭제된 정부/공무원 경력(government career) → 서버에서 삭제
+        if (isEditMode && originalGovernmentCareers.length > 0) {
+          const deletedGovernmentCareers = originalGovernmentCareers.filter(
+            (original) => !careers.find((c) => c.id === original.id),
+          )
+          for (const deleted of deletedGovernmentCareers) {
+            try {
+              await personCareerApi.deleteGovernmentCareer(deleted.id)
+              console.log(`🗑️ 정부 경력 삭제: ${deleted.id}`)
+            } catch (error) {
+              console.error('정부 경력 삭제 실패:', error)
+            }
+          }
+        }
+
+        if (careers.length > 0) {
+          toast.loading(`경력 정보 저장 중... (0/${careers.length})`)
+        }
 
         for (let i = 0; i < careers.length; i++) {
           const career = careers[i]
           toast.loading(`경력 정보 저장 중... (${i + 1}/${careers.length})`)
 
           try {
-            // Career 시작/종료일 포맷팅
+            // Career 시작/종료일 포맷팅 (ISO-8601 DateTime 형식)
             const startDate = career.startYear
-              ? `${career.startEra === 'BC' ? '-' : ''}${career.startYear.padStart(4, '0')}-${(career.startMonth || '01').padStart(2, '0')}-${(career.startDay || '01').padStart(2, '0')}`
+              ? `${career.startEra === 'BC' ? '-' : ''}${career.startYear.padStart(4, '0')}-${(career.startMonth || '01').padStart(2, '0')}-${(career.startDay || '01').padStart(2, '0')}T00:00:00.000Z`
               : undefined
 
             const endDate =
               !career.isCurrent && career.endYear
-                ? `${career.endEra === 'BC' ? '-' : ''}${career.endYear.padStart(4, '0')}-${(career.endMonth || '12').padStart(2, '0')}-${(career.endDay || '31').padStart(2, '0')}`
+                ? `${career.endEra === 'BC' ? '-' : ''}${career.endYear.padStart(4, '0')}-${(career.endMonth || '12').padStart(2, '0')}-${(career.endDay || '31').padStart(2, '0')}T23:59:59.999Z`
                 : undefined
 
             // Career 이미지 변환
@@ -1839,8 +2181,83 @@ export default function PersonCreatePage() {
               images: images.length > 0 ? images : undefined,
             }
 
-            // 카테고리 이름에 따라 적절한 API 호출
-            if (topLevelCategoryName.includes('군사')) {
+            // careerType에 따라 적절한 API 호출
+            console.log(`🔍 경력 ${i + 1} 타입 체크:`, {
+              careerType: career.careerType,
+              title: career.timelineTitle,
+            })
+
+            if (career.careerType === 'government_position') {
+              // 국가원수/왕위 재임 기록
+              console.log(`📋 경력 ${i + 1} 데이터:`, {
+                careerType: career.careerType,
+                positionType: career.positionType,
+                positionTitle: career.positionTitle,
+                positionTitleEn: career.positionTitleEn,
+                countryId: career.countryId,
+                termNumber: career.termNumber,
+                regnalNumber: career.regnalNumber,
+                startDate,
+                endDate,
+              })
+
+              if (!career.positionType || !career.positionTitle) {
+                toast.error(`경력 ${i + 1}: 직위 타입과 직위명을 입력해주세요`)
+                continue
+              }
+
+              const tenureData = {
+                personId,
+                positionType: career.positionType,
+                title: career.positionTitle,
+                titleEn: career.positionTitleEn || undefined,
+                showPositionInfo: career.showPositionInfo, // 기존 showPositionInfo 사용
+                countryId: career.countryId || undefined,
+                historicalCountryId: undefined, // TODO: 역사적 국가 선택 UI 추가
+                positionDefinitionId:
+                  career.positionDefinitionId &&
+                  career.positionDefinitionId.trim()
+                    ? career.positionDefinitionId
+                    : undefined,
+                termNumber: career.termNumber
+                  ? parseInt(career.termNumber)
+                  : undefined,
+                regnalNumber: career.regnalNumber
+                  ? parseInt(career.regnalNumber)
+                  : undefined,
+                startDate: startDate!,
+                endDate,
+                appointmentMethod: career.appointmentMethod,
+                endReason: career.endReason,
+                endReasonDetail: career.endReasonDetail || undefined,
+                notes: career.note || undefined,
+                priority: career.priority,
+              }
+
+              console.log(`📤 왕위 재임 기록 전송 데이터:`, tenureData)
+
+              // UUID 형식인지 확인 (기존 데이터인지 판단)
+              const isExistingTenure =
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                  career.id,
+                )
+
+              if (isEditMode && isExistingTenure) {
+                // 수정 모드 + 기존 데이터 → UPDATE
+                await personCareerApi.updateGovernmentPositionTenure(
+                  career.id,
+                  tenureData,
+                )
+                console.log(`✅ 왕위 재임 기록 수정 완료: ${career.id}`)
+              } else {
+                // 등록 모드 또는 새로 추가된 데이터 → INSERT
+                await personCareerApi.addGovernmentPositionTenure(tenureData)
+                console.log(`✅ 왕위 재임 기록 추가 완료`)
+              }
+            } else if (
+              career.careerType === 'military' ||
+              topLevelCategoryName.includes('군사')
+            ) {
               // 군인 경력
               await personCareerApi.addMilitaryCareer({
                 ...baseCareerData,
@@ -1851,20 +2268,40 @@ export default function PersonCreatePage() {
                   : undefined,
               })
             } else if (
+              career.careerType === 'government' ||
               topLevelCategoryName.includes('정치') ||
               topLevelCategoryName.includes('행정')
             ) {
-              // 정치인/공무원 경력
-              await personCareerApi.addGovernmentCareer({
-                ...baseCareerData,
-                countryId: career.countryId || undefined,
-                department: undefined,
-                role: career.title || undefined,
-                termNumber: career.termNumber
-                  ? parseInt(career.termNumber)
-                  : undefined,
-              })
+              // 정치인/공무원 경력 (직급 Job 필수) — 기존 항목은 이미 서버에 있으므로 추가 호출 생략
+              const isNewGovernmentCareer =
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                  career.id,
+                )
+              if (!isNewGovernmentCareer) {
+                console.log(
+                  `⏭️ 기존 정부 경력 건너뜀 (수정 API 없음): ${career.id}`,
+                )
+              } else {
+                if (!career.jobId?.trim()) {
+                  toast.error(
+                    `경력 ${i + 1}: 정치인/공무원 경력에는 직급(직책)을 선택해주세요.`,
+                  )
+                  setIsSubmitting(false)
+                  return
+                }
+                await personCareerApi.addGovernmentCareer({
+                  ...baseCareerData,
+                  positionId: career.jobId,
+                  countryId: career.countryId || undefined,
+                  department: undefined,
+                  role: career.title || undefined,
+                  termNumber: career.termNumber
+                    ? parseInt(career.termNumber)
+                    : undefined,
+                })
+              }
             } else if (
+              career.careerType === 'business' ||
               topLevelCategoryName.includes('경제') ||
               topLevelCategoryName.includes('산업')
             ) {
@@ -1875,6 +2312,7 @@ export default function PersonCreatePage() {
                 level: undefined,
               })
             } else if (
+              career.careerType === 'academic' ||
               topLevelCategoryName.includes('학문') ||
               topLevelCategoryName.includes('교육')
             ) {
@@ -1884,7 +2322,10 @@ export default function PersonCreatePage() {
                 department: undefined,
                 researchField: undefined,
               })
-            } else if (topLevelCategoryName.includes('스포츠')) {
+            } else if (
+              career.careerType === 'athlete' ||
+              topLevelCategoryName.includes('스포츠')
+            ) {
               // 운동선수 경력
               await personCareerApi.addAthleteCareer({
                 ...baseCareerData,
@@ -1892,7 +2333,10 @@ export default function PersonCreatePage() {
                 position: career.title || undefined,
                 jerseyNumber: undefined,
               })
-            } else if (topLevelCategoryName.includes('종교')) {
+            } else if (
+              career.careerType === 'religious' ||
+              topLevelCategoryName.includes('종교')
+            ) {
               // 종교인 경력
               await personCareerApi.addReligiousCareer({
                 ...baseCareerData,
@@ -1901,6 +2345,7 @@ export default function PersonCreatePage() {
                 rank: career.title || undefined,
               })
             } else if (
+              career.careerType === 'artist' ||
               topLevelCategoryName.includes('예술') ||
               topLevelCategoryName.includes('문화')
             ) {
@@ -1911,6 +2356,7 @@ export default function PersonCreatePage() {
                 style: undefined,
               })
             } else if (
+              career.careerType === 'media' ||
               topLevelCategoryName.includes('언론') ||
               topLevelCategoryName.includes('출판')
             ) {
@@ -1920,14 +2366,20 @@ export default function PersonCreatePage() {
                 mediaType: undefined,
                 role: career.title || undefined,
               })
-            } else if (topLevelCategoryName.includes('법조')) {
+            } else if (
+              career.careerType === 'legal' ||
+              topLevelCategoryName.includes('법조')
+            ) {
               // 법조인 경력
               await personCareerApi.addLegalCareer({
                 ...baseCareerData,
                 specialization: undefined,
                 courtLevel: undefined,
               })
-            } else if (topLevelCategoryName.includes('의료')) {
+            } else if (
+              career.careerType === 'medical' ||
+              topLevelCategoryName.includes('의료')
+            ) {
               // 의료인 경력
               await personCareerApi.addMedicalCareer({
                 ...baseCareerData,
@@ -1935,25 +2387,43 @@ export default function PersonCreatePage() {
                 department: undefined,
               })
             } else {
-              // 기타 - Government Career로 처리
-              await personCareerApi.addGovernmentCareer({
-                ...baseCareerData,
-                countryId: career.countryId || undefined,
-                department: undefined,
-                role: career.title || undefined,
-                termNumber: career.termNumber
-                  ? parseInt(career.termNumber)
-                  : undefined,
-              })
+              // 기타 - Government Career로 처리 (직급 Job 필수) — 기존 항목은 추가 호출 생략
+              const isNewGovernmentCareer =
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                  career.id,
+                )
+              if (isNewGovernmentCareer) {
+                if (!career.jobId?.trim()) {
+                  toast.error(
+                    `경력 ${i + 1}: 경력 유형에 맞는 직급(직책)을 선택해주세요.`,
+                  )
+                  setIsSubmitting(false)
+                  return
+                }
+                await personCareerApi.addGovernmentCareer({
+                  ...baseCareerData,
+                  positionId: career.jobId,
+                  countryId: career.countryId || undefined,
+                  department: undefined,
+                  role: career.title || undefined,
+                  termNumber: career.termNumber
+                    ? parseInt(career.termNumber)
+                    : undefined,
+                })
+              }
             }
 
             console.log(
               `Career ${i + 1}/${careers.length} saved as ${topLevelCategoryName}`,
             )
-          } catch (careerError) {
+          } catch (careerError: any) {
             console.error(`Career ${i + 1} save failed:`, careerError)
-            // Career 저장 실패는 경고만 표시하고 계속 진행
+            toast.dismiss()
             toast.error(`경력 ${i + 1} 저장 실패: ${career.timelineTitle}`)
+
+            // 경력 저장 실패 시 중단
+            setIsSubmitting(false)
+            return
           }
         }
 
@@ -1965,7 +2435,12 @@ export default function PersonCreatePage() {
         handleClearDraft()
       }
 
-      // 성공 메시지는 위에서 이미 표시됨
+      // 모든 저장 성공 시에만 이동
+      toast.success(
+        isEditMode
+          ? '인물 및 경력이 수정되었습니다.'
+          : '인물 및 경력이 등록되었습니다.',
+      )
       navigate('/persons')
     } catch (error: any) {
       console.error(
@@ -3159,11 +3634,11 @@ export default function PersonCreatePage() {
                             <br />• 조선 제4대 국왕 세종: 묘호 "세종", 시호
                             "세종장헌영문예무인성명효대왕"
                             <br />• 프랑스 루이 14세: 왕호 "Louis" (재위 번호
-                            "14"는 경력에서 입력)
+                            "14"는 아래 재임 기록에서 입력)
                             <br />• 영국 제임스 1세/6세: 왕호 "James" (잉글랜드
                             "1", 스코틀랜드 "6"은 각 재위 기록에서 입력)
                             <br />• 청나라 강희제: 묘호 "성조(聖祖)", 연호
-                            "강희(康熙)"는 경력에서 입력
+                            "강희(康熙)"는 경력사항 탭에서 입력
                           </Hint>
                         </MonarchSection>
                       </FormField>
@@ -3724,6 +4199,123 @@ export default function PersonCreatePage() {
                           </CareerFormHeader>
 
                           <CareerFormBody>
+                            {/* 0. 경력 타입 선택 */}
+                            <FormRow>
+                              <FormLabel>
+                                경력 타입 <Required>*</Required>
+                              </FormLabel>
+                              <FormField>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    gap: '8px',
+                                    flexWrap: 'wrap',
+                                  }}
+                                >
+                                  {[
+                                    {
+                                      value: 'government_position',
+                                      label: '국가원수/왕위',
+                                      icon: '👑',
+                                    },
+                                    {
+                                      value: 'government',
+                                      label: '정부/공무원',
+                                      icon: '🏛️',
+                                    },
+                                    {
+                                      value: 'military',
+                                      label: '군사',
+                                      icon: '⚔️',
+                                    },
+                                    {
+                                      value: 'business',
+                                      label: '기업',
+                                      icon: '💼',
+                                    },
+                                    {
+                                      value: 'academic',
+                                      label: '학술',
+                                      icon: '🎓',
+                                    },
+                                    {
+                                      value: 'religious',
+                                      label: '종교',
+                                      icon: '⛪',
+                                    },
+                                    {
+                                      value: 'artist',
+                                      label: '예술',
+                                      icon: '🎨',
+                                    },
+                                    {
+                                      value: 'athlete',
+                                      label: '체육',
+                                      icon: '⚽',
+                                    },
+                                    {
+                                      value: 'media',
+                                      label: '언론',
+                                      icon: '📰',
+                                    },
+                                    {
+                                      value: 'legal',
+                                      label: '법조',
+                                      icon: '⚖️',
+                                    },
+                                    {
+                                      value: 'medical',
+                                      label: '의료',
+                                      icon: '⚕️',
+                                    },
+                                  ].map((type) => (
+                                    <button
+                                      key={type.value}
+                                      type="button"
+                                      onClick={() =>
+                                        handleCareerInputChange(
+                                          activeCareer.id,
+                                          'careerType',
+                                          type.value,
+                                        )
+                                      }
+                                      style={{
+                                        padding: '8px 16px',
+                                        borderRadius: '8px',
+                                        border:
+                                          activeCareer.careerType === type.value
+                                            ? '2px solid #3b82f6'
+                                            : '1.5px solid #e2e8f0',
+                                        background:
+                                          activeCareer.careerType === type.value
+                                            ? '#eff6ff'
+                                            : 'white',
+                                        color:
+                                          activeCareer.careerType === type.value
+                                            ? '#1e40af'
+                                            : '#64748b',
+                                        fontSize: '0.875rem',
+                                        fontWeight:
+                                          activeCareer.careerType === type.value
+                                            ? '600'
+                                            : '500',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                      }}
+                                    >
+                                      {type.icon} {type.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <Hint>
+                                  {activeCareer.careerType ===
+                                  'government_position'
+                                    ? '국가원수, 왕, 황제, 대통령 등의 공식 재임 기록입니다.'
+                                    : '해당 시기의 경력 유형을 선택하세요.'}
+                                </Hint>
+                              </FormField>
+                            </FormRow>
+
                             {/* 1. 제목 (필수) */}
                             <FormRow>
                               <FormLabel>
@@ -3980,7 +4572,7 @@ export default function PersonCreatePage() {
                               <FormField>
                                 <ToggleRow>
                                   <ToggleLabel>
-                                    타임라인에 직책 정보를 표시합니다
+                                    사건 페이지에 직책 정보를 표시합니다
                                   </ToggleLabel>
                                   <ToggleButton
                                     type="button"
@@ -3999,8 +4591,9 @@ export default function PersonCreatePage() {
                                   </ToggleButton>
                                 </ToggleRow>
                                 <Hint>
-                                  활성화하면 타임라인에 "제32대 대통령" 같은
-                                  직책 정보가 표시됩니다
+                                  활성화하면 사건 리스트/상세 페이지에 "제32대
+                                  대통령" 같은 직책 정보가 표시됩니다.
+                                  비활성화하면 이름만 표시됩니다.
                                 </Hint>
                               </FormField>
                             </FormRow>
@@ -4036,188 +4629,524 @@ export default function PersonCreatePage() {
 
                             {activeCareer.showPositionInfo && (
                               <>
-                                <FormRow>
-                                  <FormLabel>
-                                    계급/직급 <Required>*</Required>
-                                    <FormLabelHint>
-                                      이 사람의 지위 (예: 대장, CEO, 장관)
-                                    </FormLabelHint>
-                                  </FormLabel>
-                                  <FormField>
-                                    <ModernSelectionCard
-                                      $hasValue={!!activeCareer.jobId}
-                                      onClick={() => setShowJobModal(true)}
-                                      type="button"
-                                    >
-                                      <ModernCardIcon
-                                        $color={DESIGN_TOKENS.colors.job}
-                                      >
-                                        <FiBriefcase size={22} />
-                                      </ModernCardIcon>
-                                      <ModernCardContent>
-                                        <ModernCardLabel>
-                                          계급/직급
-                                        </ModernCardLabel>
-                                        <ModernCardValue
-                                          $hasValue={!!activeCareer.jobId}
-                                        >
-                                          {activeCareer.jobId &&
-                                          activeCareer.jobName
-                                            ? activeCareer.jobName
-                                            : '계급/직급 선택 (예: 대장, CEO, 장관)'}
-                                        </ModernCardValue>
-                                      </ModernCardContent>
-                                      {activeCareer.jobId && (
-                                        <ModernCardClear
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            playClick()
-                                            setSelectedJobParentCategoryId(
-                                              'all',
-                                            )
-                                            setSelectedJobCategoryId('all')
-                                            handleCareerInputChange(
-                                              activeCareer.id,
-                                              'jobId',
-                                              '',
-                                            )
-                                            handleCareerInputChange(
-                                              activeCareer.id,
-                                              'jobName',
-                                              '',
-                                            )
-                                            handleCareerInputChange(
-                                              activeCareer.id,
-                                              'jobCategoryId',
-                                              '',
-                                            )
-                                          }}
-                                        >
-                                          <FiX size={16} />
-                                        </ModernCardClear>
-                                      )}
-                                    </ModernSelectionCard>
-                                  </FormField>
-                                </FormRow>
-
-                                <FormRow>
-                                  <FormLabel>
-                                    소속 조직 <Required>*</Required>
-                                    <FormLabelHint>
-                                      근무한 조직/부대/기업
-                                    </FormLabelHint>
-                                  </FormLabel>
-                                  <FormField>
-                                    <ModernSelectionCard
-                                      $hasValue={!!activeCareer.organizationId}
-                                      onClick={() =>
-                                        setShowOrganizationModal(true)
-                                      }
-                                      type="button"
-                                    >
-                                      <ModernCardIcon
-                                        $color={
-                                          DESIGN_TOKENS.colors.organization
-                                        }
-                                      >
-                                        <FiPackage size={22} />
-                                      </ModernCardIcon>
-                                      <ModernCardContent>
-                                        <ModernCardLabel>
-                                          소속 조직
-                                        </ModernCardLabel>
-                                        <ModernCardValue
-                                          $hasValue={
-                                            !!activeCareer.organizationId
+                                {/* 국가원수/왕위일 때는 직위 정의 선택 */}
+                                {activeCareer.careerType ===
+                                'government_position' ? (
+                                  <>
+                                    <FormRow>
+                                      <FormLabel>
+                                        직위 타입 <Required>*</Required>
+                                      </FormLabel>
+                                      <FormField>
+                                        <select
+                                          value={
+                                            activeCareer.positionType ||
+                                            'HEAD_OF_STATE'
                                           }
-                                        >
-                                          {(() => {
-                                            const org = organizations.find(
-                                              (o) =>
-                                                o.id ===
-                                                activeCareer.organizationId,
-                                            )
-                                            return org
-                                              ? org.name
-                                              : '소속 조직 선택 (예: 제8군단, 삼성전자, 국방부)'
-                                          })()}
-                                        </ModernCardValue>
-                                      </ModernCardContent>
-                                      {activeCareer.organizationId && (
-                                        <ModernCardClear
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleCareerInputChange(
-                                              activeCareer.id,
-                                              'organizationId',
-                                              '',
-                                            )
-                                            handleCareerInputChange(
-                                              activeCareer.id,
-                                              'organization',
-                                              '',
-                                            )
-                                          }}
-                                        >
-                                          <FiX size={16} />
-                                        </ModernCardClear>
-                                      )}
-                                    </ModernSelectionCard>
-                                  </FormField>
-                                </FormRow>
-
-                                <FormRow>
-                                  <FormLabel>
-                                    역할/보직
-                                    <FormLabelHint>
-                                      구체적인 역할이나 보직명 (선택)
-                                    </FormLabelHint>
-                                  </FormLabel>
-                                  <FormField>
-                                    <TermNumberRow>
-                                      <TermNumberInput>
-                                        <TermNumberPrefix>제</TermNumberPrefix>
-                                        <Input
-                                          type="text"
-                                          placeholder="32"
-                                          value={activeCareer.termNumber}
                                           onChange={(e) =>
                                             handleCareerInputChange(
                                               activeCareer.id,
-                                              'termNumber',
+                                              'positionType',
+                                              e.target.value,
+                                            )
+                                          }
+                                          style={{
+                                            padding: '10px 12px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '0.938rem',
+                                            width: '100%',
+                                          }}
+                                        >
+                                          <option value="HEAD_OF_STATE">
+                                            국가원수 (대통령, 국왕, 황제)
+                                          </option>
+                                          <option value="HEAD_OF_GOVERNMENT">
+                                            정부수반 (총리, 수상)
+                                          </option>
+                                          <option value="HEIR_APPARENT">
+                                            왕세자/황태자
+                                          </option>
+                                          <option value="REGENT">섭정</option>
+                                          <option value="ROYAL_NOBLE_TITLE">
+                                            왕족/귀족 칭호
+                                          </option>
+                                        </select>
+                                      </FormField>
+                                    </FormRow>
+
+                                    <FormRow>
+                                      <FormLabel>
+                                        직위명 <Required>*</Required>
+                                        <FormLabelHint>
+                                          예: "대통령", "국왕", "황제", "총리"
+                                        </FormLabelHint>
+                                      </FormLabel>
+                                      <FormField>
+                                        <Input
+                                          type="text"
+                                          placeholder="예: 대통령"
+                                          value={
+                                            activeCareer.positionTitle || ''
+                                          }
+                                          onChange={(e) =>
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'positionTitle',
+                                              e.target.value,
+                                            )
+                                          }
+                                          style={{
+                                            borderColor:
+                                              !activeCareer.positionTitle &&
+                                              (errors.careers as any)?.[
+                                                activeCareer.id
+                                              ]
+                                                ? '#ef4444'
+                                                : undefined,
+                                          }}
+                                        />
+                                        {!activeCareer.positionTitle &&
+                                          (errors.careers as any)?.[
+                                            activeCareer.id
+                                          ] && (
+                                            <ErrorText>
+                                              직위명을 입력해주세요
+                                            </ErrorText>
+                                          )}
+                                      </FormField>
+                                    </FormRow>
+
+                                    <FormRow>
+                                      <FormLabel>영문 직위명</FormLabel>
+                                      <FormField>
+                                        <Input
+                                          type="text"
+                                          placeholder="예: President, King, Emperor"
+                                          value={
+                                            activeCareer.positionTitleEn || ''
+                                          }
+                                          onChange={(e) =>
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'positionTitleEn',
+                                              e.target.value,
+                                            )
+                                          }
+                                        />
+                                      </FormField>
+                                    </FormRow>
+                                  </>
+                                ) : (
+                                  <FormRow>
+                                    <FormLabel>
+                                      계급/직급 <Required>*</Required>
+                                      <FormLabelHint>
+                                        이 사람의 지위 (예: 대장, CEO, 장관)
+                                      </FormLabelHint>
+                                    </FormLabel>
+                                    <FormField>
+                                      <ModernSelectionCard
+                                        $hasValue={!!activeCareer.jobId}
+                                        onClick={() => setShowJobModal(true)}
+                                        type="button"
+                                      >
+                                        <ModernCardIcon
+                                          $color={DESIGN_TOKENS.colors.job}
+                                        >
+                                          <FiBriefcase size={22} />
+                                        </ModernCardIcon>
+                                        <ModernCardContent>
+                                          <ModernCardLabel>
+                                            계급/직급
+                                          </ModernCardLabel>
+                                          <ModernCardValue
+                                            $hasValue={!!activeCareer.jobId}
+                                          >
+                                            {activeCareer.jobId &&
+                                            activeCareer.jobName
+                                              ? activeCareer.jobName
+                                              : '계급/직급 선택 (예: 대장, CEO, 장관)'}
+                                          </ModernCardValue>
+                                        </ModernCardContent>
+                                        {activeCareer.jobId && (
+                                          <ModernCardClear
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              playClick()
+                                              setSelectedJobParentCategoryId(
+                                                'all',
+                                              )
+                                              setSelectedJobCategoryId('all')
+                                              handleCareerInputChange(
+                                                activeCareer.id,
+                                                'jobId',
+                                                '',
+                                              )
+                                              handleCareerInputChange(
+                                                activeCareer.id,
+                                                'jobName',
+                                                '',
+                                              )
+                                              handleCareerInputChange(
+                                                activeCareer.id,
+                                                'jobCategoryId',
+                                                '',
+                                              )
+                                            }}
+                                          >
+                                            <FiX size={16} />
+                                          </ModernCardClear>
+                                        )}
+                                      </ModernSelectionCard>
+                                    </FormField>
+                                  </FormRow>
+                                )}
+
+                                {/* 소속 조직 (국가원수/왕위가 아닐 때만 표시) */}
+                                {activeCareer.careerType !==
+                                  'government_position' && (
+                                  <FormRow>
+                                    <FormLabel>
+                                      소속 조직 <Required>*</Required>
+                                      <FormLabelHint>
+                                        근무한 조직/부대/기업
+                                      </FormLabelHint>
+                                    </FormLabel>
+                                    <FormField>
+                                      <ModernSelectionCard
+                                        $hasValue={
+                                          !!activeCareer.organizationId
+                                        }
+                                        onClick={() =>
+                                          setShowOrganizationModal(true)
+                                        }
+                                        type="button"
+                                      >
+                                        <ModernCardIcon
+                                          $color={
+                                            DESIGN_TOKENS.colors.organization
+                                          }
+                                        >
+                                          <FiPackage size={22} />
+                                        </ModernCardIcon>
+                                        <ModernCardContent>
+                                          <ModernCardLabel>
+                                            소속 조직
+                                          </ModernCardLabel>
+                                          <ModernCardValue
+                                            $hasValue={
+                                              !!activeCareer.organizationId
+                                            }
+                                          >
+                                            {(() => {
+                                              const org = organizations.find(
+                                                (o) =>
+                                                  o.id ===
+                                                  activeCareer.organizationId,
+                                              )
+                                              return org
+                                                ? org.name
+                                                : '소속 조직 선택 (예: 제8군단, 삼성전자, 국방부)'
+                                            })()}
+                                          </ModernCardValue>
+                                        </ModernCardContent>
+                                        {activeCareer.organizationId && (
+                                          <ModernCardClear
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleCareerInputChange(
+                                                activeCareer.id,
+                                                'organizationId',
+                                                '',
+                                              )
+                                              handleCareerInputChange(
+                                                activeCareer.id,
+                                                'organization',
+                                                '',
+                                              )
+                                            }}
+                                          >
+                                            <FiX size={16} />
+                                          </ModernCardClear>
+                                        )}
+                                      </ModernSelectionCard>
+                                    </FormField>
+                                  </FormRow>
+                                )}
+
+                                {/* 역할/보직 (국가원수/왕위가 아닐 때만 표시) */}
+                                {activeCareer.careerType !==
+                                  'government_position' && (
+                                  <FormRow>
+                                    <FormLabel>
+                                      역할/보직
+                                      <FormLabelHint>
+                                        구체적인 역할이나 보직명 (선택)
+                                      </FormLabelHint>
+                                    </FormLabel>
+                                    <FormField>
+                                      <TermNumberRow>
+                                        <TermNumberInput>
+                                          <TermNumberPrefix>
+                                            제
+                                          </TermNumberPrefix>
+                                          <Input
+                                            type="text"
+                                            placeholder="32"
+                                            value={activeCareer.termNumber}
+                                            onChange={(e) =>
+                                              handleCareerInputChange(
+                                                activeCareer.id,
+                                                'termNumber',
+                                                e.target.value.replace(
+                                                  /[^0-9]/g,
+                                                  '',
+                                                ),
+                                              )
+                                            }
+                                            style={{
+                                              width: '80px',
+                                              textAlign: 'center',
+                                            }}
+                                          />
+                                          <TermNumberSuffix>
+                                            대
+                                          </TermNumberSuffix>
+                                        </TermNumberInput>
+                                        <Input
+                                          type="text"
+                                          placeholder="예: 군단장, 최고경영자, 국방부장관"
+                                          value={activeCareer.title}
+                                          onChange={(e) =>
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'title',
+                                              e.target.value,
+                                            )
+                                          }
+                                          style={{ flex: 1 }}
+                                        />
+                                      </TermNumberRow>
+                                      <Hint>
+                                        조직에서 맡은 구체적인 역할이나 직책을
+                                        입력하세요
+                                      </Hint>
+                                    </FormField>
+                                  </FormRow>
+                                )}
+
+                                {/* 국가원수/왕위 전용 필드 */}
+                                {activeCareer.careerType ===
+                                  'government_position' && (
+                                  <>
+                                    <FormRow>
+                                      <FormLabel>사건 페이지 표시</FormLabel>
+                                      <FormField>
+                                        <ToggleRow>
+                                          <ToggleLabel>
+                                            사건 리스트/타임라인에 직책 정보
+                                            표시
+                                          </ToggleLabel>
+                                          <ToggleButton
+                                            type="button"
+                                            $active={
+                                              activeCareer.showPositionInfoForTenure !==
+                                              false
+                                            }
+                                            onClick={() =>
+                                              handleCareerInputChange(
+                                                activeCareer.id,
+                                                'showPositionInfoForTenure',
+                                                !activeCareer.showPositionInfoForTenure,
+                                              )
+                                            }
+                                          >
+                                            <ToggleThumb
+                                              $active={
+                                                activeCareer.showPositionInfoForTenure !==
+                                                false
+                                              }
+                                            />
+                                          </ToggleButton>
+                                        </ToggleRow>
+                                        <Hint>
+                                          활성화하면 사건 페이지에서 "제32대
+                                          대통령" 같은 직책 정보가 표시됩니다.
+                                          비활성화하면 이름만 표시됩니다.
+                                        </Hint>
+                                      </FormField>
+                                    </FormRow>
+
+                                    <FormRow>
+                                      <FormLabel>
+                                        재위번호
+                                        <FormLabelHint>
+                                          서양 군주용 (예: 루이 14세의 "14")
+                                        </FormLabelHint>
+                                      </FormLabel>
+                                      <FormField>
+                                        <Input
+                                          type="text"
+                                          placeholder="14"
+                                          value={
+                                            activeCareer.regnalNumber || ''
+                                          }
+                                          onChange={(e) =>
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'regnalNumber',
                                               e.target.value.replace(
                                                 /[^0-9]/g,
                                                 '',
                                               ),
                                             )
                                           }
-                                          style={{
-                                            width: '80px',
-                                            textAlign: 'center',
-                                          }}
+                                          style={{ width: '120px' }}
                                         />
-                                        <TermNumberSuffix>대</TermNumberSuffix>
-                                      </TermNumberInput>
-                                      <Input
-                                        type="text"
-                                        placeholder="예: 군단장, 최고경영자, 국방부장관"
-                                        value={activeCareer.title}
-                                        onChange={(e) =>
-                                          handleCareerInputChange(
-                                            activeCareer.id,
-                                            'title',
-                                            e.target.value,
-                                          )
-                                        }
-                                        style={{ flex: 1 }}
-                                      />
-                                    </TermNumberRow>
-                                    <Hint>
-                                      조직에서 맡은 구체적인 역할이나 직책을
-                                      입력하세요
-                                    </Hint>
-                                  </FormField>
-                                </FormRow>
+                                        <Hint>
+                                          동아시아 군주는 "대수"를 사용하고,
+                                          서양 군주는 재위번호를 사용합니다
+                                        </Hint>
+                                      </FormField>
+                                    </FormRow>
+
+                                    <FormRow>
+                                      <FormLabel>즉위/취임 방식</FormLabel>
+                                      <FormField>
+                                        <select
+                                          value={
+                                            activeCareer.appointmentMethod || ''
+                                          }
+                                          onChange={(e) =>
+                                            handleCareerInputChange(
+                                              activeCareer.id,
+                                              'appointmentMethod',
+                                              e.target.value || undefined,
+                                            )
+                                          }
+                                          style={{
+                                            padding: '10px 12px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '0.938rem',
+                                            width: '100%',
+                                          }}
+                                        >
+                                          <option value="">선택 안함</option>
+                                          <option value="HEREDITARY">
+                                            세습 (왕위 계승)
+                                          </option>
+                                          <option value="DIRECT_ELECTION">
+                                            직접 선거
+                                          </option>
+                                          <option value="INDIRECT_ELECTION">
+                                            간접 선거
+                                          </option>
+                                          <option value="PARLIAMENTARY_ELECTION">
+                                            의회 선출
+                                          </option>
+                                          <option value="APPOINTMENT">
+                                            임명
+                                          </option>
+                                          <option value="COUP">
+                                            쿠데타/혁명
+                                          </option>
+                                          <option value="OTHER">기타</option>
+                                        </select>
+                                      </FormField>
+                                    </FormRow>
+
+                                    {!activeCareer.isCurrent && (
+                                      <>
+                                        <FormRow>
+                                          <FormLabel>퇴위/퇴임 사유</FormLabel>
+                                          <FormField>
+                                            <select
+                                              value={
+                                                activeCareer.endReason || ''
+                                              }
+                                              onChange={(e) =>
+                                                handleCareerInputChange(
+                                                  activeCareer.id,
+                                                  'endReason',
+                                                  e.target.value || undefined,
+                                                )
+                                              }
+                                              style={{
+                                                padding: '10px 12px',
+                                                borderRadius: '8px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '0.938rem',
+                                                width: '100%',
+                                              }}
+                                            >
+                                              <option value="">
+                                                선택 안함
+                                              </option>
+                                              <option value="TERM_COMPLETED">
+                                                임기 만료 (정상)
+                                              </option>
+                                              <option value="RESIGNATION">
+                                                사임/사퇴
+                                              </option>
+                                              <option value="ABDICATION">
+                                                자진 퇴위
+                                              </option>
+                                              <option value="SUCCESSION_TRANSFER">
+                                                양위/선위
+                                              </option>
+                                              <option value="REMOVAL">
+                                                폐위/해임
+                                              </option>
+                                              <option value="IMPEACHMENT">
+                                                탄핵
+                                              </option>
+                                              <option value="DEATH_IN_OFFICE">
+                                                재임 중 사망
+                                              </option>
+                                              <option value="OVERTHROWN">
+                                                쿠데타로 축출
+                                              </option>
+                                              <option value="WAR_DEFEAT">
+                                                전쟁 패배
+                                              </option>
+                                              <option value="STATE_DISSOLVED">
+                                                국가 멸망
+                                              </option>
+                                              <option value="OTHER">
+                                                기타
+                                              </option>
+                                            </select>
+                                          </FormField>
+                                        </FormRow>
+
+                                        {activeCareer.endReason && (
+                                          <FormRow>
+                                            <FormLabel>사유 상세</FormLabel>
+                                            <FormField>
+                                              <Input
+                                                type="text"
+                                                placeholder="예: 국민투표로 퇴위 결정"
+                                                value={
+                                                  activeCareer.endReasonDetail ||
+                                                  ''
+                                                }
+                                                onChange={(e) =>
+                                                  handleCareerInputChange(
+                                                    activeCareer.id,
+                                                    'endReasonDetail',
+                                                    e.target.value,
+                                                  )
+                                                }
+                                              />
+                                            </FormField>
+                                          </FormRow>
+                                        )}
+                                      </>
+                                    )}
+                                  </>
+                                )}
                               </>
                             )}
 

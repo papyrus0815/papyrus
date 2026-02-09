@@ -53,7 +53,7 @@ export class LoggingInterceptor implements NestInterceptor {
               ...logContext,
               statusCode: response.statusCode,
               duration,
-              responseSize: JSON.stringify(data).length,
+              responseSize: data ? JSON.stringify(data).length : 0,
             },
           )
         },

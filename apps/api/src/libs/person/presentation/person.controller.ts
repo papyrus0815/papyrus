@@ -28,6 +28,7 @@ import {
   CreateMedicalCareerDto,
   CreateEducationDto,
   CreatePersonAwardDto,
+  CreateGovernmentPositionTenureDto,
   AllCareersResponseDto,
   MilitaryCareerResponseDto,
   GovernmentCareerResponseDto,
@@ -66,10 +67,11 @@ export class PersonController {
   async getAllWithGovernmentPositions(): Promise<any[]> {
     const persons = await this.personService.findAllWithGovernmentPositions()
 
-    // BigInt를 문자열로 변환하는 헬퍼 함수
+    // BigInt와 Date를 문자열로 변환하는 헬퍼 함수
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
       if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
       if (Array.isArray(obj)) return obj.map(serializeBigInt)
       if (typeof obj === 'object') {
         const result: any = {}
@@ -86,7 +88,12 @@ export class PersonController {
       name: person.name,
       surname: person.surname,
       profileImageUrl: person.profileImageUrl,
+      birthEra: person.birthEra,
+      birthDate: person.birthDate ? person.birthDate.toISOString() : null,
+      deathEra: person.deathEra,
+      deathDate: person.deathDate ? person.deathDate.toISOString() : null,
       governmentPositions: serializeBigInt(person.GovernmentTenures || []),
+      governmentCareers: serializeBigInt(person.governmentCareers || []),
     }))
   }
 
@@ -96,6 +103,15 @@ export class PersonController {
   @Get(':id')
   async getById(@Param('id') id: string): Promise<PersonResponseDto> {
     return this.personService.findById(id)
+  }
+
+  /**
+   * 인물의 재임 기록만 조회 (GovernmentPositionTenure)
+   * 수정 페이지에서 경력 불러오기 실패 시 이 API로 보완
+   */
+  @Get(':id/tenures')
+  async getTenuresByPersonId(@Param('id') id: string): Promise<any[]> {
+    return this.personService.findTenuresByPersonId(id)
   }
 
   /**
@@ -349,6 +365,11 @@ export class PersonController {
   @Post('careers/government')
   async addGovernmentCareer(@Body() dto: CreateGovernmentCareerDto): Promise<GovernmentCareerResponseDto> {
     return this.personService.addGovernmentCareer(dto)
+  }
+
+  @Delete('careers/government/:id')
+  async deleteGovernmentCareer(@Param('id') id: string): Promise<void> {
+    return this.personService.deleteGovernmentCareer(id)
   }
 
   /**

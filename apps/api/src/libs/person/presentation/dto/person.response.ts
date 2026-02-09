@@ -30,6 +30,10 @@ export interface PersonResponseDto {
   motherId: string | null
   jobId: string | null
   countryId: string | null
+  // 이벤트 목록에 생몰년 표시 여부
+  showLifespanOnEventList?: boolean
+  // 정부 직위 재임 기록
+  governmentTenures?: any[]
   createdAt: string
   updatedAt: string
 }

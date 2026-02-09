@@ -83,6 +83,87 @@ const COUNTRIES: CountryData[] = [
     areaSqKm: 17098242.0,
     continentName: '유럽',
   },
+  {
+    name: '튀르키예',
+    localName: 'Türkiye',
+    flagEmoji: '🇹🇷',
+    isoCode: 'TR',
+    population: 85816199,
+    areaSqKm: 783562.0,
+    continentName: '유럽',
+  },
+  {
+    name: '헝가리',
+    localName: 'Magyarország',
+    flagEmoji: '🇭🇺',
+    isoCode: 'HU',
+    population: 9597085,
+    areaSqKm: 93030.0,
+    continentName: '유럽',
+  },
+  {
+    name: '오스트리아',
+    localName: 'Österreich',
+    flagEmoji: '🇦🇹',
+    isoCode: 'AT',
+    population: 9120813,
+    areaSqKm: 83879.0,
+    continentName: '유럽',
+  },
+  {
+    name: '루마니아',
+    localName: 'România',
+    flagEmoji: '🇷🇴',
+    isoCode: 'RO',
+    population: 19056116,
+    areaSqKm: 238397.0,
+    continentName: '유럽',
+  },
+  {
+    name: '불가리아',
+    localName: 'България',
+    flagEmoji: '🇧🇬',
+    isoCode: 'BG',
+    population: 6838937,
+    areaSqKm: 110879.0,
+    continentName: '유럽',
+  },
+  {
+    name: '세르비아',
+    localName: 'Србија',
+    flagEmoji: '🇷🇸',
+    isoCode: 'RS',
+    population: 6641197,
+    areaSqKm: 88361.0,
+    continentName: '유럽',
+  },
+  {
+    name: '폴란드',
+    localName: 'Polska',
+    flagEmoji: '🇵🇱',
+    isoCode: 'PL',
+    population: 38036118,
+    areaSqKm: 312696.0,
+    continentName: '유럽',
+  },
+  {
+    name: '체코',
+    localName: 'Česko',
+    flagEmoji: '🇨🇿',
+    isoCode: 'CZ',
+    population: 10873689,
+    areaSqKm: 78871.0,
+    continentName: '유럽',
+  },
+  {
+    name: '슬로바키아',
+    localName: 'Slovensko',
+    flagEmoji: '🇸🇰',
+    isoCode: 'SK',
+    population: 5460185,
+    areaSqKm: 49037.0,
+    continentName: '유럽',
+  },
 ]
 
 export async function seedCountries(
@@ -123,4 +204,3 @@ export async function seedCountries(
 
   console.log(`✅ 총 ${COUNTRIES.length}개 국가 생성 완료!\n`)
 }
-

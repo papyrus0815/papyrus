@@ -2,14 +2,13 @@
  * Government Position Entity - Heads of State Hook
  * FSD: entities/government-position/model
  */
+import { useEffect, useMemo, useState } from 'react'
 
-import { useEffect, useState, useMemo } from 'react'
-
+import { FILTER_ALL } from '@/features/event-list/lib'
 import {
   HeadOfStateDuringEvent,
   findHeadsOfStateDuringPeriod,
 } from '@/shared/api/government-positions'
-import { FILTER_ALL } from '@/features/event-list/lib'
 
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
 import { MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS } from '../../../pages/events/list/mock-government-positions'
@@ -28,22 +27,47 @@ export const useHeadsOfState = (
     new Set(),
   )
 
-  // 선택된 직업 타입에 따라 국가 원수 목록 필터링
+  // 선택된 직업 타입에 따라 국가 원수 목록 필터링 + 목록 전체 기간에 대한 국가원수(트럼프 등) 한 블록
   useEffect(() => {
     if (events.length === 0 || personsWithGovPositions.length === 0) return
 
+    const positionFilter =
+      selectedPositionType === FILTER_ALL ? undefined : selectedPositionType
     const headsOfStateMap = new Map<string, HeadOfStateDuringEvent[]>()
+    let periodStart: string | undefined
+    let periodEnd: string | undefined
     events.forEach((event) => {
+      const s = event.startDate
+      const e = event.endDate || s
+      if (s) {
+        if (periodStart == null || s < periodStart) periodStart = s
+        if (periodEnd == null || e > periodEnd) periodEnd = e
+      }
       const headsOfState = findHeadsOfStateDuringPeriod(
-        event.startDate,
-        event.endDate,
+        s,
+        e,
         personsWithGovPositions,
-        selectedPositionType === FILTER_ALL ? undefined : selectedPositionType,
+        positionFilter,
       )
       if (headsOfState.length > 0) {
         headsOfStateMap.set(event.id, headsOfState)
       }
     })
+    // 목록 전체 기간에 해당하는 국가원수 (사건이 과거뿐이어도 기간 끝을 올해까지 넓혀 트럼프 등 최근 재임 인물 포함)
+    const endOfCurrentYear = new Date().getFullYear() + '-12-31T23:59:59.999Z'
+    const periodEndExtended =
+      periodEnd && periodEnd > endOfCurrentYear ? periodEnd : endOfCurrentYear
+    if (periodStart) {
+      const periodHeads = findHeadsOfStateDuringPeriod(
+        periodStart,
+        periodEndExtended,
+        personsWithGovPositions,
+        positionFilter,
+      )
+      if (periodHeads.length > 0) {
+        headsOfStateMap.set('__periodHeads__', periodHeads)
+      }
+    }
     setEventHeadsOfState(headsOfStateMap)
     console.log('👑 사건별 국가 원수 (필터링됨):', headsOfStateMap)
     console.log('💼 선택된 직업:', selectedPositionType)
@@ -143,54 +167,17 @@ export const useTenureGroups = (
       }
     })
 
-    // 연속된 사건들만 그룹으로 유지 (중간에 빈 공간이 있으면 분리)
-    const continuousGroups: typeof groups = []
+    // 한 인물·한 재임 = 한 그룹 유지 (연속 분할 제거). eventIds를 사건 시작일 기준 시간순 정렬 → 첫 사건=취임 연도, 마지막=퇴임 연도
     groups.forEach((group) => {
-      // ✅ 모든 사건에 국가 원수 표시 (1개여도 표시)
-      // if (group.eventIds.length < 2) {
-      //   // 1개 사건만 있으면 그룹으로 표시하지 않음
-      //   return
-      // }
-
-      // 연속성 확인
-      const indices = topLevelEvents
-        .map((item, idx) => (group.eventIds.includes(item.node.id) ? idx : -1))
-        .filter((idx) => idx !== -1)
-
-      let currentGroup: typeof group | null = null
-      for (let i = 0; i < indices.length; i++) {
-        if (i === 0 || indices[i] === indices[i - 1] + 1) {
-          if (!currentGroup) {
-            currentGroup = {
-              ...group,
-              eventIds: [topLevelEvents[indices[i]].node.id],
-              startIndex: indices[i],
-              endIndex: indices[i],
-            }
-          } else {
-            currentGroup.eventIds.push(topLevelEvents[indices[i]].node.id)
-            currentGroup.endIndex = indices[i]
-          }
-        } else {
-          // ✅ 1개 사건도 표시
-          if (currentGroup) {
-            continuousGroups.push(currentGroup)
-          }
-          currentGroup = {
-            ...group,
-            eventIds: [topLevelEvents[indices[i]].node.id],
-            startIndex: indices[i],
-            endIndex: indices[i],
-          }
-        }
-      }
-      // ✅ 1개 사건도 표시
-      if (currentGroup) {
-        continuousGroups.push(currentGroup)
-      }
+      group.eventIds.sort((idA, idB) => {
+        const eventA = events.find((e) => e.id === idA)
+        const eventB = events.find((e) => e.id === idB)
+        const dateA = eventA?.startDate ?? ''
+        const dateB = eventB?.startDate ?? ''
+        return dateA.localeCompare(dateB)
+      })
     })
 
-    return continuousGroups
+    return groups
   }, [flattenedHierarchy, eventHeadsOfState, events])
 }
-

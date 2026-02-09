@@ -1100,13 +1100,19 @@ export default function PersonDetailPage() {
                     {person.governmentPositions.map(
                       (tenure: {
                         id: string
-                        position: { title: string; rank?: number }
+                        title: string
+                        termNumber?: number
+                        regnalNumber?: number
                         startDate?: string
                         endDate?: string
                       }) => (
                         <ActivityItem key={tenure.id}>
                           <ActivityDot />
-                          <ActivityName>{tenure.position.title}</ActivityName>
+                          <ActivityName>
+                            {tenure.termNumber && `제${tenure.termNumber}대 `}
+                            {tenure.title}
+                            {tenure.regnalNumber && ` ${tenure.regnalNumber}세`}
+                          </ActivityName>
                           {tenure.startDate && (
                             <ActivityValue>
                               {new Date(tenure.startDate).getFullYear()}

@@ -79,7 +79,7 @@ export async function updatePerson(
  */
 export async function deletePerson(id: string): Promise<void> {
   try {
-    await personsApi.$delete(apiConnection, id)
+    await personsApi._delete(apiConnection, id)
   } catch (error) {
     console.error(`❌ 인물 삭제 실패 (ID: ${id}):`, error)
     throw error
@@ -91,12 +91,20 @@ export async function deletePerson(id: string): Promise<void> {
  */
 export async function getAllPersonsWithGovernmentPositions(): Promise<any[]> {
   try {
-    const response = await apiConnection.fetch(
-      '/persons/with-government-positions',
+    const response = await fetch(
+      `${apiConnection.host}/persons/with-government-positions`,
       {
         method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       },
     )
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+
     const data = await response.json()
     return data.data || data
   } catch (error) {

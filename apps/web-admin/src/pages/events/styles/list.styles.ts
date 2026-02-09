@@ -1011,6 +1011,30 @@ export const HeadOfStateTenure = styled.span`
   font-size: 9px;
 `
 
+// 재위 시작 연도만 표시하는 행 (첫 사건 연도보다 이전인 경우)
+export const TenureStartYearRow = styled.div`
+  margin: 4px 0 8px 12px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(99, 102, 241, 0.75);
+  background: rgba(99, 102, 241, 0.06);
+  border-radius: 6px;
+  border-left: 2px solid rgba(99, 102, 241, 0.25);
+`
+
+// 퇴임 연도 표시 행 (루이16세 1792년, 트럼프 2021년 등)
+export const TenureEndYearRow = styled.div`
+  margin: 4px 0 8px 12px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(99, 102, 241, 0.75);
+  background: rgba(99, 102, 241, 0.06);
+  border-radius: 6px;
+  border-left: 2px solid rgba(99, 102, 241, 0.25);
+`
+
 // 국가 원수 집권 기간 헤더
 export const TenureGroupHeader = styled.div<{ $depth: number }>`
   margin: 12px 0 6px 0;

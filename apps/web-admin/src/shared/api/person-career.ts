@@ -1,5 +1,4 @@
 // apps/web-admin/src/shared/api/person-career.ts
-
 import axios from 'axios'
 
 // API 클라이언트 생성
@@ -131,6 +130,25 @@ export interface CreateArtistCareerDto {
 }
 
 /**
+ * 운동선수 경력 생성 DTO
+ */
+export interface CreateAthleteCareerDto {
+  personId: string
+  timelineTitle?: string
+  showPositionInfo?: boolean
+  positionId: string // 직급 ID (선수, 코치 등)
+  jobCategoryId?: string
+  organizationId?: string // 팀 ID
+  sport?: string // 종목
+  position?: string // 포지션
+  jerseyNumber?: number // 등번호
+  startDate?: string
+  endDate?: string
+  notes?: string
+  images?: CareerImageDto[]
+}
+
+/**
  * 언론인 경력 생성 DTO
  */
 export interface CreateMediaCareerDto {
@@ -185,6 +203,60 @@ export interface CreateMedicalCareerDto {
 }
 
 /**
+ * 국가원수/왕위 재임 기록 생성 DTO
+ */
+export interface CreateGovernmentPositionTenureDto {
+  personId: string
+  positionType:
+    | 'HEAD_OF_STATE'
+    | 'HEAD_OF_GOVERNMENT'
+    | 'HEIR_APPARENT'
+    | 'REGENT'
+    | 'CABINET_MINISTER'
+    | 'VICE_MINISTER'
+    | 'LEGISLATOR'
+    | 'JUDICIARY'
+    | 'LOCAL_GOVERNMENT'
+    | 'SPECIAL_POSITION'
+    | 'MILITARY_COMMANDER'
+    | 'ROYAL_NOBLE_TITLE'
+    | 'OTHER' // 직위 타입 (필수)
+  title: string // 직위명 (필수) - 예: "대통령", "국왕", "황제"
+  titleEn?: string // 영문 직위명
+  showPositionInfo?: boolean // 사건 타임라인에 직책 정보 표시 여부 (기본값: true)
+  countryId?: string // 현대 국가 ID
+  historicalCountryId?: string // 역사적 국가 ID
+  positionDefinitionId?: string // 직위 정의 ID (선택사항)
+  termNumber?: number // 대수
+  regnalNumber?: number // 재위번호 (서양 군주)
+  startDate: string // 취임일 (필수)
+  endDate?: string // 퇴임일
+  appointmentMethod?:
+    | 'DIRECT_ELECTION'
+    | 'INDIRECT_ELECTION'
+    | 'APPOINTMENT'
+    | 'HEREDITARY'
+    | 'COUP'
+    | 'PARLIAMENTARY_ELECTION'
+    | 'OTHER'
+  endReason?:
+    | 'TERM_COMPLETED'
+    | 'RESIGNATION'
+    | 'ABDICATION'
+    | 'SUCCESSION_TRANSFER'
+    | 'REMOVAL'
+    | 'IMPEACHMENT'
+    | 'DEATH_IN_OFFICE'
+    | 'OVERTHROWN'
+    | 'WAR_DEFEAT'
+    | 'STATE_DISSOLVED'
+    | 'OTHER'
+  endReasonDetail?: string
+  notes?: string
+  priority?: number
+}
+
+/**
  * 학력 생성 DTO
  */
 export interface CreateEducationDto {
@@ -235,6 +307,10 @@ export const personCareerApi = {
   addGovernmentCareer: async (dto: CreateGovernmentCareerDto) => {
     const response = await apiClient.post('/persons/careers/government', dto)
     return response.data
+  },
+
+  deleteGovernmentCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/government/${id}`)
   },
 
   /**
@@ -299,6 +375,46 @@ export const personCareerApi = {
   addMedicalCareer: async (dto: CreateMedicalCareerDto) => {
     const response = await apiClient.post('/persons/careers/medical', dto)
     return response.data
+  },
+
+  /**
+   * 국가원수/왕위 재임 기록 추가
+   */
+  addGovernmentPositionTenure: async (
+    dto: CreateGovernmentPositionTenureDto,
+  ) => {
+    const response = await apiClient.post('/government-positions/tenures', dto)
+    return response.data
+  },
+
+  /**
+   * 국가원수/왕위 재임 기록 수정
+   */
+  updateGovernmentPositionTenure: async (
+    id: string,
+    dto: Partial<CreateGovernmentPositionTenureDto>,
+  ) => {
+    const response = await apiClient.put(
+      `/government-positions/tenures/${id}`,
+      dto,
+    )
+    return response.data
+  },
+
+  /**
+   * 국가원수/왕위 재임 기록 삭제
+   */
+  deleteGovernmentPositionTenure: async (id: string) => {
+    await apiClient.delete(`/government-positions/tenures/${id}`)
+  },
+
+  /**
+   * 인물의 재임 기록만 조회 (수정 페이지 경력 로딩용)
+   * GET /persons/:id/tenures
+   */
+  getTenuresByPersonId: async (personId: string) => {
+    const response = await apiClient.get(`/persons/${personId}/tenures`)
+    return response.data ?? []
   },
 
   /**

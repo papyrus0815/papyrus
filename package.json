@@ -37,11 +37,11 @@
     "ssl:generate": "node scripts/run.js infrastructure/ssl-generate",
     "ssl:generate:simple": "node scripts/run.js infrastructure/ssl-generate --simple",
     "nginx:generate": "node scripts/run.js infrastructure/nginx-generate",
-    "prisma:seed": "node -r ./prisma-seed-loader.js -r ts-node/register apps/api/prisma/seed.ts",
+    "prisma:seed": "node -r ./prisma-seed-loader.js -r ts-node/register apps/api/prisma/seed-run.js",
     "prepare": "ts-patch install"
   },
   "prisma": {
-    "seed": "node -r ./prisma-seed-loader.js -r ts-node/register apps/api/prisma/seed.ts"
+    "seed": "node -r ./prisma-seed-loader.js -r ts-node/register apps/api/prisma/seed-run.js"
   },
   "dependencies": {
     "@hookform/error-message": "^2.0.1",
