@@ -1,5 +1,10 @@
 /**
  * 정부 직책 목업 데이터
+ *
+ * 사용처:
+ * - events.page.ui.tsx: USE_MOCK_PERSONS=true일 때 인물(정부 직위)만 목업 사용 (기본값 false → 실제 API)
+ * - useEvents.ts, useHeadsOfState.ts: 타입 참조용 (실제 데이터는 API)
+ * - MOCK_POSITION_TYPES: 필터/모달 옵션용 (직업 타입 라벨)
  */
 
 /**

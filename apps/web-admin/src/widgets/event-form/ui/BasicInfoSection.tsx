@@ -10,6 +10,7 @@ import {
   FiGlobe,
   FiImage,
   FiShield,
+  FiTag,
   FiX,
 } from 'react-icons/fi'
 
@@ -51,6 +52,10 @@ interface BasicInfoSectionProps {
   thumbnail: string
   setThumbnail: (value: string) => void
   setThumbnailFile: (file: File | null) => void
+
+  /** 키워드 (동일 사건 매핑용, 선택) */
+  keywords?: string[]
+  setKeywords?: (value: string[]) => void
 
   // DB 카테고리
   dbCategories: EventCategoryDto[]
@@ -96,6 +101,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   thumbnail,
   setThumbnail,
   setThumbnailFile,
+  keywords = [],
+  setKeywords = () => {},
   dbCategories,
   relatedCountryIds = [],
   setRelatedCountryIds = () => {},
@@ -119,6 +126,48 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
   const [isEndTimeModalOpen, setIsEndTimeModalOpen] = useState(false)
+  const [keywordInput, setKeywordInput] = useState(keywords.join(', '))
+  const [keywordValidationMsg, setKeywordValidationMsg] = useState('')
+  const skipKeywordSyncRef = useRef(false)
+
+  const KEYWORD_MAX_LENGTH = 30
+  const KEYWORD_MAX_COUNT = 20
+
+  const addKeywordsFromInput = () => {
+    const raw = keywordInput.trim()
+    if (!raw) return
+    const parts = raw
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const tooLong = parts.filter((s) => s.length > KEYWORD_MAX_LENGTH)
+    const valid = parts
+      .filter((s) => s.length <= KEYWORD_MAX_LENGTH)
+      .slice(0, KEYWORD_MAX_COUNT - keywords.length)
+    if (tooLong.length > 0) {
+      setKeywordValidationMsg(
+        `키워드는 ${KEYWORD_MAX_LENGTH}자 이내로 입력해 주세요. (${tooLong.length}개 생략됨)`,
+      )
+      setTimeout(() => setKeywordValidationMsg(''), 4000)
+    }
+    if (valid.length === 0) return
+    const next = [...keywords, ...valid]
+      .filter((k, i, arr) => arr.indexOf(k) === i)
+      .slice(0, KEYWORD_MAX_COUNT)
+    if (next.length >= KEYWORD_MAX_COUNT && parts.length > valid.length) {
+      setKeywordValidationMsg(
+        `키워드는 최대 ${KEYWORD_MAX_COUNT}개까지 등록할 수 있습니다.`,
+      )
+      setTimeout(() => setKeywordValidationMsg(''), 4000)
+    }
+    skipKeywordSyncRef.current = true
+    setKeywords(next)
+    setKeywordInput('')
+  }
+  useEffect(() => {
+    if (!skipKeywordSyncRef.current) setKeywordInput(keywords.join(', '))
+    skipKeywordSyncRef.current = false
+  }, [keywords])
 
   // 전쟁/군사 카테고리 선택 시 자동 스크롤 (최초 1회만)
   useEffect(() => {
@@ -269,6 +318,95 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             rows={4}
           />
           <S.Hint>사건의 핵심 내용을 요약해주세요</S.Hint>
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
+      <S.FormRow>
+        <S.FormLabel>
+          <FiTag
+            size={14}
+            style={{ marginRight: 6, verticalAlign: 'middle' }}
+          />
+          키워드
+        </S.FormLabel>
+        <S.FormField>
+          <S.Input
+            type="text"
+            placeholder="키워드 입력 후 엔터 (쉼표로 여러 개 가능, 최대 20개·각 30자)"
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              e.preventDefault()
+              addKeywordsFromInput()
+            }}
+            onBlur={() => addKeywordsFromInput()}
+          />
+          {keywordValidationMsg && (
+            <p
+              style={{
+                marginTop: 6,
+                fontSize: 12,
+                color: 'var(--error-color, #c53030)',
+              }}
+            >
+              {keywordValidationMsg}
+            </p>
+          )}
+          {keywords.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 6,
+                marginTop: 8,
+              }}
+            >
+              {keywords.map((k) => (
+                <span
+                  key={k}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '4px 10px',
+                    background: '#e5e7eb',
+                    color: '#1f2937',
+                    border: '1px solid #d1d5db',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 500,
+                  }}
+                >
+                  {k}
+                  <button
+                    type="button"
+                    onClick={() => setKeywords(keywords.filter((x) => x !== k))}
+                    style={{
+                      padding: 0,
+                      marginLeft: 2,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      lineHeight: 1,
+                      color: '#6b7280',
+                    }}
+                    aria-label={`${k} 제거`}
+                  >
+                    <FiX size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <S.Hint>
+            <strong>내가 등록한 사건</strong>과{' '}
+            <strong>타인이 등록한 사건</strong>을 나중에 매칭할 때 사용합니다.
+            같은 역사적 사건을 가리키는 대표 키워드(인명, 사건명, 연도 등)를
+            넣어두면, 추후 검색·매칭으로 서로 연결할 수 있습니다. 입력 후 엔터로
+            추가, ×로 제거.
+          </S.Hint>
         </S.FormField>
       </S.FormRow>
 

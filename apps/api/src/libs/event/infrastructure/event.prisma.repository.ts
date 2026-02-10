@@ -82,6 +82,7 @@ export class EventPrismaRepository implements EventRepository {
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,
         warCost: data.warCost,
+        keywords: data.keywords ?? undefined,
         createdById: data.createdById!, // 등록자 ID (필수)
       },
       include: {
@@ -120,6 +121,12 @@ export class EventPrismaRepository implements EventRepository {
         administrativeDivisionId: data.administrativeDivisionId,
         historicalCountryId: data.historicalCountryId,
         warCost: data.warCost,
+        keywords:
+          data.keywords === undefined
+            ? undefined
+            : data.keywords === null
+              ? Prisma.JsonNull
+              : data.keywords,
       },
       include: {
         category: true,
@@ -161,6 +168,10 @@ export class EventPrismaRepository implements EventRepository {
       administrativeDivisionId: event.administrativeDivisionId,
       historicalCountryId: event.historicalCountryId,
       warCost: event.warCost,
+      keywords:
+        event.keywords != null && Array.isArray(event.keywords)
+          ? (event.keywords as string[])
+          : null,
       createdById: event.createdById,
     })
   }

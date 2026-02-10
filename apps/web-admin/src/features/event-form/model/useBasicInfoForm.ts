@@ -20,6 +20,7 @@ export const useBasicInfoForm = () => {
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
   const [tags, setTags] = useState<string[]>([])
+  const [keywords, setKeywords] = useState<string[]>([])
   const [relatedCountryIds, setRelatedCountryIds] = useState<string[]>([])
   const [relatedHistoricalCountryIds, setRelatedHistoricalCountryIds] =
     useState<string[]>([])
@@ -65,6 +66,7 @@ export const useBasicInfoForm = () => {
     latitude,
     longitude,
     tags,
+    keywords,
     relatedCountryIds,
     relatedHistoricalCountryIds,
 
@@ -82,6 +84,7 @@ export const useBasicInfoForm = () => {
     setLatitude,
     setLongitude,
     setTags,
+    setKeywords,
     setRelatedCountryIds,
     setRelatedHistoricalCountryIds,
 

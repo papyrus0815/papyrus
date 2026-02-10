@@ -283,6 +283,8 @@ export const buildEventSubmitData = (params: {
     thumbnail?: string
   }>
   childEventIds?: string[] // 기존 사건을 하위 사건으로 연결
+  /** 키워드 (동일 사건 매핑용) */
+  keywords?: string[]
 }) => {
   return {
     title: params.title,
@@ -366,5 +368,9 @@ export const buildEventSubmitData = (params: {
       params.childEventIds && params.childEventIds.length > 0
         ? params.childEventIds
         : undefined, // 🆕 기존 사건을 하위 사건으로 연결
+    keywords:
+      params.keywords && params.keywords.length > 0
+        ? params.keywords.filter((k) => k.trim())
+        : undefined,
   }
 }

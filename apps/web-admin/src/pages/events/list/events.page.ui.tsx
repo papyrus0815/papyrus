@@ -221,19 +221,17 @@ export const EventsCatalogPage: React.FC = () => {
     const fetchEvents = async () => {
       setIsLoading(true)
       try {
-        // 🎭 목업 데이터 사용 여부 (true로 설정하면 목업 데이터 사용)
-        const USE_MOCK_DATA = true
+        // 🎭 목업: 인물(정부 직위)만 목업 사용 여부. false = 실제 API 사용 (권장)
+        const USE_MOCK_PERSONS = false
 
         let eventsResponse: Awaited<ReturnType<typeof getAllEvents>>
         let personsResponse: typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
 
-        if (USE_MOCK_DATA) {
-          // 목업 데이터 사용
+        if (USE_MOCK_PERSONS) {
           eventsResponse = await getAllEvents()
           personsResponse = MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
-          console.log('🎭 목업 데이터 사용 중')
+          console.log('🎭 인물 데이터만 목업 사용 중')
         } else {
-          // 실제 API 호출
           ;[eventsResponse, personsResponse] = await Promise.all([
             getAllEvents(),
             getAllPersonsWithGovernmentPositions(),

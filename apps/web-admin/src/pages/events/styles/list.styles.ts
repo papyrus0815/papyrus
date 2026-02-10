@@ -428,6 +428,53 @@ export const CollapsedCount = styled.span`
   flex-shrink: 0;
 `
 
+/** 같은 연도 내 같은 취임일자(날짜) 묶음 접기용 */
+export const DateDivider = styled.button`
+  display: flex;
+  align-items: center;
+  margin: 16px 0 8px -70px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  width: calc(100% + 70px);
+  cursor: pointer;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 32px;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 8px;
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 50%;
+    z-index: 1;
+  }
+
+  span {
+    margin-left: 52px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #64748b;
+    padding: 2px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(203, 213, 225, 0.4);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    svg {
+      transition: transform 0.2s ease;
+      color: #94a3b8;
+    }
+  }
+
+  &:hover span {
+    border-color: rgba(99, 102, 241, 0.25);
+  }
+`
+
 export const SimpleYearLabel = styled.div`
   margin: 12px 0 8px 0;
   padding: 4px 10px;
@@ -1036,7 +1083,10 @@ export const TenureEndYearRow = styled.div`
 `
 
 // 국가 원수 집권 기간 헤더
-export const TenureGroupHeader = styled.div<{ $depth: number }>`
+export const TenureGroupHeader = styled.div<{
+  $depth: number
+  $clickable?: boolean
+}>`
   margin: 12px 0 6px 0;
   padding: 8px 12px;
   background: rgba(99, 102, 241, 0.04);
@@ -1047,6 +1097,19 @@ export const TenureGroupHeader = styled.div<{ $depth: number }>`
   display: flex;
   align-items: center;
   gap: 8px;
+  ${({ $clickable }) =>
+    $clickable &&
+    `
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-left: 3px solid rgba(99, 102, 241, 0.5);
+    transition: background 0.2s ease;
+    &:hover {
+      background: rgba(99, 102, 241, 0.08);
+    }
+  `}
 `
 
 export const TenureGroupTitle = styled.div`

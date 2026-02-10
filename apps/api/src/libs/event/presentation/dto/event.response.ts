@@ -35,6 +35,14 @@ export class EventResponseDto {
   @ApiProperty({ description: '여파', required: false })
   aftermath?: string | null
 
+  @ApiProperty({
+    description: '키워드 (동일 사건 매핑용)',
+    required: false,
+    type: 'array',
+    items: { type: 'string' },
+  })
+  keywords?: string[] | null
+
   @ApiProperty({ description: '상위 사건 ID', required: false })
   parentEventId?: string | null
 

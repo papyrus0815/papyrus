@@ -103,6 +103,7 @@ export class EventController {
       parentEventId: event.parentEventId,
       parentEvent: event.parentEvent ? this.toResponseDto(event.parentEvent) : undefined,
       childEvents: event.childEvents ? event.childEvents.map((child: any) => this.toResponseDto(child)) : undefined,
+      keywords: event.keywords != null ? (Array.isArray(event.keywords) ? event.keywords : []) : null,
       cityId: event.cityId,
       administrativeDivisionId: event.administrativeDivisionId,
       historicalCountryId: event.historicalCountryId,
@@ -321,6 +322,7 @@ export class EventController {
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,
         warCost: dto.warCost,
+        keywords: dto.keywords,
         childEvents: dto.childEvents, // 🆕 하위 사건 정보 전달
         createdById: userId, // 🆕 등록자 ID
       },
@@ -421,6 +423,7 @@ export class EventController {
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,
         warCost: dto.warCost,
+        keywords: dto.keywords,
       },
       dto.relatedCountryIds,
       dto.relatedHistoricalCountryIds,

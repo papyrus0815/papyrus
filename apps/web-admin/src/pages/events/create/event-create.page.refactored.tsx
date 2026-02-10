@@ -123,6 +123,8 @@ export const EventCreatePageRefactored: React.FC = () => {
     setLongitude,
     tags,
     setTags,
+    keywords,
+    setKeywords,
     relatedCountryIds,
     setRelatedCountryIds,
     relatedHistoricalCountryIds,
@@ -300,6 +302,7 @@ export const EventCreatePageRefactored: React.FC = () => {
         }
 
         setLocation(event.location || '')
+        setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
 
         // 썸네일 로드 (새 구조 우선, 레거시 fallback)
         if (event.eventImages && event.eventImages.length > 0) {
@@ -450,6 +453,7 @@ export const EventCreatePageRefactored: React.FC = () => {
         mentionedEvents,
         childEvents, // 🆕 하위 사건 빠른 추가 (deprecated)
         childEventIds, // 🆕 하위 사건 연결 (기존 사건)
+        keywords,
       })
 
       console.log('🔍 [디버깅] category 값:', category)
@@ -532,6 +536,8 @@ export const EventCreatePageRefactored: React.FC = () => {
               thumbnail={thumbnail}
               setThumbnail={setThumbnail}
               setThumbnailFile={setThumbnailFile}
+              keywords={keywords}
+              setKeywords={setKeywords}
               dbCategories={dbCategories}
               relatedCountryIds={relatedCountryIds}
               setRelatedCountryIds={setRelatedCountryIds}

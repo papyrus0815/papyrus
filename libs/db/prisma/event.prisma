@@ -229,6 +229,9 @@ model Event {
   /// 전쟁 비용 (텍스트)
   warCost String? @map("war_cost") @db.Text
 
+  /// 키워드 (동일 사건 매핑용, 문자열 배열 JSON)
+  keywords Json? @db.Json
+
   //--- 관계 필드
   category    EventCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   parentEvent Event?         @relation("ParentChildEvent", fields: [parentEventId], references: [id])

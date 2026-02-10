@@ -36,6 +36,17 @@ export class UpdateEventDto {
   @IsOptional()
   location?: string
 
+  @ApiProperty({
+    description: '키워드 (동일 사건 매핑용)',
+    required: false,
+    type: 'array',
+    items: { type: 'string' },
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  keywords?: string[]
+
   @ApiProperty({ description: '카테고리 ID', required: false })
   @IsString()
   @IsOptional()

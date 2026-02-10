@@ -16,6 +16,8 @@ export class Event {
   casualties?: any | null
   militaryDetails?: any | null
   warCost?: string | null
+  /** 키워드 (동일 사건 매핑용) */
+  keywords?: string[] | null
   createdById!: string
 
   constructor(data: Event) {

@@ -39,6 +39,15 @@ const COUNTRIES: CountryData[] = [
     continentName: '아시아',
   },
   {
+    name: '이란',
+    localName: 'ایران',
+    flagEmoji: '🇮🇷',
+    isoCode: 'IR',
+    population: 89172767,
+    areaSqKm: 1648195.0,
+    continentName: '아시아',
+  },
+  {
     name: '미국',
     localName: 'United States',
     flagEmoji: '🇺🇸',

@@ -1,7 +1,11 @@
 import { execSync } from 'child_process'
-import * as readline from 'readline'
-import * as path from 'path'
 import { config } from 'dotenv'
+import * as path from 'path'
+import * as readline from 'readline'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // .env 파일 로드 (프로젝트 루트)
 const envPath = path.resolve(__dirname, '../../../.env')

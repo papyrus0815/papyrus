@@ -227,6 +227,8 @@ export const EventCreatePage: React.FC = () => {
 
   // 태그
   const [tags, setTags] = useState<string[]>([])
+  /** 키워드 (동일 사건 매핑용, 추후 검색/매칭에 사용) */
+  const [keywords, setKeywords] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
 
   // 관련 국가 (간소화)
@@ -369,6 +371,7 @@ export const EventCreatePage: React.FC = () => {
         }
         setLocation(event.location || '')
         setThumbnail(event.thumbnail || '')
+        setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
 
         // 카테고리 설정 (서버에서 받은 이름을 그대로 사용)
         if (event.category?.name) {
@@ -833,6 +836,7 @@ export const EventCreatePage: React.FC = () => {
         mentionedPersons,
         mentionedEvents,
         childEvents, // 🆕 하위 사건 추가
+        keywords,
       })
 
       console.log('📤 사건 데이터 전송:', eventData)
@@ -1182,6 +1186,8 @@ export const EventCreatePage: React.FC = () => {
               dbCategories={dbCategories}
               tags={tags}
               setTags={setTags}
+              keywords={keywords}
+              setKeywords={setKeywords}
               relatedCountryIds={relatedCountryIds}
               setRelatedCountryIds={setRelatedCountryIds}
               relatedHistoricalCountryIds={relatedHistoricalCountryIds}
@@ -1459,14 +1465,18 @@ export const EventCreatePage: React.FC = () => {
                         <S.ChildEventItem key={idx}>
                           <div>
                             <strong>{child.title}</strong>
-                            {child.startDate && <span> · {child.startDate}</span>}
+                            {child.startDate && (
+                              <span> · {child.startDate}</span>
+                            )}
                             {child.location && <span> · {child.location}</span>}
                           </div>
                           <S.RemoveChildButton
                             type="button"
                             onClick={() => {
                               playClickSound()
-                              setChildEvents(childEvents.filter((_, i) => i !== idx))
+                              setChildEvents(
+                                childEvents.filter((_, i) => i !== idx),
+                              )
                             }}
                           >
                             <FiX size={14} />
@@ -1475,7 +1485,7 @@ export const EventCreatePage: React.FC = () => {
                       ))}
                     </S.ChildEventsList>
                   )}
-                  
+
                   {showChildEventForm ? (
                     <S.QuickAddForm>
                       <S.QuickAddInputGroup>
@@ -1483,25 +1493,45 @@ export const EventCreatePage: React.FC = () => {
                           type="text"
                           placeholder="사건명 (필수)*"
                           value={newChildEvent.title}
-                          onChange={(e) => setNewChildEvent({...newChildEvent, title: e.target.value})}
+                          onChange={(e) =>
+                            setNewChildEvent({
+                              ...newChildEvent,
+                              title: e.target.value,
+                            })
+                          }
                         />
                         <S.QuickAddInput
                           type="date"
                           placeholder="시작일"
                           value={newChildEvent.startDate}
-                          onChange={(e) => setNewChildEvent({...newChildEvent, startDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewChildEvent({
+                              ...newChildEvent,
+                              startDate: e.target.value,
+                            })
+                          }
                         />
                         <S.QuickAddInput
                           type="date"
                           placeholder="종료일"
                           value={newChildEvent.endDate}
-                          onChange={(e) => setNewChildEvent({...newChildEvent, endDate: e.target.value})}
+                          onChange={(e) =>
+                            setNewChildEvent({
+                              ...newChildEvent,
+                              endDate: e.target.value,
+                            })
+                          }
                         />
                         <S.QuickAddInput
                           type="text"
                           placeholder="위치"
                           value={newChildEvent.location}
-                          onChange={(e) => setNewChildEvent({...newChildEvent, location: e.target.value})}
+                          onChange={(e) =>
+                            setNewChildEvent({
+                              ...newChildEvent,
+                              location: e.target.value,
+                            })
+                          }
                         />
                       </S.QuickAddInputGroup>
                       <S.QuickAddButtons>
@@ -1562,7 +1592,9 @@ export const EventCreatePage: React.FC = () => {
                     </S.AddChildButton>
                   )}
                   <S.Hint>
-                    이 사건에 포함되는 하위 사건들을 빠르게 추가하세요 (예: 2차 세계대전 → 폴란드 침공, 프랑스 침공...). 기본 정보만 입력하고, 상세 내용은 나중에 작성할 수 있습니다.
+                    이 사건에 포함되는 하위 사건들을 빠르게 추가하세요 (예: 2차
+                    세계대전 → 폴란드 침공, 프랑스 침공...). 기본 정보만
+                    입력하고, 상세 내용은 나중에 작성할 수 있습니다.
                   </S.Hint>
                 </S.FormField>
               </S.FormRow>
