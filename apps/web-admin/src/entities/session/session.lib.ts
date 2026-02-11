@@ -16,8 +16,7 @@ export function attachAuthInterceptor(): void {
       const token = parsed?.state?.token as string | undefined
       if (token) {
         nestiaApiService.updateToken(token)
-        
-return
+        return
       }
     }
   } catch {

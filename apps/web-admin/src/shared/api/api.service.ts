@@ -1,3 +1,4 @@
+import { useSessionStore } from '@/entities/session/session.store'
 import { IConnection } from '@nestia/fetcher'
 
 // Nestia SDK를 사용한 API 서비스
@@ -46,8 +47,42 @@ export class NestiaApiService {
   }
 
   // 현재 연결 정보 제공 (도메인 레이어에서 SDK 호출 시 사용)
+  // 요청 시점에 저장소의 토큰이 있으면 반영 (rehydration 지연 또는 다른 탭 로그인 대응)
   getConnection(): IConnection {
+    this.syncTokenFromStorage()
     return this.connection
+  }
+
+  /**
+   * store 또는 localStorage에 토큰이 있으면 connection에 반영 (Authorization 없을 때만)
+   */
+  private syncTokenFromStorage(): void {
+    if (typeof window === 'undefined') return
+    if (this.connection.headers?.Authorization) return
+
+    let token: string | null = null
+
+    try {
+      // 1) Zustand store에서 먼저 확인 (로그인 직후 persist 지연 대응)
+      token = useSessionStore.getState().token ?? null
+      // 2) localStorage (reload 후 복원)
+      if (!token) {
+        const persisted = localStorage.getItem('session-storage')
+        if (persisted) {
+          const parsed = JSON.parse(persisted)
+          token = (parsed?.state?.token as string) ?? null
+        }
+      }
+      if (!token) token = localStorage.getItem('token')
+      if (token) {
+        this.connection.headers = {
+          ...this.connection.headers,
+          Authorization: `Bearer ${token}`,
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 }
 

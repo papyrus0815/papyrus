@@ -24,6 +24,7 @@ import type {
   EventHierarchyNode,
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
+import { HeadsOfStateYearGroupToggle } from '../../../pages/events/styles/list.styles'
 import * as List from '../../../pages/events/styles/list.styles'
 import * as Skeleton from '../../../pages/events/styles/skeleton.styles'
 import {
@@ -113,6 +114,19 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 }) => {
   const navigate = useNavigate()
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
+  /** 재위 년도 그룹 접기 (옛날 디자인: 첫 인물 카드 + "+N명" 펼치기) */
+  const [expandedPersonYearGroups, setExpandedPersonYearGroups] = useState<
+    Set<string>
+  >(new Set())
+
+  const togglePersonYearGroup = (key: string) => {
+    setExpandedPersonYearGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const toggleYearCollapse = (year: number) => {
     setCollapsedYears((prev) => {
@@ -304,42 +318,89 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   </List.CollapsedPlaceholder>
                 ) : (
                   <>
-                    {periodHeadsOfState
-                      .filter(
+                    {/* 재위 년도가 같은 취임: 옛날 디자인 = 첫 인물 카드 + "+N명" 접기/펼치기 */}
+                    {(() => {
+                      const headsStartInYear = periodHeadsOfState.filter(
                         (h) =>
                           new Date(h.tenure.startDate).getFullYear() ===
                           currentYear,
                       )
-                      .map((head) => (
-                        <React.Fragment
-                          key={`period-start-${head.person.id}-${head.tenure.startDate}`}
+                      if (headsStartInYear.length === 0) return null
+                      const primary = headsStartInYear[0]
+                      const others = headsStartInYear.slice(1)
+                      const startKey = `start-${currentYear}`
+                      const isStartExpanded =
+                        expandedPersonYearGroups.has(startKey)
+                      return (
+                        <List.HeadsOfStateYearGroup
+                          key={`start-${currentYear}`}
                         >
                           <TenureGroupHeader
-                            headOfState={head}
-                            otherHeadsOfState={[]}
-                            isExpanded={false}
-                            onToggleExpansion={() => {}}
+                            headOfState={primary}
+                            otherHeadsOfState={others}
+                            isExpanded={isStartExpanded}
+                            onToggleExpansion={() =>
+                              togglePersonYearGroup(startKey)
+                            }
                             startYear={currentYear}
                           />
-                        </React.Fragment>
-                      ))}
-                    {periodHeadsOfState
-                      .filter(
+                          {others.length > 0 && isStartExpanded && (
+                            <OtherHeadsOfStateList otherHeadsOfState={others} />
+                          )}
+                        </List.HeadsOfStateYearGroup>
+                      )
+                    })()}
+                    {/* 재위 년도가 같은 퇴임: 접기 시 요약행, 펼치면 푸터 목록 */}
+                    {(() => {
+                      const headsEndInYear = periodHeadsOfState.filter(
                         (h) =>
                           h.tenure.endDate &&
                           new Date(h.tenure.endDate).getFullYear() ===
                             currentYear,
                       )
-                      .map((head) => (
-                        <React.Fragment
-                          key={`period-end-${head.person.id}-${head.tenure.endDate}`}
-                        >
-                          <TenureGroupFooter
-                            headOfState={head}
-                            endYear={currentYear}
-                          />
-                        </React.Fragment>
-                      ))}
+                      if (headsEndInYear.length === 0) return null
+                      const endKey = `end-${currentYear}`
+                      const isEndExpanded = expandedPersonYearGroups.has(endKey)
+                      return (
+                        <List.HeadsOfStateYearGroup key={`end-${currentYear}`}>
+                          {headsEndInYear.length === 1 ? (
+                            <TenureGroupFooter
+                              headOfState={headsEndInYear[0]}
+                              endYear={currentYear}
+                            />
+                          ) : (
+                            <>
+                              <HeadsOfStateYearGroupToggle
+                                type="button"
+                                onClick={() => togglePersonYearGroup(endKey)}
+                              >
+                                <FiChevronRight
+                                  size={12}
+                                  style={{
+                                    transform: isEndExpanded
+                                      ? 'rotate(90deg)'
+                                      : 'rotate(0deg)',
+                                    transition: 'transform 0.2s ease',
+                                  }}
+                                />
+                                {currentYear}년 퇴임{' '}
+                                <List.CollapsedCount>
+                                  {headsEndInYear.length}명
+                                </List.CollapsedCount>
+                              </HeadsOfStateYearGroupToggle>
+                              {isEndExpanded &&
+                                headsEndInYear.map((head) => (
+                                  <TenureGroupFooter
+                                    key={`period-end-${head.person.id}-${head.tenure.endDate}`}
+                                    headOfState={head}
+                                    endYear={currentYear}
+                                  />
+                                ))}
+                            </>
+                          )}
+                        </List.HeadsOfStateYearGroup>
+                      )
+                    })()}
                     {yearItems.map(({ node, depth, parentEvent }) => {
                       const hasChildren = Boolean(
                         node.children && node.children.length > 0,

@@ -11,6 +11,7 @@ import {
   FiGitBranch,
   FiGlobe,
   FiMapPin,
+  FiTag,
   FiUsers,
 } from 'react-icons/fi'
 
@@ -286,6 +287,49 @@ export const EventListItem: React.FC<EventListItemProps> = ({
                     <span style={{ color: '#94a3b8' }}>
                       {' '}
                       외 {event.sectionTitles.length - 3}개
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 키워드 */}
+            {event.keywords && event.keywords.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '6px',
+                  color: '#64748b',
+                }}
+              >
+                <FiTag size={13} style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '4px',
+                  }}
+                >
+                  {event.keywords.slice(0, 8).map((k, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        background: '#e0e7ff',
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontSize: '11px',
+                        color: '#4338ca',
+                        fontWeight: '500',
+                      }}
+                    >
+                      {k}
+                    </span>
+                  ))}
+                  {event.keywords.length > 8 && (
+                    <span style={{ color: '#94a3b8', fontSize: '11px' }}>
+                      +{event.keywords.length - 8}
                     </span>
                   )}
                 </div>

@@ -151,9 +151,17 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       setTimeout(() => setKeywordValidationMsg(''), 4000)
     }
     if (valid.length === 0) return
-    const next = [...keywords, ...valid]
+    let next = [...keywords, ...valid]
       .filter((k, i, arr) => arr.indexOf(k) === i)
       .slice(0, KEYWORD_MAX_COUNT)
+    // 한글 조합 중 추가된 짧은 키워드 제거 (예: '히' + '히히' → '히히'만 유지)
+    next = next.filter(
+      (k) =>
+        !next.some(
+          (other) =>
+            other !== k && other.length > k.length && other.includes(k),
+        ),
+    )
     if (next.length >= KEYWORD_MAX_COUNT && parts.length > valid.length) {
       setKeywordValidationMsg(
         `키워드는 최대 ${KEYWORD_MAX_COUNT}개까지 등록할 수 있습니다.`,
@@ -338,10 +346,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             onChange={(e) => setKeywordInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== 'Enter') return
+              if ((e.nativeEvent as KeyboardEvent).isComposing) return
               e.preventDefault()
               addKeywordsFromInput()
             }}
-            onBlur={() => addKeywordsFromInput()}
           />
           {keywordValidationMsg && (
             <p
@@ -506,7 +514,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       <DatePickerModal
         isOpen={isStartDateModalOpen}
         onClose={() => setIsStartDateModalOpen(false)}
-        onSelect={(date) => setStartDate(date)}
+        onSelect={(date) => {
+          setStartDate(date)
+          setIsStartDateModalOpen(false)
+          // 시작일 선택 직후 종료일 설정할 수 있도록 모달 열기
+          setTimeout(() => setIsEndDateModalOpen(true), 200)
+        }}
         initialDate={startDate}
         maxDate={endDate}
         title="시작 일자 선택"
@@ -515,7 +528,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         isOpen={isEndDateModalOpen}
         onClose={() => setIsEndDateModalOpen(false)}
         onSelect={(date) => setEndDate(date)}
-        initialDate={endDate}
+        initialDate={endDate || startDate}
         minDate={startDate}
         title="종료 일자 선택"
       />

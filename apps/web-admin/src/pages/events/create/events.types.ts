@@ -173,4 +173,6 @@ export interface HistoricalEvent {
   eventImages?: EventImage[] // 사건 이미지 목록 (새 구조)
   relatedCountries?: Array<{ id: string; name: string; flagEmoji?: string }> // 관련 현대 국가
   relatedHistoricalCountries?: Array<{ id: string; name: string }> // 관련 역사적 국가
+  /** 키워드 (동일 사건 매핑/검색용) */
+  keywords?: string[] | null
 }

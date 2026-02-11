@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+
 import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -14,7 +15,6 @@ interface DatePickerModalProps {
   title?: string
 }
 
-const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
 
 export const DatePickerModal: React.FC<DatePickerModalProps> = ({
@@ -32,18 +32,27 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const [viewMonth, setViewMonth] = useState(new Date().getMonth())
   const [isBCE, setIsBCE] = useState(false)
   const [yearInputValue, setYearInputValue] = useState('2024')
+  const [monthInputValue, setMonthInputValue] = useState('1')
+  const [dayInputValue, setDayInputValue] = useState('1')
+
+  const getDaysInMonth = (y: number, m: number) =>
+    new Date(y, m + 1, 0).getDate()
 
   // initialDate 변경 시 상태 업데이트
   useEffect(() => {
     if (isOpen) {
       const date = initialDate ? new Date(initialDate) : new Date()
-      setSelectedDate(date)
-      const year = date.getFullYear()
-      const absYear = Math.abs(year)
-      setViewYear(absYear)
-      setYearInputValue(absYear.toString())
-      setIsBCE(year < 0)
-      setViewMonth(date.getMonth())
+      if (!isNaN(date.getTime())) {
+        setSelectedDate(date)
+        const year = date.getFullYear()
+        const absYear = Math.abs(year)
+        setViewYear(absYear)
+        setYearInputValue(absYear.toString())
+        setIsBCE(year < 0)
+        setViewMonth(date.getMonth())
+        setMonthInputValue(String(date.getMonth() + 1))
+        setDayInputValue(String(date.getDate()))
+      }
     }
   }, [isOpen, initialDate])
 
@@ -51,20 +60,25 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   // 년도 입력 변경
   const handleYearInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
+    const value = e.target.value.replace(/\D/g, '')
     setYearInputValue(value)
-    
-    const year = parseInt(value)
+    const year = parseInt(value, 10)
     if (!isNaN(year) && year >= 1 && year <= 9999) {
       setViewYear(year)
+      const lastDay = getDaysInMonth(year, viewMonth)
+      const d = Math.min(selectedDate.getDate(), lastDay)
+      setDayInputValue(String(d))
+      setSelectedDate(new Date(isBCE ? -year : year, viewMonth, d))
     }
   }
 
-  // 년도 입력 포커스 아웃
+  // 년도 입력 포커스 아웃 (유효성 복구)
   const handleYearInputBlur = () => {
-    const year = parseInt(yearInputValue)
+    const year = parseInt(yearInputValue, 10)
     if (isNaN(year) || year < 1 || year > 9999) {
       setYearInputValue(viewYear.toString())
+    } else {
+      setYearInputValue(year.toString())
     }
   }
 
@@ -75,6 +89,10 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     if (newYear >= 1 && newYear <= 9999) {
       setViewYear(newYear)
       setYearInputValue(newYear.toString())
+      const lastDay = getDaysInMonth(newYear, viewMonth)
+      const d = Math.min(selectedDate.getDate(), lastDay)
+      setDayInputValue(String(d))
+      setSelectedDate(new Date(isBCE ? -newYear : newYear, viewMonth, d))
     }
   }
 
@@ -84,25 +102,72 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     setIsBCE(!isBCE)
   }
 
-  // 월 변경
+  // 월 입력 변경 (직접 입력)
+  const handleMonthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '')
+    setMonthInputValue(value)
+    const num = parseInt(value, 10)
+    if (!isNaN(num) && num >= 1 && num <= 12) {
+      setViewMonth(num - 1)
+      const lastDay = getDaysInMonth(viewYear, num - 1)
+      const d = Math.min(selectedDate.getDate(), lastDay)
+      setDayInputValue(String(d))
+      setSelectedDate(new Date(isBCE ? -viewYear : viewYear, num - 1, d))
+    }
+  }
+  const handleMonthInputBlur = () => {
+    const num = parseInt(monthInputValue, 10)
+    if (isNaN(num) || num < 1 || num > 12) {
+      setMonthInputValue(String(viewMonth + 1))
+    } else {
+      setMonthInputValue(String(num))
+    }
+  }
+
+  // 일 입력 변경 (직접 입력)
+  const handleDayInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '')
+    setDayInputValue(value)
+    const num = parseInt(value, 10)
+    const lastDay = getDaysInMonth(viewYear, viewMonth)
+    if (!isNaN(num) && num >= 1 && num <= lastDay) {
+      setSelectedDate(new Date(isBCE ? -viewYear : viewYear, viewMonth, num))
+    }
+  }
+  const handleDayInputBlur = () => {
+    const num = parseInt(dayInputValue, 10)
+    const lastDay = getDaysInMonth(viewYear, viewMonth)
+    if (isNaN(num) || num < 1 || num > lastDay) {
+      setDayInputValue(String(Math.min(selectedDate.getDate(), lastDay)))
+    } else {
+      setDayInputValue(String(num))
+    }
+  }
+
+  // 월 변경 (화살표)
   const handleMonthChange = (delta: number) => {
     playClickSound()
     const newMonth = viewMonth + delta
     if (newMonth < 0) {
       setViewMonth(11)
+      setMonthInputValue('12')
       handleYearChange(-1)
     } else if (newMonth > 11) {
       setViewMonth(0)
+      setMonthInputValue('1')
       handleYearChange(1)
     } else {
       setViewMonth(newMonth)
+      setMonthInputValue(String(newMonth + 1))
     }
   }
 
-  // 날짜 선택
+  // 날짜 선택 (달력에서 클릭)
   const handleDateSelect = (day: number) => {
     playClickSound()
-    
+    setSelectedDate(new Date(isBCE ? -viewYear : viewYear, viewMonth, day))
+    setDayInputValue(String(day))
+
     // ISO 8601 형식으로 포맷
     const actualYear = isBCE ? -viewYear : viewYear
     let formatted: string
@@ -110,13 +175,34 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     const yearStr = absYear.toString().padStart(4, '0')
     const monthStr = String(viewMonth + 1).padStart(2, '0')
     const dayStr = String(day).padStart(2, '0')
-    
+
     if (actualYear < 0) {
       formatted = `-${yearStr}-${monthStr}-${dayStr}`
     } else {
       formatted = `${yearStr}-${monthStr}-${dayStr}`
     }
-    
+
+    onSelect(formatted)
+    onClose()
+  }
+
+  // 입력된 년/월/일로 날짜 확정 (적용 버튼 또는 Enter 시 사용)
+  const applyTypedDate = () => {
+    const y = parseInt(yearInputValue, 10)
+    const m = parseInt(monthInputValue, 10)
+    const d = parseInt(dayInputValue, 10)
+    if (isNaN(y) || y < 1 || y > 9999) return
+    if (isNaN(m) || m < 1 || m > 12) return
+    const lastDay = getDaysInMonth(y, m - 1)
+    if (isNaN(d) || d < 1 || d > lastDay) return
+    const actualYear = isBCE ? -y : y
+    const yearStr = y.toString().padStart(4, '0')
+    const monthStr = String(m).padStart(2, '0')
+    const dayStr = String(d).padStart(2, '0')
+    const formatted =
+      actualYear < 0
+        ? `-${yearStr}-${monthStr}-${dayStr}`
+        : `${yearStr}-${monthStr}-${dayStr}`
     onSelect(formatted)
     onClose()
   }
@@ -125,7 +211,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const isDateValid = (day: number | null): boolean => {
     if (day === null) return false
     if (isBCE) return true
-    
+
     const date = new Date(viewYear, viewMonth, day)
     if (minDate && date < new Date(minDate)) return false
     if (maxDate && date > new Date(maxDate)) return false
@@ -158,11 +244,11 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
     const firstDay = new Date(viewYear, viewMonth, 1).getDay()
     const days: (number | null)[] = Array(firstDay).fill(null)
-    
+
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i)
     }
-    
+
     return days
   }
 
@@ -177,7 +263,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
         </ModalHeader>
 
         <ModalContent>
-          {/* 좌측: 설정 영역 */}
+          {/* 좌측: 설정 영역 - 년 월 일 가로 배치 */}
           <LeftPanel>
             {/* 기원 선택 */}
             <SettingSection>
@@ -192,47 +278,54 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
               </EraSelector>
             </SettingSection>
 
-            {/* 년도 선택 */}
+            {/* 년 · 월 · 일 가로 한 줄 */}
             <SettingSection>
-              <SettingLabel>년도</SettingLabel>
-              <YearControl>
-                <YearNavButton onClick={() => handleYearChange(-1)}>
-                  <FiChevronLeft size={16} />
-                </YearNavButton>
-                <YearInputContainer>
-                  <YearInput
-                    type="text"
-                    value={yearInputValue}
-                    onChange={handleYearInputChange}
-                    onBlur={handleYearInputBlur}
-                    placeholder="년도"
-                  />
-                  <YearUnit>년</YearUnit>
-                </YearInputContainer>
-                <YearNavButton onClick={() => handleYearChange(1)}>
-                  <FiChevronRight size={16} />
-                </YearNavButton>
-              </YearControl>
+              <SettingLabel>날짜 입력</SettingLabel>
+              <YearMonthDayRow>
+                <ShortInput
+                  type="text"
+                  inputMode="numeric"
+                  value={yearInputValue}
+                  onChange={handleYearInputChange}
+                  onBlur={handleYearInputBlur}
+                  onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
+                  placeholder="년도"
+                  style={{ flex: 1.2 }}
+                />
+                <ShortInput
+                  type="text"
+                  inputMode="numeric"
+                  value={monthInputValue}
+                  onChange={handleMonthInputChange}
+                  onBlur={handleMonthInputBlur}
+                  onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
+                  placeholder="월"
+                  maxLength={2}
+                  style={{ width: 48 }}
+                />
+                <ShortInput
+                  type="text"
+                  inputMode="numeric"
+                  value={dayInputValue}
+                  onChange={handleDayInputChange}
+                  onBlur={handleDayInputBlur}
+                  onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
+                  placeholder="일"
+                  maxLength={2}
+                  style={{ width: 48 }}
+                />
+              </YearMonthDayRow>
             </SettingSection>
 
-            {/* 월 선택 */}
-            <SettingSection>
-              <SettingLabel>월</SettingLabel>
-              <MonthGrid>
-                {MONTH_NAMES.map((month, index) => (
-                  <MonthButton
-                    key={month}
-                    $isSelected={viewMonth === index}
-                    onClick={() => {
-                      playClickSound()
-                      setViewMonth(index)
-                    }}
-                  >
-                    {index + 1}
-                  </MonthButton>
-                ))}
-              </MonthGrid>
-            </SettingSection>
+            <ApplyDateButton
+              type="button"
+              onClick={() => {
+                playClickSound()
+                applyTypedDate()
+              }}
+            >
+              입력한 날짜로 선택
+            </ApplyDateButton>
           </LeftPanel>
 
           {/* 우측: 달력 영역 */}
@@ -262,7 +355,9 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   $isDisabled={!isDateValid(day)}
                   $isSelected={isDateSelected(day)}
                   $isToday={isToday(day)}
-                  onClick={() => day && isDateValid(day) && handleDateSelect(day)}
+                  onClick={() =>
+                    day && isDateValid(day) && handleDateSelect(day)
+                  }
                 >
                   {day}
                 </DayCell>
@@ -401,8 +496,7 @@ const EraButton = styled.button<{ $isSelected: boolean }>`
   font-size: 14px;
   font-weight: 700;
   color: ${({ $isSelected }) => ($isSelected ? '#111827' : '#6b7280')};
-  background: ${({ $isSelected }) =>
-    $isSelected ? '#f3f4f6' : '#ffffff'};
+  background: ${({ $isSelected }) => ($isSelected ? '#f3f4f6' : '#ffffff')};
   border: 1.5px solid
     ${({ $isSelected }) => ($isSelected ? '#d1d5db' : '#e5e7eb')};
   border-radius: 8px;
@@ -410,51 +504,23 @@ const EraButton = styled.button<{ $isSelected: boolean }>`
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ $isSelected }) =>
-      $isSelected ? '#e5e7eb' : '#f9fafb'};
+    background: ${({ $isSelected }) => ($isSelected ? '#e5e7eb' : '#f9fafb')};
     border-color: #d1d5db;
   }
 `
 
-const YearControl = styled.div`
+const YearMonthDayRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: nowrap;
 `
 
-const YearNavButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 40px;
-  border: 1.5px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-
-  &:hover {
-    border-color: #8b5cf6;
-    color: #8b5cf6;
-    background: #faf5ff;
-  }
-`
-
-const YearInputContainer = styled.div`
-  flex: 1;
-  position: relative;
-  display: flex;
-  align-items: center;
-`
-
-const YearInput = styled.input`
+const ShortInput = styled.input`
   width: 100%;
-  padding: 10px 36px 10px 12px;
+  padding: 10px 12px;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   color: #1e293b;
   border: 1.5px solid #e2e8f0;
   border-radius: 8px;
@@ -472,37 +538,21 @@ const YearInput = styled.input`
   }
 `
 
-const YearUnit = styled.div`
-  position: absolute;
-  right: 12px;
-  font-size: 13px;
+const ApplyDateButton = styled.button`
+  margin-top: 16px;
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
   font-weight: 600;
-  color: #94a3b8;
-  pointer-events: none;
-`
-
-const MonthGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-`
-
-const MonthButton = styled.button<{ $isSelected: boolean }>`
-  padding: 10px 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ $isSelected }) => ($isSelected ? '#111827' : '#6b7280')};
-  background: ${({ $isSelected }) =>
-    $isSelected ? '#f3f4f6' : '#ffffff'};
-  border: 1px solid ${({ $isSelected }) => ($isSelected ? '#d1d5db' : '#e5e7eb')};
-  border-radius: 6px;
+  color: #fff;
+  background: #8b5cf6;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ $isSelected }) =>
-      $isSelected ? '#e5e7eb' : '#f9fafb'};
-    border-color: #d1d5db;
+    background: #7c3aed;
   }
 `
 
@@ -589,8 +639,7 @@ const DayCell = styled.button<{
   font-weight: ${({ $isSelected }) => ($isSelected ? '600' : '500')};
   color: ${({ $isDisabled, $isSelected }) =>
     $isDisabled ? '#e5e7eb' : $isSelected ? '#111827' : '#1f2937'};
-  background: ${({ $isSelected }) =>
-    $isSelected ? '#f3f4f6' : 'transparent'};
+  background: ${({ $isSelected }) => ($isSelected ? '#f3f4f6' : 'transparent')};
   cursor: ${({ $isDisabled }) => ($isDisabled ? 'not-allowed' : 'pointer')};
   transition: all 0.15s ease;
   position: relative;

@@ -1242,6 +1242,49 @@ export const TenureTimelineMeta = styled.span`
   color: rgba(20, 19, 34, 0.6);
 `
 
+/** 재위 년도가 같은 카드 묶음 컨테이너 (배경/테두리 없음) */
+export const HeadsOfStateYearGroup = styled.div`
+  margin: 10px 0 12px 0;
+  padding: 0;
+  width: 100%;
+  display: block;
+`
+
+/** 묶음 라벨 (예: "1945년 취임", "1945년 퇴임") */
+export const HeadsOfStateYearGroupLabel = styled.div`
+  margin: 0 0 8px 0;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(99, 102, 241, 0.85);
+  width: 100%;
+  display: block;
+`
+
+/** 재위 년도 그룹 접기용 토글 행 (옛날 디자인: 퇴임 N명 요약) */
+export const HeadsOfStateYearGroupToggle = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 4px 0;
+  padding: 6px 10px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.06);
+  border-left: 3px solid rgba(99, 102, 241, 0.35);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(99, 102, 241, 0.85);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.1);
+  }
+`
+
 export const OtherHeadsOfStateList = styled.div`
   margin: 0 0 6px 0;
   padding: 8px 12px;

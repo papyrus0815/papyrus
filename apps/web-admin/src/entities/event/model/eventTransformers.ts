@@ -196,6 +196,8 @@ export const transformEventsFromApi = (
       // ✅ 관련 국가 추가
       relatedCountries: evt.relatedCountries,
       relatedHistoricalCountries: evt.relatedHistoricalCountries,
+      // ✅ 키워드 추가
+      keywords: evt.keywords ?? undefined,
     }
   }
 
