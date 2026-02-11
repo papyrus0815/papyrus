@@ -8,14 +8,17 @@
  * - 검색 및 필터링
  * - 데스크톱/모바일 반응형 UI
  */
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { FiChevronRight, FiGlobe, FiUsers } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { useHistoricalCountries } from '@/entities/historical-country/api'
 import type { Era } from '@/entities/person/api'
 import { ActionMenu, type ActionMenuItem } from '@/shared/ui/action-menu'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal'
 import { SelectModal } from '@/shared/ui/select-modal'
 
 import { type PersonFormData, usePersonPage } from './use-person-page.hook'
@@ -101,6 +104,8 @@ export default function PersonPage() {
     handleSubmit,
   } = usePersonPage()
 
+  const { data: historicalCountries } = useHistoricalCountries()
+
   // Era 옵션
   const eraOptions = [
     { value: 'BC', label: '기원전' },
@@ -109,6 +114,23 @@ export default function PersonPage() {
 
   const hasData = persons && persons.length > 0
   const hasFilteredData = paginatedPersons && paginatedPersons.length > 0
+
+  const dashboardStats = useMemo(() => {
+    if (!persons?.length) {
+      return { total: 0, male: 0, female: 0, countries: 0 }
+    }
+    const male = persons.filter((p) => p.gender === 'MALE').length
+    const female = persons.filter((p) => p.gender === 'FEMALE').length
+    const countryIds = new Set(
+      persons.map((p) => p.countryId).filter(Boolean),
+    ) as Set<string>
+    return {
+      total: persons.length,
+      male,
+      female,
+      countries: countryIds.size,
+    }
+  }, [persons])
 
   if (isLoading) {
     return (
@@ -148,233 +170,415 @@ export default function PersonPage() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        {/* 검색 및 필터 영역 */}
-        <FilterSection
-          initial={{ opacity: 0, y: -20 }}
+        {/* 대시보드 요약 카드 (사건 페이지 스타일) */}
+        <DashboardGrid
+          as={motion.div}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: 0.3 }}
         >
-          <FilterLeft>
-            <FilterIconButton
-              type="button"
-              onClick={() => setShowCountryFilterModal(true)}
-              $active={countryFilter.length > 0}
-              title="국가 필터"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"
-                  fill="currentColor"
-                />
-              </svg>
-              {countryFilter.length > 0 && (
-                <FilterBadge>{countryFilter.length}</FilterBadge>
-              )}
-            </FilterIconButton>
+          <DashboardCard>
+            <DashboardCardIcon $variant="primary">
+              <FiUsers size={22} />
+            </DashboardCardIcon>
+            <DashboardCardContent>
+              <DashboardCardTitle>총 인물</DashboardCardTitle>
+              <DashboardCardCount>
+                {dashboardStats.total.toLocaleString('ko-KR')}명
+              </DashboardCardCount>
+            </DashboardCardContent>
+          </DashboardCard>
+          <DashboardCard>
+            <DashboardCardIcon $variant="male">
+              <FiUsers size={20} />
+            </DashboardCardIcon>
+            <DashboardCardContent>
+              <DashboardCardTitle>남성</DashboardCardTitle>
+              <DashboardCardCount>
+                {dashboardStats.male.toLocaleString('ko-KR')}명
+              </DashboardCardCount>
+            </DashboardCardContent>
+          </DashboardCard>
+          <DashboardCard>
+            <DashboardCardIcon $variant="female">
+              <FiUsers size={20} />
+            </DashboardCardIcon>
+            <DashboardCardContent>
+              <DashboardCardTitle>여성</DashboardCardTitle>
+              <DashboardCardCount>
+                {dashboardStats.female.toLocaleString('ko-KR')}명
+              </DashboardCardCount>
+            </DashboardCardContent>
+          </DashboardCard>
+          <DashboardCard>
+            <DashboardCardIcon $variant="country">
+              <FiGlobe size={22} />
+            </DashboardCardIcon>
+            <DashboardCardContent>
+              <DashboardCardTitle>등록 국가</DashboardCardTitle>
+              <DashboardCardCount>
+                {dashboardStats.countries.toLocaleString('ko-KR')}개국
+              </DashboardCardCount>
+            </DashboardCardContent>
+          </DashboardCard>
+        </DashboardGrid>
 
-            <SortByText>Sort By:</SortByText>
-            <SortButton
+        {/* 필터 영역 (사건 페이지 스타일) */}
+        <FilterSection
+          as={motion.div}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <FilterSearchInput
+            type="search"
+            placeholder="이름 또는 약력으로 검색"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <FilterTriggerButton
+            type="button"
+            onClick={() => setShowGenderFilterModal(true)}
+          >
+            <span>
+              {genderFilter === 'ALL'
+                ? '전체 성별'
+                : genderFilter === 'MALE'
+                  ? '남성'
+                  : '여성'}
+            </span>
+            <FiChevronRight size={14} />
+          </FilterTriggerButton>
+          <FilterTriggerButton
+            type="button"
+            onClick={() => setShowCountryFilterModal(true)}
+          >
+            <span>
+              {countryFilter.length === 0
+                ? '전체 국가'
+                : `${countryFilter.length}개국 선택`}
+            </span>
+            <FiChevronRight size={14} />
+          </FilterTriggerButton>
+          <FilterTriggerButton
+            type="button"
+            onClick={() => setShowContinentFilterModal(true)}
+          >
+            <span>
+              {continentFilter === 'ALL'
+                ? '전체 대륙'
+                : continents?.find((c) => c.id === continentFilter)?.name ||
+                  '대륙'}
+            </span>
+            <FiChevronRight size={14} />
+          </FilterTriggerButton>
+          <FilterTriggerButton
+            type="button"
+            onClick={() => setShowSortModal(true)}
+          >
+            <span>{sortBy === 'birthYear' ? '연생순' : '국가순'}</span>
+            <FiChevronRight size={14} />
+          </FilterTriggerButton>
+          {(countryFilter.length > 0 ||
+            genderFilter !== 'ALL' ||
+            continentFilter !== 'ALL') && (
+            <FilterResetButton
               type="button"
-              onClick={() => setShowSortModal(true)}
-              $active={sortBy !== 'birthYear'}
+              onClick={() => {
+                setCountryFilter([])
+                setGenderFilter('ALL')
+                setContinentFilter('ALL')
+                setCurrentPage(1)
+              }}
             >
-              {sortBy === 'birthYear' ? 'Bestseller' : 'Country Name'}
-            </SortButton>
-          </FilterLeft>
-
-          <SearchWrapper>
-            <SearchIconStyled>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
-                  fill="currentColor"
-                />
-              </svg>
-            </SearchIconStyled>
-            <SearchInputStyled
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {searchTerm && (
-              <ClearButtonStyled onClick={() => setSearchTerm('')}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </ClearButtonStyled>
+              필터 초기화
+            </FilterResetButton>
+          )}
+          <FilterChipsWrap>
+            {genderFilter !== 'ALL' && (
+              <ActiveFilterChip>
+                <span>성별 · {genderFilter === 'MALE' ? '남성' : '여성'}</span>
+                <button
+                  type="button"
+                  onClick={() => setGenderFilter('ALL')}
+                  aria-label="성별 필터 해제"
+                >
+                  ×
+                </button>
+              </ActiveFilterChip>
             )}
-          </SearchWrapper>
-
-          <ResultCount>{filteredPersons.length} Items</ResultCount>
+            {countryFilter.length > 0 && (
+              <ActiveFilterChip>
+                <span>국가 · {countryFilter.length}개</span>
+                <button
+                  type="button"
+                  onClick={() => setCountryFilter([])}
+                  aria-label="국가 필터 해제"
+                >
+                  ×
+                </button>
+              </ActiveFilterChip>
+            )}
+            {continentFilter !== 'ALL' && (
+              <ActiveFilterChip>
+                <span>
+                  대륙 ·{' '}
+                  {continents?.find((c) => c.id === continentFilter)?.name ||
+                    continentFilter}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setContinentFilter('ALL')}
+                  aria-label="대륙 필터 해제"
+                >
+                  ×
+                </button>
+              </ActiveFilterChip>
+            )}
+          </FilterChipsWrap>
+          <ResultCount>{filteredPersons.length}명</ResultCount>
         </FilterSection>
 
-        {filteredPersons.length === 0 ? (
-          <EmptyState
-            as={motion.div}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4 }}
-          >
-            <EmptyIcon>🔍</EmptyIcon>
-            <EmptyTitle>검색 결과가 없습니다</EmptyTitle>
-            <EmptyDesc>다른 검색어나 필터를 사용해보세요</EmptyDesc>
-          </EmptyState>
-        ) : (
-          <>
-            <Grid
+        <ListArea>
+          {filteredPersons.length === 0 ? (
+            <EmptyState
               as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4 }}
             >
-              {paginatedPersons.map((person, index) => {
-                const fullName = person.surname
-                  ? `${person.surname} ${person.name}`
-                  : person.name
-
-                const birthYear = person.birthYear
-                const deathYear = person.deathYear
-
-                const lifespan =
-                  birthYear && deathYear
-                    ? `${birthYear} - ${deathYear}`
-                    : birthYear
-                      ? `${birthYear} - `
-                      : '미상'
-
-                // 국가 정보 가져오기
-                const personCountry = person.countryId
-                  ? countries?.find(
-                      (country) => country.id === person.countryId,
-                    )
-                  : null
-
-                // 표시할 이미지 우선순위: 프로필 이미지 > 국가 썸네일 이미지
-                const displayImage =
-                  person.profileImageUrl || personCountry?.thumbnailUrl
-
-                const menuItems: ActionMenuItem[] = [
-                  {
-                    id: 'edit',
-                    label: '수정',
-                    icon: '✏️',
-                    onClick: () => navigate(`/persons/${person.id}/edit`),
-                  },
-                  {
-                    id: 'delete',
-                    label: '삭제',
-                    icon: '🗑️',
-                    onClick: () => handleDelete(person.id, fullName),
-                  },
-                ]
-
-                return (
-                  <Card
-                    key={person.id}
-                    as={motion.div}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    onClick={(e) => {
-                      // ActionMenu 클릭은 무시
-                      const actionMenu = (e.target as HTMLElement).closest(
-                        '[data-action-menu]',
-                      )
-                      if (actionMenu) {
-                        return
-                      }
-
-                      // react-router navigate로 상세 페이지 이동 (SPA 방식)
-                      navigate(`/persons/${person.id}`)
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <CardImageWrapper>
-                      {displayImage ? (
-                        <CardImage src={displayImage} alt={fullName} />
-                      ) : (
-                        <CardImagePlaceholder>
-                          <svg
-                            width="80"
-                            height="80"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                          >
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                          </svg>
-                        </CardImagePlaceholder>
-                      )}
-                    </CardImageWrapper>
-
-                    <CardContent>
-                      <PersonInfo>
-                        <PersonName>{fullName}</PersonName>
-                        {personCountry && (
-                          <PersonMeta>
-                            <MetaBadge $type="country">
-                              {personCountry.name}
-                            </MetaBadge>
-                          </PersonMeta>
-                        )}
-                        <PersonPrice>
-                          ${Math.floor(Math.random() * 100) + 20}
-                        </PersonPrice>
-                      </PersonInfo>
-                    </CardContent>
-
-                    {/* ActionMenu - 이벤트 전파 중지 */}
-                    <ActionMenuWrapper
-                      onClick={(e: React.MouseEvent) => {
-                        e.stopPropagation()
-                      }}
-                    >
-                      <ActionMenu items={menuItems} />
-                    </ActionMenuWrapper>
-                  </Card>
-                )
-              })}
-            </Grid>
-
-            {/* 페이징 컨트롤 */}
-            {totalPages > 1 && (
-              <Pagination
+              <EmptyIcon>👤</EmptyIcon>
+              <EmptyTitle>검색 결과가 없습니다</EmptyTitle>
+              <EmptyDesc>
+                검색어를 바꾸거나 국가·성별 필터를 해제해 보세요
+              </EmptyDesc>
+            </EmptyState>
+          ) : (
+            <>
+              <Grid
+                as={motion.div}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: 0.2 }}
+                transition={{ duration: 0.3 }}
               >
-                <PaginationButton
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.max(1, prev - 1))
-                  }
-                  disabled={currentPage === 1}
-                >
-                  ‹ 이전
-                </PaginationButton>
+                {paginatedPersons.map((person, index) => {
+                  const fullName = person.surname
+                    ? `${person.surname} ${person.name}`
+                    : person.name
 
-                <PaginationInfo>
-                  {currentPage} / {totalPages}
-                </PaginationInfo>
+                  const birthYear = (person as { birthYear?: number }).birthYear
+                  const deathYear = (person as { deathYear?: number }).deathYear
 
-                <PaginationButton
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() =>
-                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                  }
-                  disabled={currentPage === totalPages}
+                  const formatYear = (y: number) =>
+                    y.toLocaleString('ko-KR', { useGrouping: true })
+                  const era = (e: string | undefined) =>
+                    e === 'BC' ? 'BC' : 'AD'
+
+                  const isAlive = birthYear != null && deathYear == null
+                  const currentYear = new Date().getFullYear()
+                  const currentAge =
+                    isAlive && birthYear != null && person.birthEra !== 'BC'
+                      ? currentYear - birthYear
+                      : null
+
+                  const isDeceased = deathYear != null
+                  const lifespan =
+                    birthYear != null && deathYear != null
+                      ? `${era(person.birthEra)} ${formatYear(birthYear)} ~ ${era(person.deathEra)} ${formatYear(deathYear)}`
+                      : birthYear != null
+                        ? isAlive && currentAge != null && currentAge >= 0
+                          ? `AD ${formatYear(birthYear)} ~ 생존 (${currentAge}세)`
+                          : `${era(person.birthEra)} ${formatYear(birthYear)} ~`
+                        : '생몰년 미상'
+
+                  // 국가 정보
+                  const personCountry = person.countryId
+                    ? countries?.find(
+                        (country) => country.id === person.countryId,
+                      )
+                    : null
+
+                  // 직업·종교·왕조 (API 확장 필드)
+                  const personJob = (person as { jobId?: string }).jobId
+                    ? jobs?.find(
+                        (j) => j.id === (person as { jobId?: string }).jobId,
+                      )
+                    : null
+                  const personReligion = (person as { religionId?: string })
+                    .religionId
+                    ? religions?.find(
+                        (r) =>
+                          r.id ===
+                          (person as { religionId?: string }).religionId,
+                      )
+                    : null
+                  const personDynasty = (person as { dynastyId?: string })
+                    .dynastyId
+                    ? dynasties?.find(
+                        (d) =>
+                          d.id === (person as { dynastyId?: string }).dynastyId,
+                      )
+                    : null
+                  const roleParts = [
+                    personJob?.name,
+                    personReligion?.name,
+                    personDynasty?.name,
+                  ].filter(Boolean) as string[]
+                  const roleLabel =
+                    roleParts.length > 0 ? roleParts.join(' · ') : null
+
+                  const genderLabel =
+                    person.gender === 'MALE'
+                      ? '남'
+                      : person.gender === 'FEMALE'
+                        ? '여'
+                        : null
+
+                  // 약력 요약 (최대 3줄 분량)
+                  const bioText =
+                    person.biography?.replace(/\s+/g, ' ').trim() || ''
+                  const bioExcerpt =
+                    bioText.length > 120
+                      ? `${bioText.slice(0, 120)}…`
+                      : bioText || null
+
+                  // 표시할 이미지
+                  const displayImage =
+                    person.profileImageUrl || personCountry?.thumbnailUrl
+
+                  const menuItems: ActionMenuItem[] = [
+                    {
+                      id: 'edit',
+                      label: '수정',
+                      icon: '✏️',
+                      onClick: () => navigate(`/persons/${person.id}/edit`),
+                    },
+                    {
+                      id: 'delete',
+                      label: '삭제',
+                      icon: '🗑️',
+                      onClick: () => handleDelete(person.id, fullName),
+                    },
+                  ]
+
+                  return (
+                    <Card
+                      key={person.id}
+                      as={motion.div}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                      onClick={(e) => {
+                        // ActionMenu 클릭은 무시
+                        const actionMenu = (e.target as HTMLElement).closest(
+                          '[data-action-menu]',
+                        )
+                        if (actionMenu) {
+                          return
+                        }
+
+                        // react-router navigate로 상세 페이지 이동 (SPA 방식)
+                        navigate(`/persons/${person.id}`)
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <CardImageWrapper>
+                        {displayImage ? (
+                          <CardImage src={displayImage} alt={fullName} />
+                        ) : (
+                          <CardImagePlaceholder>
+                            <svg
+                              width="80"
+                              height="80"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                            >
+                              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                            </svg>
+                          </CardImagePlaceholder>
+                        )}
+                      </CardImageWrapper>
+
+                      <CardContent>
+                        <PersonInfo>
+                          <CardTitleRow>
+                            <PersonName>{fullName}</PersonName>
+                            {genderLabel && (
+                              <CardGender>{genderLabel}</CardGender>
+                            )}
+                          </CardTitleRow>
+                          <PersonLifespan>
+                            {isDeceased && (
+                              <TombstoneIcon aria-hidden>🪦</TombstoneIcon>
+                            )}
+                            {lifespan}
+                          </PersonLifespan>
+                          {personCountry && (
+                            <CardMetaRow>
+                              <MetaBadge $type="country">
+                                {'flagEmoji' in personCountry &&
+                                personCountry.flagEmoji
+                                  ? `${personCountry.flagEmoji} `
+                                  : ''}
+                                {personCountry.name}
+                              </MetaBadge>
+                            </CardMetaRow>
+                          )}
+                          {roleLabel && <CardRole>{roleLabel}</CardRole>}
+                          {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
+                        </PersonInfo>
+                      </CardContent>
+
+                      {/* ActionMenu - 이벤트 전파 중지 */}
+                      <ActionMenuWrapper
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation()
+                        }}
+                      >
+                        <ActionMenu items={menuItems} />
+                      </ActionMenuWrapper>
+                    </Card>
+                  )
+                })}
+              </Grid>
+
+              {/* 페이징 컨트롤 */}
+              {totalPages > 1 && (
+                <Pagination
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: 0.2 }}
                 >
-                  다음 ›
-                </PaginationButton>
-              </Pagination>
-            )}
-          </>
-        )}
+                  <PaginationButton
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={currentPage === 1}
+                  >
+                    이전
+                  </PaginationButton>
+
+                  <PaginationInfo>
+                    {currentPage} / {totalPages}페이지
+                  </PaginationInfo>
+
+                  <PaginationButton
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                  >
+                    다음
+                  </PaginationButton>
+                </Pagination>
+              )}
+            </>
+          )}
+        </ListArea>
       </Container>
 
       {/* 플로팅 + 버튼 (등록 페이지로 이동) */}
@@ -1307,18 +1511,20 @@ export default function PersonPage() {
         }}
       />
 
-      {/* 필터: 국가 다중 선택 모달 */}
-      <CountryMultiSelectModal
+      {/* 필터: 국가 선택 모달 (사건 등록 페이지와 동일) */}
+      <CountrySelectModal
         isOpen={showCountryFilterModal}
         onClose={() => setShowCountryFilterModal(false)}
         title="국가 필터"
-        countries={countries || []}
-        continents={continents || []}
+        multiSelect
         selectedCountryIds={countryFilter}
-        onConfirm={(selectedIds) => {
-          setCountryFilter(selectedIds)
-          setShowCountryFilterModal(false)
+        onSelect={({ id }) => {
+          setCountryFilter((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+          )
         }}
+        modernCountries={countries || []}
+        historicalCountries={historicalCountries || []}
       />
 
       {/* 출생 기원 선택 모달 */}
@@ -1350,73 +1556,67 @@ export default function PersonPage() {
   )
 }
 
+// 사건 페이지와 동일한 테마 색상
+const THEME = {
+  primary: '#6366f1',
+  primaryDark: '#4f46e5',
+  primaryLight: 'rgba(99, 102, 241, 0.12)',
+  border: 'rgba(20, 19, 34, 0.08)',
+  borderLight: 'rgba(99, 102, 241, 0.12)',
+  background: {
+    white: '#ffffff',
+    light: '#f8fafc',
+    gradient: 'linear-gradient(180deg, #fafbff 0%, #ffffff 100%)',
+  },
+} as const
+
 // Styled Components
 const Wrap = styled.div`
   width: 100%;
   min-height: 100vh;
-  background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+  background: ${THEME.background.gradient};
   padding-top: var(--header-height, 64px);
   padding-bottom: 60px;
   position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 400px;
-    background: linear-gradient(
-      135deg,
-      rgba(102, 126, 234, 0.05) 0%,
-      rgba(118, 75, 162, 0.05) 100%
-    );
-    pointer-events: none;
-  }
 `
 
 const Container = styled.div`
-  max-width: 100%;
   width: 100%;
+  max-width: 100%;
   margin: 0;
-  padding: 28px 40px;
+  padding: 20px 24px 32px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
   position: relative;
   z-index: 1;
-
-  @media (max-width: 1024px) {
-    padding: 24px 24px;
-    gap: 24px;
-  }
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
-    padding: 20px 16px;
+    padding: 16px;
     gap: 20px;
   }
 `
 
 const LoadingMessage = styled.div`
   text-align: center;
-  padding: 120px 48px;
-  font-size: 15px;
-  color: #6b7280;
-  font-weight: 600;
+  padding: 80px 32px;
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 
   &::before {
     content: '';
-    width: 52px;
-    height: 52px;
-    border: 4px solid #dbeafe;
-    border-top-color: #667eea;
-    border-right-color: #764ba2;
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #64748b;
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.7s linear infinite;
   }
 
   @keyframes spin {
@@ -1431,32 +1631,31 @@ const ErrorState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 100px 32px;
+  padding: 64px 32px;
   text-align: center;
-  background: white;
-  border-radius: 16px;
-  border: 2px solid #fee2e2;
-  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.08);
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #fecaca;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const ErrorIcon = styled.div`
-  font-size: 64px;
-  margin-bottom: 24px;
-  filter: grayscale(0.2);
+  font-size: 40px;
+  margin-bottom: 16px;
 `
 
 const ErrorTitle = styled.h3`
-  margin: 0 0 12px 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: #dc2626;
-  letter-spacing: -0.4px;
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #b91c1c;
+  letter-spacing: -0.02em;
 `
 
 const ErrorDesc = styled.p`
-  margin: 0 0 32px 0;
-  font-size: 15px;
-  color: #6b7280;
+  margin: 0 0 24px 0;
+  font-size: 14px;
+  color: #64748b;
   font-weight: 500;
   max-width: 420px;
   line-height: 1.7;
@@ -1466,314 +1665,408 @@ const RetryButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 32px;
-  font-size: 15px;
+  padding: 12px 24px;
+  font-size: 14px;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.9) 0%,
+    rgba(79, 70, 229, 0.9) 100%
+  );
   border: none;
-  border-radius: 14px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 24px rgba(102, 126, 234, 0.45);
-  }
-
-  &:active {
-    transform: translateY(0);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
   }
 `
 
 const FloatingButton = styled.button`
   position: fixed;
-  right: 2rem;
-  bottom: 2rem;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 2.2rem;
-  border: none;
+  right: 24px;
+  bottom: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.95) 0%,
+    rgba(79, 70, 229, 0.95) 100%
+  );
+  color: #fff;
+  font-size: 1.75rem;
+  font-weight: 300;
+  line-height: 1;
+  border: 1.5px solid rgba(99, 102, 241, 0.3);
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
   z-index: 900;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -4px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    opacity: 0;
-    filter: blur(8px);
-    transition: opacity 0.3s;
-  }
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
-    transform: translateY(-4px) scale(1.08);
-    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
-  }
-
-  &:hover::before {
-    opacity: 0.6;
-  }
-
-  &:active {
-    transform: translateY(-2px) scale(1.04);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
   }
 
   @media (max-width: 1024px) {
-    right: 1.5rem;
-    bottom: 5rem;
-    width: 60px;
-    height: 60px;
+    right: 16px;
+    bottom: 80px;
+    width: 52px;
+    height: 52px;
+    font-size: 1.5rem;
   }
 `
 
-// 검색 및 필터 스타일
-const FilterSection = styled(motion.div)`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 0;
-  margin-bottom: 24px;
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    align-items: stretch;
-  }
-`
-
-const FilterLeft = styled.div`
-  display: flex;
-  align-items: center;
+// 대시보드 카드 (깔끔한 플랫 스타일, 그림자 없음)
+const DashboardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
+  margin-bottom: 10px;
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 8px;
+  }
 `
 
-const FilterIconButton = styled.button<{ $active?: boolean }>`
+const DashboardCard = styled.div`
+  border-radius: 12px;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  position: relative;
+  gap: 14px;
+  background: #ffffff;
+  border: 1px solid rgba(203, 213, 225, 0.6);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.25);
+    background: #fafbff;
+  }
+
+  @media (max-width: 768px) {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+`
+
+const DashboardCardIcon = styled.div<{
+  $variant?: 'primary' | 'male' | 'female' | 'country'
+}>`
   width: 44px;
   height: 44px;
-  border: 2px solid ${({ $active }) => ($active ? '#667eea' : '#e5e7eb')};
-  background: ${({ $active }) =>
-    $active ? 'linear-gradient(135deg, #f3e8ff 0%, #efe9ff 100%)' : '#ffffff'};
-  color: ${({ $active }) => ($active ? '#667eea' : '#6b7280')};
   border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: ${({ $active }) =>
-    $active
-      ? '0 4px 12px rgba(102, 126, 234, 0.2)'
-      : '0 2px 4px rgba(0, 0, 0, 0.05)'};
-
-  &:hover {
-    border-color: #667eea;
-    background: linear-gradient(135deg, #f3e8ff 0%, #efe9ff 100%);
-    color: #667eea;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.25);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-`
-
-const FilterBadge = styled.span`
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  min-width: 20px;
-  height: 20px;
+  background: ${({ $variant }) => {
+    switch ($variant) {
+      case 'male':
+        return 'rgba(59, 130, 246, 0.1)'
+      case 'female':
+        return 'rgba(236, 72, 153, 0.1)'
+      case 'country':
+        return 'rgba(34, 197, 94, 0.1)'
+      default:
+        return 'rgba(99, 102, 241, 0.1)'
+    }
+  }};
+  color: ${({ $variant }) => {
+    switch ($variant) {
+      case 'male':
+        return '#2563eb'
+      case 'female':
+        return '#db2777'
+      case 'country':
+        return '#16a34a'
+      default:
+        return '#4f46e5'
+    }
+  }};
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 6px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
-  border: 2px solid white;
-`
+  flex-shrink: 0;
 
-const SortByText = styled.span`
-  font-size: 14px;
-  color: #6b7280;
-  margin-left: 8px;
-`
-
-const SortButton = styled.button<{ $active?: boolean }>`
-  padding: 10px 20px;
-  border: 2px solid ${({ $active }) => ($active ? '#667eea' : '#e5e7eb')};
-  background: ${({ $active }) =>
-    $active ? 'linear-gradient(135deg, #f3e8ff 0%, #efe9ff 100%)' : '#ffffff'};
-  color: ${({ $active }) => ($active ? '#667eea' : '#111827')};
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-
-  &:hover {
-    border-color: #667eea;
-    background: linear-gradient(135deg, #f3e8ff 0%, #efe9ff 100%);
-    color: #667eea;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-  }
-
-  &:active {
-    transform: translateY(0);
+  @media (max-width: 768px) {
+    width: 40px;
+    height: 40px;
   }
 `
 
-const SearchWrapper = styled.div`
-  position: relative;
+const DashboardCardContent = styled.div`
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 2px;
   flex: 1;
-  max-width: 400px;
+  min-width: 0;
+`
 
-  @media (max-width: 1024px) {
-    max-width: 100%;
+const DashboardCardTitle = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+`
+
+const DashboardCardCount = styled.div`
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+
+  @media (max-width: 768px) {
+    font-size: 15px;
   }
 `
 
-const SearchIconStyled = styled.div`
-  position: absolute;
-  left: 12px;
+// 필터 영역 (그림자 없음, 대시보드와 간격 축소)
+const FilterSection = styled(motion.div)`
   display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid rgba(203, 213, 225, 0.6);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
   align-items: center;
-  color: #9ca3af;
-  pointer-events: none;
-  z-index: 1;
+
+  @media (max-width: 768px) {
+    padding: 10px 14px;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
 `
 
-const SearchInputStyled = styled.input`
-  width: 100%;
-  padding: 12px 40px 12px 40px;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 14px;
-  background: #ffffff;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  color: #111827;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+const FilterSearchInput = styled.input`
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  padding: 9px 14px 9px 36px;
+  font-size: 13px;
+  background: #f8fafc
+    url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
+    no-repeat 12px 50%;
+  background-size: 14px;
+  color: #0f172a;
+  transition: all 0.2s ease;
+  min-width: 200px;
+  max-width: 300px;
+
+  &::placeholder {
+    color: #94a3b8;
+    font-size: 12px;
+  }
 
   &:hover {
-    border-color: #d1d5db;
+    background-color: #ffffff;
+    border-color: rgba(99, 102, 241, 0.2);
   }
 
   &:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-    transform: translateY(-1px);
-  }
-
-  &::placeholder {
-    color: #9ca3af;
+    background-color: #ffffff;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
   }
 `
 
-const ClearButtonStyled = styled.button`
-  position: absolute;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: #e5e7eb;
-  border-radius: 50%;
-  color: #6b7280;
+const FilterTriggerButton = styled.button`
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  padding: 0;
-  z-index: 1;
-
-  &:hover {
-    background: #d1d5db;
-    color: #111827;
-  }
-
-  &:active {
-    background: #9ca3af;
-  }
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 
   svg {
-    display: block;
+    color: #6366f1;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+  }
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    background: linear-gradient(
+      135deg,
+      #ffffff 0%,
+      rgba(249, 250, 251, 1) 100%
+    );
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.1);
+
+    svg {
+      transform: translateX(2px);
+    }
+  }
+
+  &:focus {
+    outline: none;
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  }
+`
+
+const FilterResetButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  padding: 9px 14px;
+  background: rgba(239, 68, 68, 0.05);
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+`
+
+const FilterChipsWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+`
+
+const ActiveFilterChip = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f46e5;
+
+  span {
+    white-space: nowrap;
+  }
+
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: rgba(99, 102, 241, 0.15);
+    border: none;
+    border-radius: 50%;
+    color: #6366f1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    line-height: 1;
+
+    &:hover {
+      background: rgba(99, 102, 241, 0.25);
+      color: #4f46e5;
+    }
   }
 `
 
 const ResultCount = styled.span`
-  font-size: 14px;
-  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4f46e5;
   white-space: nowrap;
+  margin-left: auto;
+  padding: 6px 12px;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 999px;
+`
+
+const ListArea = styled.div`
+  width: 100%;
+  min-width: 0;
+  padding: 0 16px;
+  box-sizing: border-box;
+
+  @media (min-width: 1200px) {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  @media (max-width: 768px) {
+    padding: 0 12px;
+  }
 `
 
 const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 28px;
-  margin-top: 8px;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 24px;
+  margin-top: 4px;
 
-  @media (max-width: 1400px) {
+  @media (min-width: 900px) {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 24px;
   }
 
-  @media (max-width: 768px) {
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 20px;
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 28px;
   }
 
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 20px;
   }
 `
 
 const Card = styled.div`
-  background: white;
-  border-radius: 16px;
+  background: #fff;
+  border-radius: 12px;
   padding: 0;
-  border: 2px solid #e5e7eb;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1.5px solid ${THEME.border};
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
   position: relative;
   cursor: pointer;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-
   &:hover {
-    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
-    transform: translateY(-4px);
-    border-color: #667eea;
+    border-color: ${THEME.borderLight};
+    transform: translateY(-2px);
   }
 `
 
 const CardImageWrapper = styled.div`
   width: 100%;
-  height: 320px;
+  aspect-ratio: 4 / 3;
+  max-height: 240px;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  background: #f1f5f9;
 
   &::after {
     content: '';
@@ -1781,15 +2074,10 @@ const CardImageWrapper = styled.div`
     inset: 0;
     background: linear-gradient(
       180deg,
-      transparent 0%,
-      rgba(0, 0, 0, 0.1) 100%
+      transparent 50%,
+      rgba(0, 0, 0, 0.03) 100%
     );
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-
-  ${Card}:hover &::after {
-    opacity: 1;
+    pointer-events: none;
   }
 `
 
@@ -1797,10 +2085,11 @@ const CardImage = styled.img`
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  object-position: top center;
+  transition: transform 0.4s ease;
 
   ${Card}:hover & {
-    transform: scale(1.08);
+    transform: scale(1.03);
   }
 `
 
@@ -1810,123 +2099,154 @@ const CardImagePlaceholder = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: #e2e8f0;
+  color: #94a3b8;
 
   svg {
-    width: 80px;
-    height: 80px;
-    opacity: 0.4;
+    width: 56px;
+    height: 56px;
+    opacity: 0.6;
   }
 `
 
 const CardContent = styled.div`
-  padding: 16px 16px 20px;
+  padding: 18px 18px 20px;
   position: relative;
 `
 
 const ActionMenuWrapper = styled.div`
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 10px;
+  right: 10px;
   z-index: 10;
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
+
+  ${Card}:hover & {
+    opacity: 1;
+  }
 `
 
 const PersonInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
+`
+
+const CardTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 `
 
 const PersonName = styled.h3`
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  color: #111827;
-  line-height: 1.4;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 `
 
-const PersonMeta = styled.div`
+const CardGender = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  flex-shrink: 0;
+`
+
+const PersonLifespan = styled.div`
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
   display: flex;
   align-items: center;
+  gap: 6px;
+`
+
+const TombstoneIcon = styled.span`
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+`
+
+const CardMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  margin: 4px 0;
+  margin-top: 10px;
 `
 
 const MetaBadge = styled.span<{ $type?: 'country' }>`
-  display: inline-block;
-  padding: 6px 12px;
-  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-  color: #6b7280;
-  border-radius: 8px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: #f1f5f9;
+  color: #475569;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 600;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s;
-
-  ${Card}:hover & {
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-    color: #667eea;
-    border-color: #667eea;
-  }
+  letter-spacing: 0.02em;
 `
 
-const PersonPrice = styled.div`
-  margin-top: 8px;
-  font-size: 20px;
-  font-weight: 700;
-  color: #111827;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+const CardRole = styled.span`
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+`
+
+const CardBio = styled.p`
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `
 
 const EmptyState = styled.div`
   text-align: center;
-  padding: 100px 40px;
-  background: white;
-  border-radius: 24px;
-  border: 2px solid #e5e7eb;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  position: relative;
-  overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  }
+  padding: 80px 32px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const EmptyIcon = styled.div`
-  font-size: 72px;
-  margin-bottom: 24px;
-  opacity: 0.5;
-  filter: grayscale(0.2);
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.4;
 `
 
 const EmptyTitle = styled.h3`
-  font-size: 22px;
-  font-weight: 700;
-  color: #667eea;
-  margin-bottom: 8px;
-  letter-spacing: -0.3px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
 `
 
 const EmptyDesc = styled.p`
-  color: #9ca3af;
-  font-size: 15px;
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
   font-weight: 500;
-  line-height: 1.6;
+  line-height: 1.5;
 `
 
 // 페이징 스타일
@@ -1934,46 +2254,38 @@ const Pagination = styled(motion.div)`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  margin-top: 40px;
-  padding: 24px;
+  gap: 12px;
+  margin-top: 32px;
+  padding: 20px;
 `
 
 const PaginationButton = styled(motion.button)<{ disabled?: boolean }>`
-  padding: 14px 28px;
-  border: ${({ disabled }) => (disabled ? '2px solid #f3f4f6' : 'none')};
-  border-radius: 14px;
-  background: ${({ disabled }) =>
-    disabled ? '#fafbfc' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'};
-  color: ${({ disabled }) => (disabled ? '#d1d5db' : 'white')};
-  font-size: 15px;
+  padding: 10px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: ${({ disabled }) => (disabled ? '#f1f5f9' : '#fff')};
+  color: ${({ disabled }) => (disabled ? '#94a3b8' : '#475569')};
+  font-size: 14px;
   font-weight: 600;
   cursor: ${({ disabled }) => (disabled ? 'not-allowed' : 'pointer')};
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: ${({ disabled }) =>
-    disabled ? 'none' : '0 4px 16px rgba(102, 126, 234, 0.35)'};
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 24px rgba(102, 126, 234, 0.45);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #0f172a;
   }
 `
 
 const PaginationInfo = styled.div`
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  color: #667eea;
-  min-width: 100px;
+  color: #64748b;
+  min-width: 80px;
   text-align: center;
-  padding: 14px 24px;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border-radius: 14px;
-  border: 2px solid rgba(102, 126, 234, 0.25);
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.15);
 `
 
 // Form Styles (계속)
@@ -2335,369 +2647,5 @@ const SelectClearButton = styled.button`
   &:hover {
     background: #e8e8e8;
     border-color: #bdc1c6;
-  }
-`
-
-// 국가 다중 선택 모달 컴포넌트
-interface CountryMultiSelectModalProps {
-  isOpen: boolean
-  onClose: () => void
-  title: string
-  countries: Array<{ id: string; name: string; continentId?: string | null }>
-  continents: Array<{ id: string; name: string }>
-  selectedCountryIds: string[]
-  onConfirm: (selectedIds: string[]) => void
-}
-
-function CountryMultiSelectModal({
-  isOpen,
-  onClose,
-  title,
-  countries,
-  continents,
-  selectedCountryIds,
-  onConfirm,
-}: CountryMultiSelectModalProps) {
-  const [selectedIds, setSelectedIds] =
-    React.useState<string[]>(selectedCountryIds)
-  const [continentFilter, setContinentFilter] = React.useState<string>('ALL')
-  const [searchTerm, setSearchTerm] = React.useState('')
-
-  React.useEffect(() => {
-    if (isOpen) {
-      setSelectedIds(selectedCountryIds)
-      setContinentFilter('ALL')
-      setSearchTerm('')
-    }
-  }, [isOpen, selectedCountryIds])
-
-  if (!isOpen) return null
-
-  const filteredCountries = countries.filter((country) => {
-    const matchesContinent =
-      continentFilter === 'ALL' ||
-      (country.continentId && country.continentId === continentFilter)
-    const matchesSearch =
-      searchTerm === '' ||
-      country.name.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesContinent && matchesSearch
-  })
-
-  const toggleCountry = (countryId: string) => {
-    if (selectedIds.includes(countryId)) {
-      setSelectedIds(selectedIds.filter((id) => id !== countryId))
-    } else {
-      setSelectedIds([...selectedIds, countryId])
-    }
-  }
-
-  return (
-    <ModalOverlay onClick={onClose}>
-      <ModalContent onClick={(e) => e.stopPropagation()}>
-        <ModalHeader>
-          <ModalTitle>{title}</ModalTitle>
-          <ModalCloseButton onClick={onClose}>×</ModalCloseButton>
-        </ModalHeader>
-
-        <ModalBody>
-          {/* 대륙 필터 */}
-          <MultiSelectSection>
-            <MultiSelectLabel>대륙으로 검색</MultiSelectLabel>
-            <MultiSelectButtons>
-              <MultiSelectFilterButton
-                $isActive={continentFilter === 'ALL'}
-                onClick={() => setContinentFilter('ALL')}
-              >
-                전체
-              </MultiSelectFilterButton>
-              {continents.map((continent) => (
-                <MultiSelectFilterButton
-                  key={continent.id}
-                  $isActive={continentFilter === continent.id}
-                  onClick={() => setContinentFilter(continent.id)}
-                >
-                  {continent.name}
-                </MultiSelectFilterButton>
-              ))}
-            </MultiSelectButtons>
-          </MultiSelectSection>
-
-          {/* 검색 */}
-          <MultiSelectSection>
-            <MultiSelectSearchInput
-              type="text"
-              placeholder="국가명 검색..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </MultiSelectSection>
-
-          {/* 국가 목록 */}
-          <MultiSelectList>
-            {filteredCountries.map((country) => (
-              <MultiSelectItem
-                key={country.id}
-                $isSelected={selectedIds.includes(country.id)}
-                onClick={() => toggleCountry(country.id)}
-              >
-                <MultiSelectCheckbox
-                  $isChecked={selectedIds.includes(country.id)}
-                >
-                  {selectedIds.includes(country.id) && '✓'}
-                </MultiSelectCheckbox>
-                <span>{country.name}</span>
-              </MultiSelectItem>
-            ))}
-          </MultiSelectList>
-
-          {/* 선택된 개수 */}
-          <MultiSelectInfo>{selectedIds.length}개 선택됨</MultiSelectInfo>
-        </ModalBody>
-
-        <ModalFooter>
-          <ModalButtonSecondary onClick={onClose}>취소</ModalButtonSecondary>
-          <ModalButtonPrimary onClick={() => onConfirm(selectedIds)}>
-            확인
-          </ModalButtonPrimary>
-        </ModalFooter>
-      </ModalContent>
-    </ModalOverlay>
-  )
-}
-
-// 다중 선택 모달 스타일
-const ModalOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  backdrop-filter: blur(4px);
-`
-
-const ModalContent = styled.div`
-  background: white;
-  border-radius: 16px;
-  width: 90%;
-  max-width: 640px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e5e7eb;
-`
-
-const ModalHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fafbfc;
-`
-
-const ModalTitle = styled.h2`
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: #111827;
-`
-
-const ModalCloseButton = styled.button`
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 24px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #e5e7eb;
-    color: #374151;
-  }
-`
-
-const ModalBody = styled.div`
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
-`
-
-const MultiSelectSection = styled.div`
-  margin-bottom: 20px;
-`
-
-const MultiSelectLabel = styled.div`
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  margin-bottom: 12px;
-`
-
-const MultiSelectButtons = styled.div`
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-`
-
-const MultiSelectFilterButton = styled.button<{ $isActive?: boolean }>`
-  padding: 8px 16px;
-  border: 2px solid ${({ $isActive }) => ($isActive ? '#667eea' : '#e5e7eb')};
-  background: ${({ $isActive }) => ($isActive ? '#eff6ff' : 'white')};
-  color: ${({ $isActive }) => ($isActive ? '#667eea' : '#6b7280')};
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: ${({ $isActive }) => ($isActive ? '#dbeafe' : '#f9fafb')};
-    border-color: #667eea;
-  }
-`
-
-const MultiSelectSearchInput = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  font-size: 14px;
-  transition: all 0.2s ease;
-
-  &:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  }
-`
-
-const MultiSelectList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 4px;
-`
-
-const MultiSelectItem = styled.div<{ $isSelected?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid
-    ${({ $isSelected }) => ($isSelected ? '#667eea' : '#e5e7eb')};
-  background: ${({ $isSelected }) =>
-    $isSelected
-      ? 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)'
-      : 'white'};
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: ${({ $isSelected }) =>
-      $isSelected
-        ? 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)'
-        : '#f9fafb'};
-    border-color: #667eea;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px
-      ${({ $isSelected }) =>
-        $isSelected ? 'rgba(102, 126, 234, 0.2)' : 'rgba(0, 0, 0, 0.05)'};
-  }
-`
-
-const MultiSelectCheckbox = styled.div<{ $isChecked?: boolean }>`
-  width: 22px;
-  height: 22px;
-  border: 2px solid ${({ $isChecked }) => ($isChecked ? '#667eea' : '#d1d5db')};
-  background: ${({ $isChecked }) =>
-    $isChecked ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white'};
-  color: white;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-
-  ${MultiSelectItem}:hover & {
-    border-color: #667eea;
-    transform: scale(1.05);
-  }
-`
-
-const MultiSelectInfo = styled.div`
-  margin-top: 16px;
-  padding: 12px;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border-radius: 8px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: #667eea;
-  border: 1px solid rgba(102, 126, 234, 0.25);
-`
-
-const ModalFooter = styled.div`
-  display: flex;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid #e5e7eb;
-`
-
-const ModalButtonSecondary = styled.button`
-  flex: 1;
-  padding: 12px 24px;
-  border: 2px solid #e5e7eb;
-  background: white;
-  color: #6b7280;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: #f9fafb;
-    border-color: #d1d5db;
-  }
-`
-
-const ModalButtonPrimary = styled.button`
-  flex: 1;
-  padding: 12px 24px;
-  border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  }
-
-  &:active {
-    transform: translateY(0);
   }
 `
