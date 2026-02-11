@@ -97,20 +97,6 @@ export default function HistoryLayout() {
 
                   <SidebarItem
                     as={Link}
-                    to="/history/persons"
-                    $active={isActive('/history/persons')}
-                  >
-                    <SidebarIcon>
-                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                      </svg>
-                    </SidebarIcon>
-                    <SidebarLabel>인물</SidebarLabel>
-                    <Badge>0</Badge>
-                  </SidebarItem>
-
-                  <SidebarItem
-                    as={Link}
                     to="/history/dynasties"
                     $active={isActive('/history/dynasties')}
                   >
@@ -143,22 +129,6 @@ export default function HistoryLayout() {
                       </svg>
                     </SidebarIcon>
                     <SidebarLabel>직업</SidebarLabel>
-                    <Badge>0</Badge>
-                  </SidebarItem>
-
-                  <SidebarItem
-                    as={Link}
-                    to="/history/military-units"
-                    $active={isActive('/history/military-units')}
-                  >
-                    <SidebarIcon>
-                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                        <path d="M2 17l10 5 10-5" />
-                        <path d="M2 12l10 5 10-5" />
-                      </svg>
-                    </SidebarIcon>
-                    <SidebarLabel>군부대</SidebarLabel>
                     <Badge>0</Badge>
                   </SidebarItem>
 
@@ -212,19 +182,6 @@ export default function HistoryLayout() {
 
               <CollapsedIconItem
                 as={motion.button}
-                onClick={() => navigate('/history/persons')}
-                $active={isActive('/history/persons')}
-                title="인물"
-                whileHover={{ scale: 1.1, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                </svg>
-              </CollapsedIconItem>
-
-              <CollapsedIconItem
-                as={motion.button}
                 onClick={() => navigate('/history/dynasties')}
                 $active={isActive('/history/dynasties')}
                 title="가문"
@@ -248,21 +205,6 @@ export default function HistoryLayout() {
                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                   <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
                   <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                </svg>
-              </CollapsedIconItem>
-
-              <CollapsedIconItem
-                as={motion.button}
-                onClick={() => navigate('/history/military-units')}
-                $active={isActive('/history/military-units')}
-                title="군부대"
-                whileHover={{ scale: 1.1, y: -2 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                  <path d="M2 12l10 5 10-5" />
                 </svg>
               </CollapsedIconItem>
             </CollapsedIcons>
@@ -316,22 +258,6 @@ export default function HistoryLayout() {
           {isActive('/history/country') && <ActiveIndicator />}
         </TabBarItem>
 
-        {/* 인물 탭 버튼 */}
-        <TabBarItem
-          whileTap={{ scale: 0.95 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          onClick={() => navigate('/history/persons')}
-          $active={isActive('/history/persons')}
-        >
-          <TabBarIcon $active={isActive('/history/persons')}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-            </svg>
-          </TabBarIcon>
-          <TabBarLabel $active={isActive('/history/persons')}>인물</TabBarLabel>
-          {isActive('/history/persons') && <ActiveIndicator />}
-        </TabBarItem>
-
         {/* 가문 탭 버튼 */}
         <TabBarItem
           whileTap={{ scale: 0.95 }}
@@ -366,25 +292,6 @@ export default function HistoryLayout() {
           </TabBarIcon>
           <TabBarLabel $active={isActive('/history/jobs')}>직업</TabBarLabel>
           {isActive('/history/jobs') && <ActiveIndicator />}
-        </TabBarItem>
-
-        <TabBarItem
-          whileTap={{ scale: 0.95 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          onClick={() => navigate('/history/military-units')}
-          $active={isActive('/history/military-units')}
-        >
-          <TabBarIcon $active={isActive('/history/military-units')}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-          </TabBarIcon>
-          <TabBarLabel $active={isActive('/history/military-units')}>
-            군부대
-          </TabBarLabel>
-          {isActive('/history/military-units') && <ActiveIndicator />}
         </TabBarItem>
 
         {/* 가운데 FAB 버튼 (국가 페이지에서만 표시) */}

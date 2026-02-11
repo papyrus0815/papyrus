@@ -18,7 +18,6 @@ import { historyPageRoute } from '@/pages/history/history.route'
 import { layoutLoader } from '@/pages/layout/layout.loader'
 import Layout from '@/pages/layout/layout.ui'
 import { loginPageRoute } from '@/pages/login/login-page.route'
-import { militaryUnitsRoute } from '@/pages/military-units/military-units.route'
 import { page404Route } from '@/pages/page-404/page-404.route'
 import { personsRoute } from '@/pages/persons/persons.route'
 // history, panels 제거됨 (연관 위젯 파일 정리)
@@ -137,8 +136,6 @@ const appRouterConfig = [
           dashboardRoute,
           // 이벤트 페이지 라우트
           eventPageRoute,
-          // 군부대 라우트
-          militaryUnitsRoute,
           // 인물 라우트
           personsRoute,
           // 행정부처 라우트

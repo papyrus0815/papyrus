@@ -14,7 +14,6 @@ import {
   FiMoreHorizontal,
   FiPause,
   FiPlay,
-  FiShield,
   FiSkipBack,
   FiSkipForward,
   FiUser,
@@ -324,16 +323,6 @@ const Header: React.FC = () => {
         navigate('/events')
       },
       active: location.pathname.startsWith('/events'),
-    },
-    {
-      key: 'military-units',
-      label: '군부대',
-      icon: <FiShield size={16} />,
-      onClick: () => {
-        playClickSound()
-        navigate('/military-units')
-      },
-      active: location.pathname.startsWith('/military-units'),
     },
     {
       key: 'persons',

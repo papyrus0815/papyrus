@@ -52,33 +52,6 @@ export const historyPageRoute: RouteObject = {
           },
         },
         {
-          path: 'persons',
-          lazy: async () => {
-            const { default: Component } = await import(
-              '../persons/person.page'
-            )
-            return { Component }
-          },
-        },
-        {
-          path: 'persons/create',
-          lazy: async () => {
-            const { default: Component } = await import(
-              '../persons/person-create.page'
-            )
-            return { Component }
-          },
-        },
-        {
-          path: 'persons/:id',
-          lazy: async () => {
-            const { default: Component } = await import(
-              '../persons/person-detail.page'
-            )
-            return { Component }
-          },
-        },
-        {
           path: 'dynasties',
           lazy: async () => {
             const { DynastyPage } = await import('./dynasty/dynasty.page')
@@ -90,15 +63,6 @@ export const historyPageRoute: RouteObject = {
           lazy: async () => {
             const { JobPage } = await import('./job/job.page')
             return { Component: JobPage }
-          },
-        },
-        {
-          path: 'military-units',
-          lazy: async () => {
-            const { MilitaryUnitPage } = await import(
-              './military-unit/military-unit.page'
-            )
-            return { Component: MilitaryUnitPage }
           },
         },
       ],
