@@ -16,6 +16,7 @@ import { CurationModule } from '../../../libs/curation/infrastructure/curation.m
 import { SocialModule } from '../../../libs/social/infrastructure/social.module'
 import { EventModule } from '../../../libs/event/infrastructure/event.module'
 import { EventCategoryModule } from '../../../libs/event-category/event-category.module'
+import { CityModule } from '../../../libs/city/city.module'
 import { UploadModule } from '../../../libs/shared/upload/upload.module'
 
 import {
@@ -48,6 +49,7 @@ import {
     SocialModule,
     EventModule,
     EventCategoryModule,
+    CityModule,
     UploadModule,
     HealthModule,
   ],

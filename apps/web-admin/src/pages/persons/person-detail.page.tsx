@@ -19,6 +19,7 @@ import styled from 'styled-components'
 
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 type TabType = 'overview' | 'genealogy' | 'activities' | 'events' | 'works'
 
@@ -456,10 +457,8 @@ export default function PersonDetailPage() {
     : '?'
   const lifespanText = `${birthYearText} ~ ${deathYearText}`
 
-  // 전체 이름
-  const fullName = person.surname
-    ? `${person.surname} ${person.name}`
-    : person.name
+  // 전체 이름 (nameDisplayOrder에 따라 성+이름 또는 이름+성)
+  const fullName = getPersonDisplayName(person)
 
   return (
     <ModernWrap>
@@ -1359,8 +1358,7 @@ export default function PersonDetailPage() {
                             </MemberAvatar>
                             <MemberInfo>
                               <MemberName>
-                                {person.father.father.surname}{' '}
-                                {person.father.father.name}
+                                {getPersonDisplayName(person.father.father)}
                               </MemberName>
                               <MemberRelation>조부</MemberRelation>
                               {person.father.father.birthYear && (
@@ -1415,8 +1413,7 @@ export default function PersonDetailPage() {
                             </MemberAvatar>
                             <MemberInfo>
                               <MemberName>
-                                {person.mother.father.surname}{' '}
-                                {person.mother.father.name}
+                                {getPersonDisplayName(person.mother.father)}
                               </MemberName>
                               <MemberRelation>외조부</MemberRelation>
                               {person.mother.father.birthYear && (
@@ -1485,7 +1482,7 @@ export default function PersonDetailPage() {
                               </MemberAvatar>
                               <MemberInfo>
                                 <MemberName>
-                                  {person.father.surname} {person.father.name}
+                                  {getPersonDisplayName(person.father)}
                                 </MemberName>
                                 <MemberRelation>父</MemberRelation>
                                 {person.father.birthYear && (
@@ -1540,7 +1537,7 @@ export default function PersonDetailPage() {
                               </MemberAvatar>
                               <MemberInfo>
                                 <MemberName>
-                                  {person.mother.surname} {person.mother.name}
+                                  {getPersonDisplayName(person.mother)}
                                 </MemberName>
                                 <MemberRelation>母</MemberRelation>
                                 {person.mother.birthYear && (

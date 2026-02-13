@@ -7,6 +7,9 @@ export interface PersonResponseDto {
   id: string
   name: string
   surname: string | null
+  middleName: string | null
+  nameDisplayOrder: string | null
+  originalName: string | null
   birthEra: Era | null
   birthYear: number | null
   birthMonth: number | null
@@ -30,6 +33,8 @@ export interface PersonResponseDto {
   motherId: string | null
   jobId: string | null
   countryId: string | null
+  birthCityId: string | null
+  deathCityId: string | null
   // 이벤트 목록에 생몰년 표시 여부
   showLifespanOnEventList?: boolean
   // 정부 직위 재임 기록

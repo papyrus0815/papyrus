@@ -86,6 +86,9 @@ export function PersonDetail({ personId, onClose }: PersonDetailProps) {
         )}
         <ProfileInfo>
           <Name>{fullName}</Name>
+          {person.originalName && (
+            <OriginalName>{person.originalName}</OriginalName>
+          )}
           <Lifespan>{lifespan}</Lifespan>
           {country && <CountryBadge>{country.name}</CountryBadge>}
         </ProfileInfo>
@@ -117,6 +120,12 @@ export function PersonDetail({ personId, onClose }: PersonDetailProps) {
                       ? '여성'
                       : '기타'}
                 </InfoValue>
+              </InfoItem>
+            )}
+            {person.originalName && (
+              <InfoItem>
+                <InfoLabel>이름 원어</InfoLabel>
+                <InfoValue>{person.originalName}</InfoValue>
               </InfoItem>
             )}
           </InfoGrid>
@@ -301,6 +310,13 @@ const Name = styled.h1`
   color: #111827;
   text-align: center;
   letter-spacing: -0.5px;
+`
+
+const OriginalName = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  font-style: italic;
 `
 
 const Lifespan = styled.div`

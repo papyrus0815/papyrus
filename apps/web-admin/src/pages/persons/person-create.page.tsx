@@ -57,6 +57,7 @@ import {
   TextArea,
 } from '@/pages/events/create/event-create.styles'
 import { getAllContinents } from '@/shared/api/continents'
+import { cityApi } from '@/shared/api/city'
 import { getAllCountries } from '@/shared/api/countries'
 import { dynastyApi } from '@/shared/api/dynasty'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -71,6 +72,7 @@ import { personCareerApi } from '@/shared/api/person-career'
 import { getAllReligions } from '@/shared/api/religions'
 import { uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { StepNavigation } from '@/widgets/event-form/ui'
 
@@ -263,6 +265,8 @@ interface FormData {
 
   // 소속 정보
   birthCountryId: string // 출생 국가
+  birthCityId: string // 출생지 (도시)
+  deathCityId: string // 사망지 (도시)
   countryTransfers: Array<{
     countryId: string
     year: string
@@ -335,6 +339,8 @@ export default function PersonCreatePage() {
     posthumousName: '',
     // 소속 정보
     birthCountryId: presetCountryId || '', // 출생 국가
+    birthCityId: '', // 출생지 (도시)
+    deathCityId: '', // 사망지 (도시)
     countryTransfers: [], // 이적 이력
     dynastyId: '',
     religionId: '',
@@ -361,6 +367,7 @@ export default function PersonCreatePage() {
   const [jobs, setJobs] = useState<any[]>([])
   const [jobCategories, setJobCategories] = useState<any[]>([])
   const [persons, setPersons] = useState<any[]>([])
+  const [cities, setCities] = useState<Array<{ id: string; name: string; countryId: string }>>([])
   const [governmentPositionDefinitions, setGovernmentPositionDefinitions] =
     useState<any[]>([])
 
@@ -516,6 +523,7 @@ export default function PersonCreatePage() {
         jobsData,
         jobCategoriesData,
         personsData,
+        citiesData,
       ] = await Promise.all([
         getAllCountries(),
         getAllHistoricalCountries(),
@@ -525,6 +533,7 @@ export default function PersonCreatePage() {
         getAllJobs(),
         jobCategoryApi.getAll(),
         personApi.getAll(),
+        cityApi.getAll(),
       ])
 
       setCountries(countriesData || [])
@@ -535,6 +544,7 @@ export default function PersonCreatePage() {
       setJobs(jobsData || [])
       setJobCategories(jobCategoriesData || [])
       setPersons(personsData || [])
+      setCities(Array.isArray(citiesData) ? citiesData : [])
 
       // 수정 모드: 기존 인물 데이터 + 재임 기록 + 정부/공무원 등 모든 경력 로드
       if (isEditMode && id) {
@@ -560,17 +570,23 @@ export default function PersonCreatePage() {
             ],
           )
 
-          // 폼 데이터 채우기
+          // 폼 데이터 채우기 (nameDisplayOrder에 맞춰 fullName·nameFormat 복원)
+          const loadedNameFormat =
+            personData.nameDisplayOrder === 'western' ? 'western' : 'korean'
+          const loadedFullName = getPersonDisplayName({
+            name: personData.name || '',
+            surname: personData.surname ?? '',
+            middleName: personData.middleName ?? '',
+            nameDisplayOrder: personData.nameDisplayOrder ?? 'korean',
+          })
           setFormData((prev) => ({
             ...prev,
             name: personData.name || '',
             surname: personData.surname || '',
             middleName: personData.middleName || '',
             originalName: personData.originalName || '',
-            fullName:
-              personData.surname && personData.name
-                ? `${personData.surname}${personData.name}`
-                : personData.name || '',
+            nameFormat: loadedNameFormat,
+            fullName: loadedFullName,
             gender: personData.gender || '',
             // 생몰 정보
             birthEra: (personData.birthEra || 'AD') as Era,
@@ -597,6 +613,8 @@ export default function PersonCreatePage() {
             posthumousName: personData.posthumousName || '',
             // 관계
             birthCountryId: personData.countryId || '',
+            birthCityId: personData.birthCityId || '',
+            deathCityId: personData.deathCityId || '',
             dynastyId: personData.dynastyId || '',
             religionId: personData.religionId || '',
             jobIds: personData.jobId ? [personData.jobId] : [],
@@ -1128,6 +1146,43 @@ export default function PersonCreatePage() {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }))
+    }
+  }
+
+  /** 전체 이름을 선택한 형식으로 파싱해 성/이름/중간이름에 반영. 형식 전환 시에도 호출 */
+  const parseFullNameToFields = (
+    fullName: string,
+    format: 'korean' | 'western',
+  ) => {
+    const t = fullName.trim()
+    if (!t) {
+      handleInputChange('surname', '')
+      handleInputChange('name', '')
+      handleInputChange('middleName', '')
+      return
+    }
+    if (format === 'korean') {
+      handleInputChange('surname', t[0])
+      handleInputChange('name', t.substring(1))
+      handleInputChange('middleName', '')
+    } else {
+      const parts = t.split(/\s+/)
+      if (parts.length === 1) {
+        handleInputChange('name', parts[0])
+        handleInputChange('surname', '')
+        handleInputChange('middleName', '')
+      } else if (parts.length === 2) {
+        handleInputChange('name', parts[0])
+        handleInputChange('surname', parts[1])
+        handleInputChange('middleName', '')
+      } else {
+        handleInputChange('name', parts[0])
+        handleInputChange(
+          'middleName',
+          parts.slice(1, -1).join(' '),
+        )
+        handleInputChange('surname', parts[parts.length - 1])
+      }
     }
   }
 
@@ -2019,6 +2074,9 @@ export default function PersonCreatePage() {
       const input: CreatePersonInput = {
         name: formData.name.trim(),
         surname: formData.surname.trim() || undefined,
+        middleName: formData.middleName.trim() || undefined,
+        nameDisplayOrder: formData.nameFormat,
+        originalName: formData.originalName.trim() || undefined,
         gender: formData.gender,
         biography: formData.biography.trim() || undefined,
         profileImageUrl:
@@ -2029,6 +2087,8 @@ export default function PersonCreatePage() {
         posthumousName: formData.posthumousName.trim() || undefined,
         // 소속 정보
         countryId: formData.birthCountryId || undefined, // 출생 국가를 primary로
+        birthCityId: formData.birthCityId || undefined,
+        deathCityId: formData.deathCityId || undefined,
         dynastyId: formData.dynastyId || undefined,
         religionId: formData.religionId || undefined,
         jobId: formData.jobIds.length > 0 ? formData.jobIds[0] : undefined, // 첫 번째 직업을 주 직업으로
@@ -2710,177 +2770,121 @@ export default function PersonCreatePage() {
                   </ImagePreviewModal>
                 )}
 
-                {/* 이름 입력 - 간편/상세 모드 */}
+                {/* 이름 */}
                 <FormRow>
                   <FormLabel>
                     이름 <Required>*</Required>
+                    <FormLabelHint>
+                      전체 이름을 한 칸에 입력하면 성과 이름이 자동으로 구분됩니다. 한국식은 성+이름, 서양식은 이름+성 순으로 표시됩니다.
+                    </FormLabelHint>
                   </FormLabel>
                   <FormField>
-                    {/* 입력 모드 토글 */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '8px',
-                        marginBottom: '12px',
-                      }}
-                    >
-                      <SelectButton
-                        type="button"
-                        $selected={formData.nameInputMode === 'simple'}
-                        onClick={() =>
-                          handleInputChange('nameInputMode', 'simple')
-                        }
-                      >
-                        ⚡ 간편 입력
-                      </SelectButton>
-                      <SelectButton
-                        type="button"
-                        $selected={formData.nameInputMode === 'detailed'}
-                        onClick={() =>
-                          handleInputChange('nameInputMode', 'detailed')
-                        }
-                      >
-                        📝 상세 입력
-                      </SelectButton>
-                    </div>
-
-                    {/* 간편 입력 모드 */}
-                    {formData.nameInputMode === 'simple' && (
-                      <>
-                        {/* 이름 형식 선택 */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: '8px',
-                            marginBottom: '12px',
-                          }}
-                        >
-                          <SelectButton
+                    <NameToggleRow>
+                      <NameSegmentGroup>
+                        <NameSegmentLabel>이름 형식</NameSegmentLabel>
+                        <NameSegmentPill>
+                          <NameSegmentButton
                             type="button"
                             $selected={formData.nameFormat === 'korean'}
-                            onClick={() =>
-                              handleInputChange('nameFormat', 'korean')
-                            }
-                            style={{ flex: 1, fontSize: '0.875rem' }}
+                            onClick={() => {
+                              // 형식만 바꾸고 성/이름/중간이름은 유지. 한 칸 입력란만 새 순서로 갱신
+                              setFormData((prev) => ({
+                                ...prev,
+                                nameFormat: 'korean',
+                                fullName: getPersonDisplayName({
+                                  name: prev.name,
+                                  surname: prev.surname,
+                                  middleName: prev.middleName,
+                                  nameDisplayOrder: 'korean',
+                                }),
+                              }))
+                            }}
+                            title="첫 글자=성, 나머지=이름 (예: 김철수)"
                           >
-                            🇰🇷 한국식 (김철수)
-                          </SelectButton>
-                          <SelectButton
+                            한국식
+                          </NameSegmentButton>
+                          <NameSegmentButton
                             type="button"
                             $selected={formData.nameFormat === 'western'}
-                            onClick={() =>
-                              handleInputChange('nameFormat', 'western')
-                            }
-                            style={{ flex: 1, fontSize: '0.875rem' }}
+                            onClick={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                nameFormat: 'western',
+                                fullName: getPersonDisplayName({
+                                  name: prev.name,
+                                  surname: prev.surname,
+                                  middleName: prev.middleName,
+                                  nameDisplayOrder: 'western',
+                                }),
+                              }))
+                            }}
+                            title="공백 기준 맨 뒤=성 (예: George Bush)"
                           >
-                            🌍 서양식 (George Bush)
-                          </SelectButton>
-                        </div>
-
-                        {/* 전체 이름 입력 */}
+                            서양식
+                          </NameSegmentButton>
+                        </NameSegmentPill>
+                      </NameSegmentGroup>
+                      <NameSegmentGroup>
+                        <NameSegmentLabel>입력 방식</NameSegmentLabel>
+                        <NameSegmentPill>
+                          <NameSegmentButton
+                            type="button"
+                            $selected={formData.nameInputMode === 'simple'}
+                            onClick={() => handleInputChange('nameInputMode', 'simple')}
+                          >
+                            한 칸 입력
+                          </NameSegmentButton>
+                          <NameSegmentButton
+                            type="button"
+                            $selected={formData.nameInputMode === 'detailed'}
+                            onClick={() => handleInputChange('nameInputMode', 'detailed')}
+                          >
+                            성·이름·중간 따로
+                          </NameSegmentButton>
+                        </NameSegmentPill>
+                      </NameSegmentGroup>
+                    </NameToggleRow>
+                    {formData.nameInputMode === 'simple' ? (
+                      <>
                         <ErrorInput
                           type="text"
                           placeholder={
                             formData.nameFormat === 'korean'
-                              ? '예: 김철수, 이순신, 박영희'
-                              : '예: George Bush, Louis XIV, Elizabeth Windsor'
+                              ? '예: 김철수, 이순신'
+                              : '예: George Bush, Elizabeth Windsor'
                           }
                           value={formData.fullName}
                           onChange={(e) => {
                             const fullName = e.target.value
                             handleInputChange('fullName', fullName)
-
-                            // 자동 파싱
-                            if (fullName.trim()) {
-                              if (formData.nameFormat === 'korean') {
-                                // 한국식: 첫 글자가 성
-                                const surname = fullName.trim()[0]
-                                const name = fullName.trim().substring(1)
-                                handleInputChange('surname', surname)
-                                handleInputChange('name', name)
-                                handleInputChange('middleName', '')
-                              } else {
-                                // 서양식: 공백으로 분리
-                                const parts = fullName.trim().split(/\s+/)
-                                if (parts.length === 1) {
-                                  handleInputChange('name', parts[0])
-                                  handleInputChange('surname', '')
-                                  handleInputChange('middleName', '')
-                                } else if (parts.length === 2) {
-                                  handleInputChange('name', parts[0])
-                                  handleInputChange('surname', parts[1])
-                                  handleInputChange('middleName', '')
-                                } else {
-                                  // 3개 이상: 첫번째=이름, 중간들=중간이름, 마지막=성
-                                  handleInputChange('name', parts[0])
-                                  handleInputChange(
-                                    'middleName',
-                                    parts.slice(1, -1).join(' '),
-                                  )
-                                  handleInputChange(
-                                    'surname',
-                                    parts[parts.length - 1],
-                                  )
-                                }
-                              }
-                            }
+                            parseFullNameToFields(fullName, formData.nameFormat)
                           }}
                           $hasError={!!errors.name || !!errors.surname}
                           $flash={errorFlashOn}
+                          style={{ marginTop: 12 }}
                         />
-
-                        {/* 파싱 결과 미리보기 */}
-                        {formData.fullName && (
-                          <div
-                            style={{
-                              marginTop: '8px',
-                              padding: '12px',
-                              background: '#f0fdf4',
-                              border: '1px solid #86efac',
-                              borderRadius: '8px',
-                              fontSize: '0.875rem',
-                              color: '#166534',
-                            }}
-                          >
-                            ✓ 파싱 결과:
-                            {formData.surname && (
-                              <strong> 성: {formData.surname}</strong>
-                            )}
-                            {formData.name && (
-                              <strong> | 이름: {formData.name}</strong>
-                            )}
-                            {formData.middleName && (
-                              <strong>
-                                {' '}
-                                | 중간이름: {formData.middleName}
-                              </strong>
-                            )}
-                          </div>
+                        {formData.fullName?.trim() && (
+                          <NameParsePreview>
+                            <NameParseDisplay>
+                              {getPersonDisplayName({
+                                name: formData.name,
+                                surname: formData.surname,
+                                middleName: formData.middleName,
+                                nameDisplayOrder: formData.nameFormat,
+                              })}
+                            </NameParseDisplay>
+                            <NameParseMeta>
+                              성 {formData.surname || '—'} · 이름 {formData.name || '—'}
+                              {formData.middleName ? ` · 중간 ${formData.middleName}` : ''}
+                            </NameParseMeta>
+                          </NameParsePreview>
                         )}
-
-                        {errors.name && <ErrorText>{errors.name}</ErrorText>}
-                        {errors.surname && (
-                          <ErrorText>{errors.surname}</ErrorText>
-                        )}
-
-                        <Hint>
-                          💡 전체 이름을 입력하면 자동으로 성/이름이 분리됩니다.
-                          <br />• 한국식: "김철수" → 성: 김, 이름: 철수
-                          <br />• 서양식: "George Bush" → 성: Bush, 이름: George
-                          <br />• 서양식(3단어): "George Walker Bush" → 성:
-                          Bush, 이름: George, 중간이름: Walker
-                        </Hint>
                       </>
-                    )}
-
-                    {/* 상세 입력 모드 */}
-                    {formData.nameInputMode === 'detailed' && (
+                    ) : (
                       <>
-                        <NameRow>
+                        <NameRow style={{ marginTop: 12 }}>
                           <NameInputWrapper>
-                            <NameLabel>
-                              성 <Required>*</Required>
-                            </NameLabel>
+                            <NameLabel>성 <Required>*</Required></NameLabel>
                             <ErrorInput
                               type="text"
                               placeholder="예: 김, Bush"
@@ -2896,9 +2900,7 @@ export default function PersonCreatePage() {
                             )}
                           </NameInputWrapper>
                           <NameInputWrapper>
-                            <NameLabel>
-                              이름 <Required>*</Required>
-                            </NameLabel>
+                            <NameLabel>이름 <Required>*</Required></NameLabel>
                             <ErrorInput
                               type="text"
                               placeholder="예: 철수, George"
@@ -2925,12 +2927,14 @@ export default function PersonCreatePage() {
                           </NameInputWrapper>
                         </NameRow>
                         {errors.name && <ErrorText>{errors.name}</ErrorText>}
-                        <Hint>
-                          성과 이름은 필수입니다. 중간이름은 선택사항입니다.
-                          <br />
-                          예시: 한국 (성: 김, 이름: 철수) | 유럽 (성: Bush,
-                          이름: George, 중간이름: Walker)
-                        </Hint>
+                      </>
+                    )}
+                    {(errors.name || errors.surname) && (
+                      <>
+                        {errors.name && <ErrorText>{errors.name}</ErrorText>}
+                        {errors.surname && (
+                          <ErrorText>{errors.surname}</ErrorText>
+                        )}
                       </>
                     )}
                   </FormField>
@@ -3025,10 +3029,7 @@ export default function PersonCreatePage() {
                             </InlineCheckRow>
                           </LifespanLabelRow>
                           {formData.isBirthDateUnknown ? (
-                            <UnknownDateBox>
-                              <span className="icon">❓</span>
-                              <span className="text">미상</span>
-                            </UnknownDateBox>
+                            <UnknownDateBox>미상</UnknownDateBox>
                           ) : (
                             <DateButton
                               onClick={() => setShowBirthDateModal(true)}
@@ -3101,15 +3102,9 @@ export default function PersonCreatePage() {
                             </RadioGroup>
                           </LifespanLabelRow>
                           {formData.isAlive ? (
-                            <AliveBox>
-                              <span className="icon">✨</span>
-                              <span className="text">생존 중</span>
-                            </AliveBox>
+                            <AliveBox>생존 중</AliveBox>
                           ) : formData.isDeathDateUnknown ? (
-                            <UnknownDateBox>
-                              <span className="icon">❓</span>
-                              <span className="text">미상</span>
-                            </UnknownDateBox>
+                            <UnknownDateBox>미상</UnknownDateBox>
                           ) : (
                             <DateButton
                               onClick={() => setShowDeathDateModal(true)}
@@ -3362,7 +3357,7 @@ export default function PersonCreatePage() {
                                 }}
                               >
                                 <span style={{ fontSize: '1.25rem' }}>
-                                  {birthCountry.flagEmoji || '🌍'}
+                                  {birthCountry.flagEmoji || '—'}
                                 </span>
                                 <span>{birthCountry.name}</span>
                               </span>
@@ -3420,6 +3415,61 @@ export default function PersonCreatePage() {
                   </FormField>
                 </FormRow>
 
+                {/* 출생지 / 사망지 (도시) — DB에 등록된 도시·행정구역에서 선택 */}
+                <FormRow>
+                  <FormLabel>
+                    출생지 / 사망지 (도시)
+                    <FormLabelHint>
+                      등록된 도시 또는 국가의 행정구역에서 선택하세요
+                    </FormLabelHint>
+                  </FormLabel>
+                  <FormField>
+                    <ModernSelectionGrid>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <FormLabel style={{ marginBottom: 6, fontSize: 12 }}>출생지 (도시)</FormLabel>
+                        <Input
+                          as="select"
+                          value={formData.birthCityId}
+                          onChange={(e) => handleInputChange('birthCityId', e.target.value)}
+                          style={{ width: '100%', padding: '10px 12px' }}
+                        >
+                          <option value="">선택 안 함</option>
+                          {(formData.birthCountryId
+                            ? cities.filter((c) => c.countryId === formData.birthCountryId)
+                            : cities
+                          ).map((city) => (
+                            <option key={city.id} value={city.id}>
+                              {city.name}
+                              {city.countryId && countries.find((co) => co.id === city.countryId)
+                                ? ` (${countries.find((co) => co.id === city.countryId)?.name})`
+                                : ''}
+                            </option>
+                          ))}
+                        </Input>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <FormLabel style={{ marginBottom: 6, fontSize: 12 }}>사망지 (도시)</FormLabel>
+                        <Input
+                          as="select"
+                          value={formData.deathCityId}
+                          onChange={(e) => handleInputChange('deathCityId', e.target.value)}
+                          style={{ width: '100%', padding: '10px 12px' }}
+                        >
+                          <option value="">선택 안 함</option>
+                          {cities.map((city) => (
+                            <option key={city.id} value={city.id}>
+                              {city.name}
+                              {city.countryId && countries.find((co) => co.id === city.countryId)
+                                ? ` (${countries.find((co) => co.id === city.countryId)?.name})`
+                                : ''}
+                            </option>
+                          ))}
+                        </Input>
+                      </div>
+                    </ModernSelectionGrid>
+                  </FormField>
+                </FormRow>
+
                 {/* 국가 이적 이력 */}
                 <FormRow>
                   <FormLabel>
@@ -3444,7 +3494,7 @@ export default function PersonCreatePage() {
                           <TransferInfo>
                             <TransferCountryName>
                               <span style={{ fontSize: '1.125rem' }}>
-                                {transfer.country?.flagEmoji || '🌍'}
+                                {transfer.country?.flagEmoji || '—'}
                               </span>
                               <span>
                                 {transfer.country?.name || '알 수 없음'}
@@ -3528,7 +3578,7 @@ export default function PersonCreatePage() {
 
                           <MonarchHint>
                             {isMonarch
-                              ? '✨ 직업이 왕/군주로 선택되었습니다. 왕호, 묘호, 시호 등을 입력하세요.'
+                              ? '직업이 왕/군주로 선택되었습니다. 왕호, 묘호, 시호 등을 입력하세요.'
                               : '가문에 속한 왕족의 경우 왕호, 묘호, 시호 등을 입력할 수 있습니다.'}
                           </MonarchHint>
 
@@ -3630,7 +3680,7 @@ export default function PersonCreatePage() {
                               fontSize: '0.875rem',
                             }}
                           >
-                            💡 예시:
+                            예시:
                             <br />• 조선 제4대 국왕 세종: 묘호 "세종", 시호
                             "세종장헌영문예무인성명효대왕"
                             <br />• 프랑스 루이 14세: 왕호 "Louis" (재위 번호
@@ -3707,7 +3757,7 @@ export default function PersonCreatePage() {
                                 }}
                               >
                                 <span>
-                                  {`${selectedFather.surname || ''} ${selectedFather.name}`.trim()}
+                                  {getPersonDisplayName(selectedFather)}
                                 </span>
                                 {(selectedFather.birthYear ||
                                   selectedFather.deathYear) && (
@@ -3762,7 +3812,7 @@ export default function PersonCreatePage() {
                                 }}
                               >
                                 <span>
-                                  {`${selectedMother.surname || ''} ${selectedMother.name}`.trim()}
+                                  {getPersonDisplayName(selectedMother)}
                                 </span>
                                 {(selectedMother.birthYear ||
                                   selectedMother.deathYear) && (
@@ -4046,8 +4096,8 @@ export default function PersonCreatePage() {
                           lineHeight: '1.6',
                         }}
                       >
-                        💡 타임라인 항목을 추가하면 임기/활동 기간, 활동 국가,
-                        소속 조직 등을 입력할 수 있습니다
+                        타임라인 항목을 추가하면 임기/활동 기간, 활동 국가,
+                        소속 조직 등을 입력할 수 있습니다.
                       </div>
                     </div>
                   )}
@@ -4203,6 +4253,9 @@ export default function PersonCreatePage() {
                             <FormRow>
                               <FormLabel>
                                 경력 타입 <Required>*</Required>
+                                <FormLabelHint>
+                                  해당 시기의 직업 분류를 선택하세요.
+                                </FormLabelHint>
                               </FormLabel>
                               <FormField>
                                 <div
@@ -4216,57 +4269,46 @@ export default function PersonCreatePage() {
                                     {
                                       value: 'government_position',
                                       label: '국가원수/왕위',
-                                      icon: '👑',
                                     },
                                     {
                                       value: 'government',
                                       label: '정부/공무원',
-                                      icon: '🏛️',
                                     },
                                     {
                                       value: 'military',
                                       label: '군사',
-                                      icon: '⚔️',
                                     },
                                     {
                                       value: 'business',
                                       label: '기업',
-                                      icon: '💼',
                                     },
                                     {
                                       value: 'academic',
                                       label: '학술',
-                                      icon: '🎓',
                                     },
                                     {
                                       value: 'religious',
                                       label: '종교',
-                                      icon: '⛪',
                                     },
                                     {
                                       value: 'artist',
                                       label: '예술',
-                                      icon: '🎨',
                                     },
                                     {
                                       value: 'athlete',
                                       label: '체육',
-                                      icon: '⚽',
                                     },
                                     {
                                       value: 'media',
                                       label: '언론',
-                                      icon: '📰',
                                     },
                                     {
                                       value: 'legal',
                                       label: '법조',
-                                      icon: '⚖️',
                                     },
                                     {
                                       value: 'medical',
                                       label: '의료',
-                                      icon: '⚕️',
                                     },
                                   ].map((type) => (
                                     <button
@@ -4303,7 +4345,7 @@ export default function PersonCreatePage() {
                                         transition: 'all 0.2s',
                                       }}
                                     >
-                                      {type.icon} {type.label}
+                                      {type.label}
                                     </button>
                                   ))}
                                 </div>
@@ -4535,7 +4577,7 @@ export default function PersonCreatePage() {
                                             <span
                                               style={{ fontSize: '1.25rem' }}
                                             >
-                                              {country.flagEmoji || '🌍'}
+                                              {country.flagEmoji || '—'}
                                             </span>
                                             <span>{country.name}</span>
                                           </span>
@@ -5897,7 +5939,7 @@ export default function PersonCreatePage() {
                         <span style={{ fontSize: '1.5rem' }}>
                           {filteredCountries.find(
                             (c) => c.id === transferCountryId,
-                          )?.flagEmoji || '🌍'}
+                          )?.flagEmoji || '—'}
                         </span>
                         <span style={{ fontWeight: '600' }}>
                           {
@@ -6651,7 +6693,7 @@ export default function PersonCreatePage() {
                       </ListItemIcon>
                       <PersonInfo>
                         <PersonName>
-                          {`${person.surname || ''} ${person.name}`.trim()}
+                          {getPersonDisplayName(person)}
                         </PersonName>
                         {person.birthYear && (
                           <PersonLifespan $color="#059669">
@@ -6733,7 +6775,7 @@ export default function PersonCreatePage() {
                       </ListItemIcon>
                       <PersonInfo>
                         <PersonName>
-                          {`${person.surname || ''} ${person.name}`.trim()}
+                          {getPersonDisplayName(person)}
                         </PersonName>
                         {person.birthYear && (
                           <PersonLifespan $color="#db2777">
@@ -6833,7 +6875,12 @@ export default function PersonCreatePage() {
             <ConfirmModalBody>
               <ConfirmMessage>
                 <strong>
-                  {formData.surname} {formData.name}
+                  {getPersonDisplayName({
+                    name: formData.name,
+                    surname: formData.surname,
+                    middleName: formData.middleName,
+                    nameDisplayOrder: formData.nameFormat,
+                  })}
                 </strong>{' '}
                 님의 정보를 등록하시겠습니까?
               </ConfirmMessage>
@@ -6995,6 +7042,75 @@ const NameInputWrapper = styled.div`
   flex-direction: column;
   gap: 0.5rem;
 `
+
+const NameToggleRow = styled.div`
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+`
+
+const NameSegmentGroup = styled.div`
+  flex: 1 1 0;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+`
+
+const NameSegmentLabel = styled.span`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+`
+
+const NameSegmentPill = styled.div`
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+`
+
+const NameSegmentButton = styled.button<{ $selected?: boolean }>`
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: ${(p) => (p.$selected ? '#0f172a' : '#64748b')};
+  background: ${(p) => (p.$selected ? '#fff' : 'transparent')};
+  box-shadow: ${(p) => (p.$selected ? '0 1px 2px rgba(0,0,0,0.06)' : 'none')};
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    color: ${(p) => (p.$selected ? '#0f172a' : '#334155')};
+    background: ${(p) => (p.$selected ? '#fff' : 'rgba(255,255,255,0.6)')};
+  }
+`
+
+const NameParsePreview = styled.div`
+  margin-top: 0.625rem;
+  padding: 0.625rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`
+
+const NameParseDisplay = styled.div`
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+`
+
+const NameParseMeta = styled.div`
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 400;
+`
+
 
 const NameLabel = styled.label`
   font-size: 0.85rem;
@@ -7798,43 +7914,25 @@ const CustomCheckbox = styled.label`
 const UnknownDateBox = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 0.625rem;
   padding: 0.75rem 1.25rem;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  background: #fef3c7;
   border: 1.5px solid #fcd34d;
   border-radius: 10px;
   font-size: 0.9rem;
-  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.08);
-
-  .icon {
-    font-size: 1.25rem;
-  }
-
-  .text {
-    color: #92400e;
-    font-weight: 600;
-  }
+  color: #92400e;
+  font-weight: 600;
 `
 
 const AliveBox = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 0.625rem;
   padding: 0.75rem 1.25rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  background: #f0f9ff;
   border: 1.5px solid #bae6fd;
   border-radius: 10px;
   font-size: 0.9rem;
-  box-shadow: 0 1px 3px rgba(14, 165, 233, 0.08);
-
-  .icon {
-    font-size: 1.25rem;
-  }
-
-  .text {
-    color: #0369a1;
-    font-weight: 600;
-  }
+  color: #0369a1;
+  font-weight: 600;
 `
 
 // Modal Styled Components

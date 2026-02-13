@@ -8,16 +8,19 @@
  * - 검색 및 필터링
  * - 데스크톱/모바일 반응형 UI
  */
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiChevronRight, FiGlobe, FiUsers } from 'react-icons/fi'
+import { FiChevronLeft, FiChevronRight, FiEdit2, FiExternalLink, FiGlobe, FiSettings, FiUsers, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { useHistoricalCountries } from '@/entities/historical-country/api'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { pathKeys } from '@/shared/router'
 import type { Era } from '@/entities/person/api'
-import { ActionMenu, type ActionMenuItem } from '@/shared/ui/action-menu'
+import { Z_INDEX } from '@/shared/styles/z-index'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal'
 import { SelectModal } from '@/shared/ui/select-modal'
 
@@ -60,8 +63,17 @@ export default function PersonPage() {
     setContinentFilter,
     sortBy,
     setSortBy,
+    sortOrder,
+    setSortOrder,
     currentPage,
     setCurrentPage,
+    centuryRange,
+    centuryStart,
+    centuryEnd,
+    setCenturyStart,
+    setCenturyEnd,
+    getCentury,
+    centuryCounts,
 
     // Form State
     formData,
@@ -94,6 +106,8 @@ export default function PersonPage() {
     setShowContinentFilterModal,
     showSortModal,
     setShowSortModal,
+    showSettingsModal,
+    setShowSettingsModal,
 
     // Mutations
     deleteMutation,
@@ -112,8 +126,230 @@ export default function PersonPage() {
     { value: 'AD', label: '기원후' },
   ]
 
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+  const prevDetailIdRef = useRef<string | null>(null)
+  const centuryTrackRef = useRef<HTMLDivElement>(null)
+  const [draggingHandle, setDraggingHandle] = useState<'start' | 'end' | null>(null)
+
+  /** 가로 세기 트랙에서 clientX → 세기(0~21) */
+  const getCenturyFromClientX = useCallback((clientX: number) => {
+    const el = centuryTrackRef.current
+    if (!el) return 0
+    const rect = el.getBoundingClientRect()
+    const ratio = (clientX - rect.left) / rect.width
+    return Math.max(0, Math.min(21, Math.round(ratio * 21)))
+  }, [])
+
+  useEffect(() => {
+    if (draggingHandle === null) return
+    const onMove = (e: MouseEvent) => {
+      const c = getCenturyFromClientX(e.clientX)
+      if (draggingHandle === 'start') setCenturyStart(c)
+      else setCenturyEnd(c)
+    }
+    const onUp = () => setDraggingHandle(null)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [draggingHandle, getCenturyFromClientX, setCenturyStart, setCenturyEnd])
+
+  /** 인물 선택 시 로딩을 먼저 보여주고 ID 변경 (바뀐 정보가 잠깐 노출되지 않도록) */
+  const handleSelectPerson = (id: string) => {
+    if (id !== selectedPersonId) setIsDetailLoading(true)
+    setSelectedPersonId(id)
+  }
+
+  /** 닫는 동안은 2열 유지해 카드가 커졌다 작아지는 현상 방지 */
+  const hasDetailLayout = !!selectedPersonId || isClosing
+
+  /** 현재 페이지 인물을 세기별로 그룹 (최신 세기 먼저: 21 → 0) */
+  const personsByCentury = useMemo(() => {
+    const map = new Map<number, (typeof paginatedPersons)[number][]>()
+    paginatedPersons.forEach((p) => {
+      const c = getCentury((p as { birthYear?: number }).birthYear, p.birthEra)
+      if (c != null) {
+        if (!map.has(c)) map.set(c, [])
+        map.get(c)!.push(p)
+      }
+    })
+    return Array.from(map.entries()).sort(([a], [b]) => b - a)
+  }, [paginatedPersons, getCentury])
+
+  useEffect(() => {
+    if (selectedPersonId && selectedPersonId !== prevDetailIdRef.current) {
+      prevDetailIdRef.current = selectedPersonId
+      setIsDetailLoading(true)
+      const t = setTimeout(() => setIsDetailLoading(false), 120)
+      return () => clearTimeout(t)
+    }
+    if (!selectedPersonId) prevDetailIdRef.current = null
+  }, [selectedPersonId])
+
   const hasData = persons && persons.length > 0
   const hasFilteredData = paginatedPersons && paginatedPersons.length > 0
+
+  const selectedPerson = useMemo(
+    () => persons?.find((p) => p.id === selectedPersonId) ?? null,
+    [persons, selectedPersonId],
+  )
+
+  /** 좌측 상세 패널에 표시할 인물 정보 */
+  function DetailContent({
+    person,
+    countries,
+    jobs,
+    religions,
+    dynasties,
+  }: {
+    person: (typeof persons)[number]
+    countries: Array<{ id: string; name: string; thumbnailUrl?: string; flagEmoji?: string }> | undefined
+    jobs: Array<{ id: string; name: string }> | undefined
+    religions: Array<{ id: string; name: string }> | undefined
+    dynasties: Array<{ id: string; name: string }> | undefined
+  }) {
+    const fullName = getPersonDisplayName(person)
+    const birthYear = (person as { birthYear?: number }).birthYear
+    const deathYear = (person as { deathYear?: number }).deathYear
+    const formatYear = (y: number) => y.toLocaleString('ko-KR', { useGrouping: true })
+    const era = (e: string | undefined) => (e === 'BC' ? 'BC' : 'AD')
+    const isAlive = birthYear != null && deathYear == null
+    const currentYear = new Date().getFullYear()
+    const currentAge =
+      isAlive && birthYear != null && person.birthEra !== 'BC'
+        ? currentYear - birthYear
+        : null
+    const isDeceased = deathYear != null
+    const ageAtDeath =
+      birthYear != null && deathYear != null
+        ? person.birthEra === 'BC' && person.deathEra === 'BC'
+          ? birthYear - deathYear
+          : person.birthEra === 'AD' && person.deathEra === 'AD'
+            ? deathYear - birthYear
+            : (person.birthEra === 'BC' ? birthYear : deathYear) + (person.deathEra === 'AD' ? deathYear : birthYear)
+        : null
+    const lifespan =
+      birthYear != null && deathYear != null
+        ? `${era(person.birthEra)} ${formatYear(birthYear)} ~ ${era(person.deathEra)} ${formatYear(deathYear)}`
+        : birthYear != null
+          ? isAlive && currentAge != null && currentAge >= 0
+            ? `AD ${formatYear(birthYear)} ~ 생존 (${currentAge}세)`
+            : `${era(person.birthEra)} ${formatYear(birthYear)} ~`
+          : '생몰년 미상'
+    const personCountry = person.countryId
+      ? countries?.find((c) => c.id === person.countryId)
+      : null
+    const personJob = (person as { jobId?: string }).jobId
+      ? jobs?.find((j) => j.id === (person as { jobId?: string }).jobId)
+      : null
+    const personReligion = (person as { religionId?: string }).religionId
+      ? religions?.find((r) => r.id === (person as { religionId?: string }).religionId)
+      : null
+    const personDynasty = (person as { dynastyId?: string }).dynastyId
+      ? dynasties?.find((d) => d.id === (person as { dynastyId?: string }).dynastyId)
+      : null
+    const roleParts = [personJob?.name, personReligion?.name, personDynasty?.name].filter(
+      Boolean,
+    ) as string[]
+    const displayImage =
+      person.profileImageUrl ||
+      (personCountry && 'thumbnailUrl' in personCountry
+        ? (personCountry as { thumbnailUrl?: string }).thumbnailUrl
+        : null)
+
+    const unregisteredText = '등록되지 않았습니다'
+
+    return (
+      <DetailContentWrap>
+        <DetailHeader>
+          <DetailThumbCol>
+            <DetailImageWrap>
+              {displayImage ? (
+                <DetailImage src={displayImage} alt={fullName} />
+              ) : (
+                <DetailImagePlaceholder>
+                  <FiUsers size={48} />
+                </DetailImagePlaceholder>
+              )}
+            </DetailImageWrap>
+            <DetailThumbActions>
+              <DetailActionBtn type="button" $edit onClick={() => navigate(`/persons/${person.id}/edit`)}>
+                <FiEdit2 size={14} />
+                수정
+              </DetailActionBtn>
+              <DetailActionBtn type="button" $detail onClick={() => navigate(pathKeys.persons.detail(person.id))}>
+                <FiExternalLink size={14} />
+                상세 이동
+              </DetailActionBtn>
+            </DetailThumbActions>
+          </DetailThumbCol>
+          <DetailHeaderRight>
+            <DetailTitleBlock>
+              <DetailName>{fullName}</DetailName>
+              {person.originalName && (
+                <DetailOriginalName>{person.originalName}</DetailOriginalName>
+              )}
+            </DetailTitleBlock>
+            <DetailField>
+              <DetailFieldLabel>생몰</DetailFieldLabel>
+              <DetailFieldValue>
+                {isDeceased && <span aria-hidden>🪦</span>}
+                {lifespan}
+                {isDeceased && ageAtDeath != null && ageAtDeath >= 0 && (
+                  <DetailHyangnyeon>향년 {ageAtDeath}세</DetailHyangnyeon>
+                )}
+              </DetailFieldValue>
+            </DetailField>
+            <DetailField>
+              <DetailFieldLabel>국가</DetailFieldLabel>
+              <DetailFieldValue>
+                {personCountry ? (
+                  <>
+                    {'flagEmoji' in personCountry && personCountry.flagEmoji
+                      ? `${personCountry.flagEmoji} `
+                      : ''}
+                    {personCountry.name}
+                  </>
+                ) : (
+                  <DetailUnregistered>{unregisteredText}</DetailUnregistered>
+                )}
+              </DetailFieldValue>
+            </DetailField>
+          </DetailHeaderRight>
+        </DetailHeader>
+
+        <DetailField>
+          <DetailFieldLabel>직업 · 종교 · 왕조</DetailFieldLabel>
+          <DetailFieldValue>
+            {roleParts.length > 0 ? (
+              <DetailMetaRow>
+                {roleParts.map((part) => (
+                  <DetailMetaChip key={part}>{part}</DetailMetaChip>
+                ))}
+              </DetailMetaRow>
+            ) : (
+              <DetailUnregistered>{unregisteredText}</DetailUnregistered>
+            )}
+          </DetailFieldValue>
+        </DetailField>
+
+        <DetailBioSection>
+          <DetailBioLabel>약력</DetailBioLabel>
+          <DetailBio>
+            {person.biography ? (
+              person.biography
+            ) : (
+              <DetailUnregistered>{unregisteredText}</DetailUnregistered>
+            )}
+          </DetailBio>
+        </DetailBioSection>
+      </DetailContentWrap>
+    )
+  }
 
   const dashboardStats = useMemo(() => {
     if (!persons?.length) {
@@ -279,6 +515,24 @@ export default function PersonPage() {
             <span>{sortBy === 'birthYear' ? '연생순' : '국가순'}</span>
             <FiChevronRight size={14} />
           </FilterTriggerButton>
+          <SortOrderGroup>
+            <SortOrderButton
+              type="button"
+              $active={sortOrder === 'asc'}
+              onClick={() => setSortOrder('asc')}
+              aria-pressed={sortOrder === 'asc'}
+            >
+              오름차순
+            </SortOrderButton>
+            <SortOrderButton
+              type="button"
+              $active={sortOrder === 'desc'}
+              onClick={() => setSortOrder('desc')}
+              aria-pressed={sortOrder === 'desc'}
+            >
+              내림차순
+            </SortOrderButton>
+          </SortOrderGroup>
           {(countryFilter.length > 0 ||
             genderFilter !== 'ALL' ||
             continentFilter !== 'ALL') && (
@@ -337,9 +591,95 @@ export default function PersonPage() {
             )}
           </FilterChipsWrap>
           <ResultCount>{filteredPersons.length}명</ResultCount>
+          <FilterSettingsButton
+            type="button"
+            onClick={() => setShowSettingsModal(true)}
+            aria-label="설정"
+            title="설정"
+          >
+            <FiSettings size={18} />
+          </FilterSettingsButton>
         </FilterSection>
 
-        <ListArea>
+        {/* 대시보드·필터 밑: 리스트 */}
+        <ListRow>
+        <ListArea $hasDetail={hasDetailLayout}>
+          <AnimatePresence initial={false} onExitComplete={() => setIsClosing(false)}>
+            {selectedPersonId && selectedPerson && (
+              <DetailPanel
+                as={motion.div}
+                key="detail-panel"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{
+                  flex: '0 0 0px',
+                  minWidth: 0,
+                  maxWidth: 0,
+                  opacity: 0,
+                  overflow: 'hidden',
+                  transition: { duration: 0.3, ease: 'easeOut' },
+                }}
+                transition={{ duration: 0.15 }}
+                style={{ overflow: 'hidden' }}
+              >
+                <DetailCloseButton
+                  type="button"
+                  onClick={() => {
+                    setIsClosing(true)
+                    setSelectedPersonId(null)
+                  }}
+                  aria-label="상세 닫기"
+                >
+                  <FiX size={20} />
+                </DetailCloseButton>
+                <AnimatePresence mode="wait">
+                  {isDetailLoading ? (
+                    <DetailLoadingCute
+                      key="loading"
+                      as={motion.div}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <DetailLoadingEmoji>✨</DetailLoadingEmoji>
+                      <DetailLoadingDots>
+                        <span /><span /><span />
+                      </DetailLoadingDots>
+                      <DetailLoadingText>인물 정보를 불러오는 중이에요</DetailLoadingText>
+                      <DetailLoadingSkeleton>
+                        <DetailSkeletonLine $w="70%" />
+                        <DetailSkeletonLine $w="50%" />
+                        <DetailSkeletonLine $w="60%" />
+                      </DetailLoadingSkeleton>
+                    </DetailLoadingCute>
+                  ) : (
+                    <motion.div
+                      key="content"
+                      initial={false}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <DetailContent
+                        person={selectedPerson}
+                        countries={countries}
+                        jobs={jobs}
+                        religions={religions}
+                        dynasties={dynasties}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </DetailPanel>
+            )}
+          </AnimatePresence>
+          <ListColumn
+            as={motion.div}
+            $twoRows={hasDetailLayout}
+            $expandWhenClosing={!selectedPersonId}
+            initial={false}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          >
           {filteredPersons.length === 0 ? (
             <EmptyState
               as={motion.div}
@@ -355,221 +695,109 @@ export default function PersonPage() {
             </EmptyState>
           ) : (
             <>
-              <Grid
-                as={motion.div}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                {paginatedPersons.map((person, index) => {
-                  const fullName = person.surname
-                    ? `${person.surname} ${person.name}`
-                    : person.name
-
-                  const birthYear = (person as { birthYear?: number }).birthYear
-                  const deathYear = (person as { deathYear?: number }).deathYear
-
-                  const formatYear = (y: number) =>
-                    y.toLocaleString('ko-KR', { useGrouping: true })
-                  const era = (e: string | undefined) =>
-                    e === 'BC' ? 'BC' : 'AD'
-
-                  const isAlive = birthYear != null && deathYear == null
-                  const currentYear = new Date().getFullYear()
-                  const currentAge =
-                    isAlive && birthYear != null && person.birthEra !== 'BC'
-                      ? currentYear - birthYear
-                      : null
-
-                  const isDeceased = deathYear != null
-                  const lifespan =
-                    birthYear != null && deathYear != null
-                      ? `${era(person.birthEra)} ${formatYear(birthYear)} ~ ${era(person.deathEra)} ${formatYear(deathYear)}`
-                      : birthYear != null
-                        ? isAlive && currentAge != null && currentAge >= 0
-                          ? `AD ${formatYear(birthYear)} ~ 생존 (${currentAge}세)`
-                          : `${era(person.birthEra)} ${formatYear(birthYear)} ~`
-                        : '생몰년 미상'
-
-                  // 국가 정보
-                  const personCountry = person.countryId
-                    ? countries?.find(
-                        (country) => country.id === person.countryId,
-                      )
-                    : null
-
-                  // 직업·종교·왕조 (API 확장 필드)
-                  const personJob = (person as { jobId?: string }).jobId
-                    ? jobs?.find(
-                        (j) => j.id === (person as { jobId?: string }).jobId,
-                      )
-                    : null
-                  const personReligion = (person as { religionId?: string })
-                    .religionId
-                    ? religions?.find(
-                        (r) =>
-                          r.id ===
-                          (person as { religionId?: string }).religionId,
-                      )
-                    : null
-                  const personDynasty = (person as { dynastyId?: string })
-                    .dynastyId
-                    ? dynasties?.find(
-                        (d) =>
-                          d.id === (person as { dynastyId?: string }).dynastyId,
-                      )
-                    : null
-                  const roleParts = [
-                    personJob?.name,
-                    personReligion?.name,
-                    personDynasty?.name,
-                  ].filter(Boolean) as string[]
-                  const roleLabel =
-                    roleParts.length > 0 ? roleParts.join(' · ') : null
-
-                  const genderLabel =
-                    person.gender === 'MALE'
-                      ? '남'
-                      : person.gender === 'FEMALE'
-                        ? '여'
-                        : null
-
-                  // 약력 요약 (최대 3줄 분량)
-                  const bioText =
-                    person.biography?.replace(/\s+/g, ' ').trim() || ''
-                  const bioExcerpt =
-                    bioText.length > 120
-                      ? `${bioText.slice(0, 120)}…`
-                      : bioText || null
-
-                  // 표시할 이미지
-                  const displayImage =
-                    person.profileImageUrl || personCountry?.thumbnailUrl
-
-                  const menuItems: ActionMenuItem[] = [
-                    {
-                      id: 'edit',
-                      label: '수정',
-                      icon: '✏️',
-                      onClick: () => navigate(`/persons/${person.id}/edit`),
-                    },
-                    {
-                      id: 'delete',
-                      label: '삭제',
-                      icon: '🗑️',
-                      onClick: () => handleDelete(person.id, fullName),
-                    },
-                  ]
-
-                  return (
-                    <Card
-                      key={person.id}
-                      as={motion.div}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      onClick={(e) => {
-                        // ActionMenu 클릭은 무시
-                        const actionMenu = (e.target as HTMLElement).closest(
-                          '[data-action-menu]',
-                        )
-                        if (actionMenu) {
-                          return
-                        }
-
-                        // react-router navigate로 상세 페이지 이동 (SPA 방식)
-                        navigate(`/persons/${person.id}`)
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <CardImageWrapper>
-                        {displayImage ? (
-                          <CardImage src={displayImage} alt={fullName} />
-                        ) : (
-                          <CardImagePlaceholder>
-                            <svg
-                              width="80"
-                              height="80"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
+              <ListScrollArea>
+                {personsByCentury.map(([century, list]) => (
+                    <CenturySection key={century}>
+                      <CenturyHeading>
+                        {century < 0 ? `기원전 ${-century}세기` : `${century}세기`}
+                      </CenturyHeading>
+                      <AdaptiveGrid $twoRows={hasDetailLayout}>
+                        {list.map((person) => {
+                          const fullName = getPersonDisplayName(person, true)
+                          const birthYear = (person as { birthYear?: number }).birthYear
+                          const deathYear = (person as { deathYear?: number }).deathYear
+                          const formatYear = (y: number) => y.toLocaleString('ko-KR', { useGrouping: true })
+                          const era = (e: string | undefined) => (e === 'BC' ? 'BC' : 'AD')
+                          const isAlive = birthYear != null && deathYear == null
+                          const currentYear = new Date().getFullYear()
+                          const currentAge = isAlive && birthYear != null && person.birthEra !== 'BC' ? currentYear - birthYear : null
+                          const isDeceased = deathYear != null
+                          const lifespan =
+                            birthYear != null && deathYear != null
+                              ? `${era(person.birthEra)} ${formatYear(birthYear)} ~ ${era(person.deathEra)} ${formatYear(deathYear)}`
+                              : birthYear != null
+                                ? isAlive && currentAge != null && currentAge >= 0
+                                  ? `AD ${formatYear(birthYear)} ~ 생존 (${currentAge}세)`
+                                  : `${era(person.birthEra)} ${formatYear(birthYear)} ~`
+                                : '생몰년 미상'
+                          const personCountry = person.countryId ? countries?.find((c) => c.id === person.countryId) : null
+                          const personJob = (person as { jobId?: string }).jobId ? jobs?.find((j) => j.id === (person as { jobId?: string }).jobId) : null
+                          const personReligion = (person as { religionId?: string }).religionId ? religions?.find((r) => r.id === (person as { religionId?: string }).religionId) : null
+                          const personDynasty = (person as { dynastyId?: string }).dynastyId ? dynasties?.find((d) => d.id === (person as { dynastyId?: string }).dynastyId) : null
+                          const roleParts = [personJob?.name, personReligion?.name, personDynasty?.name].filter(Boolean) as string[]
+                          const roleLabel = roleParts.length > 0 ? roleParts.join(' · ') : null
+                          const genderLabel = person.gender === 'MALE' ? '남' : person.gender === 'FEMALE' ? '여' : null
+                          const bioText = person.biography?.replace(/\s+/g, ' ').trim() || ''
+                          const bioExcerpt = bioText.length > 120 ? `${bioText.slice(0, 120)}…` : bioText || null
+                          const displayImage = person.profileImageUrl || personCountry?.thumbnailUrl
+                          return (
+                            <Card
+                              key={person.id}
+                              $active={person.id === selectedPersonId}
+                              onClick={() => handleSelectPerson(person.id)}
+                              style={{ cursor: 'pointer' }}
                             >
-                              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                            </svg>
-                          </CardImagePlaceholder>
-                        )}
-                      </CardImageWrapper>
+                              <CardImageWrapper>
+                                {displayImage ? (
+                                  <CardImage src={displayImage} alt={fullName} />
+                                ) : (
+                                  <CardImagePlaceholder>
+                                    <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+                                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                                    </svg>
+                                  </CardImagePlaceholder>
+                                )}
+                              </CardImageWrapper>
+                              <CardContent>
+                                <PersonInfo>
+                                  <CardTitleRow>
+                                    <PersonName>{fullName}</PersonName>
+                                    {genderLabel && <CardGender>{genderLabel}</CardGender>}
+                                  </CardTitleRow>
+                                  <PersonLifespan>
+                                    {isDeceased && <TombstoneIcon aria-hidden>🪦</TombstoneIcon>}
+                                    {lifespan}
+                                  </PersonLifespan>
+                                  {personCountry && (
+                                    <CardMetaRow>
+                                      <MetaBadge $type="country">
+                                        {'flagEmoji' in personCountry && personCountry.flagEmoji ? `${personCountry.flagEmoji} ` : ''}
+                                        {personCountry.name}
+                                      </MetaBadge>
+                                    </CardMetaRow>
+                                  )}
+                                  {roleLabel && <CardRole>{roleLabel}</CardRole>}
+                                  {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
+                                </PersonInfo>
+                              </CardContent>
+                            </Card>
+                          )
+                        })}
+                      </AdaptiveGrid>
+                    </CenturySection>
+                ))}
+              </ListScrollArea>
 
-                      <CardContent>
-                        <PersonInfo>
-                          <CardTitleRow>
-                            <PersonName>{fullName}</PersonName>
-                            {genderLabel && (
-                              <CardGender>{genderLabel}</CardGender>
-                            )}
-                          </CardTitleRow>
-                          <PersonLifespan>
-                            {isDeceased && (
-                              <TombstoneIcon aria-hidden>🪦</TombstoneIcon>
-                            )}
-                            {lifespan}
-                          </PersonLifespan>
-                          {personCountry && (
-                            <CardMetaRow>
-                              <MetaBadge $type="country">
-                                {'flagEmoji' in personCountry &&
-                                personCountry.flagEmoji
-                                  ? `${personCountry.flagEmoji} `
-                                  : ''}
-                                {personCountry.name}
-                              </MetaBadge>
-                            </CardMetaRow>
-                          )}
-                          {roleLabel && <CardRole>{roleLabel}</CardRole>}
-                          {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
-                        </PersonInfo>
-                      </CardContent>
-
-                      {/* ActionMenu - 이벤트 전파 중지 */}
-                      <ActionMenuWrapper
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation()
-                        }}
-                      >
-                        <ActionMenu items={menuItems} />
-                      </ActionMenuWrapper>
-                    </Card>
-                  )
-                })}
-              </Grid>
-
-              {/* 페이징 컨트롤 */}
               {totalPages > 1 && (
                 <Pagination
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.2 }}
+                  as={motion.div}
+                  initial={false}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, delay: 0.15 }}
                 >
                   <PaginationButton
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(1, prev - 1))
-                    }
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                   >
                     이전
                   </PaginationButton>
-
-                  <PaginationInfo>
-                    {currentPage} / {totalPages}페이지
-                  </PaginationInfo>
-
+                  <PaginationInfo>{currentPage} / {totalPages}페이지</PaginationInfo>
                   <PaginationButton
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                    }
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
                   >
                     다음
@@ -578,7 +806,9 @@ export default function PersonPage() {
               )}
             </>
           )}
+          </ListColumn>
         </ListArea>
+        </ListRow>
       </Container>
 
       {/* 플로팅 + 버튼 (등록 페이지로 이동) */}
@@ -1365,9 +1595,7 @@ export default function PersonPage() {
             ?.filter((person) => person.id !== editingPerson?.id)
             .map((person) => ({
               value: person.id,
-              label: person.surname
-                ? `${person.surname} ${person.name}`
-                : person.name,
+              label: getPersonDisplayName(person),
             })) || []
         }
         selectedValue={formData.fatherId}
@@ -1387,9 +1615,7 @@ export default function PersonPage() {
             ?.filter((person) => person.id !== editingPerson?.id)
             .map((person) => ({
               value: person.id,
-              label: person.surname
-                ? `${person.surname} ${person.name}`
-                : person.name,
+              label: getPersonDisplayName(person),
             })) || []
         }
         selectedValue={formData.motherId}
@@ -1552,6 +1778,78 @@ export default function PersonPage() {
           setShowDeathEraModal(false)
         }}
       />
+
+      {/* 설정 모달 — 세기 범위 */}
+      {showSettingsModal &&
+        createPortal(
+          <>
+            <SettingsModalOverlay
+              as={motion.div}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSettingsModal(false)}
+            />
+            <SettingsModalBox
+              as={motion.div}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SettingsModalHeader>
+                <SettingsModalTitle>설정</SettingsModalTitle>
+                <SettingsModalClose
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  aria-label="닫기"
+                >
+                  <FiX size={20} />
+                </SettingsModalClose>
+              </SettingsModalHeader>
+              <SettingsModalContent>
+                <SettingsCenturyBlock>
+                  <SettingsCenturyLabel>출생 세기 범위</SettingsCenturyLabel>
+                  <SettingsCenturyDesc>표시할 세기 범위를 드래그하여 선택하세요.</SettingsCenturyDesc>
+                  <SettingsCenturyTrackWrap ref={centuryTrackRef}>
+                    <SettingsCenturyTrackLine />
+                    <SettingsCenturyHistogramWrap>
+                      {centuryCounts.map((count, c) => {
+                        const maxCount = Math.max(1, ...centuryCounts)
+                        const heightPct = (count / maxCount) * 100
+                        return (
+                          <SettingsCenturyHistogramBar key={c} $height={heightPct} title={`${c}세기: ${count}명`} />
+                        )
+                      })}
+                    </SettingsCenturyHistogramWrap>
+                    <SettingsCenturyHandle
+                      $left={(centuryStart / 21) * 100}
+                      onMouseDown={(e) => { e.preventDefault(); setDraggingHandle('start') }}
+                      aria-label={`시작 세기 ${centuryStart}`}
+                    />
+                    <SettingsCenturyHandle
+                      $left={(centuryEnd / 21) * 100}
+                      onMouseDown={(e) => { e.preventDefault(); setDraggingHandle('end') }}
+                      aria-label={`끝 세기 ${centuryEnd}`}
+                    />
+                  </SettingsCenturyTrackWrap>
+                  <SettingsCenturyTickRow>
+                    {Array.from({ length: 22 }, (_, c) => (
+                      <SettingsCenturyTickLabel key={c} $left={(c / 21) * 100}>
+                        {c}
+                      </SettingsCenturyTickLabel>
+                    ))}
+                  </SettingsCenturyTickRow>
+                  <SettingsCenturyRangeValue>
+                    {centuryStart}세기 ~ {centuryEnd}세기
+                  </SettingsCenturyRangeValue>
+                </SettingsCenturyBlock>
+              </SettingsModalContent>
+            </SettingsModalBox>
+          </>,
+          document.body,
+        )}
     </Wrap>
   )
 }
@@ -1578,6 +1876,8 @@ const Wrap = styled.div`
   padding-top: var(--header-height, 64px);
   padding-bottom: 60px;
   position: relative;
+  display: flex;
+  flex-direction: column;
 `
 
 const Container = styled.div`
@@ -1591,6 +1891,8 @@ const Container = styled.div`
   position: relative;
   z-index: 1;
   box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
 
   @media (max-width: 768px) {
     padding: 16px;
@@ -1925,6 +2227,35 @@ const FilterTriggerButton = styled.button`
   }
 `
 
+const SortOrderGroup = styled.div`
+  display: inline-flex;
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+`
+
+const SortOrderButton = styled.button<{ $active?: boolean }>`
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  border-right: 1px solid rgba(203, 213, 225, 0.6);
+  background: ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.15)' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#4f46e5' : '#64748b')};
+
+  &:last-child {
+    border-right: none;
+  }
+
+  &:hover {
+    background: ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.2)' : 'rgba(203, 213, 225, 0.3)')};
+    color: #1e293b;
+  }
+`
+
 const FilterResetButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -2002,38 +2333,655 @@ const ResultCount = styled.span`
   border-radius: 999px;
 `
 
-const ListArea = styled.div`
+const FilterSettingsButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1.5px solid rgba(203, 213, 225, 0.6);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    background: #fff;
+    color: #6366f1;
+  }
+  &:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+`
+
+const ListArea = styled.div<{ $hasDetail?: boolean }>`
   width: 100%;
   min-width: 0;
   padding: 0 16px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 
   @media (min-width: 1200px) {
-    max-width: 1400px;
+    max-width: ${({ $hasDetail }) => ($hasDetail ? '100%' : '1400px')};
     margin: 0 auto;
     padding: 0 32px;
   }
 
   @media (max-width: 768px) {
     padding: 0 12px;
+    flex-direction: column;
   }
 `
 
+/* 좌측: 인물 상세 — 카드 우측 이동 시 남은 영역 전부 상세로 */
+const DetailPanel = styled.div`
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 24px 28px 28px 0;
+  margin-right: 24px;
+  position: relative;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border-right: 1px solid rgba(203, 213, 225, 0.4);
+  border-radius: 0;
+
+  @media (max-width: 768px) {
+    margin-right: 0;
+    padding: 20px 0;
+    border-right: none;
+  }
+`
+
+const DetailCloseButton = styled.button`
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 42px;
+  height: 42px;
+  border: none;
+  background: rgba(255, 240, 245, 0.9);
+  color: #c08497;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s ease;
+
+  &:hover {
+    background: rgba(252, 231, 243, 0.95);
+    color: #be185d;
+    transform: scale(1.05);
+  }
+`
+
+/* 인물 전환 시 로딩 — 패널 가운데 */
+const DetailLoadingCute = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px 24px;
+  gap: 16px;
+`
+
+const DetailLoadingEmoji = styled.span`
+  font-size: 48px;
+  animation: detailLoadingBounce 0.8s ease-in-out infinite;
+  @keyframes detailLoadingBounce {
+    0%, 100% { transform: scale(1) translateY(0); }
+    50% { transform: scale(1.1) translateY(-6px); }
+  }
+`
+
+const DetailLoadingDots = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f9a8d4 0%, #f472b6 100%);
+    animation: detailLoadingDot 0.9s ease-in-out infinite;
+    &:nth-child(1) { animation-delay: 0s; }
+    &:nth-child(2) { animation-delay: 0.15s; }
+    &:nth-child(3) { animation-delay: 0.3s; }
+  }
+  @keyframes detailLoadingDot {
+    0%, 100% { transform: scale(0.85); opacity: 0.6; }
+    50% { transform: scale(1.2); opacity: 1; }
+  }
+`
+
+const DetailLoadingText = styled.p`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: -0.01em;
+`
+
+const DetailLoadingSkeleton = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 240px;
+  margin-top: 12px;
+`
+
+const DetailSkeletonLine = styled.div<{ $w?: string }>`
+  height: 12px;
+  width: ${({ $w }) => $w ?? '100%'};
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(251, 207, 232, 0.4) 0%, rgba(253, 224, 239, 0.6) 50%, rgba(251, 207, 232, 0.4) 100%);
+  background-size: 200% 100%;
+  animation: detailSkeletonShine 1.2s ease-in-out infinite;
+  @keyframes detailSkeletonShine {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+`
+
+const DetailContentWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+`
+
+const DetailHeader = styled.div`
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  align-items: flex-start;
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+  }
+`
+
+const DetailThumbCol = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+`
+
+const DetailImageWrap = styled.div`
+  width: 200px;
+  aspect-ratio: 3/4;
+  min-height: 200px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @media (min-width: 700px) {
+    width: 240px;
+    min-height: 260px;
+  }
+`
+
+const DetailThumbActions = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+`
+
+const DetailImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: top center;
+`
+
+const DetailHeaderRight = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`
+
+const DetailImagePlaceholder = styled.div`
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+`
+
+const DetailTitleBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const DetailName = styled.h2`
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+`
+
+const DetailOriginalName = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  font-style: italic;
+`
+
+const DetailField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const DetailFieldLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+`
+
+const DetailFieldValue = styled.div`
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const DetailHyangnyeon = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border-radius: 6px;
+`
+
+const DetailUnregistered = styled.span`
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+  font-style: italic;
+`
+
+const DetailMetaRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+`
+
+const DetailMetaChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid rgba(203, 213, 225, 0.6);
+  border-radius: 8px;
+`
+
+const DetailBioSection = styled.section`
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+`
+
+const DetailBioLabel = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+`
+
+const DetailBio = styled.div`
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+`
+
+/* 수정 / 상세 이동 — 작은 버튼 */
+const DetailActionBtn = styled.button<{ $edit?: boolean; $detail?: boolean }>`
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  flex: 1;
+
+  ${({ $edit }) =>
+    $edit &&
+    `
+    &:hover {
+      border-color: #9ca3af;
+      background: #f9fafb;
+    }
+  `}
+
+  ${({ $detail }) =>
+    $detail &&
+    `
+    border-color: #0f172a;
+    background: #0f172a;
+    color: #fff;
+    &:hover {
+      background: #1e293b;
+      border-color: #1e293b;
+    }
+  `}
+`
+
+/* 우측: 리스트 영역 — 상세 열림 시 카드만 맨 우측, 닫을 때는 패널이 줄어들며 리스트가 스르륵 채움 */
+const ListColumn = styled.div<{ $twoRows?: boolean; $expandWhenClosing?: boolean }>`
+  flex: ${({ $twoRows, $expandWhenClosing }) =>
+    $expandWhenClosing ? '1' : $twoRows ? '0 0 auto' : '1'};
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: ${({ $twoRows }) => ($twoRows ? 'flex-end' : 'stretch')};
+  min-height: 0;
+  align-self: stretch;
+  overflow-y: ${({ $twoRows }) => ($twoRows ? 'auto' : 'visible')};
+
+  @media (max-width: 768px) {
+    flex: 1;
+    align-items: stretch;
+    overflow-y: visible;
+  }
+`
+
+const ListScrollArea = styled.div`
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+`
+
+const CenturySection = styled.section`
+  margin-bottom: 28px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`
+
+const CenturyHeading = styled.h3`
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6366f1;
+  letter-spacing: -0.02em;
+`
+
+/* 대시보드·필터 밑: 리스트 */
+const ListRow = styled.div`
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+`
+
+/* 설정 모달 */
+const SettingsModalOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
+  backdrop-filter: blur(4px);
+`
+
+const SettingsModalBox = styled.div`
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100% - 32px));
+  max-height: 85vh;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.12);
+  z-index: ${Z_INDEX.MODAL_CONTENT};
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+`
+
+const SettingsModalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fafbfc;
+`
+
+const SettingsModalTitle = styled.h2`
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #1e293b;
+`
+
+const SettingsModalClose = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #334155;
+  }
+`
+
+const SettingsModalContent = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+`
+
+/* 설정 모달 — 세기 범위 (개선된 디자인) */
+const SettingsCenturyBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const SettingsCenturyLabel = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+`
+
+const SettingsCenturyDesc = styled.p`
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+`
+
+const SettingsCenturyTrackWrap = styled.div`
+  position: relative;
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: flex-end;
+`
+
+const SettingsCenturyTrackLine = styled.div`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #c7d2fe 0%, #6366f1 50%, #c7d2fe 100%);
+  border-radius: 2px;
+  pointer-events: none;
+`
+
+const SettingsCenturyHistogramWrap = styled.div`
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 38px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: stretch;
+  gap: 2px;
+  padding: 0 2px;
+  pointer-events: none;
+`
+
+const SettingsCenturyHistogramBar = styled.div<{ $height: number }>`
+  flex: 1;
+  min-width: 3px;
+  background: rgba(99, 102, 241, 0.4);
+  border-radius: 2px 2px 0 0;
+  height: ${({ $height }) => $height}%;
+  min-height: ${({ $height }) => ($height > 0 ? 3 : 0)}px;
+`
+
+const SettingsCenturyHandle = styled.div<{ $left: number }>`
+  position: absolute;
+  left: ${({ $left }) => $left}%;
+  bottom: 0;
+  transform: translate(-50%, 50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  cursor: grab;
+  z-index: 2;
+
+  &:active {
+    cursor: grabbing;
+  }
+`
+
+const SettingsCenturyTickRow = styled.div`
+  position: relative;
+  width: 100%;
+  height: 18px;
+  margin-top: 6px;
+`
+
+const SettingsCenturyTickLabel = styled.span<{ $left: number }>`
+  position: absolute;
+  left: ${({ $left }) => $left}%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1;
+  pointer-events: none;
+  font-weight: 500;
+`
+
+const SettingsCenturyRangeValue = styled.div`
+  margin-top: 4px;
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  text-align: center;
+`
+
+/* 상세 열림 시: 기존 카드 사이즈 유지, 한 줄 두 개, 우측으로 이동 */
+const TwoColGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 260px);
+  gap: 24px;
+  width: max-content;
+  min-width: 0;
+  margin-top: 4px;
+  padding-right: 8px;
+
+  @media (min-width: 900px) {
+    gap: 28px;
+    grid-template-columns: repeat(2, 280px);
+  }
+
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(2, 300px);
+  }
+
+  @media (max-width: 640px) {
+    gap: 16px;
+    grid-template-columns: repeat(2, 140px);
+  }
+`
+
+/* 기본: 여러 열 그리드 (상세 닫혀 있을 때) */
 const Grid = styled.div`
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 24px;
   margin-top: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 
   @media (min-width: 900px) {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
 
   @media (min-width: 1200px) {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 28px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   }
 
   @media (max-width: 640px) {
@@ -2042,20 +2990,53 @@ const Grid = styled.div`
   }
 `
 
-const Card = styled.div`
-  background: #fff;
+/* 상세 열림/닫힘에 따라 한 그리드로 전환 — 리마운트 없이 스르륵 전환 */
+const AdaptiveGrid = styled.div<{ $twoRows?: boolean }>`
+  display: grid;
+  gap: 24px;
+  margin-top: 4px;
+  min-width: 0;
+  ${({ $twoRows }) =>
+    $twoRows
+      ? `
+    grid-template-columns: repeat(2, 260px);
+    width: max-content;
+    padding-right: 8px;
+    @media (min-width: 900px) { gap: 28px; grid-template-columns: repeat(2, 280px); }
+    @media (min-width: 1200px) { grid-template-columns: repeat(2, 300px); }
+    @media (max-width: 640px) { gap: 16px; grid-template-columns: repeat(2, 140px); }
+  `
+      : `
+    width: 100%;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    @media (min-width: 900px) { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    @media (min-width: 1200px) { gap: 28px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+    @media (max-width: 640px) { grid-template-columns: 1fr; gap: 20px; }
+  `}
+`
+
+/* active 시 메인 퍼플(#6366f1) 사용 */
+const Card = styled.div<{ $active?: boolean }>`
+  background: ${({ $active }) => ($active ? THEME.primaryLight : '#fff')};
   border-radius: 12px;
   padding: 0;
-  border: 1.5px solid ${THEME.border};
+  border: 1.5px solid ${({ $active }) => ($active ? THEME.primary : THEME.border)};
   transition:
-    box-shadow 0.2s ease,
-    border-color 0.2s ease,
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    background 0.3s ease,
     transform 0.2s ease;
   position: relative;
   cursor: pointer;
   overflow: hidden;
+  ${({ $active }) =>
+    $active &&
+    `
+    box-shadow: 0 0 0 2px ${THEME.primary}, 0 4px 16px rgba(99, 102, 241, 0.18);
+    border-color: ${THEME.primary};
+  `}
   &:hover {
-    border-color: ${THEME.borderLight};
+    border-color: ${({ $active }) => ($active ? THEME.primaryDark : THEME.borderLight)};
     transform: translateY(-2px);
   }
 `
@@ -2112,19 +3093,6 @@ const CardImagePlaceholder = styled.div`
 const CardContent = styled.div`
   padding: 18px 18px 20px;
   position: relative;
-`
-
-const ActionMenuWrapper = styled.div`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 10;
-  opacity: 0.4;
-  transition: opacity 0.2s ease;
-
-  ${Card}:hover & {
-    opacity: 1;
-  }
 `
 
 const PersonInfo = styled.div`

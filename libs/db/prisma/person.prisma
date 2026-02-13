@@ -35,6 +35,12 @@
 /// - 시대를 초월한 통합 관리
 /// - 복합 국적 및 국가 소속 지원
 
+/// 이름 표시 순서 (한국식: 성+이름, 서양식: 이름+성)
+enum NameDisplayOrder {
+  korean
+  western
+}
+
 /// 인물-국가 관계의 유형
 enum PersonCountryAffiliationType {
   /// 출생지
@@ -69,6 +75,9 @@ model Person {
 
   /// 원어 이름 (Original Name)
   originalName String? @map("original_name") @db.VarChar(100)
+
+  /// 이름 표시 순서: korean(성+이름), western(이름+성). null이면 성+이름
+  nameDisplayOrder NameDisplayOrder? @map("name_display_order")
 
   /// 출생 기원 (BC/AD)
   birthEra Era? @default(AD) @map("birth_era")
@@ -123,6 +132,10 @@ model Person {
   /// @deprecated 직업 정보는 Career 테이블들 사용 (MilitaryCareer, BusinessCareer 등)
   jobId          String? @map("job_id") @db.Char(36)
   countryId      String? @map("country_id") @db.Char(36) // 주 국적 (간편 조회용, deprecated 예정)
+  /// 출생지 (도시)
+  birthCityId    String? @map("birth_city_id") @db.Char(36)
+  /// 사망지 (도시)
+  deathCityId    String? @map("death_city_id") @db.Char(36)
 
   //--- 관계 필드
   Company            Company[]
@@ -131,6 +144,8 @@ model Person {
   denomination       ReligionDenomination? @relation("DenominationToPerson", fields: [denominationId], references: [id], onDelete: SetNull)
   job                Job?                  @relation("JobToPerson", fields: [jobId], references: [id], onDelete: SetNull)
   country            Country?              @relation("CountryToPerson", fields: [countryId], references: [id], onDelete: SetNull)
+  birthCity          City?                 @relation("PersonBirthCity", fields: [birthCityId], references: [id], onDelete: SetNull)
+  deathCity          City?                 @relation("PersonDeathCity", fields: [deathCityId], references: [id], onDelete: SetNull)
   father             Person?               @relation("ParentChildFather", fields: [fatherId], references: [id], onDelete: SetNull)
   mother             Person?               @relation("ParentChildMother", fields: [motherId], references: [id], onDelete: SetNull)
   childrenFromFather Person[]              @relation("ParentChildFather")
@@ -187,6 +202,8 @@ model Person {
   @@index([motherId], name: "idx_person_motherId")
   @@index([jobId], name: "idx_person_jobId")
   @@index([countryId], name: "idx_person_countryId")
+  @@index([birthCityId], name: "idx_person_birthCityId")
+  @@index([deathCityId], name: "idx_person_deathCityId")
   @@map("person")
 }
 

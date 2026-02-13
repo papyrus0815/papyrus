@@ -254,6 +254,7 @@ export class PersonController {
       name: dto.name,
       middleName: dto.middleName,
       surname: dto.surname,
+      nameDisplayOrder: dto.nameDisplayOrder,
       originalName: dto.originalName,
       birthDate,
       deathDate,
@@ -271,6 +272,8 @@ export class PersonController {
       motherId: dto.motherId,
       jobId: dto.jobId,
       countryId: dto.countryId,
+      birthCityId: dto.birthCityId,
+      deathCityId: dto.deathCityId,
     })
   }
 
@@ -310,6 +313,7 @@ export class PersonController {
       name: dto.name,
       middleName: dto.middleName,
       surname: dto.surname,
+      nameDisplayOrder: dto.nameDisplayOrder,
       originalName: dto.originalName,
       birthDate,
       deathDate,
@@ -327,6 +331,8 @@ export class PersonController {
       motherId: dto.motherId,
       jobId: dto.jobId,
       countryId: dto.countryId,
+      birthCityId: dto.birthCityId,
+      deathCityId: dto.deathCityId,
     })
   }
 

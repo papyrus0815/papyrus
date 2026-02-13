@@ -26,6 +26,7 @@ import { useCountries } from '@/features/country/api'
 import { useDynasties } from '@/shared/api/dynasty'
 import { useJobs } from '@/shared/api/job'
 import { useReligions } from '@/shared/api/religion'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 export interface PersonFormData {
   name: string
@@ -75,8 +76,32 @@ export function usePersonPage() {
   const [countryFilter, setCountryFilter] = useState<string[]>([])
   const [continentFilter, setContinentFilter] = useState<string>('ALL')
   const [sortBy, setSortBy] = useState<'birthYear' | 'countryName'>('birthYear')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
+
+  /** 출생년도·기원으로 세기 계산. AD: 1~100→1, 101~200→2 / BC: 1~100→-1 */
+  const getCentury = (year: number | undefined, era: string | undefined): number | null => {
+    if (year == null || year <= 0) return null
+    if (era === 'BC') return -Math.ceil(year / 100)
+    return Math.ceil(year / 100)
+  }
+
+  /** 세기 범위: 0~21세기 고정 */
+  const centuryRange = useMemo(() => ({ min: 0, max: 21 }), [])
+
+  const [centuryStart, setCenturyStart] = useState<number>(0)
+  const [centuryEnd, setCenturyEnd] = useState<number>(21)
+
+  /** 세기별 인물 수 (0~21, 히스토그램용) */
+  const centuryCounts = useMemo(() => {
+    const counts = Array.from({ length: 22 }, () => 0)
+    persons?.forEach((p) => {
+      const c = getCentury(p.birthYear, p.birthEra)
+      if (c != null && c >= 0 && c <= 21) counts[c] += 1
+    })
+    return counts
+  }, [persons])
 
   // SelectModal State
   const [showCountryModal, setShowCountryModal] = useState(false)
@@ -94,6 +119,7 @@ export function usePersonPage() {
   const [showContinentFilterModal, setShowContinentFilterModal] =
     useState(false)
   const [showSortModal, setShowSortModal] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
 
   // Profile Image State
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
@@ -131,9 +157,7 @@ export function usePersonPage() {
 
     const filtered = persons.filter((person) => {
       // 검색어 필터
-      const fullName = person.surname
-        ? `${person.surname} ${person.name}`
-        : person.name
+      const fullName = getPersonDisplayName(person)
       const matchesSearch =
         searchTerm === '' ||
         fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -157,21 +181,30 @@ export function usePersonPage() {
         matchesContinent = personCountry?.continentId === continentFilter
       }
 
+      // 세기 필터 (시작~끝 세기 사이 출생 인물만, start/end 순서 무관)
+      const personCentury = getCentury(person.birthYear, person.birthEra)
+      const [lo, hi] = [Math.min(centuryStart, centuryEnd), Math.max(centuryStart, centuryEnd)]
+      const matchesCentury =
+        personCentury == null ? false : personCentury >= lo && personCentury <= hi
+
       return (
-        matchesSearch && matchesGender && matchesCountry && matchesContinent
+        matchesSearch &&
+        matchesGender &&
+        matchesCountry &&
+        matchesContinent &&
+        matchesCentury
       )
     })
 
-    // 정렬
+    // 정렬 (오름차순/내림차순 적용)
+    const dir = sortOrder === 'desc' ? -1 : 1
     return filtered.sort((personA, personB) => {
+      let cmp = 0
       if (sortBy === 'birthYear') {
-        // 연생순 (오래된 순)
         const yearA = personA.birthYear || 9999
         const yearB = personB.birthYear || 9999
-
-        return yearA - yearB
+        cmp = yearA - yearB
       } else if (sortBy === 'countryName') {
-        // 국가 이름순
         const countryA = countries?.find(
           (country) => country.id === personA.countryId,
         )
@@ -180,11 +213,9 @@ export function usePersonPage() {
         )
         const nameA = countryA?.name || ''
         const nameB = countryB?.name || ''
-
-        return nameA.localeCompare(nameB, 'ko')
+        cmp = nameA.localeCompare(nameB, 'ko')
       }
-
-      return 0
+      return cmp * dir
     })
   }, [
     persons,
@@ -193,6 +224,9 @@ export function usePersonPage() {
     countryFilter,
     continentFilter,
     sortBy,
+    sortOrder,
+    centuryStart,
+    centuryEnd,
     countries,
   ])
 
@@ -214,7 +248,7 @@ export function usePersonPage() {
    */
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, genderFilter, countryFilter, continentFilter])
+  }, [searchTerm, genderFilter, countryFilter, continentFilter, sortBy, sortOrder, centuryStart, centuryEnd])
 
   /**
    * 수정 시 폼 데이터 설정
@@ -470,9 +504,18 @@ export function usePersonPage() {
     setContinentFilter,
     sortBy,
     setSortBy,
+    sortOrder,
+    setSortOrder,
     currentPage,
     setCurrentPage,
     itemsPerPage,
+    centuryRange,
+    centuryStart,
+    centuryEnd,
+    setCenturyStart,
+    setCenturyEnd,
+    getCentury,
+    centuryCounts,
 
     // Form State
     formData,
@@ -506,6 +549,8 @@ export function usePersonPage() {
     setShowContinentFilterModal,
     showSortModal,
     setShowSortModal,
+    showSettingsModal,
+    setShowSettingsModal,
 
     // Mutations
     deleteMutation,

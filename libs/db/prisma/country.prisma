@@ -285,6 +285,8 @@ model City {
   Organizations          Organization[]          @relation("OrganizationHeadquartersCity")
   PoliticalParty         PoliticalParty[]        @relation("PoliticalPartyHeadquartersCity")
   EventTimeline          EventTimeline[]
+  personsBornHere        Person[]                @relation("PersonBirthCity")
+  personsDiedHere        Person[]                @relation("PersonDeathCity")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

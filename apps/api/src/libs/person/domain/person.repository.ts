@@ -35,6 +35,7 @@ export interface CreatePersonData {
   name: string
   middleName?: string
   surname?: string
+  nameDisplayOrder?: 'korean' | 'western'
   originalName?: string
   birthDate?: Date
   deathDate?: Date
@@ -57,6 +58,8 @@ export interface CreatePersonData {
   motherId?: string
   jobId?: string
   countryId?: string
+  birthCityId?: string
+  deathCityId?: string
 }
 
 /**
@@ -66,6 +69,7 @@ export interface UpdatePersonData {
   name?: string
   middleName?: string
   surname?: string
+  nameDisplayOrder?: 'korean' | 'western'
   originalName?: string
   birthDate?: Date
   deathDate?: Date
@@ -88,6 +92,8 @@ export interface UpdatePersonData {
   motherId?: string
   jobId?: string
   countryId?: string
+  birthCityId?: string
+  deathCityId?: string
 }
 
 /**

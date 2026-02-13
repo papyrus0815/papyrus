@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn } from 'class-validator'
 import { Type } from 'class-transformer'
 
 /**
@@ -86,6 +86,14 @@ export class CreatePersonDto {
   @IsOptional()
   @IsString()
   surname?: string
+
+  /**
+   * 이름 표시 순서: korean(성+이름), western(이름+성)
+   * @example "western"
+   */
+  @IsOptional()
+  @IsIn(['korean', 'western'])
+  nameDisplayOrder?: 'korean' | 'western'
 
   /**
    * 원어 이름 (Original Name)
@@ -284,4 +292,18 @@ export class CreatePersonDto {
   @IsOptional()
   @IsString()
   countryId?: string
+
+  /**
+   * 출생지 도시 ID (선택) — 등록된 도시(City) 또는 국가 행정구역 데이터에서 선택
+   */
+  @IsOptional()
+  @IsString()
+  birthCityId?: string
+
+  /**
+   * 사망지 도시 ID (선택)
+   */
+  @IsOptional()
+  @IsString()
+  deathCityId?: string
 }

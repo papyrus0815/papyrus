@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn } from 'class-validator'
 import { Type } from 'class-transformer'
 import { Era, DateInfoDto } from './create-person.dto'
 
@@ -26,6 +26,13 @@ export class UpdatePersonDto {
   @IsOptional()
   @IsString()
   surname?: string
+
+  /**
+   * 이름 표시 순서: korean(성+이름), western(이름+성)
+   */
+  @IsOptional()
+  @IsIn(['korean', 'western'])
+  nameDisplayOrder?: 'korean' | 'western'
 
   /**
    * 원어 이름 (선택)
@@ -197,4 +204,18 @@ export class UpdatePersonDto {
   @IsOptional()
   @IsString()
   countryId?: string
+
+  /**
+   * 출생지 도시 ID (선택)
+   */
+  @IsOptional()
+  @IsString()
+  birthCityId?: string
+
+  /**
+   * 사망지 도시 ID (선택)
+   */
+  @IsOptional()
+  @IsString()
+  deathCityId?: string
 }
