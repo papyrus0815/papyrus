@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 전체 제어
   startAll: () => ipcRenderer.invoke('service:startAll'),
   stopAll: () => ipcRenderer.invoke('service:stopAll'),
+  restart: () => ipcRenderer.invoke('service:restart'),
 
   // Docker 제어
   startDocker: () => ipcRenderer.invoke('service:startDocker'),
@@ -75,6 +76,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // SDK 빌드
   buildSdk: () => ipcRenderer.invoke('service:buildSdk'),
+
+  // Web 빌드
+  buildWeb: () => ipcRenderer.invoke('service:buildWeb'),
 
   // 데이터베이스 관리
   runMigration: () => ipcRenderer.invoke('service:runMigration'),
@@ -153,6 +157,7 @@ declare global {
       getStatus: () => Promise<any>
       startAll: () => Promise<void>
       stopAll: () => Promise<void>
+      restart: () => Promise<boolean>
       startDocker: () => Promise<void>
       stopDocker: () => Promise<void>
       resetDocker: () => Promise<{ success: boolean; message: string }>
@@ -185,6 +190,7 @@ declare global {
       readLogFile: (filePath: string) => Promise<string>
       buildApi: () => Promise<boolean>
       buildSdk: () => Promise<boolean>
+      buildWeb: () => Promise<boolean>
       runMigration: () => Promise<boolean>
       runDeploy: () => Promise<boolean>
       runGenerate: () => Promise<boolean>

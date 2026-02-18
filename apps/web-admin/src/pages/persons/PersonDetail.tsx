@@ -128,6 +128,24 @@ export function PersonDetail({ personId, onClose }: PersonDetailProps) {
                 <InfoValue>{person.originalName}</InfoValue>
               </InfoItem>
             )}
+            {person.surnameMeaning && (
+              <InfoItem>
+                <InfoLabel>성의 뜻</InfoLabel>
+                <InfoValue>{person.surnameMeaning}</InfoValue>
+              </InfoItem>
+            )}
+            {person.nameMeaning && (
+              <InfoItem>
+                <InfoLabel>이름의 뜻</InfoLabel>
+                <InfoValue>{person.nameMeaning}</InfoValue>
+              </InfoItem>
+            )}
+            {person.middleNameMeaning && (
+              <InfoItem>
+                <InfoLabel>중간이름의 뜻</InfoLabel>
+                <InfoValue>{person.middleNameMeaning}</InfoValue>
+              </InfoItem>
+            )}
           </InfoGrid>
         </Section>
 

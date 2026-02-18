@@ -58,6 +58,40 @@ export class PersonPrismaRepository implements IPersonRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * 인물 create/update 시 FK 필드 정리.
+   * 빈 문자열('')·null·undefined인 FK는 객체에서 제거해 Prisma에 전달하지 않음 → country_id 등 FK 위반 방지.
+   */
+  private sanitizePersonFkFields<T extends CreatePersonData | UpdatePersonData>(data: T): T {
+    const fkKeys = [
+      'countryId',
+      'birthCityId',
+      'deathCityId',
+      'dynastyId',
+      'religionId',
+      'denominationId',
+      'fatherId',
+      'motherId',
+      'jobId',
+    ] as const
+    const out = { ...data } as T & Record<string, unknown>
+    for (const key of fkKeys) {
+      const v = out[key]
+      if (v === '' || v == null) delete out[key]
+    }
+    return out as T
+  }
+
+  /**
+   * 응답용 출생 국가 ID: Person.countryId가 있으면 그대로, 없으면 BIRTH_PLACE 소속의 historicalCountryId 또는 countryId 반환
+   */
+  private getEffectiveBirthCountryId(person: any): string | null {
+    if (person.countryId) return person.countryId
+    const affiliations = person.countryAffiliations as Array<{ affiliationType: string; historicalCountryId?: string | null; countryId?: string | null }> | undefined
+    const birth = affiliations?.find((a) => String(a.affiliationType) === 'BIRTH_PLACE')
+    return birth?.historicalCountryId ?? birth?.countryId ?? null
+  }
+
+  /**
    * Prisma Person을 PersonResponseDto로 변환
    */
   private mapToPersonResponse(person: any): PersonResponseDto {
@@ -84,6 +118,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       middleName: person.middleName ?? null,
       nameDisplayOrder: person.nameDisplayOrder ?? null,
       originalName: person.originalName ?? null,
+      surnameMeaning: person.surnameMeaning ?? null,
+      nameMeaning: person.nameMeaning ?? null,
+      middleNameMeaning: person.middleNameMeaning ?? null,
       birthEra: person.birthEra as any,
       birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
       birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
@@ -106,7 +143,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       fatherId: person.fatherId,
       motherId: person.motherId,
       jobId: person.jobId,
-      countryId: person.countryId,
+      countryId: this.getEffectiveBirthCountryId(person),
       birthCityId: person.birthCityId ?? null,
       deathCityId: person.deathCityId ?? null,
       showLifespanOnEventList: person.showLifespanOnEventList,
@@ -350,15 +387,18 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 모든 인물 목록 조회
+   * 모든 인물 목록 조회 (출생국가에 역사적 국가 포함해 effective countryId 반환)
    */
   async findAll(): Promise<PersonResponseDto[]> {
     const persons = await this.prisma.person.findMany({
       orderBy: {
         createdAt: 'desc',
       },
+      include: {
+        countryAffiliations: true,
+      },
     })
-    return persons.map(p => this.mapToPersonResponse(p))
+    return persons.map((p) => this.mapToPersonResponse(p))
   }
 
   /**
@@ -469,6 +509,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const person = await this.prisma.person.findUnique({
       where: { id },
       include: {
+        countryAffiliations: true,
         GovernmentTenures: {
           include: {
             positionDefinition: true,
@@ -764,23 +805,125 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   /**
    * 인물 생성
+   * FK 필드 정리 + countryId는 Country에 있을 때만 Person에 저장.
+   * 역사적 국가 ID면 Person.countryId는 넣지 않고, PersonCountryAffiliation(BIRTH_PLACE)에만 저장.
    */
   async create(data: CreatePersonData): Promise<PersonResponseDto> {
+    const sanitized = this.sanitizePersonFkFields(data) as CreatePersonData & Record<string, unknown>
+    const birthId = sanitized.countryId
+    let birthHistoricalCountryId: string | null = null
+
+    if (birthId) {
+      const inCountry = await this.prisma.country.findUnique({
+        where: { id: birthId },
+        select: { id: true },
+      })
+      if (inCountry) {
+        // 현대 국가 → Person.countryId 유지
+      } else {
+        const inHistorical = await this.prisma.historicalCountry.findUnique({
+          where: { id: birthId },
+          select: { id: true },
+        })
+        if (inHistorical) {
+          birthHistoricalCountryId = birthId
+          delete sanitized.countryId
+        } else {
+          delete sanitized.countryId
+        }
+      }
+    }
+
     const person = await this.prisma.person.create({
-      data,
+      data: sanitized as Parameters<PrismaService['person']['create']>[0]['data'],
     })
-    return this.mapToPersonResponse(person)
+
+    if (birthHistoricalCountryId) {
+      await this.prisma.personCountryAffiliation.create({
+        data: {
+          personId: person.id,
+          historicalCountryId: birthHistoricalCountryId,
+          countryId: null,
+          affiliationType: 'BIRTH_PLACE',
+          priority: 0,
+        },
+      })
+    }
+
+    // 응답에 effective countryId(역사적 국가 포함)를 넣기 위해 countryAffiliations 포함해 재조회
+    const created = await this.prisma.person.findUnique({
+      where: { id: person.id },
+      include: { countryAffiliations: true },
+    })
+    return created ? this.mapToPersonResponse(created) : this.mapToPersonResponse(person)
   }
 
   /**
    * 인물 수정
+   * FK 필드 정리 + countryId는 Country에 있을 때만 반영.
+   * 역사적 국가면 Person.countryId는 비우고, BIRTH_PLACE만 PersonCountryAffiliation에 반영.
    */
   async update(id: string, data: UpdatePersonData): Promise<PersonResponseDto> {
+    const sanitized = this.sanitizePersonFkFields(data) as UpdatePersonData & Record<string, unknown>
+    const birthIdInput = data.countryId
+    const birthId = sanitized.countryId
+    let birthHistoricalCountryId: string | null = null
+
+    if (birthId) {
+      const inCountry = await this.prisma.country.findUnique({
+        where: { id: birthId },
+        select: { id: true },
+      })
+      if (inCountry) {
+        // 현대 국가 → Person.countryId 유지
+      } else {
+        const inHistorical = await this.prisma.historicalCountry.findUnique({
+          where: { id: birthId },
+          select: { id: true },
+        })
+        if (inHistorical) {
+          birthHistoricalCountryId = birthId
+          delete sanitized.countryId
+        } else {
+          delete sanitized.countryId
+        }
+      }
+    }
+
+    // 출생국가를 비웠을 때( null / '' ) Person.countryId를 null로 반영
+    const updateData = { ...sanitized } as Parameters<PrismaService['person']['update']>[0]['data']
+    if (birthIdInput !== undefined && (birthIdInput === null || birthIdInput === '')) {
+      ;(updateData as Record<string, unknown>).countryId = null
+    }
+
     const person = await this.prisma.person.update({
       where: { id },
-      data,
+      data: updateData,
     })
-    return this.mapToPersonResponse(person)
+
+    if (birthIdInput !== undefined) {
+      await this.prisma.personCountryAffiliation.deleteMany({
+        where: { personId: id, affiliationType: 'BIRTH_PLACE' },
+      })
+      if (birthHistoricalCountryId) {
+        await this.prisma.personCountryAffiliation.create({
+          data: {
+            personId: id,
+            historicalCountryId: birthHistoricalCountryId,
+            countryId: null,
+            affiliationType: 'BIRTH_PLACE',
+            priority: 0,
+          },
+        })
+      }
+    }
+
+    // 응답에 effective countryId(역사적 국가 포함)를 넣기 위해 countryAffiliations 포함해 재조회
+    const updated = await this.prisma.person.findUnique({
+      where: { id },
+      include: { countryAffiliations: true },
+    })
+    return updated ? this.mapToPersonResponse(updated) : this.mapToPersonResponse(person)
   }
 
   /**
@@ -999,9 +1142,49 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 재임 기록의 국가 FK 정리: 빈 문자열/무효 ID 제거, countryId가 역사적 국가 ID면 historicalCountryId로만 저장
+   */
+  private async resolveTenureCountryFields(dto: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }): Promise<{ countryId?: string | null; historicalCountryId?: string | null }> {
+    const result: { countryId?: string | null; historicalCountryId?: string | null } = {}
+    const cid = dto.countryId && dto.countryId.trim() !== '' ? dto.countryId.trim() : null
+    const hid = dto.historicalCountryId && dto.historicalCountryId.trim() !== '' ? dto.historicalCountryId.trim() : null
+
+    if (cid) {
+      const inCountry = await this.prisma.country.findUnique({
+        where: { id: cid },
+        select: { id: true },
+      })
+      if (inCountry) {
+        result.countryId = cid
+      } else {
+        const inHistorical = await this.prisma.historicalCountry.findUnique({
+          where: { id: cid },
+          select: { id: true },
+        })
+        if (inHistorical) result.historicalCountryId = cid
+      }
+    }
+    if (hid && result.historicalCountryId === undefined) {
+      const inHistorical = await this.prisma.historicalCountry.findUnique({
+        where: { id: hid },
+        select: { id: true },
+      })
+      if (inHistorical) result.historicalCountryId = hid
+    }
+    return result
+  }
+
+  /**
    * 국가원수/왕위 재임 기록 추가
    */
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto): Promise<any> {
+    const countryFields = await this.resolveTenureCountryFields({
+      countryId: dto.countryId,
+      historicalCountryId: dto.historicalCountryId,
+    })
     const tenure = await this.prisma.governmentPositionTenure.create({
       data: {
         personId: dto.personId,
@@ -1009,9 +1192,11 @@ export class PersonPrismaRepository implements IPersonRepository {
         title: dto.title,
         titleEn: dto.titleEn,
         showPositionInfo: dto.showPositionInfo !== false, // 기본값 true
-        countryId: dto.countryId,
-        historicalCountryId: dto.historicalCountryId,
-        positionDefinitionId: dto.positionDefinitionId, // 선택사항
+        ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
+        ...(countryFields.historicalCountryId != null && {
+          historicalCountryId: countryFields.historicalCountryId,
+        }),
+        positionDefinitionId: dto.positionDefinitionId ?? undefined,
         termNumber: dto.termNumber,
         regnalNumber: dto.regnalNumber,
         startDate: new Date(dto.startDate),
@@ -1053,13 +1238,19 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async updateGovernmentPositionTenure(id: string, dto: Partial<CreateGovernmentPositionTenureDto>): Promise<any> {
     const updateData: any = {}
-    
+
     if (dto.positionType) updateData.positionType = dto.positionType as any
     if (dto.title) updateData.title = dto.title
     if (dto.titleEn !== undefined) updateData.titleEn = dto.titleEn
     if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
-    if (dto.countryId !== undefined) updateData.countryId = dto.countryId
-    if (dto.historicalCountryId !== undefined) updateData.historicalCountryId = dto.historicalCountryId
+    if (dto.countryId !== undefined || dto.historicalCountryId !== undefined) {
+      const countryFields = await this.resolveTenureCountryFields({
+        countryId: dto.countryId,
+        historicalCountryId: dto.historicalCountryId,
+      })
+      updateData.countryId = countryFields.countryId ?? null
+      updateData.historicalCountryId = countryFields.historicalCountryId ?? null
+    }
     if (dto.positionDefinitionId !== undefined) updateData.positionDefinitionId = dto.positionDefinitionId
     if (dto.termNumber !== undefined) updateData.termNumber = dto.termNumber
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber

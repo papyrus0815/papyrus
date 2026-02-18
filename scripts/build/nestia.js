@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const { runCommands, success, error } = require('../utils/common')
-const fs = require('fs')
-const path = require('path')
+import { runCommands, success, error } from '../utils/common.js'
+import fs from 'fs'
+import path from 'path'
 
 async function main() {
   try {
@@ -123,8 +123,4 @@ async function main() {
   }
 }
 
-if (require.main === module) {
-  main()
-}
-
-module.exports = main
+export default main

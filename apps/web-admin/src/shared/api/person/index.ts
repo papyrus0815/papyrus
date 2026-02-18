@@ -13,6 +13,12 @@ export type Person = {
   nameDisplayOrder?: string | null
   /** 이름 원어 (Original Name) */
   originalName?: string | null
+  /** 성의 뜻 */
+  surnameMeaning?: string | null
+  /** 이름의 뜻 */
+  nameMeaning?: string | null
+  /** 중간이름의 뜻 */
+  middleNameMeaning?: string | null
   birthEra?: Era | null
   birthDate?: string | null
   deathEra?: Era | null
@@ -71,6 +77,12 @@ export type CreatePersonInput = {
   deathCityId?: string | null
   /** 이름 원어 (Original Name) */
   originalName?: string | null
+  /** 성의 뜻 */
+  surnameMeaning?: string | null
+  /** 이름의 뜻 */
+  nameMeaning?: string | null
+  /** 중간이름의 뜻 */
+  middleNameMeaning?: string | null
   // 날짜 객체 형식
   birth?: DateInfo
   death?: DateInfo

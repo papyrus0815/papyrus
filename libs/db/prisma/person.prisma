@@ -76,6 +76,13 @@ model Person {
   /// 원어 이름 (Original Name)
   originalName String? @map("original_name") @db.VarChar(100)
 
+  /// 성의 뜻 (예: 金 = 쇠 금)
+  surnameMeaning String? @map("surname_meaning") @db.VarChar(300)
+  /// 이름의 뜻 (예: 承 = 이을 승, 煐 = 빛날 영)
+  nameMeaning String? @map("name_meaning") @db.VarChar(300)
+  /// 중간이름의 뜻
+  middleNameMeaning String? @map("middle_name_meaning") @db.VarChar(300)
+
   /// 이름 표시 순서: korean(성+이름), western(이름+성). null이면 성+이름
   nameDisplayOrder NameDisplayOrder? @map("name_display_order")
 

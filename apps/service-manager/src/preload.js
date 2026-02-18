@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 전체 제어
     startAll: () => ipcRenderer.invoke('service:startAll'),
     stopAll: () => ipcRenderer.invoke('service:stopAll'),
+    restart: () => ipcRenderer.invoke('service:restart'),
     // Docker 제어
     startDocker: () => ipcRenderer.invoke('service:startDocker'),
     stopDocker: () => ipcRenderer.invoke('service:stopDocker'),
@@ -51,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     buildApi: () => ipcRenderer.invoke('service:buildApi'),
     // SDK 빌드
     buildSdk: () => ipcRenderer.invoke('service:buildSdk'),
+    // Web 빌드
+    buildWeb: () => ipcRenderer.invoke('service:buildWeb'),
     // 데이터베이스 관리
     runMigration: () => ipcRenderer.invoke('service:runMigration'),
     runDeploy: () => ipcRenderer.invoke('service:runDeploy'),

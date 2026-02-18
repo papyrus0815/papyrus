@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { runNpx, success, error } = require('../utils/common')
+import { runNpx, success, error } from '../utils/common.js'
 
 async function main() {
   try {
@@ -13,8 +13,4 @@ async function main() {
   }
 }
 
-if (require.main === module) {
-  main()
-}
-
-module.exports = main
+export default main

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf } from 'class-validator'
 import { Type } from 'class-transformer'
 import { Era, DateInfoDto } from './create-person.dto'
 
@@ -35,11 +35,36 @@ export class UpdatePersonDto {
   nameDisplayOrder?: 'korean' | 'western'
 
   /**
-   * 원어 이름 (선택)
+   * 원어 이름 (선택). null이면 저장된 값 삭제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  originalName?: string
+  originalName?: string | null
+
+  /**
+   * 성의 뜻 (선택). null이면 저장된 값 삭제
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  surnameMeaning?: string | null
+
+  /**
+   * 이름의 뜻 (선택). null이면 저장된 값 삭제
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  nameMeaning?: string | null
+
+  /**
+   * 중간이름의 뜻 (선택). null이면 저장된 값 삭제
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  middleNameMeaning?: string | null
 
   /**
    * 출생 정보 (객체 형식)

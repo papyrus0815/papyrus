@@ -20,6 +20,7 @@ declare global {
     updateServiceButtons: () => void
     handleStart: (serviceId: string) => Promise<void>
     handleStop: (serviceId: string) => Promise<void>
+    restartServers: () => Promise<void>
     openUrl: (url: string) => void
     resetDocker: () => Promise<void>
     clearEnvCache: () => void
@@ -47,6 +48,8 @@ declare global {
     showAllPrismaSettings: () => Promise<void>
     buildNestiaSdk: () => Promise<void>
     validateNestiaSdk: () => Promise<void>
+    runApiBuild: () => Promise<void>
+    runWebBuild: () => Promise<void>
     loadLogFiles: () => Promise<void>
     viewLogFile: (filePath: string) => Promise<void>
     loadEnvFiles: () => Promise<void>

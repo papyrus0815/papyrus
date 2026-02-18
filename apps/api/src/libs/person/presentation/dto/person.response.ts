@@ -10,6 +10,9 @@ export interface PersonResponseDto {
   middleName: string | null
   nameDisplayOrder: string | null
   originalName: string | null
+  surnameMeaning: string | null
+  nameMeaning: string | null
+  middleNameMeaning: string | null
   birthEra: Era | null
   birthYear: number | null
   birthMonth: number | null

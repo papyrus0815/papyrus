@@ -244,6 +244,9 @@ interface FormData {
   middleName: string // 중간 이름 (Middle Name)
   surname: string // 성 (Last Name/Family Name)
   originalName: string // 이름 원어 (Original Name)
+  surnameMeaning: string // 성의 뜻
+  nameMeaning: string // 이름의 뜻
+  middleNameMeaning: string // 중간이름의 뜻
   nicknames: string[] // 별명/호/필명 (다중) - 변경
   gender: string
   birthEra: Era
@@ -320,6 +323,9 @@ export default function PersonCreatePage() {
     middleName: '', // 중간 이름
     surname: '',
     originalName: '', // 이름 원어
+    surnameMeaning: '', // 성의 뜻
+    nameMeaning: '', // 이름의 뜻
+    middleNameMeaning: '', // 중간이름의 뜻
     nicknames: [], // 별명 배열
     gender: '',
     birthEra: 'AD',
@@ -585,6 +591,9 @@ export default function PersonCreatePage() {
             surname: personData.surname || '',
             middleName: personData.middleName || '',
             originalName: personData.originalName || '',
+            surnameMeaning: personData.surnameMeaning || '',
+            nameMeaning: personData.nameMeaning || '',
+            middleNameMeaning: personData.middleNameMeaning || '',
             nameFormat: loadedNameFormat,
             fullName: loadedFullName,
             gender: personData.gender || '',
@@ -693,7 +702,7 @@ export default function PersonCreatePage() {
                     : '',
                   endDay: isEndDateValid ? endDate.getDate().toString() : '',
                   isCurrent: !tenure.endDate,
-                  countryId: tenure.countryId || '',
+                  countryId: tenure.countryId || tenure.historicalCountryId || '',
                   note: tenure.notes || '',
                   priority: index,
                   // GovernmentPositionTenure 전용 필드
@@ -2076,7 +2085,11 @@ export default function PersonCreatePage() {
         surname: formData.surname.trim() || undefined,
         middleName: formData.middleName.trim() || undefined,
         nameDisplayOrder: formData.nameFormat,
-        originalName: formData.originalName.trim() || undefined,
+        // 빈값이면 null로 보내서 DB에 지워지도록 (수정 시 기존 값 삭제 가능)
+        originalName: formData.originalName.trim() || null,
+        surnameMeaning: formData.surnameMeaning.trim() || null,
+        nameMeaning: formData.nameMeaning.trim() || null,
+        middleNameMeaning: formData.middleNameMeaning.trim() || null,
         gender: formData.gender,
         biography: formData.biography.trim() || undefined,
         profileImageUrl:
@@ -2770,8 +2783,8 @@ export default function PersonCreatePage() {
                   </ImagePreviewModal>
                 )}
 
-                {/* 이름 */}
-                <FormRow>
+                {/* 이름 (이름·이름 원어·뜻 사이 구분선 없음) */}
+                <FormRow $noBorder>
                   <FormLabel>
                     이름 <Required>*</Required>
                     <FormLabelHint>
@@ -2912,19 +2925,21 @@ export default function PersonCreatePage() {
                               $flash={errorFlashOn}
                             />
                           </NameInputWrapper>
-                          <NameInputWrapper>
-                            <NameLabel>중간이름 (선택)</NameLabel>
-                            <ErrorInput
-                              type="text"
-                              placeholder="예: Walker"
-                              value={formData.middleName}
-                              onChange={(e) =>
-                                handleInputChange('middleName', e.target.value)
-                              }
-                              $hasError={false}
-                              $flash={false}
-                            />
-                          </NameInputWrapper>
+                          {formData.nameFormat === 'western' && (
+                            <NameInputWrapper>
+                              <NameLabel>중간이름 (선택)</NameLabel>
+                              <ErrorInput
+                                type="text"
+                                placeholder="예: Walker"
+                                value={formData.middleName}
+                                onChange={(e) =>
+                                  handleInputChange('middleName', e.target.value)
+                                }
+                                $hasError={false}
+                                $flash={false}
+                              />
+                            </NameInputWrapper>
+                          )}
                         </NameRow>
                         {errors.name && <ErrorText>{errors.name}</ErrorText>}
                       </>
@@ -2941,7 +2956,7 @@ export default function PersonCreatePage() {
                 </FormRow>
 
                 {/* 이름 원어 (선택) */}
-                <FormRow>
+                <FormRow $noBorder>
                   <FormLabel>
                     이름 원어 (선택)
                     <FormLabelHint>
@@ -2961,6 +2976,57 @@ export default function PersonCreatePage() {
                       예시: 조지 부시 → George Bush | 마오쩌둥 → 毛澤東 |
                       블라디미르 푸틴 → Владимир Путин
                     </Hint>
+                  </FormField>
+                </FormRow>
+
+                {/* 성·이름(·서양식일 때만 중간이름)의 뜻 (선택) */}
+                <FormRow $noBorder>
+                  <FormLabel>
+                    {formData.nameFormat === 'korean'
+                      ? '성·이름의 뜻 (선택)'
+                      : '성·이름·중간이름의 뜻 (선택)'}
+                    <FormLabelHint>
+                      한자 훈·음 등 (예: 金 = 쇠 금, 承 = 이을 승)
+                    </FormLabelHint>
+                  </FormLabel>
+                  <FormField>
+                    <NameRow style={{ marginTop: 0 }}>
+                      <NameInputWrapper>
+                        <NameLabel>성의 뜻</NameLabel>
+                        <Input
+                          type="text"
+                          placeholder="예: 金 = 쇠 금"
+                          value={formData.surnameMeaning}
+                          onChange={(e) =>
+                            handleInputChange('surnameMeaning', e.target.value)
+                          }
+                        />
+                      </NameInputWrapper>
+                      <NameInputWrapper>
+                        <NameLabel>이름의 뜻</NameLabel>
+                        <Input
+                          type="text"
+                          placeholder="예: 承 = 이을 승"
+                          value={formData.nameMeaning}
+                          onChange={(e) =>
+                            handleInputChange('nameMeaning', e.target.value)
+                          }
+                        />
+                      </NameInputWrapper>
+                      {formData.nameFormat === 'western' && (
+                        <NameInputWrapper>
+                          <NameLabel>중간이름의 뜻</NameLabel>
+                          <Input
+                            type="text"
+                            placeholder="예: Walker"
+                            value={formData.middleNameMeaning}
+                            onChange={(e) =>
+                              handleInputChange('middleNameMeaning', e.target.value)
+                            }
+                          />
+                        </NameInputWrapper>
+                      )}
+                    </NameRow>
                   </FormField>
                 </FormRow>
 
@@ -7110,7 +7176,6 @@ const NameParseMeta = styled.div`
   color: #94a3b8;
   font-weight: 400;
 `
-
 
 const NameLabel = styled.label`
   font-size: 0.85rem;

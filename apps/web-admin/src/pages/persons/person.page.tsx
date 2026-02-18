@@ -120,6 +120,18 @@ export default function PersonPage() {
 
   const { data: historicalCountries } = useHistoricalCountries()
 
+  /** countryId로 현대 국가 또는 역사적 국가 객체 반환 (리스트/상세 국가 표시용) */
+  const resolveCountryById = useCallback(
+    (id: string | null | undefined): { id: string; name: string; flagEmoji?: string } | null => {
+      if (!id) return null
+      const fromModern = countries?.find((c) => c.id === id)
+      if (fromModern) return fromModern
+      const fromHistorical = (historicalCountries ?? []).find((c) => c.id === id)
+      return fromHistorical ?? null
+    },
+    [countries, historicalCountries],
+  )
+
   // Era 옵션
   const eraOptions = [
     { value: 'BC', label: '기원전' },
@@ -240,9 +252,7 @@ export default function PersonPage() {
             ? `AD ${formatYear(birthYear)} ~ 생존 (${currentAge}세)`
             : `${era(person.birthEra)} ${formatYear(birthYear)} ~`
           : '생몰년 미상'
-    const personCountry = person.countryId
-      ? countries?.find((c) => c.id === person.countryId)
-      : null
+    const personCountry = resolveCountryById(person.countryId)
     const personJob = (person as { jobId?: string }).jobId
       ? jobs?.find((j) => j.id === (person as { jobId?: string }).jobId)
       : null
@@ -292,6 +302,13 @@ export default function PersonPage() {
               <DetailName>{fullName}</DetailName>
               {person.originalName && (
                 <DetailOriginalName>{person.originalName}</DetailOriginalName>
+              )}
+              {(person.surnameMeaning || person.nameMeaning || person.middleNameMeaning) && (
+                <DetailNameMeaning>
+                  {[person.surnameMeaning, person.nameMeaning, person.middleNameMeaning]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </DetailNameMeaning>
               )}
             </DetailTitleBlock>
             <DetailField>
@@ -720,7 +737,7 @@ export default function PersonPage() {
                                   ? `AD ${formatYear(birthYear)} ~ 생존 (${currentAge}세)`
                                   : `${era(person.birthEra)} ${formatYear(birthYear)} ~`
                                 : '생몰년 미상'
-                          const personCountry = person.countryId ? countries?.find((c) => c.id === person.countryId) : null
+                          const personCountry = resolveCountryById(person.countryId)
                           const personJob = (person as { jobId?: string }).jobId ? jobs?.find((j) => j.id === (person as { jobId?: string }).jobId) : null
                           const personReligion = (person as { religionId?: string }).religionId ? religions?.find((r) => r.id === (person as { religionId?: string }).religionId) : null
                           const personDynasty = (person as { dynastyId?: string }).dynastyId ? dynasties?.find((d) => d.id === (person as { dynastyId?: string }).dynastyId) : null
@@ -2592,6 +2609,12 @@ const DetailOriginalName = styled.span`
   font-weight: 500;
   color: #64748b;
   font-style: italic;
+`
+
+const DetailNameMeaning = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
 `
 
 const DetailField = styled.div`

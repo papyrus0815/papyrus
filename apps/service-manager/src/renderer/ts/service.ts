@@ -155,6 +155,11 @@ async function renderServices(): Promise<void> {
       const status = getServiceStatus(service.id)
       const statusClass = status.toLowerCase()
       const canControl = service.canControl
+      const address = getServiceAddress(service.id)
+
+      const addressHtml = address
+        ? `<div class="service-address" title="${address.local}${address.network ? ' / ' + address.network : ''}">로컬: ${address.local}${address.network ? ` <span class="service-address-network">| 네트워크: ${address.network}</span>` : ''}</div>`
+        : ''
 
       return `
         <div class="service-item">
@@ -169,6 +174,7 @@ async function renderServices(): Promise<void> {
                     ? '시스템 서비스'
                     : '포트: 미설정'
               }</div>
+              ${addressHtml}
             </div>
             <div class="service-status ${statusClass}">${status}</div>
           </div>
@@ -188,6 +194,36 @@ async function renderServices(): Promise<void> {
     .join('')
 
   updateServiceButtons()
+}
+
+/**
+ * 실행 중일 때 포트 번호 반환. 중지 시 null
+ */
+function getServicePort(serviceId: string): number | null {
+  if (!window.cachedStatus?.papyrusServer) return null
+  const ps = window.cachedStatus.papyrusServer as ServiceStatusMap['papyrusServer']
+  switch (serviceId) {
+    case 'api':
+      return ps?.apiServer?.isRunning && ps.apiServer.port != null ? ps.apiServer.port : null
+    case 'web-admin':
+      return ps?.webAdminServer?.isRunning && ps.webAdminServer.port != null ? ps.webAdminServer.port : null
+    case 'web-user':
+      return ps?.webUserServer?.isRunning && ps.webUserServer.port != null ? ps.webUserServer.port : null
+    default:
+      return null
+  }
+}
+
+/**
+ * 실행 중일 때 로컬 주소와 네트워크 주소(전역 IP) 반환. 중지 시 null
+ */
+function getServiceAddress(serviceId: string): { local: string; network?: string } | null {
+  const port = getServicePort(serviceId)
+  if (port == null) return null
+  const local = `http://127.0.0.1:${port}`
+  const localIp = window.cachedStatus?.localIp as string | undefined
+  const network = localIp ? `http://${localIp}:${port}` : undefined
+  return { local, network }
 }
 
 /**
@@ -420,6 +456,37 @@ async function resetDocker(): Promise<void> {
   }
 }
 
+/**
+ * 전체 서비스 재시작 (중지 → 3초 대기 → 시작)
+ */
+async function restartServers(): Promise<void> {
+  const button = getElementById<HTMLButtonElement>('restartServersButton')
+  if (!button) return
+  const originalText = button.innerHTML
+
+  try {
+    setButtonDisabled('restartServersButton', true)
+    button.innerHTML = '<span class="spinner"></span> 재시작 중...'
+
+    console.log('🔄 서버 재시작 시작...')
+    const success = await window.electronAPI.restart()
+    handleApiResult(
+      { success, message: success ? '서버가 재시작되었습니다.' : '재시작에 실패했습니다.' },
+      '✅ 서버 재시작 완료',
+      '❌ 서버 재시작 실패',
+    )
+
+    if (typeof window.updateStatus === 'function') {
+      await window.updateStatus()
+    }
+  } catch (error) {
+    handleError(error, '서버 재시작 실패')
+  } finally {
+    setButtonDisabled('restartServersButton', false)
+    button.innerHTML = originalText
+  }
+}
+
 // 🌐 HTML에서 호출할 수 있도록 전역 window 객체에 등록
 window.renderServices = renderServices
 window.getServiceStatus = getServiceStatus
@@ -428,4 +495,5 @@ window.handleStart = handleStart
 window.handleStop = handleStop
 window.openUrl = openUrl
 window.resetDocker = resetDocker
+window.restartServers = restartServers
 window.clearEnvCache = clearEnvCache

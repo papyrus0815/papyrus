@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf } from 'class-validator'
 import { Type } from 'class-transformer'
 
 /**
@@ -96,12 +96,37 @@ export class CreatePersonDto {
   nameDisplayOrder?: 'korean' | 'western'
 
   /**
-   * 원어 이름 (Original Name)
+   * 원어 이름 (Original Name). null 가능 (빈값 저장 시)
    * @example "Franklin D. Roosevelt"
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  originalName?: string
+  originalName?: string | null
+
+  /**
+   * 성의 뜻 (예: 金 = 쇠 금). null 가능
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  surnameMeaning?: string | null
+
+  /**
+   * 이름의 뜻 (예: 承 = 이을 승, 煐 = 빛날 영). null 가능
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  nameMeaning?: string | null
+
+  /**
+   * 중간이름의 뜻. null 가능
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  middleNameMeaning?: string | null
 
   /**
    * 별명/호/필명 목록

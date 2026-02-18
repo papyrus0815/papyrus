@@ -600,6 +600,10 @@ function registerIpcHandlers() {
     return await serviceManager.stopAll()
   })
 
+  ipcMain.handle('service:restart', async () => {
+    return await serviceManager.restart()
+  })
+
   // Docker 제어
   ipcMain.handle('service:startDocker', async () => {
     const projectRoot =
@@ -1013,6 +1017,11 @@ function registerIpcHandlers() {
   // SDK 빌드
   ipcMain.handle('service:buildSdk', async () => {
     return await serviceManager.papyrusServerManager.buildNestiaSdk()
+  })
+
+  // Web 빌드
+  ipcMain.handle('service:buildWeb', async () => {
+    return await serviceManager.papyrusServerManager.buildWeb()
   })
 
   // 데이터베이스 마이그레이션

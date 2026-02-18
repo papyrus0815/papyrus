@@ -864,4 +864,53 @@ export class PapyrusServerManager {
       return false
     }
   }
+
+  /**
+   * Web(관리자/사용자 웹) 빌드
+   */
+  async buildWeb(projectRoot?: string): Promise<boolean> {
+    const root = projectRoot || this.projectRoot
+    try {
+      console.log('🌐 Web 빌드 시작...')
+      console.log(`   📂 프로젝트 경로: ${root}`)
+      console.log(`   🚀 실행 명령: npm run build:web`)
+
+      const { stdout, stderr } = await execAsync('npm run build:web', {
+        cwd: root,
+        encoding: 'utf8',
+        maxBuffer: 10 * 1024 * 1024, // 10MB
+      })
+
+      if (stdout) {
+        const lines = stdout.split('\n').filter((line) => line.trim())
+        lines.forEach((line) => {
+          if (
+            line.includes('✅') ||
+            line.includes('완료') ||
+            line.includes('Successfully') ||
+            line.includes('Build')
+          ) {
+            console.log(`   ${line}`)
+          }
+        })
+      }
+
+      if (stderr) {
+        const lines = stderr.split('\n').filter((line) => line.trim())
+        lines.forEach((line) => {
+          if (line.includes('error') || line.includes('Error')) {
+            console.error(`   ❌ ${line}`)
+          }
+        })
+      }
+
+      console.log('✅ Web 빌드 완료!')
+      return true
+    } catch (error: any) {
+      console.error('❌ Web 빌드 실패:', error.message)
+      if (error.stdout) console.error('   출력:', error.stdout)
+      if (error.stderr) console.error('   에러:', error.stderr)
+      return false
+    }
+  }
 }

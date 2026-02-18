@@ -36,7 +36,10 @@ export interface CreatePersonData {
   middleName?: string
   surname?: string
   nameDisplayOrder?: 'korean' | 'western'
-  originalName?: string
+  originalName?: string | null
+  surnameMeaning?: string | null
+  nameMeaning?: string | null
+  middleNameMeaning?: string | null
   birthDate?: Date
   deathDate?: Date
   isBirthDateUnknown?: boolean
@@ -70,7 +73,10 @@ export interface UpdatePersonData {
   middleName?: string
   surname?: string
   nameDisplayOrder?: 'korean' | 'western'
-  originalName?: string
+  originalName?: string | null
+  surnameMeaning?: string | null
+  nameMeaning?: string | null
+  middleNameMeaning?: string | null
   birthDate?: Date
   deathDate?: Date
   isBirthDateUnknown?: boolean

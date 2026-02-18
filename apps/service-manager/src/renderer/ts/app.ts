@@ -2,6 +2,7 @@
  * App Manager - 애플리케이션 초기화 및 전역 상태(상태 폴링, 콘솔 로그) 관리
  */
 // 모든 모듈을 먼저 import하여 초기화
+import './build.js'
 import './env.js'
 import './logs.js'
 import './nestia.js'

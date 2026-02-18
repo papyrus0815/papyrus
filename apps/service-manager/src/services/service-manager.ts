@@ -3,6 +3,8 @@
  * 모든 서비스를 통합 관리하는 서비스
  */
 
+import * as os from 'os'
+
 import { DockerManager, DockerStatus } from './docker-manager'
 import {
   PapyrusServerManager,
@@ -13,6 +15,29 @@ export interface ServiceStatus {
   docker: DockerStatus
   papyrusServer: PapyrusServerStatus
   allReady: boolean
+  /** 로컬 네트워크 IP (같은 LAN에서 접속용, 예: 192.168.0.10) */
+  localIp?: string
+}
+
+/**
+ * 로컬 네트워크에서 사용 중인 IPv4 주소 반환 (127.0.0.1 제외)
+ */
+function getLocalNetworkIp(): string | undefined {
+  try {
+    const interfaces = os.networkInterfaces()
+    for (const name of Object.keys(interfaces)) {
+      const iface = interfaces[name]
+      if (!iface) continue
+      for (const info of iface) {
+        if (info.family === 'IPv4' && !info.internal) {
+          return info.address
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return undefined
 }
 
 export class ServiceManager {
@@ -56,10 +81,13 @@ export class ServiceManager {
       papyrusServer.webUserServer.isRunning &&
       papyrusServer.apiServer.isRunning
 
+    const localIp = getLocalNetworkIp()
+
     return {
       docker,
       papyrusServer,
       allReady,
+      localIp,
     }
   }
 

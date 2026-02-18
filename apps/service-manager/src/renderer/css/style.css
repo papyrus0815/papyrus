@@ -609,6 +609,14 @@ body {
   color: #86868b;
 }
 
+.service-address {
+  font-size: 11px;
+  color: #86868b;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
 .service-status {
   padding: 4px 10px;
   border-radius: 10px;

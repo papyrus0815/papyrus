@@ -117,6 +117,10 @@
   color: rgba(255, 255, 255, 0.5);
 }
 
+.service-address {
+  color: rgba(255, 255, 255, 0.6);
+}
+
 /* 검색 입력 - 다크모드 */
 .search-input {
   background: rgba(255, 255, 255, 0.08);

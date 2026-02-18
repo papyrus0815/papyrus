@@ -143,6 +143,30 @@
 
             <div class="settings-section">
               <div class="settings-section-header">
+                <div class="settings-section-icon">🔄</div>
+                <div class="settings-section-title">서버 재시작</div>
+              </div>
+              <div class="settings-section-body">
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">전체 서비스 재시작</div>
+                    <div class="settings-row-description">
+                      Docker, API, 웹 서버를 모두 중지한 뒤 다시 시작합니다 (약 3초 대기 후 시작)
+                    </div>
+                  </div>
+                  <button
+                    class="macos-btn macos-btn-primary"
+                    onclick="restartServers()"
+                    id="restartServersButton"
+                  >
+                    재시작
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
                 <div class="settings-section-icon">🔨</div>
                 <div class="settings-section-title">Nestia SDK 빌드</div>
               </div>
@@ -175,6 +199,45 @@
                     id="validateNestiaButton"
                   >
                     검증
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-header">
+                <div class="settings-section-icon">🏗️</div>
+                <div class="settings-section-title">프로젝트 빌드</div>
+              </div>
+              <div class="settings-section-body">
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">API 빌드</div>
+                    <div class="settings-row-description">
+                      NestJS API 서버 빌드 (npm run build:api)
+                    </div>
+                  </div>
+                  <button
+                    class="macos-btn macos-btn-primary"
+                    onclick="runApiBuild()"
+                    id="buildApiButton"
+                  >
+                    빌드
+                  </button>
+                </div>
+                <div class="settings-row">
+                  <div>
+                    <div class="settings-row-label">Web 빌드</div>
+                    <div class="settings-row-description">
+                      관리자/사용자 웹 앱 빌드 (npm run build:web)
+                    </div>
+                  </div>
+                  <button
+                    class="macos-btn macos-btn-primary"
+                    onclick="runWebBuild()"
+                    id="buildWebButton"
+                  >
+                    빌드
                   </button>
                 </div>
               </div>
