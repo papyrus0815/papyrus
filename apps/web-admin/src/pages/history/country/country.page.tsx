@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-hot-toast'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+
+import { pathKeys } from '@/shared/router'
 
 import { type ContinentOption, type Country } from '@/entities/country/api'
 import { getSummaryMetrics } from '@/entities/country/lib/utils'
@@ -60,7 +62,13 @@ import * as S from './country.styles'
 export default function CountryPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const params = useParams<{ countryId?: string }>()
   const inHistory = location.pathname.startsWith('/history')
+
+  /** 경로 기반 URL의 countryId (현대/과거 국가 공통 고유 ID) */
+  const countryIdFromUrl = params.countryId ?? null
+  /** 역대 수반 탭 전용 URL 여부 (/history/country/:id/heads-of-state) */
+  const isHeadsOfStateUrl = location.pathname.includes('/heads-of-state')
 
   // ==================== API Hooks ====================
   // 현대 국가 데이터
@@ -156,10 +164,21 @@ export default function CountryPage() {
   const [editingHistorical, setEditingHistorical] =
     useState<HistoricalCountry | null>(null)
 
-  // UI 상태
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // UI 상태 (선택된 국가 ID — URL과 동기화, 직접 진입 시에도 URL 기준으로 초기화)
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => countryIdFromUrl || null,
+  )
+
+  // URL이 바뀌면 선택 상태 동기화 (다른 국가 클릭, 뒤로가기, 직접 URL 입력 등)
+  useEffect(() => {
+    setSelectedId(countryIdFromUrl || null)
+  }, [countryIdFromUrl])
+
   const [isLoading, setIsLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('dashboard')
+  // URL에 countryId가 있으면 목록 탭으로 열기 (직접 진입 시 상세 패널이 보이도록)
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>(() =>
+    countryIdFromUrl ? 'list' : 'dashboard',
+  )
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
 
@@ -221,29 +240,32 @@ export default function CountryPage() {
   /** 대시보드 통계 (총 인구, 평균 면적 등) */
   const metrics = useMemo(() => getSummaryMetrics(countries), [countries])
 
-  /** 현재 선택된 국가 */
+  /** 현재 선택된 국가 (URL 직접 진입 시에도 현대/과거 모두 조회) */
   const selectedCountry = useMemo(() => {
     if (!selectedId) return undefined
-    
-    // 1. 먼저 현대 국가에서 찾기
-    const modernCountry = unifiedCountries.find((country) => country.id === selectedId)
+
+    // 1. 현대 국가에서 찾기
+    const modernCountry = unifiedCountries.find((c) => c.id === selectedId)
     if (modernCountry) return modernCountry
-    
-    // 2. 역사적 국가에서 찾기
+
+    // 2. 현대 국가 하위 역사적 국가에서 찾기
     for (const country of unifiedCountries) {
       if (country.type === 'modern' && country.historicalCountries) {
-        const historicalCountry = country.historicalCountries.find(
-          (historical) => historical.id === selectedId
+        const historical = country.historicalCountries.find(
+          (h) => h.id === selectedId,
         )
-        if (historicalCountry) {
-          // 역사적 국가를 Country 타입으로 변환하여 반환
-          return historicalToUnified(historicalCountry)
-        }
+        if (historical) return historicalToUnified(historical)
       }
     }
-    
+
+    // 3. API 전체 역사적 국가에서 찾기 (URL 직접 접근 시 미연결 과거 국가도 표시)
+    const fromApi = (apiHistoricalCountries ?? []).find(
+      (hc) => hc.id === selectedId,
+    )
+    if (fromApi) return historicalToUnified(fromApi as HistoricalCountry)
+
     return undefined
-  }, [unifiedCountries, selectedId])
+  }, [unifiedCountries, selectedId, apiHistoricalCountries])
 
   /**
    * 필터링 및 정렬된 국가 목록
@@ -251,33 +273,38 @@ export default function CountryPage() {
    * - 대륙 필터 (현대 국가만 해당)
    * - 국가 타입 필터 (전체/현대/역사)
    * - 정렬 (이름/인구/면적)
+   *
+   * 역사적 국가: GET /historical-countries 전체를 사용해 표시 (연결 여부와 무관하게 DB에 있는 모든 역사적 국가 노출)
    */
   const filtered = useMemo(() => {
     const searchTextLower = query.trim().toLowerCase()
 
-    // 'historical' 필터: 모든 현대 국가의 역사 국가를 평평하게 표시
+    // 'historical' 필터: API에서 조회한 전체 역사적 국가 사용 (연결된 것만이 아님)
     if (countryTypeFilter === 'historical') {
-      const allHistoricalCountries: UnifiedCountry[] = []
-
+      const fromApi = (apiHistoricalCountries ?? []).map((hc) =>
+        historicalToUnified(hc as HistoricalCountry),
+      )
+      // 현대 국가 하위에만 있는 항목 중 API 목록에 없는 것도 포함 (이중화 방지를 위해 Set으로 id 관리)
+      const seenIds = new Set(fromApi.map((c) => c.id))
       unifiedCountries.forEach((country) => {
         if (country.type === 'modern' && country.historicalCountries) {
           country.historicalCountries.forEach((hc) => {
-            allHistoricalCountries.push(historicalToUnified(hc))
+            if (!seenIds.has(hc.id)) {
+              seenIds.add(hc.id)
+              fromApi.push(historicalToUnified(hc))
+            }
           })
         }
       })
 
-      // 검색 필터 적용
-      const result = allHistoricalCountries.filter((country) => {
+      const result = fromApi.filter((country) => {
         const matchSearch =
           !searchTextLower ||
           country.name.toLowerCase().includes(searchTextLower) ||
           (country.enName || '').toLowerCase().includes(searchTextLower)
-
         return matchSearch
       })
 
-      // 정렬
       return result.sort((countryA, countryB) => {
         if (sortBy === 'name') {
           return countryA.name.localeCompare(countryB.name, 'ko')
@@ -320,7 +347,14 @@ export default function CountryPage() {
 
       return 0
     })
-  }, [unifiedCountries, query, continentFilter, countryTypeFilter, sortBy])
+  }, [
+    unifiedCountries,
+    apiHistoricalCountries,
+    query,
+    continentFilter,
+    countryTypeFilter,
+    sortBy,
+  ])
 
   /** 탭별 카운트 (미사용 - 향후 확장용) */
   const countUnassigned = useMemo(
@@ -380,7 +414,7 @@ export default function CountryPage() {
         setIsMobileListOpen(true)
       } else {
         setIsMobileListOpen(false)
-        setSelectedId(null)
+        handleClearCountry()
       }
     }
 
@@ -392,6 +426,19 @@ export default function CountryPage() {
   }, [])
 
   // ==================== 이벤트 핸들러 ====================
+  /** 국가 선택 시 해당 국가 고유 URL로 이동 */
+  const handleSelectCountry = useCallback(
+    (id: string) => {
+      navigate(pathKeys.history.countryDetail(id))
+    },
+    [navigate],
+  )
+
+  /** 상세 닫기 시 URL에서 countryId 제거 */
+  const handleClearCountry = useCallback(() => {
+    navigate(pathKeys.history.country())
+  }, [navigate])
+
   /**
    * 현대 국가 삭제
    * - 사용자 확인 후 삭제
@@ -511,7 +558,7 @@ export default function CountryPage() {
 
       try {
         await deleteHistoricalMutation.mutateAsync(id)
-        setSelectedId(null)
+        handleClearCountry()
         toast.success('삭제되었습니다', { id: loadingToast })
       } catch (err) {
         toast.error('삭제 실패: ' + (err as Error).message, {
@@ -530,6 +577,7 @@ export default function CountryPage() {
   async function handleSaveHistorical(
     data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
       id?: string
+      parentModernCountryIds?: string[]
     },
   ) {
     const loadingToast = toast.loading(
@@ -549,6 +597,7 @@ export default function CountryPage() {
             startDate: data.startDate || null,
             endDate: data.endDate || null,
             stateType: data.stateType,
+            parentModernCountryIds: data.parentModernCountryIds,
           },
         })
         toast.success('수정되었습니다', { id: loadingToast })
@@ -562,6 +611,7 @@ export default function CountryPage() {
           startDate: data.startDate || undefined,
           endDate: data.endDate || undefined,
           stateType: data.stateType,
+          parentModernCountryIds: data.parentModernCountryIds,
         })
         toast.success('등록되었습니다', { id: loadingToast })
       }
@@ -676,7 +726,7 @@ export default function CountryPage() {
         onTabChange={(tab) => {
           setActiveTab(tab)
           if (tab === 'dashboard') {
-            setSelectedId(null)
+            handleClearCountry()
           }
         }}
         isMobileListOpen={isMobileListOpen}
@@ -685,7 +735,7 @@ export default function CountryPage() {
         filtered={filtered}
         continents={CONTINENTS}
         selectedId={selectedId}
-        onSelectCountry={setSelectedId}
+        onSelectCountry={handleSelectCountry}
         query={query}
         onQueryChange={setQuery}
         continentFilter={continentFilter}
@@ -704,7 +754,7 @@ export default function CountryPage() {
           filtered={filtered}
           continents={CONTINENTS}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={handleSelectCountry}
           query={query}
           onQueryChange={setQuery}
           continentFilter={continentFilter}
@@ -722,7 +772,7 @@ export default function CountryPage() {
           activeTab={activeTab}
           onTabChange={(tab) => {
             setActiveTab(tab)
-            setSelectedId(null) // 탭 전환 시 선택 해제
+            handleClearCountry()
           }}
           onAdd={() => setEditing({} as Country)}
           onAddHistorical={() => setEditingHistorical({} as HistoricalCountry)}
@@ -754,6 +804,15 @@ export default function CountryPage() {
               isLoading={isLoading}
               onEdit={setEditing}
               onDelete={handleDelete}
+              initialDetailTab={isHeadsOfStateUrl ? 'heads' : undefined}
+              onDetailTabChange={(tab: 'heads' | null) => {
+                if (!selectedId) return
+                if (tab === 'heads') {
+                  navigate(pathKeys.history.countryHeadsOfState(selectedId))
+                } else {
+                  navigate(pathKeys.history.countryDetail(selectedId))
+                }
+              }}
             />
           ) : (
             <CountryDetail

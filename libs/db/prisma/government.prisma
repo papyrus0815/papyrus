@@ -170,8 +170,11 @@ model GovernmentPositionDefinition {
   /// 직급/서열 (숫자가 작을수록 높은 직위, 예: 1=대통령, 2=국무총리)
   rank Int? @default(999)
 
-  /// 부서/부처명 (예: "외교부", "국방부", "이조")
+  /// 부서/부처명 (예: "외교부", "국방부", "이조") — 표시/과거명용, organizationId와 보완
   departmentName String? @map("department_name") @db.VarChar(100)
+
+  /// 소속 행정기구 (Organization FK). 있으면 표시 시 조직명 사용, 없으면 departmentName 사용
+  organizationId String? @map("organization_id") @db.Char(36)
 
   /// 소속 국가 (현대 국가)
   countryId String? @map("country_id") @db.Char(36)
@@ -186,6 +189,7 @@ model GovernmentPositionDefinition {
   abolishedDate DateTime? @map("abolished_date")
 
   //--- 관계 필드
+  organization      Organization?      @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
   country           Country?           @relation("GovernmentPositionCountry", fields: [countryId], references: [id], onDelete: SetNull)
   historicalCountry HistoricalCountry? @relation("GovernmentPositionHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
@@ -196,6 +200,7 @@ model GovernmentPositionDefinition {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([organizationId], name: "idx_gov_pos_def_organizationId")
   @@index([countryId], name: "idx_gov_pos_def_countryId")
   @@index([historicalCountryId], name: "idx_gov_pos_def_histCountryId")
   @@index([positionType], name: "idx_gov_pos_def_type")

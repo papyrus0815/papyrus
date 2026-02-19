@@ -11,6 +11,8 @@ import {
   CreateEducationDto,
   CreateGovernmentCareerDto,
   CreateGovernmentPositionTenureDto,
+  CreateGovernmentPositionDefinitionDto,
+  UpdateGovernmentPositionDefinitionDto,
   CreateLegalCareerDto,
   CreateMediaCareerDto,
   CreateMedicalCareerDto,
@@ -166,6 +168,18 @@ export interface IPersonRepository {
   ): Promise<any>
   deleteGovernmentPositionTenure(id: string): Promise<void>
   findTenuresByPersonId(personId: string): Promise<any[]>
+  findTenuresByCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<any[]>
+  findPositionDefinitions(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<any[]>
+  findPositionDefinitionById(id: string): Promise<any | null>
+  createPositionDefinition(dto: CreateGovernmentPositionDefinitionDto): Promise<any>
+  updatePositionDefinition(id: string, dto: UpdateGovernmentPositionDefinitionDto): Promise<any>
+  deletePositionDefinition(id: string): Promise<void>
   addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto>
   addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto>
   findAllCareers(personId: string): Promise<AllCareersResponseDto>

@@ -431,11 +431,13 @@ const ModalOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 24px;
   animation: fadeIn 0.2s ease;
 
   @keyframes fadeIn {
@@ -449,19 +451,20 @@ const ModalOverlay = styled.div`
 `
 
 const ModalBox = styled.div`
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 800px;
-  max-height: 80vh;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.15);
+  width: 100%;
+  max-width: 880px;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.3s ease;
+  overflow: hidden;
+  animation: slideUp 0.25s ease;
 
   @keyframes slideUp {
     from {
-      transform: translateY(20px);
+      transform: translateY(16px);
       opacity: 0;
     }
     to {
@@ -475,113 +478,108 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 24px 28px;
+  border-bottom: 1px solid #eee;
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: 22px;
+  font-weight: 600;
+  color: #111;
+  letter-spacing: -0.03em;
 `
 
 const ModalCloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: none;
-  background: rgba(148, 163, 184, 0.08);
-  color: #94a3b8;
-  border-radius: 10px;
+  background: #f5f5f5;
+  color: #666;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    color: #6366f1;
+    background: var(--color-primary-100, #f3e8ff);
+    color: var(--color-primary);
   }
 `
 
 const SearchSection = styled.div`
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  padding: 20px 28px;
+  border-bottom: 1px solid #eee;
 `
 
 const SearchInput = styled.input`
   width: 100%;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
-  border-radius: 10px;
+  padding: 16px 20px;
+  font-size: 16px;
+  color: #111;
+  border: 2px solid #eee;
+  border-radius: 12px;
   outline: none;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &::placeholder {
-    color: #94a3b8;
+    color: #999;
   }
 
   &:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px rgba(173, 70, 255, 0.12);
   }
 `
 
-// 좌우 분할 레이아웃
 const SplitModalBody = styled.div`
   display: grid;
-  grid-template-columns: 200px 1fr;
-  height: 500px;
+  grid-template-columns: 220px 1fr;
+  min-height: 420px;
   overflow: hidden;
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    height: auto;
+    min-height: auto;
   }
 `
 
-// 좌측 필터 사이드바
 const FilterSidebar = styled.div`
-  background: #f8fafc;
-  border-right: 1px solid rgba(226, 232, 240, 1);
+  background: #fafafa;
+  border-right: 1px solid #eee;
   overflow-y: auto;
-  padding: 12px 8px;
+  padding: 20px 16px;
 
   &::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
   }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
   &::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.3);
-    border-radius: 2px;
+    background: #ddd;
+    border-radius: 3px;
   }
 
   @media (max-width: 768px) {
     border-right: none;
-    border-bottom: 1px solid rgba(226, 232, 240, 1);
-    max-height: 200px;
+    border-bottom: 1px solid #eee;
+    max-height: 220px;
   }
 `
 
 const FilterSidebarHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #0f172a;
-  padding: 8px 12px;
-  margin-bottom: 8px;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+  padding: 0 4px 16px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #eee;
 
   svg {
-    color: #6366f1;
+    color: var(--color-primary);
   }
 `
 
@@ -589,99 +587,80 @@ const FilterBadge = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  background: #6366f1;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 9px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 11px;
   margin-left: auto;
 `
 
 const FilterGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0 4px;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 `
 
 const FilterLabel = styled.label`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: #555;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  margin-bottom: 8px;
 
   svg {
-    color: #6366f1;
+    color: var(--color-primary);
   }
 `
 
 const FilterSelect = styled.select`
-  padding: 8px 10px;
-  font-size: 13px;
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 14px;
   font-weight: 500;
-  color: #0f172a;
-  background: #ffffff;
-  border: 1.5px solid rgba(226, 232, 240, 1);
-  border-radius: 8px;
+  color: #111;
+  background: #fff;
+  border: 2px solid #eee;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
   outline: none;
+  transition: border-color 0.2s ease;
 
-  &:hover {
-    border-color: #6366f1;
-  }
-
-  &:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  }
-
-  option {
-    padding: 8px;
+  &:hover, &:focus {
+    border-color: var(--color-primary);
   }
 `
 
 const FilterDivider = styled.div`
   height: 1px;
-  background: rgba(226, 232, 240, 0.6);
-  margin: 8px 4px;
+  background: #eee;
+  margin: 16px 0;
 `
 
 const ResetFiltersButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 12px;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: 8px;
+  color: var(--color-primary);
+  background: var(--color-primary-100, #f3e8ff);
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin: 0 4px;
+  transition: opacity 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: #6366f1;
-  }
-
-  &:active {
-    transform: scale(0.98);
+    opacity: 0.9;
   }
 `
 
-// 우측 인물 리스트 영역
 const PersonsArea = styled.div`
   display: flex;
   flex-direction: column;
@@ -689,41 +668,24 @@ const PersonsArea = styled.div`
 `
 
 const PersonsHeader = styled.div`
-  padding: 12px 16px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  background: #ffffff;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
-
-  span {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+  padding: 16px 28px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  border-bottom: 1px solid #eee;
 `
 
 const PersonsList = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 20px 28px;
 
   &::-webkit-scrollbar {
     width: 8px;
   }
-
-  &::-webkit-scrollbar-track {
-    background: rgba(226, 232, 240, 0.3);
-    border-radius: 4px;
-  }
-
   &::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
+    background: #ddd;
     border-radius: 4px;
-
-    &:hover {
-      background: rgba(148, 163, 184, 0.6);
-    }
   }
 `
 
@@ -732,14 +694,14 @@ const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  color: #cbd5e1;
+  padding: 80px 24px;
+  color: #bbb;
 
   p {
-    margin: 16px 0 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: #94a3b8;
+    margin: 20px 0 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: #888;
   }
 `
 
@@ -747,48 +709,42 @@ const PersonCard = styled.button<{ $selected: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
-  padding: 12px 14px;
-  margin-bottom: 6px;
+  padding: 18px 20px;
+  margin-bottom: 10px;
   background: ${({ $selected }) =>
-    $selected ? 'rgba(99, 102, 241, 0.08)' : 'transparent'};
-  border: 1.5px solid
+    $selected ? 'var(--color-primary-100, #f3e8ff)' : '#fff'};
+  border: 2px solid
     ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.3)' : 'rgba(226, 232, 240, 0.6)'};
-  border-radius: 10px;
+      $selected ? 'var(--color-primary)' : '#eee'};
+  border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
 
   &:hover {
+    border-color: var(--color-primary);
     background: ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.04)'};
-    border-color: ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.4)' : 'rgba(99, 102, 241, 0.2)'};
-    transform: translateX(4px);
-  }
-
-  &:active {
-    transform: translateX(2px);
+      $selected ? 'var(--color-primary-100, #f3e8ff)' : 'var(--color-primary-100, #faf5ff)'};
   }
 `
 
 const PersonCardContent = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 18px;
   width: 100%;
 `
 
 const PersonAvatar = styled.div<{ $selected?: boolean }>`
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: ${({ $selected }) =>
-    $selected ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : '#e2e8f0'};
-  border-radius: 10px;
-  color: ${({ $selected }) => ($selected ? '#ffffff' : '#64748b')};
+    $selected ? 'var(--color-primary)' : '#f0f0f0'};
+  border-radius: 14px;
+  color: ${({ $selected }) => ($selected ? '#fff' : '#888')};
   flex-shrink: 0;
   overflow: hidden;
 
@@ -804,45 +760,40 @@ const PersonMainInfo = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 `
 
 const PersonNameRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-
-  svg {
-    color: #6366f1;
-    flex-shrink: 0;
-  }
+  gap: 12px;
 `
 
 const PersonName = styled.div`
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 600;
-  color: #0f172a;
-  letter-spacing: -0.2px;
+  color: #111;
+  letter-spacing: -0.02em;
 `
 
 const PersonMetaRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   flex-wrap: wrap;
 `
 
 const PersonMeta = styled.div`
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: #666;
 
   svg {
-    color: #6366f1;
+    color: var(--color-primary);
     flex-shrink: 0;
   }
 
@@ -850,45 +801,41 @@ const PersonMeta = styled.div`
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100px;
+    max-width: 120px;
   }
 `
 
 const PersonDates = styled.div<{ $empty?: boolean }>`
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
-  color: ${({ $empty }) => ($empty ? '#94a3b8' : '#64748b')};
+  color: ${({ $empty }) => ($empty ? '#999' : '#666')};
 `
 
-// 토글 버튼
 const ToggleButton = styled.div<{ $selected: boolean }>`
   position: relative;
-  width: 40px;
-  height: 22px;
+  width: 44px;
+  height: 24px;
   background: ${({ $selected }) =>
-    $selected ? '#6366f1' : 'rgba(203, 213, 225, 0.5)'};
-  border-radius: 11px;
+    $selected ? 'var(--color-primary)' : '#e0e0e0'};
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   flex-shrink: 0;
-  border: 2px solid
-    ${({ $selected }) => ($selected ? '#6366f1' : 'rgba(203, 213, 225, 0.8)')};
+  border: none;
 
   &:hover {
-    background: ${({ $selected }) =>
-      $selected ? '#4f46e5' : 'rgba(203, 213, 225, 0.7)'};
-    border-color: ${({ $selected }) => ($selected ? '#4f46e5' : '#cbd5e1')};
+    opacity: 0.9;
   }
 `
 
 const ToggleSlider = styled.div<{ $selected: boolean }>`
   position: absolute;
   top: 2px;
-  left: ${({ $selected }) => ($selected ? '20px' : '2px')};
-  width: 14px;
-  height: 14px;
-  background: #ffffff;
+  left: ${({ $selected }) => ($selected ? '22px' : '2px')};
+  width: 20px;
+  height: 20px;
+  background: #fff;
   border-radius: 50%;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 `

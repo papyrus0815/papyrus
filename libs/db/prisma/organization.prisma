@@ -212,6 +212,9 @@ model Organization {
   legalCareers       LegalCareer[]       @relation("LegalOrganization")
   medicalCareers     MedicalCareer[]     @relation("MedicalOrganization")
 
+  /// 이 조직을 소속으로 참조하는 정부 직위 정의 (government.prisma)
+  governmentPositionDefinitions GovernmentPositionDefinition[] @relation("GovernmentPositionOrganization")
+
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -219,6 +222,7 @@ model Organization {
   @@index([type], name: "idx_organization_type")
   @@index([scope], name: "idx_organization_scope")
   @@index([countryId], name: "idx_organization_countryId")
+  @@index([historicalCountryId], name: "idx_organization_historicalCountryId")
   @@index([headquartersCityId], name: "idx_organization_hqCityId")
   @@map("organization")
 }

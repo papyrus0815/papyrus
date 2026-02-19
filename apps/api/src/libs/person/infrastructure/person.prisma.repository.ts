@@ -34,6 +34,8 @@ import {
   CreateEducationDto,
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
+  CreateGovernmentPositionDefinitionDto,
+  UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
   GovernmentCareerResponseDto,
@@ -1301,6 +1303,142 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 관직 정의 목록 조회 (국가/역사적 국가별)
+   */
+  async findPositionDefinitions(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<any[]> {
+    const where: any = {}
+    if (params.countryId) where.countryId = params.countryId
+    if (params.historicalCountryId)
+      where.historicalCountryId = params.historicalCountryId
+    const list = await this.prisma.governmentPositionDefinition.findMany({
+      where,
+      include: {
+        organization: true,
+        country: true,
+        historicalCountry: true,
+      },
+      orderBy: [{ rank: 'asc' }, { title: 'asc' }],
+    })
+    return list.map((row) => this.serializeDefinition(row))
+  }
+
+  /**
+   * 관직 정의 단건 조회
+   */
+  async findPositionDefinitionById(id: string): Promise<any | null> {
+    const row = await this.prisma.governmentPositionDefinition.findUnique({
+      where: { id },
+      include: {
+        organization: true,
+        country: true,
+        historicalCountry: true,
+      },
+    })
+    return row ? this.serializeDefinition(row) : null
+  }
+
+  /**
+   * 관직 정의 생성
+   */
+  async createPositionDefinition(
+    dto: CreateGovernmentPositionDefinitionDto,
+  ): Promise<any> {
+    const row = await this.prisma.governmentPositionDefinition.create({
+      data: {
+        title: dto.title,
+        titleEn: dto.titleEn ?? undefined,
+        titleLocal: dto.titleLocal ?? undefined,
+        positionType: dto.positionType as any,
+        description: dto.description ?? undefined,
+        rank: dto.rank ?? undefined,
+        departmentName: dto.departmentName ?? undefined,
+        organizationId: dto.organizationId ?? undefined,
+        countryId: dto.countryId ?? undefined,
+        historicalCountryId: dto.historicalCountryId ?? undefined,
+        establishedDate: dto.establishedDate
+          ? new Date(dto.establishedDate)
+          : undefined,
+        abolishedDate: dto.abolishedDate
+          ? new Date(dto.abolishedDate)
+          : undefined,
+      },
+      include: {
+        organization: true,
+        country: true,
+        historicalCountry: true,
+      },
+    })
+    return this.serializeDefinition(row)
+  }
+
+  /**
+   * 관직 정의 수정
+   */
+  async updatePositionDefinition(
+    id: string,
+    dto: UpdateGovernmentPositionDefinitionDto,
+  ): Promise<any> {
+    const data: any = {}
+    if (dto.title !== undefined) data.title = dto.title
+    if (dto.titleEn !== undefined) data.titleEn = dto.titleEn
+    if (dto.titleLocal !== undefined) data.titleLocal = dto.titleLocal
+    if (dto.positionType !== undefined) data.positionType = dto.positionType
+    if (dto.description !== undefined) data.description = dto.description
+    if (dto.rank !== undefined) data.rank = dto.rank
+    if (dto.departmentName !== undefined) data.departmentName = dto.departmentName
+    if (dto.organizationId !== undefined) data.organizationId = dto.organizationId
+    if (dto.countryId !== undefined) data.countryId = dto.countryId
+    if (dto.historicalCountryId !== undefined)
+      data.historicalCountryId = dto.historicalCountryId
+    if (dto.establishedDate !== undefined)
+      data.establishedDate = dto.establishedDate
+        ? new Date(dto.establishedDate)
+        : null
+    if (dto.abolishedDate !== undefined)
+      data.abolishedDate = dto.abolishedDate
+        ? new Date(dto.abolishedDate)
+        : null
+    const row = await this.prisma.governmentPositionDefinition.update({
+      where: { id },
+      data,
+      include: {
+        organization: true,
+        country: true,
+        historicalCountry: true,
+      },
+    })
+    return this.serializeDefinition(row)
+  }
+
+  /**
+   * 관직 정의 삭제
+   */
+  async deletePositionDefinition(id: string): Promise<void> {
+    await this.prisma.governmentPositionDefinition.delete({
+      where: { id },
+    })
+  }
+
+  private serializeDefinition(row: any): any {
+    const serialize = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serialize)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serialize(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serialize(row)
+  }
+
+  /**
    * 학력 추가
    */
   async addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
@@ -1347,6 +1485,56 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
+      },
+      orderBy: { startDate: 'desc' },
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(tenures)
+  }
+
+  /**
+   * 국가 또는 역사적 국가별 재임 기록 조회 (연대표 국가 페이지 수장 목록용)
+   */
+  async findTenuresByCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<any[]> {
+    const { countryId, historicalCountryId } = params
+    if (!countryId && !historicalCountryId) return []
+
+    const where = countryId
+      ? { countryId }
+      : historicalCountryId
+        ? { historicalCountryId }
+        : {}
+
+    const tenures = await this.prisma.governmentPositionTenure.findMany({
+      where,
+      include: {
+        positionDefinition: true,
+        country: true,
+        historicalCountry: true,
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            nameDisplayOrder: true,
+            profileImageUrl: true,
+          },
+        },
       },
       orderBy: { startDate: 'desc' },
     })

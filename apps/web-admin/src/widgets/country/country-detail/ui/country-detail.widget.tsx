@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react'
+import React, { useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -15,6 +15,8 @@ import { StatisticsModal } from './StatisticsModal'
 import { ChartsSection } from './charts-section.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
+import { HeadsOfStateSection } from './heads-of-state-section.widget'
+import { PositionDefinitionsSection } from './position-definitions-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { HistorySection } from './history-section.widget'
 import { KPIGrid } from './kpi-grid.widget'
@@ -99,12 +101,15 @@ const importData = [
   { category: '화학제품', value: 38 },
 ]
 
-interface CountryDetailProps {
+export interface CountryDetailProps {
   country: UnifiedCountry | null
   continents: ContinentOption[]
   isLoading?: boolean
   onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
+  /** URL 연동: 역대 수반 등 특정 탭으로 진입 시 */
+  initialDetailTab?: 'heads'
+  onDetailTabChange?: (tab: 'heads' | null) => void
 }
 
 /**
@@ -116,6 +121,8 @@ export function CountryDetail({
   isLoading = false,
   onEdit,
   onDelete,
+  initialDetailTab,
+  onDetailTabChange,
 }: CountryDetailProps) {
   const [activeTab, setActiveTab] = useState<CountryDetailTab>('overview')
   const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>('statistics')
@@ -163,6 +170,8 @@ export function CountryDetail({
         isLoading={isLoading}
         onEdit={onEdit}
         onDelete={onDelete}
+        initialTab={initialDetailTab === 'heads' ? 'heads' : undefined}
+        onTabChangeToUrl={onDetailTabChange}
       />
     )
   }
@@ -341,11 +350,18 @@ export function CountryDetail({
                       )}
 
                       {activeSubTab === 'government' && (
-                        <GovernmentInfoSection />
+                        <>
+                          <GovernmentInfoSection />
+                          <PositionDefinitionsSection country={country} />
+                        </>
                       )}
 
                       {activeSubTab === 'person' && (
                         <PersonStatsSection countryId={country.id} />
+                      )}
+
+                      {activeSubTab === 'heads' && (
+                        <HeadsOfStateSection country={country} />
                       )}
 
                       {activeSubTab === 'history' && (

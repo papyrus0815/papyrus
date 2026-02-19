@@ -35,3 +35,39 @@ export const EventsIcon: React.FC = () => (
     />
   </svg>
 )
+
+export const GovernmentIcon: React.FC = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 2L2 9v2h2v9h4v-6h4v6h4v-9h2V9L12 2zm0 2.5l6 4.5v1H6v-1l6-4.5z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+export const SuccessionIcon: React.FC = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 2l3 6h6l-5 4 2 6-6-4-6 4 2-6-5-4h6L12 2z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+export const TerritoryIcon: React.FC = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+export const CultureIcon: React.FC = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
+      fill="currentColor"
+    />
+  </svg>
+)

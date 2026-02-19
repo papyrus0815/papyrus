@@ -6,9 +6,19 @@ import { EventsIcon, MilitaryIcon, OverviewIcon, PeopleIcon } from './TabIcons'
 
 export type CountryDetailTab = 'overview' | 'people' | 'military' | 'events'
 
+export interface TabConfigItem {
+  id: string
+  label: string
+  Icon: React.FC
+}
+
 interface CountryDetailTabsProps {
-  activeTab: CountryDetailTab
-  onTabChange: (tab: CountryDetailTab) => void
+  activeTab: CountryDetailTab | string
+  onTabChange: (tab: CountryDetailTab | string) => void
+  /** 역사적 국가 등 커스텀 탭 사용 시 전달 */
+  customTabs?: TabConfigItem[]
+  /** true면 우측 탭 패널을 처음부터 열어둠 (역사적 국가 등 탭이 많을 때 권장) */
+  defaultOpen?: boolean
 }
 
 interface TabConfig {
@@ -220,9 +230,12 @@ const MobileTabButton = styled.button<{ $active: boolean }>`
 export const CountryDetailTabs: React.FC<CountryDetailTabsProps> = ({
   activeTab,
   onTabChange,
+  customTabs,
+  defaultOpen = false,
 }) => {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(defaultOpen)
   const containerRef = useRef<HTMLDivElement>(null)
+  const tabs = customTabs ?? TAB_CONFIGS
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -245,7 +258,7 @@ export const CountryDetailTabs: React.FC<CountryDetailTabsProps> = ({
   }, [isOpen])
 
   const getActiveTabLabel = () => {
-    const config = TAB_CONFIGS.find((tab) => tab.id === activeTab)
+    const config = tabs.find((tab) => tab.id === activeTab)
     return config?.label || '메뉴'
   }
 
@@ -265,7 +278,7 @@ export const CountryDetailTabs: React.FC<CountryDetailTabsProps> = ({
       <TabsContainer ref={containerRef} $isOpen={isOpen}>
         <MenuTitle>{getActiveTabLabel()}</MenuTitle>
 
-        {TAB_CONFIGS.map(({ id, label, Icon }) => (
+        {tabs.map(({ id, label, Icon }) => (
           <TabButton
             key={id}
             $active={activeTab === id}
@@ -282,7 +295,7 @@ export const CountryDetailTabs: React.FC<CountryDetailTabsProps> = ({
 
       {/* 모바일: 상단 메뉴 */}
       <MobileContainer>
-        {TAB_CONFIGS.map(({ id, label, Icon }) => (
+        {tabs.map(({ id, label, Icon }) => (
           <MobileTabButton
             key={id}
             $active={activeTab === id}

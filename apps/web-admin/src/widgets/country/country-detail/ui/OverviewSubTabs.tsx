@@ -4,7 +4,13 @@ import styled from 'styled-components'
 
 import * as S from '@/pages/history/country/country.styles'
 
-export type OverviewSubTab = 'statistics' | 'map' | 'government' | 'person' | 'history'
+export type OverviewSubTab =
+  | 'statistics'
+  | 'map'
+  | 'government'
+  | 'person'
+  | 'heads'
+  | 'history'
 
 interface OverviewSubTabsProps {
   activeSubTab: OverviewSubTab
@@ -47,6 +53,12 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             onClick={() => onSubTabChange('person')}
           >
             인물
+          </S.TabButton>
+          <S.TabButton
+            $active={activeSubTab === 'heads'}
+            onClick={() => onSubTabChange('heads')}
+          >
+            역대 수반
           </S.TabButton>
           <S.TabButton
             $active={activeSubTab === 'history'}

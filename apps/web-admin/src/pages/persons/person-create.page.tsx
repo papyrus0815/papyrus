@@ -311,6 +311,7 @@ export default function PersonCreatePage() {
   const [searchParams] = useSearchParams()
   const { id } = useParams<{ id: string }>() // 수정 모드: ID가 있으면 수정
   const presetCountryId = searchParams.get('countryId')
+  const presetTenureId = searchParams.get('tenureId') // 역대수반 목록에서 클릭 시 해당 재임 포커스
   const playClick = useClickSound()
 
   const isEditMode = !!id // 수정 모드 여부
@@ -772,6 +773,13 @@ export default function PersonCreatePage() {
               },
             )
             setCareers(combined)
+            if (
+              presetTenureId &&
+              combined.some((c) => c.id === presetTenureId)
+            ) {
+              setActiveCareerId(presetTenureId)
+              setCurrentStep('career')
+            }
             console.log(
               `✅ 경력 로드 완료: 재임 ${tenureCareers.length}건, 정부/공무원 ${governmentCareers.length}건`,
             )

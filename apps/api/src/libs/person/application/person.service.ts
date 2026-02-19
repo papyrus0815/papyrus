@@ -19,6 +19,8 @@ import {
   CreateEducationDto,
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
+  CreateGovernmentPositionDefinitionDto,
+  UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
   GovernmentCareerResponseDto,
@@ -205,6 +207,65 @@ export class PersonService {
    */
   async findTenuresByPersonId(personId: string): Promise<any[]> {
     return this.personRepository.findTenuresByPersonId(personId)
+  }
+
+  /**
+   * 국가 또는 역사적 국가별 재임 기록 조회 (연대표 국가 페이지 수장 목록용)
+   */
+  async findTenuresByCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<any[]> {
+    return this.personRepository.findTenuresByCountry(params)
+  }
+
+  /**
+   * 관직 정의 목록 조회
+   */
+  async findPositionDefinitions(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<any[]> {
+    return this.personRepository.findPositionDefinitions(params)
+  }
+
+  /**
+   * 관직 정의 단건 조회
+   */
+  async findPositionDefinitionById(id: string): Promise<any> {
+    const def = await this.personRepository.findPositionDefinitionById(id)
+    if (!def) {
+      throw new NotFoundException(`관직 정의를 찾을 수 없습니다 (ID: ${id})`)
+    }
+    return def
+  }
+
+  /**
+   * 관직 정의 생성
+   */
+  async createPositionDefinition(
+    dto: CreateGovernmentPositionDefinitionDto,
+  ): Promise<any> {
+    return this.personRepository.createPositionDefinition(dto)
+  }
+
+  /**
+   * 관직 정의 수정
+   */
+  async updatePositionDefinition(
+    id: string,
+    dto: UpdateGovernmentPositionDefinitionDto,
+  ): Promise<any> {
+    await this.findPositionDefinitionById(id)
+    return this.personRepository.updatePositionDefinition(id, dto)
+  }
+
+  /**
+   * 관직 정의 삭제
+   */
+  async deletePositionDefinition(id: string): Promise<void> {
+    await this.findPositionDefinitionById(id)
+    return this.personRepository.deletePositionDefinition(id)
   }
 
   /**

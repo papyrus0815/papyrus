@@ -21,6 +21,12 @@ export const pathKeys = {
   history: {
     root: () => `/${ROUTES.HISTORY.ROOT}/`,
     country: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/`,
+    /** 국가 상세 고유 URL (경로 기반) */
+    countryDetail: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/`,
+    /** 국가 상세 내 역대 수반 탭 고유 URL */
+    countryHeadsOfState: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/heads-of-state/`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
   },
 

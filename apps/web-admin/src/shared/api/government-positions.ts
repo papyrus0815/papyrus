@@ -31,6 +31,12 @@ export interface GovernmentPositionDefinition {
   description?: string
   rank?: number
   departmentName?: string
+  organizationId?: string | null
+  organization?: {
+    id: string
+    name: string
+    shortName?: string | null
+  } | null
   countryId?: string
   historicalCountryId?: string
   country?: {
@@ -41,6 +47,8 @@ export interface GovernmentPositionDefinition {
     id: string
     name: string
   }
+  establishedDate?: string | null
+  abolishedDate?: string | null
 }
 
 /**

@@ -571,9 +571,7 @@ export function CountryList({
                               >
                                 <S.ListRow
                                   $active={historical.id === selectedId}
-                                  onClick={() => {
-                                    onSelect(historical.id)
-                                  }}
+                                  onClick={() => onSelect(historical.id)}
                                   className="historical-sub-item"
                                   style={{
                                     background:

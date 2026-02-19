@@ -1,13 +1,87 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import * as CountryStyles from '@/pages/history/country/country.styles'
 
 import { historicalCountryMockData } from '../mock/historical-country.mock'
-import * as CountryDetailStyles from './CountryDetail.styles'
+import { CountryFlag } from '../../shared'
+import * as S from './CountryDetail.styles'
+import { HeadsOfStateSection } from './heads-of-state-section.widget'
+import { PositionDefinitionsSection } from './position-definitions-section.widget'
 import { LoadingOverlay } from './LoadingOverlay'
+
+// 역사적 국가 전용 컴팩트 스타일 (자리 최소화)
+const CompactFlagWrapper = styled(S.MiniFlagWrapper)`
+  height: 200px;
+  @media (max-width: 768px) {
+    height: 160px;
+  }
+`
+const CompactNameOverlay = styled(S.CountryNameOverlay)`
+  top: 20px;
+  left: 20px;
+  @media (max-width: 768px) {
+    top: 12px;
+    left: 16px;
+  }
+`
+const CompactCountryName = styled(S.AnalyticsCountryName)`
+  font-size: 28px;
+  @media (max-width: 768px) {
+    font-size: 22px;
+  }
+`
+const CompactCountryLocalName = styled(S.AnalyticsCountryLocalName)`
+  font-size: 14px;
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
+`
+const CompactStrip = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 6px;
+  margin-bottom: 0;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color-light, #e5e7eb);
+  min-height: 0;
+`
+const CompactBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e5e7eb;
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  & span:last-child {
+    font-size: 12px;
+    color: #111827;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: -0.01em;
+  }
+`
+const CompactTabBar = styled(CountryStyles.TabBar)`
+  padding: 0;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+`
+const CompactTabButton = styled(CountryStyles.TabButton)`
+  padding: 8px 12px;
+  font-size: 12px;
+`
 
 // ============================================
 // 역사적 국가 전용 탭 타입
@@ -17,6 +91,8 @@ export type HistoricalCountryTab =
   | 'overview' // 역사 개요
   | 'events' // 주요 사건 (메인)
   | 'figures' // 주요 인물
+  | 'heads' // 수장 (국왕, 황제 등)
+  | 'government' // 행정조직 (관직 정의, 행정기구)
   | 'succession' // 계승 관계
   | 'territory' // 영토 변천
   | 'culture' // 문화 유산
@@ -111,6 +187,10 @@ interface HistoricalCountryDetailProps {
   isLoading?: boolean
   onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
+  /** URL 연동: 역대 수반 탭으로 직접 진입 시 */
+  initialTab?: 'heads'
+  /** 탭 변경 시 URL 업데이트용 (heads일 때만 호출, 그 외 null) */
+  onTabChangeToUrl?: (tab: 'heads' | null) => void
 }
 
 /**
@@ -121,8 +201,24 @@ export function HistoricalCountryDetail({
   isLoading = false,
   onEdit,
   onDelete,
+  initialTab,
+  onTabChangeToUrl,
 }: HistoricalCountryDetailProps) {
-  const [activeTab, setActiveTab] = useState<HistoricalCountryTab>('overview')
+  const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(
+    () => initialTab ?? 'overview',
+  )
+
+  const handleTabChange = (tab: HistoricalCountryTab) => {
+    setActiveTab(tab)
+    onTabChangeToUrl?.(tab === 'heads' ? 'heads' : null)
+  }
+
+  // URL에서 직접 진입·뒤로가기 시 탭 동기화
+  useEffect(() => {
+    if (initialTab === 'heads') setActiveTab('heads')
+    else if (!initialTab)
+      setActiveTab((prev) => (prev === 'heads' ? 'overview' : prev))
+  }, [initialTab])
 
   // 존속 기간 포맷팅
   const formatPeriod = () => {
@@ -156,31 +252,29 @@ export function HistoricalCountryDetail({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            style={{ height: '100%', overflow: 'auto' }}
+            transition={{ duration: 0.15 }}
+            style={{ width: '100%', height: '100%' }}
           >
-            <CountryStyles.DetailPane
+            <CountryStyles.AnalyticsDashboard
               as={motion.div}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               style={{ gap: 0 }}
             >
-              {/* 역사적 국가 헤더 */}
               <HistoricalCountryHeader
                 country={country}
-                period={formatPeriod()}
-                duration={calculateDuration()}
                 onEdit={onEdit}
                 onDelete={onDelete}
               />
 
-              {/* 탭 네비게이션 */}
               <HistoricalCountryTabs
+                country={country}
+                period={formatPeriod()}
+                duration={calculateDuration()}
                 activeTab={activeTab}
-                onTabChange={setActiveTab}
+                onTabChange={handleTabChange}
               />
 
-              {/* 탭 콘텐츠 */}
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeTab}
@@ -198,6 +292,12 @@ export function HistoricalCountryDetail({
                   {activeTab === 'figures' && (
                     <HistoricalFiguresSection country={country} />
                   )}
+                  {activeTab === 'heads' && (
+                    <HeadsOfStateSection country={country} />
+                  )}
+                  {activeTab === 'government' && (
+                    <PositionDefinitionsSection country={country} />
+                  )}
                   {activeTab === 'succession' && (
                     <SuccessionSection country={country} />
                   )}
@@ -209,7 +309,7 @@ export function HistoricalCountryDetail({
                   )}
                 </motion.div>
               </AnimatePresence>
-            </CountryStyles.DetailPane>
+            </CountryStyles.AnalyticsDashboard>
           </motion.div>
         )}
       </AnimatePresence>
@@ -218,290 +318,146 @@ export function HistoricalCountryDetail({
 }
 
 // ============================================
-// 역사적 국가 헤더
+// 역사적 국가 헤더 (현대 국가와 동일 레이아웃/스타일)
 // ============================================
 
 interface HistoricalCountryHeaderProps {
   country: UnifiedCountry
-  period: string
-  duration: string | null
   onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
 }
 
 function HistoricalCountryHeader({
   country,
-  period,
-  duration,
   onEdit,
   onDelete,
 }: HistoricalCountryHeaderProps) {
   return (
-    <div
-      style={{
-        padding: '32px 48px',
-        background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-        borderBottom: '2px solid #f1f5f9',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        {/* 국가명 & 액션 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            marginBottom: '24px',
-          }}
+    <>
+      <CompactFlagWrapper
+        as={motion.div}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+      >
+        <motion.div
+          initial={{ scale: 1.1, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          style={{ width: '100%', height: '100%' }}
         >
-          <div
-            style={{
-              display: 'flex',
-              gap: '24px',
-              alignItems: 'center',
-              flex: 1,
+          <CountryFlag
+            thumbnailUrl={country.thumbnailUrl}
+            countryName={country.name}
+            size="full"
+          />
+        </motion.div>
+
+        <CompactNameOverlay
+          as={motion.div}
+          initial={{ x: -30, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <motion.div whileHover={{ x: 4, transition: { duration: 0.2 } }}>
+            <CompactCountryName>{country.name}</CompactCountryName>
+          </motion.div>
+          {country.enName && (
+            <motion.div whileHover={{ x: 4, transition: { duration: 0.2 } }}>
+              <CompactCountryLocalName>
+                {country.enName}
+              </CompactCountryLocalName>
+            </motion.div>
+          )}
+        </CompactNameOverlay>
+
+        <S.FlagGradientOverlay />
+      </CompactFlagWrapper>
+
+      {(onEdit || onDelete) && (
+        <S.CompactKebabMenu
+          as={motion.div}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+        >
+          <S.KebabButton
+            as={motion.button}
+            whileHover={{ scale: 1.1, rotate: 90 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => {
+              e.stopPropagation()
+              const menu = e.currentTarget.nextElementSibling as HTMLElement
+              if (menu) {
+                menu.style.display =
+                  menu.style.display === 'block' ? 'none' : 'block'
+              }
             }}
           >
-            {country.thumbnailUrl && (
-              <div
-                style={{
-                  width: '100px',
-                  height: '100px',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  border: '2px solid #e2e8f0',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-                  background: 'white',
-                }}
-              >
-                <img
-                  src={country.thumbnailUrl}
-                  alt={country.name}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                />
-              </div>
-            )}
-            <div>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  marginBottom: '8px',
-                }}
-              >
-                <h1
-                  style={{
-                    fontSize: '32px',
-                    fontWeight: 800,
-                    margin: 0,
-                    color: '#0f172a',
-                    letterSpacing: '-0.02em',
-                  }}
-                >
-                  {country.name}
-                </h1>
-                {country.stateType && (
-                  <span
-                    style={{
-                      padding: '6px 14px',
-                      background:
-                        'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                      border: '2px solid #3b82f6',
-                      borderRadius: '10px',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: '#1e40af',
-                      letterSpacing: '-0.01em',
-                    }}
-                  >
-                    {getStateTypeLabel(country.stateType)}
-                  </span>
-                )}
-              </div>
-              {country.enName && (
-                <p
-                  style={{
-                    fontSize: '15px',
-                    color: '#64748b',
-                    margin: 0,
-                    fontWeight: 600,
-                  }}
-                >
-                  {country.enName}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* 액션 버튼 */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="12" cy="19" r="1.5" />
+            </svg>
+          </S.KebabButton>
+          <S.DropdownMenu>
             {onEdit && (
-              <button
-                onClick={() => onEdit(country)}
-                style={{
-                  padding: '10px 20px',
-                  background: '#fff',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: '10px',
-                  color: '#64748b',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#f1f5f9'
-                  e.currentTarget.style.borderColor = '#cbd5e1'
-                  e.currentTarget.style.transform = 'translateY(-1px)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#fff'
-                  e.currentTarget.style.borderColor = '#e5e7eb'
-                  e.currentTarget.style.transform = 'translateY(0)'
+              <S.DropdownButton
+                as={motion.button}
+                whileHover={{ x: 4 }}
+                transition={{ duration: 0.2 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit(country)
+                  const menu = e.currentTarget.parentElement as HTMLElement
+                  if (menu) menu.style.display = 'none'
                 }}
               >
-                편집
-              </button>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                수정
+              </S.DropdownButton>
             )}
             {onDelete && (
-              <button
-                onClick={() => {
-                  if (
-                    window.confirm(`${country.name}을(를) 삭제하시겠습니까?`)
-                  ) {
-                    onDelete(country.id)
-                  }
-                }}
-                style={{
-                  padding: '10px 20px',
-                  background: '#fff',
-                  border: '2px solid #fee2e2',
-                  borderRadius: '10px',
-                  color: '#dc2626',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#fef2f2'
-                  e.currentTarget.style.borderColor = '#fecaca'
-                  e.currentTarget.style.transform = 'translateY(-1px)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#fff'
-                  e.currentTarget.style.borderColor = '#fee2e2'
-                  e.currentTarget.style.transform = 'translateY(0)'
+              <S.DropdownButton
+                as={motion.button}
+                whileHover={{ x: 4 }}
+                transition={{ duration: 0.2 }}
+                $isDelete
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(country.id)
+                  const menu = e.currentTarget.parentElement as HTMLElement
+                  if (menu) menu.style.display = 'none'
                 }}
               >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
                 삭제
-              </button>
+              </S.DropdownButton>
             )}
-          </div>
-        </div>
-
-        {/* 존속 기간 정보 */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: duration ? 'repeat(2, 1fr)' : '1fr',
-            gap: '16px',
-          }}
-        >
-          <div
-            style={{
-              padding: '20px 24px',
-              background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-              border: '2px solid #3b82f6',
-              borderRadius: '14px',
-              transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)'
-              e.currentTarget.style.boxShadow =
-                '0 8px 24px rgba(59, 130, 246, 0.2)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}
-          >
-            <div
-              style={{
-                fontSize: '12px',
-                color: '#1e40af',
-                marginBottom: '6px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              존속 기간
-            </div>
-            <div
-              style={{
-                fontSize: '20px',
-                fontWeight: 800,
-                color: '#0f172a',
-                letterSpacing: '-0.02em',
-              }}
-            >
-              {period}
-            </div>
-          </div>
-          {duration && (
-            <div
-              style={{
-                padding: '20px 24px',
-                background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-                border: '2px solid #10b981',
-                borderRadius: '14px',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)'
-                e.currentTarget.style.boxShadow =
-                  '0 8px 24px rgba(16, 185, 129, 0.2)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = 'none'
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '12px',
-                  color: '#065f46',
-                  marginBottom: '6px',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                존속 기간
-              </div>
-              <div
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 800,
-                  color: '#0f172a',
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                {duration}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+          </S.DropdownMenu>
+        </S.CompactKebabMenu>
+      )}
+    </>
   )
 }
 
@@ -523,15 +479,21 @@ function getStateTypeLabel(stateType: string): string {
 }
 
 // ============================================
-// 탭 네비게이션
+// 배지 + 탭 한 줄 (컴팩트)
 // ============================================
 
 interface HistoricalCountryTabsProps {
+  country: UnifiedCountry
+  period: string
+  duration: string | null
   activeTab: HistoricalCountryTab
   onTabChange: (tab: HistoricalCountryTab) => void
 }
 
 function HistoricalCountryTabs({
+  country,
+  period,
+  duration,
   activeTab,
   onTabChange,
 }: HistoricalCountryTabsProps) {
@@ -539,63 +501,43 @@ function HistoricalCountryTabs({
     { id: 'overview', label: '개요' },
     { id: 'events', label: '주요 사건' },
     { id: 'figures', label: '인물' },
+    { id: 'heads', label: '역대 수반' },
+    { id: 'government', label: '행정조직' },
     { id: 'succession', label: '계승' },
     { id: 'territory', label: '영토' },
     { id: 'culture', label: '문화' },
   ]
 
   return (
-    <div
-      style={{
-        borderBottom: '2px solid #f3f4f6',
-        background: 'white',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          gap: '8px',
-          padding: '0 48px',
-        }}
-      >
+    <CompactStrip>
+      <CompactBadge>
+        <span>존속 기간</span>
+        <span>{period}</span>
+      </CompactBadge>
+      {duration && (
+        <CompactBadge>
+          <span>기간</span>
+          <span>{duration}</span>
+        </CompactBadge>
+      )}
+      {country.stateType && (
+        <CompactBadge>
+          <span>국가 형태</span>
+          <span>{getStateTypeLabel(country.stateType)}</span>
+        </CompactBadge>
+      )}
+      <CompactTabBar>
         {tabs.map((tab) => (
-          <button
+          <CompactTabButton
             key={tab.id}
+            $active={activeTab === tab.id}
             onClick={() => onTabChange(tab.id)}
-            style={{
-              padding: '18px 28px',
-              background: 'transparent',
-              color: activeTab === tab.id ? '#667eea' : '#6b7280',
-              border: 'none',
-              borderBottom:
-                activeTab === tab.id
-                  ? '3px solid #667eea'
-                  : '3px solid transparent',
-              cursor: 'pointer',
-              fontSize: '15px',
-              fontWeight: 700,
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-              letterSpacing: '-0.01em',
-            }}
-            onMouseEnter={(e) => {
-              if (activeTab !== tab.id) {
-                e.currentTarget.style.color = '#111827'
-                e.currentTarget.style.background = '#fafafa'
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeTab !== tab.id) {
-                e.currentTarget.style.color = '#6b7280'
-                e.currentTarget.style.background = 'transparent'
-              }
-            }}
           >
             {tab.label}
-          </button>
+          </CompactTabButton>
         ))}
-      </div>
-    </div>
+      </CompactTabBar>
+    </CompactStrip>
   )
 }
 

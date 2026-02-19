@@ -257,6 +257,42 @@ export interface CreateGovernmentPositionTenureDto {
 }
 
 /**
+ * 관직 정의 생성 DTO
+ */
+export interface CreateGovernmentPositionDefinitionDto {
+  title: string
+  titleEn?: string | null
+  titleLocal?: string | null
+  positionType: string
+  description?: string | null
+  rank?: number | null
+  departmentName?: string | null
+  organizationId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  establishedDate?: string | null
+  abolishedDate?: string | null
+}
+
+/**
+ * 관직 정의 수정 DTO
+ */
+export interface UpdateGovernmentPositionDefinitionDto {
+  title?: string
+  titleEn?: string | null
+  titleLocal?: string | null
+  positionType?: string
+  description?: string | null
+  rank?: number | null
+  departmentName?: string | null
+  organizationId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  establishedDate?: string | null
+  abolishedDate?: string | null
+}
+
+/**
  * 학력 생성 DTO
  */
 export interface CreateEducationDto {
@@ -415,6 +451,77 @@ export const personCareerApi = {
   getTenuresByPersonId: async (personId: string) => {
     const response = await apiClient.get(`/persons/${personId}/tenures`)
     return response.data ?? []
+  },
+
+  /**
+   * 국가 또는 역사적 국가별 재임 기록 목록 조회 (연대표 국가 페이지 수장 목록용)
+   * GET /government-positions/tenures?countryId= | historicalCountryId=
+   */
+  getTenuresByCountry: async (params: {
+    countryId?: string
+    historicalCountryId?: string
+  }) => {
+    const q = new URLSearchParams()
+    if (params.countryId) q.set('countryId', params.countryId)
+    if (params.historicalCountryId) q.set('historicalCountryId', params.historicalCountryId)
+    const response = await apiClient.get(
+      `/government-positions/tenures?${q.toString()}`,
+    )
+    return response.data ?? []
+  },
+
+  /**
+   * 관직 정의 목록 조회
+   * GET /government-positions/definitions?countryId= | historicalCountryId=
+   */
+  getPositionDefinitions: async (params: {
+    countryId?: string
+    historicalCountryId?: string
+  }) => {
+    const q = new URLSearchParams()
+    if (params.countryId) q.set('countryId', params.countryId)
+    if (params.historicalCountryId) q.set('historicalCountryId', params.historicalCountryId)
+    const response = await apiClient.get(
+      `/government-positions/definitions?${q.toString()}`,
+    )
+    return response.data ?? []
+  },
+
+  /**
+   * 관직 정의 단건 조회
+   */
+  getPositionDefinitionById: async (id: string) => {
+    const response = await apiClient.get(`/government-positions/definitions/${id}`)
+    return response.data
+  },
+
+  /**
+   * 관직 정의 생성
+   */
+  createPositionDefinition: async (dto: CreateGovernmentPositionDefinitionDto) => {
+    const response = await apiClient.post('/government-positions/definitions', dto)
+    return response.data
+  },
+
+  /**
+   * 관직 정의 수정
+   */
+  updatePositionDefinition: async (
+    id: string,
+    dto: UpdateGovernmentPositionDefinitionDto,
+  ) => {
+    const response = await apiClient.put(
+      `/government-positions/definitions/${id}`,
+      dto,
+    )
+    return response.data
+  },
+
+  /**
+   * 관직 정의 삭제
+   */
+  deletePositionDefinition: async (id: string) => {
+    await apiClient.delete(`/government-positions/definitions/${id}`)
   },
 
   /**
