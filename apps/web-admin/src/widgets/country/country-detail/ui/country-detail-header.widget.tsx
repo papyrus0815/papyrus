@@ -67,49 +67,60 @@ export function CountryDetailHeader({
 
         {/* 그래디언트 오버레이 (더 나은 텍스트 가독성) */}
         <S.FlagGradientOverlay />
+
+        {/* 대륙 뱃지 - 국기 영역 좌측 하단 */}
+        {continentName && (
+          <S.FlagBottomLeftOverlay
+            as={motion.div}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.35 }}
+          >
+            <motion.div
+              whileHover={{ scale: 1.05, y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <S.InfoBadge>
+                <S.BadgeLabel>대륙</S.BadgeLabel>
+                <S.BadgeValue>{continentName}</S.BadgeValue>
+              </S.InfoBadge>
+            </motion.div>
+          </S.FlagBottomLeftOverlay>
+        )}
       </S.MiniFlagWrapper>
 
-      {/* 국가 정보 배지들 - 필수 정보만 */}
-      <S.AnalyticsBadges
-        as={motion.div}
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-      >
-        {continentName && (
-          <motion.div
-            whileHover={{ scale: 1.05, y: -2 }}
-            transition={{ duration: 0.2 }}
-          >
-            <S.InfoBadge>
-              <S.BadgeLabel>대륙</S.BadgeLabel>
-              <S.BadgeValue>{continentName}</S.BadgeValue>
-            </S.InfoBadge>
-          </motion.div>
-        )}
-        {country.languageId && (
-          <motion.div
-            whileHover={{ scale: 1.05, y: -2 }}
-            transition={{ duration: 0.2 }}
-          >
-            <S.InfoBadge>
-              <S.BadgeLabel>언어</S.BadgeLabel>
-              <S.BadgeValue>{country.languageId}</S.BadgeValue>
-            </S.InfoBadge>
-          </motion.div>
-        )}
-        {country.currencyId && (
-          <motion.div
-            whileHover={{ scale: 1.05, y: -2 }}
-            transition={{ duration: 0.2 }}
-          >
-            <S.InfoBadge>
-              <S.BadgeLabel>화폐</S.BadgeLabel>
-              <S.BadgeValue>{country.currencyId}</S.BadgeValue>
-            </S.InfoBadge>
-          </motion.div>
-        )}
-      </S.AnalyticsBadges>
+      {/* 국가 정보 배지들 - 언어·화폐 (대륙은 국기 영역 좌하단에 배치) */}
+      {(country.languageId || country.currencyId) && (
+        <S.AnalyticsBadges
+          as={motion.div}
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          {country.languageId && (
+            <motion.div
+              whileHover={{ scale: 1.05, y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <S.InfoBadge>
+                <S.BadgeLabel>언어</S.BadgeLabel>
+                <S.BadgeValue>{country.languageId}</S.BadgeValue>
+              </S.InfoBadge>
+            </motion.div>
+          )}
+          {country.currencyId && (
+            <motion.div
+              whileHover={{ scale: 1.05, y: -2 }}
+              transition={{ duration: 0.2 }}
+            >
+              <S.InfoBadge>
+                <S.BadgeLabel>화폐</S.BadgeLabel>
+                <S.BadgeValue>{country.currencyId}</S.BadgeValue>
+              </S.InfoBadge>
+            </motion.div>
+          )}
+        </S.AnalyticsBadges>
+      )}
 
       {/* 케밥 메뉴 */}
       {(onEdit || onDelete) && (

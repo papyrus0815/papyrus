@@ -38,6 +38,48 @@ export class GovernmentPositionController {
   constructor(private readonly personService: PersonService) {}
 
   /**
+   * 현대 국가별 재임 기록 (REST) - GET /government-positions/countries/:countryId/tenures
+   */
+  @Get('countries/:countryId/tenures')
+  async getTenuresByCountryId(@Param('countryId') countryId: string): Promise<any[]> {
+    const list = await this.personService.findTenuresByCountry({ countryId })
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 현대 국가에 재임이 있는 인물 (REST) - GET /government-positions/countries/:countryId/persons
+   */
+  @Get('countries/:countryId/persons')
+  async getPersonsByCountryId(@Param('countryId') countryId: string): Promise<any[]> {
+    return this.personService.findPersonsWithTenureInCountry({ countryId })
+  }
+
+  /**
+   * 역사적 국가별 재임 기록 (REST) - GET /government-positions/historical-countries/:id/tenures
+   */
+  @Get('historical-countries/:historicalCountryId/tenures')
+  async getTenuresByHistoricalCountryId(
+    @Param('historicalCountryId') historicalCountryId: string,
+  ): Promise<any[]> {
+    const list = await this.personService.findTenuresByCountry({
+      historicalCountryId,
+    })
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 역사적 국가에 재임이 있는 인물 (REST) - GET /government-positions/historical-countries/:id/persons
+   */
+  @Get('historical-countries/:historicalCountryId/persons')
+  async getPersonsByHistoricalCountryId(
+    @Param('historicalCountryId') historicalCountryId: string,
+  ): Promise<any[]> {
+    return this.personService.findPersonsWithTenureInCountry({
+      historicalCountryId,
+    })
+  }
+
+  /**
    * 관직 정의 목록 조회 (국가/역사적 국가별)
    */
   @Get('definitions')
@@ -90,21 +132,6 @@ export class GovernmentPositionController {
   @Delete('definitions/:id')
   async deleteDefinition(@Param('id') id: string): Promise<void> {
     await this.personService.deletePositionDefinition(id)
-  }
-
-  /**
-   * 국가 또는 역사적 국가별 재임 기록 목록 조회 (연대표 국가 페이지 수장 목록용)
-   */
-  @Get('tenures')
-  async getTenuresByCountry(
-    @Query('countryId') countryId?: string,
-    @Query('historicalCountryId') historicalCountryId?: string,
-  ): Promise<any[]> {
-    const list = await this.personService.findTenuresByCountry({
-      countryId: countryId || undefined,
-      historicalCountryId: historicalCountryId || undefined,
-    })
-    return list.map(serializeBigInt)
   }
 
   /**

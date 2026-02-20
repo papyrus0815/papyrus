@@ -422,20 +422,27 @@ export const personCareerApi = {
   },
 
   /**
-   * 국가 또는 역사적 국가별 재임 기록 목록 조회 (연대표 국가 페이지 수장 목록용)
-   * GET /government-positions/tenures?countryId= | historicalCountryId=
+   * 국가 또는 역사적 국가별 재임 기록 목록 조회 (REST)
+   * GET /government-positions/countries/:countryId/tenures
+   * GET /government-positions/historical-countries/:historicalCountryId/tenures
    */
   getTenuresByCountry: async (params: {
     countryId?: string
     historicalCountryId?: string
   }) => {
-    const q = new URLSearchParams()
-    if (params.countryId) q.set('countryId', params.countryId)
-    if (params.historicalCountryId) q.set('historicalCountryId', params.historicalCountryId)
-    const response = await apiClient.get(
-      `/government-positions/tenures?${q.toString()}`,
-    )
-    return response.data ?? []
+    if (params.countryId) {
+      const response = await apiClient.get(
+        `/government-positions/countries/${encodeURIComponent(params.countryId)}/tenures`,
+      )
+      return response.data ?? []
+    }
+    if (params.historicalCountryId) {
+      const response = await apiClient.get(
+        `/government-positions/historical-countries/${encodeURIComponent(params.historicalCountryId)}/tenures`,
+      )
+      return response.data ?? []
+    }
+    return []
   },
 
   /**

@@ -5,7 +5,9 @@
   "targets": {
     "build": {
       "executor": "nx:run-commands",
-      "outputs": ["{workspaceRoot}/dist/apps/api"],
+      "outputs": [
+        "{workspaceRoot}/dist/apps/api"
+      ],
       "options": {
         "command": "npx prisma generate --schema=apps/api/prisma/schema.prisma && tspc -p apps/api/tsconfig.app.json",
         "cwd": "."
@@ -44,7 +46,10 @@
           "CACHE_MAX_AGE": "1y",
           "GZIP_MIN_LENGTH": "1024"
         }
-      }
+      },
+      "dependsOn": [
+        "build"
+      ]
     },
     "generate": {
       "executor": "nx:run-commands",

@@ -166,6 +166,13 @@ export interface IPersonRepository {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]>
+  /**
+   * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (역대 수반 인물 선택용)
+   */
+  findPersonsWithTenureInCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<PersonResponseDto[]>
   findPositionDefinitions(params: {
     countryId?: string
     historicalCountryId?: string

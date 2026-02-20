@@ -31,6 +31,36 @@ export async function getAllPersons(): Promise<PersonResponseDto[]> {
 }
 
 /**
+ * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (REST)
+ * GET /government-positions/countries/:countryId/persons
+ * GET /government-positions/historical-countries/:historicalCountryId/persons
+ */
+export async function getPersonsByTenureCountry(params: {
+  countryId?: string
+  historicalCountryId?: string
+}): Promise<PersonResponseDto[]> {
+  const { countryId, historicalCountryId } = params
+  if (!countryId && !historicalCountryId) return []
+  const path = countryId
+    ? `/government-positions/countries/${encodeURIComponent(countryId)}/persons`
+    : `/government-positions/historical-countries/${encodeURIComponent(historicalCountryId!)}/persons`
+  const url = `${apiConnection.host}${path}`
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    return data?.data ?? data ?? []
+  } catch (error) {
+    console.error('❌ 국가별 인물 목록 조회 실패:', error)
+    throw error
+  }
+}
+
+/**
  * 인물 상세 조회
  */
 export async function getPersonById(id: string): Promise<PersonResponseDto> {

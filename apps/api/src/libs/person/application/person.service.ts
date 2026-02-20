@@ -50,6 +50,16 @@ export class PersonService {
   }
 
   /**
+   * 해당 국가(또는 연결된 역사적 국가)에 재임이 있는 인물만 조회
+   */
+  async findPersonsWithTenureInCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<PersonResponseDto[]> {
+    return this.personRepository.findPersonsWithTenureInCountry(params)
+  }
+
+  /**
    * 모든 인물 목록 조회 (정부 직책 포함)
    */
   async findAllWithGovernmentPositions() {

@@ -9,7 +9,7 @@ import { FiPlus, FiUser, FiCalendar, FiChevronRight, FiArrowLeft, FiChevronDown,
 import { toast } from 'react-hot-toast'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { getAllPersons } from '@/shared/api/persons'
+import { getPersonsByTenureCountry } from '@/shared/api/persons'
 import { personCareerApi } from '@/shared/api/person-career'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/PersonSelectModal'
@@ -128,8 +128,10 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
   })
 
   const { data: persons = [] } = useQuery({
-    queryKey: ['persons-all'],
-    queryFn: () => getAllPersons(),
+    queryKey: ['persons-by-tenure-country', countryId, historicalCountryId],
+    queryFn: () =>
+      getPersonsByTenureCountry({ countryId, historicalCountryId }),
+    enabled: !!countryId || !!historicalCountryId,
   })
 
   const refetch = () => {
@@ -293,12 +295,7 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
   const selectedPerson = persons.find((p: any) => p.id === selectedPersonId) ?? null
 
   return (
-    <>
-      <SectionHeader>
-        <SectionTitle>역대 수반</SectionTitle>
-        <SectionSubtitle>대통령·총리·국왕 등 국가 원수·정부 수반 재임 기록</SectionSubtitle>
-      </SectionHeader>
-
+    <SectionOuter>
       {view === 'list' ? (
         <ListWrap>
           <ListHead>
@@ -329,6 +326,11 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
               {tenures.map((t: any) => {
                 const titleText = t.title || t.position?.title || '—'
                 const regnalFromNotes = getRegnalNameFromNotes(t.notes)
+                const countryLabel =
+                  !isHistorical &&
+                  (t.country?.name || t.historicalCountry?.name)
+                    ? t.country?.name || t.historicalCountry?.name
+                    : null
                 return (
                   <ListItem
                     key={t.id}
@@ -365,6 +367,9 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
                       </ItemRow>
                       <ItemRow>
                         <ItemTitleBadge>{titleText}</ItemTitleBadge>
+                        {countryLabel != null && (
+                          <ItemCountryBadge>{countryLabel}</ItemCountryBadge>
+                        )}
                         {regnalFromNotes && (
                           <ItemRegnalName>왕명: {regnalFromNotes}</ItemRegnalName>
                         )}
@@ -611,9 +616,13 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
           setEndDateModalOpen(false)
         }}
       />
-    </>
+    </SectionOuter>
   )
 }
+
+const SectionOuter = styled.div`
+  margin-top: 28px;
+`
 
 const SectionHeader = styled.div`
   margin-bottom: 48px;
@@ -849,6 +858,16 @@ const ItemTitleBadge = styled.span`
   font-weight: 600;
   color: #475569;
   background: #f1f5f9;
+  border-radius: 8px;
+`
+
+const ItemCountryBadge = styled.span`
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0f766e;
+  background: #ccfbf1;
   border-radius: 8px;
 `
 

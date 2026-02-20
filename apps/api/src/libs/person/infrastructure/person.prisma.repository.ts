@@ -1355,6 +1355,8 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   /**
    * 국가 또는 역사적 국가별 재임 기록 조회 (연대표 국가 페이지 수장 목록용)
+   * - 현대 국가(countryId)일 때: 해당 국가 + 이 현대 국가에 연결된 모든 역사적 국가의 재임 기록 포함 (하위 국가 인물 모두 표시)
+   * - 역사적 국가(historicalCountryId)만 조회 시: 해당 역사적 국가만
    */
   async findTenuresByCountry(params: {
     countryId?: string
@@ -1363,11 +1365,26 @@ export class PersonPrismaRepository implements IPersonRepository {
     const { countryId, historicalCountryId } = params
     if (!countryId && !historicalCountryId) return []
 
-    const where = countryId
-      ? { countryId }
-      : historicalCountryId
-        ? { historicalCountryId }
-        : {}
+    let where: any = historicalCountryId
+      ? { historicalCountryId }
+      : { countryId: countryId! }
+
+    if (countryId) {
+      const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+        .findMany({
+          where: { modernCountryId: countryId },
+          select: { historicalCountryId: true },
+        })
+        .then((rows) => rows.map((r) => r.historicalCountryId))
+      if (linkedHistoricalIds.length > 0) {
+        where = {
+          OR: [
+            { countryId },
+            { historicalCountryId: { in: linkedHistoricalIds } },
+          ],
+        }
+      }
+    }
 
     const tenures = await this.prisma.governmentPositionTenure.findMany({
       where,
@@ -1401,6 +1418,55 @@ export class PersonPrismaRepository implements IPersonRepository {
       return obj
     }
     return serializeBigInt(tenures)
+  }
+
+  /**
+   * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (역대 수반 인물 선택용)
+   */
+  async findPersonsWithTenureInCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<PersonResponseDto[]> {
+    const { countryId, historicalCountryId } = params
+    if (!countryId && !historicalCountryId) return []
+
+    let tenureWhere: any = historicalCountryId
+      ? { historicalCountryId }
+      : { countryId: countryId! }
+
+    if (countryId) {
+      const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+        .findMany({
+          where: { modernCountryId: countryId },
+          select: { historicalCountryId: true },
+        })
+        .then((rows) => rows.map((r) => r.historicalCountryId))
+      if (linkedHistoricalIds.length > 0) {
+        tenureWhere = {
+          OR: [
+            { countryId },
+            { historicalCountryId: { in: linkedHistoricalIds } },
+          ],
+        }
+      }
+    }
+
+    const tenures = await this.prisma.governmentPositionTenure.findMany({
+      where: tenureWhere,
+      select: { personId: true },
+      distinct: ['personId'],
+    })
+    const personIds = tenures.map((t) => t.personId)
+    if (personIds.length === 0) return []
+
+    const persons = await this.prisma.person.findMany({
+      where: { id: { in: personIds } },
+      orderBy: { name: 'asc', surname: 'asc' },
+      include: {
+        countryAffiliations: true,
+      },
+    })
+    return persons.map((p) => this.mapToPersonResponse(p))
   }
 
   /**

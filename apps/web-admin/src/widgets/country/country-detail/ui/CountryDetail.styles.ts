@@ -1381,6 +1381,19 @@ export const FlagGradientOverlay = styled.div`
   z-index: 1;
 `
 
+/** 국기 영역 좌측 하단에 배치하는 오버레이 (대륙 뱃지 등) */
+export const FlagBottomLeftOverlay = styled.div`
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  z-index: 5;
+
+  @media (max-width: 768px) {
+    left: 16px;
+    bottom: 16px;
+  }
+`
+
 export const CountryNameOverlay = styled.div`
   position: absolute;
   top: 45px;
