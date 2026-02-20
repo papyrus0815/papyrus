@@ -15,14 +15,6 @@
 ///   • 배경과 여파 분석
 ///   • 상위-하위 사건 관계 (큰 사건 > 세부 사건)
 /// 
-/// - 사건 타임라인(EventTimeline): 사건 내 세부 진행 및 여정 기록
-///   • 사건 내부의 시간적 진행 과정
-///   • 중요한 전환점과 순간들
-///   • 단계별 상황 변화
-///   • 🆕 복잡한 여정 경로 추적 (페리 제독 일본 원정 등)
-///   • 🆕 각 시점별 위치 정보 (도시, 국가, 좌표)
-///   • 🆕 순차적 경로 관리 (sequenceNumber)
-/// 
 /// - 사건-인물 관계(PersonEvent): 참여자 관리
 ///   • 사건 참여 인물들의 역할
 ///   • 주도자, 참여자, 피해자 등 구분
@@ -250,7 +242,6 @@ model Event {
   historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
   persons          PersonEvent[]
-  timelines        EventTimeline[]
   BookEvent        BookEvent[]
   countryRelations EventCountryRelation[]
   relatedEvents    EventRelation[]        @relation("EventToRelated")
@@ -351,102 +342,6 @@ model EventImage {
   @@index([eventId], name: "idx_event_image_eventId")
   @@index([eventId, isPrimary], name: "idx_event_image_eventId_primary")
   @@map("event_image")
-}
-
-// ========================
-// EventTimeline
-// ========================
-model EventTimeline {
-  /// PK
-  id String @id @default(uuid()) @db.Char(36)
-
-  /// 어느 사건의 타임라인인가
-  eventId String @map("event_id") @db.Char(36)
-
-  /// 이 시점 발생일시
-  occurredAt DateTime? @map("occurred_at")
-
-  /// 타임라인 제목
-  title String @db.VarChar(100)
-
-  /// 상세 내용
-  description String? @db.Text
-
-  /// 위치명 (자유 텍스트, 예: "노퍽 조선소", "마데이라 항구")
-  locationName String? @map("location_name") @db.VarChar(200)
-
-  /// 도시 ID
-  cityId String? @map("city_id") @db.Char(36)
-
-  /// 행정구역 ID
-  administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
-
-  /// 현대 국가 ID
-  modernCountryId String? @map("modern_country_id") @db.Char(36)
-
-  /// 역사적 국가 ID
-  historicalCountryId String? @map("historical_country_id") @db.Char(36)
-
-  /// 위도 (경유지 좌표)
-  latitude Decimal? @db.Decimal(10, 7)
-
-  /// 경도 (경유지 좌표)
-  longitude Decimal? @db.Decimal(10, 7)
-
-  /// 순서 번호 (여정 순서 등, 1부터 시작)
-  sequenceNumber Int? @map("sequence_number")
-
-  /// 관련 시설 ID (조선소, 항구, 주요 건물 등)
-  facilityId String? @map("facility_id") @db.Char(36)
-
-  //--- 관계 필드
-  event                  Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  city                   City?                   @relation(fields: [cityId], references: [id], onDelete: SetNull)
-  administrativeDivision AdministrativeDivision? @relation(fields: [administrativeDivisionId], references: [id], onDelete: SetNull)
-  modernCountry          Country?                @relation(fields: [modernCountryId], references: [id], onDelete: SetNull)
-  historicalCountry      HistoricalCountry?      @relation(fields: [historicalCountryId], references: [id], onDelete: SetNull)
-  facility               CompanyFacility?        @relation(fields: [facilityId], references: [id], onDelete: SetNull)
-  EventTimelinePerson    EventTimelinePerson[]
-
-  //--- 메타데이터 필드
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([eventId, sequenceNumber], name: "idx_timeline_event_seq")
-  @@index([cityId], name: "idx_timeline_cityId")
-  @@index([modernCountryId], name: "idx_timeline_modernCountryId")
-  @@index([historicalCountryId], name: "idx_timeline_historicalCountryId")
-  @@index([facilityId], name: "idx_timeline_facilityId")
-  @@map("event_timeline")
-}
-
-// ========================
-// EventTimelinePerson
-// ========================
-model EventTimelinePerson {
-  /// PK
-  id String @id @default(uuid()) @db.Char(36)
-
-  /// 타임라인 FK
-  timelineId String @map("timeline_id") @db.Char(36)
-
-  /// 인물 FK
-  personId String @map("person_id") @db.Char(36)
-
-  /// 행동/역할 등
-  action String?
-  note   String?
-
-  //--- 관계 필드
-  timeline EventTimeline @relation(fields: [timelineId], references: [id], onDelete: Cascade)
-  person   Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
-
-  //--- 메타데이터 필드
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([timelineId, personId])
-  @@map("event_timeline_person")
 }
 
 // ========================

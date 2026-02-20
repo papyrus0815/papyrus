@@ -111,6 +111,8 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
   const [termNumber, setTermNumber] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
   const [regnalName, setRegnalName] = useState('')
+  /** 사건 페이지(역대 수반 토글)에 이 재임을 노출할지 여부 */
+  const [showOnEventsPage, setShowOnEventsPage] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const isMonarchPosition = ['국왕', '여왕', '황제', '여제', '왕'].includes(selectedPositionTitleKey)
@@ -162,6 +164,7 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
     setTermNumber(t.termNumber != null ? String(t.termNumber) : '')
     setRegnalNumber(t.regnalNumber != null ? String(t.regnalNumber) : '')
     setRegnalName(getRegnalNameFromNotes(t.notes) || '')
+    setShowOnEventsPage(t.showPositionInfo !== false)
   }, [editingTenureId, editingTenure])
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -189,6 +192,7 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
         termNumber: termNumber ? parseInt(termNumber, 10) : undefined,
         regnalNumber: regnalNumber ? parseInt(regnalNumber, 10) : undefined,
         notes: notesValue,
+        showPositionInfo: showOnEventsPage,
       }
       if (editingTenureId) {
         await personCareerApi.updateGovernmentPositionTenure(editingTenureId, payload)
@@ -219,6 +223,7 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
     setTermNumber('')
     setRegnalNumber('')
     setRegnalName('')
+    setShowOnEventsPage(true)
   }
 
   const handlePositionTitleSelect = (value: string) => {
@@ -535,6 +540,22 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
                   title="서양 군주: 이름 뒤 숫자"
                 />
                 <FieldHint>서양 군주용. 루이 14세 → 14, 제임스 1세 → 1</FieldHint>
+              </FieldControl>
+            </FieldRow>
+            <FieldRow>
+              <FieldLabel>사건 페이지 노출</FieldLabel>
+              <FieldControl>
+                <CheckboxRow>
+                  <input
+                    type="checkbox"
+                    id="heads-show-on-events"
+                    checked={showOnEventsPage}
+                    onChange={(e) => setShowOnEventsPage(e.target.checked)}
+                  />
+                  <label htmlFor="heads-show-on-events">
+                    사건 목록 페이지에 이 수반을 노출합니다 (역대 수반 토글 시 표시)
+                  </label>
+                </CheckboxRow>
               </FieldControl>
             </FieldRow>
           </FormRows>
@@ -989,6 +1010,25 @@ const FieldHint = styled.span`
   font-size: 12px;
   color: ${TEXT_SECONDARY};
   line-height: 1.4;
+`
+
+const CheckboxRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  input[type='checkbox'] {
+    width: 18px;
+    height: 18px;
+    accent-color: #7c3aed;
+    cursor: pointer;
+  }
+  label {
+    font-size: 14px;
+    color: ${TEXT_PRIMARY};
+    cursor: pointer;
+    user-select: none;
+  }
 `
 
 const FieldControl = styled.div<{ $variant?: 'person' | 'datePair' }>`

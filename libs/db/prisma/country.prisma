@@ -93,7 +93,6 @@ model Country {
   PoliticalParty            PoliticalParty[]                 @relation("PoliticalPartyCountry")
   governmentPositions       GovernmentPositionDefinition[]   @relation("GovernmentPositionCountry")
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
-  eventTimelines            EventTimeline[]
   eventCountryRelations     EventCountryRelation[]
 
   // 🆕 정규화된 군사 사건 관계
@@ -102,9 +101,6 @@ model Country {
   toCountryRelations   EventCountryRelationNew[] @relation("ToCountry")
   treatySignatories    TreatySignatory[]
   allianceMembers      AllianceMember[]
-
-  // 분야별 경력 관계
-  governmentCareers GovernmentCareer[] @relation("GovernmentCountry")
 
   // 🆕 왕조 통치 관계
   /// 이 국가를 통치한/통치하는 왕조들의 역사 (입헌군주제 등)
@@ -243,7 +239,6 @@ model AdministrativeDivision {
   cities          City[]
   event           Event[]
   CompanyFacility CompanyFacility[]
-  EventTimeline   EventTimeline[]
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -284,7 +279,6 @@ model City {
   Event                  Event[]
   Organizations          Organization[]          @relation("OrganizationHeadquartersCity")
   PoliticalParty         PoliticalParty[]        @relation("PoliticalPartyHeadquartersCity")
-  EventTimeline          EventTimeline[]
   personsBornHere        Person[]                @relation("PersonBirthCity")
   personsDiedHere        Person[]                @relation("PersonDeathCity")
 

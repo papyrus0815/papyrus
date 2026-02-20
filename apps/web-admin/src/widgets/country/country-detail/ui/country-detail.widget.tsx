@@ -22,7 +22,6 @@ import { HistorySection } from './history-section.widget'
 import { KPIGrid } from './kpi-grid.widget'
 import { MapRegionSection } from './map-region-section.widget'
 import { PersonStatsSection } from './person-stats-section.widget'
-import { TimelineNewsSection } from './timeline-news-section.widget'
 
 // 목업 데이터
 const economicGrowthData = [
@@ -324,13 +323,6 @@ export function CountryDetail({
                     >
                       {activeSubTab === 'statistics' && (
                         <div>
-                          <TimelineNewsSection
-                            economicGrowthData={economicGrowthData}
-                            populationGrowthData={populationGrowthData}
-                            exportData={exportData}
-                            importData={importData}
-                          />
-
                           <ChartsSection
                             economicGrowthData={economicGrowthData}
                             populationGrowthData={populationGrowthData}

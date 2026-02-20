@@ -23,6 +23,7 @@
     "electron:build:linux": "cd apps/web && npm run build && electron-builder --linux",
     "db:build": "node scripts/run.js database/build",
     "db:migrate": "node scripts/run.js database/migrate",
+    "db:migrate:deploy": "node scripts/run.js database/migrate-deploy",
     "db:generate": "node scripts/run.js database/generate",
     "db:reset": "node scripts/run.js database/reset",
     "docker:up": "node scripts/run.js docker/up",

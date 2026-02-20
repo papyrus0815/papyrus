@@ -34,7 +34,6 @@ const SECTION_LINKS = [
   { id: 'overview', label: '개요' },
   { id: 'gallery', label: '이미지' },
   { id: 'context', label: '배경/여파' },
-  { id: 'timeline', label: '타임라인' },
   { id: 'theaters', label: '전구' },
   { id: 'figures', label: '핵심 인물' },
   { id: 'countries', label: '참전 국가' },
@@ -331,41 +330,6 @@ export const EventDetailPage: React.FC = () => {
               />
             </NarrativeCard>
           </NarrativeGrid>
-
-          <Panel id="timeline">
-            <PanelHeader>
-              <div>
-                <span>핵심 타임라인 (EventTimeline)</span>
-                <strong>시간 축으로 본 흐름</strong>
-              </div>
-            </PanelHeader>
-            <TimelineList>
-              {selectedEvent.timeline.map((point) => (
-                <TimelineRow key={point.id}>
-                  <TimelineMarker />
-                  <TimelineContent>
-                    <small>{formatDateRange(point.occurredAt)}</small>
-                    <h4>{point.title}</h4>
-                    <p>{point.description}</p>
-                    <TimelineMeta>
-                      {point.locationName && (
-                        <MetaChip>
-                          <FiMapPin />
-                          {point.locationName}
-                        </MetaChip>
-                      )}
-                      {point.involvedPersons?.map((person) => (
-                        <MetaChip key={person.id}>
-                          <FiUsers />
-                          {person.name} ({person.role})
-                        </MetaChip>
-                      ))}
-                    </TimelineMeta>
-                  </TimelineContent>
-                </TimelineRow>
-              ))}
-            </TimelineList>
-          </Panel>
 
           <Panel id="theaters">
             <PanelHeader>

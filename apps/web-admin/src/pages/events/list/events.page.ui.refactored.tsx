@@ -53,7 +53,6 @@ import {
   CategoryModal,
   EventDetailPanel,
   SimpleSelectModal,
-  TimelineView,
   TreeView,
 } from '@/widgets/event-list/ui'
 
@@ -195,8 +194,8 @@ export const EventsCatalogPageRefactored: React.FC = () => {
   const [showPositionTypeModal, setShowPositionTypeModal] = useState(false)
   const [showSummaryModal, setShowSummaryModal] = useState(false)
   const [summaryEventId, setSummaryEventId] = useState<string | null>(null)
-  const [summaryViewMode, setSummaryViewMode] = useState<SummaryViewMode>(
-    SUMMARY_VIEW_MODES.TIMELINE,
+  const [summaryViewMode] = useState<SummaryViewMode>(
+    SUMMARY_VIEW_MODES.TREE,
   )
 
   // ===== 사건 선택 시 최근 본 목록에 추가 =====
@@ -589,12 +588,12 @@ export const EventsCatalogPageRefactored: React.FC = () => {
       <SimpleSelectModal
         isOpen={showPositionTypeModal}
         onClose={() => setShowPositionTypeModal(false)}
-        title="직업 선택"
+        title="역대 수반 직책"
         selectedValue={selectedPositionType}
         options={MOCK_POSITION_TYPES}
         onSelect={(value) => setSelectedPositionType(value)}
-        allLabel="전체 직업"
-        allDescription="모든 직책의 인물"
+        allLabel="전체 직책"
+        allDescription="모든 역대 수반"
         Icon={FiUsers}
       />
 
@@ -637,28 +636,14 @@ export const EventsCatalogPageRefactored: React.FC = () => {
                 </Modal.ModalHeader>
 
                 <Modal.SummaryTabBar>
-                  <Modal.SummaryTab
-                    $active={summaryViewMode === SUMMARY_VIEW_MODES.TIMELINE}
-                    onClick={() => setSummaryViewMode('timeline')}
-                  >
-                    <FiClock size={16} />
-                    타임라인
-                  </Modal.SummaryTab>
-                  <Modal.SummaryTab
-                    $active={summaryViewMode === SUMMARY_VIEW_MODES.TREE}
-                    onClick={() => setSummaryViewMode('tree')}
-                  >
+                  <Modal.SummaryTab $active>
                     <FiGitBranch size={16} />
                     계층 구조
                   </Modal.SummaryTab>
                 </Modal.SummaryTabBar>
 
                 <Modal.SummaryContent>
-                  {summaryViewMode === SUMMARY_VIEW_MODES.TIMELINE ? (
-                    <TimelineView node={summaryNode} />
-                  ) : (
-                    <TreeView node={summaryNode} />
-                  )}
+                  <TreeView node={summaryNode} />
                 </Modal.SummaryContent>
               </motion.div>
             </Modal.SummaryModal>

@@ -17,7 +17,6 @@ import {
   UpdatePersonDto, 
   PersonResponseDto,
   CreateMilitaryCareerDto,
-  CreateGovernmentCareerDto,
   CreateBusinessCareerDto,
   CreateAcademicCareerDto,
   CreateAthleteCareerDto,
@@ -31,7 +30,6 @@ import {
   CreateGovernmentPositionTenureDto,
   AllCareersResponseDto,
   MilitaryCareerResponseDto,
-  GovernmentCareerResponseDto,
   BusinessCareerResponseDto,
   AcademicCareerResponseDto,
   AthleteCareerResponseDto,
@@ -93,7 +91,7 @@ export class PersonController {
       deathEra: person.deathEra,
       deathDate: person.deathDate ? person.deathDate.toISOString() : null,
       governmentPositions: serializeBigInt(person.GovernmentTenures || []),
-      governmentCareers: serializeBigInt(person.governmentCareers || []),
+      governmentCareers: [],
     }))
   }
 
@@ -369,19 +367,6 @@ export class PersonController {
   @Post('careers/military')
   async addMilitaryCareer(@Body() dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
     return this.personService.addMilitaryCareer(dto)
-  }
-
-  /**
-   * 정치인/공무원 경력 추가
-   */
-  @Post('careers/government')
-  async addGovernmentCareer(@Body() dto: CreateGovernmentCareerDto): Promise<GovernmentCareerResponseDto> {
-    return this.personService.addGovernmentCareer(dto)
-  }
-
-  @Delete('careers/government/:id')
-  async deleteGovernmentCareer(@Param('id') id: string): Promise<void> {
-    return this.personService.deleteGovernmentCareer(id)
   }
 
   /**

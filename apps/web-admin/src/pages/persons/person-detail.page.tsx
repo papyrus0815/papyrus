@@ -7,7 +7,7 @@
  * - 프로필 이미지 갤러리
  * - 소속 정보 (국가, 가문, 종교, 직업)
  * - 가계도 (가문 + 가족 관계 통합)
- * - 주요 활동 (창업 조직, 군 경력, 조직 활동, 정치 활동, 저서, 사건 참여)
+ * - 주요 사건, 저서, 관련 조직 등
  */
 import React, { useEffect, useState } from 'react'
 
@@ -130,7 +130,6 @@ const MOCK_PERSON = {
       role: '주도',
     },
   ],
-  eventTimelines: [],
 }
 
 /**
@@ -728,29 +727,6 @@ export default function PersonDetailPage() {
               as={motion.div}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
-            >
-              <MetricIcon>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </MetricIcon>
-              <MetricContent>
-                <MetricLabel>정부 직위</MetricLabel>
-                <MetricValue>
-                  {person.governmentPositions?.length || 0}건
-                </MetricValue>
-                <MetricSubtext>역임 직위</MetricSubtext>
-              </MetricContent>
-            </DashboardMetricCard>
-
-            <DashboardMetricCard
-              as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.3 }}
             >
               <MetricIcon>
@@ -770,31 +746,6 @@ export default function PersonDetailPage() {
               </MetricContent>
             </DashboardMetricCard>
 
-            <DashboardMetricCard
-              as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.4 }}
-            >
-              <MetricIcon>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 2l-5.5 9h11L12 2zm0 3.84L13.93 9h-3.87L12 5.84zM17.5 13c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM3 21.5h8v-8H3v8zm2-6h4v4H5v-4z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </MetricIcon>
-              <MetricContent>
-                <MetricLabel>조직 활동</MetricLabel>
-                <MetricValue>
-                  {(person.organizationRoles?.length || 0) +
-                    (person.militaryCommands?.length || 0) +
-                    (person.partyLeaderships?.length || 0)}
-                  건
-                </MetricValue>
-                <MetricSubtext>총 활동 수</MetricSubtext>
-              </MetricContent>
-            </DashboardMetricCard>
           </DashboardMetricsGrid>
 
           {/* 개요 탭 */}
@@ -979,158 +930,6 @@ export default function PersonDetailPage() {
               </WidgetContent>
             </DashboardWidget>
 
-            {/* 창업 조직 */}
-            <DashboardWidget
-              as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.05 }}
-            >
-              <WidgetHeader>
-                <WidgetIcon>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </WidgetIcon>
-                <WidgetTitle>창업 조직</WidgetTitle>
-              </WidgetHeader>
-              <WidgetContent>
-                {person.foundedCompanies &&
-                person.foundedCompanies.length > 0 ? (
-                  <ActivityList>
-                    {person.foundedCompanies.map(
-                      (company: {
-                        id: string
-                        name: string
-                        foundedAt?: string
-                      }) => (
-                        <ActivityItem key={company.id}>
-                          <ActivityDot />
-                          <ActivityName>{company.name}</ActivityName>
-                          {company.foundedAt && (
-                            <ActivityValue>
-                              {new Date(company.foundedAt).getFullYear()}년
-                            </ActivityValue>
-                          )}
-                        </ActivityItem>
-                      ),
-                    )}
-                  </ActivityList>
-                ) : (
-                  <EmptyStateCard>
-                    <EmptyStateText>등록된 창업 조직이 없습니다</EmptyStateText>
-                  </EmptyStateCard>
-                )}
-              </WidgetContent>
-            </DashboardWidget>
-
-            {/* 군 경력 */}
-            <DashboardWidget
-              as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
-            >
-              <WidgetHeader>
-                <WidgetIcon>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M17 10.43V2H7v8.43c0 .35.18.68.49.86l4.18 2.51-.99 2.34-3.41.29 2.59 2.24L9.07 22 12 20.23 14.93 22l-.78-3.33 2.59-2.24-3.41-.29-.99-2.34 4.18-2.51c.3-.18.48-.5.48-.86z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </WidgetIcon>
-                <WidgetTitle>군 경력</WidgetTitle>
-              </WidgetHeader>
-              <WidgetContent>
-                {person.militaryCommands &&
-                person.militaryCommands.length > 0 ? (
-                  <ActivityList>
-                    {person.militaryCommands.map(
-                      (command: {
-                        id: string
-                        unit: { name: string }
-                        rank: string
-                        role: string
-                      }) => (
-                        <ActivityItem key={command.id}>
-                          <ActivityDot />
-                          <ActivityName>{command.unit.name}</ActivityName>
-                          <ActivityValue>
-                            {command.rank} · {command.role}
-                          </ActivityValue>
-                        </ActivityItem>
-                      ),
-                    )}
-                  </ActivityList>
-                ) : (
-                  <EmptyStateCard>
-                    <EmptyStateText>등록된 군 경력이 없습니다</EmptyStateText>
-                  </EmptyStateCard>
-                )}
-              </WidgetContent>
-            </DashboardWidget>
-
-            {/* 정부 직위 */}
-            <DashboardWidget
-              as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.125 }}
-            >
-              <WidgetHeader>
-                <WidgetIcon>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                </WidgetIcon>
-                <WidgetTitle>정부 직위</WidgetTitle>
-              </WidgetHeader>
-              <WidgetContent>
-                {person.governmentPositions &&
-                person.governmentPositions.length > 0 ? (
-                  <ActivityList>
-                    {person.governmentPositions.map(
-                      (tenure: {
-                        id: string
-                        title: string
-                        termNumber?: number
-                        regnalNumber?: number
-                        startDate?: string
-                        endDate?: string
-                      }) => (
-                        <ActivityItem key={tenure.id}>
-                          <ActivityDot />
-                          <ActivityName>
-                            {tenure.termNumber && `제${tenure.termNumber}대 `}
-                            {tenure.title}
-                            {tenure.regnalNumber && ` ${tenure.regnalNumber}세`}
-                          </ActivityName>
-                          {tenure.startDate && (
-                            <ActivityValue>
-                              {new Date(tenure.startDate).getFullYear()}
-                              {tenure.endDate
-                                ? ` ~ ${new Date(tenure.endDate).getFullYear()}`
-                                : ' ~ 현재'}
-                            </ActivityValue>
-                          )}
-                        </ActivityItem>
-                      ),
-                    )}
-                  </ActivityList>
-                ) : (
-                  <EmptyStateCard>
-                    <EmptyStateText>등록된 정부 직위가 없습니다</EmptyStateText>
-                  </EmptyStateCard>
-                )}
-              </WidgetContent>
-            </DashboardWidget>
           </DashboardActivityGrid>
         </OverviewDashboard>
       )}
@@ -1154,7 +953,6 @@ export default function PersonDetailPage() {
                     description?: string
                     category?: any
                     countryRelations?: any[]
-                    timelines?: any[]
                   }
                   role?: string
                   note?: string
@@ -1232,48 +1030,6 @@ export default function PersonDetailPage() {
                         </EventDetailSection>
                       )}
 
-                    {personEvent.event.timelines &&
-                      personEvent.event.timelines.length > 0 && (
-                        <EventDetailSection>
-                          <EventDetailSectionTitle>
-                            🗺️ 타임라인
-                          </EventDetailSectionTitle>
-                          {personEvent.event.timelines.map((timeline: any) => (
-                            <EventDetailItem key={timeline.id}>
-                              <EventDetailItemHeader>
-                                <EventDetailItemTitle>
-                                  📍 {timeline.locationName || '위치 미상'}
-                                </EventDetailItemTitle>
-                                {timeline.occurredAt && (
-                                  <EventDetailItemDate>
-                                    {new Date(
-                                      timeline.occurredAt,
-                                    ).toLocaleDateString('ko-KR', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                    })}
-                                  </EventDetailItemDate>
-                                )}
-                              </EventDetailItemHeader>
-                              <EventDetailItemSubtitle>
-                                {timeline.title}
-                              </EventDetailItemSubtitle>
-                              {timeline.description && (
-                                <EventDetailItemDesc>
-                                  {timeline.description}
-                                </EventDetailItemDesc>
-                              )}
-                              {timeline.facility && (
-                                <EventDetailItemDesc>
-                                  🏭 {timeline.facility.name} (
-                                  {timeline.facility.facilityType})
-                                </EventDetailItemDesc>
-                              )}
-                            </EventDetailItem>
-                          ))}
-                        </EventDetailSection>
-                      )}
                   </EventDetailCard>
                 ),
               )}
@@ -1730,223 +1486,6 @@ export default function PersonDetailPage() {
         {activeTab === 'activities' && (
           <ActivitiesTabContent>
             <ActivitySection>
-              {/* 조직 활동 */}
-              <OrganizationCard
-                as={motion.div}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-              >
-                <CardHeader>
-                  <CardHeaderIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12 2l-5.5 9h11L12 2zm0 3.84L13.93 9h-3.87L12 5.84zM17.5 13c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zm0 7c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5zM3 21.5h8v-8H3v8zm2-6h4v4H5v-4z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </CardHeaderIcon>
-                  <CardTitle>조직 활동</CardTitle>
-                </CardHeader>
-                {person.organizationRoles &&
-                person.organizationRoles.length > 0 ? (
-                  <BadgeList>
-                    {person.organizationRoles.map(
-                      (role: {
-                        id: string
-                        organization: { name?: string; shortName?: string }
-                        roleTitle: string
-                        startDate?: string
-                        endDate?: string
-                      }) => (
-                        <BadgeItem key={role.id} $color="#ad46ff">
-                          <BadgeName>
-                            {role.organization.name ||
-                              role.organization.shortName}
-                          </BadgeName>
-                          <BadgeRole>{role.roleTitle}</BadgeRole>
-                          {role.startDate && (
-                            <BadgePeriod>
-                              {new Date(role.startDate).getFullYear()}
-                              {role.endDate
-                                ? ` ~ ${new Date(role.endDate).getFullYear()}`
-                                : ' ~ 현재'}
-                            </BadgePeriod>
-                          )}
-                        </BadgeItem>
-                      ),
-                    )}
-                  </BadgeList>
-                ) : (
-                  <EmptyStateCard>
-                    <EmptyStateIcon>
-                      <svg
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                      >
-                        <path
-                          d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm14 0a6 6 0 1 1-12 0 6 6 0 0 1 12 0z"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </EmptyStateIcon>
-                    <EmptyStateText>등록된 조직 활동이 없습니다</EmptyStateText>
-                  </EmptyStateCard>
-                )}
-              </OrganizationCard>
-
-              {/* 정당 활동 */}
-              <PartyCard
-                as={motion.div}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.25,
-                  delay: 0.05,
-                  ease: [0.4, 0, 0.2, 1],
-                }}
-              >
-                <CardHeader>
-                  <CardHeaderIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zm-2 10H6V7h12v12zm-9-6c-.83 0-1.5-.67-1.5-1.5S8.17 10 9 10s1.5.67 1.5 1.5S9.83 13 9 13zm7.5-1.5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5.67-1.5 1.5-1.5 1.5.67 1.5 1.5zM8 15h8v2H8v-2z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </CardHeaderIcon>
-                  <CardTitle>정당 활동</CardTitle>
-                </CardHeader>
-                {person.partyLeaderships &&
-                person.partyLeaderships.length > 0 ? (
-                  <BadgeList>
-                    {person.partyLeaderships.map(
-                      (leadership: {
-                        id: string
-                        party: { name?: string; shortName?: string }
-                        roleTitle: string
-                        startDate?: string
-                        endDate?: string
-                      }) => (
-                        <BadgeItem key={leadership.id} $color="#ad46ff">
-                          <BadgeName>
-                            {leadership.party.name ||
-                              leadership.party.shortName}
-                          </BadgeName>
-                          <BadgeRole>{leadership.roleTitle}</BadgeRole>
-                          {leadership.startDate && (
-                            <BadgePeriod>
-                              {new Date(leadership.startDate).getFullYear()}
-                              {leadership.endDate
-                                ? ` ~ ${new Date(leadership.endDate).getFullYear()}`
-                                : ' ~ 현재'}
-                            </BadgePeriod>
-                          )}
-                        </BadgeItem>
-                      ),
-                    )}
-                  </BadgeList>
-                ) : (
-                  <EmptyStateCard>
-                    <EmptyStateIcon>
-                      <svg
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                      >
-                        <path
-                          d="M3 21h18M5 21V7l8-4v18M19 21V10l-6-3"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </EmptyStateIcon>
-                    <EmptyStateText>등록된 정당 활동이 없습니다</EmptyStateText>
-                  </EmptyStateCard>
-                )}
-              </PartyCard>
-
-              {/* 군 경력 */}
-              <MilitaryCard
-                as={motion.div}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.25,
-                  delay: 0.1,
-                  ease: [0.4, 0, 0.2, 1],
-                }}
-              >
-                <CardHeader>
-                  <CardHeaderIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M17 10.43V2H7v8.43c0 .35.18.68.49.86l4.18 2.51-.99 2.34-3.41.29 2.59 2.24L9.07 22 12 20.23 14.93 22l-.78-3.33 2.59-2.24-3.41-.29-.99-2.34 4.18-2.51c.3-.18.48-.5.48-.86z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </CardHeaderIcon>
-                  <CardTitle>군 경력</CardTitle>
-                </CardHeader>
-                {person.militaryCommands &&
-                person.militaryCommands.length > 0 ? (
-                  <BadgeList>
-                    {person.militaryCommands.map(
-                      (command: {
-                        id: string
-                        unit: { name: string }
-                        rank: string
-                        role: string
-                        startDate?: string
-                        endDate?: string
-                      }) => (
-                        <BadgeItem key={command.id} $color="#ad46ff">
-                          <BadgeName>{command.unit.name}</BadgeName>
-                          <BadgeRole>
-                            {command.rank} · {command.role}
-                          </BadgeRole>
-                          {command.startDate && (
-                            <BadgePeriod>
-                              {new Date(command.startDate).getFullYear()}
-                              {command.endDate
-                                ? ` ~ ${new Date(command.endDate).getFullYear()}`
-                                : ' ~ 현재'}
-                            </BadgePeriod>
-                          )}
-                        </BadgeItem>
-                      ),
-                    )}
-                  </BadgeList>
-                ) : (
-                  <EmptyStateCard>
-                    <EmptyStateIcon>
-                      <svg
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                      >
-                        <path
-                          d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </EmptyStateIcon>
-                    <EmptyStateText>등록된 군 경력이 없습니다</EmptyStateText>
-                  </EmptyStateCard>
-                )}
-              </MilitaryCard>
-
               {/* 주요 사건 */}
               <EventCard
                 as={motion.div}
@@ -2086,78 +1625,6 @@ export default function PersonDetailPage() {
                   </EmptyStateCard>
                 )}
               </BookCard>
-
-              {/* 창업 조직 */}
-              <CompanyCard
-                as={motion.div}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.25,
-                  delay: 0.05,
-                  ease: [0.4, 0, 0.2, 1],
-                }}
-              >
-                <CardHeader>
-                  <CardHeaderIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </CardHeaderIcon>
-                  <CardTitle>창업 조직</CardTitle>
-                </CardHeader>
-                {person.foundedCompanies &&
-                person.foundedCompanies.length > 0 ? (
-                  <TimelineList>
-                    {person.foundedCompanies.map(
-                      (company: {
-                        id: string
-                        name: string
-                        foundedAt?: string
-                      }) => (
-                        <TimelineItem key={company.id}>
-                          <TimelineDot $color="#ad46ff" />
-                          <TimelineContent>
-                            <TimelineName>{company.name}</TimelineName>
-                            {company.foundedAt && (
-                              <TimelineDate>
-                                {new Date(company.foundedAt).getFullYear()}년
-                                설립
-                              </TimelineDate>
-                            )}
-                          </TimelineContent>
-                        </TimelineItem>
-                      ),
-                    )}
-                  </TimelineList>
-                ) : (
-                  <EmptyStateCard>
-                    <EmptyStateIcon>
-                      <svg
-                        width="48"
-                        height="48"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                      >
-                        <rect
-                          x="3"
-                          y="3"
-                          width="18"
-                          height="18"
-                          rx="2"
-                          strokeWidth="1.5"
-                        />
-                        <path d="M9 11h6m-6 4h6" strokeWidth="1.5" />
-                      </svg>
-                    </EmptyStateIcon>
-                    <EmptyStateText>등록된 창업 조직가 없습니다</EmptyStateText>
-                  </EmptyStateCard>
-                )}
-              </CompanyCard>
 
               {/* 관련 조직 */}
               <CompanyCard

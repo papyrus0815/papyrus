@@ -7,7 +7,6 @@ import {
 import { PersonPrismaRepository } from '../infrastructure/person.prisma.repository'
 import {
   CreateMilitaryCareerDto,
-  CreateGovernmentCareerDto,
   CreateBusinessCareerDto,
   CreateAcademicCareerDto,
   CreateAthleteCareerDto,
@@ -23,7 +22,6 @@ import {
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
-  GovernmentCareerResponseDto,
   BusinessCareerResponseDto,
   AcademicCareerResponseDto,
   AthleteCareerResponseDto,
@@ -112,17 +110,6 @@ export class PersonService {
    */
   async addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
     return this.personRepository.addMilitaryCareer(dto)
-  }
-
-  /**
-   * 정치인/공무원 경력 추가
-   */
-  async addGovernmentCareer(dto: CreateGovernmentCareerDto): Promise<GovernmentCareerResponseDto> {
-    return this.personRepository.addGovernmentCareer(dto)
-  }
-
-  async deleteGovernmentCareer(id: string): Promise<void> {
-    return this.personRepository.deleteGovernmentCareer(id)
   }
 
   /**

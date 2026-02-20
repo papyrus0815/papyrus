@@ -27,7 +27,6 @@ export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
  * 요약 뷰 모드
  */
 export const SUMMARY_VIEW_MODES = {
-  TIMELINE: 'timeline',
   TREE: 'tree',
 } as const
 

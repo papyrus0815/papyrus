@@ -16,9 +16,7 @@ interface HistorySectionProps {
 }
 
 export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
-  const [activeView, setActiveView] = useState<
-    'timeline' | 'events' | 'events-timeline'
-  >('timeline')
+  const [activeView] = useState<'events'>('events')
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
   const [selectedCountryId, setSelectedCountryId] = useState<string>('all') // 선택된 국가
   const [selectedEvent, setSelectedEvent] = useState<HistoricalEvent | null>(
@@ -145,96 +143,12 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
           style={{ display: 'flex', alignItems: 'center', gap: '16px' }}
         ></div>
 
-        {/* 뷰 전환 버튼 */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            background: '#f3f4f6',
-            padding: '4px',
-            borderRadius: '8px',
-          }}
-        >
-          <button
-            onClick={() => {
-              setActiveView('timeline')
-              setSelectedEvent(null)
-            }}
-            style={{
-              padding: '8px 20px',
-              border: 'none',
-              borderRadius: '6px',
-              background: activeView === 'timeline' ? 'white' : 'transparent',
-              color: activeView === 'timeline' ? '#8b5cf6' : '#6b7280',
-              fontWeight: activeView === 'timeline' ? '600' : '400',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow:
-                activeView === 'timeline'
-                  ? '0 2px 4px rgba(0,0,0,0.1)'
-                  : 'none',
-            }}
-          >
-            🏛️ 국가
-          </button>
-          <button
-            onClick={() => {
-              setActiveView('events-timeline')
-              setSelectedPeriod(null)
-              setSelectedEvent(null)
-            }}
-            style={{
-              padding: '8px 20px',
-              border: 'none',
-              borderRadius: '6px',
-              background:
-                activeView === 'events-timeline' ? 'white' : 'transparent',
-              color: activeView === 'events-timeline' ? '#8b5cf6' : '#6b7280',
-              fontWeight: activeView === 'events-timeline' ? '600' : '400',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow:
-                activeView === 'events-timeline'
-                  ? '0 2px 4px rgba(0,0,0,0.1)'
-                  : 'none',
-            }}
-          >
-            📅 사건 타임라인
-          </button>
-          <button
-            onClick={() => {
-              setActiveView('events')
-              setSelectedPeriod(null)
-            }}
-            style={{
-              padding: '8px 20px',
-              border: 'none',
-              borderRadius: '6px',
-              background: activeView === 'events' ? 'white' : 'transparent',
-              color: activeView === 'events' ? '#8b5cf6' : '#6b7280',
-              fontWeight: activeView === 'events' ? '600' : '400',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow:
-                activeView === 'events' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-            }}
-          >
-            📜 사건 목록
-          </button>
-        </div>
       </div>
 
       <AnimatePresence mode="wait">
-        {/* 타임라인 뷰 */}
-        {activeView === 'timeline' && !selectedPeriod && (
-          <motion.div
-            key="timeline"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            {/* 역사적 국가 타임라인 */}
+        {/* 타임라인 뷰 제거됨 */}
+        {false && (
+          <motion.div key="timeline-removed">
             <div style={{ marginBottom: '40px' }}>
               <h3
                 style={{
@@ -1153,8 +1067,8 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
           </motion.div>
         )}
 
-        {/* 시대 상세 뷰 */}
-        {activeView === 'timeline' && selectedPeriod && (
+        {/* 시대 상세 뷰 - 타임라인 기능 제거 */}
+        {false && selectedPeriod && (
           <motion.div
             key="period-detail"
             initial={{ opacity: 0, x: 20 }}
@@ -1392,8 +1306,8 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
           </motion.div>
         )}
 
-        {/* 사건 타임라인 뷰 */}
-        {activeView === 'events-timeline' && !selectedEvent && (
+        {/* 사건 타임라인 뷰 - 타임라인 기능 제거 */}
+        {false && !selectedEvent && (
           <motion.div
             key="events-timeline"
             initial={{ opacity: 0, y: 20 }}

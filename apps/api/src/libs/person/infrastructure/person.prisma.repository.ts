@@ -2,7 +2,6 @@ import { BadRequestException, Injectable } from '@nestjs/common'
 import { 
   Person,
   MilitaryCareer,
-  GovernmentCareer,
   BusinessCareer,
   AcademicCareer,
   AthleteCareer,
@@ -22,7 +21,6 @@ import {
 } from '../domain/person.repository'
 import {
   CreateMilitaryCareerDto,
-  CreateGovernmentCareerDto,
   CreateBusinessCareerDto,
   CreateAcademicCareerDto,
   CreateAthleteCareerDto,
@@ -38,7 +36,6 @@ import {
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
-  GovernmentCareerResponseDto,
   BusinessCareerResponseDto,
   AcademicCareerResponseDto,
   AthleteCareerResponseDto,
@@ -170,27 +167,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       organizationId: career.organizationId,
       branch: career.branch,
       position: career.position,
-      termNumber: career.termNumber,
-      startDate: career.startDate?.toISOString() || null,
-      endDate: career.endDate?.toISOString() || null,
-      notes: career.notes,
-      createdAt: career.createdAt.toISOString(),
-      updatedAt: career.updatedAt.toISOString(),
-    }
-  }
-
-  private mapToGovernmentCareerResponse(career: GovernmentCareer): GovernmentCareerResponseDto {
-    return {
-      id: career.id,
-      personId: career.personId,
-      timelineTitle: career.timelineTitle,
-      showPositionInfo: career.showPositionInfo,
-      positionId: career.positionId,
-      jobCategoryId: career.jobCategoryId,
-      organizationId: career.organizationId,
-      countryId: career.countryId,
-      department: career.department,
-      roleTitle: career.roleTitle,
       termNumber: career.termNumber,
       startDate: career.startDate?.toISOString() || null,
       endDate: career.endDate?.toISOString() || null,
@@ -469,34 +445,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             startDate: 'desc',
           },
         },
-        governmentCareers: {
-          select: {
-            id: true,
-            timelineTitle: true,
-            showPositionInfo: true,
-            positionId: true,
-            roleTitle: true,
-            termNumber: true,
-            startDate: true,
-            endDate: true,
-            countryId: true,
-            country: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            position: {
-              select: {
-                id: true,
-                title: true,
-              },
-            },
-          },
-          orderBy: {
-            startDate: 'desc',
-          },
-        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -681,67 +629,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                         name: true,
                       },
                     },
-                  },
-                },
-                timelines: {
-                  select: {
-                    id: true,
-                    title: true,
-                    description: true,
-                    occurredAt: true,
-                    locationName: true,
-                    latitude: true,
-                    longitude: true,
-                    sequenceNumber: true,
-                    city: {
-                      select: {
-                        id: true,
-                        name: true,
-                      },
-                    },
-                    administrativeDivision: {
-                      select: {
-                        id: true,
-                        name: true,
-                      },
-                    },
-                    modernCountry: {
-                      select: {
-                        id: true,
-                        name: true,
-                      },
-                    },
-                    historicalCountry: {
-                      select: {
-                        id: true,
-                        name: true,
-                      },
-                    },
-                    facility: {
-                      select: {
-                        id: true,
-                        name: true,
-                        facilityType: true,
-                      },
-                    },
-                    EventTimelinePerson: {
-                      select: {
-                        id: true,
-                        action: true,
-                        note: true,
-                        person: {
-                          select: {
-                            id: true,
-                            name: true,
-                            surname: true,
-                            nameDisplayOrder: true,
-                          },
-                        },
-                      },
-                    },
-                  },
-                  orderBy: {
-                    sequenceNumber: 'asc',
                   },
                 },
               },
@@ -958,43 +845,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
     
     return this.mapToMilitaryCareerResponse(career)
-  }
-
-  /**
-   * 정치인/공무원 경력 추가
-   * positionId는 Job 테이블의 id를 참조하므로 유효한 직급(Job) ID가 필요합니다.
-   */
-  async addGovernmentCareer(dto: CreateGovernmentCareerDto): Promise<GovernmentCareerResponseDto> {
-    const { images, role, ...careerData } = dto
-
-    const positionId = dto.positionId?.trim()
-    if (!positionId) {
-      throw new BadRequestException('정치인/공무원 경력에는 직급(직책)을 선택해주세요.')
-    }
-    const job = await this.prisma.job.findUnique({ where: { id: positionId } })
-    if (!job) {
-      throw new BadRequestException('선택한 직급(직책)이 존재하지 않습니다.')
-    }
-
-    const career = await this.prisma.governmentCareer.create({
-      data: {
-        ...careerData,
-        roleTitle: role ?? (careerData as any).roleTitle,
-        positionId,
-        images: images && images.length > 0 ? {
-          create: images
-        } : undefined
-      },
-    })
-
-    return this.mapToGovernmentCareerResponse(career)
-  }
-
-  /**
-   * 정치인/공무원 경력 삭제
-   */
-  async deleteGovernmentCareer(id: string): Promise<void> {
-    await this.prisma.governmentCareer.delete({ where: { id } })
   }
 
   /**
@@ -1565,7 +1415,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id: personId },
       include: {
         militaryCareers: true,
-        governmentCareers: true,
         businessCareers: true,
         academicCareers: true,
         religiousCareers: true,
@@ -1598,7 +1447,7 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     return {
       military: person.militaryCareers.map(c => this.mapToMilitaryCareerResponse(c)),
-      government: person.governmentCareers.map(c => this.mapToGovernmentCareerResponse(c)),
+      government: [],
       business: person.businessCareers.map(c => this.mapToBusinessCareerResponse(c)),
       academic: person.academicCareers.map(c => this.mapToAcademicCareerResponse(c)),
       athlete: person.athleteCareers.map(c => this.mapToAthleteCareerResponse(c)),

@@ -444,64 +444,6 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
                                 ))}
                               </TimelineSection>
                             )}
-                          {evt.event.timelines &&
-                            evt.event.timelines.length > 0 && (
-                              <TimelineSection>
-                                <TimelineTitle>타임라인</TimelineTitle>
-                                {evt.event.timelines.map((timeline: any) => (
-                                  <TimelineItem key={timeline.id}>
-                                    <TimelineHeader>
-                                      <TimelineLocation>
-                                        📍{' '}
-                                        {timeline.locationName || '위치 미상'}
-                                      </TimelineLocation>
-                                      {timeline.occurredAt && (
-                                        <TimelineDate>
-                                          {new Date(
-                                            timeline.occurredAt,
-                                          ).toLocaleDateString('ko-KR', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric',
-                                          })}
-                                        </TimelineDate>
-                                      )}
-                                    </TimelineHeader>
-                                    <TimelineTitle>
-                                      {timeline.title}
-                                    </TimelineTitle>
-                                    {timeline.description && (
-                                      <TimelineDesc>
-                                        {timeline.description}
-                                      </TimelineDesc>
-                                    )}
-                                    {timeline.facility && (
-                                      <TimelineDesc>
-                                        🏭 {timeline.facility.name} (
-                                        {timeline.facility.facilityType})
-                                      </TimelineDesc>
-                                    )}
-                                    {timeline.EventTimelinePerson &&
-                                      timeline.EventTimelinePerson.length >
-                                        0 && (
-                                        <TimelinePersons>
-                                          {timeline.EventTimelinePerson.map(
-                                            (tp: any) => (
-                                              <TimelinePerson key={tp.id}>
-                                                👤{' '}
-                                                {tp.person.surname
-                                                  ? `${tp.person.surname} ${tp.person.name}`
-                                                  : tp.person.name}
-                                                {tp.action && ` - ${tp.action}`}
-                                              </TimelinePerson>
-                                            ),
-                                          )}
-                                        </TimelinePersons>
-                                      )}
-                                  </TimelineItem>
-                                ))}
-                              </TimelineSection>
-                            )}
                         </EventItem>
                       ))}
                     </ActivityList>

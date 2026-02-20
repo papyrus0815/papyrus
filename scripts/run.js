@@ -26,7 +26,8 @@ function showHelp() {
 
 📊 데이터베이스 (database/)
   build     - Prisma 스키마 빌드
-  migrate   - 데이터베이스 마이그레이션
+  migrate   - 데이터베이스 마이그레이션 (대화형, 새 마이그레이션 생성)
+  migrate-deploy - 미적용 마이그레이션만 적용 (비대화형/CI용)
   generate  - Prisma 클라이언트 생성
   reset     - 데이터베이스 리셋
 

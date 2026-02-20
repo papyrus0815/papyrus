@@ -287,39 +287,83 @@ ${content}
         return buildResult
       }
 
-      // 2. 마이그레이션 생성 및 적용
       const schemaPath = this.getSchemaPath()
-      this.log('📝 마이그레이션 생성 및 DB 적용 중...')
+      const migrationsPath = this.getMigrationsPath()
 
-      const { stdout, stderr } = await execAsync(
-        `cd "${this.projectRoot}" && npx prisma migrate dev --name ${migrationName} --schema="${schemaPath}"`,
+      // 2. migrate diff로 변경 SQL 생성 (TTY 불필요, --schema 옵션 미지원)
+      this.log('📝 마이그레이션 SQL 생성 중...')
+      const migrationsPathRelative = 'apps/api/prisma/migrations'
+      const schemaPathRelative = 'apps/api/prisma/schema.prisma'
+      const diffCmd = `cd "${this.projectRoot}" && npx prisma migrate diff --from-migrations "${migrationsPathRelative}" --to-schema "${schemaPathRelative}" --script`
+      let sqlOutput: string
+      try {
+        const { stdout } = await execAsync(diffCmd, { maxBuffer: 5 * 1024 * 1024 })
+        sqlOutput = stdout
+      } catch (diffError: any) {
+        throw new Error(
+          (diffError.stderr || diffError.message || 'migrate diff 실패').toString(),
+        )
+      }
+
+      // dotenv/npx 로그 등이 stdout에 섞일 수 있으므로 SQL이 아닌 줄 제거
+      const sqlOnly = sqlOutput
+        .split('\n')
+        .filter(
+          (line) =>
+            !/^\[.*\]/.test(line.trim()) &&
+            !/dotenv|injecting|Prisma schema loaded|Datasource "|tip:|ExperimentalWarning/i.test(line),
+        )
+        .join('\n')
+        .trim()
+
+      const sqlTrimmed = sqlOnly.replace(/\s*--.*$/gm, '').trim()
+      if (!sqlTrimmed) {
+        const msg = '스키마에 변경사항이 없습니다. 마이그레이션 파일이 생성되지 않았습니다.'
+        this.log(`⚠️ ${msg}`)
+        return { success: true, message: msg }
+      }
+
+      // 3. 마이그레이션 폴더 및 migration.sql 생성 (필터링된 SQL만 저장)
+      const ts = new Date();
+      const timestamp =
+        ts.getFullYear() +
+        String(ts.getMonth() + 1).padStart(2, '0') +
+        String(ts.getDate()).padStart(2, '0') +
+        String(ts.getHours()).padStart(2, '0') +
+        String(ts.getMinutes()).padStart(2, '0') +
+        String(ts.getSeconds()).padStart(2, '0')
+      const folderName = `${timestamp}_${migrationName}`
+      const migrationDir = path.join(migrationsPath, folderName)
+      fs.mkdirSync(migrationDir, { recursive: true })
+      fs.writeFileSync(path.join(migrationDir, 'migration.sql'), sqlOnly, 'utf-8')
+      this.log(`📁 마이그레이션 파일 생성: ${folderName}/migration.sql`)
+
+      // 4. DB 적용
+      this.log('📝 마이그레이션 DB 적용 중...')
+      const { stdout: deployStdout, stderr: deployStderr } = await execAsync(
+        `cd "${this.projectRoot}" && npx prisma migrate deploy --schema="${schemaPath}"`,
       )
-
-      if (stderr && !stderr.includes('ExperimentalWarning')) {
-        this.log(`⚠️ ${stderr}`)
+      if (deployStderr && !deployStderr.includes('ExperimentalWarning')) {
+        this.log(`⚠️ ${deployStderr}`)
       }
-
+      this.log(deployStdout)
       this.log('✅ 마이그레이션 완료!')
-      this.log(stdout)
 
-      // 로그 저장
       let logContent = `마이그레이션이 완료되었습니다.\n`
-      logContent += `마이그레이션 이름: ${migrationName}\n\n`
-      logContent += '=== 실행 로그 ===\n'
-      logContent += stdout
-      if (stderr && !stderr.includes('ExperimentalWarning')) {
-        logContent += '\n\n=== 경고 ===\n' + stderr
-      }
+      logContent += `마이그레이션 이름: ${migrationName}\n`
+      logContent += `폴더: ${folderName}\n\n`
+      logContent += '=== DB 적용 로그 ===\n'
+      logContent += deployStdout
       const logPath = this.saveLog('migrate', 'success', logContent)
 
-      return { 
-        success: true, 
-        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      return {
+        success: true,
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : ''),
       }
     } catch (error: any) {
       const errorMsg = `마이그레이션 실패: ${error.message}`
       this.log(`❌ ${errorMsg}`)
-      
+
       // 로그 저장
       let logContent = `마이그레이션 이름: ${migrationName}\n\n`
       logContent += errorMsg
@@ -327,9 +371,9 @@ ${content}
       if (error.stderr) logContent += '\n\n=== 에러 로그 ===\n' + error.stderr
       const logPath = this.saveLog('migrate', 'failed', logContent)
 
-      return { 
-        success: false, 
-        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : '')
+      return {
+        success: false,
+        message: logContent + (logPath ? `\n\n📁 로그: ${logPath}` : ''),
       }
     }
   }

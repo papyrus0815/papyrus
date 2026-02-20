@@ -202,7 +202,6 @@ model Organization {
 
   // 분야별 경력 관계
   militaryCareers    MilitaryCareer[]    @relation("MilitaryOrganization")
-  governmentCareers  GovernmentCareer[]  @relation("GovernmentOrganization")
   businessCareers    BusinessCareer[]    @relation("BusinessOrganization")
   academicCareers    AcademicCareer[]    @relation("AcademicOrganization")
   religiousCareers   ReligiousCareer[]   @relation("ReligiousOrganization")

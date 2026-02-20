@@ -37,26 +37,6 @@ export interface CreateMilitaryCareerDto {
 }
 
 /**
- * 정치인/공무원 경력 생성 DTO
- */
-export interface CreateGovernmentCareerDto {
-  personId: string
-  timelineTitle?: string
-  showPositionInfo?: boolean
-  positionId: string // 직급 ID (대통령, 장관, 서기장 등)
-  jobCategoryId?: string
-  organizationId?: string // 소속 기관 ID
-  countryId: string // 국가 ID
-  department?: string // 부처/부서
-  role?: string // 역할
-  termNumber?: number // 대수 (제34대 대통령)
-  startDate?: string
-  endDate?: string
-  notes?: string
-  images?: CareerImageDto[]
-}
-
-/**
  * 기업인 경력 생성 DTO
  */
 export interface CreateBusinessCareerDto {
@@ -335,18 +315,6 @@ export const personCareerApi = {
   addMilitaryCareer: async (dto: CreateMilitaryCareerDto) => {
     const response = await apiClient.post('/persons/careers/military', dto)
     return response.data
-  },
-
-  /**
-   * 정치인/공무원 경력 추가
-   */
-  addGovernmentCareer: async (dto: CreateGovernmentCareerDto) => {
-    const response = await apiClient.post('/persons/careers/government', dto)
-    return response.data
-  },
-
-  deleteGovernmentCareer: async (id: string) => {
-    await apiClient.delete(`/persons/careers/government/${id}`)
   },
 
   /**

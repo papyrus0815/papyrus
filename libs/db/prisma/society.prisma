@@ -142,7 +142,6 @@ model Job {
 
   // 분야별 경력 관계
   militaryRanks       MilitaryCareer[]   @relation("MilitaryRank")
-  governmentPositions GovernmentCareer[] @relation("GovernmentPosition")
   businessPositions   BusinessCareer[]   @relation("BusinessPosition")
   academicPositions   AcademicCareer[]   @relation("AcademicPosition")
   religiousPositions  ReligiousCareer[]  @relation("ReligiousPosition")

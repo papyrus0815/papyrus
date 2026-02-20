@@ -202,7 +202,6 @@ model HistoricalCountry {
   PoliticalParty          PoliticalParty[]                @relation("PoliticalPartyHistoricalCountry")
   governmentPositions     GovernmentPositionDefinition[]  @relation("GovernmentPositionHistoricalCountry")
   governmentTenures       GovernmentPositionTenure[]      @relation("TenureHistoricalCountry")
-  EventTimeline           EventTimeline[]
   eventCountryRelations   EventCountryRelation[]
 
   // 🆕 정규화된 군사 사건 관계

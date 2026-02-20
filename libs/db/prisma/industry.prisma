@@ -150,7 +150,6 @@ model CompanyFacility {
   city                   City?                    @relation(fields: [cityId], references: [id], onDelete: SetNull)
   company                Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   facilityHistories      CompanyFacilityHistory[]
-  EventTimeline          EventTimeline[]
   builtNavalVessels      NavalVessel[]
 
   //--- 메타데이터 필드

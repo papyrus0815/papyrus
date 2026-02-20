@@ -19,7 +19,6 @@ import {
   FiPlus,
   FiTarget,
   FiUserCheck,
-  FiUsers,
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
@@ -43,17 +42,11 @@ import {
   getAllEventCategories,
 } from '@/shared/api/event-categories'
 import { getAllEvents } from '@/shared/api/events'
-import {
-  HeadOfStateDuringEvent,
-  findHeadsOfStateDuringPeriod,
-} from '@/shared/api/government-positions'
-import { getAllPersonsWithGovernmentPositions } from '@/shared/api/persons'
 import { pathKeys } from '@/shared/router'
 import {
   CategoryModal,
   EventDetailPanel,
   SimpleSelectModal,
-  TimelineView,
   TreeView,
 } from '@/widgets/event-list/ui'
 
@@ -78,12 +71,7 @@ import {
   formatCompactNumber,
   formatDateRange,
   getCenturyFromDate,
-  getPrimaryHeadOfState,
 } from '../utils/events.utils'
-import {
-  MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS,
-  MOCK_POSITION_TYPES,
-} from './mock-government-positions'
 
 type CenturyFilter = typeof FILTER_ALL | number
 type FilterChip = {
@@ -100,58 +88,6 @@ const projectCoordinates = (marker: EventMapMarker) => {
   const left = ((clampedLng + 180) / 360) * 100
 
   return { top: `${top}%`, left: `${left}%` }
-}
-
-const formatPersonDate = (
-  person: any,
-  type: 'birth' | 'death',
-): string | null => {
-  if (!person) return null
-  const era = person[`${type}Era`]
-  const year = person[`${type}Year`]
-  const month = person[`${type}Month`]
-  const day = person[`${type}Day`]
-
-  if (year) {
-    let dateStr = `${era === 'BC' ? 'BC ' : ''}${year}`
-    if (month) dateStr += `.${String(month).padStart(2, '0')}`
-    if (day) dateStr += `.${String(day).padStart(2, '0')}`
-    return dateStr
-  }
-
-  const rawDate = person[`${type}Date`]
-  if (rawDate) {
-    const parsed = new Date(rawDate)
-    if (!Number.isNaN(parsed.getTime())) {
-      return String(parsed.getFullYear())
-    }
-    return String(rawDate)
-  }
-
-  return null
-}
-
-const formatLifeSpan = (person: any) => {
-  const birth = formatPersonDate(person, 'birth')
-  const death = formatPersonDate(person, 'death')
-  if (!birth && !death) return '정보 없음'
-  return `${birth ?? '미상'} ~ ${death ?? '미상'}`
-}
-
-const formatTenurePeriod = (startDate?: string, endDate?: string) => {
-  if (!startDate && !endDate) return '기간 미상'
-  const startYear = startDate ? new Date(startDate).getFullYear() : null
-  const endYear = endDate ? new Date(endDate).getFullYear() : null
-  return `${startYear ?? '미상'} ~ ${endYear ?? '현재'}`
-}
-
-const getCareerTimeline = (person: any) => {
-  const positions = person?.governmentPositions ?? []
-  return [...positions].sort((a, b) => {
-    const aTime = new Date(a.startDate || 0).getTime()
-    const bTime = new Date(b.startDate || 0).getTime()
-    return aTime - bTime
-  })
 }
 
 export const EventsCatalogPage: React.FC = () => {
@@ -173,35 +109,21 @@ export const EventsCatalogPage: React.FC = () => {
   const [selectedCountry, setSelectedCountry] = useState<
     typeof FILTER_ALL | string
   >(FILTER_ALL)
-  const [selectedPositionType, setSelectedPositionType] = useState<
-    typeof FILTER_ALL | string
-  >(FILTER_ALL)
   const [showFlatView, setShowFlatView] = useState(false)
-  const [showTenureMarkers, setShowTenureMarkers] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(
-    new Set(),
-  )
-  const [expandedTenureGroups, setExpandedTenureGroups] = useState<Set<string>>(
     new Set(),
   )
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
   const [isLoading, setIsLoading] = useState(true)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
-  const [showPositionTypeModal, setShowPositionTypeModal] = useState(false)
   const [showSummaryModal, setShowSummaryModal] = useState(false)
   const [summaryEventId, setSummaryEventId] = useState<string | null>(null)
-  const [summaryViewMode, setSummaryViewMode] = useState<SummaryViewMode>(
-    SUMMARY_VIEW_MODES.TIMELINE,
+  const [summaryViewMode] = useState<SummaryViewMode>(
+    SUMMARY_VIEW_MODES.TREE,
   )
   const [events, setEvents] = useState<HistoricalEvent[]>([])
-  const [personsWithGovPositions, setPersonsWithGovPositions] = useState<
-    typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
-  >([])
-  const [eventHeadsOfState, setEventHeadsOfState] = useState<
-    Map<string, HeadOfStateDuringEvent[]>
-  >(new Map())
 
   // DB 카테고리 로드
   useEffect(() => {
@@ -216,34 +138,14 @@ export const EventsCatalogPage: React.FC = () => {
       })
   }, [])
 
-  // 실제 API에서 이벤트 데이터 불러오기
+  // 실제 API에서 이벤트 데이터 불러오기 (연대표/역대 수반은 국가 페이지에서만 사용)
   useEffect(() => {
     const fetchEvents = async () => {
       setIsLoading(true)
       try {
-        // 🎭 목업: 인물(정부 직위)만 목업 사용 여부. false = 실제 API 사용 (권장)
-        const USE_MOCK_PERSONS = false
-
-        let eventsResponse: Awaited<ReturnType<typeof getAllEvents>>
-        let personsResponse: typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
-
-        if (USE_MOCK_PERSONS) {
-          eventsResponse = await getAllEvents()
-          personsResponse = MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
-          console.log('🎭 인물 데이터만 목업 사용 중')
-        } else {
-          ;[eventsResponse, personsResponse] = await Promise.all([
-            getAllEvents(),
-            getAllPersonsWithGovernmentPositions(),
-          ])
-        }
-
-        console.log('📦 API 응답 (전체):', eventsResponse)
-        console.log('📦 첫 번째 이벤트 상세:', eventsResponse[0])
-        console.log('👥 인물 정부 직책 데이터:', personsResponse)
-
-        const response = eventsResponse
-        setPersonsWithGovPositions(personsResponse)
+        const response = await getAllEvents()
+        console.log('📦 API 응답 (전체):', response)
+        console.log('📦 첫 번째 이벤트 상세:', response[0])
 
         // API 응답을 HistoricalEvent 타입으로 변환
         const allEvents: HistoricalEvent[] = []
@@ -439,7 +341,6 @@ export const EventsCatalogPage: React.FC = () => {
           })
 
         setEvents(allEvents)
-        setPersonsWithGovPositions(personsResponse)
       } catch (error) {
         console.error('Failed to fetch events:', error)
         setEvents([])
@@ -450,27 +351,6 @@ export const EventsCatalogPage: React.FC = () => {
 
     fetchEvents()
   }, [])
-
-  // 선택된 직업 타입에 따라 국가 원수 목록 필터링
-  useEffect(() => {
-    if (events.length === 0 || personsWithGovPositions.length === 0) return
-
-    const headsOfStateMap = new Map<string, HeadOfStateDuringEvent[]>()
-    events.forEach((event) => {
-      const headsOfState = findHeadsOfStateDuringPeriod(
-        event.startDate,
-        event.endDate,
-        personsWithGovPositions,
-        selectedPositionType === FILTER_ALL ? undefined : selectedPositionType,
-      )
-      if (headsOfState.length > 0) {
-        headsOfStateMap.set(event.id, headsOfState)
-      }
-    })
-    setEventHeadsOfState(headsOfStateMap)
-    console.log('👑 사건별 국가 원수 (필터링됨):', headsOfStateMap)
-    console.log('💼 선택된 직업:', selectedPositionType)
-  }, [events, personsWithGovPositions, selectedPositionType])
 
   const toggleEventExpansion = (eventId: string) => {
     setExpandedEventIds((prev) => {
@@ -648,14 +528,6 @@ export const EventsCatalogPage: React.FC = () => {
       label: `국가 · ${selectedCountry}`,
       onClear: () => setSelectedCountry(FILTER_ALL),
     },
-    selectedPositionType !== FILTER_ALL && {
-      key: 'positionType',
-      label: `직업 · ${
-        MOCK_POSITION_TYPES.find((type) => type.value === selectedPositionType)
-          ?.label || selectedPositionType
-      }`,
-      onClear: () => setSelectedPositionType(FILTER_ALL),
-    },
     trimmedKeyword.length > 0 && {
       key: 'keyword',
       label: `검색어 · ${trimmedKeyword}`,
@@ -673,20 +545,6 @@ export const EventsCatalogPage: React.FC = () => {
     setSortBy('recent')
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
-    setSelectedPositionType(FILTER_ALL)
-  }
-
-  // ===== 국가 원수 집권 기간별 그룹 확장/접기 =====
-  const toggleTenureGroupExpansion = (tenureKey: string) => {
-    setExpandedTenureGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(tenureKey)) {
-        next.delete(tenureKey)
-      } else {
-        next.add(tenureKey)
-      }
-      return next
-    })
   }
 
   const toggleYearCollapse = (year: number) => {
@@ -828,117 +686,8 @@ export const EventsCatalogPage: React.FC = () => {
     return result
   }, [sortedEvents, expandedEventIds, events, showFlatView])
 
-  // 국가 원수 집권 기간별로 사건 그룹핑
-  const tenureGroups = useMemo(() => {
-    const groups: Array<{
-      headOfState: HeadOfStateDuringEvent
-      otherHeadsOfState: HeadOfStateDuringEvent[]
-      eventIds: string[]
-      startIndex: number
-      endIndex: number
-    }> = []
-
-    // depth 0인 사건들만 처리
-    const topLevelEvents = flattenedHierarchy.filter((item) => item.depth === 0)
-
-    topLevelEvents.forEach((item, index) => {
-      const headsOfState = eventHeadsOfState.get(item.node.id)
-      if (!headsOfState || headsOfState.length === 0) return
-
-      // 현재 노드의 이벤트 찾기
-      const event =
-        events.find((e) => e.id === item.node.id) ?? item.parentEvent
-      if (!event) return
-
-      // 우선순위로 가장 중요한 국가 원수 1명 선택
-      const primaryHead = getPrimaryHeadOfState(headsOfState, event)
-      const otherHeads = headsOfState.filter(
-        (headOfState) =>
-          headOfState.person.id !== primaryHead.person.id ||
-          headOfState.tenure.startDate !== primaryHead.tenure.startDate,
-      )
-
-      // 이미 이 국가 원수의 그룹이 있는지 확인
-      let existingGroup = groups.find(
-        (group) =>
-          group.headOfState.person.id === primaryHead.person.id &&
-          group.headOfState.tenure.startDate === primaryHead.tenure.startDate,
-      )
-
-      if (existingGroup) {
-        // 기존 그룹에 사건 추가
-        existingGroup.eventIds.push(item.node.id)
-        existingGroup.endIndex = index
-        // 다른 국가 원수들 병합 (중복 제거)
-        otherHeads.forEach((otherHead) => {
-          const exists = existingGroup!.otherHeadsOfState.some(
-            (existing) =>
-              existing.person.id === otherHead.person.id &&
-              existing.tenure.startDate === otherHead.tenure.startDate,
-          )
-          if (!exists) {
-            existingGroup!.otherHeadsOfState.push(otherHead)
-          }
-        })
-      } else {
-        // 새 그룹 생성
-        groups.push({
-          headOfState: primaryHead,
-          otherHeadsOfState: otherHeads,
-          eventIds: [item.node.id],
-          startIndex: index,
-          endIndex: index,
-        })
-      }
-    })
-
-    // 연속된 사건들만 그룹으로 유지 (중간에 빈 공간이 있으면 분리)
-    const continuousGroups: typeof groups = []
-    groups.forEach((group) => {
-      if (group.eventIds.length < 2) {
-        // 1개 사건만 있으면 그룹으로 표시하지 않음
-        return
-      }
-
-      // 연속성 확인
-      const indices = topLevelEvents
-        .map((item, idx) => (group.eventIds.includes(item.node.id) ? idx : -1))
-        .filter((idx) => idx !== -1)
-
-      let currentGroup: typeof group | null = null
-      for (let i = 0; i < indices.length; i++) {
-        if (i === 0 || indices[i] === indices[i - 1] + 1) {
-          if (!currentGroup) {
-            currentGroup = {
-              ...group,
-              eventIds: [topLevelEvents[indices[i]].node.id],
-              startIndex: indices[i],
-              endIndex: indices[i],
-            }
-          } else {
-            currentGroup.eventIds.push(topLevelEvents[indices[i]].node.id)
-            currentGroup.endIndex = indices[i]
-          }
-        } else {
-          if (currentGroup && currentGroup.eventIds.length >= 2) {
-            continuousGroups.push(currentGroup)
-          }
-          currentGroup = {
-            ...group,
-            eventIds: [topLevelEvents[indices[i]].node.id],
-            startIndex: indices[i],
-            endIndex: indices[i],
-          }
-        }
-      }
-      if (currentGroup && currentGroup.eventIds.length >= 2) {
-        continuousGroups.push(currentGroup)
-      }
-    })
-
-    return continuousGroups
-  }, [flattenedHierarchy, eventHeadsOfState])
-
+  // 연대표/역대 수반은 국가 페이지에서만 사용. 사건 리스트에서는 미사용.
+  const tenureGroups = useMemo(() => [], [])
   return (
     <Layout.PageScene>
       <Layout.PageWrapper>
@@ -1018,7 +767,7 @@ export const EventsCatalogPage: React.FC = () => {
               {/* 검색 */}
               <Filter.FilterSearchInput
                 type="search"
-                placeholder="사건명, 태그, 인물 검색"
+                placeholder="사건명, 태그 검색"
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
               />
@@ -1048,22 +797,6 @@ export const EventsCatalogPage: React.FC = () => {
                   {selectedCountry === FILTER_ALL
                     ? '전체 국가'
                     : selectedCountry}
-                </span>
-                <FiChevronRight size={14} />
-              </Filter.FilterTriggerButton>
-
-              {/* 직업 */}
-              <Filter.FilterTriggerButton
-                type="button"
-                onClick={() => setShowPositionTypeModal(true)}
-                style={{ marginTop: '6px' }}
-              >
-                <span>
-                  {selectedPositionType === FILTER_ALL
-                    ? '전체 직업'
-                    : MOCK_POSITION_TYPES.find(
-                        (type) => type.value === selectedPositionType,
-                      )?.label || '전체 직업'}
                 </span>
                 <FiChevronRight size={14} />
               </Filter.FilterTriggerButton>
@@ -1160,25 +893,6 @@ export const EventsCatalogPage: React.FC = () => {
               <List.ToolbarMeta>
                 <span>{sortedEvents.length}건</span>
               </List.ToolbarMeta>
-              <List.ToolbarToggle>
-                <List.ToolbarToggleText>
-                  <List.ToolbarToggleLabel>
-                    정적 인물 타임라인
-                  </List.ToolbarToggleLabel>
-                  <List.ToolbarToggleDescription>
-                    사건 사이 인물 생몰/주요 경력 표시
-                  </List.ToolbarToggleDescription>
-                </List.ToolbarToggleText>
-                <Filter.Switch
-                  type="button"
-                  $active={showTenureMarkers}
-                  onClick={() => {
-                    setShowTenureMarkers(!showTenureMarkers)
-                  }}
-                >
-                  <Filter.SwitchThumb $active={showTenureMarkers} />
-                </Filter.Switch>
-              </List.ToolbarToggle>
               <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
                 <List.SortSelect
                   value={sortBy}
@@ -1332,16 +1046,8 @@ export const EventsCatalogPage: React.FC = () => {
                         node.id &&
                       depth === 0
 
-                    // 이 사건이 집권 기간 그룹에 속하는지
-                    const isInTenureGroup =
-                      showTenureMarkers && tenureGroup && depth === 0
-
-                    const careerTimeline = tenureGroup
-                      ? getCareerTimeline(tenureGroup.headOfState.person).slice(
-                          0,
-                          4,
-                        )
-                      : []
+                    // 집권 기간 그룹 표시는 제거됨 (경력/재위는 사건 리스트에 노출하지 않음)
+                    const isInTenureGroup = false
 
                     return (
                       <React.Fragment key={node.id}>
@@ -1363,193 +1069,6 @@ export const EventsCatalogPage: React.FC = () => {
                           </List.YearDivider>
                         )}
 
-                        {/* 집권 기간 그룹 헤더 */}
-                        {isGroupStart && tenureGroup && (
-                          <>
-                            <List.TenureGroupHeader $depth={0}>
-                              <List.TenureGroupTitle>
-                                <FiUserCheck />
-                              </List.TenureGroupTitle>
-                              <List.TenureGroupAvatar>
-                                {tenureGroup.headOfState.person
-                                  .profileImageUrl ? (
-                                  <img
-                                    src={
-                                      tenureGroup.headOfState.person
-                                        .profileImageUrl
-                                    }
-                                    alt={`${tenureGroup.headOfState.person.surname || ''}${tenureGroup.headOfState.person.name}`}
-                                  />
-                                ) : (
-                                  <>
-                                    {
-                                      (tenureGroup.headOfState.person.surname ||
-                                        '')[0]
-                                    }
-                                    {tenureGroup.headOfState.person.name[0]}
-                                  </>
-                                )}
-                              </List.TenureGroupAvatar>
-                              <List.TenureGroupInfo>
-                                <span>
-                                  {tenureGroup.headOfState.person.surname || ''}
-                                  {tenureGroup.headOfState.person.name}
-                                </span>
-                                <List.TenureGroupBadge>
-                                  {tenureGroup.headOfState.country.name}
-                                </List.TenureGroupBadge>
-                                <span
-                                  style={{ color: 'rgba(99, 102, 241, 0.6)' }}
-                                >
-                                  집권 시작
-                                </span>
-                              </List.TenureGroupInfo>
-                              {tenureGroup.otherHeadsOfState &&
-                                tenureGroup.otherHeadsOfState.length > 0 && (
-                                  <List.TenureGroupExpandButton
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      const tenureKey = `${tenureGroup.headOfState.person.id}-${tenureGroup.headOfState.tenure.startDate}`
-                                      toggleTenureGroupExpansion(tenureKey)
-                                    }}
-                                  >
-                                    {expandedTenureGroups.has(
-                                      `${tenureGroup.headOfState.person.id}-${tenureGroup.headOfState.tenure.startDate}`,
-                                    ) ? (
-                                      <>
-                                        <FiChevronDown size={12} />
-                                        접기
-                                      </>
-                                    ) : (
-                                      <>
-                                        +{tenureGroup.otherHeadsOfState.length}
-                                        명
-                                      </>
-                                    )}
-                                  </List.TenureGroupExpandButton>
-                                )}
-                            </List.TenureGroupHeader>
-                            {showTenureMarkers && tenureGroup && (
-                              <List.TenureDetailsPanel>
-                                <List.TenureDetailsHeader>
-                                  <List.TenureSectionTitle>
-                                    주요 경력사항
-                                  </List.TenureSectionTitle>
-                                  <List.TenureSectionDescription>
-                                    인물의 주요 직책 타임라인을 표시합니다.
-                                  </List.TenureSectionDescription>
-                                </List.TenureDetailsHeader>
-                                {careerTimeline.length === 0 ? (
-                                  <List.TenureDetailRow>
-                                    <List.TenureDetailValue>
-                                      정보 없음
-                                    </List.TenureDetailValue>
-                                  </List.TenureDetailRow>
-                                ) : (
-                                  <List.TenureTimeline>
-                                    {careerTimeline.map((career) => {
-                                      const countryName =
-                                        career.position?.country?.name ||
-                                        career.position?.historicalCountry
-                                          ?.name ||
-                                        ''
-                                      return (
-                                        <List.TenureTimelineItem
-                                          key={career.id}
-                                        >
-                                          <List.TenureTimelinePeriod>
-                                            {formatTenurePeriod(
-                                              career.startDate,
-                                              career.endDate,
-                                            )}
-                                          </List.TenureTimelinePeriod>
-                                          <List.TenureTimelineTitle>
-                                            {career.position?.title ||
-                                              '직책 미정'}
-                                          </List.TenureTimelineTitle>
-                                          {countryName && (
-                                            <List.TenureTimelineMeta>
-                                              {countryName}
-                                            </List.TenureTimelineMeta>
-                                          )}
-                                        </List.TenureTimelineItem>
-                                      )
-                                    })}
-                                  </List.TenureTimeline>
-                                )}
-                                <List.TenureDetailRow>
-                                  <List.TenureDetailLabel>
-                                    생몰
-                                  </List.TenureDetailLabel>
-                                  <List.TenureDetailValue>
-                                    {formatLifeSpan(
-                                      tenureGroup.headOfState.person,
-                                    )}
-                                  </List.TenureDetailValue>
-                                </List.TenureDetailRow>
-                              </List.TenureDetailsPanel>
-                            )}
-                            {/* 다른 국가 원수 리스트 */}
-                            {tenureGroup.otherHeadsOfState &&
-                              tenureGroup.otherHeadsOfState.length > 0 &&
-                              expandedTenureGroups.has(
-                                `${tenureGroup.headOfState.person.id}-${tenureGroup.headOfState.tenure.startDate}`,
-                              ) && (
-                                <List.OtherHeadsOfStateList>
-                                  {tenureGroup.otherHeadsOfState.map(
-                                    (otherHead) => (
-                                      <List.OtherHeadOfStateRow
-                                        key={`${otherHead.person.id}-${otherHead.tenure.startDate}`}
-                                      >
-                                        <List.OtherHeadAvatar>
-                                          {otherHead.person.profileImageUrl ? (
-                                            <img
-                                              src={
-                                                otherHead.person.profileImageUrl
-                                              }
-                                              alt={`${otherHead.person.surname || ''}${otherHead.person.name}`}
-                                            />
-                                          ) : (
-                                            <>
-                                              {
-                                                (otherHead.person.surname ||
-                                                  '')[0]
-                                              }
-                                              {otherHead.person.name[0]}
-                                            </>
-                                          )}
-                                        </List.OtherHeadAvatar>
-                                        <List.OtherHeadInfo>
-                                          <strong>
-                                            {otherHead.person.surname || ''}
-                                            {otherHead.person.name}
-                                          </strong>
-                                          <span>|</span>
-                                          <span>{otherHead.country.name}</span>
-                                          <span>
-                                            {otherHead.position.title}
-                                          </span>
-                                          <span>|</span>
-                                          <span>
-                                            {new Date(
-                                              otherHead.tenure.startDate,
-                                            ).getFullYear()}
-                                            ~
-                                            {otherHead.tenure.endDate
-                                              ? new Date(
-                                                  otherHead.tenure.endDate,
-                                                ).getFullYear()
-                                              : '현재'}
-                                          </span>
-                                        </List.OtherHeadInfo>
-                                      </List.OtherHeadOfStateRow>
-                                    ),
-                                  )}
-                                </List.OtherHeadsOfStateList>
-                              )}
-                          </>
-                        )}
                         {isInTenureGroup ? (
                           <List.CompactListItemInTenure
                             $active={selectedEventId === node.id}
@@ -1918,17 +1437,6 @@ export const EventsCatalogPage: React.FC = () => {
                           </List.CompactListItem>
                         )}
 
-                        {/* 집권 기간 그룹 푸터 (퇴임/종료가 있는 경우만: 진행 중이면 미표시) */}
-                        {isGroupEnd &&
-                          tenureGroup &&
-                          tenureGroup.headOfState.tenure.endDate && (
-                            <List.TenureGroupFooter>
-                              {tenureGroup.headOfState.person.surname || ''}
-                              {tenureGroup.headOfState.person.name}{' '}
-                              {tenureGroup.headOfState.position.title} 집권기
-                              종료
-                            </List.TenureGroupFooter>
-                          )}
                       </React.Fragment>
                     )
                   },
@@ -1976,20 +1484,6 @@ export const EventsCatalogPage: React.FC = () => {
         Icon={FiGlobe}
       />
 
-      {/* 직업 선택 모달 */}
-      {/* ===== FSD Widget: 직업 선택 모달 ===== */}
-      <SimpleSelectModal
-        isOpen={showPositionTypeModal}
-        onClose={() => setShowPositionTypeModal(false)}
-        title="직업 선택"
-        selectedValue={selectedPositionType}
-        options={MOCK_POSITION_TYPES}
-        onSelect={(value) => setSelectedPositionType(value)}
-        allLabel="전체 직업"
-        allDescription="모든 직책의 인물"
-        Icon={FiUsers}
-      />
-
       {/* 사건 요약 모달 */}
       {showSummaryModal &&
         summaryNode &&
@@ -2029,28 +1523,14 @@ export const EventsCatalogPage: React.FC = () => {
                 </Modal.ModalHeader>
 
                 <Modal.SummaryTabBar>
-                  <Modal.SummaryTab
-                    $active={summaryViewMode === SUMMARY_VIEW_MODES.TIMELINE}
-                    onClick={() => setSummaryViewMode('timeline')}
-                  >
-                    <FiClock size={16} />
-                    타임라인
-                  </Modal.SummaryTab>
-                  <Modal.SummaryTab
-                    $active={summaryViewMode === SUMMARY_VIEW_MODES.TREE}
-                    onClick={() => setSummaryViewMode('tree')}
-                  >
+                  <Modal.SummaryTab $active>
                     <FiGitBranch size={16} />
                     계층 구조
                   </Modal.SummaryTab>
                 </Modal.SummaryTabBar>
 
                 <Modal.SummaryContent>
-                  {summaryViewMode === SUMMARY_VIEW_MODES.TIMELINE ? (
-                    <TimelineView node={summaryNode} />
-                  ) : (
-                    <TreeView node={summaryNode} />
-                  )}
+                  <TreeView node={summaryNode} />
                 </Modal.SummaryContent>
               </motion.div>
             </Modal.SummaryModal>

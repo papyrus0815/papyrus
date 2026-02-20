@@ -153,10 +153,11 @@ export function findHeadsOfStateDuringPeriod(
     (start <= eventEnd && (!end || end >= eventStart)) ||
     (eventStart <= end! && eventEnd >= start)
 
-  persons.forEach((person) => {
-    // 1) 재임 기록 (GovernmentPositionTenure)
+    persons.forEach((person) => {
+    // 1) 재임 기록 (GovernmentPositionTenure) — 사건 페이지 노출 체크된 것만
     if (person.governmentPositions?.length > 0) {
       person.governmentPositions.forEach((tenure: any) => {
+        if (tenure.showPositionInfo === false) return
         if (positionTypeFilter && positionTypeFilter !== 'all') {
           if (tenure.positionType !== positionTypeFilter) return
         } else {
@@ -187,58 +188,8 @@ export function findHeadsOfStateDuringPeriod(
         }
       })
     }
-
-    // 2) 정부/공무원 경력 (GovernmentCareer) - "직책 정보 표시" 체크된 것만
-    const careers = person.governmentCareers ?? []
-    careers.forEach((career: any) => {
-      if (career.showPositionInfo === false) return
-      const careerStart = career.startDate ? new Date(career.startDate) : null
-      if (!careerStart || isNaN(careerStart.getTime())) return
-      const careerEnd = career.endDate ? new Date(career.endDate) : null
-      if (!isOverlapping(careerStart, careerEnd)) return
-      const country = career.country
-      if (!country) return
-      const title =
-        career.roleTitle ||
-        career.timelineTitle ||
-        career.position?.title ||
-        '직책'
-      // 직급(Job)이 "대통령"이거나 제목에 국가원수 직함이 있으면 HEAD_OF_STATE (사건 페이지 필터/노출용)
-      const positionTitle = (career.position?.title || '').trim()
-      const titleStr = (title || '').trim()
-      const titleLower = titleStr.toLowerCase()
-      const isHeadOfState =
-        positionTitle === '대통령' ||
-        /대통령|국왕|황제|천황|emperor|king|president|head of state/i.test(
-          titleLower,
-        ) ||
-        /제\s*\d+\s*대\s*대통령/.test(titleStr)
-      const positionType = isHeadOfState
-        ? GovernmentPositionType.HEAD_OF_STATE
-        : GovernmentPositionType.CABINET_MINISTER
-      if (
-        positionTypeFilter &&
-        positionTypeFilter !== 'all' &&
-        positionType !== positionTypeFilter
-      )
-        return
-      pushPerson(person, {
-        position: {
-          id: career.positionId || career.id,
-          title,
-          titleEn: undefined,
-          positionType,
-          rank: 0,
-        },
-        tenure: {
-          termNumber: career.termNumber,
-          startDate: career.startDate,
-          endDate: career.endDate ?? undefined,
-          showPositionInfo: career.showPositionInfo !== false,
-        },
-        country: { id: country.id, name: country.name },
-      })
-    })
+    // 사건 페이지는 연대표(국가 페이지)에 등록한 수반(GovernmentPositionTenure)만 사용.
+    // 정부/공무원 경력(GovernmentCareer)은 사용하지 않음.
   })
 
   return result.sort(
