@@ -56,6 +56,11 @@ export interface IHistoricalCountryRepository {
   findById(id: string): Promise<HistoricalCountry | null>
 
   /**
+   * 역사적 국가에 연결된 현대 국가 ID 목록 조회
+   */
+  findModernCountryIdsByHistoricalCountryId(id: string): Promise<string[]>
+
+  /**
    * 역사적 국가 생성
    */
   create(data: CreateHistoricalCountryData): Promise<HistoricalCountry>

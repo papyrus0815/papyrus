@@ -34,6 +34,17 @@ export class HistoricalCountryPrismaRepository
     return country ? this.toEntity(country as any) : null
   }
 
+  async findModernCountryIdsByHistoricalCountryId(
+    id: string,
+  ): Promise<string[]> {
+    const rows =
+      await this.prisma.historicalCountryModernCountry.findMany({
+        where: { historicalCountryId: id },
+        select: { modernCountryId: true },
+      })
+    return rows.map((r) => r.modernCountryId)
+  }
+
   async create(data: CreateHistoricalCountryData): Promise<HistoricalCountry> {
     const country = await this.prisma.historicalCountry.create({
       data: {

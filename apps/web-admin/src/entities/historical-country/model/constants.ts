@@ -14,6 +14,7 @@ export const STATE_TYPE_LABELS: Record<HistoricalStateType, string> = {
   THEOCRACY: '신정 국가',
   TRIBAL_STATE: '부족 국가',
   NOMADIC_EMPIRE: '유목 제국',
+  DYNASTY: '왕조',
   OTHER: '기타',
 }
 
@@ -31,6 +32,7 @@ export const STATE_TYPE_COLORS: Record<HistoricalStateType, string> = {
   THEOCRACY: '#a855f7', // 연보라색
   TRIBAL_STATE: '#84cc16', // 연두색
   NOMADIC_EMPIRE: '#eab308', // 노란색
+  DYNASTY: '#6366f1', // 인디고
   OTHER: '#6b7280', // 회색
 }
 
@@ -48,5 +50,6 @@ export const STATE_TYPE_EMOJIS: Record<HistoricalStateType, string> = {
   THEOCRACY: '⛪',
   TRIBAL_STATE: '🏕️',
   NOMADIC_EMPIRE: '🐎',
+  DYNASTY: '👨‍👩‍👧‍👦',
   OTHER: '🏴',
 }

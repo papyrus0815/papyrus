@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { FormSidePanel } from '@/shared/ui/form-side-panel'
 import type { HistoricalCountry, Era } from '@/entities/historical-country/api'
+import { useHistoricalCountry } from '@/features/historical-country/use-historical-countries.hook'
+import { uploadImage } from '@/shared/api/upload'
 import * as S from '../../../../pages/history/country/country.styles'
 
 /**
@@ -160,6 +162,9 @@ export function HistoricalCountryForm({
 
   /** 업로드할 썸네일 파일 */
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+  /** 썸네일 업로드 중/에러 */
+  const [thumbnailUploading, setThumbnailUploading] = useState(false)
+  const [thumbnailUploadError, setThumbnailUploadError] = useState<string | null>(null)
 
   /** 국가 형태 선택 모달 표시 여부 */
   const [showStateTypeModal, setShowStateTypeModal] = useState(false)
@@ -177,6 +182,13 @@ export function HistoricalCountryForm({
   const [selectedModernCountries, setSelectedModernCountries] = useState<
     string[]
   >([])
+
+  /** 수정 시 상세 API로 시작/종료 시점 등 전체 필드 확실히 로드 */
+  const { data: editingDetail } = useHistoricalCountry(editing?.id)
+
+  // 수정 모드에서는 상세 API 응답 우선 사용 (시작/종료 시점이 목록 응답에 없을 수 있음)
+  const formSource =
+    editing?.id && editingDetail ? editingDetail : editing
 
   // ==================== Form Hook 설정 ====================
 
@@ -202,33 +214,49 @@ export function HistoricalCountryForm({
   // ==================== useEffect 훅 ====================
 
   /**
-   * editing 객체가 변경될 때마다 form 초기화
-   * - 수정 모드: 기존 데이터로 폼 채우기
-   * - 생성 모드 (editing.id가 없음): 빈 값으로 초기화
+   * formSource(editing 또는 상세 API 응답)가 바뀔 때마다 폼 초기화
+   * - 수정 모드: 상세 API 우선 사용해 시작/종료 시점까지 확실히 채움
+   * - 생성 모드: 빈 값으로 초기화
    */
   useEffect(() => {
     if (editing) {
-      // 수정 모드: 기존 데이터로 폼 채우기
       if (editing.id) {
+        // 수정 모드: formSource(상세 API 응답 우선)로 폼 채우기
+        const raw = formSource as HistoricalCountry & {
+          parentModernCountryIds?: string[]
+          start_era?: string
+          start_year?: number
+          start_month?: number
+          start_day?: number
+          end_era?: string
+          end_year?: number
+          end_month?: number
+          end_day?: number
+        }
+        const parentIds = raw?.parentModernCountryIds ?? []
+        const num = (v: number | null | undefined) =>
+          v !== null && v !== undefined ? v : undefined
+        const str = (v: string | null | undefined) => v || undefined
         reset({
-          name: editing.name || '',
-          enName: editing.enName || '',
-          description: editing.description || '',
-          thumbnailUrl: editing.thumbnailUrl || '',
-          startEra: editing.startEra || undefined,
-          startYear: editing.startYear || undefined,
-          startMonth: editing.startMonth || undefined,
-          startDay: editing.startDay || undefined,
-          endEra: editing.endEra || undefined,
-          endYear: editing.endYear || undefined,
-          endMonth: editing.endMonth || undefined,
-          endDay: editing.endDay || undefined,
-          stateType: editing.stateType || '',
-          parentModernCountryIds: [], // TODO: 백엔드에서 현대 국가 연결 정보 가져오기
+          name: (raw?.name ?? editing.name) || '',
+          enName: (raw?.enName ?? editing.enName) || '',
+          description: (raw?.description ?? editing.description) || '',
+          thumbnailUrl: (raw?.thumbnailUrl ?? editing.thumbnailUrl) || '',
+          startEra: str(raw?.startEra ?? raw?.start_era),
+          startYear: num(raw?.startYear ?? raw?.start_year),
+          startMonth: num(raw?.startMonth ?? raw?.start_month),
+          startDay: num(raw?.startDay ?? raw?.start_day),
+          endEra: str(raw?.endEra ?? raw?.end_era),
+          endYear: num(raw?.endYear ?? raw?.end_year),
+          endMonth: num(raw?.endMonth ?? raw?.end_month),
+          endDay: num(raw?.endDay ?? raw?.end_day),
+          stateType: (raw?.stateType ?? editing.stateType) || '',
+          parentModernCountryIds: parentIds,
         })
-        setThumbnailPreview(editing.thumbnailUrl || '')
+        setThumbnailPreview((raw?.thumbnailUrl ?? editing.thumbnailUrl) || '')
+        setSelectedModernCountries(parentIds)
       } else {
-        // 생성 모드: 완전히 빈 값으로 초기화
+        // 생성 모드: 빈 값으로 초기화
         reset({
           name: '',
           enName: '',
@@ -246,44 +274,35 @@ export function HistoricalCountryForm({
           parentModernCountryIds: [],
         })
         setThumbnailPreview('')
+        setSelectedModernCountries([])
       }
       setThumbnailFile(null)
-      setSelectedModernCountries([]) // 선택된 현대 국가 초기화
     }
-  }, [editing, reset])
-
-  /** 썸네일 URL 필드 값 감시 */
-  const thumbnailUrl = watch('thumbnailUrl')
-
-  /**
-   * 썸네일 URL 변경 시 미리보기 업데이트
-   * - URL 입력 시 실시간으로 미리보기 반영
-   */
-  useEffect(() => {
-    if (thumbnailUrl) {
-      setThumbnailPreview(thumbnailUrl)
-    } else {
-      setThumbnailPreview('')
-    }
-  }, [thumbnailUrl])
+  }, [editing, formSource, reset])
 
   // ==================== 이벤트 핸들러 ====================
 
   /**
    * 썸네일 파일 업로드 핸들러
-   * - 파일을 Base64로 변환하여 미리보기 및 폼에 저장
-   * - FileReader API 사용
+   * - 서버에 업로드 후 반환된 URL만 저장 (DB 255자 제한, base64 미사용)
    */
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setThumbnailFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setThumbnailPreview(reader.result as string)
-        setValue('thumbnailUrl', reader.result as string)
-      }
-      reader.readAsDataURL(file)
+    if (!file) return
+    setThumbnailFile(file)
+    setThumbnailUploadError(null)
+    setThumbnailUploading(true)
+    try {
+      const result = await uploadImage(file)
+      const url = (result.url ?? '').length > 255 ? (result.url ?? '').slice(0, 255) : (result.url ?? '')
+      setValue('thumbnailUrl', url, { shouldValidate: true })
+      setThumbnailPreview(result.url ?? '')
+    } catch (err) {
+      setThumbnailUploadError((err as Error).message)
+      setThumbnailPreview('')
+      setValue('thumbnailUrl', '')
+    } finally {
+      setThumbnailUploading(false)
     }
   }
 
@@ -343,6 +362,8 @@ export function HistoricalCountryForm({
     reset()
     setThumbnailPreview('')
     setThumbnailFile(null)
+    setThumbnailUploadError(null)
+    setThumbnailUploading(false)
     setSelectedModernCountries([])
     onClose()
   }
@@ -511,6 +532,55 @@ export function HistoricalCountryForm({
                 </S.FormSectionDescription>
               </div>
             </S.FormSectionHeader>
+
+            {/* 썸네일 (국가명 위, 파일 업로드만) */}
+            <S.FormField style={{ marginBottom: '16px' }}>
+              <S.FormLabel htmlFor="thumbnail-upload">썸네일</S.FormLabel>
+              {thumbnailPreview && (
+                <S.ThumbnailPreview
+                  style={{ maxWidth: '100%', overflow: 'hidden', marginBottom: '12px' }}
+                >
+                  <S.ThumbnailImage
+                    src={thumbnailPreview}
+                    alt="썸네일 미리보기"
+                    style={{ maxWidth: '100%', maxHeight: '160px', objectFit: 'contain' }}
+                  />
+                </S.ThumbnailPreview>
+              )}
+              <S.FileUploadWrapper>
+                <S.FileUploadLabel htmlFor="thumbnail-upload">
+                  <S.FileUploadIcon>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </S.FileUploadIcon>
+                  <S.FileUploadText>
+                    {thumbnailUploading
+                      ? '업로드 중...'
+                      : thumbnailFile
+                        ? thumbnailFile.name
+                        : '이미지 파일 선택'}
+                  </S.FileUploadText>
+                </S.FileUploadLabel>
+                <S.FileInput
+                  id="thumbnail-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailChange}
+                  disabled={thumbnailUploading}
+                />
+              </S.FileUploadWrapper>
+              {thumbnailUploadError && (
+                <S.ErrorMessage style={{ marginTop: '8px' }}>
+                  {thumbnailUploadError}
+                </S.ErrorMessage>
+              )}
+              <input type="hidden" {...register('thumbnailUrl')} />
+            </S.FormField>
+
             <S.FormRow>
               {/* 국가명 (한글) */}
               <S.FormField>
@@ -1107,63 +1177,10 @@ export function HistoricalCountryForm({
               <div>
                 <S.FormSectionTitle>추가 정보</S.FormSectionTitle>
                 <S.FormSectionDescription>
-                  썸네일, 설명 등 부가적인 정보를 입력하세요 (선택)
+                  설명 등 부가적인 정보를 입력하세요 (선택)
                 </S.FormSectionDescription>
               </div>
             </S.FormSectionHeader>
-
-            {/* 썸네일 URL */}
-            <S.FormField>
-              <S.FormLabel htmlFor="thumbnailUrl">썸네일 URL</S.FormLabel>
-              <S.Input
-                id="thumbnailUrl"
-                type="text"
-                placeholder="https://example.com/image.jpg"
-                {...register('thumbnailUrl')}
-                $error={!!errors.thumbnailUrl}
-              />
-              {errors.thumbnailUrl && (
-                <S.ErrorMessage>{errors.thumbnailUrl.message}</S.ErrorMessage>
-              )}
-            </S.FormField>
-
-            {/* 썸네일 파일 업로드 */}
-            <S.FormField>
-              <S.FormLabel htmlFor="thumbnailFile">
-                또는 파일 업로드
-              </S.FormLabel>
-              <S.FileUploadWrapper>
-                <S.FileUploadLabel htmlFor="thumbnail-upload">
-                  <S.FileUploadIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.FileUploadIcon>
-                  <S.FileUploadText>
-                    {thumbnailFile ? thumbnailFile.name : '이미지 파일 선택'}
-                  </S.FileUploadText>
-                </S.FileUploadLabel>
-                <S.FileInput
-                  id="thumbnail-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleThumbnailChange}
-                />
-              </S.FileUploadWrapper>
-            </S.FormField>
-
-            {/* 썸네일 미리보기 */}
-            {thumbnailPreview && (
-              <S.FormField>
-                <S.FormLabel>썸네일 미리보기</S.FormLabel>
-                <S.ThumbnailPreview>
-                  <img src={thumbnailPreview} alt="Thumbnail Preview" />
-                </S.ThumbnailPreview>
-              </S.FormField>
-            )}
 
             {/* 설명 */}
             <S.FormField>

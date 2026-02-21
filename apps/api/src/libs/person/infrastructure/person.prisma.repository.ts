@@ -1144,6 +1144,30 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 재임 기록 단건 조회 (삭제 전 알림용)
+   */
+  async findTenureById(id: string): Promise<any | null> {
+    const tenure = await this.prisma.governmentPositionTenure.findUnique({
+      where: { id },
+      include: { person: true },
+    })
+    if (!tenure) return null
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(tenure)
+  }
+
+  /**
    * 국가원수/왕위 재임 기록 삭제
    */
   async deleteGovernmentPositionTenure(id: string): Promise<void> {

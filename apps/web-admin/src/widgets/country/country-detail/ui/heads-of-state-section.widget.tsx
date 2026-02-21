@@ -258,6 +258,20 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     setShowOnEventsPage(true)
   }
 
+  const handleDeleteTenure = async () => {
+    if (!editingTenureId) return
+    if (!window.confirm('이 재임 기록을 삭제하시겠습니까?')) return
+    try {
+      await personCareerApi.deleteGovernmentPositionTenure(editingTenureId)
+      toast.success('재임 기록이 삭제되었습니다.')
+      resetForm()
+      setView('list')
+      refetch()
+    } catch (err: any) {
+      toast.error(err?.message || '삭제에 실패했습니다.')
+    }
+  }
+
   const handlePositionTitleSelect = (value: string) => {
     setPositionTitleModalOpen(false)
     setSelectedPositionTitleKey(value)
@@ -635,6 +649,11 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
             </FieldRow>
           </FormRows>
           <FormActions>
+            {editingTenureId && (
+              <DeleteButton type="button" onClick={handleDeleteTenure} disabled={isSubmitting}>
+                삭제
+              </DeleteButton>
+            )}
             <ResetButton type="button" onClick={resetForm} disabled={isSubmitting}>
               초기화
             </ResetButton>
@@ -1243,6 +1262,27 @@ const FormActions = styled.div`
   margin-top: 40px;
   padding-top: 32px;
   border-top: 1px solid #f1f5f9;
+`
+
+const DeleteButton = styled.button`
+  padding: 14px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    transform: translateY(-1px);
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `
 
 const SubmitButton = styled.button`

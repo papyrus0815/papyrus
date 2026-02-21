@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { NestExpressApplication } from '@nestjs/platform-express'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+import { json, urlencoded } from 'express'
 
 import cookieParser from 'cookie-parser'
 import { readFileSync } from 'fs'
@@ -29,18 +30,18 @@ async function bootstrap() {
     await tempApp.close()
 
     console.log('📍 Step 4: Creating actual app...')
-    // 실제 앱 생성
-    const app = await NestFactory.create<NestExpressApplication>(
-      AppModule,
-      securityConfig.useHttps
+    // 실제 앱 생성 (bodyParser: false 후 아래에서 10mb limit으로 직접 등록)
+    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+      ...(securityConfig.useHttps
         ? {
             httpsOptions: {
               key: readFileSync(config.sslKeyPath as string),
               cert: readFileSync(config.sslCertPath as string),
             },
           }
-        : undefined,
-    )
+        : {}),
+      bodyParser: false,
+    })
 
     console.log('📍 Step 5: Configuring CORS...')
 
@@ -64,6 +65,10 @@ async function bootstrap() {
       credentials: true,
       exposedHeaders: ['set-cookie', 'x-request-id'],
     })
+
+    // Body parser (기본 ~100kb → 10mb로 상향, PayloadTooLargeError 방지)
+    app.use(json({ limit: '10mb' }))
+    app.use(urlencoded({ extended: true, limit: '10mb' }))
 
     // 미들웨어
     app.use(cookieParser())

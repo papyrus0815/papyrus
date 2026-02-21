@@ -22,6 +22,7 @@ import type {
   CreateHistoricalCountryDto,
   UpdateHistoricalCountryDto,
 } from '@/shared/api/historical-countries'
+import { countryKeys } from '@/features/country/api'
 
 /**
  * React Query 캐시 키 관리
@@ -106,10 +107,12 @@ export function useCreateHistoricalCountry() {
     mutationFn: (data: CreateHistoricalCountryDto) =>
       historicalCountriesApi.createHistoricalCountry(data),
     onSuccess: () => {
-      // 목록 갱신
+      // 역사적 국가 목록 갱신 (전체 prefix로 entities/features 모두 반영)
       queryClient.invalidateQueries({
-        queryKey: historicalCountryKeys.lists(),
+        queryKey: historicalCountryKeys.all,
       })
+      // 연대표 페이지의 현대 국가 목록(역사적 국가 중첩) 갱신
+      queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
     },
   })
 }
@@ -141,14 +144,13 @@ export function useUpdateHistoricalCountry() {
       data: UpdateHistoricalCountryDto
     }) => historicalCountriesApi.updateHistoricalCountry(id, data),
     onSuccess: (_, variables) => {
-      // 목록 갱신
       queryClient.invalidateQueries({
-        queryKey: historicalCountryKeys.lists(),
+        queryKey: historicalCountryKeys.all,
       })
-      // 상세 갱신
       queryClient.invalidateQueries({
         queryKey: historicalCountryKeys.detail(variables.id),
       })
+      queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
     },
   })
 }
@@ -175,10 +177,10 @@ export function useDeleteHistoricalCountry() {
     mutationFn: (id: string) =>
       historicalCountriesApi.deleteHistoricalCountry(id),
     onSuccess: () => {
-      // 목록 갱신
       queryClient.invalidateQueries({
-        queryKey: historicalCountryKeys.lists(),
+        queryKey: historicalCountryKeys.all,
       })
+      queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
     },
   })
 }

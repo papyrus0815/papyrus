@@ -63,6 +63,8 @@ enum HistoricalStateType {
   TRIBAL_STATE
   /// 유목 제국
   NOMADIC_EMPIRE
+  /// 왕조 / 가문 국가
+  DYNASTY
   /// 기타
   OTHER
 }

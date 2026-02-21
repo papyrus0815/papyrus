@@ -95,6 +95,31 @@ model ActionLog {
   @@map("action_log")
 }
 
+/// 헤더 알림 (전체 CRUD). "무엇이" CRUD됐는지 특정값(entityLabel)으로 명시.
+model Notification {
+  id        String   @id @default(uuid()) @db.Char(36)
+  /// CRUD된 대상을 식별하는 이름 (필수). 예: 인물명 "홍길동", 국가명 "한국", 사건명 "임진왜란", 재임 "세종대왕 - 대통령"
+  /// → 클라이언트 표시: "{entityLabel}이(가) 등록/수정/삭제되었습니다"
+  entityLabel String  @map("entity_label") @db.VarChar(255)
+  /// 동작 구분. entityLabel + method로 "홍길동이 등록되었습니다" 등 문장 조합 가능
+  method    EventMethod  @map("method")
+  /// 리소스 타입 (필터·딥링크·문장 조합용). 예: PERSON → "인물이"
+  ownerType AggregateType? @map("owner_type")
+  /// 상세 페이지 이동용 ID
+  recordId  String?  @map("record_id") @db.Char(36)
+  /// (선택) 부가 설명. 예: 직책명만, 기간, 하위 항목 요약 등
+  preview   String?  @db.VarChar(500)
+  /// (선택) 서버에서 이미 조합한 완성 문장. 넣으면 클라이언트는 이걸 우선 표시
+  title     String?  @db.VarChar(255)
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt], name: "idx_notification_created_at")
+  @@index([ownerType], name: "idx_notification_owner_type")
+  @@index([read], name: "idx_notification_read")
+  @@map("notification")
+}
+
 // ========================
 // Attachment
 // ========================

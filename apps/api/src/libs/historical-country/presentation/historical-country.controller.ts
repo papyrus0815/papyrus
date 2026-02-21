@@ -49,7 +49,11 @@ export class HistoricalCountryController {
   ): Promise<HistoricalCountryResponseDto> {
     const country =
       await this.historicalCountryService.getHistoricalCountryById(id)
-    return this.toResponseDto(country)
+    const parentModernCountryIds =
+      await this.historicalCountryService.getModernCountryIdsByHistoricalCountryId(
+        id,
+      )
+    return this.toResponseDto(country, parentModernCountryIds)
   }
 
   /**
@@ -133,6 +137,7 @@ export class HistoricalCountryController {
 
   private toResponseDto(
     country: HistoricalCountry,
+    parentModernCountryIds?: string[],
   ): HistoricalCountryResponseDto {
     return {
       id: country.id,
@@ -154,6 +159,7 @@ export class HistoricalCountryController {
       endDay: country.endDay,
 
       stateType: country.stateType,
+      parentModernCountryIds,
       createdAt: country.createdAt.toISOString(),
       updatedAt: country.updatedAt.toISOString(),
     }

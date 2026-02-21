@@ -32,6 +32,7 @@ import {
   useCreateHistoricalCountry,
   useDeleteHistoricalCountry,
   useHistoricalCountries,
+  useHistoricalCountry,
   useUpdateHistoricalCountry,
 } from '@/features/historical-country'
 import { CountryDashboard } from '@/widgets/country/country-dashboard'
@@ -163,6 +164,10 @@ export default function CountryPage() {
   const [editing, setEditing] = useState<Country | null>(null)
   const [editingHistorical, setEditingHistorical] =
     useState<HistoricalCountry | null>(null)
+  /** 수정 시 상세 API로 상위 현대 국가(parentModernCountryIds) 포함해 조회 */
+  const { data: editingHistoricalDetail } = useHistoricalCountry(
+    editingHistorical?.id,
+  )
 
   // UI 상태 (선택된 국가 ID — URL과 동기화, 직접 진입 시에도 URL 기준으로 초기화)
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -574,6 +579,26 @@ export default function CountryPage() {
    * - null/undefined 변환 처리
    * - Toast 알림
    */
+  /** 연대표 상세 패널에서 "수정" 클릭 시: 역사적 국가면 역사적 폼, 현대 국가면 현대 폼 열기 */
+  function handleEditFromDetail(country: UnifiedCountry) {
+    if (country.type === 'historical') {
+      const full =
+        apiHistoricalCountries?.find((hc) => hc.id === country.id) ?? null
+      if (full) setEditingHistorical(full as HistoricalCountry)
+    } else {
+      setEditing(country as Country)
+    }
+  }
+
+  /** 연대표 상세 패널에서 "삭제" 클릭 시: 선택이 역사적 국가면 역사적 삭제, 아니면 현대 삭제 */
+  function handleDeleteFromDetail(id: string) {
+    if (selectedCountry?.type === 'historical') {
+      void handleDeleteHistorical(id)
+    } else {
+      void handleDelete(id)
+    }
+  }
+
   async function handleSaveHistorical(
     data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
       id?: string
@@ -586,16 +611,22 @@ export default function CountryPage() {
 
     try {
       if (data.id) {
-        // 수정
+        // 수정 (API는 startDate/endDate 미지원, startEra/startYear 등만 사용)
         await updateHistoricalMutation.mutateAsync({
           id: data.id,
           data: {
             name: data.name,
             enName: data.enName,
-            description: data.description || null,
-            thumbnailUrl: data.thumbnailUrl || null,
-            startDate: data.startDate || null,
-            endDate: data.endDate || null,
+            description: data.description ?? null,
+            thumbnailUrl: data.thumbnailUrl ?? null,
+            startEra: data.startEra ?? null,
+            startYear: data.startYear ?? null,
+            startMonth: data.startMonth ?? null,
+            startDay: data.startDay ?? null,
+            endEra: data.endEra ?? null,
+            endYear: data.endYear ?? null,
+            endMonth: data.endMonth ?? null,
+            endDay: data.endDay ?? null,
             stateType: data.stateType,
             parentModernCountryIds: data.parentModernCountryIds,
           },
@@ -606,10 +637,16 @@ export default function CountryPage() {
         await createHistoricalMutation.mutateAsync({
           name: data.name,
           enName: data.enName,
-          description: data.description || undefined,
-          thumbnailUrl: data.thumbnailUrl || undefined,
-          startDate: data.startDate || undefined,
-          endDate: data.endDate || undefined,
+          description: data.description ?? undefined,
+          thumbnailUrl: data.thumbnailUrl ?? undefined,
+          startEra: data.startEra ?? undefined,
+          startYear: data.startYear ?? undefined,
+          startMonth: data.startMonth ?? undefined,
+          startDay: data.startDay ?? undefined,
+          endEra: data.endEra ?? undefined,
+          endYear: data.endYear ?? undefined,
+          endMonth: data.endMonth ?? undefined,
+          endDay: data.endDay ?? undefined,
           stateType: data.stateType,
           parentModernCountryIds: data.parentModernCountryIds,
         })
@@ -802,8 +839,8 @@ export default function CountryPage() {
               country={selectedCountry || null}
               continents={CONTINENTS}
               isLoading={isLoading}
-              onEdit={setEditing}
-              onDelete={handleDelete}
+              onEdit={handleEditFromDetail}
+              onDelete={handleDeleteFromDetail}
               initialDetailTab={isHeadsOfStateUrl ? 'heads' : undefined}
               onDetailTabChange={(tab: 'heads' | null) => {
                 if (!selectedId) return
@@ -819,8 +856,8 @@ export default function CountryPage() {
               country={null}
               continents={CONTINENTS}
               isLoading={isLoading}
-              onEdit={setEditing}
-              onDelete={handleDelete}
+              onEdit={handleEditFromDetail}
+              onDelete={handleDeleteFromDetail}
             />
           )}
         </S.DetailPane>
@@ -1244,9 +1281,13 @@ export default function CountryPage() {
           )
         : null}
 
-      {/* 역사적 국가 Form */}
+      {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 상위 현대 국가 표시) */}
       <HistoricalCountryForm
-        editing={editingHistorical}
+        editing={
+          editingHistorical
+            ? (editingHistoricalDetail ?? editingHistorical)
+            : null
+        }
         modernCountries={countries.map((countryItem) => ({
           id: countryItem.id,
           name: countryItem.name,

@@ -161,6 +161,7 @@ export interface IPersonRepository {
     dto: Partial<CreateGovernmentPositionTenureDto>,
   ): Promise<any>
   deleteGovernmentPositionTenure(id: string): Promise<void>
+  findTenureById(id: string): Promise<any | null>
   findTenuresByPersonId(personId: string): Promise<any[]>
   findTenuresByCountry(params: {
     countryId?: string

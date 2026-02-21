@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
+import { EventMethod } from '@prisma/client'
 import {
   IPersonRepository,
   CreatePersonData,
   UpdatePersonData,
 } from '../domain/person.repository'
 import { PersonPrismaRepository } from '../infrastructure/person.prisma.repository'
+import { NotificationService } from '../../notification/application/notification.service'
 import {
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -38,9 +40,21 @@ import {
 /**
  * 인물 도메인 서비스
  */
+/** 인물 표시명 (한국/서양 순서) */
+function personDisplayName(p: { name?: string | null; surname?: string | null; nameDisplayOrder?: string | null }): string {
+  const name = p.name ?? ''
+  const surname = p.surname ?? ''
+  const order = (p.nameDisplayOrder as string) ?? 'korean'
+  if (order === 'western') return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
+  return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
+}
+
 @Injectable()
 export class PersonService {
-  constructor(private readonly personRepository: PersonPrismaRepository) {}
+  constructor(
+    private readonly personRepository: PersonPrismaRepository,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   /**
    * 모든 인물 목록 조회
@@ -92,7 +106,13 @@ export class PersonService {
    * 인물 생성
    */
   async create(data: CreatePersonData): Promise<PersonResponseDto> {
-    return this.personRepository.create(data)
+    const person = await this.personRepository.create(data)
+    await this.notificationService.notifyPerson(
+      personDisplayName(person),
+      EventMethod.CREATE,
+      person.id,
+    )
+    return person
   }
 
   /**
@@ -100,15 +120,25 @@ export class PersonService {
    */
   async update(id: string, data: UpdatePersonData): Promise<PersonResponseDto> {
     await this.findById(id) // 존재 여부 확인
-    return this.personRepository.update(id, data)
+    const person = await this.personRepository.update(id, data)
+    await this.notificationService.notifyPerson(
+      personDisplayName(person),
+      EventMethod.UPDATE,
+      person.id,
+    )
+    return person
   }
 
   /**
    * 인물 삭제
    */
   async delete(id: string): Promise<void> {
-    await this.findById(id) // 존재 여부 확인
+    const person = await this.findById(id) // 존재 여부 확인 + 표시명용
     await this.personRepository.delete(id)
+    await this.notificationService.notifyPerson(
+      personDisplayName(person),
+      EventMethod.DELETE,
+    )
   }
 
   // ========================
@@ -182,21 +212,33 @@ export class PersonService {
    * 국가원수/왕위 재임 기록 추가
    */
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto): Promise<any> {
-    return this.personRepository.addGovernmentPositionTenure(dto)
+    const tenure = await this.personRepository.addGovernmentPositionTenure(dto)
+    const person = tenure?.person
+    const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
+    await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenure?.startDate ? String(tenure.startDate) : undefined)
+    return tenure
   }
 
   /**
    * 국가원수/왕위 재임 기록 수정
    */
   async updateGovernmentPositionTenure(id: string, dto: Partial<CreateGovernmentPositionTenureDto>): Promise<any> {
-    return this.personRepository.updateGovernmentPositionTenure(id, dto)
+    const tenure = await this.personRepository.updateGovernmentPositionTenure(id, dto)
+    const person = tenure?.person
+    const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
+    await this.notificationService.notifyTenure(label, EventMethod.UPDATE, tenure?.personId ?? tenure?.id, tenure?.startDate ? String(tenure.startDate) : undefined)
+    return tenure
   }
 
   /**
    * 국가원수/왕위 재임 기록 삭제
    */
   async deleteGovernmentPositionTenure(id: string): Promise<void> {
-    return this.personRepository.deleteGovernmentPositionTenure(id)
+    const tenure = await this.personRepository.findTenureById(id)
+    const person = tenure?.person
+    const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
+    await this.personRepository.deleteGovernmentPositionTenure(id)
+    await this.notificationService.notifyTenure(label, EventMethod.DELETE, tenure?.personId)
   }
 
   /**

@@ -25,6 +25,11 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import {
+  getNotificationEntityTypeLabel,
+  getNotificationListPath,
+  useNotificationStore,
+} from '@/entities/notification'
 import { useSessionStore } from '@/entities/session'
 import { getPlaylistControls } from '@/shared/hooks/use-bgm-playlist.hook'
 import {
@@ -44,20 +49,17 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-interface MessageItem {
-  id: string
-  title: string
-  preview?: string
-  time: string
-  unread?: boolean
-}
-
 const Header: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { username, reset } = useSessionStore()
+  const { messages, markAllRead, markOneRead, fetchNotifications } = useNotificationStore()
 
   const [isBellOpen, setIsBellOpen] = useState(false)
+
+  useEffect(() => {
+    if (isBellOpen) fetchNotifications()
+  }, [isBellOpen, fetchNotifications])
   const [isUserOpen, setIsUserOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -276,30 +278,6 @@ const Header: React.FC = () => {
     }
   }
 
-  const [messages, setMessages] = useState<MessageItem[]>([
-    {
-      id: 'm1',
-      title: '새 국가가 등록되었습니다',
-      preview: '한국이 목록에 추가되었습니다',
-      time: '오늘 12:32',
-      unread: true,
-    },
-    {
-      id: 'm2',
-      title: '데이터 동기화 완료',
-      preview: '국가 통계가 최신화되었습니다',
-      time: '어제 18:10',
-      unread: false,
-    },
-    {
-      id: 'm3',
-      title: '알림 테스트 메시지',
-      preview: '시스템 점검 안내',
-      time: '2일 전',
-      unread: true,
-    },
-  ])
-
   useOnClickOutside(bellMenuRef, () => setIsBellOpen(false))
   useOnClickOutside(userMenuRef, () => setIsUserOpen(false))
   useOnClickOutside(settingsMenuRef, () => setIsSettingsOpen(false))
@@ -382,18 +360,6 @@ const Header: React.FC = () => {
   ]
 
   const unreadCount = messages.filter((item) => item.unread).length
-
-  const markAllRead = () =>
-    setMessages((prevMessages) =>
-      prevMessages.map((message) => ({ ...message, unread: false })),
-    )
-
-  const toggleOneRead = (messageId: string) =>
-    setMessages((prevMessages) =>
-      prevMessages.map((message) =>
-        message.id === messageId ? { ...message, unread: false } : message,
-      ),
-    )
 
   return (
     <>
@@ -578,12 +544,24 @@ const Header: React.FC = () => {
                     $unread={!!msg.unread}
                     onClick={() => {
                       playClickSound()
-                      toggleOneRead(msg.id)
+                      markOneRead(msg.id)
+                      const listPath = getNotificationListPath(msg.ownerType)
+                      if (listPath) {
+                        navigate(listPath)
+                        setIsBellOpen(false)
+                      }
                     }}
                   >
                     <UnreadDot $visible={!!msg.unread} />
                     <MessageBody>
-                      <MessageTitle>{msg.title}</MessageTitle>
+                      <MessageTitleRow>
+                        {getNotificationEntityTypeLabel(msg.ownerType) && (
+                          <EntityTypeChip>
+                            {getNotificationEntityTypeLabel(msg.ownerType)}
+                          </EntityTypeChip>
+                        )}
+                        <MessageTitle>{msg.title}</MessageTitle>
+                      </MessageTitleRow>
                       {msg.preview && (
                         <MessagePreview>{msg.preview}</MessagePreview>
                       )}
@@ -756,12 +734,24 @@ const Header: React.FC = () => {
                       $unread={!!msg.unread}
                       onClick={() => {
                         playClickSound()
-                        toggleOneRead(msg.id)
+                        markOneRead(msg.id)
+                        const listPath = getNotificationListPath(msg.ownerType)
+                        if (listPath) {
+                          navigate(listPath)
+                          setIsBellOpen(false)
+                        }
                       }}
                     >
                       <UnreadDot $visible={!!msg.unread} />
                       <MessageBody>
-                        <MessageTitle>{msg.title}</MessageTitle>
+                        <MessageTitleRow>
+                          {getNotificationEntityTypeLabel(msg.ownerType) && (
+                            <EntityTypeChip>
+                              {getNotificationEntityTypeLabel(msg.ownerType)}
+                            </EntityTypeChip>
+                          )}
+                          <MessageTitle>{msg.title}</MessageTitle>
+                        </MessageTitleRow>
                         {msg.preview && (
                           <MessagePreview>{msg.preview}</MessagePreview>
                         )}
@@ -1467,12 +1457,31 @@ const MessageBody = styled.div`
   gap: 4px;
 `
 
+const MessageTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+`
+
+const EntityTypeChip = styled.span`
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: rgba(173, 70, 255, 0.12);
+  flex-shrink: 0;
+`
+
 const MessageTitle = styled.div`
   font-size: 14px;
   color: #202124;
   font-weight: 600;
   line-height: 1.45;
-  margin-bottom: 4px;
+  min-width: 0;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;

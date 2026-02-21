@@ -4,12 +4,14 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common'
+import { EventMethod } from '@prisma/client'
 import {
   CountryRepository,
   HistoricalCountrySimple,
 } from '../domain/country.repository'
 import { Country } from '../domain/country.entity'
 import { PrismaClient } from '@prisma/client'
+import { NotificationService } from '../../notification/application/notification.service'
 
 @Injectable()
 export class CountryService {
@@ -17,6 +19,7 @@ export class CountryService {
     @Inject('CountryRepository')
     private readonly countries: CountryRepository,
     private readonly prisma: PrismaClient,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -72,7 +75,14 @@ export class CountryService {
       )
     }
 
-    return this.countries.create(data)
+    const country = await this.countries.create(data)
+    await this.notificationService.notifyCountry(
+      country.name,
+      EventMethod.CREATE,
+      country.id,
+      country.localName ?? undefined,
+    )
+    return country
   }
 
   /**
@@ -100,7 +110,14 @@ export class CountryService {
       }
     }
 
-    return this.countries.update(id, data)
+    const country = await this.countries.update(id, data)
+    await this.notificationService.notifyCountry(
+      country.name,
+      EventMethod.UPDATE,
+      country.id,
+      country.localName ?? undefined,
+    )
+    return country
   }
 
   /**
@@ -109,9 +126,12 @@ export class CountryService {
    * @throws NotFoundException 국가를 찾을 수 없는 경우
    */
   async deleteCountry(id: string): Promise<void> {
-    // 존재 여부 확인
-    await this.getCountryById(id)
+    const country = await this.getCountryById(id)
     await this.countries.delete(id)
+    await this.notificationService.notifyCountry(
+      country.name,
+      EventMethod.DELETE,
+    )
   }
 
   /**

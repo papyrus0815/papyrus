@@ -5,19 +5,40 @@ import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
 
 import type { HistoricalCountry } from '@/entities/historical-country/api'
-import { useHistoricalCountries } from '@/features/historical-country'
-import { useHistoricalCountryFilters } from '@/features/historical-country'
+import { useCountries } from '@/features/country/api'
+import {
+  useCreateHistoricalCountry,
+  useDeleteHistoricalCountry,
+  useHistoricalCountries,
+  useHistoricalCountryFilters,
+  useHistoricalCountry,
+  useUpdateHistoricalCountry,
+} from '@/features/historical-country'
 import { HistoricalCountryDashboard } from '@/widgets/historical-country/historical-country-dashboard'
 import { HistoricalCountryDetail } from '@/widgets/historical-country/historical-country-detail'
+import { HistoricalCountryForm } from '@/widgets/historical-country/historical-country-form'
 import { HistoricalCountryList } from '@/widgets/historical-country/historical-country-list'
 
 export default function HistoricalCountryPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('dashboard')
   const [selectedCountry, setSelectedCountry] =
     useState<HistoricalCountry | null>(null)
+  /** 수정/등록할 역사적 국가 (null이면 폼 숨김, {}면 신규 등록) */
+  const [editingCountry, setEditingCountry] =
+    useState<HistoricalCountry | Record<string, never> | null>(null)
 
   // API 데이터 조회
   const { data: apiCountries, isLoading } = useHistoricalCountries()
+  const { data: modernCountries = [] } = useCountries()
+  /** 수정 시 상세 API로 상위 현대 국가(parentModernCountryIds) 포함해 조회 */
+  const editingId =
+    editingCountry && typeof editingCountry === 'object' && 'id' in editingCountry
+      ? editingCountry.id
+      : undefined
+  const { data: editingDetail } = useHistoricalCountry(editingId)
+  const createMutation = useCreateHistoricalCountry()
+  const updateMutation = useUpdateHistoricalCountry()
+  const deleteMutation = useDeleteHistoricalCountry()
 
   // 로컬 타입으로 변환
   const countries = useMemo(() => {
@@ -33,11 +54,78 @@ export default function HistoricalCountryPage() {
   }
 
   const handleEdit = (country: HistoricalCountry) => {
-    toast('수정 기능은 곧 추가됩니다!', { icon: '🚧' })
+    setEditingCountry(country)
   }
 
-  const handleDelete = (id: string) => {
-    toast('삭제 기능은 곧 추가됩니다!', { icon: '🚧' })
+  const handleDelete = async (id: string) => {
+    if (!confirm('정말로 이 역사적 국가를 삭제하시겠습니까?')) return
+    const loadingToast = toast.loading('삭제하는 중...')
+    try {
+      await deleteMutation.mutateAsync(id)
+      toast.success('삭제되었습니다', { id: loadingToast })
+      if (selectedCountry?.id === id) setSelectedCountry(null)
+    } catch (error) {
+      toast.error('삭제 실패: ' + (error as Error).message, { id: loadingToast })
+    }
+  }
+
+  const handleSaveHistorical = async (
+    data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
+      id?: string
+      parentModernCountryIds?: string[]
+    },
+  ) => {
+    const loadingToast = toast.loading(
+      data.id ? '수정하는 중...' : '등록하는 중...',
+    )
+    try {
+      if (data.id) {
+        await updateMutation.mutateAsync({
+          id: data.id,
+          data: {
+            name: data.name,
+            enName: data.enName,
+            description: data.description ?? null,
+            thumbnailUrl: data.thumbnailUrl ?? null,
+            startEra: data.startEra ?? null,
+            startYear: data.startYear ?? null,
+            startMonth: data.startMonth ?? null,
+            startDay: data.startDay ?? null,
+            endEra: data.endEra ?? null,
+            endYear: data.endYear ?? null,
+            endMonth: data.endMonth ?? null,
+            endDay: data.endDay ?? null,
+            stateType: data.stateType,
+            parentModernCountryIds: data.parentModernCountryIds,
+          },
+        })
+        toast.success('수정되었습니다', { id: loadingToast })
+      } else {
+        await createMutation.mutateAsync({
+          name: data.name,
+          enName: data.enName,
+          description: data.description ?? undefined,
+          thumbnailUrl: data.thumbnailUrl ?? undefined,
+          startEra: data.startEra ?? undefined,
+          startYear: data.startYear ?? undefined,
+          startMonth: data.startMonth ?? undefined,
+          startDay: data.startDay ?? undefined,
+          endEra: data.endEra ?? undefined,
+          endYear: data.endYear ?? undefined,
+          endMonth: data.endMonth ?? undefined,
+          endDay: data.endDay ?? undefined,
+          stateType: data.stateType,
+          parentModernCountryIds: data.parentModernCountryIds,
+        })
+        toast.success('등록되었습니다', { id: loadingToast })
+      }
+      setEditingCountry(null)
+    } catch (error) {
+      toast.error(
+        (data.id ? '수정 실패: ' : '등록 실패: ') + (error as Error).message,
+        { id: loadingToast },
+      )
+    }
   }
 
   if (isLoading) {
@@ -54,10 +142,20 @@ export default function HistoricalCountryPage() {
       {/* 헤더 */}
       <Header>
         <HeaderContent>
-          <Title>🏛️ 역사적 국가</Title>
-          <Description>
-            과거에 존재했던 국가들의 역사를 탐험해보세요
-          </Description>
+          <HeaderRow>
+            <div>
+              <Title>🏛️ 역사적 국가</Title>
+              <Description>
+                과거에 존재했던 국가들의 역사를 탐험해보세요
+              </Description>
+            </div>
+            <AddButton
+              type="button"
+              onClick={() => setEditingCountry({} as HistoricalCountry)}
+            >
+              + 국가 등록
+            </AddButton>
+          </HeaderRow>
         </HeaderContent>
       </Header>
 
@@ -125,6 +223,21 @@ export default function HistoricalCountryPage() {
           </ListViewContainer>
         )}
       </Content>
+
+      {/* 역사적 국가 등록/수정 폼 */}
+      <HistoricalCountryForm
+        editing={
+          editingCountry && editingId
+            ? (editingDetail ?? (editingCountry as HistoricalCountry))
+            : (editingCountry as HistoricalCountry | null)
+        }
+        modernCountries={modernCountries.map((c) => ({
+          id: c.id,
+          name: c.name,
+        }))}
+        onClose={() => setEditingCountry(null)}
+        onSave={handleSaveHistorical}
+      />
     </Container>
   )
 }
@@ -144,6 +257,30 @@ const Header = styled.div`
 const HeaderContent = styled.div`
   max-width: 1200px;
   margin: 0 auto;
+`
+
+const HeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+`
+
+const AddButton = styled.button`
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.35);
+  }
 `
 
 const Title = styled.h1`

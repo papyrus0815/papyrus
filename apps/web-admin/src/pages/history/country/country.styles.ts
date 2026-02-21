@@ -1477,11 +1477,15 @@ export const ThumbnailPreview = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
+  overflow: hidden;
 `
 
 export const ThumbnailImage = styled.img`
   max-width: 100%;
-  max-height: 200px;
+  max-height: 160px;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);

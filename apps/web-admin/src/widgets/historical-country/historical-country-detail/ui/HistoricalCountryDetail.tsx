@@ -84,6 +84,7 @@ export function HistoricalCountryDetail({
       THEOCRACY: '신정 국가',
       TRIBAL_STATE: '부족 국가',
       NOMADIC_EMPIRE: '유목 제국',
+      DYNASTY: '왕조',
       OTHER: '기타',
     }
     return labels[stateType] || stateType

@@ -17,6 +17,7 @@ import { SocialModule } from '../../../libs/social/infrastructure/social.module'
 import { EventModule } from '../../../libs/event/infrastructure/event.module'
 import { EventCategoryModule } from '../../../libs/event-category/event-category.module'
 import { CityModule } from '../../../libs/city/city.module'
+import { NotificationModule } from '../../../libs/notification/notification.module'
 import { OrganizationModule } from '../../../libs/organization/infrastructure/organization.module'
 import { UploadModule } from '../../../libs/shared/upload/upload.module'
 
@@ -51,6 +52,7 @@ import {
     EventModule,
     EventCategoryModule,
     CityModule,
+    NotificationModule,
     OrganizationModule,
     UploadModule,
     HealthModule,
