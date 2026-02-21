@@ -457,6 +457,34 @@ export const SectionTitle = styled.h2`
   }
 `
 
+/** 인물 탭 내 서브탭 바 (통계·최근 인물 | 역대 수반) */
+export const PersonInnerTabBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+`
+
+export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: ${({ $active }) => ($active ? '#f1f5f9' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#0f172a' : '#64748b')};
+  font-size: 14px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+
+  &:hover {
+    background: ${({ $active }) => ($active ? '#f1f5f9' : '#f8fafc')};
+    color: #0f172a;
+  }
+`
+
 export const SimpleHeaderSubtitle = styled.p`
   margin: 4px 0 0 0;
   font-size: 14px;

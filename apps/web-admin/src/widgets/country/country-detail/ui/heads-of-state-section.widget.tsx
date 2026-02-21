@@ -2,8 +2,9 @@
  * 역대 수반(국가원수·정부수반·군주 등) 재임 기록 목록 및 추가 섹션
  * 연대표 국가 상세에서 해당 국가의 재임 기록을 보고 추가할 수 있음
  */
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { AnimatePresence, motion } from 'framer-motion'
 import styled from 'styled-components'
 import { FiPlus, FiUser, FiCalendar, FiChevronRight, FiArrowLeft, FiChevronDown, FiSave } from 'react-icons/fi'
 import { toast } from 'react-hot-toast'
@@ -86,11 +87,19 @@ const POSITION_TITLE_EN_MAP: Record<string, string> = {
 
 interface HeadsOfStateSectionProps {
   country: UnifiedCountry
+  /** 인물 탭에 통합되어 상단 여백을 부모가 줄 때 true */
+  embedded?: boolean
 }
 
-export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
+const MIN_LOADING_MS = 1000
+const FADE_DURATION = 0.35
+
+export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionProps) {
   const queryClient = useQueryClient()
   const isHistorical = country.type === 'historical'
+  const [showLoading, setShowLoading] = useState(true)
+  const loadStartRef = useRef<number>(Date.now())
+  const minLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const countryId = !isHistorical ? country.id : undefined
   const historicalCountryId = isHistorical ? country.id : undefined
 
@@ -126,6 +135,27 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
       }),
     enabled: !!countryId || !!historicalCountryId,
   })
+
+  // 최소 1초 로딩 표시 후 부드럽게 전환
+  useEffect(() => {
+    if (isLoading) {
+      loadStartRef.current = Date.now()
+      setShowLoading(true)
+    } else {
+      const elapsed = Date.now() - loadStartRef.current
+      const remaining = Math.max(0, MIN_LOADING_MS - elapsed)
+      minLoadTimeoutRef.current = setTimeout(() => {
+        setShowLoading(false)
+        minLoadTimeoutRef.current = null
+      }, remaining)
+    }
+    return () => {
+      if (minLoadTimeoutRef.current) {
+        clearTimeout(minLoadTimeoutRef.current)
+        minLoadTimeoutRef.current = null
+      }
+    }
+  }, [isLoading])
 
   const { data: persons = [] } = useQuery({
     queryKey: ['persons-by-tenure-country', countryId, historicalCountryId],
@@ -295,34 +325,70 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
   const selectedPerson = persons.find((p: any) => p.id === selectedPersonId) ?? null
 
   return (
-    <SectionOuter>
+    <SectionOuter $embedded={embedded}>
       {view === 'list' ? (
-        <ListWrap>
-          <ListHead>
-            <ListTitle>
-              재임 목록
-              {!isLoading && tenures.length > 0 && <span className="count">{tenures.length}건</span>}
-            </ListTitle>
-            <AddTenureButton type="button" onClick={() => setView('register')}>
-              <FiPlus size={20} />
-              수반 등록
-            </AddTenureButton>
-          </ListHead>
-          {isLoading ? (
-            <LoadingState>
-              <LoadingDots />
-              <span>목록을 불러오는 중입니다.</span>
-            </LoadingState>
-          ) : tenures.length === 0 ? (
-            <EmptyState>
-              <EmptyIconWrap>
-                <FiUser size={40} />
-              </EmptyIconWrap>
-              <EmptyTitle>등록된 재임 기록이 없습니다</EmptyTitle>
-              <EmptyDesc>수반 등록 버튼을 눌러 재임 기록을 추가해 보세요.</EmptyDesc>
-            </EmptyState>
-          ) : (
-            <List>
+        <div style={{ position: 'relative', minHeight: '400px' }}>
+          <AnimatePresence mode="wait">
+            {showLoading ? (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: FADE_DURATION, ease: [0.25, 0.1, 0.25, 1] }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: '400px',
+                  color: '#64748b',
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                }}
+              >
+                <div style={{ textAlign: 'center' }}>
+                  <div
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      border: '4px solid #e2e8f0',
+                      borderTopColor: '#8b5cf6',
+                      borderRadius: '50%',
+                      margin: '0 auto 16px',
+                      animation: 'spin 1s linear infinite',
+                    }}
+                  />
+                  <p style={{ margin: 0, fontSize: '14px' }}>목록을 불러오는 중입니다.</p>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: FADE_DURATION, ease: [0.25, 0.1, 0.25, 1] }}
+              >
+                <ListWrap>
+                  <ListHead>
+                    <ListTitle>
+                      재임 목록
+                      {tenures.length > 0 && <span className="count">{tenures.length}건</span>}
+                    </ListTitle>
+                    <AddTenureButton type="button" onClick={() => setView('register')}>
+                      <FiPlus size={20} />
+                      수반 등록
+                    </AddTenureButton>
+                  </ListHead>
+                  {tenures.length === 0 ? (
+                    <EmptyState>
+                      <EmptyIconWrap>
+                        <FiUser size={40} />
+                      </EmptyIconWrap>
+                      <EmptyTitle>등록된 재임 기록이 없습니다</EmptyTitle>
+                      <EmptyDesc>수반 등록 버튼을 눌러 재임 기록을 추가해 보세요.</EmptyDesc>
+                    </EmptyState>
+                  ) : (
+                    <List>
               {tenures.map((t: any) => {
                 const titleText = t.title || t.position?.title || '—'
                 const regnalFromNotes = getRegnalNameFromNotes(t.notes)
@@ -381,9 +447,13 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
                   </ListItem>
                 )
               })}
-            </List>
-          )}
-        </ListWrap>
+                    </List>
+                  )}
+                </ListWrap>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       ) : (
         <>
           <BackToListButton
@@ -620,8 +690,8 @@ export function HeadsOfStateSection({ country }: HeadsOfStateSectionProps) {
   )
 }
 
-const SectionOuter = styled.div`
-  margin-top: 28px;
+const SectionOuter = styled.div<{ $embedded?: boolean }>`
+  margin-top: ${({ $embedded }) => ($embedded ? '16px' : '28px')};
 `
 
 const SectionHeader = styled.div`
@@ -695,31 +765,6 @@ const AddTenureButton = styled.button`
   &:hover {
     background: #8b5cf6;
     box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
-  }
-`
-
-const LoadingState = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 48px 24px;
-  color: #64748b;
-  font-size: 14px;
-`
-
-const LoadingDots = styled.span`
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e2e8f0;
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 `
 

@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import { type Person, personApi } from '@/shared/api/person'
 
 interface PersonStatsProps {
   countryId: string
+  /** true면 상단 여백 겹침 없음(탭 아래 등) — 카드 그리드 marginTop 0 */
+  noOverlap?: boolean
 }
 
 interface PersonStats {
@@ -28,9 +30,14 @@ interface PersonStats {
  * - 시대별 분포
  * - 최근 등록 인물
  */
-export function PersonStatsSection({ countryId }: PersonStatsProps) {
+const MIN_LOADING_MS = 1000
+const FADE_DURATION = 0.35
+
+export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
   const [persons, setPersons] = useState<Person[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const loadStartRef = useRef<number>(Date.now())
+  const minLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [stats, setStats] = useState<PersonStats>({
     totalPersons: 0,
     maleCount: 0,
@@ -43,10 +50,11 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
     recentPersons: [],
   })
 
-  // 데이터 로드
+  // 데이터 로드 — 최소 1초 로딩 표시 후 부드럽게 전환
   useEffect(() => {
+    loadStartRef.current = Date.now()
+    setIsLoading(true)
     const fetchData = async () => {
-      setIsLoading(true)
       try {
         const data = await personApi.getByCountryId(countryId)
         setPersons(data)
@@ -54,10 +62,21 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
       } catch (error) {
         console.error('Failed to fetch persons:', error)
       } finally {
-        setIsLoading(false)
+        const elapsed = Date.now() - loadStartRef.current
+        const remaining = Math.max(0, MIN_LOADING_MS - elapsed)
+        minLoadTimeoutRef.current = setTimeout(() => {
+          setIsLoading(false)
+          minLoadTimeoutRef.current = null
+        }, remaining)
       }
     }
     fetchData()
+    return () => {
+      if (minLoadTimeoutRef.current) {
+        clearTimeout(minLoadTimeoutRef.current)
+        minLoadTimeoutRef.current = null
+      }
+    }
   }, [countryId])
 
   // 통계 계산
@@ -129,57 +148,64 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
     })
   }
 
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '400px',
-          color: '#64748b',
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              width: '48px',
-              height: '48px',
-              border: '4px solid #e2e8f0',
-              borderTopColor: '#8b5cf6',
-              borderRadius: '50%',
-              margin: '0 auto 16px',
-              animation: 'spin 1s linear infinite',
-            }}
-          />
-          <p>인물 데이터를 불러오는 중...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3 }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '24px',
-        padding: '24px',
-        background: '#f8fafc',
-        minHeight: 'calc(100vh - 200px)',
-        position: 'relative',
-      }}
-    >
+    <div style={{ position: 'relative', minHeight: '400px' }}>
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: FADE_DURATION, ease: [0.25, 0.1, 0.25, 1] }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: '400px',
+              color: '#64748b',
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+            }}
+          >
+            <div style={{ textAlign: 'center' }}>
+              <div
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  border: '4px solid #e2e8f0',
+                  borderTopColor: '#8b5cf6',
+                  borderRadius: '50%',
+                  margin: '0 auto 16px',
+                  animation: 'spin 1s linear infinite',
+                }}
+              />
+              <p>인물 데이터를 불러오는 중...</p>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: FADE_DURATION, ease: [0.25, 0.1, 0.25, 1] }}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px',
+              padding: '24px',
+              background: '#f8fafc',
+              minHeight: 'calc(100vh - 200px)',
+              position: 'relative',
+            }}
+          >
       {/* 통계 카드 그리드 */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(6, 1fr)',
           gap: '16px',
-          marginTop: '-80px',
+          marginTop: noOverlap ? 0 : -80,
           position: 'relative',
           zIndex: 10,
         }}
@@ -407,7 +433,7 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
                     opacity: 0.9,
                   }}
                 >
-                  {((stats.maleCount / stats.totalPersons) * 100).toFixed(1)}%
+                  {stats.totalPersons > 0 ? ((stats.maleCount / stats.totalPersons) * 100).toFixed(1) : '0.0'}%
                 </div>
               </div>
             </div>
@@ -447,7 +473,7 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
                     opacity: 0.9,
                   }}
                 >
-                  {((stats.femaleCount / stats.totalPersons) * 100).toFixed(1)}%
+                  {stats.totalPersons > 0 ? ((stats.femaleCount / stats.totalPersons) * 100).toFixed(1) : '0.0'}%
                 </div>
               </div>
             </div>
@@ -549,7 +575,7 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
                     opacity: 0.9,
                   }}
                 >
-                  {((stats.aliveCount / stats.totalPersons) * 100).toFixed(1)}%
+                  {stats.totalPersons > 0 ? ((stats.aliveCount / stats.totalPersons) * 100).toFixed(1) : '0.0'}%
                 </div>
               </div>
             </div>
@@ -589,10 +615,7 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
                     opacity: 0.9,
                   }}
                 >
-                  {((stats.deceasedCount / stats.totalPersons) * 100).toFixed(
-                    1,
-                  )}
-                  %
+                  {stats.totalPersons > 0 ? ((stats.deceasedCount / stats.totalPersons) * 100).toFixed(1) : '0.0'}%
                 </div>
               </div>
             </div>
@@ -738,7 +761,7 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
                   <div
                     style={{
                       height: '100%',
-                      width: `${(count / stats.totalPersons) * 100}%`,
+                      width: `${stats.totalPersons > 0 ? (count / stats.totalPersons) * 100 : 0}%`,
                       background:
                         'linear-gradient(90deg, #8b5cf6 0%, #a78bfa 100%)',
                       borderRadius: '2px',
@@ -819,8 +842,9 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
           {Object.entries(stats.byEra)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([era, count], idx) => {
-              const maxCount = Math.max(...Object.values(stats.byEra))
-              const height = (count / maxCount) * 200
+              const values = Object.values(stats.byEra)
+              const maxCount = values.length ? Math.max(0, ...values) : 0
+              const height = maxCount > 0 ? (count / maxCount) * 200 : 0
               return (
                 <div
                   key={idx}
@@ -1042,7 +1066,10 @@ export function PersonStatsSection({ countryId }: PersonStatsProps) {
           ))}
         </div>
       </div>
-    </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 

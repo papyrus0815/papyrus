@@ -125,6 +125,8 @@ export function CountryDetail({
 }: CountryDetailProps) {
   const [activeTab, setActiveTab] = useState<CountryDetailTab>('overview')
   const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>('statistics')
+  /** 인물 탭 내 전환: 통계·최근 인물 | 역대 수반 */
+  const [personInnerTab, setPersonInnerTab] = useState<'stats' | 'heads'>('stats')
   const [mapLocation, setMapLocation] = useState<{
     latitude: number
     longitude: number
@@ -153,6 +155,15 @@ export function CountryDetail({
       setSelectedRegionInfo(null)
     }
   }, [activeSubTab])
+
+  // URL 등으로 역대 수반(heads) 진입 시 → 인물 서브탭 + 역대 수반 탭으로 열기
+  React.useEffect(() => {
+    if (initialDetailTab === 'heads') {
+      setActiveTab('overview')
+      setActiveSubTab('person')
+      setPersonInnerTab('heads')
+    }
+  }, [initialDetailTab])
 
   if (!country) {
     return <EmptyState />
@@ -312,14 +323,17 @@ export function CountryDetail({
                 >
                   {/* KPI Grid 제거 - 불필요한 공간 낭비 */}
 
-                  {/* 서브 탭 콘텐츠 */}
-                  <AnimatePresence mode="wait">
+                  {/* 서브 탭 콘텐츠 — opacity만 사용해 스르륵 크로스페이드 */}
+                  <AnimatePresence initial={false} mode="wait">
                     <motion.div
                       key={activeSubTab}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{
+                        duration: 0.32,
+                        ease: [0.25, 0.1, 0.25, 1],
+                      }}
                     >
                       {activeSubTab === 'statistics' && (
                         <div>
@@ -349,11 +363,32 @@ export function CountryDetail({
                       )}
 
                       {activeSubTab === 'person' && (
-                        <PersonStatsSection countryId={country.id} />
-                      )}
-
-                      {activeSubTab === 'heads' && (
-                        <HeadsOfStateSection country={country} />
+                        <div style={{ marginTop: 28 }}>
+                          <CountryDetailStyles.PersonInnerTabBar role="tablist" aria-label="인물 하위 메뉴">
+                            <CountryDetailStyles.PersonInnerTabButton
+                              role="tab"
+                              aria-selected={personInnerTab === 'stats'}
+                              $active={personInnerTab === 'stats'}
+                              onClick={() => setPersonInnerTab('stats')}
+                            >
+                              통계·최근 인물
+                            </CountryDetailStyles.PersonInnerTabButton>
+                            <CountryDetailStyles.PersonInnerTabButton
+                              role="tab"
+                              aria-selected={personInnerTab === 'heads'}
+                              $active={personInnerTab === 'heads'}
+                              onClick={() => setPersonInnerTab('heads')}
+                            >
+                              역대 수반
+                            </CountryDetailStyles.PersonInnerTabButton>
+                          </CountryDetailStyles.PersonInnerTabBar>
+                          {personInnerTab === 'stats' && (
+                            <PersonStatsSection countryId={country.id} noOverlap />
+                          )}
+                          {personInnerTab === 'heads' && (
+                            <HeadsOfStateSection country={country} />
+                          )}
+                        </div>
                       )}
 
                       {activeSubTab === 'history' && (

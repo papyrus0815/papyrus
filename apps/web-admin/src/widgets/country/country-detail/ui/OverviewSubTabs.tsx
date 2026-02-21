@@ -9,7 +9,6 @@ export type OverviewSubTab =
   | 'map'
   | 'government'
   | 'person'
-  | 'heads'
   | 'history'
 
 interface OverviewSubTabsProps {
@@ -53,12 +52,6 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             onClick={() => onSubTabChange('person')}
           >
             인물
-          </S.TabButton>
-          <S.TabButton
-            $active={activeSubTab === 'heads'}
-            onClick={() => onSubTabChange('heads')}
-          >
-            역대 수반
           </S.TabButton>
           <S.TabButton
             $active={activeSubTab === 'history'}
