@@ -358,7 +358,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                       animation: 'spin 1s linear infinite',
                     }}
                   />
-                  <p style={{ margin: 0, fontSize: '14px' }}>목록을 불러오는 중입니다.</p>
+                  <p>인물 데이터를 불러오는 중...</p>
                 </div>
               </motion.div>
             ) : (
@@ -691,7 +691,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
 }
 
 const SectionOuter = styled.div<{ $embedded?: boolean }>`
-  margin-top: ${({ $embedded }) => ($embedded ? '16px' : '28px')};
+  margin-top: ${({ $embedded }) => ($embedded ? '0' : '28px')};
 `
 
 const SectionHeader = styled.div`
