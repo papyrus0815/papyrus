@@ -61,8 +61,13 @@ export class UploadController {
         },
       }),
       fileFilter: (req, file, cb) => {
-        // 이미지 파일만 허용
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
+        // 이미지 파일만 허용 (mimetype이 image/로 시작하거나, 없을 때 확장자로 판단)
+        const mimetypeOk =
+          file.mimetype?.startsWith('image/') ||
+          /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(
+            file.originalname || '',
+          )
+        if (!mimetypeOk) {
           return cb(
             new Error('이미지 파일만 업로드할 수 있습니다.'),
             false,

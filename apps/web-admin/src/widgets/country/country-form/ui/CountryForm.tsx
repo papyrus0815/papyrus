@@ -11,6 +11,7 @@ import {
   type CountryFormData,
 } from '@/entities/country/api'
 import { countrySchema } from '@/entities/country/model/schema'
+import { uploadImage } from '@/shared/api/upload'
 import * as S from '../../../../pages/history/country/country.styles'
 
 /**
@@ -49,6 +50,10 @@ export function CountryForm({
 
   /** 업로드할 썸네일 파일 */
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+
+  /** 국기/썸네일 업로드 중 */
+  const [imageUploading, setImageUploading] = useState(false)
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null)
 
   /** 대륙 선택 모달 표시 여부 */
   const [showContinentModal, setShowContinentModal] = useState(false)
@@ -94,7 +99,6 @@ export function CountryForm({
           localName: editing.localName || '',
           isoCode: editing.isoCode || '',
           flagEmoji: editing.flagEmoji || '',
-          flagImageUrl: editing.flagImageUrl || '',
           capital: editing.capital || '',
           continentId: editing.continentId || '',
           population: editing.population,
@@ -112,7 +116,6 @@ export function CountryForm({
           localName: '',
           isoCode: '',
           flagEmoji: '',
-          flagImageUrl: '',
           capital: '',
           continentId: '',
           population: undefined,
@@ -147,21 +150,26 @@ export function CountryForm({
   // ==================== 이벤트 핸들러 ====================
 
   /**
-   * 국기 이미지 파일 업로드 핸들러
-   * - 파일을 Base64로 변환하여 폼에 저장
-   * - FileReader API 사용
+   * 국기/썸네일 이미지 업로드 핸들러
+   * - 서버에 업로드 후 thumbnailUrl에만 저장 (국기 = 썸네일, 255자 제한)
    */
-  const handleFlagImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFlagImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setFlagImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setValue('flagImageUrl', reader.result as string, {
-          shouldValidate: true,
-        })
-      }
-      reader.readAsDataURL(file)
+    if (!file) return
+    setFlagImageFile(file)
+    setImageUploadError(null)
+    setImageUploading(true)
+    try {
+      const result = await uploadImage(file)
+      const url = (result.url ?? '').length > 255 ? (result.url ?? '').slice(0, 255) : (result.url ?? '')
+      setValue('thumbnailUrl', url, { shouldValidate: true })
+      setThumbnailPreview(result.url ?? '')
+    } catch (err) {
+      setImageUploadError((err as Error).message)
+      setThumbnailPreview('')
+      setValue('thumbnailUrl', '')
+    } finally {
+      setImageUploading(false)
     }
   }
 
@@ -196,7 +204,6 @@ export function CountryForm({
       localName: data.localName,
       isoCode: data.isoCode,
       flagEmoji: data.flagEmoji,
-      flagImageUrl: data.flagImageUrl,
       capital: data.capital,
       population: data.population,
       areaSqKm: data.areaSqKm,
@@ -292,6 +299,54 @@ export function CountryForm({
               </S.FormSectionDescription>
             </div>
           </S.FormSectionHeader>
+
+          {/* 국기 이미지 (상단 배치) */}
+          <S.FormField style={{ marginBottom: '16px' }}>
+            <S.FormLabel>국기 이미지 (썸네일)</S.FormLabel>
+            {thumbnailPreview && (
+              <S.FlagImagePreview
+                style={{ maxWidth: '100%', overflow: 'hidden', marginBottom: '12px' }}
+              >
+                <S.FlagImage
+                  src={thumbnailPreview}
+                  alt="국기 미리보기"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+              </S.FlagImagePreview>
+            )}
+            <S.FileUploadWrapper>
+              <S.FileUploadLabel htmlFor="flag-image-upload">
+                <S.FileUploadIcon>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </S.FileUploadIcon>
+                <S.FileUploadText>
+                  {imageUploading
+                    ? '업로드 중...'
+                    : flagImageFile
+                      ? flagImageFile.name
+                      : '이미지 파일 선택'}
+                </S.FileUploadText>
+              </S.FileUploadLabel>
+              <S.FileInput
+                id="flag-image-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleFlagImageChange}
+                disabled={imageUploading}
+              />
+            </S.FileUploadWrapper>
+            {imageUploadError && (
+              <S.ErrorMessage style={{ marginTop: '8px' }}>{imageUploadError}</S.ErrorMessage>
+            )}
+          </S.FormField>
+
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>
@@ -341,43 +396,6 @@ export function CountryForm({
               />
               {errors.flagEmoji && (
                 <S.ErrorMessage>{errors.flagEmoji.message}</S.ErrorMessage>
-              )}
-            </S.FormField>
-          </S.FormRow>
-          <S.FormRow>
-            <S.FormField>
-              <S.FormLabel>국기 이미지</S.FormLabel>
-              <S.FileUploadWrapper>
-                <S.FileUploadLabel htmlFor="flag-image-upload">
-                  <S.FileUploadIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.FileUploadIcon>
-                  <S.FileUploadText>
-                    {flagImageFile ? flagImageFile.name : '이미지 파일 선택'}
-                  </S.FileUploadText>
-                </S.FileUploadLabel>
-                <S.FileInput
-                  id="flag-image-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFlagImageChange}
-                />
-              </S.FileUploadWrapper>
-              {watch('flagImageUrl') && (
-                <S.FlagImagePreview>
-                  <S.FlagImage
-                    src={watch('flagImageUrl')}
-                    alt="국기 미리보기"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none'
-                    }}
-                  />
-                </S.FlagImagePreview>
               )}
             </S.FormField>
           </S.FormRow>
@@ -491,47 +509,10 @@ export function CountryForm({
             <div>
               <S.FormSectionTitle>추가 정보</S.FormSectionTitle>
               <S.FormSectionDescription>
-                썸네일, 화폐, 언어 등 부가적인 정보를 입력하세요 (선택)
+                화폐, 언어 등 부가적인 정보를 입력하세요 (선택)
               </S.FormSectionDescription>
             </div>
           </S.FormSectionHeader>
-          <S.FormRow>
-            <S.FormField>
-              <S.FormLabel>썸네일 이미지</S.FormLabel>
-              <S.FileUploadWrapper>
-                <S.FileUploadLabel htmlFor="thumbnail-upload">
-                  <S.FileUploadIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.FileUploadIcon>
-                  <S.FileUploadText>
-                    {thumbnailFile ? thumbnailFile.name : '이미지 파일 선택'}
-                  </S.FileUploadText>
-                </S.FileUploadLabel>
-                <S.FileInput
-                  id="thumbnail-upload"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleThumbnailChange}
-                />
-              </S.FileUploadWrapper>
-              {thumbnailPreview && (
-                <S.ThumbnailPreview>
-                  <S.ThumbnailImage
-                    src={thumbnailPreview}
-                    alt="썸네일 미리보기"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none'
-                    }}
-                  />
-                </S.ThumbnailPreview>
-              )}
-            </S.FormField>
-          </S.FormRow>
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>화폐 ID</S.FormLabel>

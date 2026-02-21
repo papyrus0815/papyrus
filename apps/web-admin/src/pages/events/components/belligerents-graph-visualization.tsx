@@ -257,7 +257,7 @@ export const BelligerentsGraphVisualization: React.FC<
               const isDragging = draggingNodeId === country.countryId
 
               // 국기 이미지 또는 썸네일 URL
-              const flagUrl = country.flagImageUrl || country.thumbnailUrl
+              const flagUrl = country.thumbnailUrl
 
               return (
                 <g key={country.countryId}>

@@ -225,7 +225,6 @@ export default function CountryPage() {
         localName: editing.localName || '',
         isoCode: editing.isoCode || '',
         flagEmoji: editing.flagEmoji || '',
-        flagImageUrl: editing.flagImageUrl ?? undefined,
         capital: editing.capital || '',
         continentId: editing.continentId || '',
         population: editing.population ?? undefined,
@@ -540,7 +539,6 @@ export default function CountryPage() {
       localName: data.localName || undefined,
       isoCode: data.isoCode || undefined,
       flagEmoji: data.flagEmoji || undefined,
-      flagImageUrl: data.flagImageUrl || undefined,
       capital: data.capital || undefined,
       population: data.population || undefined,
       areaSqKm: data.areaSqKm || undefined,
@@ -688,7 +686,7 @@ export default function CountryPage() {
       setFlagImageFile(file)
       const reader = new FileReader()
       reader.onloadend = () => {
-        setValue('flagImageUrl', reader.result as string)
+        setValue('thumbnailUrl', reader.result as string)
       }
       reader.readAsDataURL(file)
     }

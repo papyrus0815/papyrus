@@ -26,14 +26,6 @@ export const countrySchema = z.object({
     .string()
     .transform((val) => val || undefined)
     .optional(),
-  flagImageUrl: z
-    .string()
-    .refine(
-      (val) => !val || /^https?:\/\/.+/.test(val),
-      '유효한 URL을 입력하세요',
-    )
-    .transform((val) => val || undefined)
-    .optional(),
   capital: z
     .string()
     .max(100, '수도명은 100자 이내여야 합니다')
@@ -62,8 +54,12 @@ export const countrySchema = z.object({
   thumbnailUrl: z
     .string()
     .refine(
-      (val) => !val || /^https?:\/\/.+/.test(val),
-      '유효한 URL을 입력하세요',
+      (val) =>
+        !val ||
+        /^https?:\/\/.+/.test(val) ||
+        /^\/[^/].*/.test(val) ||
+        /^data:[\w+/]+;base64,.+/.test(val),
+      '유효한 URL 또는 이미지 경로를 입력하세요',
     )
     .transform((val) => val || undefined)
     .optional(),
