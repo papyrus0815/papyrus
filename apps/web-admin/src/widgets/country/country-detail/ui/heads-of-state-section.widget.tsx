@@ -10,12 +10,13 @@ import { FiPlus, FiUser, FiCalendar, FiChevronRight, FiArrowLeft, FiChevronDown,
 import { toast } from 'react-hot-toast'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { getPersonsByTenureCountry } from '@/shared/api/persons'
+import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { personCareerApi } from '@/shared/api/person-career'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/PersonSelectModal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { LineageTree } from './lineage-tree.widget'
 
 /**
  * 직책명 → DB 유형(positionType) 매핑.
@@ -104,6 +105,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const historicalCountryId = isHistorical ? country.id : undefined
 
   const [view, setView] = useState<'list' | 'register'>('list')
+  /** 목록 내 표시 모드: 목록 | 계보도(대수 기준) */
+  const [listViewMode, setListViewMode] = useState<'list' | 'lineage'>('lineage')
   /** 수정 모드: 목록에서 클릭한 재임 ID (설정되면 수정 폼 표시) */
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
   const [personSelectModalOpen, setPersonSelectModalOpen] = useState(false)
@@ -162,6 +165,13 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     queryFn: () =>
       getPersonsByTenureCountry({ countryId, historicalCountryId }),
     enabled: !!countryId || !!historicalCountryId,
+  })
+
+  /** 수반 등록 시 인물 선택 모달용 — 전체 인물 목록(재임 여부 무관) */
+  const { data: allPersonsForModal = [] } = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: () => getAllPersons(),
+    enabled: personSelectModalOpen,
   })
 
   const refetch = () => {
@@ -338,6 +348,131 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
 
   const selectedPerson = persons.find((p: any) => p.id === selectedPersonId) ?? null
 
+  /** 계보도용: 대수/재위번호 있는 재임만, 대수 순 정렬 */
+  const lineageTenures = React.useMemo(() => {
+    const withOrder = tenures.filter(
+      (t: any) => t.termNumber != null || t.regnalNumber != null,
+    )
+    return [...withOrder].sort((a: any, b: any) => {
+      const orderA = a.termNumber ?? a.regnalNumber ?? 0
+      const orderB = b.termNumber ?? b.regnalNumber ?? 0
+      if (orderA !== orderB) return orderA - orderB
+      const startA = a.startDate ? new Date(a.startDate).getTime() : 0
+      const startB = b.startDate ? new Date(b.startDate).getTime() : 0
+      return startA - startB
+    })
+  }, [tenures])
+
+  /** person에서 부모 ID (camelCase/snake_case 모두 지원) */
+  const getParentId = (p: any, personIds: Set<string>) => {
+    const norm = (id: unknown) => (id != null && id !== '' ? String(id) : null)
+    const fatherId = norm((p as any)?.fatherId ?? (p as any)?.father_id)
+    const motherId = norm((p as any)?.motherId ?? (p as any)?.mother_id)
+    if (fatherId && personIds.has(fatherId)) return fatherId
+    if (motherId && personIds.has(motherId)) return motherId
+    return null
+  }
+
+  /** personId → full person (persons API에 fatherId/motherId 있음, tenures의 person에는 없을 수 있음) */
+  const personById = React.useMemo(() => {
+    const map = new Map<string, any>()
+    persons.forEach((p: any) => map.set(String(p.id), p))
+    return map
+  }, [persons])
+
+  /** 세대별 그룹: 같은 부모 = 같은 행(형제). 부모 ID는 persons 목록 기준으로 사용. */
+  const lineageRows = React.useMemo(() => {
+    const norm = (id: unknown) => (id != null && id !== '' ? String(id) : null)
+    const personIds = new Set(
+      lineageTenures
+        .map((t: any) => norm(t.person?.id))
+        .filter((id): id is string => id != null),
+    )
+    const byParent = new Map<string | null, any[]>()
+    lineageTenures.forEach((t: any) => {
+      const pid = norm(t.person?.id)
+      const fullPerson = pid ? personById.get(pid) ?? t.person : t.person
+      const parentId = getParentId(fullPerson, personIds)
+      const list = byParent.get(parentId) ?? []
+      list.push(t)
+      byParent.set(parentId, list)
+    })
+    const roots = byParent.get(null) ?? []
+    const hasFamilyLinks = roots.length < lineageTenures.length
+
+    if (!hasFamilyLinks && lineageTenures.length > 0) {
+      // 부모 연결 없음: 같은 부모→같은 행 규칙 적용 불가, 대수 순 1인 1행
+      return lineageTenures.map((t: any) => [t])
+    }
+
+    const rows: any[][] = []
+    let currentGen = roots
+    const seen = new Set<string>()
+    while (currentGen.length > 0) {
+      currentGen.sort((a: any, b: any) => {
+        const oa = a.termNumber ?? a.regnalNumber ?? 0
+        const ob = b.termNumber ?? b.regnalNumber ?? 0
+        return oa - ob
+      })
+      rows.push(currentGen)
+      currentGen.forEach((t: any) => seen.add(t.id))
+      const nextGen = currentGen.flatMap((t: any) => {
+        const parentPersonId = norm(t.person?.id)
+        return parentPersonId ? byParent.get(parentPersonId) ?? [] : []
+      })
+      currentGen = nextGen.filter((t: any) => !seen.has(t.id))
+    }
+    if (rows.length === 0 && lineageTenures.length > 0) rows.push([...lineageTenures])
+    return rows
+  }, [lineageTenures, personById])
+
+  /** 노드 배치: tenure id -> { row, col } (가계도 SVG/그리드용) */
+  const lineagePlacement = React.useMemo(() => {
+    const map = new Map<string, { row: number; col: number }>()
+    lineageRows.forEach((row, rowIdx) => {
+      row.forEach((t: any, colIdx: number) => map.set(t.id, { row: rowIdx, col: colIdx }))
+    })
+    return map
+  }, [lineageRows])
+
+  /** 부모 tenure id -> 자식 tenure id[] (연결선 그리기용). 부모 ID는 persons 목록 기준. */
+  const parentToChildren = React.useMemo(() => {
+    const norm = (id: unknown) => (id != null && id !== '' ? String(id) : null)
+    const personIds = new Set(
+      lineageTenures.map((t: any) => norm(t.person?.id)).filter((id): id is string => id != null),
+    )
+    const tenureByPersonId = new Map<string, any>()
+    lineageTenures.forEach((t: any) => {
+      const pid = norm(t.person?.id)
+      if (!pid) return
+      const existing = tenureByPersonId.get(pid)
+      const order = t.termNumber ?? t.regnalNumber ?? 0
+      if (!existing || (existing.termNumber ?? existing.regnalNumber ?? 0) > order)
+        tenureByPersonId.set(pid, t)
+    })
+    const map = new Map<string, string[]>()
+    lineageTenures.forEach((t: any) => {
+      const pid = norm(t.person?.id)
+      const fullPerson = pid ? personById.get(pid) ?? t.person : t.person
+      const parentId = getParentId(fullPerson, personIds)
+      if (!parentId) return
+      const parentTenure = tenureByPersonId.get(parentId)
+      if (!parentTenure) return
+      const list = map.get(parentTenure.id) ?? []
+      list.push(t.id)
+      map.set(parentTenure.id, list)
+    })
+
+    if (map.size === 0 && lineageTenures.length >= 2) {
+      for (let i = 0; i < lineageTenures.length - 1; i++) {
+        map.set(lineageTenures[i].id, [lineageTenures[i + 1].id])
+      }
+    }
+    return map
+  }, [lineageTenures, personById])
+
+  const showLineageTab = tenures.length > 0 && lineageTenures.length > 0
+
   return (
     <SectionOuter $embedded={embedded}>
       {view === 'list' ? (
@@ -384,10 +519,34 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
               >
                 <ListWrap>
                   <ListHead>
-                    <ListTitle>
-                      재임 목록
-                      {tenures.length > 0 && <span className="count">{tenures.length}건</span>}
-                    </ListTitle>
+                    <ListHeadLeft>
+                      {showLineageTab && (
+                        <ViewModeTabs role="tablist" aria-label="보기 방식">
+                          <ViewModeTab
+                            role="tab"
+                            aria-selected={listViewMode === 'lineage'}
+                            $active={listViewMode === 'lineage'}
+                            onClick={() => setListViewMode('lineage')}
+                          >
+                            계보도
+                          </ViewModeTab>
+                          <ViewModeTab
+                            role="tab"
+                            aria-selected={listViewMode === 'list'}
+                            $active={listViewMode === 'list'}
+                            onClick={() => setListViewMode('list')}
+                          >
+                            목록
+                          </ViewModeTab>
+                        </ViewModeTabs>
+                      )}
+                      <ListTitle>
+                        {listViewMode === 'lineage' && lineageTenures.length > 0
+                          ? '역대 수반 계보'
+                          : '재임 목록'}
+                        {tenures.length > 0 && <span className="count">{tenures.length}건</span>}
+                      </ListTitle>
+                    </ListHeadLeft>
                     <AddTenureButton type="button" onClick={() => setView('register')}>
                       <FiPlus size={20} />
                       수반 등록
@@ -401,6 +560,24 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                       <EmptyTitle>등록된 재임 기록이 없습니다</EmptyTitle>
                       <EmptyDesc>수반 등록 버튼을 눌러 재임 기록을 추가해 보세요.</EmptyDesc>
                     </EmptyState>
+                  ) : listViewMode === 'lineage' && lineageTenures.length > 0 ? (
+                    <LineageWrap>
+                      <LineageLegend>
+                        <strong>가계도</strong> — 선으로 연결된 위→아래가 부모→자식 관계입니다. 카드의 <strong>재위 연도</strong>가 강조되어 있습니다. 인물에 부·모가 등록되어 있어야 선이 연결됩니다.
+                      </LineageLegend>
+                      <LineageTree
+                        rows={lineageRows}
+                        placement={lineagePlacement}
+                        parentToChildren={parentToChildren}
+                        getPersonName={getPersonName}
+                        formatDate={formatDate}
+                        getRegnalNameFromNotes={getRegnalNameFromNotes}
+                        onCardClick={(tenureId) => {
+                          setEditingTenureId(tenureId)
+                          setView('register')
+                        }}
+                      />
+                    </LineageWrap>
                   ) : (
                     <List>
               {tenures.map((t: any) => {
@@ -665,7 +842,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
 
       {personSelectModalOpen && (
         <PersonSelectModal
-          persons={persons}
+          persons={allPersonsForModal}
           selectedPersonId={selectedPersonId}
           onSelect={(id) => {
             setSelectedPersonId(id)
@@ -750,6 +927,54 @@ const ListHead = styled.div`
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
   flex-wrap: wrap;
+`
+
+const ListHeadLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+`
+
+const ViewModeTabs = styled.div`
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #e2e8f0;
+  border-radius: 10px;
+`
+
+const ViewModeTab = styled.button<{ $active?: boolean }>`
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ $active }) => ($active ? '#fff' : '#64748b')};
+  background: ${({ $active }) => ($active ? 'var(--color-primary)' : 'transparent')};
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+
+  &:hover {
+    color: ${({ $active }) => ($active ? '#fff' : '#334155')};
+    background: ${({ $active }) => ($active ? '#7c3aed' : 'rgba(0,0,0,0.06)')};
+  }
+`
+
+const LineageWrap = styled.div`
+  padding: 24px 24px 32px;
+  min-height: 200px;
+`
+
+const LineageLegend = styled.div`
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #0c4a6e;
+  line-height: 1.5;
 `
 
 const ListTitle = styled.h2`

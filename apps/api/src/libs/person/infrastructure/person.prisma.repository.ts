@@ -1424,6 +1424,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             middleName: true,
             nameDisplayOrder: true,
             profileImageUrl: true,
+            fatherId: true,
+            motherId: true,
           },
         },
       },
