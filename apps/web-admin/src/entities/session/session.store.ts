@@ -19,21 +19,7 @@ export const useSessionStore = create<SessionStore>()(
       token: null,
       username: null,
       setSession: (state) => {
-        console.log('💾 세션 설정 시작:', {
-          token: state.token ? '***' : null,
-          username: state.username,
-        })
-
         set({ token: state.token, username: state.username })
-
-        // 설정 후 즉시 확인
-        setTimeout(() => {
-          const currentState = useSessionStore.getState()
-          console.log('🔍 세션 설정 후 상태 확인:', {
-            token: currentState.token ? '***' : null,
-            username: currentState.username,
-          })
-        }, 0)
       },
       reset: () => set({ token: null, username: null }),
     }),

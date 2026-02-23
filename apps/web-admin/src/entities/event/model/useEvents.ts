@@ -34,8 +34,6 @@ export const useEvents = (pageSizeParam: number = 20) => {
       const currentOffset = reset ? 0 : offset
       const limit = customLimit || pageSize
 
-      console.log(`📥 사건 요청: offset=${currentOffset}, limit=${limit}`)
-
       const [eventsResponse, personsResponse] = await Promise.all([
         getAllEvents({
           offset: currentOffset,
@@ -43,9 +41,6 @@ export const useEvents = (pageSizeParam: number = 20) => {
         }),
         getAllPersonsWithGovernmentPositions(),
       ])
-
-      console.log(`✅ ${eventsResponse.length}개 사건 수신`)
-      console.log(`✅ ${personsResponse.length}명 인물 (정부 직위 포함) 수신`)
 
       const newEvents = transformEventsFromApi(eventsResponse)
 
@@ -67,7 +62,6 @@ export const useEvents = (pageSizeParam: number = 20) => {
       setHasMore(eventsResponse.length === limit)
       setPersonsWithGovPositions(personsResponse)
     } catch (error) {
-      console.error('Failed to fetch events:', error)
       if (reset) {
         setEvents([])
       }
@@ -77,7 +71,6 @@ export const useEvents = (pageSizeParam: number = 20) => {
   }
 
   const resetAndFetch = (newPageSize: number) => {
-    console.log(`🔄 페이지 크기 변경으로 리셋: ${newPageSize}개씩`)
     setPageSize(newPageSize)
     setOffset(0)
     setHasMore(true)

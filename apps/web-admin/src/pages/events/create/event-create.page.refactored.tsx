@@ -252,11 +252,6 @@ export const EventCreatePageRefactored: React.FC = () => {
       try {
         const event = await getEventById(editEventId)
 
-        console.log('📥 사건 로드:', event)
-        console.log('📚 eventSections:', event.eventSections)
-        console.log('🖼️ eventImages:', event.eventImages)
-        console.log('📜 sections (레거시):', event.sections)
-
         // 기본 정보 설정
         setTitle(event.title)
         setDescription(event.description || '')
@@ -310,33 +305,21 @@ export const EventCreatePageRefactored: React.FC = () => {
           setThumbnail(
             primaryImage?.imageUrl || event.eventImages[0].imageUrl || '',
           )
-          console.log('🖼️ eventImages에서 썸네일 로드:', primaryImage?.imageUrl)
         } else if (event.thumbnail) {
           setThumbnail(event.thumbnail)
-          console.log('🖼️ thumbnail (레거시) 로드:', event.thumbnail)
         }
 
         // 🔧 FIX: 카테고리는 ID를 저장해야 함
         if (event.categoryId) {
-          setCategory(event.categoryId) // "cat-military-001"
-          console.log(
-            '✅ 카테고리 로드:',
-            event.categoryId,
-            event.category?.name,
-          )
+          setCategory(event.categoryId)
         }
 
         // 관련 국가 로드
         if (event.relatedCountryIds) {
           setRelatedCountryIds(event.relatedCountryIds)
-          console.log('✅ 관련 현대 국가 로드:', event.relatedCountryIds)
         }
         if (event.relatedHistoricalCountryIds) {
           setRelatedHistoricalCountryIds(event.relatedHistoricalCountryIds)
-          console.log(
-            '✅ 관련 역사적 국가 로드:',
-            event.relatedHistoricalCountryIds,
-          )
         }
 
         // 섹션 로드 (새 구조 우선, 레거시 fallback)
@@ -349,7 +332,6 @@ export const EventCreatePageRefactored: React.FC = () => {
             mentions: [], // 멘션은 별도 로직으로 추출 가능
           }))
           setSections(loadedSections)
-          console.log('✅ eventSections 로드:', loadedSections.length)
         } else if (event.sections) {
           // 레거시 구조
           if (
@@ -362,7 +344,6 @@ export const EventCreatePageRefactored: React.FC = () => {
           } else if (Array.isArray(event.sections)) {
             setSections(event.sections)
           }
-          console.log('✅ sections (레거시) 로드')
         }
 
         // 군사 정보 설정 (간소화)
@@ -376,8 +357,7 @@ export const EventCreatePageRefactored: React.FC = () => {
         }
 
         toast.success('사건 정보를 불러왔습니다')
-      } catch (error) {
-        console.error('사건 정보 로드 실패:', error)
+      } catch {
         toast.error('사건 정보를 불러오는데 실패했습니다')
       } finally {
         setIsLoadingEvent(false)
@@ -396,13 +376,8 @@ export const EventCreatePageRefactored: React.FC = () => {
           setLoadedChildEvents(childEventsData)
           const childIds = childEventsData.map((child) => child.id)
           setChildEventIds(childIds)
-          console.log(
-            `✅ ${childEventsData.length}개 하위 사건 로드됨:`,
-            childEventsData.map((c) => c.title),
-          )
         })
-        .catch((error) => {
-          console.error('하위 사건 관계 로드 실패:', error)
+        .catch(() => {
           setLoadedChildEvents([])
           setChildEventIds([])
         })
@@ -456,10 +431,6 @@ export const EventCreatePageRefactored: React.FC = () => {
         keywords,
       })
 
-      console.log('🔍 [디버깅] category 값:', category)
-      console.log('🔍 [디버깅] eventData.categoryId:', eventData.categoryId)
-      console.log('📤 사건 데이터 전송:', eventData)
-
       if (isEditMode && editEventId) {
         await updateEvent(
           editEventId,
@@ -473,7 +444,6 @@ export const EventCreatePageRefactored: React.FC = () => {
 
       navigate(pathKeys.events.root())
     } catch (error) {
-      console.error('사건 등록 실패:', error)
       toast.error(
         `사건 등록에 실패했습니다: ${
           error instanceof Error ? error.message : '알 수 없는 오류'

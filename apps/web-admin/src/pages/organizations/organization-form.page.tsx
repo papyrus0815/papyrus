@@ -147,8 +147,8 @@ export const OrganizationFormPage: React.FC = () => {
           countryId: org.countryId,
           historicalCountryId: org.historicalCountryId,
         })
-      } catch (e) {
-        console.error(e)
+      } catch {
+        // ignore
       }
       setLoading(false)
     })()
@@ -171,7 +171,6 @@ export const OrganizationFormPage: React.FC = () => {
       }
       navigate('/organizations')
     } catch (err: any) {
-      console.error(err)
       alert(err?.message || '저장 실패')
     }
   }

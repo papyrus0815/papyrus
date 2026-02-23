@@ -28,7 +28,6 @@ export async function getAllContinents(): Promise<ContinentResponseDto[]> {
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
   } catch (error) {
-    console.error('❌ 대륙 목록 조회 실패:', error)
     throw error
   }
 }
@@ -46,7 +45,6 @@ export async function getContinentById(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 대륙 조회 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -64,7 +62,6 @@ export async function createContinent(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error('❌ 대륙 생성 실패:', error)
     throw error
   }
 }
@@ -84,7 +81,6 @@ export async function updateContinent(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 대륙 수정 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -96,7 +92,6 @@ export async function deleteContinent(id: string): Promise<void> {
   try {
     await continentsApi.deleteContinent(apiConnection, id)
   } catch (error) {
-    console.error(`❌ 대륙 삭제 실패 (ID: ${id}):`, error)
     throw error
   }
 }

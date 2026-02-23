@@ -61,7 +61,6 @@ export const JobForm = ({ job, onClose }: JobFormProps) => {
       }
       onClose()
     } catch (err: any) {
-      console.error('Failed to save job:', err)
 
       // 에러 메시지 파싱
       if (

@@ -69,8 +69,6 @@ export const useHeadsOfState = (
       }
     }
     setEventHeadsOfState(headsOfStateMap)
-    console.log('👑 사건별 국가 원수 (필터링됨):', headsOfStateMap)
-    console.log('💼 선택된 직업:', selectedPositionType)
   }, [events, personsWithGovPositions, selectedPositionType])
 
   const toggleTenureGroupExpansion = (tenureKey: string) => {

@@ -206,8 +206,8 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
       ])
       setModernCountries(modern)
       setHistoricalCountries(historical)
-    } catch (error) {
-      console.error('국가 목록 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }
 
@@ -215,8 +215,8 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     try {
       const data = await getAllPersons()
       setPersons(data)
-    } catch (error) {
-      console.error('인물 목록 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }
 
@@ -401,7 +401,6 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
       return
     }
 
-    console.log('Submit:', formData)
     // TODO: API 연동
 
     navigate('/administration-departments')

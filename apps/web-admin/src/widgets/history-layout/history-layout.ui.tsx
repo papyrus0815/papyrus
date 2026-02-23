@@ -38,8 +38,8 @@ export default function HistoryLayout() {
         SIDEBAR_COLLAPSED_KEY,
         JSON.stringify(isSidebarCollapsed),
       )
-    } catch (error) {
-      console.error('Failed to save sidebar state:', error)
+    } catch {
+      // ignore
     }
   }, [isSidebarCollapsed])
 
@@ -375,7 +375,6 @@ export default function HistoryLayout() {
               type="button"
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation()
-                console.log('대시보드 클릭')
                 window.dispatchEvent(
                   new CustomEvent('switchViewMode', {
                     detail: 'dashboard',
@@ -400,7 +399,6 @@ export default function HistoryLayout() {
               type="button"
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation()
-                console.log('목록 클릭')
                 window.dispatchEvent(
                   new CustomEvent('switchViewMode', { detail: 'list' }),
                 )

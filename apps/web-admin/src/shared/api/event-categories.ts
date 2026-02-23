@@ -34,8 +34,7 @@ const getConnection = (): IConnection => ({
 export async function getAllEventCategories(): Promise<EventCategoryDto[]> {
   try {
     return await api.event_categories.getAllCategories(getConnection())
-  } catch (error) {
-    console.error('❌ 카테고리 목록 조회 실패:', error)
+  } catch {
     throw new Error('Failed to fetch event categories')
   }
 }

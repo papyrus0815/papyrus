@@ -32,7 +32,6 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
       const data = await personApi.getByCountryId(countryId)
       setPersons(data)
     } catch (error) {
-      console.error('Failed to fetch persons:', error)
       setPersons([])
     } finally {
       setIsLoading(false)
@@ -52,7 +51,6 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
           const detail = await getPersonDetailById(selectedPersonId)
           setPersonDetail(detail)
         } catch (error) {
-          console.error('Failed to fetch person detail:', error)
         } finally {
           setIsLoadingDetail(false)
         }
@@ -71,7 +69,6 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
       const detail = await getPersonDetailById(personId)
       setPersonDetail(detail)
     } catch (error) {
-      console.error('Failed to fetch person detail:', error)
       setPersonDetail(null)
     } finally {
       setIsLoadingDetail(false)

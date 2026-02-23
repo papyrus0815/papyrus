@@ -13,7 +13,6 @@ import { type ContinentOption, type Country } from '@/entities/country/api'
 import { getSummaryMetrics } from '@/entities/country/lib/utils'
 import { countrySchema } from '@/entities/country/model/schema'
 import {
-  COUNTRY_TYPE_LABELS,
   type CountryFormData,
   type CountryTypeFilter,
   type UnifiedCountry,
@@ -38,6 +37,8 @@ import {
 import { CountryDashboard } from '@/widgets/country/country-dashboard'
 import { CountryDetail } from '@/widgets/country/country-detail'
 import { CountryForm } from '@/widgets/country/country-form'
+import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
+import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
 import { CountryList } from '@/widgets/country/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui'
 import { HistoricalCountryForm } from '@/widgets/historical-country/historical-country-form'
@@ -148,14 +149,7 @@ export default function CountryPage() {
   }, [apiContinents])
 
   // ==================== 상태 관리 ====================
-  // 검색 & 필터
-  const [query, setQuery] = useState('')
-  const [continentFilter, setContinentFilter] = useState('')
-  const [countryTypeFilter, setCountryTypeFilter] =
-    useState<CountryTypeFilter>('all')
-  const [sortBy, setSortBy] = useState<'name' | 'population' | 'area'>('name')
-
-  // 모달 상태
+  // 모달만 페이지에 둠 (목록 검색/필터는 Context에서 관리 → 입력 시 페이지 리렌더 없음)
   const [showContinentModal, setShowContinentModal] = useState(false)
   const [showSortModal, setShowSortModal] = useState(false)
   const [showCountryTypeModal, setShowCountryTypeModal] = useState(false)
@@ -179,7 +173,8 @@ export default function CountryPage() {
     setSelectedId(countryIdFromUrl || null)
   }, [countryIdFromUrl])
 
-  const [isLoading, setIsLoading] = useState(false)
+  /** 상세 전환 시 별도 로딩 없음(데이터 이미 있음) */
+  const isLoading = false
   // URL에 countryId가 있으면 목록 탭으로 열기 (직접 진입 시 상세 패널이 보이도록)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>(() =>
     countryIdFromUrl ? 'list' : 'dashboard',
@@ -271,95 +266,6 @@ export default function CountryPage() {
     return undefined
   }, [unifiedCountries, selectedId, apiHistoricalCountries])
 
-  /**
-   * 필터링 및 정렬된 국가 목록
-   * - 검색어 필터 (이름, ISO 코드, 수도, 영문명)
-   * - 대륙 필터 (현대 국가만 해당)
-   * - 국가 타입 필터 (전체/현대/역사)
-   * - 정렬 (이름/인구/면적)
-   *
-   * 역사적 국가: GET /historical-countries 전체를 사용해 표시 (연결 여부와 무관하게 DB에 있는 모든 역사적 국가 노출)
-   */
-  const filtered = useMemo(() => {
-    const searchTextLower = query.trim().toLowerCase()
-
-    // 'historical' 필터: API에서 조회한 전체 역사적 국가 사용 (연결된 것만이 아님)
-    if (countryTypeFilter === 'historical') {
-      const fromApi = (apiHistoricalCountries ?? []).map((hc) =>
-        historicalToUnified(hc as HistoricalCountry),
-      )
-      // 현대 국가 하위에만 있는 항목 중 API 목록에 없는 것도 포함 (이중화 방지를 위해 Set으로 id 관리)
-      const seenIds = new Set(fromApi.map((c) => c.id))
-      unifiedCountries.forEach((country) => {
-        if (country.type === 'modern' && country.historicalCountries) {
-          country.historicalCountries.forEach((hc) => {
-            if (!seenIds.has(hc.id)) {
-              seenIds.add(hc.id)
-              fromApi.push(historicalToUnified(hc))
-            }
-          })
-        }
-      })
-
-      const result = fromApi.filter((country) => {
-        const matchSearch =
-          !searchTextLower ||
-          country.name.toLowerCase().includes(searchTextLower) ||
-          (country.enName || '').toLowerCase().includes(searchTextLower)
-        return matchSearch
-      })
-
-      return result.sort((countryA, countryB) => {
-        if (sortBy === 'name') {
-          return countryA.name.localeCompare(countryB.name, 'ko')
-        }
-        return 0
-      })
-    }
-
-    // 'all' 또는 'modern' 필터: 현대 국가만 표시 (하위에 역사 국가 포함)
-    const result = unifiedCountries.filter((country) => {
-      // 타입 필터 (modern만 표시)
-      if (country.type !== 'modern') return false
-
-      // 검색 필터
-      const matchSearch =
-        !searchTextLower ||
-        country.name.toLowerCase().includes(searchTextLower) ||
-        (country.isoCode || '').toLowerCase().includes(searchTextLower) ||
-        (country.capital || '').toLowerCase().includes(searchTextLower)
-
-      // 대륙 필터
-      const matchContinent =
-        !continentFilter || country.continentId === continentFilter
-
-      return matchSearch && matchContinent
-    })
-
-    // 정렬
-    return result.sort((countryA, countryB) => {
-      if (sortBy === 'name') {
-        return countryA.name.localeCompare(countryB.name, 'ko')
-      } else if (sortBy === 'population') {
-        return (
-          (Number(countryB.population) || 0) -
-          (Number(countryA.population) || 0)
-        )
-      } else if (sortBy === 'area') {
-        return (countryB.areaSqKm || 0) - (countryA.areaSqKm || 0)
-      }
-
-      return 0
-    })
-  }, [
-    unifiedCountries,
-    apiHistoricalCountries,
-    query,
-    continentFilter,
-    countryTypeFilter,
-    sortBy,
-  ])
-
   /** 탭별 카운트 (미사용 - 향후 확장용) */
   const countUnassigned = useMemo(
     () => countries.filter((countryItem) => !countryItem.isoCode).length,
@@ -389,20 +295,7 @@ export default function CountryPage() {
     }
   }, [])
 
-  /**
-   * 국가 선택 시 로딩 효과
-   * - 800ms 인위적 로딩 (애니메이션 효과)
-   */
-  useEffect(() => {
-    if (selectedId) {
-      setIsLoading(true)
-      const timer = setTimeout(() => {
-        setIsLoading(false)
-      }, 800)
-
-      return () => clearTimeout(timer)
-    }
-  }, [selectedId])
+  // 국가 선택 시 별도 API 호출 없음(이미 메모리에 있음) → 로딩 표시 없이 즉시 전환
 
   /**
    * 뷰 모드 전환 이벤트 리스너
@@ -442,6 +335,34 @@ export default function CountryPage() {
   const handleClearCountry = useCallback(() => {
     navigate(pathKeys.history.country())
   }, [navigate])
+
+  /** 목록 탭 전환 (대시보드/국가 목록) */
+  const handleTabChange = useCallback(
+    (tab: 'dashboard' | 'list') => {
+      setActiveTab(tab)
+      if (tab === 'dashboard') handleClearCountry()
+    },
+    [handleClearCountry],
+  )
+
+  /** 역사적 국가 수정 클릭 시 폼에 전달할 데이터 설정 */
+  const handleEditHistoricalFromList = useCallback(
+    (country: UnifiedCountry) => {
+      const historical = apiHistoricalCountries?.find((hc) => hc.id === country.id)
+      if (historical) setEditingHistorical(historical as HistoricalCountry)
+    },
+    [apiHistoricalCountries],
+  )
+
+  /** 상세 패널 내 탭 변경 시 URL 연동 (역대 수반 등) */
+  const handleDetailTabChange = useCallback(
+    (tab: 'heads' | null) => {
+      if (!selectedId) return
+      if (tab === 'heads') navigate(pathKeys.history.countryHeadsOfState(selectedId))
+      else navigate(pathKeys.history.countryDetail(selectedId))
+    },
+    [navigate, selectedId],
+  )
 
   /**
    * 현대 국가 삭제
@@ -490,7 +411,7 @@ export default function CountryPage() {
             capital: data.capital,
             population: data.population ? String(data.population) : undefined,
             areaSqKm: data.areaSqKm ? Number(data.areaSqKm) : undefined,
-            thumbnailUrl: data.thumbnailUrl,
+            thumbnailUrl: data.thumbnailUrl ?? '',
             currencyId: data.currencyId,
             languageId: data.languageId,
             continentId: data.continentId,
@@ -756,83 +677,53 @@ export default function CountryPage() {
           </S.HeaderContent>
         </S.PageHeader>
       )}
-      <CountryMobileUI
-        activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab)
-          if (tab === 'dashboard') {
-            handleClearCountry()
-          }
-        }}
-        isMobileListOpen={isMobileListOpen}
-        onMobileListOpenChange={setIsMobileListOpen}
+      <CountryListStateProvider
+        unifiedCountries={unifiedCountries}
+        apiHistoricalCountries={apiHistoricalCountries}
         countries={countries}
-        filtered={filtered}
         continents={CONTINENTS}
-        selectedId={selectedId}
-        onSelectCountry={handleSelectCountry}
-        query={query}
-        onQueryChange={setQuery}
-        continentFilter={continentFilter}
-        onContinentFilterChange={setContinentFilter}
-        sortBy={sortBy}
-        onSortByChange={setSortBy}
-        onShowContinentModal={() => setShowContinentModal(true)}
-        onShowSortModal={() => setShowSortModal(true)}
-        onAddCountry={() => setEditing({} as Country)}
-        inHistory={inHistory}
-      />
-
-      <S.MainGrid $noSidebar={inHistory}>
-        <CountryList
-          countries={countries}
-          filtered={filtered}
-          continents={CONTINENTS}
-          selectedId={selectedId}
-          onSelect={handleSelectCountry}
-          query={query}
-          onQueryChange={setQuery}
-          continentFilter={continentFilter}
-          onContinentFilterChange={setContinentFilter}
-          countryTypeFilter={countryTypeFilter}
-          onCountryTypeFilterChange={setCountryTypeFilter}
-          sortBy={sortBy}
-          onSortByChange={setSortBy}
-          showContinentModal={showContinentModal}
-          setShowContinentModal={setShowContinentModal}
-          showSortModal={showSortModal}
-          setShowSortModal={setShowSortModal}
-          showCountryTypeModal={showCountryTypeModal}
-          setShowCountryTypeModal={setShowCountryTypeModal}
+      >
+        <CountryMobileUI
           activeTab={activeTab}
           onTabChange={(tab) => {
             setActiveTab(tab)
-            handleClearCountry()
+            if (tab === 'dashboard') handleClearCountry()
           }}
-          onAdd={() => setEditing({} as Country)}
-          onAddHistorical={() => setEditingHistorical({} as HistoricalCountry)}
-          onEditHistorical={(country) => {
-            // UnifiedCountry를 HistoricalCountry로 변환
-            const historical = apiHistoricalCountries?.find(
-              (hc) => hc.id === country.id,
-            )
-            if (historical) {
-              setEditingHistorical(historical)
-            }
-          }}
+          isMobileListOpen={isMobileListOpen}
+          onMobileListOpenChange={setIsMobileListOpen}
+          selectedId={selectedId}
+          onSelectCountry={handleSelectCountry}
+          onShowContinentModal={() => setShowContinentModal(true)}
+          onShowSortModal={() => setShowSortModal(true)}
+          onAddCountry={() => setEditing({} as Country)}
           inHistory={inHistory}
         />
 
-        <S.DetailPane>
-          {activeTab === 'dashboard' ? (
-            <CountryDashboard
-              countries={countries}
-              filtered={filtered}
-              continents={CONTINENTS}
-              isLoading={isLoading}
-              onCountryEdit={setEditing}
-            />
-          ) : selectedId ? (
+        <S.MainGrid $noSidebar={inHistory}>
+          <CountryList
+            selectedId={selectedId}
+            onSelect={handleSelectCountry}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            onAdd={() => setEditing({} as Country)}
+            onAddHistorical={() => setEditingHistorical({} as HistoricalCountry)}
+            onEditHistorical={handleEditHistoricalFromList}
+            inHistory={inHistory}
+            showContinentModal={showContinentModal}
+            setShowContinentModal={setShowContinentModal}
+            showSortModal={showSortModal}
+            setShowSortModal={setShowSortModal}
+            showCountryTypeModal={showCountryTypeModal}
+            setShowCountryTypeModal={setShowCountryTypeModal}
+          />
+
+          <S.DetailPane>
+            {activeTab === 'dashboard' ? (
+              <CountryDashboard
+                isLoading={isLoading}
+                onCountryEdit={setEditing}
+              />
+            ) : selectedId ? (
             <CountryDetail
               country={selectedCountry || null}
               continents={CONTINENTS}
@@ -840,26 +731,29 @@ export default function CountryPage() {
               onEdit={handleEditFromDetail}
               onDelete={handleDeleteFromDetail}
               initialDetailTab={isHeadsOfStateUrl ? 'heads' : undefined}
-              onDetailTabChange={(tab: 'heads' | null) => {
-                if (!selectedId) return
-                if (tab === 'heads') {
-                  navigate(pathKeys.history.countryHeadsOfState(selectedId))
-                } else {
-                  navigate(pathKeys.history.countryDetail(selectedId))
-                }
-              }}
+              onDetailTabChange={handleDetailTabChange}
             />
-          ) : (
-            <CountryDetail
-              country={null}
-              continents={CONTINENTS}
-              isLoading={isLoading}
-              onEdit={handleEditFromDetail}
-              onDelete={handleDeleteFromDetail}
-            />
-          )}
-        </S.DetailPane>
-      </S.MainGrid>
+            ) : (
+              <CountryDetail
+                country={null}
+                continents={CONTINENTS}
+                isLoading={isLoading}
+                onEdit={handleEditFromDetail}
+                onDelete={handleDeleteFromDetail}
+              />
+            )}
+          </S.DetailPane>
+        </S.MainGrid>
+
+        <CountryListModals
+          showContinentModal={showContinentModal}
+          setShowContinentModal={setShowContinentModal}
+          showSortModal={showSortModal}
+          setShowSortModal={setShowSortModal}
+          showCountryTypeModal={showCountryTypeModal}
+          setShowCountryTypeModal={setShowCountryTypeModal}
+        />
+      </CountryListStateProvider>
 
       <CountryForm
         editing={editing}
@@ -867,417 +761,6 @@ export default function CountryPage() {
         onClose={() => setEditing(null)}
         onSave={handleSave}
       />
-
-      {/* 대륙 선택 모달 */}
-      {showContinentModal
-        ? createPortal(
-            <>
-              <S.SelectModalOverlay
-                as={motion.div}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => setShowContinentModal(false)}
-              />
-              <S.SelectModal
-                as={motion.div}
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <S.SelectModalHeader>
-                  <S.SelectModalTitle>대륙 선택</S.SelectModalTitle>
-                  <S.SelectModalClose
-                    onClick={() => setShowContinentModal(false)}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.SelectModalClose>
-                </S.SelectModalHeader>
-                <S.SelectModalContent>
-                  <S.SelectOption
-                    $active={!continentFilter}
-                    onClick={() => {
-                      setContinentFilter('')
-                      setShowContinentModal(false)
-                    }}
-                  >
-                    <S.SelectOptionIcon>
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </S.SelectOptionIcon>
-                    <S.SelectOptionText>전체 대륙</S.SelectOptionText>
-                    {!continentFilter && (
-                      <S.SelectOptionCheck>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionCheck>
-                    )}
-                  </S.SelectOption>
-                  {CONTINENTS.map((continent) => (
-                    <S.SelectOption
-                      key={continent.id}
-                      $active={continentFilter === continent.id}
-                      onClick={() => {
-                        setContinentFilter(continent.id)
-                        setShowContinentModal(false)
-                      }}
-                    >
-                      <S.SelectOptionIcon>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionIcon>
-                      <S.SelectOptionText>{continent.name}</S.SelectOptionText>
-                      {continentFilter === continent.id && (
-                        <S.SelectOptionCheck>
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                          >
-                            <path
-                              d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        </S.SelectOptionCheck>
-                      )}
-                    </S.SelectOption>
-                  ))}
-                </S.SelectModalContent>
-              </S.SelectModal>
-            </>,
-            document.body,
-          )
-        : null}
-
-      {/* 정렬 선택 모달 */}
-      {showSortModal
-        ? createPortal(
-            <>
-              <S.SelectModalOverlay
-                as={motion.div}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => setShowSortModal(false)}
-              />
-              <S.SelectModal
-                as={motion.div}
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <S.SelectModalHeader>
-                  <S.SelectModalTitle>정렬 기준</S.SelectModalTitle>
-                  <S.SelectModalClose onClick={() => setShowSortModal(false)}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.SelectModalClose>
-                </S.SelectModalHeader>
-                <S.SelectModalContent>
-                  <S.SelectOption
-                    $active={sortBy === 'name'}
-                    onClick={() => {
-                      setSortBy('name')
-                      setShowSortModal(false)
-                    }}
-                  >
-                    <S.SelectOptionIcon>
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path d="M14 7l-5 5 5 5V7z" fill="currentColor" />
-                      </svg>
-                    </S.SelectOptionIcon>
-                    <S.SelectOptionText>이름순</S.SelectOptionText>
-                    {sortBy === 'name' && (
-                      <S.SelectOptionCheck>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionCheck>
-                    )}
-                  </S.SelectOption>
-                  <S.SelectOption
-                    $active={sortBy === 'population'}
-                    onClick={() => {
-                      setSortBy('population')
-                      setShowSortModal(false)
-                    }}
-                  >
-                    <S.SelectOptionIcon>
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </S.SelectOptionIcon>
-                    <S.SelectOptionText>인구순</S.SelectOptionText>
-                    {sortBy === 'population' && (
-                      <S.SelectOptionCheck>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionCheck>
-                    )}
-                  </S.SelectOption>
-                  <S.SelectOption
-                    $active={sortBy === 'area'}
-                    onClick={() => {
-                      setSortBy('area')
-                      setShowSortModal(false)
-                    }}
-                  >
-                    <S.SelectOptionIcon>
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </S.SelectOptionIcon>
-                    <S.SelectOptionText>면적순</S.SelectOptionText>
-                    {sortBy === 'area' && (
-                      <S.SelectOptionCheck>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionCheck>
-                    )}
-                  </S.SelectOption>
-                </S.SelectModalContent>
-              </S.SelectModal>
-            </>,
-            document.body,
-          )
-        : null}
-
-      {/* 국가 타입 선택 모달 */}
-      {showCountryTypeModal
-        ? createPortal(
-            <>
-              <S.SelectModalOverlay
-                as={motion.div}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => setShowCountryTypeModal(false)}
-              />
-              <S.SelectModal
-                as={motion.div}
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <S.SelectModalHeader>
-                  <S.SelectModalTitle>국가 타입</S.SelectModalTitle>
-                  <S.SelectModalClose
-                    onClick={() => setShowCountryTypeModal(false)}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.SelectModalClose>
-                </S.SelectModalHeader>
-                <S.SelectModalContent>
-                  <S.SelectOption
-                    $active={countryTypeFilter === 'all'}
-                    onClick={() => {
-                      setCountryTypeFilter('all')
-                      setShowCountryTypeModal(false)
-                    }}
-                  >
-                    <S.SelectOptionIcon>
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </S.SelectOptionIcon>
-                    <S.SelectOptionText>
-                      {COUNTRY_TYPE_LABELS.all}
-                    </S.SelectOptionText>
-                    {countryTypeFilter === 'all' && (
-                      <S.SelectOptionCheck>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionCheck>
-                    )}
-                  </S.SelectOption>
-                  <S.SelectOption
-                    $active={countryTypeFilter === 'modern'}
-                    onClick={() => {
-                      setCountryTypeFilter('modern')
-                      setShowCountryTypeModal(false)
-                    }}
-                  >
-                    <S.SelectOptionIcon>
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.7 0 3.25.62 4.45 1.64-.53.18-1.12.36-1.45.36-1 0-2-.5-3.5-.5-.86 0-1.6.17-2.22.44C9.73 4.67 10.83 4 12 4z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </S.SelectOptionIcon>
-                    <S.SelectOptionText>
-                      {COUNTRY_TYPE_LABELS.modern}
-                    </S.SelectOptionText>
-                    {countryTypeFilter === 'modern' && (
-                      <S.SelectOptionCheck>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionCheck>
-                    )}
-                  </S.SelectOption>
-                  <S.SelectOption
-                    $active={countryTypeFilter === 'historical'}
-                    onClick={() => {
-                      setCountryTypeFilter('historical')
-                      setShowCountryTypeModal(false)
-                    }}
-                  >
-                    <S.SelectOptionIcon>
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </S.SelectOptionIcon>
-                    <S.SelectOptionText>
-                      {COUNTRY_TYPE_LABELS.historical}
-                    </S.SelectOptionText>
-                    {countryTypeFilter === 'historical' && (
-                      <S.SelectOptionCheck>
-                        <svg
-                          width="20"
-                          height="20"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SelectOptionCheck>
-                    )}
-                  </S.SelectOption>
-                </S.SelectModalContent>
-              </S.SelectModal>
-            </>,
-            document.body,
-          )
-        : null}
 
       {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 상위 현대 국가 표시) */}
       <HistoricalCountryForm

@@ -26,13 +26,9 @@ export const useEventHierarchy = (
     sortedEvents.forEach((event) => {
       if (event.hierarchy.children && event.hierarchy.children.length > 0) {
         ids.add(event.id)
-        console.log(
-          `🔓 자동 펼침: ${event.title} (${event.hierarchy.children.length}개 하위 사건)`,
-        )
       }
     })
     if (ids.size > 0) {
-      console.log(`📂 총 ${ids.size}개 사건 자동 펼침, IDs:`, Array.from(ids))
       setExpandedEventIds(ids)
     }
   }, [sortedEvents])
@@ -51,8 +47,6 @@ export const useEventHierarchy = (
 
   // hierarchy를 flatten하여 리스트로 만들기
   const flattenedHierarchy = useMemo(() => {
-    console.log(`🎯 Flattening hierarchy: showFlatView=${showFlatView}`)
-
     const result: Array<{
       node: EventHierarchyNode
       depth: number
@@ -60,9 +54,6 @@ export const useEventHierarchy = (
     }> = []
 
     if (showFlatView) {
-      // 플랫 뷰: 모든 사건(부모+자식)을 depth 0으로 평평하게 표시
-      console.log(`📊 평면 모드: 모든 사건을 depth=0으로 표시`)
-
       const addAllEventsFlat = (
         node: EventHierarchyNode,
         parentEvent: HistoricalEvent | null,
@@ -111,12 +102,6 @@ export const useEventHierarchy = (
         // 방향 적용
         return sortDirection === 'asc' ? comparison : -comparison
       })
-
-      console.log(
-        `📊 평면 모드 결과: ${result.length}개 사건 (모두 depth=0, ${sortBy} ${sortDirection})`,
-      )
-      console.log(`   첫 번째: ${result[0]?.node.title}`)
-      console.log(`   마지막: ${result[result.length - 1]?.node.title}`)
     } else {
       // 계층 뷰: 기존 로직
       const traverse = (
@@ -162,30 +147,8 @@ export const useEventHierarchy = (
       }
 
       sortedEvents.forEach((event) => {
-        const hasChildren =
-          event.hierarchy.children && event.hierarchy.children.length > 0
-        const isExpanded = expandedEventIds.has(event.id)
-        console.log(
-          `🔍 ${event.title}: children=${hasChildren ? event.hierarchy.children!.length : 0}, expanded=${isExpanded}`,
-        )
         traverse(event.hierarchy, 0, event)
       })
-    }
-
-    console.log(
-      `📊 Flattened hierarchy: ${result.length} items (depths: ${result.map((r) => r.depth).join(', ')})`,
-    )
-    console.log(
-      `📂 Expanded IDs (${expandedEventIds.size}):`,
-      Array.from(expandedEventIds),
-    )
-    const childCount = result.filter((r) => r.depth > 0).length
-    if (childCount > 0) {
-      console.log(`   ↳ ${childCount}개 하위 사건 포함`)
-    } else {
-      console.log(
-        `   ⚠️ 하위 사건 없음 (expandedEventIds가 비어있거나 children이 없음)`,
-      )
     }
 
     return result

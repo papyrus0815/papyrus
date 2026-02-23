@@ -25,7 +25,6 @@ export async function getAllPersons(): Promise<PersonResponseDto[]> {
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
   } catch (error) {
-    console.error('❌ 인물 목록 조회 실패:', error)
     throw error
   }
 }
@@ -55,7 +54,6 @@ export async function getPersonsByTenureCountry(params: {
     const data = await response.json()
     return data?.data ?? data ?? []
   } catch (error) {
-    console.error('❌ 국가별 인물 목록 조회 실패:', error)
     throw error
   }
 }
@@ -68,7 +66,6 @@ export async function getPersonById(id: string): Promise<PersonResponseDto> {
     const response = (await personsApi.getById(apiConnection, id)) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 인물 조회 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -83,7 +80,6 @@ export async function createPerson(
     const response = (await personsApi.create(apiConnection, data)) as any
     return response.data || response
   } catch (error) {
-    console.error('❌ 인물 생성 실패:', error)
     throw error
   }
 }
@@ -99,7 +95,6 @@ export async function updatePerson(
     const response = (await personsApi.update(apiConnection, id, data)) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 인물 수정 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -111,7 +106,6 @@ export async function deletePerson(id: string): Promise<void> {
   try {
     await personsApi._delete(apiConnection, id)
   } catch (error) {
-    console.error(`❌ 인물 삭제 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -138,7 +132,6 @@ export async function getAllPersonsWithGovernmentPositions(): Promise<any[]> {
     const data = await response.json()
     return data.data || data
   } catch (error) {
-    console.error('❌ 인물 목록 조회 실패 (정부 직책 포함):', error)
     throw error
   }
 }

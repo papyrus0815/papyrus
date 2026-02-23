@@ -220,12 +220,6 @@ const Header: React.FC = () => {
   const handleBgmMuteToggle = () => {
     // 최신 BGM 오디오 인스턴스를 직접 가져옴
     const bgmAudio = getBgmAudio()
-    console.log('🔊 음소거 토글 시도:', {
-      bgmAudio,
-      isBgmMuted,
-      bgmVolume,
-      currentAudioVolume: bgmAudio?.volume,
-    })
 
     if (bgmAudio) {
       bgmAudioRef.current = bgmAudio // ref도 업데이트
@@ -234,22 +228,9 @@ const Header: React.FC = () => {
         const restoreVolume = bgmVolume > 0 ? bgmVolume : 0.1
         bgmAudio.volume = restoreVolume
         setGlobalBgmMutedState(false) // 전역 음소거 상태 해제
-        // 강제로 볼륨 설정 확인
-        console.log('✅ 음소거 해제:', {
-          restoreVolume,
-          actualVolume: bgmAudio.volume,
-        })
         setBgmVolume(restoreVolume)
         setIsBgmMuted(false)
 
-        // 상태 동기화 확인
-        setTimeout(() => {
-          console.log('🔍 음소거 해제 후 확인:', {
-            audioVolume: bgmAudio.volume,
-            stateVolume: bgmVolume,
-            isMuted: isBgmMuted,
-          })
-        }, 100)
       } else {
         // 음소거: 볼륨을 0으로 설정
         // 현재 볼륨을 저장 (음소거 해제 시 복원용)
@@ -259,22 +240,7 @@ const Header: React.FC = () => {
         }
         bgmAudio.volume = 0
         setIsBgmMuted(true)
-        console.log('🔇 음소거 설정:', {
-          savedVolume: currentVolume,
-          actualVolume: bgmAudio.volume,
-        })
-
-        // 상태 동기화 확인
-        setTimeout(() => {
-          console.log('🔍 음소거 설정 후 확인:', {
-            audioVolume: bgmAudio.volume,
-            stateVolume: bgmVolume,
-            isMuted: isBgmMuted,
-          })
-        }, 100)
       }
-    } else {
-      console.warn('⚠️ BGM 오디오 인스턴스를 찾을 수 없습니다')
     }
   }
 

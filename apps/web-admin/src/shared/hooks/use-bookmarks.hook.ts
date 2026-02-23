@@ -15,8 +15,8 @@ export const useBookmarks = () => {
       if (stored) {
         setBookmarks(new Set(JSON.parse(stored)))
       }
-    } catch (error) {
-      console.error('즐겨찾기 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }, [])
 
@@ -27,8 +27,8 @@ export const useBookmarks = () => {
         STORAGE_KEY,
         JSON.stringify(Array.from(newBookmarks)),
       )
-    } catch (error) {
-      console.error('즐겨찾기 저장 실패:', error)
+    } catch {
+      // ignore
     }
   }
 

@@ -69,9 +69,7 @@ export function useBgm(options: UseBgmOptions): UseBgmReturn {
     try {
       await audioRef.current.play()
       setIsPlaying(true)
-      console.log('✅ BGM 재생 성공')
-    } catch (error) {
-      console.error('❌ BGM 재생 실패:', error)
+    } catch {
       setIsPlaying(false)
     }
   }
@@ -124,16 +122,11 @@ export function useBgm(options: UseBgmOptions): UseBgmReturn {
 
     // 오디오 로드 완료 이벤트
     audio.addEventListener('loadeddata', () => {
-      console.log('✅ 오디오 파일 로드 완료')
       audioRef.current = audio
-      // 전역 BGM 오디오 인스턴스 등록 (클릭 사운드 ducking 효과를 위해)
       registerBgmAudio(audio)
     })
 
-    // 오디오 에러 이벤트
-    audio.addEventListener('error', (e) => {
-      console.error('❌ 오디오 로드 에러:', e)
-    })
+    audio.addEventListener('error', () => {})
 
     // 오디오 재생 이벤트
     audio.addEventListener('play', () => {
@@ -147,15 +140,7 @@ export function useBgm(options: UseBgmOptions): UseBgmReturn {
 
     audioRef.current = audio
 
-    // 오디오 인스턴스를 즉시 등록 (loadeddata 이벤트가 발생하지 않을 수 있음)
     registerBgmAudio(audio)
-    console.log('✅ BGM 오디오 인스턴스 등록:', audio.readyState)
-
-    // 오디오가 이미 로드된 경우에도 확인
-    if (audio.readyState >= 2) {
-      // HAVE_CURRENT_DATA 이상이면 이미 로드됨
-      console.log('✅ 오디오가 이미 로드됨')
-    }
 
     // 자동 재생이 활성화된 경우에만 재생 시도
     if (autoPlay) {
@@ -177,7 +162,7 @@ export function useBgm(options: UseBgmOptions): UseBgmReturn {
 
       // 페이지 로드 시 재생 시도 (실패할 수 있음)
       playAudio().catch(() => {
-        console.log('⏳ 사용자 상호작용 대기 중...')
+        () => {}
       })
 
       // 컴포넌트 언마운트 시 이벤트 리스너 제거

@@ -27,17 +27,13 @@ export const ethnicityApi = {
     return null
   },
 
-  create: async (data: CreateEthnicityInput) => {
-    console.log('Ethnicity API not implemented yet', data)
+  create: async (_data: CreateEthnicityInput) => {
     return null
   },
 
-  update: async (id: string, data: UpdateEthnicityInput) => {
-    console.log('Ethnicity API not implemented yet', id, data)
+  update: async (_id: string, _data: UpdateEthnicityInput) => {
     return null
   },
 
-  delete: async (id: string) => {
-    console.log('Ethnicity API not implemented yet', id)
-  },
+  delete: async (_id: string) => {},
 }

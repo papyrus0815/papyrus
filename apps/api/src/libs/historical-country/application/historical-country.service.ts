@@ -8,6 +8,7 @@ import {
 import { HistoricalCountry } from '../domain/historical-country.entity'
 import { HistoricalCountryPrismaRepository } from '../infrastructure/historical-country.prisma.repository'
 import { NotificationService } from '../../notification/application/notification.service'
+import { UploadService } from '../../shared/upload/upload.service'
 
 @Injectable()
 export class HistoricalCountryService {
@@ -16,6 +17,7 @@ export class HistoricalCountryService {
   constructor(
     repository: HistoricalCountryPrismaRepository,
     private readonly notificationService: NotificationService,
+    private readonly uploadService: UploadService,
   ) {
     this.repository = repository
   }
@@ -70,7 +72,13 @@ export class HistoricalCountryService {
     id: string,
     data: UpdateHistoricalCountryData,
   ): Promise<HistoricalCountry> {
-    await this.getHistoricalCountryById(id)
+    const current = await this.getHistoricalCountryById(id)
+    const newThumbnail = data.thumbnailUrl ?? null
+    const isClearingOrReplacing =
+      newThumbnail !== (current.thumbnailUrl ?? null)
+    if (isClearingOrReplacing && current.thumbnailUrl) {
+      await this.uploadService.deleteFileByUrl(current.thumbnailUrl)
+    }
     const country = await this.repository.update(id, data)
     await this.notificationService.notifyHistoricalCountry(
       country.name,

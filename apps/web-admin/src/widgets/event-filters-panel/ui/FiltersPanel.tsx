@@ -205,12 +205,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
 
         <Filter.SortButton
           type="button"
-          onClick={() => {
-            console.log(
-              `🔄 정렬 방향 버튼 클릭: ${sortDirection} → ${sortDirection === 'asc' ? 'desc' : 'asc'}`,
-            )
-            onSortDirectionToggle()
-          }}
+          onClick={onSortDirectionToggle}
         >
           {sortDirection === 'asc' ? (
             <FiArrowUp size={14} />

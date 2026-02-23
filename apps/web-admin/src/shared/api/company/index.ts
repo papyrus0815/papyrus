@@ -29,17 +29,13 @@ export const companyApi = {
     return null
   },
 
-  create: async (data: CreateCompanyInput) => {
-    console.log('Company API not implemented yet', data)
+  create: async (_data: CreateCompanyInput) => {
     return null
   },
 
-  update: async (id: string, data: UpdateCompanyInput) => {
-    console.log('Company API not implemented yet', id, data)
+  update: async (_id: string, _data: UpdateCompanyInput) => {
     return null
   },
 
-  delete: async (id: string) => {
-    console.log('Company API not implemented yet', id)
-  },
+  delete: async (_id: string) => {},
 }

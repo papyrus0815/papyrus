@@ -96,8 +96,8 @@ export function PersonCreateForm({
         setDynasties(dynastiesData)
         setJobs(jobsData)
         setPersons(personsData)
-      } catch (error) {
-        console.error('Failed to fetch data:', error)
+      } catch {
+        // ignore
       }
     }
     fetchData()
@@ -209,7 +209,6 @@ export function PersonCreateForm({
       await personApi.create(data)
       onSuccess()
     } catch (error: any) {
-      console.error('Failed to create person:', error)
       setErrors({
         submit:
           error?.message ||

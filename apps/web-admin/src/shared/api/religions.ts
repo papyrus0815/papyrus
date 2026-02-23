@@ -22,7 +22,6 @@ export async function getAllReligions(): Promise<ReligionResponseDto[]> {
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
   } catch (error) {
-    console.error('❌ 종교 목록 조회 실패:', error)
     throw error
   }
 }
@@ -35,7 +34,6 @@ export async function getReligionById(id: string): Promise<ReligionResponseDto> 
     const response = (await religionsApi.getById(apiConnection, id)) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 종교 조회 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -50,7 +48,6 @@ export async function createReligion(
     const response = (await religionsApi.create(apiConnection, data)) as any
     return response.data || response
   } catch (error) {
-    console.error('❌ 종교 생성 실패:', error)
     throw error
   }
 }
@@ -70,7 +67,6 @@ export async function updateReligion(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 종교 수정 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -82,7 +78,6 @@ export async function deleteReligion(id: string): Promise<void> {
   try {
     await religionsApi.$delete(apiConnection, id)
   } catch (error) {
-    console.error(`❌ 종교 삭제 실패 (ID: ${id}):`, error)
     throw error
   }
 }

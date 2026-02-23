@@ -128,8 +128,8 @@ export const OrganizationsListPage: React.FC = () => {
       ])
       setCountries(c)
       setHistoricalCountries(h)
-    } catch (e) {
-      console.error(e)
+    } catch {
+      // ignore
     }
     setLoading(false)
   }
@@ -152,8 +152,7 @@ export const OrganizationsListPage: React.FC = () => {
       ])
       setList(listRes)
       setTree(treeRes)
-    } catch (e) {
-      console.error(e)
+    } catch {
       setList([])
       setTree([])
     }
@@ -170,8 +169,7 @@ export const OrganizationsListPage: React.FC = () => {
     try {
       await deleteOrganization(apiConnection, id)
       loadOrganizations()
-    } catch (e) {
-      console.error(e)
+    } catch {
       alert('삭제 실패')
     }
   }

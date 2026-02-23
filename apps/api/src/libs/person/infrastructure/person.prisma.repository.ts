@@ -1485,7 +1485,7 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const persons = await this.prisma.person.findMany({
       where: { id: { in: personIds } },
-      orderBy: { name: 'asc', surname: 'asc' },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
         countryAffiliations: true,
       },

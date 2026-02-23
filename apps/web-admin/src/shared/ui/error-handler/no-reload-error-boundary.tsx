@@ -20,27 +20,11 @@ export class NoReloadErrorBoundary extends Component<Props, State> {
     this.state = { hasError: false, error: null }
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    console.warn(
-      '[NoReloadErrorBoundary] Error caught but UI will not be shown:',
-      error.message,
-    )
-    console.warn('[NoReloadErrorBoundary] Error stack:', error.stack)
-
-    // 어떤 에러든 UI를 표시하지 않음 (새로고침 방지)
+  static getDerivedStateFromError(_error: Error): State {
     return { hasError: false, error: null }
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.warn(
-      '[NoReloadErrorBoundary] componentDidCatch - error suppressed:',
-      error.message,
-    )
-    console.warn(
-      '[NoReloadErrorBoundary] componentStack:',
-      errorInfo.componentStack,
-    )
-
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
     // onError 콜백도 호출하지 않음 (추가 에러 핸들링 방지)
     // if (this.props.onError) {
     //   this.props.onError(error, errorInfo)

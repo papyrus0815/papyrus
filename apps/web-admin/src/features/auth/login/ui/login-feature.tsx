@@ -16,9 +16,6 @@ const LoginFormFeatureComponent: React.FC<LoginFormFeatureProps> = ({
 }) => {
   const handleError = useCallback(
     (error: string) => {
-      if (import.meta.env.DEV) {
-        console.error('🚨 로그인 폼에서 에러 발생:', error)
-      }
       onError?.(error)
     },
     [onError],

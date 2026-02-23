@@ -45,11 +45,6 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
   useEffect(() => {
     // focus 관련 에러라면 UI를 표시하지 않음
     if (isFocusRelatedError()) {
-      console.warn(
-        '[ErrorHandler] Focus error detected - UI will not be shown:',
-        error.message,
-      )
-
       return
     }
 
@@ -60,11 +55,6 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
   const handleReload = () => {
     // focus 관련 에러라면 새로고침하지 않음
     if (isFocusRelatedError()) {
-      console.warn(
-        '[ErrorHandler] Focus error reload prevented:',
-        error.message,
-      )
-
       return
     }
 
@@ -75,12 +65,7 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
   const handleRetry = () => {
     // focus 관련 에러라면 단순히 UI만 닫기
     if (isFocusRelatedError()) {
-      console.warn(
-        '[ErrorHandler] Focus error retry - just closing UI:',
-        error.message,
-      )
       setIsVisible(false)
-
       return
     }
 
@@ -94,10 +79,6 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
 
   // focus 관련 에러라면 아무것도 렌더링하지 않음
   if (isFocusRelatedError()) {
-    console.warn(
-      '[ErrorHandler] Focus error - returning null to prevent UI render',
-    )
-
     return null
   }
 

@@ -16,8 +16,8 @@ export const useRecentEvents = () => {
       if (stored) {
         setRecentEvents(JSON.parse(stored))
       }
-    } catch (error) {
-      console.error('최근 본 사건 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }, [])
 
@@ -30,8 +30,8 @@ export const useRecentEvents = () => {
 
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newList))
-      } catch (error) {
-        console.error('최근 본 사건 저장 실패:', error)
+      } catch {
+        // ignore
       }
 
       return newList

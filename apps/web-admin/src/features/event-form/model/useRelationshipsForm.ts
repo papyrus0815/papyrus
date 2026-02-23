@@ -81,14 +81,8 @@ export const useRelationshipsForm = (
       }
 
       getEventById(parentEventId)
-        .then((event) => {
-          console.log('📥 부모 사건 로드:', event)
-          setParentEventData(event)
-        })
-        .catch((error) => {
-          console.error('부모 사건 정보 로드 실패:', error)
-          setParentEventData(null)
-        })
+        .then(setParentEventData)
+        .catch(() => setParentEventData(null))
     } else if (!parentEventId && parentEventSearch) {
       setParentEventData(null)
     }

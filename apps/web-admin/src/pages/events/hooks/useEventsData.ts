@@ -114,8 +114,6 @@ export function useEventsData() {
 
       try {
         const response = await getAllEvents()
-        console.log('📦 API 응답 (전체):', response)
-        console.log('📦 첫 번째 이벤트 상세:', response[0])
 
         const allEvents: HistoricalEvent[] = []
 
@@ -123,31 +121,9 @@ export function useEventsData() {
           // ✅ 최상위 이벤트만 필터링 (parentEventId가 없는 것만)
           .filter((event) => !event.parentEventId)
           .forEach((event) => {
-            // 디버깅: 카테고리 정보 확인
-            console.log(
-              '🔍 Event:',
-              event.title,
-              'Category 객체:',
-              event.category,
-              'Category ID:',
-              event.categoryId,
-              'Parent:',
-              event.parentEventId,
-            )
-
             const category = event.category?.name
               ? CATEGORY_MAP[event.category.name] || 'other'
               : 'other'
-
-            console.log(
-              '✅ Mapped category for',
-              event.title,
-              ':',
-              category,
-              '(from:',
-              event.category?.name,
-              ')',
-            )
 
             // 부모 이벤트 추가
             const parentEventData = convertToHistoricalEvent(event)
@@ -164,7 +140,6 @@ export function useEventsData() {
 
         setEvents(allEvents)
       } catch (err) {
-        console.error('Failed to fetch events:', err)
         setError(err instanceof Error ? err : new Error('Unknown error'))
         setEvents([])
       } finally {

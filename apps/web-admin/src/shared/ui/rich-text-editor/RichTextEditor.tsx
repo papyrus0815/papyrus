@@ -1326,14 +1326,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         return
       }
 
-      // 디버깅: 엔티티 데이터 확인
-      console.log('🔍 멘션 검색:', {
-        query,
-        personsCount: mentionEntities.persons?.length || 0,
-        eventsCount: mentionEntities.events?.length || 0,
-        countriesCount: mentionEntities.countries?.length || 0,
-      })
-
       const results = searchMentionEntities(query, {
         persons: mentionEntities.persons as never[],
         events: mentionEntities.events as never[],
@@ -1341,8 +1333,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         historicalCountries: mentionEntities.historicalCountries as never[],
         militaryUnits: mentionEntities.militaryUnits as never[],
       })
-
-      console.log('📋 멘션 검색 결과:', results.length, '개')
 
       // 최대 30개로 제한
       setMentionResults(results.slice(0, 30))
@@ -1819,8 +1809,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         setPendingImageUrl(imageUrl)
         setImageCaptionInput('')
         setImageCaptionModalVisible(true)
-      } catch (error) {
-        console.error('이미지 업로드 실패:', error)
+      } catch {
         alert('이미지 업로드에 실패했습니다.')
       }
     }
@@ -1912,9 +1901,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           selection.removeAllRanges()
           selection.addRange(newRange)
         }
-      } catch (error) {
+      } catch {
         // Range가 유효하지 않으면 에디터 끝에 추가
-        console.warn('이미지 삽입 위치 복원 실패, 에디터 끝에 추가:', error)
         editorRef.current.appendChild(imageContainer)
         const spaceText = document.createTextNode('\u200B')
         editorRef.current.appendChild(spaceText)

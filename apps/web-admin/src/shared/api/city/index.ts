@@ -45,17 +45,13 @@ export const cityApi = {
     return list.find((c) => c.id === id) ?? null
   },
 
-  create: async (data: CreateCityInput) => {
-    console.log('City API create not implemented yet', data)
+  create: async (_data: CreateCityInput) => {
     return null
   },
 
-  update: async (id: string, data: UpdateCityInput) => {
-    console.log('City API update not implemented yet', id, data)
+  update: async (_id: string, _data: UpdateCityInput) => {
     return null
   },
 
-  delete: async (id: string) => {
-    console.log('City API delete not implemented yet', id)
-  },
+  delete: async (_id: string) => {},
 }

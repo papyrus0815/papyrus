@@ -233,8 +233,8 @@ export const MilitaryUnitFormPage: React.FC = () => {
       ])
       setModernCountries(modern)
       setHistoricalCountries(historical)
-    } catch (error) {
-      console.error('국가 목록 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }
 
@@ -242,8 +242,8 @@ export const MilitaryUnitFormPage: React.FC = () => {
     try {
       const units = await militaryUnitApi.getAll()
       setAllUnits(units)
-    } catch (error) {
-      console.error('군부대 목록 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }
 
@@ -251,8 +251,8 @@ export const MilitaryUnitFormPage: React.FC = () => {
     try {
       const persons = await getAllPersons()
       setAllPersons(persons)
-    } catch (error) {
-      console.error('인물 목록 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }
 
@@ -297,8 +297,7 @@ export const MilitaryUnitFormPage: React.FC = () => {
         }))
         setCommanders(loadedCommanders)
       }
-    } catch (error) {
-      console.error('군부대 정보 로드 실패:', error)
+    } catch {
       alert('군부대 정보를 불러오는데 실패했습니다.')
       navigate('/military-units')
     } finally {
@@ -336,8 +335,7 @@ export const MilitaryUnitFormPage: React.FC = () => {
         alert('군부대가 생성되었습니다.')
       }
       navigate('/military-units')
-    } catch (error) {
-      console.error('군부대 저장 실패:', error)
+    } catch {
       alert('군부대 저장에 실패했습니다.')
     } finally {
       setLoading(false)

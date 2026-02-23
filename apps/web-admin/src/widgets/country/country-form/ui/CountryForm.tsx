@@ -207,12 +207,27 @@ export function CountryForm({
       capital: data.capital,
       population: data.population,
       areaSqKm: data.areaSqKm,
-      thumbnailUrl: data.thumbnailUrl,
+      // 이미지 삭제 시 빈 문자열을 명시해 DB에서도 제거되도록 함 (undefined면 요청에서 빠져 갱신 안 됨)
+      thumbnailUrl: data.thumbnailUrl ?? '',
       currencyId: data.currencyId,
       languageId: data.languageId,
       continentId: data.continentId,
       gdpUsdBn: data.gdpUsdBn,
     })
+  }
+
+  /**
+   * 국가 이미지(썸네일) 삭제
+   * - 미리보기·폼 값·선택된 파일 초기화
+   */
+  const handleDeleteImage = () => {
+    setThumbnailPreview('')
+    setValue('thumbnailUrl', '', { shouldValidate: true })
+    setFlagImageFile(null)
+    setThumbnailFile(null)
+    setImageUploadError(null)
+    const input = document.getElementById('flag-image-upload') as HTMLInputElement | null
+    if (input) input.value = ''
   }
 
   /**
@@ -314,6 +329,22 @@ export function CountryForm({
                     e.currentTarget.style.display = 'none'
                   }}
                 />
+                <button
+                  type="button"
+                  onClick={handleDeleteImage}
+                  style={{
+                    marginTop: '8px',
+                    padding: '6px 12px',
+                    fontSize: '13px',
+                    color: '#dc2626',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  이미지 삭제
+                </button>
               </S.FlagImagePreview>
             )}
             <S.FileUploadWrapper>

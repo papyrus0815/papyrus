@@ -101,7 +101,6 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
           )
         }
       } catch (error) {
-        console.error('Error loading data:', error)
       } finally {
         setLoading(false)
       }

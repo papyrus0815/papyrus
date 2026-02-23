@@ -64,8 +64,8 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
       ])
       setModernCountries(modern)
       setHistoricalCountries(historical)
-    } catch (error) {
-      console.error('국가 목록 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }
 
@@ -198,7 +198,6 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
   const handleDelete = (id: string, name: string) => {
     playClickSound()
     if (confirm(`'${name}' 부처를 삭제하시겠습니까?`)) {
-      console.log('Delete:', id)
       // TODO: API 연동
     }
   }

@@ -128,14 +128,8 @@ export const EventsCatalogPage: React.FC = () => {
   // DB 카테고리 로드
   useEffect(() => {
     getAllEventCategories()
-      .then((categories) => {
-        console.log('✅ 카테고리 목록 로드:', categories)
-        setDbCategories(categories)
-      })
-      .catch((error) => {
-        console.error('❌ 카테고리 로드 실패:', error)
-        setDbCategories([])
-      })
+      .then(setDbCategories)
+      .catch(() => setDbCategories([]))
   }, [])
 
   // 실제 API에서 이벤트 데이터 불러오기 (연대표/역대 수반은 국가 페이지에서만 사용)
@@ -144,8 +138,6 @@ export const EventsCatalogPage: React.FC = () => {
       setIsLoading(true)
       try {
         const response = await getAllEvents()
-        console.log('📦 API 응답 (전체):', response)
-        console.log('📦 첫 번째 이벤트 상세:', response[0])
 
         // API 응답을 HistoricalEvent 타입으로 변환
         const allEvents: HistoricalEvent[] = []
@@ -201,34 +193,9 @@ export const EventsCatalogPage: React.FC = () => {
             const fullEvent = buildFullHierarchy(event.id)
             if (!fullEvent) return
 
-            console.log(
-              '🔍 Event:',
-              fullEvent.title,
-              'Category 객체:',
-              fullEvent.category,
-              'Category ID:',
-              fullEvent.categoryId,
-              'Parent:',
-              fullEvent.parentEventId,
-              'Children:',
-              fullEvent.childEvents?.length || 0,
-            )
-
             // ===== FSD: 카테고리 ID 직접 사용 =====
             const categoryId = fullEvent.category?.id || 'cat-other-001'
             const categoryKey = extractCategoryKey(categoryId)
-
-            console.log(
-              '✅ Category for',
-              fullEvent.title,
-              ':',
-              categoryKey,
-              '(ID:',
-              categoryId,
-              ', name:',
-              fullEvent.category?.name,
-              ')',
-            )
 
             // 재귀적으로 hierarchy를 구축하는 헬퍼 함수
             const buildHierarchy = (
@@ -341,8 +308,7 @@ export const EventsCatalogPage: React.FC = () => {
           })
 
         setEvents(allEvents)
-      } catch (error) {
-        console.error('Failed to fetch events:', error)
+      } catch {
         setEvents([])
       } finally {
         setIsLoading(false)

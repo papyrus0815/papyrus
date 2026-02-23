@@ -21,6 +21,7 @@ import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { HistorySection } from './history-section.widget'
 import { KPIGrid } from './kpi-grid.widget'
 import { MapRegionSection } from './map-region-section.widget'
+import { PersonListSection } from './person-list-section.widget'
 import { PersonStatsSection } from './person-stats-section.widget'
 
 // 목업 데이터
@@ -112,9 +113,9 @@ export interface CountryDetailProps {
 }
 
 /**
- * 국가 상세 페이지
+ * 국가 상세 페이지 (React.memo로 부모 리렌더 시 불필요한 리렌더 감소)
  */
-export function CountryDetail({
+function CountryDetailInner({
   country,
   continents,
   isLoading = false,
@@ -125,8 +126,8 @@ export function CountryDetail({
 }: CountryDetailProps) {
   const [activeTab, setActiveTab] = useState<CountryDetailTab>('overview')
   const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>('statistics')
-  /** 인물 탭 내 전환: 통계·최근 인물 | 역대 수반 */
-  const [personInnerTab, setPersonInnerTab] = useState<'stats' | 'heads'>('stats')
+  /** 인물 탭 내 전환: 통계·최근 인물 | 역대 수반 | 인물 리스트 */
+  const [personInnerTab, setPersonInnerTab] = useState<'stats' | 'heads' | 'list'>('stats')
   const [mapLocation, setMapLocation] = useState<{
     latitude: number
     longitude: number
@@ -246,30 +247,16 @@ export function CountryDetail({
       name: city.name,
     })
 
-    console.log('🔍 handleCityClick called:', city)
-    console.log(
-      '🔍 area:',
-      city.area,
-      'gdp:',
-      city.gdp,
-      'industry:',
-      city.industry,
-    )
-
     // 선택된 행정구역 정보 업데이트
     if (city.area || city.gdp || city.industry) {
-      const newRegionInfo = {
+      setSelectedRegionInfo({
         name: city.name,
         population: city.population,
         area: city.area || '정보 없음',
         gdp: city.gdp || '정보 없음',
         industry: city.industry || '정보 없음',
-      }
-      console.log('✅ Setting selectedRegionInfo:', newRegionInfo)
-      setSelectedRegionInfo(newRegionInfo)
+      })
     } else {
-      console.log('❌ No area/gdp/industry, clearing selectedRegionInfo')
-      // area, gdp, industry가 없으면 초기화 (국가 수준으로 되돌림)
       setSelectedRegionInfo(null)
     }
   }
@@ -381,12 +368,23 @@ export function CountryDetail({
                             >
                               역대 수반
                             </CountryDetailStyles.PersonInnerTabButton>
+                            <CountryDetailStyles.PersonInnerTabButton
+                              role="tab"
+                              aria-selected={personInnerTab === 'list'}
+                              $active={personInnerTab === 'list'}
+                              onClick={() => setPersonInnerTab('list')}
+                            >
+                              인물 리스트
+                            </CountryDetailStyles.PersonInnerTabButton>
                           </CountryDetailStyles.PersonInnerTabBar>
                           {personInnerTab === 'stats' && (
                             <PersonStatsSection countryId={country.id} noOverlap />
                           )}
                           {personInnerTab === 'heads' && (
                             <HeadsOfStateSection country={country} />
+                          )}
+                          {personInnerTab === 'list' && (
+                            <PersonListSection countryId={country.id} />
                           )}
                         </div>
                       )}
@@ -464,3 +462,5 @@ function EmptyState() {
     </CountryDetailStyles.EmptyStateContainer>
   )
 }
+
+export const CountryDetail = React.memo(CountryDetailInner)

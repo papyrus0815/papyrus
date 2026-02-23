@@ -38,7 +38,6 @@ export async function getAllHistoricalCountries(): Promise<
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
   } catch (error) {
-    console.error('❌ 역사적 국가 목록 조회 실패:', error)
     throw error
   }
 }
@@ -56,7 +55,6 @@ export async function getHistoricalCountryById(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 역사적 국가 조회 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -74,7 +72,6 @@ export async function createHistoricalCountry(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error('❌ 역사적 국가 생성 실패:', error)
     throw error
   }
 }
@@ -94,7 +91,6 @@ export async function updateHistoricalCountry(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 역사적 국가 수정 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -106,7 +102,6 @@ export async function deleteHistoricalCountry(id: string): Promise<void> {
   try {
     await historicalCountriesApi.deleteHistoricalCountry(apiConnection, id)
   } catch (error) {
-    console.error(`❌ 역사적 국가 삭제 실패 (ID: ${id}):`, error)
     throw error
   }
 }

@@ -18,13 +18,11 @@ export function useErrorHandler(): UseErrorHandlerReturn {
   // 전역 에러 핸들러 등록
   useEffect(() => {
     const handleGlobalError = (event: ErrorEvent) => {
-      console.error('🚨 전역 에러 발생:', event.error)
       const errorMsg = `🚨 에러: ${event.error?.message || event.message || '알 수 없는 오류'}`
       showError(errorMsg)
     }
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      console.error('🚨 처리되지 않은 Promise 거부:', event.reason)
       const errorMsg = `🚨 Promise 오류: ${event.reason?.message || event.reason || '알 수 없는 오류'}`
       showError(errorMsg)
     }

@@ -35,17 +35,13 @@ export const administrationDepartmentApi = {
     return null
   },
 
-  create: async (data: CreateAdministrationDepartmentInput) => {
-    console.log('AdministrationDepartment API not implemented yet', data)
+  create: async (_data: CreateAdministrationDepartmentInput) => {
     return null
   },
 
-  update: async (id: string, data: UpdateAdministrationDepartmentInput) => {
-    console.log('AdministrationDepartment API not implemented yet', id, data)
+  update: async (_id: string, _data: UpdateAdministrationDepartmentInput) => {
     return null
   },
 
-  delete: async (id: string) => {
-    console.log('AdministrationDepartment API not implemented yet', id)
-  },
+  delete: async (_id: string) => {},
 }

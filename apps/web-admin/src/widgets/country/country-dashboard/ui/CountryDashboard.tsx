@@ -3,23 +3,28 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { type Country, type ContinentOption } from '@/entities/country/api'
 import { type UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getSummaryMetrics } from '@/entities/country/lib/utils'
+import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 import * as S from '../../../../pages/history/country/country.styles'
 
 interface CountryDashboardProps {
-  countries: Country[]
-  filtered: UnifiedCountry[] // Country[] → UnifiedCountry[]로 변경
-  continents: ContinentOption[]
+  countries?: Country[]
+  filtered?: UnifiedCountry[]
+  continents?: ContinentOption[]
   isLoading?: boolean
   onCountryEdit?: (country: Country) => void
 }
 
 export function CountryDashboard({
-  countries,
-  filtered,
-  continents,
+  countries: countriesProp,
+  filtered: filteredProp,
+  continents: continentsProp,
   isLoading = false,
   onCountryEdit,
 }: CountryDashboardProps) {
+  const listState = useCountryListState()
+  const countries = countriesProp ?? listState.countries
+  const filtered = filteredProp ?? listState.filtered
+  const continents = continentsProp ?? listState.continents
   const metrics = getSummaryMetrics(countries)
 
   // Always show Global Dashboard
@@ -225,8 +230,8 @@ export function CountryDashboard({
                   (cont) => cont.id === country.continentId,
                 )
                 const density =
-                  country.population && country.areaSqKm
-                    ? (country.population / country.areaSqKm).toFixed(1)
+                  country.population != null && country.areaSqKm != null
+                    ? (Number(country.population) / Number(country.areaSqKm)).toFixed(1)
                     : '-'
 
                 // 현대 국가만 편집 가능

@@ -472,7 +472,6 @@ export default function PersonCreatePage() {
         }
       }
     } catch (error) {
-      console.error('Failed to load draft:', error)
     }
   }, [])
 
@@ -486,7 +485,6 @@ export default function PersonCreatePage() {
             JSON.stringify({ formData, careers }),
           )
         } catch (error) {
-          console.error('Failed to save draft:', error)
         }
       }
     }, 30000) // 30초
@@ -500,7 +498,6 @@ export default function PersonCreatePage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ formData, careers }))
       toast.success('임시 저장되었습니다.')
     } catch (error) {
-      console.error('Failed to save draft:', error)
       toast.error('임시 저장에 실패했습니다.')
     }
   }
@@ -511,7 +508,6 @@ export default function PersonCreatePage() {
       localStorage.removeItem(STORAGE_KEY)
       toast.success('임시 저장 내용이 삭제되었습니다.')
     } catch (error) {
-      console.error('Failed to clear draft:', error)
     }
   }
 
@@ -615,13 +611,11 @@ export default function PersonCreatePage() {
 
           toast.success('데이터를 불러왔습니다')
         } catch (error) {
-          console.error('Failed to load person:', error)
           toast.error('인물 데이터를 불러오는데 실패했습니다')
           navigate('/persons')
         }
       }
     } catch (error) {
-      console.error('Failed to load entities:', error)
       toast.error('데이터를 불러오는데 실패했습니다.')
     }
   }
@@ -1182,7 +1176,6 @@ export default function PersonCreatePage() {
       )
       toast.success('이미지가 업로드되었습니다.')
     } catch (error) {
-      console.error('Career image upload failed:', error)
       toast.error('이미지 업로드에 실패했습니다.')
     } finally {
       e.target.value = ''
@@ -1391,7 +1384,6 @@ export default function PersonCreatePage() {
       })
       toast.success(`${urls.length}개의 이미지가 업로드되었습니다.`)
     } catch (error) {
-      console.error('Image upload failed:', error)
       toast.error('이미지 업로드에 실패했습니다.')
     } finally {
       setIsUploadingImage(false)
@@ -1455,7 +1447,6 @@ export default function PersonCreatePage() {
       })
       toast.success(`${urls.length}개의 이미지가 업로드되었습니다.`)
     } catch (error) {
-      console.error('Image upload failed:', error)
       toast.error('이미지 업로드에 실패했습니다.')
     } finally {
       setIsUploadingImage(false)
@@ -1911,7 +1902,6 @@ export default function PersonCreatePage() {
         }
       }
 
-      console.log(`${isEditMode ? 'Updating' : 'Creating'} person data:`, input)
 
       let personId: string
 
@@ -1942,11 +1932,6 @@ export default function PersonCreatePage() {
       )
       navigate('/persons')
     } catch (error: any) {
-      console.error(
-        `Person ${isEditMode ? 'update' : 'creation'} failed:`,
-        error,
-      )
-
       const actionName = isEditMode ? '수정' : '등록'
 
       if (error.response?.data) {

@@ -58,7 +58,7 @@ function ClientRouter({
     )
   } catch (error) {
     // hydration 오류 발생 시 fallback 표시
-    console.warn('Router hydration error, showing fallback:', error)
+    // Router hydration error, showing fallback
 
     return null
   }

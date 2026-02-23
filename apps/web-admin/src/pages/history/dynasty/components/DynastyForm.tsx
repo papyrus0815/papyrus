@@ -61,7 +61,6 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
       }
       onClose()
     } catch (err: any) {
-      console.error('Failed to save dynasty:', err)
 
       // 에러 메시지 파싱
       if (

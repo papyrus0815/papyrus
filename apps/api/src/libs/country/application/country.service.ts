@@ -12,6 +12,7 @@ import {
 import { Country } from '../domain/country.entity'
 import { PrismaClient } from '@prisma/client'
 import { NotificationService } from '../../notification/application/notification.service'
+import { UploadService } from '../../shared/upload/upload.service'
 
 @Injectable()
 export class CountryService {
@@ -20,6 +21,7 @@ export class CountryService {
     private readonly countries: CountryRepository,
     private readonly prisma: PrismaClient,
     private readonly notificationService: NotificationService,
+    private readonly uploadService: UploadService,
   ) {}
 
   /**
@@ -97,8 +99,7 @@ export class CountryService {
     id: string,
     data: Partial<Omit<Country, 'id'>>,
   ): Promise<Country> {
-    // 존재 여부 확인
-    await this.getCountryById(id)
+    const current = await this.getCountryById(id)
 
     // 이름 변경 시 중복 체크
     if (data.name) {
@@ -108,6 +109,14 @@ export class CountryService {
           `Country with name ${data.name} already exists`,
         )
       }
+    }
+
+    // 썸네일 제거/교체 시 기존 업로드 파일 삭제 (/uploads/images/... 만)
+    const newThumbnail = data.thumbnailUrl ?? null
+    const isClearingOrReplacing =
+      newThumbnail !== (current.thumbnailUrl ?? null)
+    if (isClearingOrReplacing && current.thumbnailUrl) {
+      await this.uploadService.deleteFileByUrl(current.thumbnailUrl)
     }
 
     const country = await this.countries.update(id, data)

@@ -22,7 +22,6 @@ export async function getAllCountries(): Promise<CountryResponseDto[]> {
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
   } catch (error) {
-    console.error('❌ 국가 목록 조회 실패:', error)
     throw error
   }
 }
@@ -38,7 +37,6 @@ export async function getCountryById(id: string): Promise<CountryResponseDto> {
     )) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 국가 조회 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -56,7 +54,6 @@ export async function createCountry(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error('❌ 국가 생성 실패:', error)
     throw error
   }
 }
@@ -76,7 +73,6 @@ export async function updateCountry(
     )) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 국가 수정 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -88,7 +84,6 @@ export async function deleteCountry(id: string): Promise<void> {
   try {
     await countriesApi.deleteCountry(apiConnection, id)
   } catch (error) {
-    console.error(`❌ 국가 삭제 실패 (ID: ${id}):`, error)
     throw error
   }
 }

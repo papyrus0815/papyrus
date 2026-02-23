@@ -10,77 +10,58 @@ import {
   type CountryTypeFilter,
   type UnifiedCountry,
 } from '@/entities/country/model/unified-types'
+import { useCountryListState } from '../country-list-state.context'
 import * as S from '@/pages/history/country/country.styles'
 
 export type SortBy = 'name' | 'population' | 'area'
 export type ActiveTab = 'dashboard' | 'list'
 
 interface CountryListProps {
-  // Data
-  countries: Country[]
-  filtered: UnifiedCountry[]
-  continents: ContinentOption[]
-
-  // Selection
   selectedId: string | null
   onSelect: (id: string) => void
-
-  // Filter state
-  query: string
-  onQueryChange: (query: string) => void
-  continentFilter: string
-  onContinentFilterChange: (continentId: string) => void
-  countryTypeFilter?: CountryTypeFilter
-  onCountryTypeFilterChange?: (type: CountryTypeFilter) => void
-  sortBy: SortBy
-  onSortByChange: (sortBy: SortBy) => void
-  showContinentModal: boolean
-  setShowContinentModal: (show: boolean) => void
-  showSortModal: boolean
-  setShowSortModal: (show: boolean) => void
-  showCountryTypeModal?: boolean
-  setShowCountryTypeModal?: (show: boolean) => void
-
-  // Tab state
   activeTab: ActiveTab
   onTabChange: (tab: ActiveTab) => void
-
-  // Actions
   onAdd: () => void
   onAddHistorical?: () => void
   onEditHistorical?: (country: UnifiedCountry) => void
-
-  // Layout
   inHistory?: boolean
+  showContinentModal: boolean
+  setShowContinentModal: (v: boolean) => void
+  showSortModal: boolean
+  setShowSortModal: (v: boolean) => void
+  showCountryTypeModal: boolean
+  setShowCountryTypeModal: (v: boolean) => void
 }
 
-export function CountryList({
-  countries,
-  filtered,
-  continents,
+function CountryListInner({
   selectedId,
   onSelect,
-  query,
-  onQueryChange,
-  continentFilter,
-  onContinentFilterChange,
-  countryTypeFilter = 'all',
-  onCountryTypeFilterChange,
-  sortBy,
-  onSortByChange,
-  showContinentModal,
-  setShowContinentModal,
-  showSortModal,
-  setShowSortModal,
-  showCountryTypeModal = false,
-  setShowCountryTypeModal,
   activeTab,
   onTabChange,
   onAdd,
   onAddHistorical,
   onEditHistorical,
   inHistory = false,
+  showContinentModal,
+  setShowContinentModal,
+  showSortModal,
+  setShowSortModal,
+  showCountryTypeModal,
+  setShowCountryTypeModal,
 }: CountryListProps) {
+  const {
+    countries,
+    filtered,
+    continents,
+    query,
+    setQuery: onQueryChange,
+    continentFilter,
+    setContinentFilter: onContinentFilterChange,
+    countryTypeFilter,
+    setCountryTypeFilter: onCountryTypeFilterChange,
+    sortBy,
+    setSortBy: onSortByChange,
+  } = useCountryListState()
   const [showAddTypeModal, setShowAddTypeModal] = React.useState(false)
   const [expandedCountries, setExpandedCountries] = React.useState<Set<string>>(
     new Set(),
@@ -777,3 +758,5 @@ export function CountryList({
     </>
   )
 }
+
+export const CountryList = React.memo(CountryListInner)

@@ -1,6 +1,7 @@
 import * as personsApi from '@api/functional/persons'
 
 import { apiConnection } from '../client'
+import { getPersonsByTenureCountry } from '../persons'
 
 export type Era = 'BC' | 'AD'
 
@@ -100,8 +101,20 @@ export const personApi = {
   },
 
   getByCountryId: async (countryId: string) => {
-    const allPersons = await personApi.getAll()
-    return allPersons.filter((p: Person) => p.countryId === countryId)
+    const [byBirthCountry, byTenure] = await Promise.all([
+      (async () => {
+        const allPersons = await personApi.getAll()
+        return allPersons.filter(
+          (p: Person & { country_id?: string }) =>
+            (p.countryId ?? p.country_id) === countryId,
+        )
+      })(),
+      getPersonsByTenureCountry({ countryId }).catch(() => []),
+    ])
+    const byId = new Map<string, Person>()
+    for (const p of byBirthCountry) byId.set(p.id, p)
+    for (const p of byTenure) if (!byId.has(p.id)) byId.set(p.id, p as Person)
+    return Array.from(byId.values())
   },
 
   getById: async (id: string) => {

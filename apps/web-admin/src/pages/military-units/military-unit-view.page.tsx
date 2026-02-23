@@ -49,7 +49,6 @@ export const MilitaryUnitViewPage: React.FC = () => {
       const data = await militaryUnitApi.getById(unitId)
       setUnit(data)
     } catch (error) {
-      console.error('군부대 정보 로드 실패:', error)
       alert('군부대 정보를 불러오는데 실패했습니다.')
       navigate('/military-units')
     } finally {
@@ -67,7 +66,6 @@ export const MilitaryUnitViewPage: React.FC = () => {
       alert('군부대가 삭제되었습니다.')
       navigate('/military-units')
     } catch (error) {
-      console.error('군부대 삭제 실패:', error)
       alert('군부대 삭제에 실패했습니다.')
     }
   }

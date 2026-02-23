@@ -121,25 +121,9 @@ export default function App() {
         message.includes('activeelement') ||
         filename.includes('focus')
       ) {
-        console.warn('[App] Global focus error prevented:', event.message)
-        console.warn('[App] Error event details:', {
-          message: event.message,
-          filename: event.filename,
-          lineno: event.lineno,
-          colno: event.colno,
-          error: event.error,
-        })
         event.preventDefault()
         event.stopPropagation()
-
         return false
-      } else {
-        // focus가 아닌 일반 에러 로깅
-        console.log('[App] Non-focus error detected:', {
-          message: event.message,
-          filename: event.filename,
-          error: event.error,
-        })
       }
     }
 
@@ -153,10 +137,6 @@ export default function App() {
         reason.includes('blur') ||
         reason.includes('activeelement')
       ) {
-        console.warn(
-          '[App] Global focus promise rejection prevented:',
-          event.reason,
-        )
         event.preventDefault()
       }
     }

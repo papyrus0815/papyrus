@@ -126,7 +126,6 @@ export const EventCreatePage: React.FC = () => {
   // 레거시 구조 (하위 호환성 - 기존 데이터 로드용)
   const [belligerents, setBelligerents] = useState<BelligerentSide[]>([])
   const setBelligerentsWithLog = (value: BelligerentSide[]) => {
-    console.log('🔥🔥🔥 [setBelligerents 호출]:', value)
     setBelligerents(value)
   }
   const [belligerentsGraph, setBelligerentsGraph] =
@@ -252,12 +251,10 @@ export const EventCreatePage: React.FC = () => {
     Promise.all([
       getAllPersons()
         .then((persons) => {
-          console.log('✅ 인물 목록 로드 성공:', persons.length, '명')
           setAvailablePersons(persons)
           return persons
         })
-        .catch((error) => {
-          console.error('❌ 인물 목록 로드 실패:', error)
+        .catch(() => {
           setAvailablePersons([])
           return []
         }),
@@ -266,27 +263,19 @@ export const EventCreatePage: React.FC = () => {
           setAvailableCountries(countries)
           return countries
         })
-        .catch((error) => {
-          console.error('국가 목록 로드 실패:', error)
-          return []
-        }),
+        .catch(() => []),
       getAllHistoricalCountries()
         .then((hc) => {
           setAvailableHistoricalCountries(hc)
           return hc
         })
-        .catch((error) => {
-          console.error('역사적 국가 목록 로드 실패:', error)
-          return []
-        }),
+        .catch(() => []),
       getAllEventCategories()
         .then((categories) => {
-          console.log('✅ 카테고리 목록 로드 성공:', categories)
           setDbCategories(categories)
           return categories
         })
-        .catch((error) => {
-          console.error('❌ 카테고리 목록 로드 실패:', error)
+        .catch(() => {
           setDbCategories([])
           return []
         }),
@@ -296,18 +285,13 @@ export const EventCreatePage: React.FC = () => {
           setAvailableMilitaryUnits(units)
           return units
         })
-        .catch((error) => {
-          console.error('군부대 목록 로드 실패:', error)
-          return []
-        }),
+        .catch(() => []),
       getAllEvents()
         .then((events) => {
-          console.log('✅ 사건 목록 로드 성공:', events.length, '건')
           setAvailableEvents(events)
           return events
         })
-        .catch((error) => {
-          console.error('❌ 사건 목록 로드 실패:', error)
+        .catch(() => {
           setAvailableEvents([])
           return []
         }),
@@ -375,14 +359,7 @@ export const EventCreatePage: React.FC = () => {
 
         // 카테고리 설정 (서버에서 받은 이름을 그대로 사용)
         if (event.category?.name) {
-          const mappedCategory = event.category.name
-          setCategory(mappedCategory)
-          console.log(
-            '✅ 카테고리 로드:',
-            event.category.name,
-            '→',
-            mappedCategory,
-          )
+          setCategory(event.category.name)
         }
 
         // 섹션 데이터 설정
@@ -405,7 +382,6 @@ export const EventCreatePage: React.FC = () => {
         // 군사 정보 설정
         // 1. 정규화된 구조 먼저 확인
         if ('militaryEvent' in event && event.militaryEvent) {
-          console.log('📥 정규화된 군사 정보 로드:', event.militaryEvent)
           const militaryEventData: MilitaryEvent = event.militaryEvent
           setMilitaryEvent(militaryEventData)
 
@@ -478,11 +454,6 @@ export const EventCreatePage: React.FC = () => {
 
             setBelligerents(reversedBelligerents as BelligerentSide[])
 
-            console.log(
-              '✅ belligerentSides → belligerents 역변환 완료:',
-              reversedBelligerents.length,
-            )
-
             // 📌 belligerents를 belligerentsGraph로 변환 (화면 표시용)
             const graphCountries = reversedBelligerents.flatMap((side) =>
               (side.countries || []).map((country: CountryInSide) => {
@@ -550,16 +521,6 @@ export const EventCreatePage: React.FC = () => {
               relations: graphRelations,
               manualSides: manualSides,
             })
-
-            console.log(
-              '✅ belligerentsGraph 생성 완료:',
-              graphCountries.length,
-              '개 국가,',
-              manualSides.length,
-              '개 진영,',
-              graphRelations.length,
-              '개 관계',
-            )
           }
 
           // ===== FSD: 역변환 함수 사용 =====
@@ -581,8 +542,6 @@ export const EventCreatePage: React.FC = () => {
               treaty: md.treaty,
               strategicImpact: md.strategicImpact,
             })
-
-            console.log('✅ militaryDetails 역변환 완료 (FSD 함수 사용)')
           }
 
           // 전쟁 비용 설정
@@ -592,8 +551,6 @@ export const EventCreatePage: React.FC = () => {
         }
         // 2. 레거시 구조 (하위 호환성)
         else if (event.belligerents) {
-          console.log('📥 레거시 belligerents 로드:', event.belligerents)
-
           // 레거시 구조를 그대로 로드 (기존 UI 유지)
           if ('sides' in event.belligerents) {
             const sidesArray = event.belligerents.sides || []
@@ -714,13 +671,11 @@ export const EventCreatePage: React.FC = () => {
 
         // 회담 정보 로드
         if ('conferenceEvent' in event && event.conferenceEvent) {
-          console.log('📥 회담 정보 로드:', event.conferenceEvent)
           setConferenceEvent(event.conferenceEvent)
         }
 
         toast.success('사건 정보를 불러왔습니다')
-      } catch (error) {
-        console.error('사건 정보 로드 실패:', error)
+      } catch {
         toast.error('사건 정보를 불러오는데 실패했습니다')
       } finally {
         setIsLoadingEvent(false)
@@ -763,16 +718,7 @@ export const EventCreatePage: React.FC = () => {
   }, [showParentEventList, showPersonList, showRelatedEventList])
 
   // ===== FSD: 폼 단계 설정 =====
-  const steps = useMemo(() => {
-    const formSteps = getFormSteps(category)
-    console.log('📋 폼 단계 생성:', {
-      category,
-      isMilitary: isMilitaryCategory(category),
-      isDiplomatic: isDiplomaticCategory(category),
-      steps: formSteps.map((step) => step.label),
-    })
-    return formSteps
-  }, [category])
+  const steps = useMemo(() => getFormSteps(category), [category])
 
   const handleSubmit = async () => {
     try {
@@ -784,13 +730,6 @@ export const EventCreatePage: React.FC = () => {
       // ===== FSD: 멘션 추출 =====
       const { mentionedPersons, mentionedEvents } = extractMentions(sections)
 
-      console.log(
-        '📌 선택된 카테고리:',
-        category,
-        '→',
-        category ? categoryNameMap[category] : 'undefined',
-      )
-
       // ===== FSD: 군사 이벤트 데이터 생성 =====
       const finalMilitaryEvent = isMilitaryCategory(category)
         ? buildMilitaryEventData(category, {
@@ -801,15 +740,6 @@ export const EventCreatePage: React.FC = () => {
             warCost,
           })
         : undefined
-
-      if (finalMilitaryEvent) {
-        console.log('✅ 군사 이벤트 데이터 생성 완료:', {
-          belligerentSides: finalMilitaryEvent.belligerentSides?.length || 0,
-          relations: finalMilitaryEvent.relations?.length || 0,
-          hasMilitaryDetails: !!finalMilitaryEvent.militaryDetails,
-          casualties: finalMilitaryEvent.casualties?.length || 0,
-        })
-      }
 
       // ===== FSD: buildEventSubmitData 사용 =====
       const eventData = buildEventSubmitData({
@@ -839,8 +769,6 @@ export const EventCreatePage: React.FC = () => {
         keywords,
       })
 
-      console.log('📤 사건 데이터 전송:', eventData)
-
       // API 호출
       if (isEditMode && editEventId) {
         // 수정 모드
@@ -858,7 +786,6 @@ export const EventCreatePage: React.FC = () => {
       // 성공 시 목록 페이지로 이동
       navigate(pathKeys.events.root())
     } catch (error) {
-      console.error('사건 등록 실패:', error)
       toast.error(
         `사건 등록에 실패했습니다: ${
           error instanceof Error ? error.message : '알 수 없는 오류'
@@ -1002,29 +929,8 @@ export const EventCreatePage: React.FC = () => {
       }
       // 부모 사건의 전체 정보 로드 (belligerents 포함)
       getEventById(parentEventId)
-        .then((event) => {
-          console.log('📥 부모 사건 로드:', event)
-          console.log('📥 부모 사건 belligerents:', event.belligerents)
-          console.log(
-            '📥 부모 사건 belligerents type:',
-            typeof event.belligerents,
-          )
-          if (event.belligerents) {
-            console.log(
-              '📥 부모 사건 belligerents.sides:',
-              event.belligerents.sides,
-            )
-            console.log(
-              '📥 부모 사건 belligerents.sides is array:',
-              Array.isArray(event.belligerents.sides),
-            )
-          }
-          setParentEventData(event)
-        })
-        .catch((error) => {
-          console.error('부모 사건 정보 로드 실패:', error)
-          setParentEventData(null)
-        })
+        .then(setParentEventData)
+        .catch(() => setParentEventData(null))
     } else if (!parentEventId && parentEventSearch) {
       setParentEventData(null)
       // 선택이 해제되면 검색어도 초기화하지 않음 (사용자가 검색 중일 수 있음)
@@ -1118,12 +1024,8 @@ export const EventCreatePage: React.FC = () => {
               sourceName: string
             }>,
           )
-          console.log('📥 하위 사건 관계 로드:', allChildRelations)
         })
-        .catch((error) => {
-          console.error('하위 사건 관계 로드 실패:', error)
-          setChildEventsRelations([])
-        })
+        .catch(() => setChildEventsRelations([]))
     } else {
       setChildEventsRelations([])
     }

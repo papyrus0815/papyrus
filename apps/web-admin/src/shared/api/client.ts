@@ -11,24 +11,12 @@ function getApiHost(): string {
 
   // 환경 변수가 빈 문자열이면 현재 origin 사용 (프록시를 통함)
   if (envUrl === '') {
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    console.log('🔗 Countries/Continents API Connection (현재 origin):', origin)
-
-    return origin
+    return typeof window !== 'undefined' ? window.location.origin : ''
   }
-
-  // 환경 변수가 설정되어 있으면 그 값 사용
   if (envUrl) {
-    console.log('🔗 Countries/Continents API Connection (환경 변수):', envUrl)
-
     return envUrl
   }
-
-  // 기본값
-  const fallback = 'http://localhost:8000'
-  console.log('🔗 Countries/Continents API Connection (기본값):', fallback)
-
-  return fallback
+  return 'http://localhost:8000'
 }
 
 // API 연결 설정

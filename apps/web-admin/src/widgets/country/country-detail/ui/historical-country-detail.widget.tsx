@@ -907,12 +907,6 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
 
   const currentEventDetail = selectedEvent ? eventDetails[selectedEvent] : null
 
-  console.log('📊 HistoricalEventsSection State:', {
-    selectedEvent,
-    hasCurrentEventDetail: !!currentEventDetail,
-    availableEventIds: Object.keys(eventDetails),
-  })
-
   if (!events || events.length === 0) {
     return (
       <div
@@ -1180,17 +1174,8 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                       damping: 20,
                     }}
                     onClick={() => {
-                      console.log(
-                        '🔍 Event clicked:',
-                        event.id,
-                        'hasDetail:',
-                        hasDetail,
-                      )
                       if (hasDetail) {
-                        console.log('✅ Opening event detail for:', event.id)
                         setSelectedEvent(event.id)
-                      } else {
-                        console.log('❌ No detail available for:', event.id)
                       }
                     }}
                     style={{

@@ -2,6 +2,7 @@ import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { type Country, type ContinentOption } from '@/entities/country/api'
 import { type UnifiedCountry } from '@/entities/country/model/unified-types'
+import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 import * as S from '../../../../pages/history/country/country.styles'
 
 interface CountryMobileUIProps {
@@ -9,21 +10,21 @@ interface CountryMobileUIProps {
   onTabChange: (tab: 'dashboard' | 'list') => void
   isMobileListOpen: boolean
   onMobileListOpenChange: (open: boolean) => void
-  countries: Country[]
-  filtered: UnifiedCountry[] // Country[] → UnifiedCountry[]로 변경
-  continents: ContinentOption[]
   selectedId: string | null
   onSelectCountry: (id: string) => void
-  query: string
-  onQueryChange: (query: string) => void
-  continentFilter: string
-  onContinentFilterChange: (filter: string) => void
-  sortBy: 'name' | 'population' | 'area'
-  onSortByChange: (sort: 'name' | 'population' | 'area') => void
   onShowContinentModal: () => void
   onShowSortModal: () => void
   onAddCountry: () => void
   inHistory: boolean
+  countries?: Country[]
+  filtered?: UnifiedCountry[]
+  continents?: ContinentOption[]
+  query?: string
+  onQueryChange?: (query: string) => void
+  continentFilter?: string
+  onContinentFilterChange?: (filter: string) => void
+  sortBy?: 'name' | 'population' | 'area'
+  onSortByChange?: (sort: 'name' | 'population' | 'area') => void
 }
 
 export function CountryMobileUI({
@@ -31,22 +32,25 @@ export function CountryMobileUI({
   onTabChange,
   isMobileListOpen,
   onMobileListOpenChange,
-  countries,
-  filtered,
-  continents,
   selectedId,
   onSelectCountry,
-  query,
-  onQueryChange,
-  continentFilter,
-  onContinentFilterChange,
-  sortBy,
-  onSortByChange,
   onShowContinentModal,
   onShowSortModal,
   onAddCountry,
   inHistory,
 }: CountryMobileUIProps) {
+  const listState = useCountryListState()
+  const {
+    countries,
+    filtered,
+    continents,
+    query,
+    setQuery: onQueryChange,
+    continentFilter,
+    setContinentFilter: onContinentFilterChange,
+    sortBy,
+    setSortBy: onSortByChange,
+  } = listState
   return (
     <>
       {/* Mobile View Switcher */}

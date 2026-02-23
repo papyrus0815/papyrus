@@ -47,7 +47,6 @@ export const MilitaryUnitPage = () => {
       try {
         await deleteMilitaryUnit.mutateAsync(id)
       } catch (error) {
-        console.error('Failed to delete military unit:', error)
         alert('군부대 삭제에 실패했습니다.')
       }
     }

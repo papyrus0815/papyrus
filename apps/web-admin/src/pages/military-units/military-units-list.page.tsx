@@ -159,8 +159,8 @@ export const MilitaryUnitsListPage: React.FC = () => {
       ])
       setModernCountries(modern)
       setHistoricalCountries(historical)
-    } catch (error) {
-      console.error('국가 목록 로드 실패:', error)
+    } catch {
+      // ignore
     }
   }
 
@@ -169,9 +169,7 @@ export const MilitaryUnitsListPage: React.FC = () => {
       setLoading(true)
       const data = await militaryUnitApi.getAll()
       setMilitaryUnits(data)
-    } catch (error) {
-      console.error('군부대 목록 로드 실패:', error)
-      // 실패 시 목업 데이터 사용
+    } catch {
       setMilitaryUnits(MOCK_MILITARY_UNITS)
     } finally {
       setLoading(false)
@@ -187,8 +185,7 @@ export const MilitaryUnitsListPage: React.FC = () => {
       await militaryUnitApi.delete(id)
       alert('군부대가 삭제되었습니다.')
       loadMilitaryUnits()
-    } catch (error) {
-      console.error('군부대 삭제 실패:', error)
+    } catch {
       alert('군부대 삭제에 실패했습니다.')
     }
   }

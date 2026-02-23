@@ -292,8 +292,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
                   try {
                     const result = await uploadImage(file)
                     return result.url
-                  } catch (error) {
-                    console.error('이미지 업로드 실패:', error)
+                  } catch {
                     // 실패 시 데이터 URL 백업
                     return new Promise((resolve, reject) => {
                       const reader = new FileReader()

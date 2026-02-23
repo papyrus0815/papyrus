@@ -180,8 +180,7 @@ export function useBgmPlaylist(
       await audioRef.current.play()
       isPlayingRef.current = true
       setIsPlaying(true)
-    } catch (error) {
-      console.error('❌ BGM 재생 실패:', error)
+    } catch {
       isPlayingRef.current = false
       setIsPlaying(false)
     }
@@ -244,7 +243,6 @@ export function useBgmPlaylist(
 
     // 오디오 로드 완료 이벤트
     audio.addEventListener('loadeddata', () => {
-      console.log('✅ 오디오 파일 로드 완료:', trackSrc)
       audioRef.current = audio
       registerBgmAudio(audio)
       const dur = audio.duration || 0
@@ -253,9 +251,7 @@ export function useBgmPlaylist(
     })
 
     // 오디오 에러 이벤트
-    audio.addEventListener('error', (e) => {
-      console.error('❌ 오디오 로드 에러:', e)
-    })
+    audio.addEventListener('error', () => {})
 
     // 오디오 재생 이벤트
     audio.addEventListener('play', () => {
@@ -288,8 +284,8 @@ export function useBgmPlaylist(
     if (autoPlayRef.current) {
       try {
         await audio.play()
-      } catch (error) {
-        console.log('⏳ 사용자 상호작용 대기 중...')
+      } catch {
+        // ignore
       }
     }
   }, [])
@@ -397,9 +393,7 @@ export function useBgmPlaylist(
       !hasInitializedRef.current
     ) {
       hasInitializedRef.current = true
-      changeTrackRef.current(0).catch(() => {
-        console.log('⏳ 사용자 상호작용 대기 중...')
-      })
+      changeTrackRef.current(0).catch(() => {})
     }
 
     return () => {

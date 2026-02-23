@@ -220,8 +220,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.ThumbnailImage
                 src={getImageUrl(thumbnail)}
                 alt="썸네일 미리보기"
-                onError={(e) => {
-                  console.error('이미지 로드 실패:', thumbnail)
+                onError={() => {
                   if (thumbnail.startsWith('blob:')) {
                     URL.revokeObjectURL(thumbnail)
                   }
@@ -286,8 +285,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 const result = await uploadImage(file)
                 URL.revokeObjectURL(previewUrl)
                 setThumbnail(result.url)
-              } catch (error) {
-                console.error('썸네일 업로드 실패:', error)
+              } catch {
                 alert('썸네일 업로드에 실패했습니다.')
                 URL.revokeObjectURL(previewUrl)
                 setThumbnail('')

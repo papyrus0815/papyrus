@@ -58,17 +58,13 @@ export const politicalPartyApi = {
     return null
   },
 
-  create: async (data: CreatePoliticalPartyInput) => {
-    console.log('PoliticalParty API not implemented yet', data)
+  create: async (_data: CreatePoliticalPartyInput) => {
     return null
   },
 
-  update: async (id: string, data: UpdatePoliticalPartyInput) => {
-    console.log('PoliticalParty API not implemented yet', id, data)
+  update: async (_id: string, _data: UpdatePoliticalPartyInput) => {
     return null
   },
 
-  delete: async (id: string) => {
-    console.log('PoliticalParty API not implemented yet', id)
-  },
+  delete: async (_id: string) => {},
 }

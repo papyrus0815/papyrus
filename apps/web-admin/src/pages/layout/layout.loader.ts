@@ -12,46 +12,23 @@ import { pathKeys } from '@/shared/router'
  * 토큰이 있는 경우에만 사용자 세션 정보를 로드합니다.
  */
 export async function layoutLoader() {
-  console.log('🔄 Layout loader 시작')
-
-  // 세션 스토어에서 토큰 가져오기
   const { token } = useSessionStore.getState()
-  console.log('🔑 세션 스토어에서 토큰 확인:', token ? '***' : null)
-
-  // 토큰이 없으면 로그인으로 리다이렉트
   if (!token) {
-    console.log('❌ 토큰 없음, 로그인으로 리다이렉트')
-
     return redirect(pathKeys.login())
   }
 
-  console.log('✅ 토큰 발견, 세션 검증 진행 중...')
-
-  // 토큰이 있으면 새 토큰 발급 시도
   try {
-    console.log('🔄 토큰 리프레시 시도 중...')
     await sessionApi.refresh()
-    console.log('✅ 토큰 리프레시 성공')
-  } catch (error) {
-    // refresh 실패 시 토큰이 유효하지 않을 수 있음
-    console.warn('⚠️ 토큰 리프레시 실패, 세션 정리:', error)
+  } catch {
     useSessionStore.getState().reset()
-
     return redirect(pathKeys.login())
   }
 
-  // 세션 정보 조회
   try {
-    console.log('📡 세션 데이터 로드 시도 중...')
     const session = await queryClient.ensureQueryData(sessionQueryOptions)
-    console.log('✅ 세션 데이터 로드 성공:', session)
-
     return { session }
-  } catch (error) {
-    console.error('💥 세션 데이터 로드 실패:', error)
-    // 세션 조회 실패 시 토큰 정리
+  } catch {
     useSessionStore.getState().reset()
-
     return redirect(pathKeys.login())
   }
 }

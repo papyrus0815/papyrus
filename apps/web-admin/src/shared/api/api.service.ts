@@ -26,19 +26,10 @@ export class NestiaApiService {
 
   // 토큰 업데이트
   updateToken(token: string) {
-    console.log('🔧 API 서비스 토큰 업데이트 시작:', token ? '***' : null)
-
     this.connection.headers = {
       ...this.connection.headers,
       Authorization: `Bearer ${token}`,
     }
-
-    console.log('✅ API 서비스 토큰 업데이트 완료')
-    console.log('🔍 현재 연결 헤더 확인:', {
-      host: this.connection.host,
-      hasAuth: !!this.connection.headers.Authorization,
-      authType: this.connection.headers.Authorization ? 'Bearer ***' : 'None',
-    })
   }
 
   // 기본 URL 업데이트
@@ -90,62 +81,20 @@ export class NestiaApiService {
 function getApiBaseUrl(): string {
   const envUrl = import.meta.env.VITE_API_BASE_URL
 
-  console.log('🔍 VITE_API_BASE_URL 원본 값:', envUrl)
-  console.log('🔍 envUrl 타입:', typeof envUrl)
-  console.log('🔍 envUrl === "":', envUrl === '')
-
-  // Electron 환경 감지
   const isElectron =
     typeof window !== 'undefined' &&
     (window.location.protocol === 'file:' ||
       (window as any).electron !== undefined)
 
-  if (isElectron) {
-    console.log('🖥️ Electron 환경 감지됨')
-  }
-
-  // 환경 변수가 명시적으로 빈 문자열이면 현재 origin 사용 (프록시를 통함)
   if (envUrl === '') {
-    // Electron에서는 file:// 프로토콜이므로 localhost 사용
-    if (isElectron) {
-      const fallbackUrl = 'http://localhost:8000'
-      console.log('✅ Electron 환경: 기본 API URL 사용:', fallbackUrl)
-
-      return fallbackUrl
-    }
-
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    console.log(
-      '✅ API 요청을 프록시를 통해 전송합니다 (현재 origin 사용):',
-      origin,
-    )
-
-    return origin
+    if (isElectron) return 'http://localhost:8000'
+    return typeof window !== 'undefined' ? window.location.origin : ''
   }
 
   if (!envUrl || envUrl.trim() === '') {
-    // Electron 환경에서는 localhost 사용
-    if (isElectron) {
-      const fallbackUrl = 'http://localhost:8000'
-      console.warn(
-        '⚠️ Electron 환경: VITE_API_BASE_URL이 설정되지 않아 기본값 사용:',
-        fallbackUrl,
-      )
-
-      return fallbackUrl
-    }
-
-    // 환경 변수가 없으면 현재 origin 사용
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    console.warn(
-      '⚠️ VITE_API_BASE_URL 환경 변수가 설정되지 않았습니다. 현재 origin을 사용합니다:',
-      origin,
-    )
-
-    return origin
+    if (isElectron) return 'http://localhost:8000'
+    return typeof window !== 'undefined' ? window.location.origin : ''
   }
-
-  console.log('🔍 VITE_API_BASE_URL을 그대로 사용:', envUrl)
 
   return envUrl
 }

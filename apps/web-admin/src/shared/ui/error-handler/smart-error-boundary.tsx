@@ -58,24 +58,8 @@ export class SmartErrorBoundary extends Component<Props, State> {
       (errorMessage.includes('queryselector') && errorStack.includes('focus'))
 
     if (isFocusError) {
-      // 개발 환경에서는 콘솔에 경고 표시
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(
-          '[Smart ErrorBoundary] Focus error ignored:',
-          error.message,
-          '\nStack:',
-          error.stack,
-        )
-      }
-      // 에러 상태로 업데이트하지 않음 (UI를 표시하지 않음)
       return { hasError: false, error: null }
     }
-
-    // 일반적인 에러는 처리
-    console.log(
-      '[Smart ErrorBoundary] Non-focus error will be handled:',
-      error.message,
-    )
 
     return { hasError: true, error }
   }
@@ -113,23 +97,9 @@ export class SmartErrorBoundary extends Component<Props, State> {
       (errorMessage.includes('queryselector') && errorStack.includes('focus'))
 
     if (isFocusError) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(
-          '[Smart ErrorBoundary] Focus error caught and ignored:',
-          error.message,
-          '\nStack:',
-          error.stack,
-        )
-      }
-
-      return // onError 콜백을 호출하지 않음
+      return
     }
 
-    // 일반적인 에러만 onError 콜백 호출
-    console.log(
-      '[Smart ErrorBoundary] Non-focus error passed to onError:',
-      error.message,
-    )
     if (this.props.onError) {
       this.props.onError(error, errorInfo)
     }

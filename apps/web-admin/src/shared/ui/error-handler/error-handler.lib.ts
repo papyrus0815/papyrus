@@ -59,10 +59,8 @@ async function reportToServer<T>(payload: T) {
         keepalive: true, // 페이지 이동 중에도 요청을 유지하려는 시도
       })
     }
-  } catch (e) {
-    // 로깅 서버로의 전송 실패는 서비스의 다른 기능에 영향을 주지 않아야 합니다.
-    // 따라서 실패 시에는 콘솔에만 조용히 기록합니다.
-    console.error('[Logger] Failed to report log to custom server:', e)
+  } catch {
+    // 로깅 서버 전송 실패 시 무시
   }
 }
 
@@ -82,9 +80,6 @@ function log(
   context?: LogContext,
 ) {
   if (isDevelopment) {
-    const logFunction = console[level] || console.log
-    logFunction(`[${level.toUpperCase()}] ${message}`, context || '')
-
     return
   }
 
@@ -108,8 +103,6 @@ function log(
  */
 function error(error: Error, context?: LogContext) {
   if (isDevelopment) {
-    console.error('[Caught Error]', error, context || '')
-
     return
   }
 
@@ -178,12 +171,7 @@ export function logError(
     errorMessage.includes('activeElement')
 
   if (isFocusError) {
-    // 개발 환경에서는 콘솔에 경고만 표시
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[Focus Error Ignored]', error.message)
-    }
-    
-return // ErrorBoundary UI를 표시하지 않음
+    return
   }
 
   Logger.error(error, { componentStack: info.componentStack })

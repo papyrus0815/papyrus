@@ -41,9 +41,7 @@ export default function LoginPage() {
     try {
       await audioRef.current.play()
       setIsPlaying(true)
-      console.log('✅ BGM 재생 성공')
-    } catch (error) {
-      console.error('❌ BGM 재생 실패:', error)
+    } catch {
       setIsPlaying(false)
     }
   }
@@ -94,14 +92,10 @@ export default function LoginPage() {
 
     // 오디오 로드 완료 이벤트
     audio.addEventListener('loadeddata', () => {
-      console.log('✅ 오디오 파일 로드 완료')
       audioRef.current = audio
     })
 
-    // 오디오 에러 이벤트
-    audio.addEventListener('error', (e) => {
-      console.error('❌ 오디오 로드 에러:', e)
-    })
+    audio.addEventListener('error', () => {})
 
     // 오디오 재생 이벤트
     audio.addEventListener('play', () => {
@@ -130,9 +124,7 @@ export default function LoginPage() {
     })
 
     // 페이지 로드 시 재생 시도 (실패할 수 있음)
-    playAudio().catch(() => {
-      console.log('⏳ 사용자 상호작용 대기 중...')
-    })
+    playAudio().catch(() => {})
 
     // 컴포넌트 언마운트 시 정리
     return () => {

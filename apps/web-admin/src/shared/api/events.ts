@@ -37,8 +37,6 @@ export async function getAllEvents(params?: {
       url.searchParams.set('limit', params.limit.toString())
     }
 
-    console.log(`📡 사건 목록 요청: ${url.toString()}`)
-
     const response = await fetch(url.toString(), {
       headers: (connection.headers ?? {}) as HeadersInit,
     })
@@ -47,10 +45,8 @@ export async function getAllEvents(params?: {
     }
 
     const data = await response.json()
-    console.log(`✅ ${data.length}개 사건 수신`)
     return data
   } catch (error) {
-    console.error('❌ 사건 목록 조회 실패:', error)
     throw new Error(`사건 목록 조회 실패: ${error}`)
   }
 }
@@ -62,7 +58,6 @@ export async function getEventById(id: string): Promise<EventResponseDto> {
   try {
     return await api.events.getEventById(getConnection(), id)
   } catch (error) {
-    console.error('❌ 사건 조회 실패:', error)
     throw new Error(`사건 조회 실패: ${error}`)
   }
 }
@@ -79,7 +74,6 @@ export async function getEventsByParentId(
       parentEventId,
     )
   } catch (error) {
-    console.error('❌ 하위 사건 목록 조회 실패:', error)
     throw new Error(`하위 사건 목록 조회 실패: ${error}`)
   }
 }
@@ -91,12 +85,8 @@ export async function createEvent(
   dto: CreateEventDto,
 ): Promise<EventResponseDto> {
   try {
-    console.log('📤 사건 생성 요청:', dto)
-    const result = await api.events.createEvent(getConnection(), dto)
-    console.log('✅ 사건 생성 성공:', result)
-    return result
+    return await api.events.createEvent(getConnection(), dto)
   } catch (error) {
-    console.error('❌ 사건 생성 실패:', error)
     throw error
   }
 }
@@ -109,12 +99,8 @@ export async function updateEvent(
   dto: UpdateEventDto,
 ): Promise<EventResponseDto> {
   try {
-    console.log('📤 사건 수정 요청:', { id, dto })
-    const result = await api.events.updateEvent(getConnection(), id, dto)
-    console.log('✅ 사건 수정 성공:', result)
-    return result
+    return await api.events.updateEvent(getConnection(), id, dto)
   } catch (error) {
-    console.error('❌ 사건 수정 실패:', error)
     throw error
   }
 }
@@ -125,9 +111,7 @@ export async function updateEvent(
 export async function deleteEvent(id: string): Promise<void> {
   try {
     await api.events.deleteEvent(getConnection(), id)
-    console.log('✅ 사건 삭제 성공 (3일 간 보관):', id)
   } catch (error) {
-    console.error('❌ 사건 삭제 실패:', error)
     throw new Error(`사건 삭제 실패: ${error}`)
   }
 }
@@ -137,11 +121,8 @@ export async function deleteEvent(id: string): Promise<void> {
  */
 export async function getDeletedEvents(): Promise<EventResponseDto[]> {
   try {
-    const result = await api.events.deleted.list(getConnection())
-    console.log('✅ 삭제된 사건 목록 조회:', result.length)
-    return result
+    return await api.events.deleted.list(getConnection())
   } catch (error) {
-    console.error('❌ 삭제된 사건 조회 실패:', error)
     throw error
   }
 }
@@ -151,11 +132,8 @@ export async function getDeletedEvents(): Promise<EventResponseDto[]> {
  */
 export async function restoreEvent(id: string): Promise<EventResponseDto> {
   try {
-    const result = await api.events.$id(id).restore(getConnection())
-    console.log('✅ 사건 복구 성공:', id)
-    return result
+    return await api.events.$id(id).restore(getConnection())
   } catch (error) {
-    console.error('❌ 사건 복구 실패:', error)
     throw error
   }
 }
@@ -166,9 +144,7 @@ export async function restoreEvent(id: string): Promise<EventResponseDto> {
 export async function permanentlyDeleteEvent(id: string): Promise<void> {
   try {
     await api.events.$id(id).permanent.deleteEvent(getConnection())
-    console.log('✅ 사건 완전 삭제 성공:', id)
   } catch (error) {
-    console.error('❌ 사건 완전 삭제 실패:', error)
     throw error
   }
 }

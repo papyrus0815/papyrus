@@ -45,7 +45,6 @@ function ServiceManagerPageContent() {
       const newStatus = await window.electron.service.getStatus()
       setStatus(newStatus)
     } catch (error) {
-      console.error('❌ 상태 조회 실패:', error)
       showToast('error', '서비스 상태 조회 실패')
     }
   }
@@ -70,7 +69,6 @@ function ServiceManagerPageContent() {
       await fetchStatus()
       showToast('success', '모든 서비스가 시작되었습니다!')
     } catch (error) {
-      console.error('❌ 전체 시작 실패:', error)
       showToast('error', '서비스 시작에 실패했습니다')
     } finally {
       setLoading(false)
@@ -85,7 +83,6 @@ function ServiceManagerPageContent() {
       await fetchStatus()
       showToast('success', '모든 서비스가 중지되었습니다')
     } catch (error) {
-      console.error('❌ 전체 중지 실패:', error)
       showToast('error', '서비스 중지에 실패했습니다')
     } finally {
       setLoading(false)
@@ -100,7 +97,6 @@ function ServiceManagerPageContent() {
       await fetchStatus()
       showToast('success', '서비스가 재시작되었습니다!')
     } catch (error) {
-      console.error('❌ 재시작 실패:', error)
       showToast('error', '서비스 재시작에 실패했습니다')
     } finally {
       setLoading(false)
@@ -115,7 +111,6 @@ function ServiceManagerPageContent() {
       await fetchStatus()
       showToast('success', 'Docker 컨테이너가 시작되었습니다!')
     } catch (error) {
-      console.error('❌ Docker 시작 실패:', error)
       showToast('error', 'Docker 시작에 실패했습니다')
     } finally {
       setLoading(false)
@@ -130,7 +125,6 @@ function ServiceManagerPageContent() {
       await fetchStatus()
       showToast('success', 'Docker 컨테이너가 중지되었습니다')
     } catch (error) {
-      console.error('❌ Docker 중지 실패:', error)
       showToast('error', 'Docker 중지에 실패했습니다')
     } finally {
       setLoading(false)
@@ -145,7 +139,6 @@ function ServiceManagerPageContent() {
       await fetchStatus()
       showToast('success', 'API 서버가 시작되었습니다!')
     } catch (error) {
-      console.error('❌ API 시작 실패:', error)
       showToast('error', 'API 시작에 실패했습니다')
     } finally {
       setLoading(false)
@@ -160,7 +153,6 @@ function ServiceManagerPageContent() {
       await fetchStatus()
       showToast('success', 'API 서버가 중지되었습니다')
     } catch (error) {
-      console.error('❌ API 중지 실패:', error)
       showToast('error', 'API 중지에 실패했습니다')
     } finally {
       setLoading(false)

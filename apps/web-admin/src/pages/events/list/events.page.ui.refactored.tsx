@@ -103,13 +103,11 @@ export const EventsCatalogPageRefactored: React.FC = () => {
       getAllHistoricalCountries(),
     ])
       .then(([categories, countriesData, historicalCountriesData]) => {
-        console.log('✅ 카테고리 목록 로드:', categories)
         setDbCategories(categories)
         setCountries(countriesData)
         setHistoricalCountries(historicalCountriesData)
       })
-      .catch((error) => {
-        console.error('❌ 데이터 로드 실패:', error)
+      .catch(() => {
         setDbCategories([])
         setCountries([])
         setHistoricalCountries([])
@@ -124,10 +122,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
           // EventResponseDto를 HistoricalEvent로 변환 필요
           setDeletedEvents(events as any)
         })
-        .catch((error) => {
-          console.error('❌ 삭제된 사건 로드 실패:', error)
-          setDeletedEvents([])
-        })
+        .catch(() => setDeletedEvents([]))
     }
   }, [activeTab])
 
@@ -207,7 +202,6 @@ export const EventsCatalogPageRefactored: React.FC = () => {
 
   // ===== Pagination: 페이지 크기 변경 핸들러 =====
   const handlePageSizeChange = (newSize: number) => {
-    console.log(`📏 페이지 크기 변경: ${pageSize} → ${newSize}`)
     setPageSize(newSize)
     resetAndFetch(newSize)
   }
@@ -267,7 +261,6 @@ export const EventsCatalogPageRefactored: React.FC = () => {
 
     // 하단 300px 이내에 도달하고, 더 불러올 데이터가 있으면 서버에서 로드
     if (scrollBottom < 300 && hasMore && !isLoading) {
-      console.log('📥 서버에서 추가 데이터 요청...')
       fetchMoreEvents()
     }
   }
@@ -374,33 +367,17 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             onShowCategoryModal={() => setShowCategoryModal(true)}
             onShowCountryModal={() => setShowCountryModal(true)}
             onShowPositionTypeModal={() => setShowPositionTypeModal(true)}
-            onToggleFlatView={() => {
-              console.log(
-                `🔀 계층 구조 버튼 클릭: ${showFlatView} → ${!showFlatView}`,
-              )
-              setShowFlatView(!showFlatView)
-            }}
+            onToggleFlatView={() => setShowFlatView(!showFlatView)}
             onResetFilters={handleResetFilters}
             onSelectCentury={setSelectedCentury}
             onSortChange={(newSortBy) => {
-              console.log(`📊 정렬 기준 변경: ${sortBy} → ${newSortBy}`)
               setSortBy(newSortBy)
-
-              // 정렬 기준 변경 시 적절한 방향으로 자동 설정
-              if (newSortBy === 'recent') {
-                console.log('   → 최근순이므로 desc로 설정')
-                setSortDirection('desc')
-              } else if (newSortBy === 'duration') {
-                console.log('   → 장기 지속순이므로 desc로 설정')
+              if (newSortBy === 'recent' || newSortBy === 'duration') {
                 setSortDirection('desc')
               }
             }}
             onSortDirectionToggle={() => {
-              setSortDirection((prev) => {
-                const newDirection = prev === 'asc' ? 'desc' : 'asc'
-                console.log(`🔃 정렬 방향 변경: ${prev} → ${newDirection}`)
-                return newDirection
-              })
+              setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
             }}
           />
           <Layout.CreateEventButton
@@ -442,7 +419,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
           <button
             onClick={() => {
               setActiveTab('deleted')
-              getDeletedEvents().then(setDeletedEvents).catch(console.error)
+              getDeletedEvents().then(setDeletedEvents).catch(() => {})
             }}
             style={{
               padding: '8px 16px',
@@ -497,22 +474,13 @@ export const EventsCatalogPageRefactored: React.FC = () => {
                   setShowSummaryModal(true)
                 }}
                 onSortChange={(newSortBy) => {
-                  console.log(
-                    `📊 정렬 기준 변경 (EventCompactList): ${sortBy} → ${newSortBy}`,
-                  )
                   setSortBy(newSortBy)
                   if (newSortBy === 'recent' || newSortBy === 'duration') {
                     setSortDirection('desc')
                   }
                 }}
                 onSortDirectionToggle={() => {
-                  setSortDirection((prev) => {
-                    const newDirection = prev === 'asc' ? 'desc' : 'asc'
-                    console.log(
-                      `🔃 정렬 방향 변경 (EventCompactList): ${prev} → ${newDirection}`,
-                    )
-                    return newDirection
-                  })
+                  setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
                 }}
                 onResetFilters={handleResetFilters}
                 onToggleBookmark={toggleBookmark}

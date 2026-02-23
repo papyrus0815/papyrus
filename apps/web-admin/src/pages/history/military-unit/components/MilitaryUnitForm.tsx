@@ -92,7 +92,6 @@ export const MilitaryUnitForm = ({ unit, onClose }: MilitaryUnitFormProps) => {
       }
       onClose()
     } catch (err: any) {
-      console.error('Failed to save military unit:', err)
       setError(err?.message || '저장 중 오류가 발생했습니다.')
     }
   }

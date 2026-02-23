@@ -567,15 +567,6 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
       warCost: warCost || undefined,
     }
 
-    console.log(
-      '🔥🔥🔥 [MilitaryEventForm] militaryDetails 원본:',
-      militaryDetails,
-    )
-    console.log(
-      '🔥🔥🔥 [MilitaryEventForm] updatedMilitaryEvent:',
-      updatedMilitaryEvent,
-    )
-
     setMilitaryEvent(updatedMilitaryEvent as MilitaryEvent)
   }, [
     belligerents,
@@ -1158,29 +1149,12 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
 
   // 참전 국가 추가 (레거시 - 모달 열기용)
   const openCountryModal = (sideId: string) => {
-    console.log('🔵 openCountryModal 호출됨, sideId:', sideId)
-    console.log('🔵 sideId 타입:', typeof sideId)
-    console.log('🔵 sideId가 undefined인가?', sideId === undefined)
-    console.log('🔵 전체 belligerents:', actualBelligerents)
-
-    if (!sideId) {
-      console.error(
-        '❌ sideId가 없습니다! 버튼에서 제대로 전달되지 않았습니다.',
-      )
-      return
-    }
+    if (!sideId) return
 
     playClickSound()
-
-    // 상태 업데이트
     setSelectedSideForCountry(sideId)
     setSelectedCountryIndex(null)
-
-    // 상태 업데이트 후 모달 열기 (setTimeout으로 딜레이)
-    setTimeout(() => {
-      console.log('🔵 모달 열기 (딜레이 후), sideId:', sideId)
-      setCountryModalOpen(true)
-    }, 0)
+    setTimeout(() => setCountryModalOpen(true), 0)
   }
 
   // 참전 국가 선택 (모달에서)
@@ -1189,33 +1163,12 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
     name: string
     isHistorical: boolean
   }) => {
-    console.log('🌍 국가 선택:', country)
-    console.log('🌍 selectedSideForCountry:', selectedSideForCountry)
-    console.log('🌍 selectedCountryIndex:', selectedCountryIndex)
-    console.log('🌍 belligerents:', belligerents)
-    console.log('🌍 setBelligerents 존재 여부:', !!setBelligerents)
+    if (!selectedSideForCountry) return
 
-    // React 상태는 비동기로 업데이트되므로,
-    // setSelectedSideForCountry 직후에 handleCountrySelect가 호출되면
-    // selectedSideForCountry가 아직 undefined일 수 있음
-    // 해결: 약간의 딜레이 후 재시도 또는 모달에서 직접 sideId 전달
-
-    if (!selectedSideForCountry) {
-      console.error('❌ selectedSideForCountry가 없습니다!')
-      console.log('⚠️ React 상태 업데이트 타이밍 문제일 수 있습니다.')
-      console.log('⚠️ 잠시 후 다시 시도해주세요.')
-      return
-    }
-
-    // 레거시 구조 사용 여부 확인
     if (belligerents && setBelligerents) {
-      console.log('✅ 레거시 모드로 진행')
-      // 레거시 모드
       const updated = belligerents.map((side) => {
         if (side.id === selectedSideForCountry) {
           if (selectedCountryIndex !== null) {
-            // 기존 국가 수정
-            console.log('🌍 기존 국가 수정 모드 (레거시)')
             const newCountries = [...side.countries]
             newCountries[selectedCountryIndex] = {
               ...newCountries[selectedCountryIndex],
@@ -1225,8 +1178,6 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
             }
             return { ...side, countries: newCountries }
           } else {
-            // 새 국가 추가
-            console.log('🌍 새 국가 추가 모드 (레거시)')
             return {
               ...side,
               countries: [
@@ -1244,12 +1195,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
         }
         return side
       })
-      console.log('🌍 업데이트된 belligerents:', updated)
       setBelligerents(updated)
-      console.log('🌍 setBelligerents 호출 완료')
     } else {
-      // 새 구조 모드
-      console.log('✅ 새 구조 모드로 국가 추가')
       addCountryToSide(
         selectedSideForCountry,
         country.id,
@@ -2249,17 +2196,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                     type="button"
                                     onClick={() => {
                                       playClickSound()
-                                      const targetSideId = side.id
-                                      console.log(
-                                        '🔵 하위 세력에서 모달 열기, sideId:',
-                                        targetSideId,
-                                      )
-
-                                      // 상태 업데이트
-                                      setSelectedSideForCountry(targetSideId)
+                                      setSelectedSideForCountry(side.id)
                                       setSelectedCountryIndex(null)
-
-                                      // 딜레이 후 모달 열기
                                       setTimeout(() => {
                                         setCountryModalOpen(true)
                                       }, 0)
@@ -2658,12 +2596,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
 
                           <AddCountryButton
                             type="button"
-                            onClick={() => {
-                              console.log('🔵 AddCountryButton 클릭됨')
-                              console.log('🔵 side 객체:', side)
-                              console.log('🔵 side.id:', side.id)
-                              openCountryModal(side.id)
-                            }}
+                            onClick={() => openCountryModal(side.id)}
                           >
                             <FiPlus size={16} />
                             참전 국가 추가
@@ -3176,17 +3109,12 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
               rows={3}
               placeholder="전투에서 사용된 구체적인 전술을 설명하세요 (예: 측면 포위 공격, 중앙 돌파, 게릴라 전술, 매복 작전 등)"
               value={militaryDetails.tactics || ''}
-              onChange={(e) => {
-                console.log('🔥 [tactics 입력]:', e.target.value)
+              onChange={(e) =>
                 setMilitaryDetails({
                   ...militaryDetails,
                   tactics: e.target.value,
                 })
-                console.log('🔥 [tactics 저장 후]:', {
-                  ...militaryDetails,
-                  tactics: e.target.value,
-                })
-              }}
+              }
             />
           </FormGroup>
 
@@ -3198,17 +3126,12 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
               rows={3}
               placeholder="전체적인 전쟁/전역의 전략적 맥락을 설명하세요 (예: 적의 수도 점령을 위한 공세, 보급로 차단 전략, 소모전 전략 등)"
               value={militaryDetails.strategy || ''}
-              onChange={(e) => {
-                console.log('🔥 [strategy 입력]:', e.target.value)
+              onChange={(e) =>
                 setMilitaryDetails({
                   ...militaryDetails,
                   strategy: e.target.value,
                 })
-                console.log('🔥 [strategy 저장 후]:', {
-                  ...militaryDetails,
-                  strategy: e.target.value,
-                })
-              }}
+              }
             />
           </FormGroup>
 
@@ -3221,17 +3144,12 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
               rows={3}
               placeholder="전투의 승패 및 결과를 입력하세요 (예: 프랑스군의 결정적 승리, 오스트리아-러시아 연합군 패배)"
               value={militaryDetails.outcome}
-              onChange={(e) => {
-                console.log('🔥 [outcome 입력]:', e.target.value)
+              onChange={(e) =>
                 setMilitaryDetails({
                   ...militaryDetails,
                   outcome: e.target.value,
                 })
-                console.log('🔥 [outcome 저장 후]:', {
-                  ...militaryDetails,
-                  outcome: e.target.value,
-                })
-              }}
+              }
             />
           </FormGroup>
 

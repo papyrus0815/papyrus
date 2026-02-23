@@ -29,54 +29,19 @@ export const useFormEntities = () => {
       try {
         await Promise.all([
           getAllPersons()
-            .then((persons) => {
-              console.log('✅ 인물 목록 로드 성공:', persons.length, '명')
-              setAvailablePersons(persons)
-            })
-            .catch((error) => {
-              console.error('❌ 인물 목록 로드 실패:', error)
-              setAvailablePersons([])
-            }),
-          getAllCountries()
-            .then((countries) => {
-              setAvailableCountries(countries)
-            })
-            .catch((error) => {
-              console.error('국가 목록 로드 실패:', error)
-            }),
+            .then(setAvailablePersons)
+            .catch(() => setAvailablePersons([])),
+          getAllCountries().then(setAvailableCountries).catch(() => {}),
           getAllHistoricalCountries()
-            .then((hc) => {
-              setAvailableHistoricalCountries(hc)
-            })
-            .catch((error) => {
-              console.error('역사적 국가 목록 로드 실패:', error)
-            }),
+            .then(setAvailableHistoricalCountries)
+            .catch(() => {}),
           getAllEventCategories()
-            .then((categories) => {
-              console.log('✅ 카테고리 목록 로드 성공:', categories)
-              setDbCategories(categories)
-            })
-            .catch((error) => {
-              console.error('❌ 카테고리 목록 로드 실패:', error)
-              setDbCategories([])
-            }),
-          militaryUnitApi
-            .getAll()
-            .then((units) => {
-              setAvailableMilitaryUnits(units)
-            })
-            .catch((error) => {
-              console.error('군부대 목록 로드 실패:', error)
-            }),
+            .then(setDbCategories)
+            .catch(() => setDbCategories([])),
+          militaryUnitApi.getAll().then(setAvailableMilitaryUnits).catch(() => {}),
           getAllEvents()
-            .then((events) => {
-              console.log('✅ 사건 목록 로드 성공:', events.length, '건')
-              setAvailableEvents(events)
-            })
-            .catch((error) => {
-              console.error('❌ 사건 목록 로드 실패:', error)
-              setAvailableEvents([])
-            }),
+            .then(setAvailableEvents)
+            .catch(() => setAvailableEvents([])),
         ])
       } finally {
         setIsLoading(false)

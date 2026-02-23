@@ -20,7 +20,6 @@ export async function getAllJobs(): Promise<JobResponseDto[]> {
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
   } catch (error) {
-    console.error('❌ 직업 목록 조회 실패:', error)
     throw error
   }
 }
@@ -33,7 +32,6 @@ export async function getJobById(id: string): Promise<JobResponseDto> {
     const response = (await jobsApi.getById(apiConnection, id)) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 직업 조회 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -46,7 +44,6 @@ export async function createJob(data: CreateJobDto): Promise<JobResponseDto> {
     const response = (await jobsApi.create(apiConnection, data)) as any
     return response.data || response
   } catch (error) {
-    console.error('❌ 직업 생성 실패:', error)
     throw error
   }
 }
@@ -62,7 +59,6 @@ export async function updateJob(
     const response = (await jobsApi.update(apiConnection, id, data)) as any
     return response.data || response
   } catch (error) {
-    console.error(`❌ 직업 수정 실패 (ID: ${id}):`, error)
     throw error
   }
 }
@@ -74,7 +70,6 @@ export async function deleteJob(id: string): Promise<void> {
   try {
     await jobsApi.$delete(apiConnection, id)
   } catch (error) {
-    console.error(`❌ 직업 삭제 실패 (ID: ${id}):`, error)
     throw error
   }
 }

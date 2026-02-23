@@ -18,7 +18,8 @@ interface PersonStats {
   deceasedCount: number
   averageAge: number
   byRole: { [key: string]: number }
-  byEra: { [key: string]: number }
+  /** 출생 연도 기준 세기별 분포 (예: "20세기" -> 인원 수) */
+  byCentury: { [key: string]: number }
   recentPersons: Person[]
 }
 
@@ -27,7 +28,7 @@ interface PersonStats {
  * - 전체 인물 통계
  * - 성별/생존 현황
  * - 역할별 분포
- * - 시대별 분포
+ * - 세기별 분포
  * - 최근 등록 인물
  */
 const MIN_LOADING_MS = 1000
@@ -46,7 +47,7 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
     deceasedCount: 0,
     averageAge: 0,
     byRole: {},
-    byEra: {},
+    byCentury: {},
     recentPersons: [],
   })
 
@@ -59,8 +60,8 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
         const data = await personApi.getByCountryId(countryId)
         setPersons(data)
         calculateStats(data)
-      } catch (error) {
-        console.error('Failed to fetch persons:', error)
+      } catch {
+        // fetch failed, keep state as-is
       } finally {
         const elapsed = Date.now() - loadStartRef.current
         const remaining = Math.max(0, MIN_LOADING_MS - elapsed)
@@ -109,20 +110,23 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
       roleMap[role] = (roleMap[role] || 0) + 1
     })
 
-    // 시대별 분포 (출생 연도 기준)
-    const eraMap: { [key: string]: number } = {}
+    // 세기별 분포 (출생 연도 기준) — birthDate 또는 birthYear 모두 사용
+    const centuryMap: { [key: string]: number } = {}
     personList.forEach((p) => {
+      let year: number | null = null
       if (p.birthDate) {
-        const year = new Date(p.birthDate).getFullYear()
-        let era = '기타'
-        if (year < 1900) era = '1900년 이전'
-        else if (year < 1920) era = '1900-1919'
-        else if (year < 1940) era = '1920-1939'
-        else if (year < 1960) era = '1940-1959'
-        else if (year < 1980) era = '1960-1979'
-        else if (year < 2000) era = '1980-1999'
-        else era = '2000년 이후'
-        eraMap[era] = (eraMap[era] || 0) + 1
+        year = new Date(p.birthDate).getFullYear()
+      } else {
+        const by = (p as { birthYear?: number }).birthYear
+        if (typeof by === 'number' && !Number.isNaN(by)) year = by
+      }
+      if (year != null) {
+        // 1세기=1~100, 20세기=1901~2000, 21세기=2001~2100 (한국 통상 표기)
+        let label: string
+        if (year < 1500) label = '15세기 이전'
+        else if (year >= 2100) label = '22세기 이후'
+        else label = `${Math.floor(year / 100) + 1}세기`
+        centuryMap[label] = (centuryMap[label] || 0) + 1
       }
     })
 
@@ -143,7 +147,7 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
       deceasedCount: deceased,
       averageAge: avgAge,
       byRole: roleMap,
-      byEra: eraMap,
+      byCentury: centuryMap,
       recentPersons: recent,
     })
   }
@@ -199,13 +203,57 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
               position: 'relative',
             }}
           >
+      {/* 통계 합계 요약 */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+          borderRadius: '16px',
+          padding: '20px 24px',
+          color: '#fff',
+          boxShadow: '0 4px 20px rgba(99, 102, 241, 0.35)',
+          marginTop: noOverlap ? 0 : -80,
+          position: 'relative',
+          zIndex: 10,
+        }}
+      >
+        <div
+          style={{
+            fontSize: '13px',
+            fontWeight: 600,
+            opacity: 0.9,
+            marginBottom: '8px',
+          }}
+        >
+          인물 통계 합계
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '8px 24px',
+            fontSize: '15px',
+            fontWeight: 500,
+          }}
+        >
+          <span>
+            <strong>총 {stats.totalPersons}명</strong>
+          </span>
+          <span style={{ opacity: 0.8 }}>·</span>
+          <span>남 {stats.maleCount}명 / 여 {stats.femaleCount}명</span>
+          <span style={{ opacity: 0.8 }}>·</span>
+          <span>생존 {stats.aliveCount}명 / 사망 {stats.deceasedCount}명</span>
+          <span style={{ opacity: 0.8 }}>·</span>
+          <span>평균 나이 {stats.averageAge}세</span>
+        </div>
+      </div>
+
       {/* 통계 카드 그리드 */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(6, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
           gap: '16px',
-          marginTop: noOverlap ? 0 : -80,
           position: 'relative',
           zIndex: 10,
         }}
@@ -773,7 +821,7 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
         </div>
       </div>
 
-      {/* 시대별 분포 */}
+      {/* 출생 세기별 분포 */}
       <div
         style={{
           background: '#ffffff',
@@ -824,78 +872,114 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
                 margin: 0,
               }}
             >
-              출생 시대별 분포
+              출생 세기별 분포
             </h3>
             <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
-              출생 연도 기준 시대별 분류
+              출생 연도 기준 세기(世紀)별 분류
             </p>
           </div>
         </div>
         <div
           style={{
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(9, 1fr)',
+            gap: '12px 8px',
             alignItems: 'flex-end',
-            gap: '16px',
             height: '240px',
           }}
         >
-          {Object.entries(stats.byEra)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([era, count], idx) => {
-              const values = Object.values(stats.byEra)
-              const maxCount = values.length ? Math.max(0, ...values) : 0
+          {(() => {
+            const centuryOrder = [
+              '15세기 이전',
+              '15세기',
+              '16세기',
+              '17세기',
+              '18세기',
+              '19세기',
+              '20세기',
+              '21세기',
+              '22세기 이후',
+            ]
+            const maxCount = Math.max(
+              1,
+              ...Object.values(stats.byCentury),
+              0,
+            )
+            return centuryOrder.map((century, idx) => {
+              const count = stats.byCentury[century] ?? 0
               const height = maxCount > 0 ? (count / maxCount) * 200 : 0
               return (
                 <div
                   key={idx}
                   style={{
-                    flex: 1,
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '12px',
+                    gap: '8px',
+                    minWidth: 0,
                   }}
                 >
                   <div
                     style={{
                       width: '100%',
+                      minHeight: count > 0 ? '24px' : 0,
                       height: `${height}px`,
                       background:
-                        'linear-gradient(180deg, #3b82f6 0%, #60a5fa 100%)',
-                      borderRadius: '12px 12px 0 0',
+                        count > 0
+                          ? 'linear-gradient(180deg, #3b82f6 0%, #60a5fa 100%)'
+                          : 'rgba(226, 232, 240, 0.6)',
+                      borderRadius: '8px 8px 0 0',
                       display: 'flex',
                       alignItems: 'flex-start',
                       justifyContent: 'center',
-                      padding: '12px 8px',
-                      color: '#ffffff',
-                      fontSize: '18px',
+                      padding: count > 0 ? '8px 4px' : 0,
+                      color: count > 0 ? '#ffffff' : 'transparent',
+                      fontSize: '14px',
                       fontWeight: 700,
-                      boxShadow: '0 -2px 8px rgba(59, 130, 246, 0.3)',
+                      boxShadow:
+                        count > 0
+                          ? '0 -2px 8px rgba(59, 130, 246, 0.3)'
+                          : 'none',
                       transition: 'all 0.3s',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-6px)'
+                      if (count > 0) e.currentTarget.style.transform = 'translateY(-4px)'
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = 'translateY(0)'
                     }}
+                    title={`${century}: ${count}명`}
                   >
-                    {count}
+                    {count > 0 ? count : ''}
                   </div>
                   <span
                     style={{
-                      fontSize: '12px',
+                      fontSize: '11px',
                       fontWeight: 600,
                       color: '#64748b',
                       textAlign: 'center',
+                      lineHeight: 1.2,
                     }}
                   >
-                    {era}
+                    {century}
                   </span>
                 </div>
               )
-            })}
+            })
+          })()}
         </div>
+        {Object.keys(stats.byCentury).length === 0 && (
+          <div
+            style={{
+              marginTop: '16px',
+              textAlign: 'center',
+              color: '#94a3b8',
+              fontSize: '14px',
+            }}
+          >
+            출생 연도 정보가 있는 인물이 없습니다.
+          </div>
+        )}
       </div>
 
       {/* 최근 등록 인물 */}

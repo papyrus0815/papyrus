@@ -58,7 +58,6 @@ export const JobCategoryForm = ({ category, onClose }: JobCategoryFormProps) => 
       }
       onClose()
     } catch (err: any) {
-      console.error('Failed to save category:', err)
 
       if (
         err?.response?.data?.error?.message?.includes('Unique constraint failed')
