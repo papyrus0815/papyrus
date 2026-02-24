@@ -269,8 +269,6 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
     rank: null,
     departmentName: null,
     organizationId: null,
-    countryId: countryId ?? null,
-    historicalCountryId: historicalCountryId ?? null,
     establishedDate: null,
     abolishedDate: null,
   })
@@ -318,8 +316,6 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
         rank: def.rank ?? null,
         departmentName: def.departmentName ?? null,
         organizationId: def.organizationId ?? null,
-        countryId: def.countryId ?? countryId ?? null,
-        historicalCountryId: def.historicalCountryId ?? historicalCountryId ?? null,
         establishedDate: def.establishedDate ?? null,
         abolishedDate: def.abolishedDate ?? null,
       })
@@ -334,8 +330,6 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
         rank: null,
         departmentName: null,
         organizationId: null,
-        countryId: countryId ?? null,
-        historicalCountryId: historicalCountryId ?? null,
         establishedDate: null,
         abolishedDate: null,
       })

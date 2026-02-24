@@ -12,7 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiChevronLeft, FiChevronRight, FiEdit2, FiExternalLink, FiGlobe, FiSettings, FiUsers, FiX } from 'react-icons/fi'
+import { FiChevronLeft, FiChevronRight, FiEdit2, FiExternalLink, FiGlobe, FiLayers, FiSettings, FiUsers, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -24,6 +24,7 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal'
 import { SelectModal } from '@/shared/ui/select-modal'
 
+import { PositionCategoryCrudModal } from './PositionCategoryCrudModal'
 import { type PersonFormData, usePersonPage } from './use-person-page.hook'
 
 /**
@@ -139,6 +140,7 @@ export default function PersonPage() {
   ]
 
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+  const [showCategoryCrudModal, setShowCategoryCrudModal] = useState(false)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const prevDetailIdRef = useRef<string | null>(null)
@@ -608,6 +610,14 @@ export default function PersonPage() {
             )}
           </FilterChipsWrap>
           <ResultCount>{filteredPersons.length}명</ResultCount>
+          <FilterSettingsButton
+            type="button"
+            onClick={() => setShowCategoryCrudModal(true)}
+            aria-label="관직 카테고리 관리"
+            title="관직 카테고리 관리"
+          >
+            <FiLayers size={18} />
+          </FilterSettingsButton>
           <FilterSettingsButton
             type="button"
             onClick={() => setShowSettingsModal(true)}
@@ -1867,6 +1877,12 @@ export default function PersonPage() {
           </>,
           document.body,
         )}
+
+      {/* 관직 카테고리(1차·2차) CRUD 모달 */}
+      <PositionCategoryCrudModal
+        isOpen={showCategoryCrudModal}
+        onClose={() => setShowCategoryCrudModal(false)}
+      />
     </Wrap>
   )
 }

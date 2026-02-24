@@ -413,19 +413,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                 rank: true,
                 description: true,
                 departmentName: true,
-                country: {
-                  select: {
-                    id: true,
-                    name: true,
-                    isoCode: true,
-                  },
-                },
-                historicalCountry: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
               },
             },
             country: {
@@ -657,18 +644,6 @@ export class PersonPrismaRepository implements IPersonRepository {
                 title: true,
                 rank: true,
                 description: true,
-                country: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
-                historicalCountry: {
-                  select: {
-                    id: true,
-                    name: true,
-                  },
-                },
               },
             },
             country: {
@@ -1041,8 +1016,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       data: {
         personId: dto.personId,
         positionType: dto.positionType as any,
-        title: dto.title,
-        titleEn: dto.titleEn,
+        title: dto.title ?? undefined,
+        titleEn: dto.titleEn ?? undefined,
         showPositionInfo: dto.showPositionInfo !== false, // 기본값 true
         ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
         ...(countryFields.historicalCountryId != null && {
@@ -1177,23 +1152,14 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 관직 정의 목록 조회 (국가/역사적 국가별)
+   * 관직 정의 목록 조회 — 단일 레벨 전체 (재임 선택·관리 공통)
    */
-  async findPositionDefinitions(params: {
+  async findPositionDefinitions(_params?: {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]> {
-    const where: any = {}
-    if (params.countryId) where.countryId = params.countryId
-    if (params.historicalCountryId)
-      where.historicalCountryId = params.historicalCountryId
     const list = await this.prisma.governmentPositionDefinition.findMany({
-      where,
-      include: {
-        organization: true,
-        country: true,
-        historicalCountry: true,
-      },
+      include: { organization: true },
       orderBy: [{ rank: 'asc' }, { title: 'asc' }],
     })
     return list.map((row) => this.serializeDefinition(row))
@@ -1205,11 +1171,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   async findPositionDefinitionById(id: string): Promise<any | null> {
     const row = await this.prisma.governmentPositionDefinition.findUnique({
       where: { id },
-      include: {
-        organization: true,
-        country: true,
-        historicalCountry: true,
-      },
+      include: { organization: true },
     })
     return row ? this.serializeDefinition(row) : null
   }
@@ -1222,16 +1184,14 @@ export class PersonPrismaRepository implements IPersonRepository {
   ): Promise<any> {
     const row = await this.prisma.governmentPositionDefinition.create({
       data: {
+        positionType: dto.positionType as any,
         title: dto.title,
         titleEn: dto.titleEn ?? undefined,
         titleLocal: dto.titleLocal ?? undefined,
-        positionType: dto.positionType as any,
         description: dto.description ?? undefined,
         rank: dto.rank ?? undefined,
         departmentName: dto.departmentName ?? undefined,
         organizationId: dto.organizationId ?? undefined,
-        countryId: dto.countryId ?? undefined,
-        historicalCountryId: dto.historicalCountryId ?? undefined,
         establishedDate: dto.establishedDate
           ? new Date(dto.establishedDate)
           : undefined,
@@ -1239,11 +1199,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           ? new Date(dto.abolishedDate)
           : undefined,
       },
-      include: {
-        organization: true,
-        country: true,
-        historicalCountry: true,
-      },
+      include: { organization: true },
     })
     return this.serializeDefinition(row)
   }
@@ -1259,14 +1215,11 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.title !== undefined) data.title = dto.title
     if (dto.titleEn !== undefined) data.titleEn = dto.titleEn
     if (dto.titleLocal !== undefined) data.titleLocal = dto.titleLocal
-    if (dto.positionType !== undefined) data.positionType = dto.positionType
+    if (dto.positionType !== undefined) data.positionType = dto.positionType as any
     if (dto.description !== undefined) data.description = dto.description
     if (dto.rank !== undefined) data.rank = dto.rank
     if (dto.departmentName !== undefined) data.departmentName = dto.departmentName
     if (dto.organizationId !== undefined) data.organizationId = dto.organizationId
-    if (dto.countryId !== undefined) data.countryId = dto.countryId
-    if (dto.historicalCountryId !== undefined)
-      data.historicalCountryId = dto.historicalCountryId
     if (dto.establishedDate !== undefined)
       data.establishedDate = dto.establishedDate
         ? new Date(dto.establishedDate)
@@ -1278,11 +1231,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const row = await this.prisma.governmentPositionDefinition.update({
       where: { id },
       data,
-      include: {
-        organization: true,
-        country: true,
-        historicalCountry: true,
-      },
+      include: { organization: true },
     })
     return this.serializeDefinition(row)
   }

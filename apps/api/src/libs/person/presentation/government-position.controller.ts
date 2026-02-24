@@ -80,7 +80,7 @@ export class GovernmentPositionController {
   }
 
   /**
-   * 관직 정의 목록 조회 (국가/역사적 국가별)
+   * 관직 정의 목록 조회 (전역 단일 레벨)
    */
   @Get('definitions')
   async getDefinitions(

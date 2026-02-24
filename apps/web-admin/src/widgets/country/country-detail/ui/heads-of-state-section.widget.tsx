@@ -18,73 +18,16 @@ import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { LineageTree } from './lineage-tree.widget'
 
-/**
- * 직책명 → DB 유형(positionType) 매핑.
- * UI에서는 "직책"만 선택하고, 유형은 이 매핑으로 자동 설정.
- * (유형은 DB 필터/집계용으로만 사용되므로 사용자에게 중복으로 묻지 않음)
- */
-const POSITION_TITLE_TO_TYPE: Record<string, string> = {
-  '대통령': 'HEAD_OF_STATE',
-  '국왕': 'HEAD_OF_STATE',
-  '여왕': 'HEAD_OF_STATE',
-  '황제': 'HEAD_OF_STATE',
-  '여제': 'HEAD_OF_STATE',
-  '주석': 'HEAD_OF_STATE',
-  '총통': 'HEAD_OF_STATE',
-  '왕': 'HEAD_OF_STATE',
-  '총리': 'HEAD_OF_GOVERNMENT',
-  '국무총리': 'HEAD_OF_GOVERNMENT',
-  '수상': 'HEAD_OF_GOVERNMENT',
-  '대통령령': 'HEAD_OF_GOVERNMENT',
-  '섭정': 'REGENT',
-  '왕세자': 'HEIR_APPARENT',
-  '왕세자비': 'HEIR_APPARENT',
-  '공작': 'ROYAL_NOBLE_TITLE',
-  '대공': 'ROYAL_NOBLE_TITLE',
-  'OTHER': 'OTHER',
-}
+/** 수반 등록 시 직책 선택에 사용할 관직 유형 (DB 관직 정의 필터용) */
+const HEADS_POSITION_TYPES = new Set([
+  'HEAD_OF_STATE',
+  'HEAD_OF_GOVERNMENT',
+  'REGENT',
+  'HEIR_APPARENT',
+  'ROYAL_NOBLE_TITLE',
+])
 
-/** 직책명: 선택 목록 (대통령·국왕·총리 등). 기타 선택 시 직접 입력 가능 */
-const POSITION_TITLE_OPTIONS: SelectOption<string>[] = [
-  { value: '대통령', label: '대통령' },
-  { value: '국왕', label: '국왕' },
-  { value: '여왕', label: '여왕' },
-  { value: '황제', label: '황제' },
-  { value: '여제', label: '여제' },
-  { value: '총리', label: '총리' },
-  { value: '국무총리', label: '국무총리' },
-  { value: '수상', label: '수상' },
-  { value: '대통령령', label: '대통령령' },
-  { value: '주석', label: '주석' },
-  { value: '총통', label: '총통' },
-  { value: '왕', label: '왕' },
-  { value: '공작', label: '공작' },
-  { value: '대공', label: '대공' },
-  { value: '섭정', label: '섭정' },
-  { value: '왕세자', label: '왕세자' },
-  { value: '왕세자비', label: '왕세자비' },
-  { value: 'OTHER', label: '기타 (직접 입력)' },
-]
-
-const POSITION_TITLE_EN_MAP: Record<string, string> = {
-  '대통령': 'President',
-  '국왕': 'King',
-  '여왕': 'Queen',
-  '황제': 'Emperor',
-  '여제': 'Empress',
-  '총리': 'Prime Minister',
-  '국무총리': 'Prime Minister',
-  '수상': 'Prime Minister',
-  '대통령령': 'President',
-  '주석': 'Chairman',
-  '총통': 'President',
-  '왕': 'King',
-  '공작': 'Duke',
-  '대공': 'Grand Duke',
-  '섭정': 'Regent',
-  '왕세자': 'Crown Prince',
-  '왕세자비': 'Crown Princess',
-}
+const OTHER_POSITION_VALUE = 'OTHER'
 
 interface HeadsOfStateSectionProps {
   country: UnifiedCountry
@@ -114,8 +57,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const [startDateModalOpen, setStartDateModalOpen] = useState(false)
   const [endDateModalOpen, setEndDateModalOpen] = useState(false)
   const [selectedPersonId, setSelectedPersonId] = useState('')
-  /** 직책명: 목록에서 선택한 키('' | '대통령' | ... | 'OTHER'). 'OTHER'이면 아래 직접 입력 사용 */
-  const [selectedPositionTitleKey, setSelectedPositionTitleKey] = useState('')
+  /** 직책: DB 관직 정의 ID. null이면 기타(직접 입력) */
+  const [selectedPositionDefinitionId, setSelectedPositionDefinitionId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [titleEn, setTitleEn] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -126,8 +69,6 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   /** 사건 페이지(역대 수반 토글)에 이 재임을 노출할지 여부 */
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const isMonarchPosition = ['국왕', '여왕', '황제', '여제', '왕'].includes(selectedPositionTitleKey)
 
   const { data: tenures = [], isLoading } = useQuery({
     queryKey: ['tenures-by-country', countryId, historicalCountryId],
@@ -174,11 +115,42 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     enabled: personSelectModalOpen,
   })
 
+  /** 해당 국가의 관직 정의(DB) — 직책명 선택 목록으로 사용 */
+  const { data: positionDefinitions = [] } = useQuery({
+    queryKey: ['position-definitions', countryId, historicalCountryId],
+    queryFn: () =>
+      personCareerApi.getPositionDefinitions({
+        countryId,
+        historicalCountryId,
+      }),
+    enabled: !!countryId || !!historicalCountryId,
+  })
+
+  /** 직책 선택 옵션: DB 관직 정의(수반 관련 유형) + 기타 */
+  const positionTitleOptions: SelectOption<string>[] = React.useMemo(() => {
+    const defs = (positionDefinitions as any[]).filter((d) =>
+      HEADS_POSITION_TYPES.has(d.positionType),
+    )
+    const byDef = defs.map((d) => ({ value: d.id, label: d.title }))
+    return [...byDef, { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' }]
+  }, [positionDefinitions])
+
   const refetch = () => {
     queryClient.invalidateQueries({
       queryKey: ['tenures-by-country', countryId, historicalCountryId],
     })
+    queryClient.invalidateQueries({
+      queryKey: ['position-definitions', countryId, historicalCountryId],
+    })
   }
+
+  const selectedPositionDefinition = selectedPositionDefinitionId
+    ? (positionDefinitions as any[]).find((d) => d.id === selectedPositionDefinitionId)
+    : null
+
+  const isMonarchPosition =
+    selectedPositionDefinition?.positionType === 'HEAD_OF_STATE' ||
+    selectedPositionDefinitionId === null
 
   /** 목록에서 재임 클릭 시 수정 폼으로 전환 + 데이터 채우기 */
   const editingTenure = editingTenureId
@@ -189,17 +161,17 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     if (!editingTenureId || !editingTenure) return
     const t = editingTenure as any
     setSelectedPersonId(t.personId || '')
-    const titleVal = t.title || t.position?.title || ''
-    const key =
-      POSITION_TITLE_OPTIONS.find((o) => o.label === titleVal)?.value ||
-      (titleVal ? 'OTHER' : '')
-    setSelectedPositionTitleKey(key)
-    if (key === 'OTHER') {
-      setTitle(titleVal)
-      setTitleEn(t.titleEn || t.position?.titleEn || '')
+    const defId = t.positionDefinitionId || t.position?.id
+    const defs = positionDefinitions as any[]
+    const matchedDef = defId && defs.find((d) => d.id === defId)
+    if (matchedDef) {
+      setSelectedPositionDefinitionId(matchedDef.id)
+      setTitle(matchedDef.title || '')
+      setTitleEn(matchedDef.titleEn || '')
     } else {
-      setTitle(titleVal)
-      setTitleEn(POSITION_TITLE_EN_MAP[titleVal] ?? '')
+      setSelectedPositionDefinitionId(null)
+      setTitle(t.title || t.position?.title || '')
+      setTitleEn(t.titleEn || t.position?.titleEn || '')
     }
     setStartDate(t.startDate || '')
     setEndDate(t.endDate || '')
@@ -207,26 +179,28 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     setRegnalNumber(t.regnalNumber != null ? String(t.regnalNumber) : '')
     setRegnalName(getRegnalNameFromNotes(t.notes) || '')
     setShowOnEventsPage(t.showPositionInfo !== false)
-  }, [editingTenureId, editingTenure])
+  }, [editingTenureId, editingTenure, positionDefinitions])
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedPersonId || !title.trim() || !startDate) {
-      toast.error('인물, 직책명, 취임일을 입력해주세요.')
+    const hasDefinition = !!selectedPositionDefinitionId
+    const hasTitle = title.trim() !== ''
+    if (!selectedPersonId || (!hasDefinition && !hasTitle) || !startDate) {
+      toast.error('인물, 직책명(또는 기타 직접 입력), 취임일을 입력해주세요.')
       return
     }
     setIsSubmitting(true)
     try {
-      const resolvedPositionType =
-        selectedPositionTitleKey === 'OTHER'
-          ? 'OTHER'
-          : (POSITION_TITLE_TO_TYPE[selectedPositionTitleKey] ?? 'OTHER')
+      const def = selectedPositionDefinition
+      const resolvedPositionType = def ? def.positionType : 'OTHER'
       const notesValue = regnalName.trim() ? `왕명: ${regnalName.trim()}` : undefined
+      // 정의 선택 시 직함은 2차 카테고리(Definition)에만 두고 Tenure에는 저장하지 않음
       const payload = {
         personId: selectedPersonId,
         positionType: resolvedPositionType as any,
-        title: title.trim(),
-        titleEn: titleEn.trim() || undefined,
+        positionDefinitionId: def?.id || undefined,
+        title: def ? undefined : title.trim() || undefined,
+        titleEn: def ? undefined : (titleEn.trim() || undefined),
         countryId,
         historicalCountryId,
         startDate,
@@ -257,7 +231,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const resetForm = () => {
     setEditingTenureId(null)
     setSelectedPersonId('')
-    setSelectedPositionTitleKey('')
+    setSelectedPositionDefinitionId(null)
     setTitle('')
     setTitleEn('')
     setStartDate('')
@@ -284,24 +258,25 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
 
   const handlePositionTitleSelect = (value: string) => {
     setPositionTitleModalOpen(false)
-    setSelectedPositionTitleKey(value)
-    if (value === 'OTHER') {
+    if (value === OTHER_POSITION_VALUE) {
+      setSelectedPositionDefinitionId(null)
       setTitle('')
       setTitleEn('')
     } else {
-      const opt = POSITION_TITLE_OPTIONS.find((o) => o.value === value)
-      if (opt) {
-        setTitle(opt.label)
-        setTitleEn(POSITION_TITLE_EN_MAP[value] ?? '')
+      const def = (positionDefinitions as any[]).find((d) => d.id === value)
+      if (def) {
+        setSelectedPositionDefinitionId(def.id)
+        setTitle(def.title || '')
+        setTitleEn(def.titleEn || '')
       }
     }
   }
 
   const positionTitleLabel =
-    selectedPositionTitleKey === 'OTHER'
+    selectedPositionDefinitionId === null
       ? (title ? `기타: ${title}` : '기타 (직접 입력)')
-      : selectedPositionTitleKey
-        ? POSITION_TITLE_OPTIONS.find((o) => o.value === selectedPositionTitleKey)?.label ?? title
+      : selectedPositionDefinition
+        ? selectedPositionDefinition.title
         : '직책 선택'
 
   const formatDate = (d: string) => {
@@ -664,7 +639,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
               <SubmitButton
                 type="submit"
                 form="heads-of-state-register-form"
-                disabled={isSubmitting || !selectedPersonId || !title.trim() || !startDate}
+                disabled={isSubmitting || !selectedPersonId || (!title.trim() && !selectedPositionDefinitionId) || !startDate}
               >
                 <FiSave size={16} />
                 {isSubmitting ? '저장 중…' : '저장'}
@@ -712,7 +687,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
               <SelectTriggerButton
                 type="button"
                 onClick={() => setPositionTitleModalOpen(true)}
-                $hasValue={!!selectedPositionTitleKey}
+                $hasValue={selectedPositionDefinitionId != null || title.trim() !== ''}
               >
                 <span>{positionTitleLabel}</span>
                 <FiChevronDown size={20} />
@@ -731,7 +706,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                 </FieldControl>
               </FieldRow>
             )}
-            {selectedPositionTitleKey === 'OTHER' && (
+            {selectedPositionDefinitionId === null && (
               <>
                 <FieldRow>
                   <FieldLabel>직책명 (직접 입력)</FieldLabel>
@@ -856,8 +831,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         isOpen={positionTitleModalOpen}
         onClose={() => setPositionTitleModalOpen(false)}
         title="직책명 선택"
-        options={POSITION_TITLE_OPTIONS}
-        selectedValue={selectedPositionTitleKey}
+        options={positionTitleOptions}
+        selectedValue={selectedPositionDefinitionId ?? OTHER_POSITION_VALUE}
         onSelect={handlePositionTitleSelect}
       />
 

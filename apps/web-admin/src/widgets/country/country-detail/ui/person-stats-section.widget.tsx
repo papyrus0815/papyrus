@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { FiSettings } from 'react-icons/fi'
 
+import { PositionCategoryCrudModal } from '@/pages/persons/PositionCategoryCrudModal'
 import { type Person, personApi } from '@/shared/api/person'
 
 interface PersonStatsProps {
@@ -37,6 +39,7 @@ const FADE_DURATION = 0.35
 export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
   const [persons, setPersons] = useState<Person[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [showCategoryCrudModal, setShowCategoryCrudModal] = useState(false)
   const loadStartRef = useRef<number>(Date.now())
   const minLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [stats, setStats] = useState<PersonStats>({
@@ -213,18 +216,53 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
           boxShadow: '0 4px 20px rgba(99, 102, 241, 0.35)',
           marginTop: noOverlap ? 0 : -80,
           position: 'relative',
-          zIndex: 10,
+          zIndex: 11,
         }}
       >
         <div
           style={{
-            fontSize: '13px',
-            fontWeight: 600,
-            opacity: 0.9,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             marginBottom: '8px',
           }}
         >
-          인물 통계 합계
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              opacity: 0.9,
+            }}
+          >
+            인물 통계 합계
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setShowCategoryCrudModal(true)
+            }}
+            aria-label="관직 카테고리 관리"
+            title="관직 카테고리 관리"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 36,
+              height: 36,
+              padding: 0,
+              border: 'none',
+              borderRadius: '8px',
+              background: 'rgba(255,255,255,0.2)',
+              color: '#fff',
+              cursor: 'pointer',
+              position: 'relative',
+              zIndex: 12,
+            }}
+          >
+            <FiSettings size={20} />
+          </button>
         </div>
         <div
           style={{
@@ -1153,6 +1191,10 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
           </motion.div>
         )}
       </AnimatePresence>
+      <PositionCategoryCrudModal
+        isOpen={showCategoryCrudModal}
+        onClose={() => setShowCategoryCrudModal(false)}
+      />
     </div>
   )
 }

@@ -8,6 +8,7 @@ import {
   seedContinents,
   seedCountries,
   seedEventCategories,
+  seedGovernmentPositionDefinitions,
   seedHistoricalCountries,
 } from './seeds'
 
@@ -51,10 +52,13 @@ async function main() {
         // 3. 역사적 국가 시딩
         await seedHistoricalCountries(prisma)
 
-        // 4. 이벤트 카테고리 시딩
+        // 4. 관직 정의 시딩 (1차·2차 한 테이블: 국가원수/정부수반 + 국왕, 황제, 대통령 등)
+        await seedGovernmentPositionDefinitions(prisma)
+
+        // 6. 이벤트 카테고리 시딩
         await seedEventCategories(prisma)
 
-        // 5. 어드민 계정 시딩
+        // 7. 어드민 계정 시딩
         await seedAdmin(prisma)
 
         console.log('='.repeat(60))

@@ -248,8 +248,6 @@ export interface CreateGovernmentPositionDefinitionDto {
   rank?: number | null
   departmentName?: string | null
   organizationId?: string | null
-  countryId?: string | null
-  historicalCountryId?: string | null
   establishedDate?: string | null
   abolishedDate?: string | null
 }
@@ -266,8 +264,6 @@ export interface UpdateGovernmentPositionDefinitionDto {
   rank?: number | null
   departmentName?: string | null
   organizationId?: string | null
-  countryId?: string | null
-  historicalCountryId?: string | null
   establishedDate?: string | null
   abolishedDate?: string | null
 }
@@ -446,13 +442,12 @@ export const personCareerApi = {
   },
 
   /**
-   * 관직 정의 목록 조회
-   * GET /government-positions/definitions?countryId= | historicalCountryId=
+   * 관직 정의 목록 조회 (전역 단일 레벨)
    */
   getPositionDefinitions: async (params: {
     countryId?: string
     historicalCountryId?: string
-  }) => {
+  } = {}) => {
     const q = new URLSearchParams()
     if (params.countryId) q.set('countryId', params.countryId)
     if (params.historicalCountryId) q.set('historicalCountryId', params.historicalCountryId)

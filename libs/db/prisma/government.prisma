@@ -118,68 +118,41 @@ enum TenureEndReason {
 }
 
 // ========================
-// GovernmentPositionDefinition
+// GovernmentPositionDefinition (단일 레벨: 직함 + enum 분류)
 // ========================
 
-/// 정부 직위 정의 모델
-/// 특정 국가의 특정 관직을 정의합니다.
-/// 예: "대한민국 대통령", "조선 영의정", "일본 내각총리대신"
+/// 관직 정의 — 직함(대통령, 총리, 국왕 등) 단일 레벨. 분류는 positionType(enum)으로만 구분.
+/// 재임(Tenure)은 이 테이블 행을 참조. 국가 무관 전역 목록.
 model GovernmentPositionDefinition {
-  /// 고유 식별자 (PK)
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 직위명 (예: "대통령", "국무총리", "외교부 장관", "영의정")
-  title String @db.VarChar(100)
-
-  /// 영문 직위명
-  titleEn String? @map("title_en") @db.VarChar(100)
-
-  /// 현지어 직위명
-  titleLocal String? @map("title_local") @db.VarChar(100)
-
-  /// 직위 유형
+  /// 유형(enum). 직함의 분류 (국가원수, 정부수반 등)
   positionType GovernmentPositionType @map("position_type")
 
-  /// 설명/개요
+  /// 직함 표시명
+  title String @db.VarChar(100)
+
+  titleEn    String? @map("title_en") @db.VarChar(100)
+  titleLocal String? @map("title_local") @db.VarChar(100)
+
   description String? @db.Text
+  rank        Int?    @default(999)
 
-  /// 직급/서열 (숫자가 작을수록 높은 직위, 예: 1=대통령, 2=국무총리)
-  rank Int? @default(999)
-
-  /// 부서/부처명 (예: "외교부", "국방부", "이조") — 표시/과거명용, organizationId와 보완
   departmentName String? @map("department_name") @db.VarChar(100)
-
-  /// 소속 행정기구 (Organization FK). 있으면 표시 시 조직명 사용, 없으면 departmentName 사용
   organizationId String? @map("organization_id") @db.Char(36)
 
-  /// 소속 국가 (현대 국가)
-  countryId String? @map("country_id") @db.Char(36)
-
-  /// 소속 국가 (역사적 국가)
-  historicalCountryId String? @map("historical_country_id") @db.Char(36)
-
-  /// 직위 설치일 (이 직위가 생긴 날짜)
   establishedDate DateTime? @map("established_date")
+  abolishedDate   DateTime? @map("abolished_date")
 
-  /// 직위 폐지일 (이 직위가 없어진 날짜)
-  abolishedDate DateTime? @map("abolished_date")
+  organization Organization? @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
-  //--- 관계 필드
-  organization      Organization?      @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
-  country           Country?           @relation("GovernmentPositionCountry", fields: [countryId], references: [id], onDelete: SetNull)
-  historicalCountry HistoricalCountry? @relation("GovernmentPositionHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
-
-  /// 이 직위의 역대 재임자들
   tenures GovernmentPositionTenure[]
 
-  //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId], name: "idx_gov_pos_def_organizationId")
-  @@index([countryId], name: "idx_gov_pos_def_countryId")
-  @@index([historicalCountryId], name: "idx_gov_pos_def_histCountryId")
-  @@index([positionType], name: "idx_gov_pos_def_type")
+  @@index([positionType], name: "idx_gov_pos_def_positionType")
   @@index([rank], name: "idx_gov_pos_def_rank")
   @@map("government_position_definition")
 }
@@ -207,10 +180,10 @@ model GovernmentPositionTenure {
   /// 직위 타입 (필수)
   positionType GovernmentPositionType @map("position_type")
 
-  /// 직위명 (필수) - 예: "대통령", "국왕", "총리", "황제"
-  title String @db.VarChar(100)
+  /// 직위명 — positionDefinitionId가 있으면 정의에서 조회, 없으면(기타) 여기 값 사용
+  title String? @db.VarChar(100)
 
-  /// 영문 직위명
+  /// 영문 직위명 (기타 직접 입력 시에만 사용)
   titleEn String? @map("title_en") @db.VarChar(100)
 
   /// 사건 타임라인에 직책 정보 표시 여부 (기본값: true)

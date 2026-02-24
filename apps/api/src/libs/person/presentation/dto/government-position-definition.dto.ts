@@ -1,13 +1,11 @@
 import {
   IsString,
   IsOptional,
-  IsEnum,
   IsInt,
   IsDateString,
   IsUUID,
   Min,
 } from 'class-validator'
-import { GovernmentPositionType } from '@prisma/client'
 
 export class CreateGovernmentPositionDefinitionDto {
   @IsString()
@@ -21,8 +19,8 @@ export class CreateGovernmentPositionDefinitionDto {
   @IsString()
   titleLocal?: string | null
 
-  @IsEnum(GovernmentPositionType)
-  positionType!: GovernmentPositionType
+  @IsString()
+  positionType!: string // GovernmentPositionType enum
 
   @IsOptional()
   @IsString()
@@ -40,14 +38,6 @@ export class CreateGovernmentPositionDefinitionDto {
   @IsOptional()
   @IsUUID()
   organizationId?: string | null
-
-  @IsOptional()
-  @IsUUID()
-  countryId?: string | null
-
-  @IsOptional()
-  @IsUUID()
-  historicalCountryId?: string | null
 
   @IsOptional()
   @IsDateString()
@@ -72,8 +62,8 @@ export class UpdateGovernmentPositionDefinitionDto {
   titleLocal?: string | null
 
   @IsOptional()
-  @IsEnum(GovernmentPositionType)
-  positionType?: GovernmentPositionType
+  @IsString()
+  positionType?: string
 
   @IsOptional()
   @IsString()
@@ -91,14 +81,6 @@ export class UpdateGovernmentPositionDefinitionDto {
   @IsOptional()
   @IsUUID()
   organizationId?: string | null
-
-  @IsOptional()
-  @IsUUID()
-  countryId?: string | null
-
-  @IsOptional()
-  @IsUUID()
-  historicalCountryId?: string | null
 
   @IsOptional()
   @IsDateString()
