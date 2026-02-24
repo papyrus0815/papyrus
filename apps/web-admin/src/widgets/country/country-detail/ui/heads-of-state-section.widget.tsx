@@ -69,6 +69,12 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   /** 사건 페이지(역대 수반 토글)에 이 재임을 노출할지 여부 */
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  /** 계보도에서 표시할 직책(직책명). 직책별로 계보를 분리해 표시 */
+  const [selectedLineagePositionLabel, setSelectedLineagePositionLabel] = useState<string | null>(
+    null,
+  )
+  /** 역대 수반 페이지에서 사용자가 선택한 직책. null = 전체 */
+  const [selectedPositionFilter, setSelectedPositionFilter] = useState<string | null>(null)
 
   const { data: tenures = [], isLoading } = useQuery({
     queryKey: ['tenures-by-country', countryId, historicalCountryId],
@@ -147,6 +153,28 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const selectedPositionDefinition = selectedPositionDefinitionId
     ? (positionDefinitions as any[]).find((d) => d.id === selectedPositionDefinitionId)
     : null
+
+  /** 직책명별로 묶은 재임 목록 (목록 뷰 섹션·계보 직책 선택용). 쇼군/대통령/총리/국왕 등 직책별 구분 */
+  const tenuresByPosition = React.useMemo(() => {
+    const defs = positionDefinitions as any[]
+    const getKey = (t: any) => {
+      const defId = t.positionDefinitionId ?? t.position?.id
+      const def = defId && defs.length ? defs.find((d: any) => d.id === defId) : null
+      if (def?.title) return def.title.trim()
+      const title = (t.title || t.position?.title || '').trim()
+      return title || '(기타)'
+    }
+    const map = new Map<string, any[]>()
+    tenures.forEach((t: any) => {
+      const key = getKey(t)
+      const list = map.get(key) ?? []
+      list.push(t)
+      map.set(key, list)
+    })
+    return Array.from(map.entries())
+      .map(([label, list]) => ({ label, tenures: list }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ko'))
+  }, [tenures, positionDefinitions])
 
   const isMonarchPosition =
     selectedPositionDefinition?.positionType === 'HEAD_OF_STATE' ||
@@ -323,9 +351,17 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
 
   const selectedPerson = persons.find((p: any) => p.id === selectedPersonId) ?? null
 
-  /** 계보도용: 대수/재위번호 있는 재임만, 대수 순 정렬 */
+  /** 상단 직책 선택과 계보 직책 선택 통합: 사용자가 선택한 직책이 있으면 우선 사용 */
+  const effectivePositionLabel =
+    selectedPositionFilter ?? selectedLineagePositionLabel
+
+  /** 계보도에서 선택된 직책의 재임만 사용. 직책별로 계보 분리(국왕 계보 / 쇼군 계보 등) */
   const lineageTenures = React.useMemo(() => {
-    const withOrder = tenures.filter(
+    const source =
+      effectivePositionLabel != null
+        ? tenuresByPosition.find((g) => g.label === effectivePositionLabel)?.tenures ?? []
+        : tenures
+    const withOrder = source.filter(
       (t: any) => t.termNumber != null || t.regnalNumber != null,
     )
     return [...withOrder].sort((a: any, b: any) => {
@@ -336,7 +372,25 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       const startB = b.startDate ? new Date(b.startDate).getTime() : 0
       return startA - startB
     })
-  }, [tenures])
+  }, [tenures, tenuresByPosition, effectivePositionLabel])
+
+  /** 계보 표시 가능한 직책 그룹(대수/재위번호 있는 재임이 하나 이상인 그룹) */
+  const lineageEligibleGroups = React.useMemo(
+    () =>
+      tenuresByPosition.filter((g) =>
+        g.tenures.some((t: any) => t.termNumber != null || t.regnalNumber != null),
+      ),
+    [tenuresByPosition],
+  )
+
+  // 계보 직책 선택 초기값: lineage 가능한 첫 번째 직책
+  useEffect(() => {
+    if (lineageEligibleGroups.length === 0) return
+    const labels = new Set(lineageEligibleGroups.map((g) => g.label))
+    if (selectedLineagePositionLabel == null || !labels.has(selectedLineagePositionLabel)) {
+      setSelectedLineagePositionLabel(lineageEligibleGroups[0].label)
+    }
+  }, [lineageEligibleGroups, selectedLineagePositionLabel])
 
   /** person에서 부모 ID (camelCase/snake_case 모두 지원) */
   const getParentId = (p: any, personIds: Set<string>) => {
@@ -446,7 +500,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     return map
   }, [lineageTenures, personById])
 
-  const showLineageTab = tenures.length > 0 && lineageTenures.length > 0
+  const showLineageTab = lineageEligibleGroups.length > 0
 
   return (
     <SectionOuter $embedded={embedded}>
@@ -495,6 +549,56 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                 <ListWrap>
                   <ListHead>
                     <ListHeadLeft>
+                      {tenuresByPosition.length > 0 && (
+                        tenuresByPosition.length <= 5 ? (
+                          <PositionFilterTabs role="tablist" aria-label="직책 선택">
+                            <PositionFilterTab
+                              role="tab"
+                              type="button"
+                              $active={selectedPositionFilter == null}
+                              onClick={() => {
+                                setSelectedPositionFilter(null)
+                                setSelectedLineagePositionLabel(
+                                  lineageEligibleGroups.length > 0 ? lineageEligibleGroups[0].label : null,
+                                )
+                              }}
+                            >
+                              전체
+                            </PositionFilterTab>
+                            {tenuresByPosition.map((g) => (
+                              <PositionFilterTab
+                                key={g.label}
+                                role="tab"
+                                type="button"
+                                $active={selectedPositionFilter === g.label}
+                                onClick={() => {
+                                  setSelectedPositionFilter(g.label)
+                                  setSelectedLineagePositionLabel(g.label)
+                                }}
+                              >
+                                {g.label} ({g.tenures.length})
+                              </PositionFilterTab>
+                            ))}
+                          </PositionFilterTabs>
+                        ) : (
+                          <PositionFilterSelect
+                            value={selectedPositionFilter ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value || null
+                              setSelectedPositionFilter(v)
+                              if (v) setSelectedLineagePositionLabel(v)
+                            }}
+                            aria-label="직책 선택"
+                          >
+                            <option value="">전체</option>
+                            {tenuresByPosition.map((g) => (
+                              <option key={g.label} value={g.label}>
+                                {g.label} ({g.tenures.length}명)
+                              </option>
+                            ))}
+                          </PositionFilterSelect>
+                        )
+                      )}
                       {showLineageTab && (
                         <ViewModeTabs role="tablist" aria-label="보기 방식">
                           <ViewModeTab
@@ -517,9 +621,19 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                       )}
                       <ListTitle>
                         {listViewMode === 'lineage' && lineageTenures.length > 0
-                          ? '역대 수반 계보'
+                          ? effectivePositionLabel
+                            ? `${effectivePositionLabel} 계보`
+                            : '역대 수반 계보'
                           : '재임 목록'}
-                        {tenures.length > 0 && <span className="count">{tenures.length}건</span>}
+                        {tenures.length > 0 && (
+                          <span className="count">
+                            {selectedPositionFilter != null
+                              ? tenuresByPosition.find((g) => g.label === selectedPositionFilter)
+                                  ?.tenures.length ?? 0
+                              : tenures.length}
+                            건
+                          </span>
+                        )}
                       </ListTitle>
                     </ListHeadLeft>
                     <AddTenureButton type="button" onClick={() => setView('register')}>
@@ -537,6 +651,23 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                     </EmptyState>
                   ) : listViewMode === 'lineage' && lineageTenures.length > 0 ? (
                     <LineageWrap>
+                      {lineageEligibleGroups.length > 1 && selectedPositionFilter == null && (
+                        <LineageLegend style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <strong>직책</strong>
+                          <PositionFilterSelect
+                            value={selectedLineagePositionLabel ?? ''}
+                            onChange={(e) =>
+                              setSelectedLineagePositionLabel(e.target.value || null)}
+                            style={{ minWidth: 120 }}
+                          >
+                            {lineageEligibleGroups.map((g) => (
+                              <option key={g.label} value={g.label}>
+                                {g.label} 계보
+                              </option>
+                            ))}
+                          </PositionFilterSelect>
+                        </LineageLegend>
+                      )}
                       <LineageLegend>
                         <strong>가계도</strong> — 선으로 연결된 위→아래가 부모→자식 관계입니다. 카드의 <strong>재위 연도</strong>가 강조되어 있습니다. 인물에 부·모가 등록되어 있어야 선이 연결됩니다.
                       </LineageLegend>
@@ -554,66 +685,78 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                       />
                     </LineageWrap>
                   ) : (
-                    <List>
-              {tenures.map((t: any) => {
-                const titleText = t.title || t.position?.title || '—'
-                const regnalFromNotes = getRegnalNameFromNotes(t.notes)
-                const countryLabel =
-                  !isHistorical &&
-                  (t.country?.name || t.historicalCountry?.name)
-                    ? t.country?.name || t.historicalCountry?.name
-                    : null
-                return (
-                  <ListItem
-                    key={t.id}
-                    onClick={() => {
-                      setEditingTenureId(t.id)
-                      setView('register')
-                    }}
-                  >
-                    <ItemAvatar $hasImage={!!t.person?.profileImageUrl}>
-                      {t.person?.profileImageUrl ? (
-                        <img src={t.person.profileImageUrl} alt="" />
-                      ) : (
-                        <FiUser size={22} />
-                      )}
-                    </ItemAvatar>
-                    <ListItemBody>
-                      <ItemRow>
-                        <ItemName>
-                          {getPersonName(t.person)}
-                          {(t.termNumber != null || t.regnalNumber != null) && (
-                            <ItemTermBadge>
-                              {t.regnalNumber != null
-                                ? `${t.regnalNumber}세`
-                                : `제${t.termNumber}대`}
-                            </ItemTermBadge>
-                          )}
-                        </ItemName>
-                        <ItemDates>
-                          <FiCalendar size={14} />
-                          {formatDate(t.startDate)}
-                          <span className="sep">~</span>
-                          {t.endDate ? formatDate(t.endDate) : '현재'}
-                        </ItemDates>
-                      </ItemRow>
-                      <ItemRow>
-                        <ItemTitleBadge>{titleText}</ItemTitleBadge>
-                        {countryLabel != null && (
-                          <ItemCountryBadge>{countryLabel}</ItemCountryBadge>
-                        )}
-                        {regnalFromNotes && (
-                          <ItemRegnalName>왕명: {regnalFromNotes}</ItemRegnalName>
-                        )}
-                      </ItemRow>
-                    </ListItemBody>
-                    <ItemAction aria-label="인물 보기">
-                      <FiChevronRight size={20} strokeWidth={2.5} />
-                    </ItemAction>
-                  </ListItem>
-                )
-              })}
-                    </List>
+                    <>
+                      {(selectedPositionFilter != null
+                        ? tenuresByPosition.filter((g) => g.label === selectedPositionFilter)
+                        : tenuresByPosition
+                      ).map(({ label, tenures: groupTenures }) => (
+                        <div key={label} style={{ marginBottom: 24 }}>
+                          <PositionSectionTitle>
+                            {label} <span className="count">({groupTenures.length}명)</span>
+                          </PositionSectionTitle>
+                          <List>
+                            {groupTenures.map((t: any) => {
+                              const titleText = t.title || t.position?.title || '—'
+                              const regnalFromNotes = getRegnalNameFromNotes(t.notes)
+                              const countryLabel =
+                                !isHistorical &&
+                                (t.country?.name || t.historicalCountry?.name)
+                                  ? t.country?.name || t.historicalCountry?.name
+                                  : null
+                              return (
+                                <ListItem
+                                  key={t.id}
+                                  onClick={() => {
+                                    setEditingTenureId(t.id)
+                                    setView('register')
+                                  }}
+                                >
+                                  <ItemAvatar $hasImage={!!t.person?.profileImageUrl}>
+                                    {t.person?.profileImageUrl ? (
+                                      <img src={t.person.profileImageUrl} alt="" />
+                                    ) : (
+                                      <FiUser size={22} />
+                                    )}
+                                  </ItemAvatar>
+                                  <ListItemBody>
+                                    <ItemRow>
+                                      <ItemName>
+                                        {getPersonName(t.person)}
+                                        {(t.termNumber != null || t.regnalNumber != null) && (
+                                          <ItemTermBadge>
+                                            {t.regnalNumber != null
+                                              ? `${t.regnalNumber}세`
+                                              : `제${t.termNumber}대`}
+                                          </ItemTermBadge>
+                                        )}
+                                      </ItemName>
+                                      <ItemDates>
+                                        <FiCalendar size={14} />
+                                        {formatDate(t.startDate)}
+                                        <span className="sep">~</span>
+                                        {t.endDate ? formatDate(t.endDate) : '현재'}
+                                      </ItemDates>
+                                    </ItemRow>
+                                    <ItemRow>
+                                      <ItemTitleBadge>{titleText}</ItemTitleBadge>
+                                      {countryLabel != null && (
+                                        <ItemCountryBadge>{countryLabel}</ItemCountryBadge>
+                                      )}
+                                      {regnalFromNotes && (
+                                        <ItemRegnalName>왕명: {regnalFromNotes}</ItemRegnalName>
+                                      )}
+                                    </ItemRow>
+                                  </ListItemBody>
+                                  <ItemAction aria-label="인물 보기">
+                                    <FiChevronRight size={20} strokeWidth={2.5} />
+                                  </ItemAction>
+                                </ListItem>
+                              )
+                            })}
+                          </List>
+                        </div>
+                      ))}
+                    </>
                   )}
                 </ListWrap>
               </motion.div>
@@ -885,6 +1028,52 @@ const SectionSubtitle = styled.p`
   line-height: 1.5;
 `
 
+const PositionFilterTabs = styled.div`
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #e2e8f0;
+  border-radius: 10px;
+  flex-wrap: wrap;
+`
+
+const PositionFilterTab = styled.button<{ $active?: boolean }>`
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ $active }) => ($active ? '#fff' : '#64748b')};
+  background: ${({ $active }) => ($active ? 'var(--color-primary)' : 'transparent')};
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ $active }) => ($active ? '#fff' : '#334155')};
+    background: ${({ $active }) => ($active ? '#7c3aed' : 'rgba(0,0,0,0.06)')};
+  }
+`
+
+const PositionFilterSelect = styled.select`
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  min-width: 140px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+  }
+`
+
 const ListWrap = styled.div`
   margin-top: 0;
   background: #fff;
@@ -944,11 +1133,11 @@ const LineageWrap = styled.div`
 const LineageLegend = styled.div`
   margin-bottom: 20px;
   padding: 14px 18px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   font-size: 13px;
-  color: #0c4a6e;
+  color: #475569;
   line-height: 1.5;
 `
 
@@ -964,6 +1153,22 @@ const ListTitle = styled.h2`
     font-size: 14px;
     color: #64748b;
     margin-left: 8px;
+  }
+`
+
+/** 직책별 섹션 제목 (국왕, 쇼군, 대통령, 총리 등) */
+const PositionSectionTitle = styled.h3`
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: -0.01em;
+
+  .count {
+    font-weight: 500;
+    font-size: 13px;
+    color: #64748b;
+    margin-left: 6px;
   }
 `
 
