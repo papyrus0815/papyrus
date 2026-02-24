@@ -4,7 +4,7 @@
  */
 import * as personsApi from '@api/functional/persons'
 
-import { apiConnection } from './client'
+import { apiConnection, getApiConnection } from './client'
 
 // SDK에서 생성된 타입 사용
 export type PersonResponseDto = Awaited<
@@ -21,8 +21,7 @@ export type Era = NonNullable<CreatePersonDto['birthEra']>
  */
 export async function getAllPersons(): Promise<PersonResponseDto[]> {
   try {
-    const response = (await personsApi.getAll(apiConnection)) as any
-    // TransformInterceptor로 래핑된 응답에서 data 추출
+    const response = (await personsApi.getAll(getApiConnection())) as any
     return response.data || response
   } catch (error) {
     throw error
@@ -44,10 +43,16 @@ export async function getPersonsByTenureCountry(params: {
     ? `/government-positions/countries/${encodeURIComponent(countryId)}/persons`
     : `/government-positions/historical-countries/${encodeURIComponent(historicalCountryId!)}/persons`
   const url = `${apiConnection.host}${path}`
+  const conn = getApiConnection()
   try {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(conn.headers?.Authorization && {
+          Authorization: conn.headers.Authorization,
+        }),
+      },
       credentials: 'include',
     })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -63,7 +68,7 @@ export async function getPersonsByTenureCountry(params: {
  */
 export async function getPersonById(id: string): Promise<PersonResponseDto> {
   try {
-    const response = (await personsApi.getById(apiConnection, id)) as any
+    const response = (await personsApi.getById(getApiConnection(), id)) as any
     return response.data || response
   } catch (error) {
     throw error
@@ -77,7 +82,7 @@ export async function createPerson(
   data: CreatePersonDto,
 ): Promise<PersonResponseDto> {
   try {
-    const response = (await personsApi.create(apiConnection, data)) as any
+    const response = (await personsApi.create(getApiConnection(), data)) as any
     return response.data || response
   } catch (error) {
     throw error
@@ -92,7 +97,7 @@ export async function updatePerson(
   data: UpdatePersonDto,
 ): Promise<PersonResponseDto> {
   try {
-    const response = (await personsApi.update(apiConnection, id, data)) as any
+    const response = (await personsApi.update(getApiConnection(), id, data)) as any
     return response.data || response
   } catch (error) {
     throw error
@@ -104,7 +109,7 @@ export async function updatePerson(
  */
 export async function deletePerson(id: string): Promise<void> {
   try {
-    await personsApi._delete(apiConnection, id)
+    await personsApi._delete(getApiConnection(), id)
   } catch (error) {
     throw error
   }
@@ -115,12 +120,16 @@ export async function deletePerson(id: string): Promise<void> {
  */
 export async function getAllPersonsWithGovernmentPositions(): Promise<any[]> {
   try {
+    const conn = getApiConnection()
     const response = await fetch(
       `${apiConnection.host}/persons/with-government-positions`,
       {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(conn.headers?.Authorization && {
+            Authorization: conn.headers.Authorization,
+          }),
         },
       },
     )

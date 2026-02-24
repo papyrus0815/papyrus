@@ -20,9 +20,9 @@ export interface HistoricalCountrySimple {
 }
 
 export interface CountryRepository {
-  findAll(): Promise<Country[]>
-  findById(id: string): Promise<Country | null>
-  findByName(name: string): Promise<Country | null>
+  findAll(accountId?: string): Promise<Country[]>
+  findById(id: string, accountId?: string): Promise<Country | null>
+  findByName(name: string, accountId?: string): Promise<Country | null>
   findHistoricalCountriesByModernCountryId(
     countryId: string,
   ): Promise<HistoricalCountrySimple[]>

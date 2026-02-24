@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { EventMethod } from '@prisma/client'
 import {
   IPersonRepository,
@@ -57,10 +57,10 @@ export class PersonService {
   ) {}
 
   /**
-   * 모든 인물 목록 조회
+   * 인물 목록 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async findAll(): Promise<PersonResponseDto[]> {
-    return this.personRepository.findAll()
+  async findAll(accountId?: string): Promise<PersonResponseDto[]> {
+    return this.personRepository.findAll(accountId)
   }
 
   /**
@@ -74,17 +74,17 @@ export class PersonService {
   }
 
   /**
-   * 모든 인물 목록 조회 (정부 직책 포함)
+   * 인물 목록 조회 (정부 직책 포함, accountId 있으면 해당 계정 소유만)
    */
-  async findAllWithGovernmentPositions() {
-    return this.personRepository.findAllWithGovernmentPositions()
+  async findAllWithGovernmentPositions(accountId?: string) {
+    return this.personRepository.findAllWithGovernmentPositions(accountId)
   }
 
   /**
-   * ID로 인물 조회
+   * ID로 인물 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async findById(id: string): Promise<PersonResponseDto> {
-    const person = await this.personRepository.findById(id)
+  async findById(id: string, accountId?: string): Promise<PersonResponseDto> {
+    const person = await this.personRepository.findById(id, accountId)
     if (!person) {
       throw new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
     }
@@ -92,10 +92,10 @@ export class PersonService {
   }
 
   /**
-   * ID로 인물 상세 조회 (관계 데이터 포함)
+   * ID로 인물 상세 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async findByIdWithRelations(id: string) {
-    const person = await this.personRepository.findByIdWithRelations(id)
+  async findByIdWithRelations(id: string, accountId?: string) {
+    const person = await this.personRepository.findByIdWithRelations(id, accountId)
     if (!person) {
       throw new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
     }
@@ -103,10 +103,11 @@ export class PersonService {
   }
 
   /**
-   * 인물 생성
+   * 인물 생성 (accountId 있으면 소유자로 저장)
    */
-  async create(data: CreatePersonData): Promise<PersonResponseDto> {
-    const person = await this.personRepository.create(data)
+  async create(data: CreatePersonData, accountId?: string): Promise<PersonResponseDto> {
+    const createData = accountId != null ? { ...data, accountId } : data
+    const person = await this.personRepository.create(createData)
     await this.notificationService.notifyPerson(
       personDisplayName(person),
       EventMethod.CREATE,
@@ -116,10 +117,15 @@ export class PersonService {
   }
 
   /**
-   * 인물 수정
+   * 인물 수정 (accountId 있으면 소유자만 가능)
    */
-  async update(id: string, data: UpdatePersonData): Promise<PersonResponseDto> {
-    await this.findById(id) // 존재 여부 확인
+  async update(id: string, data: UpdatePersonData, accountId?: string): Promise<PersonResponseDto> {
+    const existing = await this.personRepository.findById(id, accountId)
+    if (!existing) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 인물만 수정할 수 있습니다.')
+        : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
+    }
     const person = await this.personRepository.update(id, data)
     await this.notificationService.notifyPerson(
       personDisplayName(person),
@@ -130,10 +136,15 @@ export class PersonService {
   }
 
   /**
-   * 인물 삭제
+   * 인물 삭제 (accountId 있으면 소유자만 가능)
    */
-  async delete(id: string): Promise<void> {
-    const person = await this.findById(id) // 존재 여부 확인 + 표시명용
+  async delete(id: string, accountId?: string): Promise<void> {
+    const person = await this.personRepository.findById(id, accountId)
+    if (!person) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 인물만 삭제할 수 있습니다.')
+        : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
+    }
     await this.personRepository.delete(id)
     await this.notificationService.notifyPerson(
       personDisplayName(person),

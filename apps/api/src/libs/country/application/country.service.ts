@@ -3,6 +3,7 @@ import {
   Inject,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common'
 import { EventMethod } from '@prisma/client'
 import {
@@ -25,25 +26,22 @@ export class CountryService {
   ) {}
 
   /**
-   * 모든 국가 조회
-   * @returns 모든 국가 목록
+   * 국가 목록 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async getAllCountries(): Promise<Country[]> {
-    return this.countries.findAll()
+  async getAllCountries(accountId?: string): Promise<Country[]> {
+    return this.countries.findAll(accountId)
   }
 
   /**
-   * ID로 국가 조회
-   * @param id 국가 ID
-   * @returns 국가 정보
-   * @throws NotFoundException 국가를 찾을 수 없는 경우
+   * ID로 국가 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async getCountryById(id: string): Promise<Country> {
-    const country = await this.countries.findById(id)
+  async getCountryById(id: string, accountId?: string): Promise<Country> {
+    const country = await this.countries.findById(id, accountId)
     if (!country) {
-      throw new NotFoundException(`Country with id ${id} not found`)
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 국가만 조회할 수 있습니다.')
+        : new NotFoundException(`Country with id ${id} not found`)
     }
-
     return country
   }
 
@@ -55,29 +53,31 @@ export class CountryService {
    */
   async getHistoricalCountriesByModernCountryId(
     countryId: string,
+    accountId?: string,
   ): Promise<HistoricalCountrySimple[]> {
-    // 현대 국가가 존재하는지 확인
-    await this.getCountryById(countryId)
-
+    await this.getCountryById(countryId, accountId)
     return this.countries.findHistoricalCountriesByModernCountryId(countryId)
   }
 
   /**
-   * 국가 생성
-   * @param data 국가 생성 데이터
-   * @returns 생성된 국가
-   * @throws ConflictException 동일한 이름의 국가가 이미 존재하는 경우
+   * 국가 생성 (accountId 있으면 소유자로 저장)
    */
-  async createCountry(data: Omit<Country, 'id'>): Promise<Country> {
-    // 중복 체크
-    const existing = await this.countries.findByName(data.name)
+  async createCountry(
+    data: Omit<Country, 'id'>,
+    accountId?: string,
+  ): Promise<Country> {
+    const createData = accountId != null ? { ...data, accountId } : data
+    const existing = await this.countries.findByName(
+      createData.name,
+      accountId ?? undefined,
+    )
     if (existing) {
       throw new ConflictException(
-        `Country with name ${data.name} already exists`,
+        `Country with name ${createData.name} already exists`,
       )
     }
 
-    const country = await this.countries.create(data)
+    const country = await this.countries.create(createData)
     await this.notificationService.notifyCountry(
       country.name,
       EventMethod.CREATE,
@@ -88,22 +88,25 @@ export class CountryService {
   }
 
   /**
-   * 국가 정보 수정
-   * @param id 국가 ID
-   * @param data 수정할 데이터
-   * @returns 수정된 국가
-   * @throws NotFoundException 국가를 찾을 수 없는 경우
-   * @throws ConflictException 변경하려는 이름이 이미 존재하는 경우
+   * 국가 수정 (accountId 있으면 소유자만 가능)
    */
   async updateCountry(
     id: string,
     data: Partial<Omit<Country, 'id'>>,
+    accountId?: string,
   ): Promise<Country> {
-    const current = await this.getCountryById(id)
+    const current = await this.countries.findById(id, accountId)
+    if (!current) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 국가만 수정할 수 있습니다.')
+        : new NotFoundException(`Country with id ${id} not found`)
+    }
 
-    // 이름 변경 시 중복 체크
     if (data.name) {
-      const existing = await this.countries.findByName(data.name)
+      const existing = await this.countries.findByName(
+        data.name,
+        accountId ?? undefined,
+      )
       if (existing && existing.id !== id) {
         throw new ConflictException(
           `Country with name ${data.name} already exists`,
@@ -130,12 +133,15 @@ export class CountryService {
   }
 
   /**
-   * 국가 삭제
-   * @param id 국가 ID
-   * @throws NotFoundException 국가를 찾을 수 없는 경우
+   * 국가 삭제 (accountId 있으면 소유자만 가능)
    */
-  async deleteCountry(id: string): Promise<void> {
-    const country = await this.getCountryById(id)
+  async deleteCountry(id: string, accountId?: string): Promise<void> {
+    const country = await this.countries.findById(id, accountId)
+    if (!country) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 국가만 삭제할 수 있습니다.')
+        : new NotFoundException(`Country with id ${id} not found`)
+    }
     await this.countries.delete(id)
     await this.notificationService.notifyCountry(
       country.name,
@@ -154,7 +160,11 @@ export class CountryService {
     countryId: string,
     startYear?: number,
     endYear?: number,
+    accountId?: string,
   ) {
+    if (accountId != null) {
+      await this.getCountryById(countryId, accountId)
+    }
     const where: {
       countryId: string
       year?: { gte?: number; lte?: number }
@@ -225,7 +235,11 @@ export class CountryService {
     countryId: string,
     startYear?: number,
     endYear?: number,
+    accountId?: string,
   ) {
+    if (accountId != null) {
+      await this.getCountryById(countryId, accountId)
+    }
     const where: {
       countryId: string
       year?: { gte?: number; lte?: number }
@@ -295,7 +309,11 @@ export class CountryService {
     countryId: string,
     startYear?: number,
     endYear?: number,
+    accountId?: string,
   ) {
+    if (accountId != null) {
+      await this.getCountryById(countryId, accountId)
+    }
     const where: {
       countryId: string
       year?: { gte?: number; lte?: number }

@@ -13,8 +13,9 @@ export class HistoricalCountryPrismaRepository
 {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(): Promise<HistoricalCountry[]> {
+  async findAll(accountId?: string): Promise<HistoricalCountry[]> {
     const countries = await this.prisma.historicalCountry.findMany({
+      where: accountId != null ? { accountId } : undefined,
       orderBy: [
         { startYear: 'desc' },
         { startMonth: 'desc' },
@@ -26,10 +27,15 @@ export class HistoricalCountryPrismaRepository
     return countries.map((country) => this.toEntity(country as any))
   }
 
-  async findById(id: string): Promise<HistoricalCountry | null> {
-    const country = await this.prisma.historicalCountry.findUnique({
-      where: { id },
-    })
+  async findById(id: string, accountId?: string): Promise<HistoricalCountry | null> {
+    const country =
+      accountId != null
+        ? await this.prisma.historicalCountry.findFirst({
+            where: { id, accountId },
+          })
+        : await this.prisma.historicalCountry.findUnique({
+            where: { id },
+          })
 
     return country ? this.toEntity(country as any) : null
   }
@@ -61,6 +67,7 @@ export class HistoricalCountryPrismaRepository
         endMonth: data.endMonth,
         endDay: data.endDay,
         stateType: data.stateType,
+        accountId: data.accountId ?? undefined,
         // 현대 국가 연결 생성 (다대다)
         modernConnections: data.parentModernCountryIds
           ? {

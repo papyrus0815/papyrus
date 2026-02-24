@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { useCountries } from '@/features/country/api'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 
 // 로컬 스토리지 키
@@ -14,12 +15,23 @@ const SIDEBAR_COLLAPSED_KEY = 'history-layout-sidebar-collapsed'
  * 히스토리 페이지의 레이아웃을 담당
  * - 데스크톱: 좌측 사이드바
  * - 모바일: 하단 탭바 + 가운데 FAB 버튼 (국가 페이지에서만)
+ * - 사이드바 배지: 현재 로그인 계정 소유 데이터만 표시
  */
 export default function HistoryLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const isActive = (path: string) => location.pathname.startsWith(path)
   const [showMenu, setShowMenu] = useState(false) // 가운데 버튼 메뉴 표시 상태
+
+  const { data: countries } = useCountries()
+  const countryCount = countries?.length ?? 0
+  const continentCount = useMemo(
+    () =>
+      new Set(
+        (countries ?? []).map((c) => c.continentId).filter(Boolean),
+      ).size,
+    [countries],
+  )
 
   // 로컬 스토리지에서 사이드바 접힘 상태 복원
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -78,7 +90,7 @@ export default function HistoryLayout() {
                       </svg>
                     </SidebarIcon>
                     <SidebarLabel>국가</SidebarLabel>
-                    <Badge>12</Badge>
+                    <Badge>{countryCount}</Badge>
                   </SidebarItem>
 
                   <SidebarItem
@@ -92,7 +104,7 @@ export default function HistoryLayout() {
                       </svg>
                     </SidebarIcon>
                     <SidebarLabel>대륙</SidebarLabel>
-                    <Badge>6</Badge>
+                    <Badge>{continentCount}</Badge>
                   </SidebarItem>
 
                   <SidebarItem

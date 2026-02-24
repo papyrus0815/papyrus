@@ -1,5 +1,5 @@
 import * as countriesApi from '@api/functional/countries'
-import { apiConnection } from '../client'
+import { getApiConnection } from '../client'
 
 export type Country = {
   id: string
@@ -17,7 +17,7 @@ export type Country = {
 
 export const countryApi = {
   getAll: async () => {
-    const result = await countriesApi.getAll(apiConnection)
+    const result = await countriesApi.getAllCountries(getApiConnection())
     // 응답이 { data: [...] } 형태인 경우 data 추출
     if (result && typeof result === 'object' && 'data' in result) {
       return Array.isArray((result as any).data) ? (result as any).data : []
@@ -26,7 +26,7 @@ export const countryApi = {
     return Array.isArray(result) ? result : []
   },
   getById: async (id: string) => {
-    return countriesApi.get(apiConnection, id)
+    return countriesApi.getCountryById(getApiConnection(), id)
   },
 }
 

@@ -663,12 +663,14 @@ export class CreateGovernmentPositionTenureDto {
   @IsString()
   positionType!: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입
 
+  /** 직위명 — positionDefinitionId가 있으면 생략(정의에서 표시), 기타 직접 입력 시 필수 */
+  @IsOptional()
   @IsString()
-  title!: string // 직위명 (필수) - 예: "대통령", "국왕", "황제"
+  title?: string | null
 
   @IsOptional()
   @IsString()
-  titleEn?: string // 영문 직위명
+  titleEn?: string | null // 영문 직위명 (기타 시에만)
 
   @IsOptional()
   @IsBoolean()

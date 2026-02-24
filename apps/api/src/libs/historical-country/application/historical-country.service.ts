@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
 import { EventMethod } from '@prisma/client'
 import {
   IHistoricalCountryRepository,
@@ -23,19 +23,21 @@ export class HistoricalCountryService {
   }
 
   /**
-   * 모든 역사적 국가 조회
+   * 역사적 국가 목록 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async getAllHistoricalCountries(): Promise<HistoricalCountry[]> {
-    return await this.repository.findAll()
+  async getAllHistoricalCountries(accountId?: string): Promise<HistoricalCountry[]> {
+    return await this.repository.findAll(accountId)
   }
 
   /**
-   * ID로 역사적 국가 조회
+   * ID로 역사적 국가 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async getHistoricalCountryById(id: string): Promise<HistoricalCountry> {
-    const country = await this.repository.findById(id)
+  async getHistoricalCountryById(id: string, accountId?: string): Promise<HistoricalCountry> {
+    const country = await this.repository.findById(id, accountId)
     if (!country) {
-      throw new NotFoundException(`Historical country with id ${id} not found`)
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 역사적 국가만 조회할 수 있습니다.')
+        : new NotFoundException(`Historical country with id ${id} not found`)
     }
     return country
   }
@@ -50,12 +52,14 @@ export class HistoricalCountryService {
   }
 
   /**
-   * 역사적 국가 생성
+   * 역사적 국가 생성 (accountId 있으면 소유자로 저장)
    */
   async createHistoricalCountry(
     data: CreateHistoricalCountryData,
+    accountId?: string,
   ): Promise<HistoricalCountry> {
-    const country = await this.repository.create(data)
+    const createData = accountId != null ? { ...data, accountId } : data
+    const country = await this.repository.create(createData)
     await this.notificationService.notifyHistoricalCountry(
       country.name,
       EventMethod.CREATE,
@@ -66,13 +70,19 @@ export class HistoricalCountryService {
   }
 
   /**
-   * 역사적 국가 수정
+   * 역사적 국가 수정 (accountId 있으면 소유자만 가능)
    */
   async updateHistoricalCountry(
     id: string,
     data: UpdateHistoricalCountryData,
+    accountId?: string,
   ): Promise<HistoricalCountry> {
-    const current = await this.getHistoricalCountryById(id)
+    const current = await this.repository.findById(id, accountId)
+    if (!current) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 역사적 국가만 수정할 수 있습니다.')
+        : new NotFoundException(`Historical country with id ${id} not found`)
+    }
     const newThumbnail = data.thumbnailUrl ?? null
     const isClearingOrReplacing =
       newThumbnail !== (current.thumbnailUrl ?? null)
@@ -90,10 +100,15 @@ export class HistoricalCountryService {
   }
 
   /**
-   * 역사적 국가 삭제
+   * 역사적 국가 삭제 (accountId 있으면 소유자만 가능)
    */
-  async deleteHistoricalCountry(id: string): Promise<void> {
-    const country = await this.getHistoricalCountryById(id)
+  async deleteHistoricalCountry(id: string, accountId?: string): Promise<void> {
+    const country = await this.repository.findById(id, accountId)
+    if (!country) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 역사적 국가만 삭제할 수 있습니다.')
+        : new NotFoundException(`Historical country with id ${id} not found`)
+    }
     await this.repository.delete(id)
     await this.notificationService.notifyHistoricalCountry(
       country.name,

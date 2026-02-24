@@ -1,6 +1,6 @@
 import * as personsApi from '@api/functional/persons'
 
-import { apiConnection } from '../client'
+import { getApiConnection } from '../client'
 import { getPersonsByTenureCountry } from '../persons'
 
 export type Era = 'BC' | 'AD'
@@ -93,7 +93,7 @@ export type UpdatePersonInput = Partial<CreatePersonInput>
 
 export const personApi = {
   getAll: async () => {
-    const result = await personsApi.getAll(apiConnection)
+    const result = await personsApi.getAll(getApiConnection())
     if (result && typeof result === 'object' && 'data' in result) {
       return Array.isArray((result as any).data) ? (result as any).data : []
     }
@@ -118,20 +118,20 @@ export const personApi = {
   },
 
   getById: async (id: string) => {
-    const result = await personsApi.getById(apiConnection, id)
+    const result = await personsApi.getById(getApiConnection(), id)
     // 인터셉터 등으로 { data } 래핑된 경우 실제 인물 객체 반환
     return (result as any)?.data ?? result
   },
 
   create: async (data: CreatePersonInput) => {
-    return await personsApi.create(apiConnection, data)
+    return await personsApi.create(getApiConnection(), data)
   },
 
   update: async (id: string, data: UpdatePersonInput) => {
-    return await personsApi.update(apiConnection, id, data)
+    return await personsApi.update(getApiConnection(), id, data)
   },
 
   delete: async (id: string) => {
-    await personsApi._delete(apiConnection, id)
+    await personsApi._delete(getApiConnection(), id)
   },
 }

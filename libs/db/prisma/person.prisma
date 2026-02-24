@@ -196,10 +196,15 @@ model Person {
   commandedBelligerentSides BelligerentSide[]
   commandedCountriesInSides CountryInSide[]
 
+  //--- 등록 계정 (개인 정보 플랫폼: 본인만 수정/삭제)
+  accountId String? @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountPersons", fields: [accountId], references: [id], onDelete: SetNull)
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([accountId], name: "idx_person_accountId")
   @@index([dynastyId], name: "idx_person_dynastyId")
   @@index([religionId], name: "idx_person_religionId")
   @@index([denominationId], name: "idx_person_denominationId")

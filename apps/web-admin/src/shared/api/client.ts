@@ -4,6 +4,7 @@
  */
 
 import type { IConnection } from '@api/IConnection'
+import { nestiaApiService } from './api.service'
 
 // API 연결 설정 함수 (api.service.ts와 동일한 로직)
 function getApiHost(): string {
@@ -19,7 +20,11 @@ function getApiHost(): string {
   return 'http://localhost:8000'
 }
 
-// API 연결 설정
+// API 연결 (host만, 인증 불필요한 경우용)
 export const apiConnection: IConnection = {
   host: getApiHost(),
 }
+
+/** 인증이 필요한 API 호출 시 사용 (JWT가 connection에 포함됨) */
+export const getApiConnection = (): IConnection =>
+  nestiaApiService.getConnection()

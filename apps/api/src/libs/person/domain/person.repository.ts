@@ -63,6 +63,8 @@ export interface CreatePersonData {
   countryId?: string
   birthCityId?: string
   deathCityId?: string
+  /** 등록 계정 ID (개인 정보 플랫폼) */
+  accountId?: string
 }
 
 /**
@@ -107,14 +109,14 @@ export interface UpdatePersonData {
  */
 export interface IPersonRepository {
   /**
-   * 모든 인물 목록 조회
+   * 인물 목록 조회 (accountId 있으면 해당 계정 소유만)
    */
-  findAll(): Promise<PersonResponseDto[]>
+  findAll(accountId?: string): Promise<PersonResponseDto[]>
 
   /**
-   * ID로 인물 조회
+   * ID로 인물 조회 (accountId 있으면 해당 계정 소유만 반환)
    */
-  findById(id: string): Promise<PersonResponseDto | null>
+  findById(id: string, accountId?: string): Promise<PersonResponseDto | null>
 
   /**
    * 인물 생성
@@ -174,6 +176,7 @@ export interface IPersonRepository {
     countryId?: string
     historicalCountryId?: string
   }): Promise<PersonResponseDto[]>
+  findByIdWithRelations(id: string, accountId?: string): Promise<any>
   findPositionDefinitions(params: {
     countryId?: string
     historicalCountryId?: string

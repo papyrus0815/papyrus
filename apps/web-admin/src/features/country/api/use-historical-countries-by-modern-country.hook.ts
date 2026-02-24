@@ -19,7 +19,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import * as historicalCountriesApi from '@api/functional/countries/historical_countries'
-import { apiConnection } from '@/shared/api/client'
+import { getApiConnection } from '@/shared/api/client'
 
 /**
  * 현대 국가 ID로 연결된 역사적 국가 목록 조회
@@ -52,7 +52,7 @@ export function useHistoricalCountriesByModernCountry(modernCountryId: string) {
     queryFn: async () => {
       const response =
         (await historicalCountriesApi.getHistoricalCountriesByModernCountryId(
-          apiConnection,
+          getApiConnection(),
           modernCountryId,
         )) as any
 

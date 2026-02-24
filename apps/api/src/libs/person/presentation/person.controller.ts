@@ -8,8 +8,11 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  UseGuards,
+  Request,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { AuthGuard } from '@nestjs/passport'
 import { TypedBody, TypedParam, TypedRoute } from '@nestia/core'
 import { PersonService } from '../application/person.service'
 import { 
@@ -43,27 +46,30 @@ import {
 } from './dto'
 
 /**
- * 인물 관리 컨트롤러
+ * 인물 관리 컨트롤러 (개인 정보 플랫폼: 로그인한 계정 소유 데이터만)
  */
 @ApiTags('persons')
 @Controller('persons')
+@UseGuards(AuthGuard('jwt'))
 export class PersonController {
   constructor(private readonly personService: PersonService) {}
 
   /**
-   * 모든 인물 목록 조회
+   * 인물 목록 조회 (본인 등록분만)
    */
   @Get()
-  async getAll(): Promise<PersonResponseDto[]> {
-    return this.personService.findAll()
+  async getAll(@Request() req: any): Promise<PersonResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findAll(accountId)
   }
 
   /**
-   * 모든 인물 목록 조회 (정부 직책 포함)
+   * 인물 목록 조회 (정부 직책 포함, 본인 등록분만)
    */
   @Get('with-government-positions')
-  async getAllWithGovernmentPositions(): Promise<any[]> {
-    const persons = await this.personService.findAllWithGovernmentPositions()
+  async getAllWithGovernmentPositions(@Request() req: any): Promise<any[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const persons = await this.personService.findAllWithGovernmentPositions(accountId)
 
     // BigInt와 Date를 문자열로 변환하는 헬퍼 함수
     const serializeBigInt = (obj: any): any => {
@@ -96,27 +102,29 @@ export class PersonController {
   }
 
   /**
-   * ID로 인물 조회
+   * ID로 인물 조회 (본인 등록분만)
    */
   @Get(':id')
-  async getById(@Param('id') id: string): Promise<PersonResponseDto> {
-    return this.personService.findById(id)
+  async getById(@Param('id') id: string, @Request() req: any): Promise<PersonResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findById(id, accountId)
   }
 
   /**
-   * 인물의 재임 기록만 조회 (GovernmentPositionTenure)
-   * 수정 페이지에서 경력 불러오기 실패 시 이 API로 보완
+   * 인물의 재임 기록만 조회 (본인 등록 인물만)
    */
   @Get(':id/tenures')
-  async getTenuresByPersonId(@Param('id') id: string): Promise<any[]> {
+  async getTenuresByPersonId(@Param('id') id: string, @Request() req: any): Promise<any[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.personService.findById(id, accountId) // 소유자만 접근
     return this.personService.findTenuresByPersonId(id)
   }
 
   /**
-   * ID로 인물 상세 조회 (관계 데이터 포함)
+   * ID로 인물 상세 조회 (본인 등록분만)
    */
   @Get(':id/detail')
-  async getDetailById(@Param('id') id: string): Promise<{
+  async getDetailById(@Param('id') id: string, @Request() req: any): Promise<{
     id: string
     name: string
     surname: string | null
@@ -150,7 +158,8 @@ export class PersonController {
     createdAt: string
     updatedAt: string
   }> {
-    const person: any = await this.personService.findByIdWithRelations(id)
+    const accountId = req.user?.id ?? req.user?.sub
+    const person: any = await this.personService.findByIdWithRelations(id, accountId)
 
     // 부모와 자녀 중복 제거
     const childrenMap = new Map()
@@ -216,10 +225,11 @@ export class PersonController {
   }
 
   /**
-   * 인물 생성
+   * 인물 생성 (현재 계정 소유로 등록)
    */
   @Post()
-  async create(@Body() dto: CreatePersonDto): Promise<PersonResponseDto> {
+  async create(@Body() dto: CreatePersonDto, @Request() req: any): Promise<PersonResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
     // birth/death 객체에서 날짜 문자열로 변환
     let birthDate: Date | undefined
     let deathDate: Date | undefined
@@ -275,17 +285,19 @@ export class PersonController {
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
-    })
+    }, accountId)
   }
 
   /**
-   * 인물 수정
+   * 인물 수정 (본인 등록분만)
    */
   @Put(':id')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdatePersonDto,
+    @Request() req: any,
   ): Promise<PersonResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
     // birth/death 객체에서 날짜 문자열로 변환
     let birthDate: Date | undefined
     let deathDate: Date | undefined
@@ -337,16 +349,17 @@ export class PersonController {
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
-    })
+    }, accountId)
   }
 
   /**
-   * 인물 삭제
+   * 인물 삭제 (본인 등록분만)
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async delete(@Param('id') id: string): Promise<void> {
-    await this.personService.delete(id)
+  async delete(@Param('id') id: string, @Request() req: any): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.personService.delete(id, accountId)
   }
 
   // ========================

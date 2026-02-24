@@ -44,4 +44,6 @@ export interface PersonResponseDto {
   governmentTenures?: any[]
   createdAt: string
   updatedAt: string
+  /** 등록 계정 ID (소유권 검사용, 선택 노출) */
+  accountId?: string | null
 }

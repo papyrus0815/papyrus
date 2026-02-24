@@ -1,5 +1,6 @@
-import { Controller, HttpCode, HttpStatus } from '@nestjs/common'
+import { Controller, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { AuthGuard } from '@nestjs/passport'
 import { CountryService } from '../application/country.service'
 import { CreateCountryDto } from './dto/create-country.dto'
 import { UpdateCountryDto } from './dto/update-country.dto'
@@ -15,6 +16,7 @@ import { TypedBody, TypedParam, TypedQuery, TypedRoute } from '@nestia/core'
 
 @ApiTags('countries')
 @Controller('countries')
+@UseGuards(AuthGuard('jwt'))
 export class CountryController {
   constructor(private readonly countryService: CountryService) {}
 
@@ -59,14 +61,17 @@ export class CountryController {
     }
   }
   /**
-   * 모든 국가 조회
+   * 모든 국가 조회 (본인 등록분만)
    *
    * @returns 국가 목록
    * @tag countries
    */
   @TypedRoute.Get()
-  async getAllCountries(): Promise<CountryResponseDto[]> {
-    const countries = await this.countryService.getAllCountries()
+  async getAllCountries(
+    @Request() req: any,
+  ): Promise<CountryResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const countries = await this.countryService.getAllCountries(accountId)
     return countries.map((country) => this.toResponseDto(country))
   }
 
@@ -80,9 +85,14 @@ export class CountryController {
   @TypedRoute.Get(':id/historical-countries')
   async getHistoricalCountriesByModernCountryId(
     @TypedParam('id') id: string,
+    @Request() req: any,
   ): Promise<HistoricalCountrySimpleResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
     const historicalCountries =
-      await this.countryService.getHistoricalCountriesByModernCountryId(id)
+      await this.countryService.getHistoricalCountriesByModernCountryId(
+        id,
+        accountId,
+      )
 
     return historicalCountries.map((hc) => ({
       id: hc.id,
@@ -113,8 +123,10 @@ export class CountryController {
   @TypedRoute.Get(':id')
   async getCountryById(
     @TypedParam('id') id: string,
+    @Request() req: any,
   ): Promise<CountryResponseDto> {
-    const country = await this.countryService.getCountryById(id)
+    const accountId = req.user?.id ?? req.user?.sub
+    const country = await this.countryService.getCountryById(id, accountId)
     return this.toResponseDto(country)
   }
 
@@ -128,20 +140,25 @@ export class CountryController {
   @TypedRoute.Post()
   async createCountry(
     @TypedBody() dto: CreateCountryDto,
+    @Request() req: any,
   ): Promise<CountryResponseDto> {
-    const country = await this.countryService.createCountry({
-      name: dto.name,
-      localName: dto.localName,
-      flagEmoji: dto.flagEmoji,
-      isoCode: dto.isoCode,
-      population: dto.population ? BigInt(dto.population) : undefined,
-      areaSqKm: dto.areaSqKm,
-      thumbnailUrl: dto.thumbnailUrl,
-      capital: dto.capital,
-      currencyId: dto.currencyId,
-      languageId: dto.languageId,
-      continentId: dto.continentId,
-    })
+    const accountId = req.user?.id ?? req.user?.sub
+    const country = await this.countryService.createCountry(
+      {
+        name: dto.name,
+        localName: dto.localName,
+        flagEmoji: dto.flagEmoji,
+        isoCode: dto.isoCode,
+        population: dto.population ? BigInt(dto.population) : undefined,
+        areaSqKm: dto.areaSqKm,
+        thumbnailUrl: dto.thumbnailUrl,
+        capital: dto.capital,
+        currencyId: dto.currencyId,
+        languageId: dto.languageId,
+        continentId: dto.continentId,
+      },
+      accountId,
+    )
     return this.toResponseDto(country)
   }
 
@@ -157,20 +174,26 @@ export class CountryController {
   async updateCountry(
     @TypedParam('id') id: string,
     @TypedBody() dto: UpdateCountryDto,
+    @Request() req: any,
   ): Promise<CountryResponseDto> {
-    const country = await this.countryService.updateCountry(id, {
-      name: dto.name,
-      localName: dto.localName,
-      flagEmoji: dto.flagEmoji,
-      isoCode: dto.isoCode,
-      population: dto.population ? BigInt(dto.population) : undefined,
-      areaSqKm: dto.areaSqKm,
-      thumbnailUrl: dto.thumbnailUrl,
-      capital: dto.capital,
-      currencyId: dto.currencyId,
-      languageId: dto.languageId,
-      continentId: dto.continentId,
-    })
+    const accountId = req.user?.id ?? req.user?.sub
+    const country = await this.countryService.updateCountry(
+      id,
+      {
+        name: dto.name,
+        localName: dto.localName,
+        flagEmoji: dto.flagEmoji,
+        isoCode: dto.isoCode,
+        population: dto.population ? BigInt(dto.population) : undefined,
+        areaSqKm: dto.areaSqKm,
+        thumbnailUrl: dto.thumbnailUrl,
+        capital: dto.capital,
+        currencyId: dto.currencyId,
+        languageId: dto.languageId,
+        continentId: dto.continentId,
+      },
+      accountId,
+    )
     return this.toResponseDto(country)
   }
 
@@ -182,8 +205,12 @@ export class CountryController {
    */
   @TypedRoute.Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteCountry(@TypedParam('id') id: string): Promise<void> {
-    await this.countryService.deleteCountry(id)
+  async deleteCountry(
+    @TypedParam('id') id: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.countryService.deleteCountry(id, accountId)
   }
 
   /**
@@ -202,11 +229,14 @@ export class CountryController {
       startYear?: string
       endYear?: string
     },
+    @Request() req: any,
   ): Promise<EconomicIndicatorResponse[]> {
+    const accountId = req.user?.id ?? req.user?.sub
     return this.countryService.getEconomicIndicators(
       id,
       query.startYear ? parseInt(query.startYear) : undefined,
       query.endYear ? parseInt(query.endYear) : undefined,
+      accountId,
     )
   }
 
@@ -226,11 +256,14 @@ export class CountryController {
       startYear?: string
       endYear?: string
     },
+    @Request() req: any,
   ): Promise<DemographicIndicatorResponse[]> {
+    const accountId = req.user?.id ?? req.user?.sub
     return this.countryService.getDemographicIndicators(
       id,
       query.startYear ? parseInt(query.startYear) : undefined,
       query.endYear ? parseInt(query.endYear) : undefined,
+      accountId,
     )
   }
 
@@ -250,11 +283,14 @@ export class CountryController {
       startYear?: string
       endYear?: string
     },
+    @Request() req: any,
   ): Promise<DevelopmentIndicatorResponse[]> {
+    const accountId = req.user?.id ?? req.user?.sub
     return this.countryService.getDevelopmentIndicators(
       id,
       query.startYear ? parseInt(query.startYear) : undefined,
       query.endYear ? parseInt(query.endYear) : undefined,
+      accountId,
     )
   }
 }

@@ -19,6 +19,7 @@ export interface CreateHistoricalCountryData {
   endDay?: number
   stateType: HistoricalStateType
   parentModernCountryIds?: string[] // 현대 국가 ID 배열
+  accountId?: string // 등록 계정 (개인 정보 플랫폼)
 }
 
 /**
@@ -46,14 +47,14 @@ export interface UpdateHistoricalCountryData {
  */
 export interface IHistoricalCountryRepository {
   /**
-   * 모든 역사적 국가 조회
+   * 역사적 국가 목록 조회 (accountId 있으면 해당 계정 소유만)
    */
-  findAll(): Promise<HistoricalCountry[]>
+  findAll(accountId?: string): Promise<HistoricalCountry[]>
 
   /**
-   * ID로 역사적 국가 조회
+   * ID로 역사적 국가 조회 (accountId 있으면 해당 계정 소유만)
    */
-  findById(id: string): Promise<HistoricalCountry | null>
+  findById(id: string, accountId?: string): Promise<HistoricalCountry | null>
 
   /**
    * 역사적 국가에 연결된 현대 국가 ID 목록 조회
@@ -61,7 +62,7 @@ export interface IHistoricalCountryRepository {
   findModernCountryIdsByHistoricalCountryId(id: string): Promise<string[]>
 
   /**
-   * 역사적 국가 생성
+   * 역사적 국가 생성 (data.accountId 또는 별도 accountId 사용)
    */
   create(data: CreateHistoricalCountryData): Promise<HistoricalCountry>
 

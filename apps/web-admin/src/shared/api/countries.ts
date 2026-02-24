@@ -4,7 +4,7 @@
  */
 
 import * as countriesApi from '@api/functional/countries'
-import { apiConnection } from './client'
+import { apiConnection, getApiConnection } from './client'
 
 // SDK에서 생성된 타입 사용
 export type CountryResponseDto = Awaited<
@@ -18,7 +18,7 @@ export type UpdateCountryDto = Parameters<typeof countriesApi.updateCountry>[2]
  */
 export async function getAllCountries(): Promise<CountryResponseDto[]> {
   try {
-    const response = (await countriesApi.getAllCountries(apiConnection)) as any
+    const response = (await countriesApi.getAllCountries(getApiConnection())) as any
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
   } catch (error) {
@@ -32,7 +32,7 @@ export async function getAllCountries(): Promise<CountryResponseDto[]> {
 export async function getCountryById(id: string): Promise<CountryResponseDto> {
   try {
     const response = (await countriesApi.getCountryById(
-      apiConnection,
+      getApiConnection(),
       id,
     )) as any
     return response.data || response
@@ -49,7 +49,7 @@ export async function createCountry(
 ): Promise<CountryResponseDto> {
   try {
     const response = (await countriesApi.createCountry(
-      apiConnection,
+      getApiConnection(),
       data,
     )) as any
     return response.data || response
@@ -67,7 +67,7 @@ export async function updateCountry(
 ): Promise<CountryResponseDto> {
   try {
     const response = (await countriesApi.updateCountry(
-      apiConnection,
+      getApiConnection(),
       id,
       data,
     )) as any
@@ -82,7 +82,7 @@ export async function updateCountry(
  */
 export async function deleteCountry(id: string): Promise<void> {
   try {
-    await countriesApi.deleteCountry(apiConnection, id)
+    await countriesApi.deleteCountry(getApiConnection(), id)
   } catch (error) {
     throw error
   }

@@ -16,6 +16,7 @@ export class Country {
   languageId?: string | null
   continentId?: string | null
   historicalCountries?: HistoricalCountrySimple[]
+  accountId?: string | null
 
   constructor(data: Country) {
     Object.assign(this, data)

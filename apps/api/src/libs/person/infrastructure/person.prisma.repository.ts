@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
-import { 
+import {
   Person,
   MilitaryCareer,
   BusinessCareer,
@@ -12,6 +12,7 @@ import {
   MedicalCareer,
   PersonEducation,
   PersonAward,
+  Prisma,
 } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import {
@@ -150,6 +151,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       governmentTenures: person.GovernmentTenures ? serializeBigInt(person.GovernmentTenures) : undefined,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
+      accountId: person.accountId ?? undefined,
     }
   }
 
@@ -365,10 +367,11 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 모든 인물 목록 조회 (출생국가에 역사적 국가 포함해 effective countryId 반환)
+   * 인물 목록 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async findAll(): Promise<PersonResponseDto[]> {
+  async findAll(accountId?: string): Promise<PersonResponseDto[]> {
     const persons = await this.prisma.person.findMany({
+      where: accountId != null ? { accountId } : undefined,
       orderBy: {
         createdAt: 'desc',
       },
@@ -380,11 +383,11 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 모든 인물 목록 조회 (정부 직책 + 정부/공무원 경력 포함)
-   * 사건 페이지에서 "직책 정보 표시" 체크된 재임·정부경력 모두 표시용
+   * 인물 목록 조회 (정부 직책 포함, accountId 있으면 해당 계정 소유만)
    */
-  async findAllWithGovernmentPositions() {
+  async findAllWithGovernmentPositions(accountId?: string) {
     return this.prisma.person.findMany({
+      where: accountId != null ? { accountId } : undefined,
       include: {
         GovernmentTenures: {
           select: {
@@ -442,33 +445,45 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * ID로 인물 조회
    */
-  async findById(id: string): Promise<PersonResponseDto | null> {
-    const person = await this.prisma.person.findUnique({
-      where: { id },
-      include: {
-        countryAffiliations: true,
-        GovernmentTenures: {
+  async findById(id: string, accountId?: string): Promise<PersonResponseDto | null> {
+    const person = accountId != null
+      ? await this.prisma.person.findFirst({
+          where: { id, accountId },
           include: {
-            positionDefinition: true,
-            country: true,
-            historicalCountry: true,
+            countryAffiliations: true,
+            GovernmentTenures: {
+              include: {
+                positionDefinition: true,
+                country: true,
+                historicalCountry: true,
+              },
+              orderBy: { startDate: 'desc' },
+            },
           },
-          orderBy: {
-            startDate: 'desc',
+        })
+      : await this.prisma.person.findUnique({
+          where: { id },
+          include: {
+            countryAffiliations: true,
+            GovernmentTenures: {
+              include: {
+                positionDefinition: true,
+                country: true,
+                historicalCountry: true,
+              },
+              orderBy: { startDate: 'desc' },
+            },
           },
-        },
-      },
-    })
+        })
     return person ? this.mapToPersonResponse(person) : null
   }
 
   /**
-   * ID로 인물 상세 조회 (관계 데이터 포함)
+   * ID로 인물 상세 조회 (accountId 있으면 해당 계정 소유만)
    */
-  async findByIdWithRelations(id: string) {
-    return this.prisma.person.findUnique({
-      where: { id },
-      include: {
+  async findByIdWithRelations(id: string, accountId?: string) {
+    const where = accountId != null ? { id, accountId } : { id }
+    const include = {
         country: true,
         dynasty: true,
         religion: true,
@@ -660,11 +675,13 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
           orderBy: {
-            startDate: 'desc',
+            startDate: Prisma.SortOrder.desc,
           },
-        },
-      },
-    })
+        }
+    }
+    return accountId != null
+      ? this.prisma.person.findFirst({ where, include })
+      : this.prisma.person.findUnique({ where, include })
   }
 
   /**

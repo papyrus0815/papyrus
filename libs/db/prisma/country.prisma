@@ -91,7 +91,6 @@ model Country {
   Organizations             Organization[]                   @relation("OrganizationCountry")
   organizationMemberships   OrganizationCountryMembership[]  @relation("OrgMembershipCountry")
   PoliticalParty            PoliticalParty[]                 @relation("PoliticalPartyCountry")
-  governmentPositions       GovernmentPositionDefinition[]   @relation("GovernmentPositionCountry")
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
   eventCountryRelations     EventCountryRelation[]
 
@@ -106,11 +105,16 @@ model Country {
   /// 이 국가를 통치한/통치하는 왕조들의 역사 (입헌군주제 등)
   dynastyRules DynastyModernRule[] @relation("CountryDynastyRules")
 
+  //--- 등록 계정 (개인 정보 플랫폼)
+  accountId String? @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountCountries", fields: [accountId], references: [id], onDelete: SetNull)
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   /// 마지막 수정 일시
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([accountId], name: "idx_country_accountId")
   @@index([currencyId], name: "idx_country_currencyId")
   @@index([languageId], name: "idx_country_languageId")
   @@index([continentId], name: "idx_country_continentId")

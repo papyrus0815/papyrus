@@ -4,7 +4,7 @@
  */
 
 import * as historicalCountriesApi from '@api/functional/historical_countries'
-import { apiConnection } from './client'
+import { getApiConnection } from './client'
 
 // SDK에서 생성된 타입 사용
 export type HistoricalCountryResponseDto = Awaited<
@@ -33,7 +33,7 @@ export async function getAllHistoricalCountries(): Promise<
 > {
   try {
     const response = (await historicalCountriesApi.getAllHistoricalCountries(
-      apiConnection,
+      getApiConnection(),
     )) as any
     // TransformInterceptor로 래핑된 응답에서 data 추출
     return response.data || response
@@ -50,7 +50,7 @@ export async function getHistoricalCountryById(
 ): Promise<HistoricalCountryResponseDto> {
   try {
     const response = (await historicalCountriesApi.getHistoricalCountryById(
-      apiConnection,
+      getApiConnection(),
       id,
     )) as any
     return response.data || response
@@ -67,7 +67,7 @@ export async function createHistoricalCountry(
 ): Promise<HistoricalCountryResponseDto> {
   try {
     const response = (await historicalCountriesApi.createHistoricalCountry(
-      apiConnection,
+      getApiConnection(),
       data,
     )) as any
     return response.data || response
@@ -85,7 +85,7 @@ export async function updateHistoricalCountry(
 ): Promise<HistoricalCountryResponseDto> {
   try {
     const response = (await historicalCountriesApi.updateHistoricalCountry(
-      apiConnection,
+      getApiConnection(),
       id,
       data,
     )) as any
@@ -100,7 +100,7 @@ export async function updateHistoricalCountry(
  */
 export async function deleteHistoricalCountry(id: string): Promise<void> {
   try {
-    await historicalCountriesApi.deleteHistoricalCountry(apiConnection, id)
+    await historicalCountriesApi.deleteHistoricalCountry(getApiConnection(), id)
   } catch (error) {
     throw error
   }

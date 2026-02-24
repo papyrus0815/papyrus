@@ -10,8 +10,9 @@ import {
 export class CountryPrismaRepository implements CountryRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(): Promise<Country[]> {
+  async findAll(accountId?: string): Promise<Country[]> {
     const countries = await this.prisma.country.findMany({
+      where: accountId != null ? { accountId } : undefined,
       orderBy: { name: 'asc' },
       include: {
         historicalConnections: {
@@ -24,24 +25,41 @@ export class CountryPrismaRepository implements CountryRepository {
     return countries.map((country) => this.toEntity(country))
   }
 
-  async findById(id: string): Promise<Country | null> {
-    const country = await this.prisma.country.findUnique({
-      where: { id },
-      include: {
-        historicalConnections: {
-          include: {
-            historicalCountry: true,
-          },
-        },
-      },
-    })
+  async findById(id: string, accountId?: string): Promise<Country | null> {
+    const country =
+      accountId != null
+        ? await this.prisma.country.findFirst({
+            where: { id, accountId },
+            include: {
+              historicalConnections: {
+                include: {
+                  historicalCountry: true,
+                },
+              },
+            },
+          })
+        : await this.prisma.country.findUnique({
+            where: { id },
+            include: {
+              historicalConnections: {
+                include: {
+                  historicalCountry: true,
+                },
+              },
+            },
+          })
     return country ? this.toEntity(country) : null
   }
 
-  async findByName(name: string): Promise<Country | null> {
-    const country = await this.prisma.country.findUnique({
-      where: { name },
-    })
+  async findByName(name: string, accountId?: string): Promise<Country | null> {
+    const country =
+      accountId != null
+        ? await this.prisma.country.findFirst({
+            where: { name, accountId },
+          })
+        : await this.prisma.country.findUnique({
+            where: { name },
+          })
     return country ? this.toEntity(country) : null
   }
 
@@ -95,6 +113,7 @@ export class CountryPrismaRepository implements CountryRepository {
         currencyId: data.currencyId,
         languageId: data.languageId,
         continentId: data.continentId,
+        accountId: (data as any).accountId ?? undefined,
       },
     })
     return this.toEntity(country)
@@ -170,6 +189,7 @@ export class CountryPrismaRepository implements CountryRepository {
       languageId: data.languageId,
       continentId: data.continentId,
       historicalCountries: historicalCountries || [],
+      accountId: data.accountId ?? undefined,
     })
   }
 }
