@@ -29,6 +29,9 @@ const HEADS_POSITION_TYPES = new Set([
 
 const OTHER_POSITION_VALUE = 'OTHER'
 
+/** 특정 직책 계보도에서 선 연결 없음용 */
+const emptyMap = new Map<string, string[]>()
+
 interface HeadsOfStateSectionProps {
   country: UnifiedCountry
   /** 인물 탭에 통합되어 상단 여백을 부모가 줄 때 true */
@@ -233,8 +236,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         historicalCountryId,
         startDate,
         endDate: endDate || undefined,
-        termNumber: termNumber ? parseInt(termNumber, 10) : undefined,
-        regnalNumber: regnalNumber ? parseInt(regnalNumber, 10) : undefined,
+        termNumber: termNumber.trim() === '' ? null : (parseInt(termNumber, 10) || undefined),
+        regnalNumber: regnalNumber.trim() === '' ? null : (parseInt(regnalNumber, 10) || undefined),
         notes: notesValue,
         showPositionInfo: showOnEventsPage,
       }
@@ -349,7 +352,10 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     return m ? m[1].trim() : null
   }
 
-  const selectedPerson = persons.find((p: any) => p.id === selectedPersonId) ?? null
+  const selectedPerson =
+    persons.find((p: any) => p.id === selectedPersonId) ??
+    allPersonsForModal.find((p: any) => p.id === selectedPersonId) ??
+    null
 
   /** 상단 직책 선택과 계보 직책 선택 통합: 사용자가 선택한 직책이 있으면 우선 사용 */
   const effectivePositionLabel =
@@ -392,68 +398,328 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     }
   }, [lineageEligibleGroups, selectedLineagePositionLabel])
 
-  /** person에서 부모 ID (camelCase/snake_case 모두 지원) */
-  const getParentId = (p: any, personIds: Set<string>) => {
-    const norm = (id: unknown) => (id != null && id !== '' ? String(id) : null)
-    const fatherId = norm((p as any)?.fatherId ?? (p as any)?.father_id)
-    const motherId = norm((p as any)?.motherId ?? (p as any)?.mother_id)
-    if (fatherId && personIds.has(fatherId)) return fatherId
-    if (motherId && personIds.has(motherId)) return motherId
+  /** person id 비교용: trim + 소문자 통일 (UUID/API 대소문자 차이 방지) */
+  const normId = (id: unknown) =>
+    id != null && id !== '' ? String(id).trim().toLowerCase() : null
+
+  /** person 객체에서 부모 ID 읽기 (camel/snake, 직속/중첩 모두 시도) */
+  const getParentIdFromPerson = (p: any) => {
+    if (!p || typeof p !== 'object') return null
+    const fatherId = normId((p as any)?.fatherId ?? (p as any)?.father_id)
+    const motherId = normId((p as any)?.motherId ?? (p as any)?.mother_id)
+    if (fatherId) return fatherId
+    if (motherId) return motherId
+    const inner = (p as any)?.person ?? (p as any)?.data
+    if (inner && typeof inner === 'object') {
+      const f = normId(inner.fatherId ?? inner.father_id)
+      const m = normId(inner.motherId ?? inner.mother_id)
+      if (f) return f
+      if (m) return m
+    }
     return null
   }
 
-  /** personId → full person (persons API에 fatherId/motherId 있음, tenures의 person에는 없을 수 있음) */
+  /** 연결선/이전 표시용: 부모가 현재 목록(personIds)에 있을 때만 부모 id 반환 */
+  const getParentIdInSet = (p: any, personIds: Set<string>) => {
+    const parentId = getParentIdFromPerson(p)
+    return parentId && personIds.has(parentId) ? parentId : null
+  }
+
+  /** 행 그룹핑용: 부모 id. tenure.person(tenures API) 우선, 없으면 persons 목록에서 조회 */
+  const getParentIdFromTenureForRow = (
+    t: any,
+    _personIds: Set<string>,
+    personByIdMap: Map<string, any>,
+    personsList: any[],
+  ) => {
+    const pid = normId(t?.person?.id ?? (t as any)?.personId)
+    let parentId = getParentIdFromPerson(t?.person)
+    if (parentId) return parentId
+    parentId = normId((t as any)?.fatherId ?? (t as any)?.father_id)
+    if (parentId) return parentId
+    if (pid) {
+      const fromList = personsList.find((p: any) => normId(p.id) === pid)
+      const p = fromList ?? personByIdMap.get(pid)
+      if (p) return getParentIdFromPerson(p)
+    }
+    return null
+  }
+
+  /** personId → full person (서버 persons 목록, fatherId/motherId 포함). 키는 normId로 통일 */
   const personById = React.useMemo(() => {
     const map = new Map<string, any>()
-    persons.forEach((p: any) => map.set(String(p.id), p))
+    persons.forEach((p: any) => {
+      const k = normId(p.id)
+      if (k) map.set(k, p)
+    })
     return map
   }, [persons])
 
-  /** 세대별 그룹: 같은 부모 = 같은 행(형제). 부모 ID는 persons 목록 기준으로 사용. */
-  const lineageRows = React.useMemo(() => {
-    const norm = (id: unknown) => (id != null && id !== '' ? String(id) : null)
-    const personIds = new Set(
-      lineageTenures
-        .map((t: any) => norm(t.person?.id))
-        .filter((id): id is string => id != null),
-    )
-    const byParent = new Map<string | null, any[]>()
-    lineageTenures.forEach((t: any) => {
-      const pid = norm(t.person?.id)
-      const fullPerson = pid ? personById.get(pid) ?? t.person : t.person
-      const parentId = getParentId(fullPerson, personIds)
-      const list = byParent.get(parentId) ?? []
-      list.push(t)
-      byParent.set(parentId, list)
-    })
-    const roots = byParent.get(null) ?? []
-    const hasFamilyLinks = roots.length < lineageTenures.length
-
-    if (!hasFamilyLinks && lineageTenures.length > 0) {
-      // 부모 연결 없음: 같은 부모→같은 행 규칙 적용 불가, 대수 순 1인 1행
-      return lineageTenures.map((t: any) => [t])
+  /** 직책별 계보 데이터 (전체일 때 mergedLineageAll에서 사용). 행은 항상 재위/대수 세대별. */
+  const lineageByGroup = React.useMemo(() => {
+    if (selectedPositionFilter != null) return []
+    const orderNum = (t: any) => {
+      const n =
+        t?.termNumber ?? t?.term_number ?? t?.regnalNumber ?? t?.regnal_number
+      if (n == null) return 0
+      const num = typeof n === 'number' ? n : parseInt(String(n), 10)
+      return Number.isNaN(num) ? 0 : num
     }
+    const orderToRowIndex = (order: number) =>
+      order <= 1 ? 0 : Math.floor((order - 2) / 2) + 1
+    const getPersonId = (t: any) => normId(t?.person?.id ?? (t as any)?.personId)
+    return lineageEligibleGroups.map((g) => {
+      const withOrder = g.tenures
+        .filter((t: any) => t.termNumber != null || t.regnalNumber != null)
+        .sort((a: any, b: any) => orderNum(a) - orderNum(b))
+      const byRow = new Map<number, any[]>()
+      withOrder.forEach((t: any) => {
+        const rowIdx = orderToRowIndex(orderNum(t))
+        const list = byRow.get(rowIdx) ?? []
+        list.push(t)
+        byRow.set(rowIdx, list)
+      })
+      const rows = Array.from(byRow.keys())
+        .sort((a, b) => a - b)
+        .map((r) =>
+          (byRow.get(r) ?? []).sort((a: any, b: any) => orderNum(a) - orderNum(b)),
+        )
+      const placement = new Map<string, { row: number; col: number }>()
+      rows.forEach((row, rowIdx) => {
+        row.forEach((t: any, colIdx: number) => placement.set(t.id, { row: rowIdx, col: colIdx }))
+      })
+      const personIds = new Set(withOrder.map(getPersonId).filter(Boolean))
+      const tenureByPersonId = new Map<string, any>()
+      withOrder.forEach((t: any) => {
+        const pid = getPersonId(t)
+        if (!pid) return
+        const existing = tenureByPersonId.get(pid)
+        if (!existing || orderNum(existing) < orderNum(t)) tenureByPersonId.set(pid, t)
+      })
+      const parentToChildren = new Map<string, string[]>()
+      withOrder.forEach((t: any) => {
+        const parentPersonId = getParentIdFromTenureForRow(t, personIds, personById, persons)
+        if (!parentPersonId) return
+        const parentTenure = tenureByPersonId.get(parentPersonId)
+        if (!parentTenure) return
+        const list = parentToChildren.get(parentTenure.id) ?? []
+        list.push(t.id)
+        parentToChildren.set(parentTenure.id, list)
+      })
+      return { label: g.label, rows, placement, parentToChildren }
+    })
+  }, [lineageEligibleGroups, selectedPositionFilter, personById, persons])
 
-    const rows: any[][] = []
-    let currentGen = roots
-    const seen = new Set<string>()
-    while (currentGen.length > 0) {
-      currentGen.sort((a: any, b: any) => {
+  /** 전체일 때: 모든 직책을 세기별로 묶어 하나의 막대·하나의 트리로 표시. 랭크 순으로 직책 정렬, 같은 세로 열에는 같은 직책만, 직책 구간마다 구분선 */
+  const mergedLineageAll = React.useMemo(() => {
+    if (selectedPositionFilter != null) return null
+    const defs = positionDefinitions as any[]
+    const getRank = (label: string) =>
+      defs.find((d: any) => d.title === label)?.rank ?? 999
+    const all = lineageEligibleGroups.flatMap((g) => g.tenures)
+    const withOrder = all
+      .filter((t: any) => t.termNumber != null || t.regnalNumber != null)
+      .sort((a: any, b: any) => {
+        const startA = a.startDate ? new Date(a.startDate).getTime() : 0
+        const startB = b.startDate ? new Date(b.startDate).getTime() : 0
+        if (startA !== startB) return startA - startB
         const oa = a.termNumber ?? a.regnalNumber ?? 0
         const ob = b.termNumber ?? b.regnalNumber ?? 0
         return oa - ob
       })
-      rows.push(currentGen)
-      currentGen.forEach((t: any) => seen.add(t.id))
-      const nextGen = currentGen.flatMap((t: any) => {
-        const parentPersonId = norm(t.person?.id)
-        return parentPersonId ? byParent.get(parentPersonId) ?? [] : []
-      })
-      currentGen = nextGen.filter((t: any) => !seen.has(t.id))
+    if (withOrder.length === 0) return null
+    const getCentury = (t: any) => {
+      if (!t?.startDate) return 0
+      const y = new Date(t.startDate).getFullYear()
+      return Math.floor(y / 100) + (y >= 0 ? 1 : 0)
     }
-    if (rows.length === 0 && lineageTenures.length > 0) rows.push([...lineageTenures])
-    return rows
-  }, [lineageTenures, personById])
+    const getPosition = (t: any) =>
+      lineageEligibleGroups.find((g) => g.tenures.some((x: any) => x.id === t.id))?.label ?? '—'
+    const byCentury = new Map<number, any[]>()
+    withOrder.forEach((t: any) => {
+      const c = getCentury(t)
+      const list = byCentury.get(c) ?? []
+      list.push(t)
+      byCentury.set(c, list)
+    })
+    const parentToChildren = new Map<string, string[]>()
+    lineageByGroup.forEach((g) => {
+      g.parentToChildren.forEach((childIds, parentId) => {
+        parentToChildren.set(parentId, childIds)
+      })
+    })
+    const sortByOrder = (a: any, b: any) => {
+      const oa = a.termNumber ?? a.regnalNumber ?? 0
+      const ob = b.termNumber ?? b.regnalNumber ?? 0
+      if (oa !== ob) return oa - ob
+      const startA = a.startDate ? new Date(a.startDate).getTime() : 0
+      const startB = b.startDate ? new Date(b.startDate).getTime() : 0
+      return startA - startB
+    }
+    const getPersonId = (t: any) => normId(t?.person?.id ?? (t as any)?.personId)
+    const centuries = Array.from(byCentury.keys()).sort((a, b) => a - b)
+    const positionsOrder = [...lineageEligibleGroups]
+      .sort((a, b) => getRank(a.label) - getRank(b.label))
+      .map((g) => g.label)
+    const allRows: any[][] = []
+    centuries.forEach((c) => {
+      const tenuresInCentury = byCentury.get(c) ?? []
+      const byPos = new Map<string, any[]>()
+      tenuresInCentury.forEach((t: any) => {
+        const pos = getPosition(t)
+        const list = byPos.get(pos) ?? []
+        list.push(t)
+        byPos.set(pos, list)
+      })
+      const orderNum = (t: any) => {
+        const n =
+          t?.termNumber ?? t?.term_number ?? t?.regnalNumber ?? t?.regnal_number
+        if (n == null) return 0
+        const num = typeof n === 'number' ? n : parseInt(String(n), 10)
+        return Number.isNaN(num) ? 0 : num
+      }
+      const orderToRowIndex = (order: number) =>
+        order <= 1 ? 0 : Math.floor((order - 2) / 2) + 1
+      const subRowByTenureId = new Map<string, number>()
+      positionsOrder.forEach((pos) => {
+        const list = (byPos.get(pos) ?? []).sort((a: any, b: any) => orderNum(a) - orderNum(b))
+        if (list.length === 0) return
+        const byRow = new Map<number, any[]>()
+        list.forEach((t: any) => {
+          const rowIdx = orderToRowIndex(orderNum(t))
+          const arr = byRow.get(rowIdx) ?? []
+          arr.push(t)
+          byRow.set(rowIdx, arr)
+        })
+        const positionRows = Array.from(byRow.keys())
+          .sort((a, b) => a - b)
+          .map((r) => (byRow.get(r) ?? []).sort((a: any, b: any) => orderNum(a) - orderNum(b)))
+        positionRows.forEach((row, rowIdx) => {
+          row.forEach((t: any) => subRowByTenureId.set(t.id, rowIdx))
+        })
+      })
+      const maxSubRow = Math.max(0, ...Array.from(subRowByTenureId.values()))
+      const rowGroups: any[][] = []
+      for (let sr = 0; sr <= maxSubRow; sr++) {
+        const rowTenures = tenuresInCentury.filter((t: any) => subRowByTenureId.get(t.id) === sr)
+        if (rowTenures.length > 0) rowGroups.push(rowTenures)
+      }
+      const minStart = (row: any[]) =>
+        Math.min(...row.map((t: any) => (t.startDate ? new Date(t.startDate).getTime() : 0)))
+      rowGroups.sort((a, b) => minStart(a) - minStart(b))
+      rowGroups.forEach((r) => allRows.push(r))
+    })
+    const maxPerPosition = new Map<string, number>()
+    allRows.forEach((row) => {
+      const byPos = new Map<string, number>()
+      row.forEach((t: any) => {
+        const pos = getPosition(t)
+        byPos.set(pos, (byPos.get(pos) ?? 0) + 1)
+      })
+      positionsOrder.forEach((pos) => {
+        const count = byPos.get(pos) ?? 0
+        if (count > 0)
+          maxPerPosition.set(pos, Math.max(maxPerPosition.get(pos) ?? 0, count))
+      })
+    })
+    /** 데이터가 있는 직책만 열로 사용해 빈 공간 축소 */
+    const positionsWithData = positionsOrder.filter(
+      (pos) => (maxPerPosition.get(pos) ?? 0) > 0,
+    )
+    let colStart = 0
+    const columnStartByPosition = new Map<string, number>()
+    /* 스페이서 열 없이 연속 배치. 구분은 구분선 + POSITION_GROUP_GAP_PX로만 */
+    positionsWithData.forEach((pos) => {
+      columnStartByPosition.set(pos, colStart)
+      colStart += maxPerPosition.get(pos) ?? 0
+    })
+    const rows = allRows
+    const placement = new Map<string, { row: number; col: number }>()
+    rows.forEach((row, rowIdx) => {
+      const byPos = new Map<string, any[]>()
+      row.forEach((t: any) => {
+        const pos = getPosition(t)
+        const list = byPos.get(pos) ?? []
+        list.push(t)
+        byPos.set(pos, list)
+      })
+      positionsWithData.forEach((pos) => {
+        const list = (byPos.get(pos) ?? []).sort(sortByOrder)
+        const startCol = columnStartByPosition.get(pos) ?? 0
+        list.forEach((t: any, i: number) => {
+          placement.set(t.id, { row: rowIdx, col: startCol + i })
+        })
+      })
+    })
+    const separatorBeforeCols = positionsWithData
+      .slice(1)
+      .map((pos) => columnStartByPosition.get(pos))
+      .filter((c): c is number => c != null)
+    const positionHeaders = positionsWithData.map((pos) => ({
+      label: pos,
+      startCol: columnStartByPosition.get(pos) ?? 0,
+      colCount: maxPerPosition.get(pos) ?? 0,
+    }))
+    const allTenures = rows.flat()
+    const getYear = (s: string | null | undefined): number | null => {
+      if (!s) return null
+      const y = parseInt(String(s).slice(0, 4), 10)
+      return Number.isNaN(y) ? null : y
+    }
+    let minYear = Infinity
+    let maxYear = -Infinity
+    allTenures.forEach((t: any) => {
+      const start = getYear(t.startDate)
+      const end = getYear(t.endDate)
+      const endY = end ?? (start != null ? new Date().getFullYear() : null)
+      if (start != null) minYear = Math.min(minYear, start)
+      if (endY != null) maxYear = Math.max(maxYear, endY)
+    })
+    const yearRange =
+      minYear !== Infinity && maxYear !== -Infinity && maxYear >= minYear
+        ? { minYear, maxYear: Math.max(maxYear, minYear + 1) }
+        : undefined
+    return { rows, placement, parentToChildren, separatorBeforeCols, positionHeaders, yearRange }
+  }, [lineageEligibleGroups, selectedPositionFilter, lineageByGroup, positionDefinitions, personById, persons])
+
+  /** 재임 ID → 직책명 (카드에 직책 뱃지 표시용, 전체 보기에서 사용) */
+  const tenureIdToPositionLabel = React.useMemo(() => {
+    const m = new Map<string, string>()
+    tenuresByPosition.forEach((g) =>
+      g.tenures.forEach((t: any) => m.set(t.id, g.label)),
+    )
+    return m
+  }, [tenuresByPosition])
+  const getPositionLabel = (t: any) =>
+    tenureIdToPositionLabel.get(t.id) ?? (t.title || t.position?.title) ?? '—'
+
+  /** 세대별 그룹: 재위/대수로 행 배치. 1대만 첫 행, 2·3대 같은 행, 4·5대 같은 행 … (형제 가로 배치). */
+  const lineageRows = React.useMemo(() => {
+    if (lineageTenures.length === 0) return []
+    const orderNum = (t: any) => {
+      const n =
+        t?.termNumber ?? t?.term_number ?? t?.regnalNumber ?? t?.regnal_number
+      if (n == null) return 0
+      const num = typeof n === 'number' ? n : parseInt(String(n), 10)
+      return Number.isNaN(num) ? 0 : num
+    }
+    /** order 1 → row 0, order 2,3 → row 1, order 4,5 → row 2, … */
+    const orderToRowIndex = (order: number) =>
+      order <= 1 ? 0 : Math.floor((order - 2) / 2) + 1
+    const byRow = new Map<number, any[]>()
+    lineageTenures.forEach((t: any) => {
+      const order = orderNum(t)
+      const rowIdx = orderToRowIndex(order)
+      const list = byRow.get(rowIdx) ?? []
+      list.push(t)
+      byRow.set(rowIdx, list)
+    })
+    const rowIndexes = Array.from(byRow.keys()).sort((a, b) => a - b)
+    const rows = rowIndexes.map((r) =>
+      (byRow.get(r) ?? []).sort((a: any, b: any) => orderNum(a) - orderNum(b)),
+    )
+    return rows.length > 0 ? rows : [lineageTenures]
+  }, [lineageTenures])
 
   /** 노드 배치: tenure id -> { row, col } (가계도 SVG/그리드용) */
   const lineagePlacement = React.useMemo(() => {
@@ -464,15 +730,15 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     return map
   }, [lineageRows])
 
-  /** 부모 tenure id -> 자식 tenure id[] (연결선 그리기용). 부모 ID는 persons 목록 기준. */
+  /** 부모 tenure id -> 자식 tenure id[] (연결선 그리기용). 서버 persons의 fatherId 기준. */
   const parentToChildren = React.useMemo(() => {
-    const norm = (id: unknown) => (id != null && id !== '' ? String(id) : null)
-    const personIds = new Set(
-      lineageTenures.map((t: any) => norm(t.person?.id)).filter((id): id is string => id != null),
+    const getPersonId = (t: any) => normId(t?.person?.id ?? (t as any)?.personId)
+    const personIds = new Set<string>(
+      lineageTenures.map(getPersonId).filter((id): id is string => id != null),
     )
     const tenureByPersonId = new Map<string, any>()
     lineageTenures.forEach((t: any) => {
-      const pid = norm(t.person?.id)
+      const pid = getPersonId(t)
       if (!pid) return
       const existing = tenureByPersonId.get(pid)
       const order = t.termNumber ?? t.regnalNumber ?? 0
@@ -481,24 +747,16 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     })
     const map = new Map<string, string[]>()
     lineageTenures.forEach((t: any) => {
-      const pid = norm(t.person?.id)
-      const fullPerson = pid ? personById.get(pid) ?? t.person : t.person
-      const parentId = getParentId(fullPerson, personIds)
-      if (!parentId) return
-      const parentTenure = tenureByPersonId.get(parentId)
+      const parentPersonId = getParentIdFromTenureForRow(t, personIds, personById, persons)
+      if (!parentPersonId) return
+      const parentTenure = tenureByPersonId.get(parentPersonId)
       if (!parentTenure) return
       const list = map.get(parentTenure.id) ?? []
       list.push(t.id)
       map.set(parentTenure.id, list)
     })
-
-    if (map.size === 0 && lineageTenures.length >= 2) {
-      for (let i = 0; i < lineageTenures.length - 1; i++) {
-        map.set(lineageTenures[i].id, [lineageTenures[i + 1].id])
-      }
-    }
     return map
-  }, [lineageTenures, personById])
+  }, [lineageTenures, personById, persons])
 
   const showLineageTab = lineageEligibleGroups.length > 0
 
@@ -550,54 +808,35 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                   <ListHead>
                     <ListHeadLeft>
                       {tenuresByPosition.length > 0 && (
-                        tenuresByPosition.length <= 5 ? (
-                          <PositionFilterTabs role="tablist" aria-label="직책 선택">
+                        <PositionFilterTabs role="tablist" aria-label="직책 선택">
+                          <PositionFilterTab
+                            role="tab"
+                            type="button"
+                            $active={selectedPositionFilter == null}
+                            onClick={() => {
+                              setSelectedPositionFilter(null)
+                              setSelectedLineagePositionLabel(
+                                lineageEligibleGroups.length > 0 ? lineageEligibleGroups[0].label : null,
+                              )
+                            }}
+                          >
+                            전체
+                          </PositionFilterTab>
+                          {tenuresByPosition.map((g) => (
                             <PositionFilterTab
+                              key={g.label}
                               role="tab"
                               type="button"
-                              $active={selectedPositionFilter == null}
+                              $active={selectedPositionFilter === g.label}
                               onClick={() => {
-                                setSelectedPositionFilter(null)
-                                setSelectedLineagePositionLabel(
-                                  lineageEligibleGroups.length > 0 ? lineageEligibleGroups[0].label : null,
-                                )
+                                setSelectedPositionFilter(g.label)
+                                setSelectedLineagePositionLabel(g.label)
                               }}
                             >
-                              전체
+                              {g.label} ({g.tenures.length})
                             </PositionFilterTab>
-                            {tenuresByPosition.map((g) => (
-                              <PositionFilterTab
-                                key={g.label}
-                                role="tab"
-                                type="button"
-                                $active={selectedPositionFilter === g.label}
-                                onClick={() => {
-                                  setSelectedPositionFilter(g.label)
-                                  setSelectedLineagePositionLabel(g.label)
-                                }}
-                              >
-                                {g.label} ({g.tenures.length})
-                              </PositionFilterTab>
-                            ))}
-                          </PositionFilterTabs>
-                        ) : (
-                          <PositionFilterSelect
-                            value={selectedPositionFilter ?? ''}
-                            onChange={(e) => {
-                              const v = e.target.value || null
-                              setSelectedPositionFilter(v)
-                              if (v) setSelectedLineagePositionLabel(v)
-                            }}
-                            aria-label="직책 선택"
-                          >
-                            <option value="">전체</option>
-                            {tenuresByPosition.map((g) => (
-                              <option key={g.label} value={g.label}>
-                                {g.label} ({g.tenures.length}명)
-                              </option>
-                            ))}
-                          </PositionFilterSelect>
-                        )
+                          ))}
+                        </PositionFilterTabs>
                       )}
                       {showLineageTab && (
                         <ViewModeTabs role="tablist" aria-label="보기 방식">
@@ -649,40 +888,43 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                       <EmptyTitle>등록된 재임 기록이 없습니다</EmptyTitle>
                       <EmptyDesc>수반 등록 버튼을 눌러 재임 기록을 추가해 보세요.</EmptyDesc>
                     </EmptyState>
-                  ) : listViewMode === 'lineage' && lineageTenures.length > 0 ? (
+                  ) : listViewMode === 'lineage' &&
+                    (selectedPositionFilter == null
+                      ? mergedLineageAll != null
+                      : lineageTenures.length > 0) ? (
                     <LineageWrap>
-                      {lineageEligibleGroups.length > 1 && selectedPositionFilter == null && (
-                        <LineageLegend style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                          <strong>직책</strong>
-                          <PositionFilterSelect
-                            value={selectedLineagePositionLabel ?? ''}
-                            onChange={(e) =>
-                              setSelectedLineagePositionLabel(e.target.value || null)}
-                            style={{ minWidth: 120 }}
-                          >
-                            {lineageEligibleGroups.map((g) => (
-                              <option key={g.label} value={g.label}>
-                                {g.label} 계보
-                              </option>
-                            ))}
-                          </PositionFilterSelect>
-                        </LineageLegend>
+                      {selectedPositionFilter == null && mergedLineageAll ? (
+                        <LineageTree
+                          rows={mergedLineageAll.rows}
+                          placement={mergedLineageAll.placement}
+                          parentToChildren={emptyMap}
+                          variableCardHeight
+                          yearRange={mergedLineageAll.yearRange}
+                          getPersonName={getPersonName}
+                          formatDate={formatDate}
+                          getRegnalNameFromNotes={getRegnalNameFromNotes}
+                          getPositionLabel={getPositionLabel}
+                          separatorBeforeCols={mergedLineageAll.separatorBeforeCols}
+                          positionHeaders={mergedLineageAll.positionHeaders}
+                          onCardClick={(tenureId) => {
+                            setEditingTenureId(tenureId)
+                            setView('register')
+                          }}
+                        />
+                      ) : (
+                        <LineageTree
+                          rows={lineageRows}
+                          placement={lineagePlacement}
+                          parentToChildren={emptyMap}
+                          getPersonName={getPersonName}
+                          formatDate={formatDate}
+                          getRegnalNameFromNotes={getRegnalNameFromNotes}
+                          onCardClick={(tenureId) => {
+                            setEditingTenureId(tenureId)
+                            setView('register')
+                          }}
+                        />
                       )}
-                      <LineageLegend>
-                        <strong>가계도</strong> — 선으로 연결된 위→아래가 부모→자식 관계입니다. 카드의 <strong>재위 연도</strong>가 강조되어 있습니다. 인물에 부·모가 등록되어 있어야 선이 연결됩니다.
-                      </LineageLegend>
-                      <LineageTree
-                        rows={lineageRows}
-                        placement={lineagePlacement}
-                        parentToChildren={parentToChildren}
-                        getPersonName={getPersonName}
-                        formatDate={formatDate}
-                        getRegnalNameFromNotes={getRegnalNameFromNotes}
-                        onCardClick={(tenureId) => {
-                          setEditingTenureId(tenureId)
-                          setView('register')
-                        }}
-                      />
                     </LineageWrap>
                   ) : (
                     <>
@@ -1004,6 +1246,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   )
 }
 
+const HEAD_ACCENT = '#6366f1'
+
 const SectionOuter = styled.div<{ $embedded?: boolean }>`
   margin-top: ${({ $embedded }) => ($embedded ? '0' : '28px')};
 `
@@ -1030,11 +1274,12 @@ const SectionSubtitle = styled.p`
 
 const PositionFilterTabs = styled.div`
   display: flex;
-  gap: 4px;
+  gap: 2px;
   padding: 4px;
-  background: #e2e8f0;
+  background: #f1f5f9;
   border-radius: 10px;
   flex-wrap: wrap;
+  border: 1px solid rgba(0, 0, 0, 0.04);
 `
 
 const PositionFilterTab = styled.button<{ $active?: boolean }>`
@@ -1042,55 +1287,38 @@ const PositionFilterTab = styled.button<{ $active?: boolean }>`
   font-size: 13px;
   font-weight: 600;
   color: ${({ $active }) => ($active ? '#fff' : '#64748b')};
-  background: ${({ $active }) => ($active ? 'var(--color-primary)' : 'transparent')};
+  background: ${({ $active }) => ($active ? HEAD_ACCENT : 'transparent')};
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   white-space: nowrap;
 
   &:hover {
     color: ${({ $active }) => ($active ? '#fff' : '#334155')};
-    background: ${({ $active }) => ($active ? '#7c3aed' : 'rgba(0,0,0,0.06)')};
-  }
-`
-
-const PositionFilterSelect = styled.select`
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #334155;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  min-width: 140px;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
-
-  &:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.15);
+    background: ${({ $active }) => ($active ? '#4f46e5' : 'rgba(0,0,0,0.04)')};
+    ${({ $active }) => $active && 'box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);'}
   }
 `
 
 const ListWrap = styled.div`
   margin-top: 0;
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
 `
 
 const ListHead = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  gap: 20px;
+  padding: 22px 28px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: linear-gradient(180deg, #fafbff 0%, #ffffff 100%);
   flex-wrap: wrap;
+  border-radius: 12px 12px 0 0;
 `
 
 const ListHeadLeft = styled.div`
@@ -1102,43 +1330,45 @@ const ListHeadLeft = styled.div`
 
 const ViewModeTabs = styled.div`
   display: flex;
-  gap: 4px;
+  gap: 2px;
   padding: 4px;
-  background: #e2e8f0;
+  background: #f1f5f9;
   border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
 `
 
 const ViewModeTab = styled.button<{ $active?: boolean }>`
   padding: 8px 16px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: ${({ $active }) => ($active ? '#fff' : '#64748b')};
-  background: ${({ $active }) => ($active ? 'var(--color-primary)' : 'transparent')};
+  background: ${({ $active }) => ($active ? HEAD_ACCENT : 'transparent')};
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
     color: ${({ $active }) => ($active ? '#fff' : '#334155')};
-    background: ${({ $active }) => ($active ? '#7c3aed' : 'rgba(0,0,0,0.06)')};
+    background: ${({ $active }) => ($active ? '#4f46e5' : 'rgba(0,0,0,0.04)')};
+    ${({ $active }) => $active && 'box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);'}
   }
 `
 
 const LineageWrap = styled.div`
-  padding: 24px 24px 32px;
+  padding: 0;
   min-height: 200px;
 `
 
 const LineageLegend = styled.div`
-  margin-bottom: 20px;
-  padding: 14px 18px;
+  margin-bottom: 24px;
+  padding: 16px 20px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 13px;
   color: #475569;
-  line-height: 1.5;
+  line-height: 1.55;
 `
 
 const ListTitle = styled.h2`
@@ -1146,7 +1376,8 @@ const ListTitle = styled.h2`
   font-size: 18px;
   font-weight: 700;
   color: #0f172a;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
 
   .count {
     font-weight: 500;
@@ -1176,19 +1407,25 @@ const AddTenureButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
+  padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: var(--color-primary);
+  background: ${HEAD_ACCENT};
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.2);
 
   &:hover {
-    background: #8b5cf6;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+    background: #4f46e5;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 `
 
