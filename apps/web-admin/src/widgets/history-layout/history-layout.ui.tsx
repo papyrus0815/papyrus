@@ -85,8 +85,9 @@ export default function HistoryLayout() {
                     $active={isActive('/history/country')}
                   >
                     <SidebarIcon>
-                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                        <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.7 0 3.25.62 4.45 1.64-.53.18-1.12.36-1.45.36-1 0-2-.5-3.5-.5-.86 0-1.6.17-2.22.44C9.73 4.67 10.83 4 12 4z" />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                       </svg>
                     </SidebarIcon>
                     <SidebarLabel>국가</SidebarLabel>
@@ -99,8 +100,8 @@ export default function HistoryLayout() {
                     $active={isActive('/history/continents')}
                   >
                     <SidebarIcon>
-                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 8h-4V5h-2v5H7v2h4v5h2v-5h4v-2z" />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
                       </svg>
                     </SidebarIcon>
                     <SidebarLabel>대륙</SidebarLabel>
@@ -113,9 +114,9 @@ export default function HistoryLayout() {
                     $active={isActive('/history/dynasties')}
                   >
                     <SidebarIcon>
-                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" />
+                        <path d="M9 22V12h6v10" />
                       </svg>
                     </SidebarIcon>
                     <SidebarLabel>가문</SidebarLabel>
@@ -128,16 +129,9 @@ export default function HistoryLayout() {
                     $active={isActive('/history/jobs')}
                   >
                     <SidebarIcon>
-                      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                        <rect
-                          x="2"
-                          y="7"
-                          width="20"
-                          height="14"
-                          rx="2"
-                          ry="2"
-                        />
-                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z" />
+                        <path d="M2 8h20M16 8V6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
                       </svg>
                     </SidebarIcon>
                     <SidebarLabel>직업</SidebarLabel>
@@ -171,11 +165,12 @@ export default function HistoryLayout() {
                 onClick={() => navigate('/history/country')}
                 $active={isActive('/history/country')}
                 title="국가"
-                whileHover={{ scale: 1.1, y: -2 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.7 0 3.25.62 4.45 1.64-.53.18-1.12.36-1.45.36-1 0-2-.5-3.5-.5-.86 0-1.6.17-2.22.44C9.73 4.67 10.83 4 12 4z" />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                 </svg>
               </CollapsedIconItem>
 
@@ -184,11 +179,11 @@ export default function HistoryLayout() {
                 onClick={() => navigate('/history/continents')}
                 $active={isActive('/history/continents')}
                 title="대륙"
-                whileHover={{ scale: 1.1, y: -2 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 8h-4V5h-2v5H7v2h4v5h2v-5h4v-2z" />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
                 </svg>
               </CollapsedIconItem>
 
@@ -197,12 +192,12 @@ export default function HistoryLayout() {
                 onClick={() => navigate('/history/dynasties')}
                 $active={isActive('/history/dynasties')}
                 title="가문"
-                whileHover={{ scale: 1.1, y: -2 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
+                  <path d="M9 22V12h6v10" />
                 </svg>
               </CollapsedIconItem>
 
@@ -211,12 +206,12 @@ export default function HistoryLayout() {
                 onClick={() => navigate('/history/jobs')}
                 $active={isActive('/history/jobs')}
                 title="직업"
-                whileHover={{ scale: 1.1, y: -2 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z" />
+                  <path d="M2 8h20M16 8V6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
                 </svg>
               </CollapsedIconItem>
             </CollapsedIcons>
@@ -261,8 +256,9 @@ export default function HistoryLayout() {
           $active={isActive('/history/country')}
         >
           <TabBarIcon $active={isActive('/history/country')}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.7 0 3.25.62 4.45 1.64-.53.18-1.12.36-1.45.36-1 0-2-.5-3.5-.5-.86 0-1.6.17-2.22.44C9.73 4.67 10.83 4 12 4z" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
             </svg>
           </TabBarIcon>
           <TabBarLabel $active={isActive('/history/country')}>국가</TabBarLabel>
@@ -278,9 +274,9 @@ export default function HistoryLayout() {
           $active={isActive('/history/dynasties')}
         >
           <TabBarIcon $active={isActive('/history/dynasties')}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
+              <path d="M9 22V12h6v10" />
             </svg>
           </TabBarIcon>
           <TabBarLabel $active={isActive('/history/dynasties')}>
@@ -297,9 +293,9 @@ export default function HistoryLayout() {
           $active={isActive('/history/jobs')}
         >
           <TabBarIcon $active={isActive('/history/jobs')}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z" />
+              <path d="M2 8h20M16 8V6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
             </svg>
           </TabBarIcon>
           <TabBarLabel $active={isActive('/history/jobs')}>직업</TabBarLabel>
@@ -316,8 +312,8 @@ export default function HistoryLayout() {
               onClick={() => setShowMenu(!showMenu)}
             >
               <motion.svg
-                width="28"
-                height="28"
+                width="24"
+                height="24"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -327,7 +323,6 @@ export default function HistoryLayout() {
                 animate={{ rotate: showMenu ? 180 : 0 }}
                 transition={{ duration: 0.3, ease: 'easeInOut' }}
               >
-                {/* 그리드 아이콘 (4개 사각형) */}
                 <rect x="3" y="3" width="7" height="7" rx="1" />
                 <rect x="14" y="3" width="7" height="7" rx="1" />
                 <rect x="14" y="14" width="7" height="7" rx="1" />
@@ -345,8 +340,8 @@ export default function HistoryLayout() {
           $active={isActive('/history/continents')}
         >
           <TabBarIcon $active={isActive('/history/continents')}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 8h-4V5h-2v5H7v2h4v5h2v-5h4v-2z" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
             </svg>
           </TabBarIcon>
           <TabBarLabel $active={isActive('/history/continents')}>
@@ -395,13 +390,11 @@ export default function HistoryLayout() {
                 setShowMenu(false)
               }}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
               </svg>
               대시보드
             </MenuItem>
@@ -417,13 +410,8 @@ export default function HistoryLayout() {
                 setShowMenu(false)
               }}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
               </svg>
               목록
             </MenuItem>
@@ -454,11 +442,10 @@ const Root = styled.div<{ $collapsed?: boolean }>`
   min-height: 100vh;
   display: grid;
   grid-template-columns: ${({ $collapsed }) =>
-    $collapsed ? '60px minmax(0, 1fr)' : '10% minmax(0, 1fr)'};
+    $collapsed ? '64px minmax(0, 1fr)' : '10% minmax(0, 1fr)'};
   column-gap: 0;
   padding: var(--header-height) 0 0;
-  background: var(--surface);
-  background-image: var(--gradient-subtle);
+  background: #ffffff;
   transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: 1024px) {
@@ -481,30 +468,26 @@ const SidebarWrapper = styled.div`
   }
 `
 
-/* 데스크톱 좌측 사이드바 */
+/* 데스크톱 좌측 사이드바 - 헤더 아래부터 표시 */
 const Sidebar = styled.aside<{ $collapsed?: boolean }>`
   position: sticky;
   top: var(--header-height);
   align-self: start;
   height: calc(100vh - var(--header-height));
-  padding: 12px 8px;
-  border-right: 1px solid rgba(173, 70, 255, 0.12);
-  background: linear-gradient(180deg, #fefefe 0%, #fafbfc 100%);
+  width: ${({ $collapsed }) => ($collapsed ? '64px' : '100%')};
+  min-width: ${({ $collapsed }) => ($collapsed ? '64px' : '100%')};
+  max-width: ${({ $collapsed }) => ($collapsed ? '64px' : '100%')};
+  padding: 16px 10px;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow:
-    2px 0 16px rgba(173, 70, 255, 0.04),
-    1px 0 4px rgba(0, 0, 0, 0.02),
-    inset -1px 0 0 rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  width: ${({ $collapsed }) => ($collapsed ? '60px' : '100%')};
-  min-width: ${({ $collapsed }) => ($collapsed ? '60px' : '100%')};
-  max-width: ${({ $collapsed }) => ($collapsed ? '60px' : '100%')};
-  position: relative; /* CollapsedIcons의 absolute 위치 기준점 */
 
   @media (max-width: 1024px) {
-    display: none; /* 태블릿/모바일에서는 숨기고 MobileSidebar 사용 */
+    display: none;
   }
 `
 
@@ -515,67 +498,32 @@ const CollapseButton = styled.button<{ $collapsed?: boolean }>`
   position: absolute;
   top: 50%;
   left: ${({ $collapsed }) =>
-    $collapsed ? 'calc(60px - 18px)' : 'calc(100% - 18px)'};
+    $collapsed ? 'calc(64px - 20px)' : 'calc(100% - 20px)'};
   transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid rgba(173, 70, 255, 0.15);
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  color: var(--color-primary);
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 100;
-  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow:
-    0 4px 16px rgba(173, 70, 255, 0.2),
-    0 2px 8px rgba(0, 0, 0, 0.1),
-    0 0 0 4px rgba(255, 255, 255, 0.95),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -6px;
-    border-radius: 50%;
-    background: radial-gradient(
-      circle,
-      rgba(173, 70, 255, 0.1) 0%,
-      transparent 70%
-    );
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s, border-color 0.2s, background 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 
   &:hover {
-    background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
-    border-color: var(--color-primary);
-    box-shadow:
-      0 6px 24px rgba(173, 70, 255, 0.3),
-      0 3px 12px rgba(0, 0, 0, 0.12),
-      0 0 0 4px rgba(255, 255, 255, 0.98),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
-
-    &::before {
-      opacity: 1;
-    }
-  }
-
-  &:active {
-    box-shadow:
-      0 2px 10px rgba(173, 70, 255, 0.25),
-      0 1px 5px rgba(0, 0, 0, 0.1),
-      0 0 0 4px rgba(255, 255, 255, 0.95),
-      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    background: #f8fafc;
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.25);
   }
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     transition: transform 0.2s ease;
-    filter: drop-shadow(0 1px 2px rgba(173, 70, 255, 0.3));
   }
 `
 
@@ -598,91 +546,42 @@ const CollapsedIcons = styled.div`
  * 접힌 상태의 아이콘 아이템
  */
 const CollapsedIconItem = styled.button<{ $active?: boolean }>`
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   border: none;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, rgba(173, 70, 255, 0.15) 0%, rgba(173, 70, 255, 0.08) 100%)'
-      : 'transparent'};
-  color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#5f6368')};
+  background: ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.1)' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   position: relative;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: ${({ $active }) =>
-    $active
-      ? '0 2px 8px rgba(173, 70, 255, 0.15), 0 1px 3px rgba(0, 0, 0, 0.06)'
-      : 'none'};
+  transition: all 0.2s ease;
 
   svg {
-    width: 24px;
-    height: 24px;
-    transition: all 0.25s ease;
-    filter: ${({ $active }) =>
-      $active ? 'drop-shadow(0 2px 4px rgba(173, 70, 255, 0.3))' : 'none'};
+    width: 22px;
+    height: 22px;
   }
 
-  /* 활성 상태 인디케이터 */
   &::before {
     content: '';
     position: absolute;
-    left: -8px;
+    left: -6px;
     top: 50%;
     transform: translateY(-50%);
-    width: 4px;
-    height: ${({ $active }) => ($active ? '60%' : '0%')};
-    border-radius: 0 4px 4px 0;
-    background: linear-gradient(180deg, var(--color-primary) 0%, #9146ff 100%);
+    width: 3px;
+    height: ${({ $active }) => ($active ? '56%' : '0')};
+    border-radius: 0 2px 2px 0;
+    background: #6366f1;
     opacity: ${({ $active }) => ($active ? 1 : 0)};
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: ${({ $active }) =>
-      $active ? '0 2px 8px rgba(173, 70, 255, 0.4)' : 'none'};
-  }
-
-  /* 활성 상태 글로우 효과 */
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 12px;
-    background: radial-gradient(
-      circle at center,
-      rgba(173, 70, 255, 0.2) 0%,
-      transparent 70%
-    );
-    opacity: ${({ $active }) => ($active ? 1 : 0)};
-    transition: opacity 0.3s ease;
-    pointer-events: none;
+    transition: all 0.25s ease;
   }
 
   &:hover {
     background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, rgba(173, 70, 255, 0.2) 0%, rgba(173, 70, 255, 0.12) 100%)'
-        : 'rgba(173, 70, 255, 0.08)'};
-    color: var(--color-primary);
-    box-shadow:
-      0 4px 12px rgba(173, 70, 255, 0.2),
-      0 2px 6px rgba(0, 0, 0, 0.08);
-
-    svg {
-      filter: drop-shadow(0 2px 6px rgba(173, 70, 255, 0.4));
-    }
-
-    &::before {
-      opacity: 1;
-      height: 70%;
-    }
-  }
-
-  &:active {
-    box-shadow:
-      0 1px 4px rgba(173, 70, 255, 0.15),
-      0 1px 2px rgba(0, 0, 0, 0.06);
+      $active ? 'rgba(99, 102, 241, 0.14)' : 'rgba(0, 0, 0, 0.04)'};
+    color: #6366f1;
   }
 `
 
@@ -704,13 +603,14 @@ const MobileBottomTabBar = styled.nav`
     bottom: 0;
     left: 0;
     right: 0;
-    height: 70px;
+    height: 64px;
     padding-bottom: env(safe-area-inset-bottom);
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px) saturate(180%);
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
     z-index: ${Z_INDEX.STICKY_HEADER};
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.04);
   }
 `
 
@@ -734,32 +634,26 @@ const TabBarItem = styled(motion.button)<{ $active?: boolean }>`
 `
 
 const TabBarIcon = styled.div<{ $active?: boolean }>`
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#70757a')};
-  transition: all 0.2s ease;
+  color: ${({ $active }) => ($active ? '#6366f1' : '#94a3b8')};
+  transition: color 0.2s ease;
 
   svg {
-    width: 24px;
-    height: 24px;
-  }
-
-  ${TabBarItem}:hover & {
-    transform: scale(1.05);
+    width: 22px;
+    height: 22px;
   }
 `
 
 const TabBarLabel = styled.span<{ $active?: boolean }>`
   font-size: 11px;
-  font-weight: ${({ $active }) => ($active ? '700' : '600')};
-  color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#70757a')};
-  letter-spacing: -0.01em;
-  transition: all 0.2s ease;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  color: ${({ $active }) => ($active ? '#6366f1' : '#94a3b8')};
+  letter-spacing: -0.02em;
+  transition: color 0.2s ease;
 `
 
 const ActiveIndicator = styled.div`
@@ -767,11 +661,10 @@ const ActiveIndicator = styled.div`
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 32px;
-  height: 3px;
-  background: linear-gradient(90deg, var(--color-primary), #9146ff);
-  border-radius: 0 0 3px 3px;
-  box-shadow: 0 2px 8px rgba(173, 70, 255, 0.4);
+  width: 24px;
+  height: 2.5px;
+  background: #6366f1;
+  border-radius: 0 0 2px 2px;
 `
 
 /* ============================================
@@ -795,71 +688,28 @@ const CenterFabWrapper = styled.div`
  * - 3D 효과, 펄스 애니메이션 포함
  */
 const CenterFab = styled(motion.button)`
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 3px solid #ffffff;
-  background: linear-gradient(135deg, #ad46ff 0%, #7c3aed 50%, #9146ff 100%);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: none;
+  background: #6366f1;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow:
-    0 8px 20px rgba(173, 70, 255, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.15),
-    inset 0 -2px 8px rgba(0, 0, 0, 0.2),
-    inset 0 2px 8px rgba(255, 255, 255, 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
   position: relative;
-  top: -12px;
-
-  /* 펄스 애니메이션 링 */
-  &::before {
-    content: '';
-    position: absolute;
-    top: -5px;
-    left: -5px;
-    right: -5px;
-    bottom: -5px;
-    border-radius: 50%;
-    border: 2px solid var(--color-primary);
-    opacity: 0;
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0% {
-      transform: scale(1);
-      opacity: 0.6;
-    }
-    50% {
-      transform: scale(1.1);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(1);
-      opacity: 0;
-    }
-  }
+  top: -10px;
 
   &:hover {
-    transform: translateY(-4px) scale(1.05);
-    box-shadow:
-      0 12px 28px rgba(173, 70, 255, 0.6),
-      0 4px 12px rgba(0, 0, 0, 0.2),
-      inset 0 -2px 8px rgba(0, 0, 0, 0.2),
-      inset 0 2px 8px rgba(255, 255, 255, 0.3);
-  }
-
-  &:active {
-    transform: translateY(-2px) scale(0.95);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
   }
 
   svg {
-    width: 28px;
-    height: 28px;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    width: 24px;
+    height: 24px;
   }
 `
 
@@ -894,28 +744,24 @@ const ModalOverlay = styled(motion.div)`
  */
 const QuickMenu = styled(motion.div)`
   position: fixed;
-  bottom: 90px;
+  bottom: 84px;
   left: 50%;
   transform: translateX(-50%);
-  background: #fff;
+  background: #ffffff;
   border-radius: 16px;
-  padding: 12px 0;
-  box-shadow:
-    0 12px 32px rgba(0, 0, 0, 0.2),
-    0 4px 12px rgba(173, 70, 255, 0.15);
+  padding: 8px 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   z-index: ${Z_INDEX.DIALOG_CONTENT};
-  min-width: 220px;
-  border: 1px solid rgba(173, 70, 255, 0.1);
+  min-width: 200px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
 `
 
-/* 메뉴 제목 */
 const MenuTitle = styled.div`
-  padding: 8px 16px;
-  font-size: 12px;
+  padding: 8px 14px;
+  font-size: 11px;
   font-weight: 600;
-  color: #70757a;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
 `
 
 /**
@@ -928,54 +774,39 @@ const MenuItem = styled.button`
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border: none;
   background: transparent;
-  color: #202124;
+  color: #334155;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
   text-align: left;
+  border-radius: 8px;
+  margin: 0 6px;
 
   svg {
-    color: #5f6368;
-    transition: color 0.15s ease;
+    color: #64748b;
   }
 
   &:hover {
-    background: rgba(173, 70, 255, 0.08);
-    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.08);
+    color: #6366f1;
 
     svg {
-      color: var(--color-primary);
+      color: #6366f1;
     }
-  }
-
-  &:active {
-    background: rgba(173, 70, 255, 0.12);
   }
 `
 
 const SidebarGroupTitle = styled.div`
   font-size: 11px;
-  font-weight: 700;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 16px 14px 8px;
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  &::before {
-    content: '';
-    width: 3px;
-    height: 12px;
-    background: linear-gradient(180deg, var(--color-primary) 0%, #9146ff 100%);
-    border-radius: 2px;
-  }
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.06em;
+  padding: 12px 12px 6px;
+  margin-top: 4px;
 `
 
 const SidebarItem = styled.button<{ $active?: boolean }>`
@@ -983,24 +814,17 @@ const SidebarItem = styled.button<{ $active?: boolean }>`
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 12px;
   margin-bottom: 2px;
-  border-radius: 12px;
-  border: 1px solid transparent;
+  border-radius: 10px;
+  border: none;
   position: relative;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, rgba(173, 70, 255, 0.12) 0%, rgba(173, 70, 255, 0.06) 100%)'
-      : 'transparent'};
-  color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#374151')};
+  background: ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.1)' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#6366f1' : '#475569')};
   cursor: pointer;
   text-align: left;
   text-decoration: none;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: ${({ $active }) =>
-    $active
-      ? '0 2px 8px rgba(173, 70, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)'
-      : 'none'};
+  transition: all 0.2s ease;
 
   &::before {
     content: '';
@@ -1009,93 +833,38 @@ const SidebarItem = styled.button<{ $active?: boolean }>`
     top: 50%;
     transform: translateY(-50%);
     width: 3px;
-    height: ${({ $active }) => ($active ? '70%' : '0%')};
-    border-radius: 0 3px 3px 0;
-    background: linear-gradient(180deg, var(--color-primary) 0%, #9146ff 100%);
+    height: ${({ $active }) => ($active ? '60%' : '0')};
+    border-radius: 0 2px 2px 0;
+    background: #6366f1;
     opacity: ${({ $active }) => ($active ? 1 : 0)};
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: ${({ $active }) =>
-      $active ? '0 0 12px rgba(173, 70, 255, 0.5)' : 'none'};
-  }
-
-  /* 호버 시 빛나는 효과 */
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 12px;
-    background: radial-gradient(
-      circle at left center,
-      rgba(173, 70, 255, 0.08) 0%,
-      transparent 70%
-    );
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
+    transition: all 0.25s ease;
   }
 
   &:hover {
     background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, rgba(173, 70, 255, 0.15) 0%, rgba(173, 70, 255, 0.08) 100%)'
-        : 'linear-gradient(135deg, rgba(173, 70, 255, 0.08) 0%, rgba(173, 70, 255, 0.04) 100%)'};
-    transform: translateX(2px);
-    box-shadow:
-      0 4px 16px rgba(173, 70, 255, 0.12),
-      0 2px 6px rgba(0, 0, 0, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 0.7);
-
-    &::before {
-      opacity: 1;
-      height: ${({ $active }) => ($active ? '80%' : '50%')};
-    }
-
-    &::after {
-      opacity: 1;
-    }
-  }
-
-  &:active {
-    transform: translateX(1px) scale(0.98);
-    box-shadow:
-      0 2px 8px rgba(173, 70, 255, 0.1),
-      0 1px 3px rgba(0, 0, 0, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  }
-
-  @media (max-width: 768px) {
-    width: 100%;
+      $active ? 'rgba(99, 102, 241, 0.14)' : 'rgba(0, 0, 0, 0.04)'};
+    color: ${({ $active }) => ($active ? '#6366f1' : '#334155')};
   }
 `
 
 const SidebarIcon = styled.span`
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  opacity: 0.7;
-  transition: all 0.25s ease;
-  position: relative;
-  z-index: 1;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
 
   svg {
     width: 18px;
     height: 18px;
-    transition: all 0.25s ease;
   }
 
-  ${SidebarItem}:hover & {
+  ${SidebarItem}:hover &,
+  ${SidebarItem}[aria-current='true'] & {
     opacity: 1;
-    transform: scale(1.15) rotate(-5deg);
-    filter: drop-shadow(0 2px 8px rgba(173, 70, 255, 0.4));
-  }
-
-  ${SidebarItem}[aria-current='true'] &,
-  ${SidebarItem}:has([aria-current='true']) & {
-    opacity: 1;
-    filter: drop-shadow(0 2px 6px rgba(173, 70, 255, 0.3));
   }
 `
 
@@ -1103,15 +872,8 @@ const SidebarLabel = styled.span`
   font-size: 13px;
   font-weight: 500;
   color: inherit;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   line-height: 1.4;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  transition: all 0.2s ease;
-
-  ${SidebarItem}:hover & {
-    font-weight: 600;
-  }
 `
 
 const SidebarSection = styled.div`
@@ -1122,50 +884,23 @@ const SidebarSection = styled.div`
 
 const Badge = styled.span`
   margin-left: auto;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 7px;
-  border-radius: 11px;
-  background: rgba(107, 114, 128, 0.1);
-  color: #6b7280;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: #64748b;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  z-index: 1;
-  border: 1px solid transparent;
+  transition: all 0.2s ease;
 
-  ${SidebarItem}:hover & {
-    background: linear-gradient(
-      135deg,
-      rgba(173, 70, 255, 0.15) 0%,
-      rgba(173, 70, 255, 0.1) 100%
-    );
-    color: var(--color-primary);
-    transform: scale(1.08);
-    border-color: rgba(173, 70, 255, 0.2);
-    box-shadow:
-      0 2px 8px rgba(173, 70, 255, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  }
-
+  ${SidebarItem}:hover &,
   ${SidebarItem}[aria-current='true'] & {
-    background: linear-gradient(
-      135deg,
-      rgba(173, 70, 255, 0.2) 0%,
-      rgba(173, 70, 255, 0.15) 100%
-    );
-    color: var(--color-primary);
-    border-color: rgba(173, 70, 255, 0.3);
-    box-shadow:
-      0 2px 6px rgba(173, 70, 255, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.6);
-    font-weight: 800;
+    background: rgba(99, 102, 241, 0.12);
+    color: #6366f1;
   }
 `
 
@@ -1174,4 +909,5 @@ const Badge = styled.span`
  */
 const Content = styled.div`
   min-width: 0;
+  background: #ffffff;
 `
