@@ -132,26 +132,33 @@ export class EventController {
   async getAllEvents(
     @Query('offset') offset?: string,
     @Query('limit') limit?: string,
+    @Query('createdSinceDays') createdSinceDays?: string,
     @Request() req?: any,
   ): Promise<EventResponseDto[]> {
     const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
     const skip = offset ? parseInt(offset, 10) : 0
     const take = limit ? Math.min(parseInt(limit, 10), 100) : 20
+    const sinceDays = createdSinceDays ? parseInt(createdSinceDays, 10) : undefined
+    const createdAtGte =
+      sinceDays != null && !Number.isNaN(sinceDays) && sinceDays > 0
+        ? new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
+        : undefined
 
-    console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}`)
+    console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}, createdSinceDays=${sinceDays ?? 'all'}`)
     console.log(`👤 req.user:`, req.user)
     console.log(`👤 userId:`, userId)
 
     // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
     const events = await this.prisma.event.findMany({
       where: {
-        parentEventId: null, // 최상위 사건만
-        createdById: userId, // 본인 사건만
-        deletedAt: null, // 삭제되지 않은 사건만
+        parentEventId: null,
+        createdById: userId,
+        deletedAt: null,
+        ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
       },
       skip,
       take,
-      orderBy: { startDate: 'desc' },
+      orderBy: createdAtGte ? { createdAt: 'desc' } : { startDate: 'desc' },
       include: {
         category: true,
         parentEvent: true,

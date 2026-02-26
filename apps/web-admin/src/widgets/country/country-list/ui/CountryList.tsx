@@ -14,6 +14,56 @@ import * as S from '@/pages/history/country/country.styles'
 
 import { useCountryListState } from '../country-list-state.context'
 
+// Dashboard summary SVG icons
+const IconGlobe = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </svg>
+)
+const IconBuilding = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h6" />
+  </svg>
+)
+const IconFlag = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+    <line x1="4" y1="22" x2="4" y2="15" />
+  </svg>
+)
+const IconPeople = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+)
+// Dashboard menu SVG icons
+const IconExecutive = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+)
+const IconLegislature = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 21h18M3 7v1a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7h18M3 7v-.7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v.7" />
+    <path d="M8 12v6M12 12v6M16 12v6" />
+  </svg>
+)
+const IconMilitary = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+)
+const IconAdministration = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <path d="M8 21h8M12 17v4" />
+  </svg>
+)
+
 export type SortBy = 'name' | 'population' | 'area'
 export type ActiveTab = 'dashboard' | 'list'
 
@@ -32,7 +82,29 @@ interface CountryListProps {
   setShowSortModal: (v: boolean) => void
   showCountryTypeModal: boolean
   setShowCountryTypeModal: (v: boolean) => void
+  /** 대시보드 오른쪽 컨텐츠 뷰 (메뉴 선택 시 컨텐츠만 전환) */
+  dashboardContentView?: DashboardContentView
+  onDashboardMenuSelect?: (view: DashboardContentView) => void
 }
+
+export type DashboardContentView =
+  | 'stats'
+  | 'heads'
+  | 'legislature'
+  | 'military'
+  | 'administration'
+
+const DASHBOARD_MENU_ITEMS: {
+  id: DashboardContentView
+  label: string
+  icon: React.ComponentType
+}[] = [
+  { id: 'stats', label: '전 세계 국가 통계', icon: IconGlobe },
+  { id: 'heads', label: '행정 수반', icon: IconExecutive },
+  { id: 'legislature', label: '저원', icon: IconLegislature },
+  { id: 'military', label: '군사', icon: IconMilitary },
+  { id: 'administration', label: '행정부', icon: IconAdministration },
+]
 
 function CountryListInner({
   selectedId,
@@ -49,6 +121,8 @@ function CountryListInner({
   setShowSortModal,
   showCountryTypeModal,
   setShowCountryTypeModal,
+  dashboardContentView = 'stats',
+  onDashboardMenuSelect,
 }: CountryListProps) {
   const {
     countries,
@@ -303,29 +377,38 @@ function CountryListInner({
           </S.FilterRow>
         )}
 
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          style={{
-            width: '100%',
-            flex: 1,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-        {activeTab === 'dashboard' ? (
+        <S.SidebarTabBody>
+          <AnimatePresence initial={false} mode="wait">
+            {activeTab === 'dashboard' ? (
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                style={{
+                  width: '100%',
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'auto',
+                }}
+              >
+              <S.DashboardSidebarSectionTitle>전 세계 국가 통계</S.DashboardSidebarSectionTitle>
               <S.DashboardSummary>
                 <S.SummaryCard>
-                  <S.SummaryIcon>🌍</S.SummaryIcon>
+                  <S.SummaryIcon>
+                    <IconGlobe />
+                  </S.SummaryIcon>
                   <S.SummaryValue>{countries.length}</S.SummaryValue>
                   <S.SummaryLabel>총 국가</S.SummaryLabel>
                 </S.SummaryCard>
 
                 <S.SummaryCard>
-                  <S.SummaryIcon>🏛️</S.SummaryIcon>
+                  <S.SummaryIcon>
+                    <IconBuilding />
+                  </S.SummaryIcon>
                   <S.SummaryValue>
                     {
                       filtered.filter((country) => country.type === 'historical')
@@ -336,7 +419,9 @@ function CountryListInner({
                 </S.SummaryCard>
 
                 <S.SummaryCard>
-                  <S.SummaryIcon>🏳️</S.SummaryIcon>
+                  <S.SummaryIcon>
+                    <IconFlag />
+                  </S.SummaryIcon>
                   <S.SummaryValue>
                     {filtered.filter((country) => country.type === 'modern').length}
                   </S.SummaryValue>
@@ -344,7 +429,9 @@ function CountryListInner({
                 </S.SummaryCard>
 
                 <S.SummaryCard>
-                  <S.SummaryIcon>👥</S.SummaryIcon>
+                  <S.SummaryIcon>
+                    <IconPeople />
+                  </S.SummaryIcon>
                   <S.SummaryValue>
                     {Math.round(
                       filtered
@@ -362,16 +449,47 @@ function CountryListInner({
                   <S.SummaryLabel>총 인구</S.SummaryLabel>
                 </S.SummaryCard>
               </S.DashboardSummary>
+
+              <S.DashboardMenu>
+                <S.DashboardMenuTitle>메뉴</S.DashboardMenuTitle>
+                {DASHBOARD_MENU_ITEMS.map(({ id, label, icon: Icon }) => (
+                  <S.DashboardMenuItem
+                    key={id}
+                    type="button"
+                    $active={dashboardContentView === id}
+                    onClick={() => onDashboardMenuSelect?.(id)}
+                  >
+                    <Icon />
+                    {label}
+                  </S.DashboardMenuItem>
+                ))}
+              </S.DashboardMenu>
+            </motion.div>
           ) : (
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
+            <motion.div
+              key="list"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              style={{
+                width: '100%',
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
             {(query || continentFilter) && (
               <S.FilterResultBar>
                 <S.FilterResultText>
@@ -709,9 +827,11 @@ function CountryListInner({
                 )}
               </S.VirtualList>
             </S.ListContainer>
-          </div>
+              </div>
+            </motion.div>
           )}
-        </motion.div>
+          </AnimatePresence>
+        </S.SidebarTabBody>
       </S.ListPane>
 
       {/* 국가 타입 선택 모달 - Portal로 body에 렌더링 */}

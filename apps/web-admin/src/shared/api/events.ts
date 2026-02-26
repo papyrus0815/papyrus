@@ -26,6 +26,8 @@ const getConnection = () => nestiaApiService.getConnection()
 export async function getAllEvents(params?: {
   offset?: number
   limit?: number
+  /** 일주일만: 7 전달 시 createdAt이 최근 N일 이내인 사건만 반환 */
+  createdSinceDays?: number
 }): Promise<EventResponseDto[]> {
   try {
     const connection = getConnection()
@@ -36,9 +38,13 @@ export async function getAllEvents(params?: {
     if (params?.limit !== undefined) {
       url.searchParams.set('limit', params.limit.toString())
     }
+    if (params?.createdSinceDays !== undefined) {
+      url.searchParams.set('createdSinceDays', params.createdSinceDays.toString())
+    }
 
     const response = await fetch(url.toString(), {
       headers: (connection.headers ?? {}) as HeadersInit,
+      credentials: 'include',
     })
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)

@@ -1979,46 +1979,39 @@ export const HeaderStatValue = styled.div`
 
 // Global Dashboard Styles
 export const GlobalDashboard = styled.div`
-  padding: 32px;
-  background: #fff;
+  padding: 32px 40px 48px;
+  background: #ffffff;
   min-height: calc(100vh - var(--header-height));
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 32px;
   overflow-y: auto;
 
   @media (max-width: 1024px) {
-    padding: 24px;
+    padding: 24px 28px 36px;
+    gap: 28px;
   }
 
   @media (max-width: 768px) {
-    padding: 20px;
-    gap: 20px;
+    padding: 20px 20px 28px;
+    gap: 24px;
   }
 
   @media (max-width: 480px) {
-    padding: 16px;
+    padding: 16px 16px 24px;
+    gap: 20px;
   }
 `
 
-export const GlobalDashboardHero = styled.div`
+export const GlobalDashboardHero = styled.header`
+  padding: 0 0 16px 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: transparent;
   position: relative;
-  padding: 32px;
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-12);
-  box-shadow: var(--shadow-soft);
-
-  @media (max-width: 1024px) {
-    padding: 28px;
-  }
 
   @media (max-width: 768px) {
-    padding: 24px;
-  }
-
-  @media (max-width: 480px) {
-    padding: 20px;
+    padding-bottom: 14px;
   }
 `
 
@@ -2040,126 +2033,191 @@ export const HeroBackground = styled.div`
 `
 
 export const HeroContent = styled.div`
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+  gap: 20px;
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
+    gap: 14px;
   }
 `
 
 export const HeroIcon = styled.div`
-  font-size: 56px;
-  opacity: 0.6;
-  filter: grayscale(100%);
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+
+  svg {
+    width: 22px;
+    height: 22px;
+  }
 
   @media (max-width: 768px) {
-    font-size: 48px;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 `
 
 export const HeroTextGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
   flex: 1;
+  min-width: 0;
 `
 
 export const HeroTitle = styled.h1`
   margin: 0;
-  font-size: 32px;
-  font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: -0.8px;
-
-  @media (max-width: 1024px) {
-    font-size: 28px;
-  }
+  font-size: 20px;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
 
   @media (max-width: 768px) {
-    font-size: 24px;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 20px;
+    font-size: 18px;
   }
 `
 
 export const HeroSubtitle = styled.p`
   margin: 0;
-  font-size: 15px;
-  font-weight: 400;
-  color: #666;
-  line-height: 1.5;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0;
 
   @media (max-width: 768px) {
-    font-size: 14px;
+    font-size: 12px;
+  }
+`
+
+/** 등록 현황 게시판 (인물·국가 등록 내역) */
+export const DashboardBoard = styled.section`
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+`
+
+export const DashboardBoardTitle = styled.h3`
+  margin: 0 0 18px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.03em;
+`
+
+export const DashboardBoardEmpty = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  padding: 12px 0;
+`
+
+export const DashboardBoardList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 280px;
+  overflow-y: auto;
+`
+
+export const DashboardBoardItem = styled.li`
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: background 0.15s ease;
+
+  &:last-child {
+    border-bottom: none;
   }
 
-  @media (max-width: 480px) {
-    font-size: 13px;
+  &:hover {
+    background: #f8fafc;
   }
+`
+
+export const DashboardBoardItemDate = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+`
+
+export const DashboardBoardItemText = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.4;
 `
 
 export const DashboardSectionTitle = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 0 16px 0;
+  gap: 14px;
+  padding: 24px 0 18px;
   background: transparent;
-
-  @media (max-width: 768px) {
-    padding: 0 0 12px 0;
-  }
+  border-bottom: 2px solid #f1f5f9;
+  margin-bottom: 6px;
 `
 
 export const SectionTitleIcon = styled.div`
-  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  color: #6366f1;
 `
 
 export const SectionTitleText = styled.h2`
   margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-  color: #1a1a1a;
-  letter-spacing: -0.5px;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 
   @media (max-width: 768px) {
-    font-size: 20px;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 18px;
+    font-size: 17px;
   }
 `
 
 export const GlobalMetricsGrid = styled.div`
-  display: flex;
-  flex-wrap: nowrap;
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-12);
-  box-shadow: var(--shadow-soft);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  background: #ffffff;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
   overflow: hidden;
 
   @media (min-width: 769px) and (max-width: 1024px) {
-    flex-wrap: wrap;
+    grid-template-columns: repeat(2, 1fr);
   }
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    flex-wrap: nowrap;
+    grid-template-columns: 1fr;
   }
 `
 
@@ -2184,52 +2242,44 @@ export const GlobalDashboardGrid = styled.div`
 `
 
 export const GlobalWidget = styled.div`
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-12);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  box-shadow: var(--shadow-soft);
-  transition: all 0.3s ease;
+  gap: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 
   &:hover {
-    background: linear-gradient(135deg, #fafbfc 0%, #f5f7fa 100%);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  }
-
-  @media (max-width: 1024px) {
-    padding: 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    border-color: #c7d2fe;
   }
 
   @media (max-width: 480px) {
-    padding: 16px;
+    padding: 20px;
+    border-radius: 14px;
   }
 `
 
 export const GlobalWidgetHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-bottom: 16px;
-  border-bottom: 2px solid var(--border-color-light);
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 `
 
 export const GlobalWidgetIcon = styled.div`
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: linear-gradient(
-    135deg,
-    var(--color-primary-100) 0%,
-    var(--color-primary-200) 100%
-  );
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(173, 70, 255, 0.15);
+  color: #6366f1;
   flex-shrink: 0;
 
   svg {
@@ -2240,14 +2290,10 @@ export const GlobalWidgetIcon = styled.div`
 
 export const GlobalWidgetTitle = styled.h3`
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: #1a1a1a;
-  letter-spacing: 0.1px;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 `
 
 export const GlobalWidgetContent = styled.div`
@@ -2258,78 +2304,68 @@ export const GlobalWidgetContent = styled.div`
 `
 
 export const GlobalMetricCard = styled.div`
-  background: transparent;
-  border-right: 1px solid var(--border-color);
-  padding: 20px 24px 18px 24px;
+  background: #ffffff;
+  padding: 24px 26px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  flex: 1;
+  gap: 10px;
   min-width: 0;
-  transition: all 0.3s ease;
-  position: relative;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  border-right: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
 
-  &:last-child {
+  &:nth-child(4n) {
     border-right: none;
   }
 
   &:hover {
-    background: linear-gradient(135deg, #fafbfc 0%, #f5f7fa 100%);
+    background: #fafbff;
+    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.08);
   }
 
   @media (min-width: 769px) and (max-width: 1024px) {
-    flex: 0 0 calc(50% - 0.5px);
-    padding: 18px 20px 16px;
-
+    padding: 22px 24px;
+    border-right: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
+    &:nth-child(4n) {
+      border-right: 1px solid #f1f5f9;
+    }
     &:nth-child(2n) {
       border-right: none;
     }
-
     &:nth-child(n + 3) {
-      border-top: 1px solid var(--border-color);
+      border-bottom: 1px solid #f1f5f9;
     }
   }
 
   @media (max-width: 768px) {
+    padding: 22px 24px;
     border-right: none;
-    border-bottom: 1px solid var(--border-color);
-    flex-basis: 100%;
-    padding: 20px;
-
+    border-bottom: 1px solid #f1f5f9;
     &:last-child {
       border-bottom: none;
     }
   }
 
   @media (max-width: 480px) {
-    padding: 18px 16px;
+    padding: 20px 22px;
   }
 `
 
 export const GlobalMetricIcon = styled.div`
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  color: #5f6368;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #6366f1;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: color 0.2s ease;
 
   svg {
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (min-width: 769px) and (max-width: 1024px) {
-    width: 32px;
-    height: 32px;
-
-    svg {
-      width: 20px;
-      height: 20px;
-    }
+    width: 21px;
+    height: 21px;
   }
 `
 
@@ -2343,40 +2379,30 @@ export const GlobalMetricContent = styled.div`
 export const GlobalMetricLabel = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: #5f6368;
-  text-transform: none;
-  letter-spacing: 0;
+  color: #6b7280;
   line-height: 1.4;
 `
 
 export const GlobalMetricValue = styled.div`
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #111827;
   line-height: 1.2;
   letter-spacing: -0.02em;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
-
-  @media (min-width: 769px) and (max-width: 1024px) {
-    font-size: 24px;
-  }
-
-  @media (max-width: 768px) {
-    font-size: 24px;
-  }
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 2px;
 
   @media (max-width: 480px) {
-    font-size: 22px;
+    font-size: 20px;
   }
 `
 
 export const GlobalMetricSubtext = styled.div`
   font-size: 11px;
-  font-weight: 400;
-  color: #9aa0a6;
+  font-weight: 500;
+  color: #9ca3af;
   line-height: 1.4;
 `
 
@@ -2386,32 +2412,42 @@ export const EmptyGlobalState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 120px 48px;
+  padding: 80px 40px;
   text-align: center;
-  min-height: 500px;
+  min-height: 420px;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 `
 
 export const EmptyGlobalIcon = styled.div`
-  font-size: 64px;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
   margin-bottom: 24px;
-  opacity: 0.3;
-  filter: grayscale(100%);
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
 `
 
 export const EmptyGlobalTitle = styled.h3`
   margin: 0 0 12px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: -0.4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 `
 
 export const EmptyGlobalDesc = styled.p`
   margin: 0;
-  font-size: 14px;
-  color: #666;
-  line-height: 1.7;
-  max-width: 380px;
+  font-size: 15px;
+  color: #64748b;
+  line-height: 1.6;
+  max-width: 360px;
 `
 
 // Dashboard View
@@ -2569,13 +2605,18 @@ export const DashboardSubtitle = styled.p`
   color: #666;
 `
 
+export const DashboardTableWrap = styled.div`
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+`
+
 export const DashboardTable = styled.table`
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  overflow: hidden;
+  font-size: 14px;
 
   @media (max-width: 768px) {
     font-size: 13px;
@@ -2589,8 +2630,8 @@ export const DashboardTable = styled.table`
 `
 
 export const DashboardTableHead = styled.thead`
-  background: #fafafa;
-  border-bottom: 1px solid #e0e0e0;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
 
   @media (max-width: 480px) {
     display: none;
@@ -2598,32 +2639,25 @@ export const DashboardTableHead = styled.thead`
 `
 
 export const DashboardTh = styled.th<{ align?: string }>`
-  padding: 14px 16px;
+  padding: 12px 16px;
   text-align: ${(props) => props.align || 'left'};
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: #64748b;
+  letter-spacing: 0.03em;
   white-space: nowrap;
 
   @media (max-width: 768px) {
-    padding: 12px 12px;
-    font-size: 11px;
-  }
-
-  @media (max-width: 480px) {
-    padding: 10px 8px;
-    font-size: 10px;
+    padding: 10px 12px;
   }
 `
 
 export const DashboardTr = styled.tr`
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f1f5f9;
   transition: background 0.15s ease;
 
   &:hover {
-    background: #fafafa;
+    background: #f8fafc;
   }
 
   &:last-child {
@@ -2632,14 +2666,15 @@ export const DashboardTr = styled.tr`
 `
 
 export const DashboardTd = styled.td<{ align?: string }>`
-  padding: 16px;
+  padding: 12px 16px;
   font-size: 14px;
-  color: #1a1a1a;
+  color: #334155;
   text-align: ${(props) => props.align || 'left'};
   white-space: nowrap;
+  vertical-align: middle;
 
   @media (max-width: 768px) {
-    padding: 12px;
+    padding: 10px 12px;
     font-size: 13px;
   }
 
@@ -2655,7 +2690,7 @@ export const DashboardTd = styled.td<{ align?: string }>`
       font-weight: 600;
       display: inline-block;
       margin-right: 8px;
-      color: #666;
+      color: #64748b;
     }
   }
 `
@@ -2679,22 +2714,22 @@ export const CountryInfo = styled.div`
 `
 
 export const CountryName = styled.div`
-  font-weight: 500;
-  color: #1a1a1a;
+  font-weight: 600;
+  color: #111827;
 `
 
 export const CountryLocalName = styled.div`
   font-size: 12px;
-  color: #999;
+  color: #6b7280;
 `
 
 export const IsoCode = styled.code`
   font-size: 12px;
-  font-family: 'Monaco', 'Courier New', monospace;
-  color: #666;
-  background: #f5f5f5;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 6px;
 `
 
 export const ContinentBadge = styled.span`
@@ -2702,9 +2737,9 @@ export const ContinentBadge = styled.span`
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: #666;
-  background: #f5f5f5;
-  border-radius: 6px;
+  color: #475569;
+  background: #f1f5f9;
+  border-radius: 8px;
 `
 
 // Loading Styles
@@ -4001,51 +4036,150 @@ export const EmptySubtext = styled.div`
 export const LocationList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   padding: 0;
 `
 
 export const LocationItem = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
   background: transparent;
-  transition: background-color 0.2s ease;
+  transition: background 0.15s ease;
 
   &:hover {
-    background: #f8f9fa;
+    background: #f8fafc;
   }
 `
 
 export const LocationDot = styled.div`
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: #6366f1;
+  flex-shrink: 0;
+`
+
+/** 순위 배지 (1, 2, 3...) */
+export const RankBadge = styled.div<{ $rank: number }>`
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: ${(p) =>
+    p.$rank <= 3 ? 'rgba(99, 102, 241, 0.15)' : '#f1f5f9'};
+  color: ${(p) => (p.$rank <= 3 ? '#6366f1' : '#64748b')};
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 `
 
 export const LocationName = styled.div`
   flex: 1;
-  font-size: 12px;
-  color: #202124;
-  font-weight: 400;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 500;
+  min-width: 0;
 `
 
 export const LocationValue = styled.div`
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 600;
+  flex-shrink: 0;
+`
+
+/** 가로 막대 그래프 (전체 비율) */
+export const BarChartList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+`
+
+export const BarChartRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+`
+
+export const BarChartLabel = styled.div`
+  min-width: 72px;
+  max-width: 120px;
   font-size: 12px;
-  color: #5f6368;
   font-weight: 500;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  color: #334155;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const BarChartTrack = styled.div`
+  flex: 1;
+  min-width: 0;
+  height: 12px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  overflow: hidden;
+`
+
+export const BarChartFill = styled.div<{
+  $percent: number
+  $rank?: 1 | 2 | 3
+}>`
+  height: 100%;
+  width: ${(p) => Math.min(100, Math.max(0, p.$percent))}%;
+  min-width: ${(p) => (p.$percent > 0 ? 4 : 0)}px;
+  background: ${(p) =>
+    p.$rank === 1
+      ? 'linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%)'
+      : p.$rank === 2
+        ? 'linear-gradient(90deg, #c0c0c0 0%, #94a3b8 100%)'
+        : p.$rank === 3
+          ? 'linear-gradient(90deg, #d97706 0%, #b45309 100%)'
+          : '#6366f1'};
+  border-radius: 6px;
+  transition: width 0.3s ease;
+`
+
+/** 1·2·3위 금(왕관)·은·동 메달 뱃지 */
+export const BarChartRank = styled.div<{ $rank: number }>`
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: ${(p) =>
+    p.$rank === 1 ? '#92400e' : p.$rank === 2 ? '#475569' : p.$rank === 3 ? '#78350f' : '#64748b'};
+  background: ${(p) =>
+    p.$rank === 1
+      ? 'linear-gradient(135deg, #fde047 0%, #f59e0b 100%)'
+      : p.$rank === 2
+        ? 'linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%)'
+        : p.$rank === 3
+          ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+          : '#f1f5f9'};
+  box-shadow: ${(p) =>
+    p.$rank <= 3 ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'};
+`
+
+export const BarChartValue = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  flex-shrink: 0;
+  min-width: 44px;
+  text-align: right;
 `
 
 export const AgeChart = styled.div`
@@ -4252,9 +4386,35 @@ export const ImageLabel = styled.div`
   }
 `
 
-// Dashboard Summary Styles
+/** 탭 전환 시 레이아웃 흔들림 방지: 필터 영역 높이 고정 */
+export const SidebarFilterSlot = styled.div`
+  min-height: 54px;
+  flex-shrink: 0;
+`
+
+/** 탭 콘텐츠 공통 영역 (flex: 1로 동일 높이 유지) */
+export const SidebarTabBody = styled.div`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`
+
+// Dashboard Summary Styles (sidebar: "전 세계 국가 통계" 등)
+export const DashboardSidebarSectionTitle = styled.h2`
+  margin: 0;
+  padding: 14px 20px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  background: #ffffff;
+  border-bottom: none;
+`
+
 export const DashboardSummary = styled.div`
-  padding: 16px;
+  padding: 0 20px 20px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
@@ -4267,38 +4427,145 @@ export const SummaryCard = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 18px 14px;
+  padding: 16px 12px;
   background: #ffffff;
   border: 1px solid #f1f5f9;
-  border-radius: 8px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  border-radius: 10px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
 
   &:hover {
     border-color: #e2e8f0;
-    background: #fafafa;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transform: translateY(-1px);
   }
 `
 
 export const SummaryIcon = styled.div`
-  font-size: 24px;
-  margin-bottom: 6px;
-  line-height: 1;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-shrink: 0;
   opacity: 0.9;
+
+  svg {
+    width: 22px;
+    height: 22px;
+  }
 `
 
 export const SummaryValue = styled.div`
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: #0f172a;
   margin-bottom: 2px;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
 `
 
 export const SummaryLabel = styled.div`
   font-size: 11px;
   color: #64748b;
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+`
+
+export const DashboardMenu = styled.nav`
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #ffffff;
+`
+
+export const DashboardMenuTitle = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+  padding: 8px 10px 10px;
+  text-transform: none;
+`
+
+export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: ${(p) => (p.$active ? '#eef2ff' : 'transparent')};
+  color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
+  font-size: 13px;
+  font-weight: ${(p) => (p.$active ? 600 : 500)};
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+
+  &:hover {
+    background: ${(p) => (p.$active ? '#e0e7ff' : '#f1f5f9')};
+    color: ${(p) => (p.$active ? '#4338ca' : '#334155')};
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: ${(p) => (p.$active ? '#6366f1' : '#64748b')};
+    opacity: ${(p) => (p.$active ? 1 : 0.85)};
+  }
+
+  &:hover svg {
+    color: ${(p) => (p.$active ? '#4f46e5' : '#334155')};
+  }
+`
+
+export const DashboardMenuContentPanel = styled.div`
+  padding: 32px 24px;
+  min-height: 100%;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+`
+
+export const DashboardMenuContentTitle = styled.h3`
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+`
+
+export const DashboardMenuContentDesc = styled.p`
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  max-width: 360px;
+`
+
+export const DashboardMenuContentButton = styled.button`
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: #f8fafc;
+    border-color: #6366f1;
+    color: #6366f1;
+  }
 `
 
 export const QuickActions = styled.div`
@@ -4312,7 +4579,7 @@ export const QuickActions = styled.div`
 export const QuickActionTitle = styled.h3`
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: #334155;
   margin: 0 0 12px 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -4326,7 +4593,7 @@ export const QuickActionButton = styled.button`
   gap: 8px;
   height: 44px;
   padding: 0 20px;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   border: none;
   border-radius: 10px;
   color: #fff;
@@ -4334,12 +4601,12 @@ export const QuickActionButton = styled.button`
   font-weight: 700;
   cursor: pointer;
   transition: all 0.25s;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
 
   &:hover {
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
   }
 
   &:active {

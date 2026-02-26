@@ -1,10 +1,243 @@
 import React from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { type Country, type ContinentOption } from '@/entities/country/api'
-import { type UnifiedCountry } from '@/entities/country/model/unified-types'
+
+import { AnimatePresence, motion } from 'framer-motion'
+
+import { type ContinentOption, type Country } from '@/entities/country/api'
+
+/** 전 세계 국가 수 기준 (UN 회원국·옵저버 등 통상 인용치) */
+const TOTAL_COUNTRIES_IN_WORLD = 195
+/** 전 세계 육지 면적 (km², 통상 인용치) */
+const TOTAL_WORLD_AREA_KM2 = 148_940_000
+const RANKING_TOP_N = 8
 import { getSummaryMetrics } from '@/entities/country/lib/utils'
+import { type UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
+
+import styled from 'styled-components'
 import * as S from '../../../../pages/history/country/country.styles'
+import { formatEventPeriod, formatRelativeTime } from '../relative-time'
+
+const FeedRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e8ecf1;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  &:hover {
+    border-color: #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+`
+const FeedRowLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`
+const FeedAvatar = styled.div<{ $type: 'country' | 'person' }>`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  background: ${(p) =>
+    p.$type === 'country'
+      ? 'linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 100%)'
+      : 'linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%)'};
+  overflow: hidden;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+const FeedLabelBlock = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+`
+const FeedCountryChip = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+`
+const FeedPrimaryLabel = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.4;
+`
+const FeedActionSuffix = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+`
+const FeedTime = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  flex-shrink: 0;
+`
+const BoardList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+`
+const BoardEmpty = styled.p`
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+  padding: 24px 0;
+  text-align: center;
+  line-height: 1.5;
+`
+const TwoCol = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`
+const FeedPanel = styled.section`
+  background: #ffffff;
+  border: 1px solid #e8ecf1;
+  border-radius: 12px;
+  padding: 20px 22px;
+`
+const FeedPanelTitle = styled.h3`
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.03em;
+`
+const EventRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e8ecf1;
+  transition: border-color 0.15s ease;
+  &:hover {
+    border-color: #e2e8f0;
+  }
+`
+const EventLeft = styled.div`
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+const EventTitle = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+const EventCountries = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+const EventCountryChip = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 3px 6px;
+  border-radius: 5px;
+`
+const EventTime = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  flex-shrink: 0;
+`
+const EventPeriod = styled.div`
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 2px;
+`
+const EventList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+`
+
+/** API Country에 gdpUsdBn이 있을 수 있음 */
+type CountryWithOptionalGdp = Country & { gdpUsdBn?: number | null }
+
+/** 등록 현황 게시판 한 건 (디자인: 배지 + 이름, 문장형 텍스트 없음) */
+export type RegistrationFeedItem = {
+  date: string
+  type: 'country' | 'person'
+  primaryLabel: string
+  countryName?: string | null
+  profileImageUrl?: string | null
+}
+
+/** 사건 일주일 내 한 건 */
+export type RecentEventItem = {
+  id: string
+  title: string
+  date: string
+  countryNames?: string[]
+  startDate?: string | null
+  endDate?: string | null
+}
 
 interface CountryDashboardProps {
   countries?: Country[]
@@ -12,6 +245,8 @@ interface CountryDashboardProps {
   continents?: ContinentOption[]
   isLoading?: boolean
   onCountryEdit?: (country: Country) => void
+  registrationFeed?: RegistrationFeedItem[]
+  recentEvents?: RecentEventItem[]
 }
 
 export function CountryDashboard({
@@ -20,6 +255,8 @@ export function CountryDashboard({
   continents: continentsProp,
   isLoading = false,
   onCountryEdit,
+  registrationFeed = [],
+  recentEvents = [],
 }: CountryDashboardProps) {
   const listState = useCountryListState()
   const countries = countriesProp ?? listState.countries
@@ -44,7 +281,12 @@ export function CountryDashboard({
         <>
           <S.GlobalDashboardHero>
             <S.HeroContent>
-              <S.HeroIcon>🌍</S.HeroIcon>
+              <S.HeroIcon>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+              </S.HeroIcon>
               <S.HeroTextGroup>
                 <S.HeroTitle>전 세계 국가 통계</S.HeroTitle>
                 <S.HeroSubtitle>
@@ -58,11 +300,10 @@ export function CountryDashboard({
           <S.GlobalMetricsGrid>
             <S.GlobalMetricCard>
               <S.GlobalMetricIcon>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                    fill="currentColor"
-                  />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </S.GlobalMetricIcon>
               <S.GlobalMetricContent>
@@ -78,45 +319,47 @@ export function CountryDashboard({
 
             <S.GlobalMetricCard>
               <S.GlobalMetricIcon>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-                    fill="currentColor"
-                  />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
                 </svg>
               </S.GlobalMetricIcon>
-              <S.GlobalMetricContent>
-                <S.GlobalMetricLabel>평균 면적</S.GlobalMetricLabel>
+                <S.GlobalMetricContent>
+                <S.GlobalMetricLabel>등록 면적</S.GlobalMetricLabel>
                 <S.GlobalMetricValue>
-                  {metrics.avgArea.toLocaleString()}km²
+                  {Math.round(metrics.totalArea).toLocaleString()}
+                  <span style={{ margin: '0 2px', color: '#94a3b8', fontWeight: 500 }}>/</span>
+                  {TOTAL_WORLD_AREA_KM2.toLocaleString()}
                 </S.GlobalMetricValue>
-                <S.GlobalMetricSubtext>국가당 평균</S.GlobalMetricSubtext>
+                <S.GlobalMetricSubtext>
+                  km² (전체 육지 면적 대비 — 더 등록하면 채워져요)
+                </S.GlobalMetricSubtext>
               </S.GlobalMetricContent>
             </S.GlobalMetricCard>
 
             <S.GlobalMetricCard>
               <S.GlobalMetricIcon>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.7 0 3.25.62 4.45 1.64-.53.18-1.12.36-1.45.36-1 0-2-.5-3.5-.5-.86 0-1.6.17-2.22.44C9.73 4.67 10.83 4 12 4z"
-                    fill="currentColor"
-                  />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                 </svg>
               </S.GlobalMetricIcon>
               <S.GlobalMetricContent>
                 <S.GlobalMetricLabel>등록 국가</S.GlobalMetricLabel>
-                <S.GlobalMetricValue>{countries.length}</S.GlobalMetricValue>
-                <S.GlobalMetricSubtext>전체 국가 수</S.GlobalMetricSubtext>
+                <S.GlobalMetricValue>
+                  {countries.length}
+                  <span style={{ margin: '0 2px', color: '#94a3b8', fontWeight: 500 }}>/</span>
+                  {TOTAL_COUNTRIES_IN_WORLD}
+                </S.GlobalMetricValue>
+                <S.GlobalMetricSubtext>
+                  {TOTAL_COUNTRIES_IN_WORLD}개국 중 등록 — 더 등록하면 통계가 풍부해져요
+                </S.GlobalMetricSubtext>
               </S.GlobalMetricContent>
             </S.GlobalMetricCard>
 
             <S.GlobalMetricCard>
               <S.GlobalMetricIcon>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"
-                    fill="currentColor"
-                  />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" />
                 </svg>
               </S.GlobalMetricIcon>
               <S.GlobalMetricContent>
@@ -129,8 +372,79 @@ export function CountryDashboard({
             </S.GlobalMetricCard>
           </S.GlobalMetricsGrid>
 
+          {/* 등록 현황 | 사건 (2열) */}
+          <TwoCol>
+            <FeedPanel>
+              <FeedPanelTitle>등록 현황</FeedPanelTitle>
+              {registrationFeed.length === 0 ? (
+                <BoardEmpty>아직 등록된 국가·인물이 없습니다.</BoardEmpty>
+              ) : (
+                <BoardList>
+                  {registrationFeed.map((item, index) => (
+                    <li key={`${item.date}-${item.type}-${index}`}>
+                      <FeedRow>
+                        <FeedRowLeft>
+                          <FeedAvatar $type={item.type}>
+                            {item.type === 'person' && item.profileImageUrl ? (
+                              <img src={item.profileImageUrl} alt="" />
+                            ) : (
+                              <span>{item.type === 'country' ? '🌍' : '👤'}</span>
+                            )}
+                          </FeedAvatar>
+                          <FeedLabelBlock>
+                            {item.type === 'person' && item.countryName && (
+                              <FeedCountryChip>{item.countryName}</FeedCountryChip>
+                            )}
+                            <FeedPrimaryLabel>{item.primaryLabel}</FeedPrimaryLabel>
+                            <FeedActionSuffix>등록</FeedActionSuffix>
+                          </FeedLabelBlock>
+                        </FeedRowLeft>
+                        <FeedTime>{formatRelativeTime(item.date)}</FeedTime>
+                      </FeedRow>
+                    </li>
+                  ))}
+                </BoardList>
+              )}
+            </FeedPanel>
+            <FeedPanel>
+              <FeedPanelTitle>사건</FeedPanelTitle>
+              {recentEvents.length === 0 ? (
+                <BoardEmpty>최근 일주일 내 사건이 없습니다.</BoardEmpty>
+              ) : (
+                <EventList>
+                  {recentEvents.map((evt) => (
+                    <li key={evt.id}>
+                      <EventRow>
+                        <EventLeft>
+                          <EventTitle>{evt.title}</EventTitle>
+                          {(evt.startDate != null || evt.endDate != null) && (
+                            <EventPeriod>
+                              {formatEventPeriod(evt.startDate, evt.endDate)}
+                            </EventPeriod>
+                          )}
+                          {(evt.countryNames?.length ?? 0) > 0 && (
+                            <EventCountries>
+                              {evt.countryNames!.map((name) => (
+                                <EventCountryChip key={name}>{name}</EventCountryChip>
+                              ))}
+                            </EventCountries>
+                          )}
+                        </EventLeft>
+                        <EventTime>{formatRelativeTime(evt.date)}</EventTime>
+                      </EventRow>
+                    </li>
+                  ))}
+                </EventList>
+              )}
+            </FeedPanel>
+          </TwoCol>
+
           <S.DashboardSectionTitle>
-            <S.SectionTitleIcon>📊</S.SectionTitleIcon>
+            <S.SectionTitleIcon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+                <path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" />
+              </svg>
+            </S.SectionTitleIcon>
             <S.SectionTitleText>상세 통계</S.SectionTitleText>
           </S.DashboardSectionTitle>
 
@@ -139,79 +453,213 @@ export function CountryDashboard({
             <S.GlobalWidget>
               <S.GlobalWidgetHeader>
                 <S.GlobalWidgetIcon>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"
-                      fill="currentColor"
-                    />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
                   </svg>
                 </S.GlobalWidgetIcon>
                 <S.GlobalWidgetTitle>대륙별 분포</S.GlobalWidgetTitle>
               </S.GlobalWidgetHeader>
               <S.GlobalWidgetContent>
-                <S.LocationList>
+                <S.BarChartList>
                   {continents.map((continent) => {
                     const count = countries.filter(
                       (country) => country.continentId === continent.id,
                     ).length
-                    const percent = ((count / countries.length) * 100).toFixed(
-                      1,
-                    )
+                    const percent = countries.length
+                      ? (count / countries.length) * 100
+                      : 0
                     return (
-                      <S.LocationItem key={continent.id}>
-                        <S.LocationDot />
-                        <S.LocationName>{continent.name}</S.LocationName>
-                        <S.LocationValue>
-                          {count}개국 ({percent}%)
-                        </S.LocationValue>
-                      </S.LocationItem>
+                      <S.BarChartRow key={continent.id}>
+                        <S.BarChartLabel>{continent.name}</S.BarChartLabel>
+                        <S.BarChartTrack>
+                          <S.BarChartFill $percent={percent} />
+                        </S.BarChartTrack>
+                        <S.BarChartValue>
+                          {count}개국 ({percent.toFixed(1)}%)
+                        </S.BarChartValue>
+                      </S.BarChartRow>
                     )
                   })}
-                </S.LocationList>
+                </S.BarChartList>
               </S.GlobalWidgetContent>
             </S.GlobalWidget>
 
             <S.GlobalWidget>
               <S.GlobalWidgetHeader>
                 <S.GlobalWidgetIcon>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                      fill="currentColor"
-                    />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                 </S.GlobalWidgetIcon>
                 <S.GlobalWidgetTitle>인구 상위 국가</S.GlobalWidgetTitle>
               </S.GlobalWidgetHeader>
-              <S.GlobalWidgetContent>
-                <S.LocationList>
-                  {[...countries]
-                    .sort(
-                      (countryA, countryB) =>
-                        (countryB.population || 0) - (countryA.population || 0),
+                <S.GlobalWidgetContent>
+                <S.BarChartList>
+                  {(() => {
+                    const totalPop = countries.reduce(
+                      (sum, c) => sum + (Number(c.population) || 0),
+                      0,
                     )
-                    .slice(0, 5)
-                    .map((country) => (
-                      <S.LocationItem key={country.id}>
-                        <S.LocationDot />
-                        <S.LocationName>
-                          {country.flagEmoji} {country.name}
-                        </S.LocationName>
-                        <S.LocationValue>
-                          {((country.population || 0) / 1_000_000).toFixed(1)}M
-                        </S.LocationValue>
-                      </S.LocationItem>
-                    ))}
-                </S.LocationList>
+                    return [...countries]
+                      .sort(
+                        (a, b) =>
+                          (Number(b.population) || 0) -
+                          (Number(a.population) || 0),
+                      )
+                      .slice(0, RANKING_TOP_N)
+                      .map((country, index) => {
+                        const rank = index + 1
+                        const pop = Number(country.population) || 0
+                        const percent = totalPop > 0 ? (pop / totalPop) * 100 : 0
+                        return (
+                          <S.BarChartRow key={country.id}>
+                            <S.BarChartRank $rank={rank}>{rank}</S.BarChartRank>
+                            <S.BarChartLabel>
+                              {country.flagEmoji} {country.name}
+                            </S.BarChartLabel>
+                            <S.BarChartTrack>
+                              <S.BarChartFill
+                                $percent={percent}
+                                $rank={rank <= 3 ? (rank as 1 | 2 | 3) : undefined}
+                              />
+                            </S.BarChartTrack>
+                            <S.BarChartValue>
+                              {(pop / 1_000_000).toFixed(1)}M ({percent.toFixed(1)}%)
+                            </S.BarChartValue>
+                          </S.BarChartRow>
+                        )
+                      })
+                  })()}
+                </S.BarChartList>
+              </S.GlobalWidgetContent>
+            </S.GlobalWidget>
+
+            <S.GlobalWidget>
+              <S.GlobalWidgetHeader>
+                <S.GlobalWidgetIcon>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" />
+                  </svg>
+                </S.GlobalWidgetIcon>
+                <S.GlobalWidgetTitle>GDP 순위</S.GlobalWidgetTitle>
+              </S.GlobalWidgetHeader>
+              <S.GlobalWidgetContent>
+                <S.BarChartList>
+                  {(() => {
+                    const withGdp = (countries as CountryWithOptionalGdp[])
+                      .filter(
+                        (c) =>
+                          c.gdpUsdBn != null && Number(c.gdpUsdBn) > 0,
+                      )
+                      .sort(
+                        (a, b) =>
+                          (Number(b.gdpUsdBn) || 0) -
+                          (Number(a.gdpUsdBn) || 0),
+                      )
+                      .slice(0, RANKING_TOP_N)
+                    if (withGdp.length === 0) {
+                      return (
+                        <S.BarChartRow>
+                          <S.BarChartLabel
+                            style={{ maxWidth: 'none', color: '#94a3b8' }}
+                          >
+                            GDP 데이터가 있는 국가가 없습니다
+                          </S.BarChartLabel>
+                        </S.BarChartRow>
+                      )
+                    }
+                    const totalGdp = withGdp.reduce(
+                      (sum, c) => sum + (Number(c.gdpUsdBn) || 0),
+                      0,
+                    )
+                    return withGdp.map((country, index) => {
+                      const rank = index + 1
+                      const gdp = Number(country.gdpUsdBn) || 0
+                      const percent =
+                        totalGdp > 0 ? (gdp / totalGdp) * 100 : 0
+                      return (
+                        <S.BarChartRow key={country.id}>
+                          <S.BarChartRank $rank={rank}>{rank}</S.BarChartRank>
+                          <S.BarChartLabel>
+                            {country.flagEmoji} {country.name}
+                          </S.BarChartLabel>
+                          <S.BarChartTrack>
+                            <S.BarChartFill
+                              $percent={percent}
+                              $rank={rank <= 3 ? (rank as 1 | 2 | 3) : undefined}
+                            />
+                          </S.BarChartTrack>
+                          <S.BarChartValue>
+                            {gdp.toLocaleString()}B ({percent.toFixed(1)}%)
+                          </S.BarChartValue>
+                        </S.BarChartRow>
+                      )
+                    })
+                  })()}
+                </S.BarChartList>
+              </S.GlobalWidgetContent>
+            </S.GlobalWidget>
+
+            <S.GlobalWidget>
+              <S.GlobalWidgetHeader>
+                <S.GlobalWidgetIcon>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+                  </svg>
+                </S.GlobalWidgetIcon>
+                <S.GlobalWidgetTitle>면적 순위</S.GlobalWidgetTitle>
+              </S.GlobalWidgetHeader>
+              <S.GlobalWidgetContent>
+                <S.BarChartList>
+                  {(() => {
+                    const totalArea = countries.reduce(
+                      (sum, c) => sum + (c.areaSqKm || 0),
+                      0,
+                    )
+                    return [...countries]
+                      .sort((a, b) => (b.areaSqKm || 0) - (a.areaSqKm || 0))
+                      .slice(0, RANKING_TOP_N)
+                      .map((country, index) => {
+                        const rank = index + 1
+                        const area = country.areaSqKm || 0
+                        const percent =
+                          totalArea > 0 ? (area / totalArea) * 100 : 0
+                        return (
+                          <S.BarChartRow key={country.id}>
+                            <S.BarChartRank $rank={rank}>{rank}</S.BarChartRank>
+                            <S.BarChartLabel>
+                              {country.flagEmoji} {country.name}
+                            </S.BarChartLabel>
+                            <S.BarChartTrack>
+                              <S.BarChartFill
+                                $percent={percent}
+                                $rank={rank <= 3 ? (rank as 1 | 2 | 3) : undefined}
+                              />
+                            </S.BarChartTrack>
+                            <S.BarChartValue>
+                              {area.toLocaleString()} ({percent.toFixed(1)}%)
+                            </S.BarChartValue>
+                          </S.BarChartRow>
+                        )
+                      })
+                  })()}
+                </S.BarChartList>
               </S.GlobalWidgetContent>
             </S.GlobalWidget>
           </S.GlobalDashboardGrid>
 
-          <S.DashboardSectionTitle style={{ marginTop: '48px' }}>
-            <S.SectionTitleIcon>📊</S.SectionTitleIcon>
+          <S.DashboardSectionTitle style={{ marginTop: '32px' }}>
+            <S.SectionTitleIcon>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+                <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+              </svg>
+            </S.SectionTitleIcon>
             <S.SectionTitleText>국가 비교 목록</S.SectionTitleText>
           </S.DashboardSectionTitle>
 
+          <S.DashboardTableWrap>
           <S.DashboardTable>
             <S.DashboardTableHead>
               <tr>
@@ -220,6 +668,7 @@ export function CountryDashboard({
                 <S.DashboardTh>수도</S.DashboardTh>
                 <S.DashboardTh>대륙</S.DashboardTh>
                 <S.DashboardTh align="right">인구</S.DashboardTh>
+                <S.DashboardTh align="right">GDP (B)</S.DashboardTh>
                 <S.DashboardTh align="right">면적 (km²)</S.DashboardTh>
                 <S.DashboardTh align="right">인구밀도</S.DashboardTh>
               </tr>
@@ -231,7 +680,9 @@ export function CountryDashboard({
                 )
                 const density =
                   country.population != null && country.areaSqKm != null
-                    ? (Number(country.population) / Number(country.areaSqKm)).toFixed(1)
+                    ? (
+                        Number(country.population) / Number(country.areaSqKm)
+                      ).toFixed(1)
                     : '-'
 
                 // 현대 국가만 편집 가능
@@ -287,7 +738,15 @@ export function CountryDashboard({
                     </S.DashboardTd>
                     <S.DashboardTd align="right">
                       {country.population
-                        ? country.population.toLocaleString()
+                        ? Number(country.population).toLocaleString()
+                        : '-'}
+                    </S.DashboardTd>
+                    <S.DashboardTd align="right">
+                      {country.type === 'modern'
+                        ? (() => {
+                            const c = countries.find((x) => x.id === country.id) as CountryWithOptionalGdp | undefined
+                            return c?.gdpUsdBn != null ? Number(c.gdpUsdBn).toLocaleString() : '-'
+                          })()
                         : '-'}
                     </S.DashboardTd>
                     <S.DashboardTd align="right">
@@ -301,6 +760,7 @@ export function CountryDashboard({
               })}
             </tbody>
           </S.DashboardTable>
+          </S.DashboardTableWrap>
         </>
       )}
     </S.GlobalDashboard>

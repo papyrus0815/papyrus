@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-hot-toast'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -20,6 +20,7 @@ import {
   modernToUnified,
 } from '@/entities/country/model/unified-types'
 import type { HistoricalCountry } from '@/entities/historical-country/api'
+import { usePersons } from '@/entities/person/api'
 import { useContinents } from '@/features/continent/use-continents.hook'
 import {
   useCountries,
@@ -34,17 +35,73 @@ import {
   useHistoricalCountry,
   useUpdateHistoricalCountry,
 } from '@/features/historical-country'
+import { getAllEvents } from '@/shared/api/events'
 import { CountryDashboard } from '@/widgets/country/country-dashboard'
 import { CountryDetail } from '@/widgets/country/country-detail'
 import { CountryForm } from '@/widgets/country/country-form'
 import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
 import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
-import { CountryList } from '@/widgets/country/country-list'
+import {
+  CountryList,
+  type DashboardContentView,
+} from '@/widgets/country/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui'
 import { HistoricalCountryForm } from '@/widgets/historical-country/historical-country-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import * as S from './country.styles'
+
+/** 대시보드 메뉴 선택 시 오른쪽 컨텐츠 (통계 제외) */
+function DashboardMenuContent({
+  view,
+  onNavigateFullPage,
+}: {
+  view: Exclude<DashboardContentView, 'stats'>
+  onNavigateFullPage: (path: string) => void
+}) {
+  const configs: Record<
+    Exclude<DashboardContentView, 'stats'>,
+    { title: string; desc: string; fullPath?: string; fullLabel?: string }
+  > = {
+    heads: {
+      title: '행정 수반',
+      desc: '좌측에서 국가를 선택한 뒤 해당 국가의 역대 수반 탭에서 확인할 수 있습니다.',
+    },
+    legislature: {
+      title: '저원 (입법 기관)',
+      desc: '조직·입법 기관 정보를 관리합니다.',
+      fullPath: '/organizations/',
+      fullLabel: '전체 보기',
+    },
+    military: {
+      title: '군사',
+      desc: '군부대 정보를 관리합니다.',
+      fullPath: '/military-units/',
+      fullLabel: '전체 보기',
+    },
+    administration: {
+      title: '행정부',
+      desc: '행정부처 정보를 관리합니다.',
+      fullPath: '/administration-departments/',
+      fullLabel: '전체 보기',
+    },
+  }
+  const { title, desc, fullPath, fullLabel } = configs[view]
+  return (
+    <S.DashboardMenuContentPanel>
+      <S.DashboardMenuContentTitle>{title}</S.DashboardMenuContentTitle>
+      <S.DashboardMenuContentDesc>{desc}</S.DashboardMenuContentDesc>
+      {fullPath && fullLabel && (
+        <S.DashboardMenuContentButton
+          type="button"
+          onClick={() => onNavigateFullPage(fullPath)}
+        >
+          {fullLabel}
+        </S.DashboardMenuContentButton>
+      )}
+    </S.DashboardMenuContentPanel>
+  )
+}
 
 /**
  * CountryPage - 국가 관리 페이지
@@ -88,6 +145,112 @@ export default function CountryPage() {
 
   // 대륙 데이터
   const { data: apiContinents } = useContinents()
+  // 등록 현황 게시판용
+  const { data: apiPersons } = usePersons()
+
+  /** 등록 현황: 일주일(7일) 내, 디자인용 primaryLabel + countryName (문장형 텍스트 없음) */
+  const registrationFeed = useMemo(() => {
+    type Item = {
+      date: string
+      type: 'country' | 'person'
+      primaryLabel: string
+      countryName?: string | null
+      profileImageUrl?: string | null
+    }
+    const items: Item[] = []
+    const now = Date.now()
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000
+    const rawCountries = apiCountries ?? []
+    const rawPersons = apiPersons ?? []
+    const countriesList = apiCountries ?? []
+
+    rawCountries.forEach((c: { name?: string; createdAt?: string }) => {
+      const date = c.createdAt
+      if (!date || now - new Date(date).getTime() > oneWeekMs) return
+      items.push({
+        date,
+        type: 'country',
+        primaryLabel: c.name || '국가',
+      })
+    })
+    rawPersons.forEach(
+      (p: {
+        name?: string | null
+        surname?: string | null
+        createdAt?: string
+        profileImageUrl?: string | null
+        country?: { name?: string } | null
+        countryId?: string | null
+      }) => {
+        const date = p.createdAt
+        if (!date || now - new Date(date).getTime() > oneWeekMs) return
+        const displayName =
+          [p.surname, p.name].filter(Boolean).join(' ') || p.name || p.surname || '이름 없음'
+        const countryName =
+          p.country?.name ??
+          (p.countryId
+            ? (countriesList as { id?: string; name?: string }[]).find(
+                (c) => c.id === p.countryId,
+              )?.name
+            : undefined)
+        items.push({
+          date,
+          type: 'person',
+          primaryLabel: displayName,
+          countryName: countryName ?? undefined,
+          profileImageUrl: p.profileImageUrl,
+        })
+      },
+    )
+    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return items.slice(0, 50)
+  }, [apiCountries, apiPersons])
+
+  /** 사건(events) 일주일 내 데이터만 조회 (createdSinceDays로 API에서 필터) */
+  useEffect(() => {
+    getAllEvents({ limit: 100, createdSinceDays: 7 })
+      .then((raw) => {
+        const list = Array.isArray(raw) ? raw : (raw as { data?: unknown[] })?.data ?? []
+        type Evt = {
+          id: string
+          title?: string
+          createdAt?: string
+          startDate?: string | null
+          endDate?: string | null
+          relatedCountries?: { name?: string }[]
+          relatedHistoricalCountries?: { name?: string }[]
+        }
+        const withDate = (list as Evt[]).map((evt) => {
+          const countryNames = [
+            ...(evt.relatedCountries ?? []).map((c) => c.name).filter(Boolean),
+            ...(evt.relatedHistoricalCountries ?? []).map((c) => c.name).filter(Boolean),
+          ] as string[]
+          return {
+            id: evt.id,
+            title: evt.title || '제목 없음',
+            _date: evt.createdAt || evt.startDate,
+            countryNames,
+            startDate: evt.startDate ?? null,
+            endDate: evt.endDate ?? null,
+          }
+        })
+        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+        const filtered = withDate
+          .filter((e) => e._date && new Date(e._date).getTime() >= oneWeekAgo)
+          .sort((a, b) => new Date(b._date!).getTime() - new Date(a._date!).getTime())
+          .slice(0, 25)
+          .map((e) => ({
+            id: e.id,
+            title: e.title,
+            date: e._date!,
+            countryNames: e.countryNames ?? [],
+            startDate: e.startDate ?? undefined,
+            endDate: e.endDate ?? undefined,
+          }))
+        setRecentEvents(filtered)
+      })
+      .catch(() => setRecentEvents([]))
+  }, [])
 
   // ==================== 데이터 변환 ====================
   /**
@@ -179,7 +342,19 @@ export default function CountryPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>(() =>
     countryIdFromUrl ? 'list' : 'dashboard',
   )
+  const [dashboardContentView, setDashboardContentView] =
+    useState<DashboardContentView>('stats')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [recentEvents, setRecentEvents] = useState<
+    {
+      id: string
+      title: string
+      date: string
+      countryNames: string[]
+      startDate?: string | null
+      endDate?: string | null
+    }[]
+  >([])
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
 
   // 이미지 업로드 상태
@@ -715,33 +890,73 @@ export default function CountryPage() {
             setShowSortModal={setShowSortModal}
             showCountryTypeModal={showCountryTypeModal}
             setShowCountryTypeModal={setShowCountryTypeModal}
+            dashboardContentView={dashboardContentView}
+            onDashboardMenuSelect={setDashboardContentView}
           />
 
           <S.DetailPane>
-            {activeTab === 'dashboard' ? (
-              <CountryDashboard
-                isLoading={isLoading}
-                onCountryEdit={setEditing}
-              />
-            ) : selectedId ? (
-            <CountryDetail
-              country={selectedCountry || null}
-              continents={CONTINENTS}
-              isLoading={isLoading}
-              onEdit={handleEditFromDetail}
-              onDelete={handleDeleteFromDetail}
-              initialDetailTab={isHeadsOfStateUrl ? 'heads' : undefined}
-              onDetailTabChange={handleDetailTabChange}
-            />
-            ) : (
-              <CountryDetail
-                country={null}
-                continents={CONTINENTS}
-                isLoading={isLoading}
-                onEdit={handleEditFromDetail}
-                onDelete={handleDeleteFromDetail}
-              />
-            )}
+            <AnimatePresence initial={false}>
+              {activeTab === 'dashboard' ? (
+                <motion.div
+                  key={dashboardContentView}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  style={{ width: '100%', minHeight: '100%' }}
+                >
+                  {dashboardContentView === 'stats' ? (
+                    <CountryDashboard
+                      isLoading={isLoading}
+                      onCountryEdit={setEditing}
+                      registrationFeed={registrationFeed}
+                      recentEvents={recentEvents}
+                    />
+                  ) : (
+                    <DashboardMenuContent
+                      view={dashboardContentView}
+                      onNavigateFullPage={navigate}
+                    />
+                  )}
+                </motion.div>
+              ) : selectedId ? (
+                <motion.div
+                  key={`detail-${selectedId}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  style={{ width: '100%', minHeight: '100%' }}
+                >
+                  <CountryDetail
+                    country={selectedCountry || null}
+                    continents={CONTINENTS}
+                    isLoading={isLoading}
+                    onEdit={handleEditFromDetail}
+                    onDelete={handleDeleteFromDetail}
+                    initialDetailTab={isHeadsOfStateUrl ? 'heads' : undefined}
+                    onDetailTabChange={handleDetailTabChange}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="list-empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeInOut' }}
+                  style={{ width: '100%', minHeight: '100%' }}
+                >
+                  <CountryDetail
+                    country={null}
+                    continents={CONTINENTS}
+                    isLoading={isLoading}
+                    onEdit={handleEditFromDetail}
+                    onDelete={handleDeleteFromDetail}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </S.DetailPane>
         </S.MainGrid>
 
