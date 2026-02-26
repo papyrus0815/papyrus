@@ -10,8 +10,9 @@ import {
   type CountryTypeFilter,
   type UnifiedCountry,
 } from '@/entities/country/model/unified-types'
-import { useCountryListState } from '../country-list-state.context'
 import * as S from '@/pages/history/country/country.styles'
+
+import { useCountryListState } from '../country-list-state.context'
 
 export type SortBy = 'name' | 'population' | 'area'
 export type ActiveTab = 'dashboard' | 'list'
@@ -67,6 +68,29 @@ function CountryListInner({
     new Set(),
   )
   const listRef = React.useRef<HTMLDivElement>(null)
+
+  // 대륙별로 그룹화 (현대 국가만; continentId 기준). 대륙 순서는 continents 배열 순서 유지
+  const groupedByContinent = React.useMemo(() => {
+    const groups = new Map<string, typeof filtered>()
+    const UNKNOWN = '__unknown__'
+    for (const country of filtered) {
+      if (country.type !== 'modern') continue
+      const key = country.continentId ?? UNKNOWN
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(country)
+    }
+    // continents 순서대로 정렬, 미분류는 맨 뒤
+    const result: { continentId: string; name: string; countries: typeof filtered }[] = []
+    for (const cont of continents) {
+      const list = groups.get(cont.id)
+      if (list?.length) result.push({ continentId: cont.id, name: cont.name, countries: list })
+    }
+    const unknownList = groups.get('__unknown__')
+    if (unknownList?.length) {
+      result.push({ continentId: '__unknown__', name: '미분류', countries: unknownList })
+    }
+    return result
+  }, [filtered, continents])
 
   // 액티브 국가가 변경되면 자동으로 펼치기
   React.useEffect(() => {
@@ -261,7 +285,7 @@ function CountryListInner({
                 {sortBy === 'name'
                   ? '이름순'
                   : sortBy === 'population'
-                    ? '인구순'
+                    ? '인구순,'
                     : '면적순'}
               </S.FilterButton>
             </S.FilterWrapper>
@@ -279,54 +303,75 @@ function CountryListInner({
           </S.FilterRow>
         )}
 
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          style={{
+            width: '100%',
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
         {activeTab === 'dashboard' ? (
-          <S.DashboardSummary>
-            <S.SummaryCard>
-              <S.SummaryIcon>🌍</S.SummaryIcon>
-              <S.SummaryValue>{countries.length}</S.SummaryValue>
-              <S.SummaryLabel>총 국가</S.SummaryLabel>
-            </S.SummaryCard>
+              <S.DashboardSummary>
+                <S.SummaryCard>
+                  <S.SummaryIcon>🌍</S.SummaryIcon>
+                  <S.SummaryValue>{countries.length}</S.SummaryValue>
+                  <S.SummaryLabel>총 국가</S.SummaryLabel>
+                </S.SummaryCard>
 
-            <S.SummaryCard>
-              <S.SummaryIcon>🏛️</S.SummaryIcon>
-              <S.SummaryValue>
-                {
-                  filtered.filter((country) => country.type === 'historical')
-                    .length
-                }
-              </S.SummaryValue>
-              <S.SummaryLabel>역사적 국가</S.SummaryLabel>
-            </S.SummaryCard>
+                <S.SummaryCard>
+                  <S.SummaryIcon>🏛️</S.SummaryIcon>
+                  <S.SummaryValue>
+                    {
+                      filtered.filter((country) => country.type === 'historical')
+                        .length
+                    }
+                  </S.SummaryValue>
+                  <S.SummaryLabel>역사적 국가</S.SummaryLabel>
+                </S.SummaryCard>
 
-            <S.SummaryCard>
-              <S.SummaryIcon>🏳️</S.SummaryIcon>
-              <S.SummaryValue>
-                {filtered.filter((country) => country.type === 'modern').length}
-              </S.SummaryValue>
-              <S.SummaryLabel>현대 국가</S.SummaryLabel>
-            </S.SummaryCard>
+                <S.SummaryCard>
+                  <S.SummaryIcon>🏳️</S.SummaryIcon>
+                  <S.SummaryValue>
+                    {filtered.filter((country) => country.type === 'modern').length}
+                  </S.SummaryValue>
+                  <S.SummaryLabel>현대 국가</S.SummaryLabel>
+                </S.SummaryCard>
 
-            <S.SummaryCard>
-              <S.SummaryIcon>👥</S.SummaryIcon>
-              <S.SummaryValue>
-                {Math.round(
-                  filtered
-                    .filter(
-                      (country) =>
-                        country.type === 'modern' && country.population,
-                    )
-                    .reduce(
-                      (sum, country) => sum + (Number(country.population) || 0),
-                      0,
-                    ) / 1_000_000_000,
-                )}
-                B
-              </S.SummaryValue>
-              <S.SummaryLabel>총 인구</S.SummaryLabel>
-            </S.SummaryCard>
-          </S.DashboardSummary>
-        ) : (
-          <>
+                <S.SummaryCard>
+                  <S.SummaryIcon>👥</S.SummaryIcon>
+                  <S.SummaryValue>
+                    {Math.round(
+                      filtered
+                        .filter(
+                          (country) =>
+                            country.type === 'modern' && country.population,
+                        )
+                        .reduce(
+                          (sum, country) => sum + (Number(country.population) || 0),
+                          0,
+                        ) / 1_000_000_000,
+                    )}
+                    B
+                  </S.SummaryValue>
+                  <S.SummaryLabel>총 인구</S.SummaryLabel>
+                </S.SummaryCard>
+              </S.DashboardSummary>
+          ) : (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
             {(query || continentFilter) && (
               <S.FilterResultBar>
                 <S.FilterResultText>
@@ -382,9 +427,12 @@ function CountryListInner({
                     </S.EmptyFilterActions>
                   </S.EmptyFilterState>
                 ) : (
-                  filtered.map((country) => (
-                    <React.Fragment key={country.id}>
-                      <S.ListRow
+                  groupedByContinent.map((group) => (
+                    <React.Fragment key={group.continentId}>
+                      <S.ContinentSectionHeader>{group.name}</S.ContinentSectionHeader>
+                      {group.countries.map((country) => (
+                        <React.Fragment key={country.id}>
+                          <S.ListRow
                         id={`country-${country.id}`}
                         $active={country.id === selectedId}
                         onClick={() => onSelect(country.id)}
@@ -557,12 +605,12 @@ function CountryListInner({
                                   style={{
                                     background:
                                       historical.id === selectedId
-                                        ? '#f3e8ff'
-                                        : '#f9fafb',
+                                        ? '#faf5ff'
+                                        : '#ffffff',
                                     borderLeft:
                                       historical.id === selectedId
-                                        ? '3px solid #8b5cf6'
-                                        : '3px solid #e5e7eb',
+                                        ? '2px solid #6366f1'
+                                        : '2px solid #f1f5f9',
                                   }}
                                 >
                                   <S.RowTop>
@@ -654,13 +702,16 @@ function CountryListInner({
                             ),
                           )}
                       </AnimatePresence>
+                        </React.Fragment>
+                      ))}
                     </React.Fragment>
                   ))
                 )}
               </S.VirtualList>
             </S.ListContainer>
-          </>
-        )}
+          </div>
+          )}
+        </motion.div>
       </S.ListPane>
 
       {/* 국가 타입 선택 모달 - Portal로 body에 렌더링 */}

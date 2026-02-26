@@ -124,11 +124,10 @@ export const ListPane = styled.div<{ $inHistory?: boolean }>`
   gap: 0;
   height: calc(100vh - var(--header-height));
   max-height: calc(100vh - var(--header-height));
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  background: #ffffff;
   position: sticky;
   top: var(--header-height);
-  border-right: 1px solid var(--border-color);
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02);
+  border-right: 1px solid #f1f5f9;
   overflow: hidden;
 
   @media (max-width: 1024px) {
@@ -482,75 +481,66 @@ export const TabBar = styled.div`
 `
 
 export const TabButton = styled.button<{ $active?: boolean }>`
-  padding: 12px 16px;
-  border-radius: 10px 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
   border: none;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)'
-      : 'transparent'};
-  color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#70757a')};
+  background: transparent;
+  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
   font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? '700' : '500')};
+  font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   position: relative;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 0.15s ease, background 0.15s ease;
   font-family:
     'Roboto',
     -apple-system,
     sans-serif;
 
   &:hover {
-    color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#3c4043')};
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)'
-        : 'linear-gradient(180deg, #f8f9fa 0%, #f1f3f5 100%)'};
+    color: #6366f1;
+    background: #eef2ff;
   }
 
   &::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
+    left: 12px;
+    right: 12px;
     bottom: 0;
-    height: 3px;
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-300) 100%)'
-        : 'transparent'};
-    border-radius: 3px 3px 0 0;
-    transition: all 0.3s ease;
+    height: 2px;
+    background: #6366f1;
+    border-radius: 2px;
+    opacity: ${({ $active }) => ($active ? '1' : '0')};
+    transition: opacity 0.15s ease;
   }
 
   @media (max-width: 768px) {
-    padding: 10px 12px;
+    padding: 6px 10px;
     font-size: 12px;
-    gap: 6px;
+    gap: 5px;
   }
 
   @media (max-width: 480px) {
-    padding: 8px 10px;
+    padding: 6px 8px;
     font-size: 11px;
   }
 `
 
 export const TabBadge = styled.span`
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #e8f0fe 0%, #d3e3fd 100%);
-  color: #1967d2;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #eef2ff;
+  color: #6366f1;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(25, 103, 210, 0.15);
   font-family:
     'Roboto',
     -apple-system,
@@ -788,33 +778,31 @@ export const ControlsRow = styled.div`
   position: sticky;
   top: 0;
   z-index: 2;
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
-  border-bottom: 1px solid var(--border-color-light);
-  padding: 8px 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  padding: 12px 16px;
 `
 
 export const FilterRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 12px;
+  gap: 8px;
+  padding: 10px 16px 12px;
   position: sticky;
   top: 57px;
   z-index: 2;
   background: #ffffff;
-  border-bottom: 1px solid var(--border-color-light);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid #f1f5f9;
   flex-wrap: wrap;
 
   @media (max-width: 768px) {
-    padding: 10px 8px;
-    gap: 8px;
+    padding: 8px 12px 10px;
+    gap: 6px;
     top: 47px;
   }
 
   @media (max-width: 480px) {
-    padding: 8px 6px;
+    padding: 6px 10px 8px;
     gap: 6px;
   }
 `
@@ -844,25 +832,22 @@ export const AddIconButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #9146ff 100%);
-  color: #ffffff;
+  background: #6366f1;
+  color: #fff;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(173, 70, 255, 0.2);
+  transition: background 0.15s ease, opacity 0.15s ease;
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(173, 70, 255, 0.3);
+    background: #4f46e5;
   }
 
   &:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 4px rgba(173, 70, 255, 0.3);
+    opacity: 0.9;
   }
 
   svg {
@@ -925,49 +910,45 @@ export const SearchIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: #94a3b8;
   pointer-events: none;
   z-index: 1;
 `
 
 export const SearchInput = styled.input`
   width: 100%;
-  height: 40px;
-  padding: 0 36px 0 40px;
-  border: 1px solid var(--border-color);
+  height: 36px;
+  padding: 0 32px 0 38px;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 14px;
-  color: #202124;
+  color: #0f172a;
   background: #ffffff;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease;
 
   &::placeholder {
-    color: #9aa0a6;
+    color: #94a3b8;
   }
 
   &:hover {
-    border-color: var(--border-color-hover);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border-color: #cbd5e1;
   }
 
   &:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow:
-      0 0 0 3px rgba(173, 70, 255, 0.08),
-      0 1px 3px rgba(0, 0, 0, 0.1);
+    border-color: #6366f1;
   }
 
   @media (max-width: 768px) {
-    height: 36px;
+    height: 34px;
     font-size: 13px;
-    padding: 0 32px 0 36px;
+    padding: 0 28px 0 34px;
   }
 
   @media (max-width: 480px) {
-    height: 34px;
+    height: 32px;
     font-size: 12px;
-    padding: 0 28px 0 32px;
+    padding: 0 24px 0 30px;
   }
 `
 
@@ -1085,54 +1066,42 @@ export const ClearAllFiltersButton = styled.button`
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--border-color);
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
-  color: #5f6368;
+  font-weight: 500;
+  color: #64748b;
   background: #ffffff;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   white-space: nowrap;
-  animation: slideIn 0.2s ease;
-
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateX(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
 
   &:hover {
-    color: #202124;
-    border-color: var(--color-primary);
-    background: #f3e8ff;
+    color: #0f172a;
+    border-color: #cbd5e1;
+    background: #f8fafc;
   }
 
   &:active {
-    transform: scale(0.98);
+    background: #f1f5f9;
+  }
+
+  svg {
+    opacity: 0.8;
   }
 
   @media (max-width: 768px) {
-    height: 36px;
-    padding: 0 12px;
+    height: 34px;
+    padding: 0 10px;
     font-size: 12px;
   }
 
   @media (max-width: 480px) {
-    height: 34px;
+    height: 32px;
     padding: 0 10px;
     font-size: 11px;
-  }
-
-  svg {
-    opacity: 0.7;
   }
 `
 
@@ -1140,25 +1109,25 @@ export const AddButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
-  padding: 0 24px;
-  border: 1.5px solid #e0e0e0;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #1a1a1a;
-  background: #fff;
+  color: #0f172a;
+  background: #ffffff;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   white-space: nowrap;
 
   &:hover {
-    border-color: #1a1a1a;
-    background: #fafafa;
+    border-color: #cbd5e1;
+    background: #f8fafc;
   }
 
   &:active {
-    transform: scale(0.98);
+    background: #f1f5f9;
   }
 `
 
@@ -1174,23 +1143,11 @@ export const FilterResultBar = styled.div`
   align-items: center;
   justify-content: center;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4f8 100%);
-  border-bottom: 1px solid #d0e7ff;
-  animation: slideDown 0.3s ease;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
   position: sticky;
   top: 113px;
   z-index: 1;
-
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
 `
 
 export const FilterResultText = styled.div`
@@ -1198,18 +1155,18 @@ export const FilterResultText = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #1967d2;
-  font-weight: 600;
+  color: #64748b;
+  font-weight: 500;
 
   svg {
-    color: #1e8e3e;
+    color: #64748b;
   }
 `
 
 export const FilterResultCount = styled.span`
-  font-weight: 800;
-  color: #1967d2;
-  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 13px;
 `
 
 export const ClearFiltersButton = styled.button`
@@ -1246,47 +1203,35 @@ export const EmptyFilterState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 100px 40px;
+  padding: 40px 20px;
   text-align: center;
-  margin: 20px;
-  animation: fadeIn 0.3s ease;
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  margin: 20px 16px;
+  background: #ffffff;
 `
 
 export const EmptyFilterIcon = styled.div`
-  font-size: 48px;
-  margin-bottom: 24px;
-  opacity: 0.3;
-  filter: grayscale(100%);
+  font-size: 36px;
+  margin-bottom: 12px;
+  opacity: 0.4;
 `
 
 export const EmptyFilterTitle = styled.h3`
-  margin: 0 0 12px 0;
-  font-size: 18px;
+  margin: 0 0 6px 0;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: -0.3px;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 `
 
 export const EmptyFilterText = styled.p`
-  margin: 0 0 32px 0;
-  font-size: 14px;
-  color: #666;
-  line-height: 1.7;
-  max-width: 380px;
+  margin: 0 0 20px 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.55;
+  max-width: 300px;
 
   strong {
-    color: #1a1a1a;
+    color: #0f172a;
     font-weight: 600;
   }
 `
@@ -1294,7 +1239,7 @@ export const EmptyFilterText = styled.p`
 export const EmptyFilterActions = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 `
 
 export const TodayBtn = styled.button`
@@ -1310,34 +1255,53 @@ export const VirtualList = styled.div`
   border: none;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 6px;
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
-  padding-right: 6px;
+  padding: 6px 8px 12px 8px;
+  background: #ffffff;
 
-  /* 커스텀 스크롤바 */
+  /* 작고 깔끔한 스크롤바 */
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 4px;
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f3f4;
-    border-radius: 4px;
+    background: transparent;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: #cbd5e1;
     border-radius: 4px;
+  }
 
-    &:hover {
-      background: #bdc1c6;
-    }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  &::-webkit-scrollbar-thumb:active {
+    background: #6366f1;
   }
 
   @media (max-width: 768px) {
-    padding-right: 0; /* 모바일에서 우측 여백 제거 */
+    padding: 4px 6px 8px 6px;
+    gap: 4px;
   }
+`
+
+/** 대륙별 구분 헤더 - 스크롤 시 리스트와 함께 이동 */
+export const ContinentSectionHeader = styled.div`
+  padding: 10px 16px 10px 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6366f1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: #faf5ff;
+  border-left: 3px solid #6366f1;
+  border-bottom: 1px solid #f3e8ff;
+  border-radius: 10px 10px 0 0;
 `
 
 export const ListRowMeta = styled.div`
@@ -1545,56 +1509,54 @@ export const ListRow = styled.button<{ $active?: boolean }>`
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, #f6f3ff 0%, #ede7ff 100%)'
-      : 'transparent'};
-  border: none;
-  border-bottom: 1px solid var(--border-color-light);
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 52px;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  min-height: 56px;
   line-height: 1.3;
   position: relative;
   flex-shrink: 0;
+  box-sizing: border-box;
 
   &::before {
     content: '';
     position: absolute;
     left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: var(--color-primary);
+    top: 10px;
+    bottom: 10px;
+    width: 2px;
+    background: #6366f1;
+    border-radius: 2px;
     opacity: ${({ $active }) => ($active ? '1' : '0')};
-    transition: opacity 0.3s ease;
+    transition: opacity 0.2s ease;
   }
 
   &:hover {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #f6f3ff 0%, #ede7ff 100%)'
-        : 'linear-gradient(135deg, #fafafa 0%, #f5f7fa 100%)'};
-
+    background: #fafbff;
+    border-color: #e0e7ff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06);
     &::before {
-      opacity: ${({ $active }) => ($active ? '1' : '0.3')};
+      opacity: ${({ $active }) => ($active ? '1' : '0.4')};
     }
   }
 
   &:active {
-    transform: scale(0.99);
+    background: #f8fafc;
   }
 
   @media (max-width: 768px) {
-    padding: 12px 12px;
-    min-height: 48px;
+    padding: 12px 14px;
+    min-height: 52px;
+    border-radius: 8px;
   }
 
   @media (max-width: 480px) {
-    padding: 10px 10px;
-    min-height: 44px;
+    padding: 10px 12px;
+    min-height: 48px;
   }
 `
 
@@ -1609,31 +1571,31 @@ export const RowBottom = styled.div`
   width: 100%;
   display: flex;
   align-items: center;
-  padding-left: 48px; /* 좌측 체크/아이콘 영역 들여쓰기 */
-  margin-top: 2px; /* 상/하 줄 간 여백 */
+  padding-left: 50px;
+  margin-top: 4px;
 
   @media (max-width: 768px) {
-    padding-left: 40px;
+    padding-left: 44px;
   }
 
   @media (max-width: 480px) {
-    padding-left: 36px;
+    padding-left: 40px;
   }
 `
 
 export const RowLeft = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   flex: 1;
-  min-width: 0; /* flex 컨테이너에서 overflow를 제대로 처리하기 위해 필요 */
+  min-width: 0;
 
   @media (max-width: 768px) {
-    gap: 10px;
+    gap: 12px;
   }
 
   @media (max-width: 480px) {
-    gap: 8px;
+    gap: 10px;
   }
 `
 
@@ -1645,74 +1607,80 @@ export const RowCheckbox = styled.span`
 `
 
 export const ExpandButton = styled.button`
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   border: none;
   background: none;
-  color: #5f6368;
+  color: #94a3b8;
   cursor: pointer;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  transition: transform 0.2s ease;
+  transition: color 0.2s ease, transform 0.2s ease;
+  border-radius: 4px;
 
   &:hover {
-    color: #202124;
+    color: #6366f1;
+  }
+
+  &:active {
+    transform: scale(0.95);
   }
 `
 
 export const StarIcon = styled.span`
   font-size: 12px;
-  color: #dadce0;
+  color: #e2e8f0;
 `
 
 export const FlagBadge = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  font-size: 18px;
-  border: 1px solid var(--border-color-light);
-  transition: all 0.2s ease;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 20px;
+  border: 1px solid #f1f5f9;
+  transition: background 0.2s ease, border-color 0.2s ease;
   flex-shrink: 0;
 
   ${ListRow}:hover & {
-    transform: scale(1.05);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    background: #f1f5f9;
+    border-color: #e2e8f0;
   }
 
   @media (max-width: 768px) {
-    width: 28px;
-    height: 28px;
-    font-size: 16px;
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+    border-radius: 8px;
   }
 
   @media (max-width: 480px) {
-    width: 24px;
-    height: 24px;
-    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
   }
 `
 
 export const TextCol = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   flex: 1;
-  min-width: 0; /* overflow 처리를 위해 필수 */
-  overflow: hidden; /* 자식 요소가 벗어나지 않도록 */
+  min-width: 0;
+  overflow: hidden;
 `
 
 export const CodeText = styled.div<{ $unread?: boolean }>`
-  font-size: 14px;
-  font-weight: ${({ $unread }) => ($unread ? '700' : '600')};
-  color: #1a1a1a;
-  letter-spacing: -0.1px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.01em;
   font-family:
     'Roboto',
     -apple-system,
@@ -1722,17 +1690,17 @@ export const CodeText = styled.div<{ $unread?: boolean }>`
   white-space: nowrap;
 
   @media (max-width: 768px) {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   @media (max-width: 480px) {
-    font-size: 12px;
+    font-size: 13px;
   }
 `
 
 export const NameText = styled.div`
-  font-size: 13px;
-  color: #70757a;
+  font-size: 12px;
+  color: #94a3b8;
   font-weight: 400;
   letter-spacing: 0;
   font-family:
@@ -1744,7 +1712,7 @@ export const NameText = styled.div`
   white-space: nowrap;
 
   @media (max-width: 768px) {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   @media (max-width: 480px) {
@@ -1763,8 +1731,9 @@ export const RadioDot = styled.span<{ $active?: boolean }>`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: ${({ $active }) =>
-    $active ? 'var(--color-primary)' : 'transparent'};
+  background: ${({ $active }) => ($active ? '#6366f1' : 'transparent')};
+  border: 2px solid ${({ $active }) => ($active ? '#6366f1' : '#e2e8f0')};
+  transition: background 0.2s ease, border-color 0.2s ease;
 `
 
 export const MetaDate = styled.span`
@@ -1773,17 +1742,19 @@ export const MetaDate = styled.span`
 `
 
 export const AttachmentDot = styled.span`
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: #c7cbd1;
+  background: #e2e8f0;
 `
 
 export const TimeText = styled.span`
   font-size: 11px;
-  color: #788087;
-  min-width: 56px;
+  color: #94a3b8;
+  font-weight: 500;
+  min-width: 44px;
   text-align: right;
+  letter-spacing: 0.02em;
 `
 
 export const TitleRow = styled.div`
@@ -1809,16 +1780,17 @@ export const Iso = styled.span`
 
 export const Meta = styled.div`
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  font-size: 12px;
-  color: #5f6368;
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
 `
 
 export const Dot = styled.span`
-  width: 4px;
-  height: 4px;
-  background: #9aa0a6;
+  width: 3px;
+  height: 3px;
+  background: #cbd5e1;
   border-radius: 50%;
   display: inline-block;
 `
@@ -3230,64 +3202,61 @@ export const SubmitButton = styled.button`
 export const FilterButton = styled.button<{ $active?: boolean }>`
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 14px;
-  border: 1px solid
-    ${({ $active }) =>
-      $active ? 'var(--color-primary)' : 'var(--border-color)'};
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid ${({ $active }) => ($active ? '#6366f1' : '#e2e8f0')};
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#5f6368')};
-  background: ${({ $active }) => ($active ? '#f3e8ff' : '#ffffff')};
+  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
+  background: ${({ $active }) => ($active ? '#eef2ff' : '#ffffff')};
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
   white-space: nowrap;
-  box-shadow: ${({ $active }) =>
-    $active ? '0 0 0 3px rgba(173, 70, 255, 0.08)' : 'none'};
-  flex-shrink: 0; /* 버튼이 찌그러지지 않도록 */
+  flex-shrink: 0;
 
   &:hover {
-    border-color: var(--color-primary);
-    background: #f3e8ff;
-    color: var(--color-primary);
+    border-color: #6366f1;
+    background: #eef2ff;
+    color: #6366f1;
   }
 
   &:active {
-    transform: scale(0.98);
+    background: #e0e7ff;
+  }
+
+  svg {
+    flex-shrink: 0;
+    opacity: 0.8;
   }
 
   @media (max-width: 1024px) {
-    height: 38px;
-    padding: 0 12px;
-    font-size: 13px;
-    gap: 6px;
-  }
-
-  @media (max-width: 768px) {
-    height: 36px;
+    height: 34px;
     padding: 0 10px;
     font-size: 12px;
     gap: 5px;
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 768px) {
     height: 32px;
-    padding: 0 8px;
-    font-size: 11px;
-    gap: 4px;
-  }
+    padding: 0 10px;
+    font-size: 12px;
+    gap: 5px;
 
-  svg {
-    flex-shrink: 0;
-    
-    @media (max-width: 768px) {
+    svg {
       width: 16px;
       height: 16px;
     }
-    
-    @media (max-width: 480px) {
+  }
+
+  @media (max-width: 480px) {
+    height: 30px;
+    padding: 0 8px;
+    font-size: 11px;
+    gap: 4px;
+
+    svg {
       width: 14px;
       height: 14px;
     }
@@ -3466,7 +3435,7 @@ export const Row = styled.div`
 
 export const Actions = styled.div`
   display: flex;
-  justify-content: flex-end;re
+  justify-content: flex-end;
   gap: 8px;
 `
 
@@ -4285,49 +4254,51 @@ export const ImageLabel = styled.div`
 
 // Dashboard Summary Styles
 export const DashboardSummary = styled.div`
-  padding: 24px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
   overflow-y: auto;
+  background: #ffffff;
 `
 
 export const SummaryCard = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px;
-  background: linear-gradient(135deg, #fff 0%, #fafbfc 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  transition: all 0.25s;
+  justify-content: center;
+  padding: 18px 14px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease;
 
   &:hover {
-    border-color: #0f172a;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border-color: #e2e8f0;
+    background: #fafafa;
   }
 `
 
 export const SummaryIcon = styled.div`
-  font-size: 32px;
-  margin-bottom: 8px;
-  filter: grayscale(0.3);
+  font-size: 24px;
+  margin-bottom: 6px;
+  line-height: 1;
+  opacity: 0.9;
 `
 
 export const SummaryValue = styled.div`
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 22px;
+  font-weight: 700;
   color: #0f172a;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  letter-spacing: -0.02em;
 `
 
 export const SummaryLabel = styled.div`
-  font-size: 13px;
+  font-size: 11px;
   color: #64748b;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 `
 
 export const QuickActions = styled.div`
