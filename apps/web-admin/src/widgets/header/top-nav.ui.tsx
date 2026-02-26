@@ -32,11 +32,11 @@ const TopNav = styled.nav`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: 4px;
   padding: 0;
 
   @media (max-width: 480px) {
-    gap: 12px;
+    gap: 2px;
     flex-wrap: wrap;
   }
 `
@@ -48,38 +48,36 @@ const TopNavItem = styled.button`
   gap: 4px;
   background: none;
   border: none;
-  color: #5f6368;
+  color: #64748b;
   cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    transform 0.06s ease;
+  padding: 6px 14px;
+  border-radius: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: var(--color-primary-100);
+    background: #f1f5f9;
+    color: #475569;
   }
 
   &:active {
-    transform: translateY(1px);
+    transform: scale(0.98);
   }
 
   &:focus-visible {
     outline: none;
-    box-shadow: var(--focus-ring);
+    box-shadow: 0 0 0 2px #6366f1;
   }
 
   &[aria-current='page'] {
-    color: var(--color-primary);
-    background: var(--color-primary-100);
+    color: #4f46e5;
+    background: #eef2ff;
     font-weight: 600;
   }
 `
 
 const TopIcon = styled.span`
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -93,13 +91,10 @@ const TopIcon = styled.span`
 const TopLabel = styled.span`
   font-size: 11px;
   font-weight: 500;
-  color: #5f6368;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  color: inherit;
+  letter-spacing: 0.01em;
 
   ${TopNavItem}[aria-current='page'] & {
-    color: var(--color-primary);
+    color: #4f46e5;
   }
 `

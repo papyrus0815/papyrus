@@ -41,7 +41,7 @@ import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 
 import { TopNavBar, type TopNavItemSpec } from './top-nav.ui'
 
-// 시간 포맷 함수
+// 재생 시간 포맷 (mm:ss)
 const formatTime = (seconds: number): string => {
   if (!isFinite(seconds) || isNaN(seconds)) return '0:00'
   const mins = Math.floor(seconds / 60)
@@ -49,11 +49,38 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+// 메시지 시간 포맷 (ISO 또는 임의 문자열 → 읽기 쉬운 형식)
+function formatMessageTime(isoOrText: string): string {
+  if (!isoOrText || typeof isoOrText !== 'string') return ''
+  const s = isoOrText.trim()
+  if (!s) return ''
+  const parsed = new Date(s)
+  if (Number.isNaN(parsed.getTime())) return s.length > 20 ? s.slice(0, 16) + '…' : s
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const yesterday = today - 86400000
+  const t = parsed.getTime()
+  const dateOnly = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime()
+  if (dateOnly === today) {
+    const h = parsed.getHours()
+    const m = parsed.getMinutes()
+    if (h < 12) return `오전 ${h}:${m.toString().padStart(2, '0')}`
+    if (h === 12) return `오후 12:${m.toString().padStart(2, '0')}`
+    return `오후 ${h - 12}:${m.toString().padStart(2, '0')}`
+  }
+  if (dateOnly === yesterday) return '어제'
+  if (parsed.getFullYear() === now.getFullYear()) {
+    return `${parsed.getMonth() + 1}월 ${parsed.getDate()}일`
+  }
+  return `${parsed.getFullYear()}. ${parsed.getMonth() + 1}. ${parsed.getDate()}`
+}
+
 const Header: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { username, reset } = useSessionStore()
-  const { messages, markAllRead, markOneRead, fetchNotifications } = useNotificationStore()
+  const { messages, markAllRead, markOneRead, fetchNotifications } =
+    useNotificationStore()
 
   const [isBellOpen, setIsBellOpen] = useState(false)
 
@@ -230,7 +257,6 @@ const Header: React.FC = () => {
         setGlobalBgmMutedState(false) // 전역 음소거 상태 해제
         setBgmVolume(restoreVolume)
         setIsBgmMuted(false)
-
       } else {
         // 음소거: 볼륨을 0으로 설정
         // 현재 볼륨을 저장 (음소거 해제 시 복원용)
@@ -531,7 +557,7 @@ const Header: React.FC = () => {
                       {msg.preview && (
                         <MessagePreview>{msg.preview}</MessagePreview>
                       )}
-                      <MessageMeta>{msg.time}</MessageMeta>
+                      <MessageMeta>{formatMessageTime(msg.time)}</MessageMeta>
                     </MessageBody>
                   </MessageRow>
                 ))}
@@ -721,7 +747,7 @@ const Header: React.FC = () => {
                         {msg.preview && (
                           <MessagePreview>{msg.preview}</MessagePreview>
                         )}
-                        <MessageMeta>{msg.time}</MessageMeta>
+                        <MessageMeta>{formatMessageTime(msg.time)}</MessageMeta>
                       </MessageBody>
                     </MessageRow>
                   ))}
@@ -840,20 +866,21 @@ const HeaderBar = styled.header`
   top: 0;
   left: 0;
   right: 0;
-  height: 64px;
+  height: var(--header-height, 64px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 20px;
   background: #ffffff;
-  border-bottom: 1px solid #e6e8eb;
+  border-bottom: 1px solid #f1f5f9;
   z-index: ${Z_INDEX.HEADER};
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const LeftZone = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 `
 
 const CenterZone = styled.div`
@@ -870,7 +897,7 @@ const CenterZone = styled.div`
 const RightZone = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 `
 
 const SoundController = styled.div`
@@ -965,32 +992,31 @@ const VolumeSlider = styled.input`
 `
 
 const SettingsHeader = styled.div`
-  padding: 8px 4px 12px;
+  padding: 4px 0 14px;
 `
 
 const SettingsTitle = styled.div`
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: #202124;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  color: #334155;
+  letter-spacing: -0.01em;
 `
 
 const SettingsContent = styled.div`
-  padding: 8px 4px;
+  padding: 4px 0;
 `
 
 const TrackInfo = styled.div`
-  padding: 12px 0;
-  margin-bottom: 8px;
+  padding: 16px 14px;
+  margin-bottom: 12px;
+  background: #f8fafc;
+  border-radius: 16px;
 `
 
 const TrackName = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #202124;
+  color: #334155;
   margin-bottom: 8px;
   text-align: center;
   overflow: hidden;
@@ -1006,9 +1032,9 @@ const TrackProgress = styled.div`
 
 const ProgressBar = styled.div`
   width: 100%;
-  height: 4px;
-  background: #e6e8eb;
-  border-radius: 2px;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 8px;
   overflow: hidden;
   position: relative;
 `
@@ -1016,8 +1042,8 @@ const ProgressBar = styled.div`
 const ProgressFill = styled.div<{ $progress: number }>`
   height: 100%;
   width: ${({ $progress }) => `${$progress}%`};
-  background: var(--color-primary);
-  border-radius: 2px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 8px;
   transition: width 0.1s linear;
 `
 
@@ -1025,61 +1051,61 @@ const TimeDisplay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   font-size: 11px;
-  color: #70757a;
+  color: #64748b;
   font-variant-numeric: tabular-nums;
+  margin-top: 8px;
 `
 
 const PlaybackControls = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 0;
+  gap: 12px;
+  padding: 16px 0;
 `
 
 const PlaybackButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid #e6e8eb;
+  width: 42px;
+  height: 42px;
+  border: none;
   border-radius: 50%;
-  background: #ffffff;
-  color: #5f6368;
+  background: #f1f5f9;
+  color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 
   &:hover {
-    background: #f8f9fa;
-    border-color: var(--color-primary);
-    color: var(--color-primary);
+    background: #e2e8f0;
+    color: #4f46e5;
     transform: scale(1.05);
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.96);
   }
 
   &:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(173, 70, 255, 0.1);
+    box-shadow: 0 0 0 2px #c7d2fe;
   }
 
-  /* 재생/일시정지 버튼은 더 크게 */
   &:nth-child(2) {
-    width: 48px;
-    height: 48px;
-    background: var(--color-primary);
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
     color: #ffffff;
-    border-color: var(--color-primary);
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 
     &:hover {
-      background: rgba(173, 70, 255, 0.9);
-      transform: scale(1.08);
+      background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+      transform: scale(1.06);
+      box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
     }
   }
 `
@@ -1100,63 +1126,63 @@ const SoundControlIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: rgba(173, 70, 255, 0.1);
-  color: var(--color-primary);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: #eef2ff;
+  color: #6366f1;
   flex-shrink: 0;
 `
 
 const SoundControlTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #202124;
+  color: #334155;
   margin-bottom: 2px;
 `
 
 const SoundControlSubtitle = styled.div`
   font-size: 12px;
-  color: #70757a;
+  color: #64748b;
 `
 
 const SoundControlActions = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-left: 48px;
+  gap: 14px;
+  padding-left: 56px;
+  margin-top: 12px;
 `
 
 const SoundToggleButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid #e6e8eb;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #5f6368;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 14px;
+  background: #f1f5f9;
+  color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 
   &:hover {
-    background: #f8f9fa;
-    border-color: #dadce0;
-    color: #202124;
+    background: #eef2ff;
+    color: #6366f1;
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.96);
   }
 `
 
 const SettingsVolumeSlider = styled.input`
   flex: 1;
-  height: 4px;
-  border-radius: 2px;
-  background: #e6e8eb;
+  height: 8px;
+  border-radius: 8px;
+  background: #e2e8f0;
   outline: none;
   -webkit-appearance: none;
   appearance: none;
@@ -1165,78 +1191,84 @@ const SettingsVolumeSlider = styled.input`
   &::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: var(--color-primary);
+    background: #6366f1;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
   }
 
   &::-webkit-slider-thumb:hover {
-    background: rgba(173, 70, 255, 0.8);
-    transform: scale(1.15);
+    background: #4f46e5;
+    transform: scale(1.1);
   }
 
   &::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    background: var(--color-primary);
+    background: #6366f1;
     cursor: pointer;
     border: none;
-    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
   }
 
   &::-moz-range-thumb:hover {
-    background: rgba(173, 70, 255, 0.8);
-    transform: scale(1.15);
+    background: #4f46e5;
+    transform: scale(1.1);
   }
 `
 
 const LogoButton = styled.button`
   border: none;
   background: transparent;
-  color: #202124;
+  color: #334155;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
+  letter-spacing: -0.02em;
   cursor: pointer;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: #6366f1;
+  }
 `
 
 const IconButton = styled.button`
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #dadce0;
-  border-radius: 50%;
-  background: #ffffff;
-  color: #5f6368;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #64748b;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: #f8f9fa;
-    border-color: #c0c4c9;
-    transform: scale(1.05);
+    background: #f1f5f9;
+    color: #475569;
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.96);
   }
 `
 
 const Badge = styled.span`
   position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   border-radius: 999px;
-  background: var(--color-primary);
+  background: #6366f1;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -1244,38 +1276,36 @@ const Badge = styled.span`
   align-items: center;
   justify-content: center;
   box-shadow: 0 0 0 2px #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
 `
 
 const UserButton = styled(IconButton)`
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   gap: 0;
 `
 
 const Avatar = styled.span`
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: #f1f3f4;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  color: #202124;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f46e5;
 `
 
 const DropdownMenu = styled.div<{ $isOpen: boolean }>`
   position: absolute;
-  top: 46px;
+  top: 44px;
   background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 16px;
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    0 0 0 1px rgba(0, 0, 0, 0.02);
-  padding: 8px;
+  border: 1px solid #f1f5f9;
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.03);
+  padding: 12px;
   display: ${({ $isOpen }) => ($isOpen ? 'block' : 'none')};
 
   @media (max-width: 768px) {
@@ -1284,70 +1314,68 @@ const DropdownMenu = styled.div<{ $isOpen: boolean }>`
 `
 
 const SettingsDropdown = styled(DropdownMenu)`
-  width: 280px;
-  padding: 12px;
+  width: 300px;
+  padding: 20px;
 `
 
 const DropdownHeaderRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 8px;
+  padding: 16px 4px 14px;
   margin-bottom: 4px;
 `
 
 const DropdownTitle = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #202124;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  color: #334155;
 `
 
 const SmallButton = styled.button`
-  height: 32px;
+  height: 34px;
   padding: 0 14px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
-  color: var(--color-primary);
+  color: #6366f1;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(173, 70, 255, 0.08);
+    background: #eef2ff;
+    color: #4f46e5;
   }
 
   &:active {
-    background: rgba(173, 70, 255, 0.12);
+    background: #e0e7ff;
   }
 `
 
 const MessageList = styled.div`
-  max-height: 420px;
+  max-height: 380px;
   overflow-y: auto;
-  padding: 4px 8px;
+  padding: 8px 4px;
   margin-top: 4px;
 
   &::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
   }
 
   &::-webkit-scrollbar-track {
-    background: transparent;
+    background: #f8fafc;
+    border-radius: 6px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.15);
-    border-radius: 2px;
+    background: #e2e8f0;
+    border-radius: 6px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.25);
+    background: #cbd5e1;
   }
 `
 
@@ -1356,16 +1384,18 @@ const EmptyNotice = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 52px 28px;
   font-size: 14px;
-  color: #9aa0a6;
+  color: #94a3b8;
   text-align: center;
-  gap: 12px;
+  gap: 14px;
+  border-radius: 16px;
+  background: #fafbff;
 
   &::before {
-    content: '📭';
-    font-size: 48px;
-    opacity: 0.4;
+    content: '🔔';
+    font-size: 44px;
+    opacity: 0.6;
   }
 `
 
@@ -1374,45 +1404,36 @@ const MessageRow = styled.button<{ $unread: boolean }>`
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px 12px;
-  margin-bottom: 6px;
+  padding: 16px 14px;
+  margin-bottom: 8px;
   border: none;
-  background: ${({ $unread }) =>
-    $unread
-      ? 'linear-gradient(135deg, rgba(173, 70, 255, 0.06) 0%, rgba(173, 70, 255, 0.03) 100%)'
-      : 'transparent'};
-  border: 1px solid
-    ${({ $unread }) => ($unread ? 'rgba(173, 70, 255, 0.2)' : 'transparent')};
-  border-radius: 12px;
+  background: ${({ $unread }) => ($unread ? '#f8fafc' : 'transparent')};
+  border-radius: 16px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
+  border-left: 4px solid ${({ $unread }) => ($unread ? '#6366f1' : 'transparent')};
 
   &:hover {
-    background: ${({ $unread }) =>
-      $unread
-        ? 'linear-gradient(135deg, rgba(173, 70, 255, 0.1) 0%, rgba(173, 70, 255, 0.05) 100%)'
-        : 'rgba(0, 0, 0, 0.03)'};
-    border-color: ${({ $unread }) =>
-      $unread ? 'rgba(173, 70, 255, 0.3)' : 'rgba(0, 0, 0, 0.08)'};
-    transform: translateX(4px);
+    background: ${({ $unread }) => ($unread ? '#f1f5f9' : '#f8fafc')};
   }
 
   &:active {
-    transform: translateX(2px);
+    transform: scale(0.99);
   }
 `
 
 const UnreadDot = styled.span<{ $visible: boolean }>`
-  width: 8px;
-  height: 8px;
-  margin-top: 7px;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: #6366f1;
   opacity: ${({ $visible }) => ($visible ? 1 : 0)};
   box-shadow: ${({ $visible }) =>
-    $visible ? '0 0 0 2px rgba(173, 70, 255, 0.2)' : 'none'};
+    $visible ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none'};
   transition: all 0.2s ease;
+  flex-shrink: 0;
 `
 
 const MessageBody = styled.div`
@@ -1433,18 +1454,18 @@ const MessageTitleRow = styled.div`
 
 const EntityTypeChip = styled.span`
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 6px;
+  padding: 5px 10px;
+  border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--color-primary);
-  background: rgba(173, 70, 255, 0.12);
+  color: #4f46e5;
+  background: #eef2ff;
   flex-shrink: 0;
 `
 
 const MessageTitle = styled.div`
   font-size: 14px;
-  color: #202124;
+  color: #334155;
   font-weight: 600;
   line-height: 1.45;
   min-width: 0;
@@ -1452,15 +1473,11 @@ const MessageTitle = styled.div`
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
 `
 
 const MessagePreview = styled.div`
   font-size: 13px;
-  color: #70757a;
+  color: #64748b;
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1472,16 +1489,10 @@ const MessageMeta = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 11px;
-  color: #9aa0a6;
-  font-weight: 400;
-
-  &::before {
-    content: '•';
-    font-size: 14px;
-    opacity: 0.5;
-  }
+  color: #94a3b8;
+  font-weight: 500;
 `
 
 const ProfileHeader = styled.div`
@@ -1492,26 +1503,27 @@ const ProfileHeader = styled.div`
 `
 
 const AvatarLg = styled(Avatar)`
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   font-size: 14px;
 `
 
 const ProfileName = styled.div`
   font-size: 13px;
-  color: #202124;
+  color: #334155;
   font-weight: 700;
 `
 
 const ProfileRole = styled.div`
   font-size: 11px;
-  color: #5f6368;
+  color: #64748b;
 `
 
 const Divider = styled.div`
   height: 1px;
-  background: #f1f3f4;
-  margin: 6px 8px;
+  background: #f1f5f9;
+  margin: 14px 0;
+  border-radius: 1px;
 `
 
 const MenuItem = styled.button`
@@ -1519,14 +1531,17 @@ const MenuItem = styled.button`
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px;
+  padding: 12px 14px;
   border: none;
   background: transparent;
-  color: #202124;
-  border-radius: 8px;
+  color: #334155;
+  border-radius: 12px;
   cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s ease;
+
   &:hover {
-    background: #f8f9fa;
+    background: #f1f5f9;
   }
 `
 
@@ -1534,37 +1549,22 @@ const MobileMenuButton = styled.button`
   display: none;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: transparent;
-  color: #3c4043;
+  color: #64748b;
   cursor: pointer;
-  border-radius: 12px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
+  border-radius: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
 
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.04);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
-
-  &:hover::before {
-    opacity: 1;
+  &:hover {
+    background: #f1f5f9;
+    color: #475569;
   }
 
   &:active {
-    transform: scale(0.95);
-  }
-
-  svg {
-    position: relative;
-    z-index: 1;
+    transform: scale(0.96);
   }
 
   @media (max-width: 768px) {
@@ -1601,10 +1601,8 @@ const MobileMenuModal = styled(motion.div)`
     max-width: 420px;
     max-height: 65vh;
     background: #fff;
-    border-radius: 20px;
-    box-shadow:
-      0 20px 60px rgba(0, 0, 0, 0.12),
-      0 0 1px rgba(0, 0, 0, 0.1);
+    border-radius: 24px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.1);
     z-index: ${Z_INDEX.MODAL_CONTENT};
     overflow: hidden;
   }
@@ -1614,18 +1612,18 @@ const MobileCloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: transparent;
-  color: #70757a;
+  color: #64748b;
   cursor: pointer;
-  border-radius: 10px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+  transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.06);
-    color: #202124;
+    background: #f1f5f9;
+    color: #334155;
   }
 
   &:active {
@@ -1667,47 +1665,41 @@ const MobileMenuContent = styled.div`
 const MobileNavItem = styled.button<{ $active?: boolean }>`
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
-  padding: 16px 14px;
-  margin-bottom: 4px;
+  padding: 16px 18px;
+  margin-bottom: 6px;
   border: none;
-  background: ${({ $active }) =>
-    $active ? 'rgba(173, 70, 255, 0.06)' : 'transparent'};
-  border: 1px solid transparent;
-  color: ${({ $active }) => ($active ? 'var(--color-primary)' : '#202124')};
-  border-radius: 14px;
+  background: ${({ $active }) => ($active ? '#eef2ff' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#4f46e5' : '#334155')};
+  border-radius: 16px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
   position: relative;
-  overflow: hidden;
 
   &::before {
     content: '';
     position: absolute;
     left: 0;
-    top: 0;
-    bottom: 0;
+    top: 50%;
+    transform: translateY(-50%);
     width: 3px;
-    background: var(--color-primary);
+    height: 20px;
+    border-radius: 0 2px 2px 0;
+    background: #6366f1;
     opacity: ${({ $active }) => ($active ? '1' : '0')};
     transition: opacity 0.2s ease;
   }
 
   &:hover {
-    background: ${({ $active }) =>
-      $active ? 'rgba(173, 70, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)'};
-    transform: translateX(2px);
-
-    &::before {
-      opacity: ${({ $active }) => ($active ? '1' : '0.5')};
-    }
+    background: ${({ $active }) => ($active ? '#e0e7ff' : '#f8fafc')};
+    color: ${({ $active }) => ($active ? '#4338ca' : '#1e293b')};
   }
 
   &:active {
-    transform: scale(0.98);
+    transform: scale(0.99);
   }
 `
 
@@ -1772,8 +1764,8 @@ const MobileModal = styled(motion.div)`
     max-width: 400px;
     max-height: 80vh;
     background: #fff;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    border-radius: 24px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12);
     z-index: ${Z_INDEX.MODAL_CONTENT};
     overflow: hidden;
   }
@@ -1783,8 +1775,8 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #f1f5f9;
   background: #fff;
 `
 
@@ -1792,10 +1784,8 @@ const ModalTitle = styled.h3`
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  color: #202124;
+  color: #334155;
   letter-spacing: -0.02em;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 `
 
 const ModalContent = styled.div`
