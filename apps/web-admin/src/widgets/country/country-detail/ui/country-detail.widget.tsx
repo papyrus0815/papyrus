@@ -436,29 +436,60 @@ function CountryDetailInner({
 
 function EmptyState() {
   return (
-    <CountryDetailStyles.EmptyStateContainer>
-      <CountryDetailStyles.EmptyStateIconWrapper>
-        <svg
-          width="56"
-          height="56"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#64748b"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 2l9.5 5.5v9L12 22l-9.5-5.5v-9L12 2z" />
-        </svg>
-      </CountryDetailStyles.EmptyStateIconWrapper>
-      <CountryDetailStyles.EmptyStateTitle>
-        국가를 선택해주세요
-      </CountryDetailStyles.EmptyStateTitle>
-      <CountryDetailStyles.EmptyStateDescription>
-        왼쪽 목록에서 국가를 선택하시면
-        <br />
-        상세 정보를 확인하실 수 있습니다
-      </CountryDetailStyles.EmptyStateDescription>
+    <CountryDetailStyles.EmptyStateContainer
+      as={motion.div}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      <CountryDetailStyles.EmptyStateBgOrb $x="10%" $y="20%" $size="320px" />
+      <CountryDetailStyles.EmptyStateBgOrb $x="75%" $y="60%" $size="280px" />
+      <CountryDetailStyles.EmptyStateBgOrb $x="50%" $y="85%" $size="200px" />
+      <CountryDetailStyles.EmptyStateCard
+        initial={{ y: 8, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
+        <CountryDetailStyles.EmptyStateIllustration>
+          <svg
+            width="120"
+            height="120"
+            viewBox="0 0 120 120"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="60"
+              cy="54"
+              r="38"
+              stroke="#e5e7eb"
+              strokeWidth="2"
+              fill="none"
+            />
+            <path
+              d="M22 54h76M60 16v76"
+              stroke="#e5e7eb"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <path
+              d="M60 92c-6 0-10-4-10-10 0-8 10-20 10-20s10 12 10 20c0 6-4 10-10 10z"
+              fill="#6366f1"
+              stroke="#fff"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            <circle cx="60" cy="82" r="3" fill="#fff" />
+          </svg>
+        </CountryDetailStyles.EmptyStateIllustration>
+        <CountryDetailStyles.EmptyStateTitle>
+          국가를 선택해주세요
+        </CountryDetailStyles.EmptyStateTitle>
+        <CountryDetailStyles.EmptyStateDescription>
+          왼쪽 목록에서 국가를 선택하면 상세 정보를 볼 수 있습니다
+        </CountryDetailStyles.EmptyStateDescription>
+        <CountryDetailStyles.EmptyStateHint>← 목록에서 선택</CountryDetailStyles.EmptyStateHint>
+      </CountryDetailStyles.EmptyStateCard>
     </CountryDetailStyles.EmptyStateContainer>
   )
 }

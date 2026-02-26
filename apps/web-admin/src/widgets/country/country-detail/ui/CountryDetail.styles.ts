@@ -206,15 +206,45 @@ export const ChartTitle = styled.h3`
   margin: 0 0 20px 0;
 `
 
-// Empty State
+// Empty State — 중앙 정렬, 풀 높이
 export const EmptyStateContainer = styled.div`
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  min-height: 500px;
+  width: 100%;
+  min-height: calc(100vh - var(--header-height, 64px));
   padding: 80px 40px;
+  box-sizing: border-box;
+  background: #ffffff;
+`
+
+export const EmptyStateBgOrb = styled.div<{ $x: string; $y: string; $size: string }>`
+  position: absolute;
+  left: ${(p) => p.$x};
+  top: ${(p) => p.$y};
+  width: ${(p) => p.$size};
+  height: ${(p) => p.$size};
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+`
+
+export const EmptyStateCard = styled(motion.div)`
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 360px;
+  padding: 56px 40px;
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 // Compact Hero Section
@@ -492,33 +522,39 @@ export const SimpleHeaderSubtitle = styled.p`
   font-weight: 500;
 `
 
-export const EmptyStateIconWrapper = styled.div`
+export const EmptyStateIllustration = styled.div`
   width: 120px;
   height: 120px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  margin-bottom: 32px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 32px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
 `
 
 export const EmptyStateTitle = styled.h3`
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 12px 0;
-  letter-spacing: -0.02em;
+  color: #111827;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+  text-align: center;
 `
 
 export const EmptyStateDescription = styled.p`
-  font-size: 15px;
-  color: #64748b;
-  line-height: 1.7;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
   margin: 0;
-  max-width: 360px;
   text-align: center;
+`
+
+export const EmptyStateHint = styled.span`
+  margin-top: 20px;
+  font-size: 13px;
+  color: #9ca3af;
+  letter-spacing: -0.01em;
 `
 
 // Hero Section
