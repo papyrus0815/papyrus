@@ -1,4 +1,5 @@
 export * from './admin.seed'
+export * from './administrationDepartmentCategory.seed'
 export * from './continent.seed'
 export * from './country.seed'
 export * from './eventCategory.seed'

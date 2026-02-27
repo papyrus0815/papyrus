@@ -11,7 +11,6 @@ import {
 // Spinner는 사용하지 않으므로 import 제거
 import { useSessionStore } from '@/entities/session/session.store'
 // FSD 구조에 맞는 static imports (지연 로딩 제거)
-import { administrationDepartmentsRoutes } from '@/pages/administration-departments/administration-departments.route'
 import { dashboardRoute } from '@/pages/dashboard/dashboard.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
 import { eventPageRoute } from '@/pages/events/event-route'
@@ -139,8 +138,6 @@ const appRouterConfig = [
           eventPageRoute,
           // 인물 라우트
           personsRoute,
-          // 행정부처 라우트
-          ...administrationDepartmentsRoutes,
           // 행정기구·조직 라우트
           ...organizationsRoutes,
           // 히스토리 그룹 하위 라우트

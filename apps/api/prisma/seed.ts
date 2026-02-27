@@ -5,6 +5,7 @@ import * as path from 'path'
 import { PrismaService } from './prisma.service'
 import {
   seedAdmin,
+  seedAdministrationDepartmentCategories,
   seedContinents,
   seedCountries,
   seedEventCategories,
@@ -58,6 +59,9 @@ async function main() {
         // 6. 이벤트 카테고리 시딩
         await seedEventCategories(prisma)
 
+        // 6-1. 행정 부처 카테고리 시딩 (국방·외교 등)
+        await seedAdministrationDepartmentCategories(prisma)
+
         // 7. 어드민 계정 시딩
         await seedAdmin(prisma)
 
@@ -70,6 +74,7 @@ async function main() {
         console.log('⚠️  프로덕션 환경에서는 최소한의 데이터만 시딩합니다.')
         await seedContinents(prisma)
         await seedEventCategories(prisma)
+        await seedAdministrationDepartmentCategories(prisma)
         await seedAdmin(prisma)
         break
 

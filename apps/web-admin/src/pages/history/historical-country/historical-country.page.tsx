@@ -73,6 +73,7 @@ export default function HistoricalCountryPage() {
     data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
       id?: string
       parentModernCountryIds?: string[]
+      parentHistoricalCountryIds?: string[]
     },
   ) => {
     const loadingToast = toast.loading(
@@ -97,6 +98,7 @@ export default function HistoricalCountryPage() {
             endDay: data.endDay ?? null,
             stateType: data.stateType,
             parentModernCountryIds: data.parentModernCountryIds,
+            parentHistoricalCountryIds: data.parentHistoricalCountryIds,
           },
         })
         toast.success('수정되었습니다', { id: loadingToast })
@@ -116,6 +118,7 @@ export default function HistoricalCountryPage() {
           endDay: data.endDay ?? undefined,
           stateType: data.stateType,
           parentModernCountryIds: data.parentModernCountryIds,
+          parentHistoricalCountryIds: data.parentHistoricalCountryIds,
         })
         toast.success('등록되었습니다', { id: loadingToast })
       }
@@ -235,6 +238,9 @@ export default function HistoricalCountryPage() {
           id: c.id,
           name: c.name,
         }))}
+        historicalCountries={(countries ?? [])
+          .filter((hc) => hc.id !== (editingCountry && 'id' in editingCountry ? editingCountry.id : undefined))
+          .map((hc) => ({ id: hc.id, name: hc.name }))}
         onClose={() => setEditingCountry(null)}
         onSave={handleSaveHistorical}
       />

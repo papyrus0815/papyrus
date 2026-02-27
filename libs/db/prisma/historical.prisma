@@ -49,6 +49,10 @@ enum HistoricalStateType {
   KINGDOM
   /// 공국 / 대공국 (공작/대공이 다스리는 국가)
   PRINCIPALITY
+  /// 선제후국 (신성로마제국 등에서 황제 선출권을 가진 제후의 영토)
+  ELECTORATE
+  /// 변경백령 (변경백이 다스리는 변경 지대의 영토)
+  MARGRAVIATE
   /// 공화국 (선출된 대표가 다스리는 국가)
   REPUBLIC
   /// 연방 (여러 주/국가의 연합체)
@@ -57,6 +61,12 @@ enum HistoricalStateType {
   CONFEDERATION
   /// 도시 국가
   CITY_STATE
+  /// 칼리프국 (이슬람 칼리프가 다스리는 국가)
+  CALIPHATE
+  /// 술탄국 (술탄이 다스리는 국가)
+  SULTANATE
+  /// 칸국 (칸이 다스리는 유목 국가)
+  KHANATE
   /// 신정 국가 (종교 지도자가 다스리는 국가)
   THEOCRACY
   /// 부족 국가 / 부족 연맹
@@ -65,6 +75,8 @@ enum HistoricalStateType {
   NOMADIC_EMPIRE
   /// 왕조 / 가문 국가
   DYNASTY
+  /// 동군연합 (같은 군주 아래 여러 정치체가 연합)
+  PERSONAL_UNION
   /// 기타
   OTHER
 }

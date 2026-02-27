@@ -306,16 +306,6 @@ const Header: React.FC = () => {
       active: location.pathname.startsWith('/persons'),
     },
     {
-      key: 'administration',
-      label: '행정부처',
-      icon: <FiBriefcase size={16} />,
-      onClick: () => {
-        playClickSound()
-        navigate('/administration-departments')
-      },
-      active: location.pathname.startsWith('/administration-departments'),
-    },
-    {
       key: 'organizations',
       label: '행정기구',
       icon: <FiGlobe size={16} />,

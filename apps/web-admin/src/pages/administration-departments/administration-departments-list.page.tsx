@@ -22,6 +22,8 @@ import {
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import type { AdministrationDepartment } from '@/shared/api/administration-department'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -30,6 +32,10 @@ import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/CountrySelectModal'
 
 type DetailTab = 'basic' | 'organization' | 'history' | 'location'
+
+type DepartmentWithCountryName = AdministrationDepartment & {
+  countryName: string
+}
 
 export const AdministrationDepartmentsListPage: React.FC = () => {
   const navigate = useNavigate()
@@ -50,6 +56,9 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
   const [historicalCountries, setHistoricalCountries] = useState<
     HistoricalCountryResponseDto[]
   >([])
+  const [departments, setDepartments] = useState<AdministrationDepartment[]>([])
+  const [departmentsLoading, setDepartmentsLoading] = useState(false)
+  const [departmentsError, setDepartmentsError] = useState<string | null>(null)
 
   // 국가 목록 로드
   useEffect(() => {
@@ -69,44 +78,41 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     }
   }
 
-  // 임시 데이터
-  const departments = [
-    {
-      id: '1',
-      name: '국무총리실',
-      countryId: 'korea',
-      countryName: '대한민국',
-      description: '행정부의 최고 기관',
-      createdAt: '2024-01-01',
-    },
-    {
-      id: '2',
-      name: '외교부',
-      countryId: 'korea',
-      countryName: '대한민국',
-      parentId: '1',
-      description: '외교 업무 담당',
-      createdAt: '2024-01-02',
-    },
-    {
-      id: '3',
-      name: '국방부',
-      countryId: 'korea',
-      countryName: '대한민국',
-      parentId: '1',
-      description: '국방 업무 담당',
-      createdAt: '2024-01-03',
-      hasMilitaryUnits: true, // 군부대 관할 표시
-    },
-    {
-      id: '4',
-      name: 'State Department',
-      countryId: 'usa',
-      countryName: '미국',
-      description: 'US Department of State',
-      createdAt: '2024-01-04',
-    },
-  ]
+  // 행정부처 목록 로드 (전체 또는 국가별)
+  const loadDepartments = async () => {
+    setDepartmentsLoading(true)
+    setDepartmentsError(null)
+    try {
+      const list = filterCountry
+        ? await administrationDepartmentApi.getByCountryId(filterCountry)
+        : await administrationDepartmentApi.getAll()
+      setDepartments(list)
+    } catch (e) {
+      setDepartmentsError(e instanceof Error ? e.message : '목록을 불러오지 못했습니다')
+      setDepartments([])
+    } finally {
+      setDepartmentsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadDepartments()
+  }, [filterCountry])
+
+  // 부처 목록 + 국가명 매핑 (표시용)
+  const departmentsWithCountryName: DepartmentWithCountryName[] = React.useMemo(() => {
+    const byCountryId: Record<string, string> = {}
+    modernCountries.forEach((c) => {
+      byCountryId[c.id] = c.name
+    })
+    historicalCountries.forEach((c) => {
+      byCountryId[c.id] = c.name
+    })
+    return departments.map((d) => ({
+      ...d,
+      countryName: byCountryId[d.countryId] ?? d.countryId,
+    }))
+  }, [departments, modernCountries, historicalCountries])
 
   // 국방부 산하 군부대 목록 (임시 데이터)
   const militaryUnits = [
@@ -144,31 +150,9 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     },
   ]
 
-  const filteredDepartments = departments.filter((dept) => {
-    const matchesSearch = dept.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-    const matchesCountry = !filterCountry || dept.countryId === filterCountry
-    return matchesSearch && matchesCountry
-  })
-
-  // 정렬
-  const sortedDepartments = [...filteredDepartments].sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return a.name.localeCompare(b.name)
-      case 'country':
-        return a.countryName.localeCompare(b.countryName)
-      case 'date':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      default:
-        return 0
-    }
-  })
-
   const uniqueCountries = Array.from(
     new Set(
-      departments
+      departmentsWithCountryName
         .map((d) => ({ id: d.countryId, name: d.countryName }))
         .map((c) => JSON.stringify(c)),
     ),
@@ -177,7 +161,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
   const activeFilterCount = [filterCountry, searchQuery].filter(Boolean).length
 
   // 국가별 통계
-  const departmentsByCountry = departments.reduce(
+  const departmentsByCountry = departmentsWithCountryName.reduce(
     (acc, dept) => {
       acc[dept.countryId] = (acc[dept.countryId] || 0) + 1
       return acc
@@ -195,10 +179,15 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     navigate(`/administration-departments/${id}/edit`)
   }
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     playClickSound()
-    if (confirm(`'${name}' 부처를 삭제하시겠습니까?`)) {
-      // TODO: API 연동
+    if (!confirm(`'${name}' 부처를 삭제하시겠습니까?`)) return
+    try {
+      await administrationDepartmentApi.delete(id)
+      if (selectedDepartment === id) setSelectedDepartment(null)
+      await loadDepartments()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '삭제에 실패했습니다')
     }
   }
 
@@ -206,6 +195,27 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     playClickSound()
     setSelectedDepartment(id)
   }
+
+  const sortedDepartments = React.useMemo(() => {
+    let list = departmentsWithCountryName
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      list = list.filter((d) => d.name.toLowerCase().includes(q))
+    }
+    if (sortBy === 'name') {
+      list = [...list].sort((a, b) => a.name.localeCompare(b.name))
+    } else if (sortBy === 'country') {
+      list = [...list].sort((a, b) =>
+        a.countryName.localeCompare(b.countryName),
+      )
+    } else {
+      list = [...list].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+    }
+    return list
+  }, [departmentsWithCountryName, searchQuery, sortBy])
 
   const selectedDept = sortedDepartments.find(
     (d) => d.id === selectedDepartment,
@@ -320,7 +330,27 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
             {/* 리스트 영역 */}
             <DepartmentList>
               <AnimatePresence mode="popLayout">
-                {sortedDepartments.length === 0 ? (
+                {departmentsLoading ? (
+                  <EmptyListState
+                    as={motion.div}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ padding: '48px 24px' }}
+                  >
+                    <p>불러오는 중...</p>
+                  </EmptyListState>
+                ) : departmentsError ? (
+                  <EmptyListState
+                    as={motion.div}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ padding: '48px 24px', color: '#b91c1c' }}
+                  >
+                    <p>{departmentsError}</p>
+                  </EmptyListState>
+                ) : sortedDepartments.length === 0 ? (
                   <EmptyListState
                     as={motion.div}
                     initial={{ opacity: 0, scale: 0.9 }}

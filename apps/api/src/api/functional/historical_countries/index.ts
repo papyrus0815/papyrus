@@ -13,7 +13,7 @@ import type { HistoricalCountryResponseDto } from "../../../libs/historical-coun
 import type { UpdateHistoricalCountryDto } from "../../../libs/historical-country/presentation/dto/update-historical-country.dto";
 
 /**
- * 모든 역사적 국가 조회
+ * 역사적 국가 목록 조회 (본인 등록분만)
  *
  * @returns 역사적 국가 목록
  * @tag historical-countries
@@ -50,7 +50,7 @@ export namespace getAllHistoricalCountries {
 }
 
 /**
- * 역사적 국가 상세 조회
+ * 역사적 국가 상세 조회 (본인 등록분만)
  *
  * @param id 역사적 국가 ID
  * @returns 역사적 국가 정보
@@ -90,7 +90,7 @@ export namespace getHistoricalCountryById {
 }
 
 /**
- * 역사적 국가 생성
+ * 역사적 국가 생성 (현재 계정 소유로 등록)
  *
  * @param dto 역사적 국가 생성 정보
  * @returns 생성된 역사적 국가

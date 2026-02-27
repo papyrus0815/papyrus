@@ -61,11 +61,11 @@ export class HistoricalCountryController {
     const accountId = req.user?.id ?? req.user?.sub
     const country =
       await this.historicalCountryService.getHistoricalCountryById(id, accountId)
-    const parentModernCountryIds =
-      await this.historicalCountryService.getModernCountryIdsByHistoricalCountryId(
-        id,
-      )
-    return this.toResponseDto(country, parentModernCountryIds)
+    const [parentModernCountryIds, parentHistoricalCountryIds] = await Promise.all([
+      this.historicalCountryService.getModernCountryIdsByHistoricalCountryId(id),
+      this.historicalCountryService.getParentHistoricalCountryIdsByMemberId(id),
+    ])
+    return this.toResponseDto(country, parentModernCountryIds, parentHistoricalCountryIds)
   }
 
   /**
@@ -97,6 +97,7 @@ export class HistoricalCountryController {
         endDay: dto.endDay,
         stateType: dto.stateType,
         parentModernCountryIds: dto.parentModernCountryIds,
+        parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
       },
       accountId,
     )
@@ -135,6 +136,7 @@ export class HistoricalCountryController {
         endDay: dto.endDay,
         stateType: dto.stateType,
         parentModernCountryIds: dto.parentModernCountryIds,
+        parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
       },
       accountId,
     )
@@ -160,6 +162,7 @@ export class HistoricalCountryController {
   private toResponseDto(
     country: HistoricalCountry,
     parentModernCountryIds?: string[],
+    parentHistoricalCountryIds?: string[],
   ): HistoricalCountryResponseDto {
     return {
       id: country.id,
@@ -182,6 +185,7 @@ export class HistoricalCountryController {
 
       stateType: country.stateType,
       parentModernCountryIds,
+      parentHistoricalCountryIds,
       createdAt: country.createdAt.toISOString(),
       updatedAt: country.updatedAt.toISOString(),
     }

@@ -52,13 +52,26 @@ export class HistoricalCountryService {
   }
 
   /**
+   * 역사적 국가가 소속된 상위 역사적 국가 ID 목록 조회
+   */
+  async getParentHistoricalCountryIdsByMemberId(
+    memberCountryId: string,
+  ): Promise<string[]> {
+    return this.repository.findParentHistoricalCountryIdsByMemberId(
+      memberCountryId,
+    )
+  }
+
+  /**
    * 역사적 국가 생성 (accountId 있으면 소유자로 저장)
    */
   async createHistoricalCountry(
     data: CreateHistoricalCountryData,
     accountId?: string,
   ): Promise<HistoricalCountry> {
-    const createData = accountId != null ? { ...data, accountId } : data
+    const createData = accountId != null
+      ? { ...data, accountId }
+      : data
     const country = await this.repository.create(createData)
     await this.notificationService.notifyHistoricalCountry(
       country.name,

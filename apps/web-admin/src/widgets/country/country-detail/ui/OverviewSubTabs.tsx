@@ -14,6 +14,8 @@ export type OverviewSubTab =
 interface OverviewSubTabsProps {
   activeSubTab: OverviewSubTab
   onSubTabChange: (tab: OverviewSubTab) => void
+  /** 우측에 배치할 액션 (예: 행정조직 탭일 때 카테고리 설정 버튼) */
+  rightSlot?: React.ReactNode
 }
 
 const StyledControlsRow = styled(S.ControlsRow)`
@@ -24,6 +26,7 @@ const StyledControlsRow = styled(S.ControlsRow)`
 export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
   activeSubTab,
   onSubTabChange,
+  rightSlot,
 }) => {
   return (
     <StyledControlsRow>
@@ -61,9 +64,7 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
           </S.TabButton>
         </S.TabBar>
       </S.ControlsLeft>
-      <S.ControlsRight>
-        {/* 우측 영역 (필요시 버튼 추가 가능) */}
-      </S.ControlsRight>
+      <S.ControlsRight>{rightSlot}</S.ControlsRight>
     </StyledControlsRow>
   )
 }

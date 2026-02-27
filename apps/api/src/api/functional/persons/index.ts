@@ -15,13 +15,14 @@ import type {
 } from "../../../libs/person/presentation/dto";
 
 export * as with_government_positions from "./with_government_positions/index";
+export * as tenures from "./tenures/index";
 export * as detail from "./detail/index";
 export * as careers from "./careers/index";
 export * as educations from "./educations/index";
 export * as awards from "./awards/index";
 
 /**
- * 모든 인물 목록 조회
+ * 인물 목록 조회 (본인 등록분만)
  * @controller PersonController.getAll
  * @path GET /persons
  * @accessor api.functional.persons.getAll
@@ -52,7 +53,7 @@ export namespace getAll {
 }
 
 /**
- * ID로 인물 조회
+ * ID로 인물 조회 (본인 등록분만)
  * @controller PersonController.getById
  * @path GET /persons/:id
  * @accessor api.functional.persons.getById
@@ -87,7 +88,7 @@ export namespace getById {
 }
 
 /**
- * 인물 생성
+ * 인물 생성 (현재 계정 소유로 등록)
  * @controller PersonController.create
  * @path POST /persons
  * @accessor api.functional.persons.create
@@ -135,7 +136,7 @@ export namespace create {
 }
 
 /**
- * 인물 수정
+ * 인물 수정 (본인 등록분만)
  * @controller PersonController.update
  * @path PUT /persons/:id
  * @accessor api.functional.persons.update
@@ -185,7 +186,7 @@ export namespace update {
 }
 
 /**
- * 인물 삭제
+ * 인물 삭제 (본인 등록분만)
  * @controller PersonController._delete
  * @path DELETE /persons/:id
  * @accessor api.functional.persons._delete

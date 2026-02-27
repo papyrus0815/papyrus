@@ -14,17 +14,22 @@ export * as upload from "./upload/index";
 export * as health from "./health/index";
 export * as religions from "./religions/index";
 export * as persons from "./persons/index";
+export * as government_positions from "./government_positions/index";
+export * as organizations from "./organizations/index";
+export * as notifications from "./notifications/index";
 export * as jobs from "./jobs/index";
+export * as job_categories from "./job_categories/index";
 export * as event_categories from "./event_categories/index";
 export * as historical_countries from "./historical_countries/index";
 export * as events from "./events/index";
 export * as dynasties from "./dynasties/index";
 export * as curations from "./curations/index";
+export * as cities from "./cities/index";
 export * as countries from "./countries/index";
-export * as job_categories from "./job_categories/index";
 export * as continents from "./continents/index";
 export * as auth from "./auth/index";
 export * as account from "./account/index";
+export * as administration_departments from "./administration_departments/index";
 export * as military_units from "./military_units/index";
 
 /**

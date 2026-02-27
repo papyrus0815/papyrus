@@ -529,6 +529,60 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   }
 `
 
+/** 국가 상세 Overview 서브탭 (통계·지도·행정조직·인물·역사) — 몽글몽글·트렌디 */
+export const OverviewSubTabRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #ffffff;
+  padding: 12px 20px 14px;
+  border-bottom: 1px solid #f1f5f9;
+`
+
+export const OverviewSubTabBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: #f1f5f9;
+  border-radius: 20px;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`
+
+export const OverviewSubTabButton = styled.button<{ $active?: boolean }>`
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: none;
+  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#4f46e5' : '#64748b')};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? '600' : '500')};
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+  white-space: nowrap;
+  box-shadow: ${({ $active }) =>
+    $active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
+
+  &:hover {
+    color: ${({ $active }) => ($active ? '#4f46e5' : '#475569')};
+    background: ${({ $active }) => ($active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
+  }
+`
+
 export const TabBadge = styled.span`
   min-width: 18px;
   height: 18px;
@@ -3298,13 +3352,13 @@ export const FilterButton = styled.button<{ $active?: boolean }>`
   }
 `
 
-// Select Modal Styles
+// Select Modal Styles — 깔끔·트렌디
 export const SelectModalOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.38);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(10px);
 `
 
 export const SelectModal = styled.div`
@@ -3312,18 +3366,16 @@ export const SelectModal = styled.div`
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(440px, calc(100% - 40px));
-  max-height: 80vh;
+  width: min(440px, calc(100% - 32px));
+  max-height: 85vh;
   background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  border-radius: 22px;
+  box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
 
-  /* framer-motion transform 보정 */
   &[style*='transform'] {
     transform: translate(-50%, -50%) !important;
   }
@@ -3333,78 +3385,77 @@ export const SelectModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color-light);
-  background: #fafbfc;
+  padding: 26px 28px;
+  border-bottom: 1px solid #f3f4f6;
 `
 
 export const SelectModalTitle = styled.h3`
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
-  color: #202124;
+  color: #111827;
+  letter-spacing: -0.025em;
 `
 
 export const SelectModalClose = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
-  color: #5f6368;
+  color: #6b7280;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s, color 0.2s;
 
   &:hover {
-    background: #f1f3f4;
-    color: #202124;
-  }
-
-  &:active {
-    background: #e8eaed;
-    transform: scale(0.95);
+    background: #f3f4f6;
+    color: #111827;
   }
 `
 
 export const SelectModalContent = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 8px 0;
+  padding: 16px 12px 20px;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 3px;
+  }
 `
 
 export const SelectOption = styled.button<{ $active?: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 4px;
   border: none;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, #f3e8ff 0%, #efe9ff 100%)'
-      : 'transparent'};
-  color: ${({ $active }) => ($active ? '#ad46ff' : '#374151')};
+  border-radius: 12px;
+  background: ${({ $active }) => ($active ? '#f5f3ff' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#4f46e5' : '#374151')};
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s, color 0.15s;
   text-align: left;
+  font-size: 15px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
 
   &:hover {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #e9d1ff 0%, #e5dbff 100%)'
-        : '#f9fafb'};
+    background: ${({ $active }) => ($active ? '#ede9fe' : '#f9fafb')};
   }
-
-  &:active {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #e0c2ff 0%, #dbd0ff 100%)'
-        : '#f3f4f6'};
+  &:last-child {
+    margin-bottom: 0;
   }
 `
 
@@ -3415,22 +3466,22 @@ export const SelectOptionIcon = styled.div`
   width: 36px;
   height: 36px;
   flex-shrink: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #f0f7ff 0%, #e8f0fe 100%);
-  color: var(--color-primary);
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #6366f1;
 `
 
 export const SelectOptionText = styled.span`
   flex: 1;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: inherit;
 `
 
 export const SelectOptionCheck = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-primary);
+  color: #4f46e5;
   flex-shrink: 0;
 `
 
@@ -3439,27 +3490,27 @@ export const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 24px;
+  padding: 48px 24px;
   text-align: center;
 `
 
 export const EmptyIcon = styled.div`
-  font-size: 64px;
-  margin-bottom: 16px;
-  opacity: 0.7;
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.6;
 `
 
 export const EmptyTitle = styled.h4`
-  margin: 0 0 8px 0;
-  font-size: 18px;
+  margin: 0 0 6px 0;
+  font-size: 16px;
   font-weight: 600;
-  color: #202124;
+  color: #111827;
 `
 
 export const EmptyDesc = styled.p`
   margin: 0;
   font-size: 14px;
-  color: #5f6368;
+  color: #6b7280;
 `
 
 export const Row = styled.div`

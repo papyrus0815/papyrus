@@ -81,9 +81,9 @@ function DashboardMenuContent({
     },
     administration: {
       title: '행정부',
-      desc: '행정부처 정보를 관리합니다.',
-      fullPath: '/administration-departments/',
-      fullLabel: '전체 보기',
+      desc: '국가 상세 > 행정조직 > 중앙부처 탭에서 해당 국가의 중앙부처를 등록·관리합니다.',
+      fullPath: '',
+      fullLabel: '',
     },
   }
   const { title, desc, fullPath, fullLabel } = configs[view]
@@ -697,6 +697,7 @@ export default function CountryPage() {
     data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
       id?: string
       parentModernCountryIds?: string[]
+      parentHistoricalCountryIds?: string[]
     },
   ) {
     const loadingToast = toast.loading(
@@ -723,6 +724,7 @@ export default function CountryPage() {
             endDay: data.endDay ?? null,
             stateType: data.stateType,
             parentModernCountryIds: data.parentModernCountryIds,
+            parentHistoricalCountryIds: data.parentHistoricalCountryIds,
           },
         })
         toast.success('수정되었습니다', { id: loadingToast })
@@ -743,6 +745,7 @@ export default function CountryPage() {
           endDay: data.endDay ?? undefined,
           stateType: data.stateType,
           parentModernCountryIds: data.parentModernCountryIds,
+          parentHistoricalCountryIds: data.parentHistoricalCountryIds,
         })
         toast.success('등록되었습니다', { id: loadingToast })
       }
@@ -977,7 +980,7 @@ export default function CountryPage() {
         onSave={handleSave}
       />
 
-      {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 상위 현대 국가 표시) */}
+      {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 상위 현대/역사적 국가 표시) */}
       <HistoricalCountryForm
         editing={
           editingHistorical
@@ -988,6 +991,9 @@ export default function CountryPage() {
           id: countryItem.id,
           name: countryItem.name,
         }))}
+        historicalCountries={(apiHistoricalCountries ?? [])
+          .filter((hc) => hc.id !== editingHistorical?.id)
+          .map((hc) => ({ id: hc.id, name: hc.name }))}
         onClose={() => setEditingHistorical(null)}
         onSave={handleSaveHistorical}
       />

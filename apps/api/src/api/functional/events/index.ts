@@ -15,10 +15,15 @@ import type {
 } from "../../../libs/event/presentation/dto";
 
 export * as parent from "./parent/index";
+export * as deleted from "./deleted/index";
+export * as restore from "./restore/index";
+export * as permanent from "./permanent/index";
 
 /**
- * 모든 사건 조회
+ * 모든 사건 조회 (페이징 지원)
  *
+ * @param offset 시작 위치 (기본값: 0)
+ * @param limit 가져올 개수 (기본값: 20, 최대: 100)
  * @returns 사건 목록
  * @tag events
  *
@@ -29,11 +34,14 @@ export * as parent from "./parent/index";
  */
 export async function getAllEvents(
   connection: IConnection,
+  offset?: string,
+  limit?: string,
+  createdSinceDays?: string,
 ): Promise<getAllEvents.Output> {
   return PlainFetcher.fetch(connection, {
     ...getAllEvents.METADATA,
     template: getAllEvents.METADATA.path,
-    path: getAllEvents.path(),
+    path: getAllEvents.path(offset, limit, createdSinceDays),
   });
 }
 export namespace getAllEvents {
@@ -50,7 +58,26 @@ export namespace getAllEvents {
     status: 200,
   } as const;
 
-  export const path = () => "/events";
+  export const path = (
+    offset?: string,
+    limit?: string,
+    createdSinceDays?: string,
+  ) => {
+    const variables: URLSearchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries({
+      offset: offset,
+      limit: limit,
+      createdSinceDays: createdSinceDays,
+    } as any))
+      if (undefined === value) continue;
+      else if (Array.isArray(value))
+        value.forEach((elem: any) => variables.append(key, String(elem)));
+      else variables.set(key, String(value));
+    const location: string = "/events";
+    return 0 === variables.size
+      ? location
+      : `${location}?${variables.toString()}`;
+  };
 }
 
 /**

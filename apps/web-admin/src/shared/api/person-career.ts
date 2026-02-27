@@ -426,17 +426,23 @@ export const personCareerApi = {
     countryId?: string
     historicalCountryId?: string
   }) => {
+    let raw: unknown
     if (params.countryId) {
       const response = await apiClient.get(
         `/government-positions/countries/${encodeURIComponent(params.countryId)}/tenures`,
       )
-      return response.data ?? []
-    }
-    if (params.historicalCountryId) {
+      raw = response.data
+    } else if (params.historicalCountryId) {
       const response = await apiClient.get(
         `/government-positions/historical-countries/${encodeURIComponent(params.historicalCountryId)}/tenures`,
       )
-      return response.data ?? []
+      raw = response.data
+    } else {
+      return []
+    }
+    if (Array.isArray(raw)) return raw
+    if (raw && typeof raw === 'object' && 'data' in raw && Array.isArray((raw as any).data)) {
+      return (raw as any).data
     }
     return []
   },

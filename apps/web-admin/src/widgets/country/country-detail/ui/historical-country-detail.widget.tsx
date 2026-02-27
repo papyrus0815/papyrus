@@ -10,7 +10,6 @@ import { historicalCountryMockData } from '../mock/historical-country.mock'
 import { CountryFlag } from '../../shared'
 import * as S from './CountryDetail.styles'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
-import { PositionDefinitionsSection } from './position-definitions-section.widget'
 import { LoadingOverlay } from './LoadingOverlay'
 
 // 역사적 국가 전용 컴팩트 스타일 (자리 최소화)
@@ -296,7 +295,9 @@ export function HistoricalCountryDetail({
                     <HeadsOfStateSection country={country} />
                   )}
                   {activeTab === 'government' && (
-                    <PositionDefinitionsSection country={country} />
+                    <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 14 }}>
+                      행정조직 정보는 현대 국가 상세에서 확인할 수 있습니다.
+                    </div>
                   )}
                   {activeTab === 'succession' && (
                     <SuccessionSection country={country} />
@@ -469,10 +470,19 @@ function getStateTypeLabel(stateType: string): string {
     REPUBLIC: '공화국',
     DUCHY: '공국',
     PRINCIPALITY: '공국',
-    CONFEDERATION: '연방',
+    ELECTORATE: '선제후국',
+    MARGRAVIATE: '변경백령',
+    CONFEDERATION: '연합',
     CITY_STATE: '도시국가',
+    CALIPHATE: '칼리프국',
+    SULTANATE: '술탄국',
+    KHANATE: '칸국',
+    THEOCRACY: '신정 국가',
+    TRIBAL_STATE: '부족 국가',
+    NOMADIC_EMPIRE: '유목 제국',
     TRIBAL_UNION: '부족연합',
     DYNASTY: '왕조',
+    PERSONAL_UNION: '동군연합',
     OTHER: '기타',
   }
   return labels[stateType] || stateType

@@ -9,7 +9,7 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   EVENT: '사건',
   ORGANIZATION: '조직',
   POLITICAL_PARTY: '정당',
-  // 필요 시 추가
+  ADMINISTRATION_DEPARTMENT: '행정부처',
 }
 
 export function getNotificationEntityTypeLabel(ownerType: string | undefined): string | null {

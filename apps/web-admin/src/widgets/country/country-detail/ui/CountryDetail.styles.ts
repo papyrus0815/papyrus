@@ -434,6 +434,27 @@ export const CompactKebabMenu = styled.div`
   }
 `
 
+/** 헤더 영역 래퍼 (absolute 자식 기준) */
+export const HeaderWrapper = styled.div`
+  position: relative;
+  width: 100%;
+`
+
+/** 헤더 우측 액션 (카테고리 설정 버튼 등) */
+export const HeaderRightSlot = styled.div`
+  position: absolute;
+  top: 80px;
+  right: 100px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+
+  @media (max-width: 768px) {
+    top: 24px;
+    right: 72px;
+  }
+`
+
 // Simple Header for other tabs
 export const SimpleHeader = styled.div`
   padding: 16px 32px;
@@ -635,27 +656,23 @@ export const KebabMenuWrapper = styled.div`
 
 export const KebabButton = styled.button`
   padding: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
   color: #64748b;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: all 0.25s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 
   &:hover {
     background: #ffffff;
-    border-color: #8b5cf6;
-    color: #8b5cf6;
-    box-shadow:
-      0 4px 16px rgba(139, 92, 246, 0.15),
-      0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: #6366f1;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
   }
 `
 
@@ -1384,7 +1401,7 @@ export const TableCell = styled.td<{ $bold?: boolean }>`
 
 export const MiniFlagWrapper = styled.div`
   width: 100%;
-  height: 400px;
+  height: 380px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1396,51 +1413,32 @@ export const MiniFlagWrapper = styled.div`
   margin-right: -16px;
   width: calc(100% + 32px);
   box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(0, 0, 0, 0.04);
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 2px 12px rgba(0, 0, 0, 0.03);
 
-  /* 국기 이미지에 효과 추가 */
   img {
-    transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   &:hover img {
-    transform: scale(1.05);
-  }
-
-  /* 내부 그림자로 깊이감 추가 */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border-radius: 0;
-    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.1);
-    pointer-events: none;
-    z-index: 2;
+    transform: scale(1.04);
   }
 
   @media (max-width: 768px) {
-    height: 300px;
-    border-radius: 0;
+    height: 280px;
   }
 `
 
-/* 그래디언트 오버레이 - 텍스트 가독성 향상 */
+/* 그래디언트 오버레이 - 텍스트 가독성 (트렌디한 좌측·하단 그라데이션) */
 export const FlagGradientOverlay = styled.div`
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(0, 0, 0, 0.6) 0%,
-    rgba(0, 0, 0, 0.3) 30%,
-    transparent 60%
-  );
+  background:
+    linear-gradient(105deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 45%, transparent 70%),
+    linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.25) 100%);
   pointer-events: none;
   z-index: 1;
 `
@@ -1448,28 +1446,45 @@ export const FlagGradientOverlay = styled.div`
 /** 국기 영역 좌측 하단에 배치하는 오버레이 (대륙 뱃지 등) */
 export const FlagBottomLeftOverlay = styled.div`
   position: absolute;
-  left: 20px;
-  bottom: 20px;
+  left: 28px;
+  bottom: 24px;
   z-index: 5;
 
   @media (max-width: 768px) {
-    left: 16px;
-    bottom: 16px;
+    left: 20px;
+    bottom: 20px;
   }
 `
 
 export const CountryNameOverlay = styled.div`
   position: absolute;
-  top: 45px;
+  top: 32px;
   left: 32px;
   z-index: 5;
   display: flex;
   flex-direction: column;
+  gap: 4px;
 
   @media (max-width: 768px) {
     top: 24px;
     left: 24px;
-    padding: 16px 20px;
+  }
+`
+
+/** 국가명 글래스 패널 - 가독성·트렌디한 톤 */
+export const CountryNameGlass = styled.div`
+  padding: 20px 24px;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(90%, 420px);
+
+  @media (max-width: 768px) {
+    padding: 14px 18px;
   }
 `
 
@@ -1496,44 +1511,42 @@ export const AnalyticsCountryInfo = styled.div`
 `
 
 export const AnalyticsCountryName = styled.h1`
-  font-size: 48px;
-  font-weight: 800;
+  font-size: 42px;
+  font-weight: 700;
   color: #ffffff;
   margin: 0;
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: -0.03em;
   text-align: left;
   text-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    0 4px 12px rgba(0, 0, 0, 0.2);
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
-  cursor: pointer;
+  cursor: default;
 
   @media (max-width: 1024px) {
-    font-size: 40px;
+    font-size: 36px;
   }
 
   @media (max-width: 768px) {
-    font-size: 32px;
+    font-size: 28px;
   }
 `
 
 export const AnalyticsCountryLocalName = styled.span`
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.92);
   margin: 0;
   font-weight: 500;
   letter-spacing: 0.02em;
   display: block;
   text-align: left;
-  text-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 2px 8px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   transition: all 0.3s ease;
-  cursor: pointer;
+  cursor: default;
 
   @media (max-width: 768px) {
-    font-size: 16px;
+    font-size: 15px;
   }
 `
 
@@ -1541,15 +1554,16 @@ export const AnalyticsBadges = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: 20px;
+  padding: 0 16px;
   position: relative;
   z-index: 1;
 
   @media (max-width: 1024px) {
-    gap: 8px;
-    margin-top: 8px;
+    gap: 10px;
+    margin-top: 16px;
   }
 `
 
@@ -1562,43 +1576,43 @@ export const SimpleBadge = styled.div`
   font-weight: 500;
 `
 
-// Info Badge (Simplified Design)
+/* Info Badge - 메인 컬러 #6366f1 액센트 */
 export const InfoBadge = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 18px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(236, 239, 242, 0.8);
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+  transition: all 0.25s ease;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.02);
 
   &:hover {
     background: #ffffff;
-    border-color: #8b5cf6;
+    border-color: rgba(99, 102, 241, 0.35);
     box-shadow:
-      0 4px 16px rgba(139, 92, 246, 0.12),
-      0 2px 8px rgba(0, 0, 0, 0.08);
+      0 4px 16px rgba(99, 102, 241, 0.1),
+      0 2px 8px rgba(0, 0, 0, 0.06);
   }
 `
 
 export const BadgeLabel = styled.span`
   font-size: 11px;
-  color: #6b7280;
+  color: #78716c;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.05em;
 `
 
 export const BadgeValue = styled.span`
   font-size: 14px;
-  color: #111827;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  color: #1c1917;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 `
 
 // Region Panel - Matching List Design

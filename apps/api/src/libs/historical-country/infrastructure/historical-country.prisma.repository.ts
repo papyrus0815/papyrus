@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { HistoricalMembershipRole } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import {
   IHistoricalCountryRepository,
@@ -51,6 +52,17 @@ export class HistoricalCountryPrismaRepository
     return rows.map((r) => r.modernCountryId)
   }
 
+  async findParentHistoricalCountryIdsByMemberId(
+    memberCountryId: string,
+  ): Promise<string[]> {
+    const rows =
+      await this.prisma.historicalCountryMembership.findMany({
+        where: { memberCountryId },
+        select: { historicalCountryId: true },
+      })
+    return rows.map((r) => r.historicalCountryId)
+  }
+
   async create(data: CreateHistoricalCountryData): Promise<HistoricalCountry> {
     const country = await this.prisma.historicalCountry.create({
       data: {
@@ -79,6 +91,20 @@ export class HistoricalCountryPrismaRepository
       },
     })
 
+    // 상위 역사적 국가 멤버십 생성 (이 국가가 하위로 소속)
+    if (
+      data.parentHistoricalCountryIds &&
+      data.parentHistoricalCountryIds.length > 0
+    ) {
+      await this.prisma.historicalCountryMembership.createMany({
+        data: data.parentHistoricalCountryIds.map((historicalCountryId) => ({
+          historicalCountryId,
+          memberCountryId: country.id,
+          role: HistoricalMembershipRole.OTHER,
+        })),
+      })
+    }
+
     return this.toEntity(country as any)
   }
 
@@ -103,6 +129,27 @@ export class HistoricalCountryPrismaRepository
             data: data.parentModernCountryIds.map((modernCountryId) => ({
               historicalCountryId: id,
               modernCountryId,
+            })),
+          })
+        }
+      })
+    }
+
+    // 상위 역사적 국가 멤버십 업데이트 (이 국가가 member로 소속된 관계)
+    if (data.parentHistoricalCountryIds !== undefined) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.historicalCountryMembership.deleteMany({
+          where: { memberCountryId: id },
+        })
+        if (
+          data.parentHistoricalCountryIds &&
+          data.parentHistoricalCountryIds.length > 0
+        ) {
+          await tx.historicalCountryMembership.createMany({
+            data: data.parentHistoricalCountryIds.map((historicalCountryId) => ({
+              historicalCountryId,
+              memberCountryId: id,
+              role: HistoricalMembershipRole.OTHER,
             })),
           })
         }

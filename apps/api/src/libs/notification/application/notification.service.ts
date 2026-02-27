@@ -55,6 +55,17 @@ export class NotificationService {
     })
   }
 
+  /** 행정부처 CRUD 알림 */
+  notifyAdministrationDepartment(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
+    return this.create({
+      entityLabel,
+      method,
+      ownerType: AggregateType.ADMINISTRATION_DEPARTMENT,
+      recordId,
+      preview,
+    })
+  }
+
   findMany(options?: { limit?: number; unreadOnly?: boolean }): Promise<NotificationRecord[]> {
     return this.notificationRepository.findMany(options)
   }

@@ -10,6 +10,8 @@ interface CountryDetailHeaderProps {
   continentName?: string
   onEdit?: (country: Country) => void
   onDelete?: (id: string) => void
+  /** 헤더 우측에 배치할 액션 (예: 카테고리 설정 버튼) */
+  rightSlot?: React.ReactNode
 }
 
 /**
@@ -23,9 +25,16 @@ export function CountryDetailHeader({
   continentName,
   onEdit,
   onDelete,
+  rightSlot,
 }: CountryDetailHeaderProps) {
   return (
-    <>
+    <S.HeaderWrapper>
+      {/* 헤더 우측 슬롯 (카테고리 설정 등) */}
+      {rightSlot && (
+        <S.HeaderRightSlot>
+          {rightSlot}
+        </S.HeaderRightSlot>
+      )}
       {/* 국기 이미지 컨테이너 */}
       <S.MiniFlagWrapper
         as={motion.div}
@@ -46,23 +55,21 @@ export function CountryDetailHeader({
           />
         </motion.div>
 
-        {/* 국가명 - 국기 위에 좌측 상단 오버레이 */}
+        {/* 국가명 - 국기 위 좌측 상단 (글래스 스타일) */}
         <S.CountryNameOverlay
           as={motion.div}
-          initial={{ x: -30, opacity: 0 }}
+          initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.5, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
         >
-          <motion.div whileHover={{ x: 4, transition: { duration: 0.2 } }}>
+          <S.CountryNameGlass>
             <S.AnalyticsCountryName>{country.name}</S.AnalyticsCountryName>
-          </motion.div>
-          {country.localName && (
-            <motion.div whileHover={{ x: 4, transition: { duration: 0.2 } }}>
+            {country.localName && (
               <S.AnalyticsCountryLocalName>
                 {country.localName}
               </S.AnalyticsCountryLocalName>
-            </motion.div>
-          )}
+            )}
+          </S.CountryNameGlass>
         </S.CountryNameOverlay>
 
         {/* 그래디언트 오버레이 (더 나은 텍스트 가독성) */}
@@ -206,6 +213,6 @@ export function CountryDetailHeader({
           </S.DropdownMenu>
         </S.CompactKebabMenu>
       )}
-    </>
+    </S.HeaderWrapper>
   )
 }

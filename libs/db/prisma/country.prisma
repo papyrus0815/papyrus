@@ -296,8 +296,25 @@ model City {
 }
 
 // ========================
+// AdministrationDepartmentCategory (전세계 공통 부처 카테고리: 국방·외교·재정 등)
+// ========================
+model AdministrationDepartmentCategory {
+  id String @id @default(uuid()) @db.Char(36)
+
+  name   String  @db.VarChar(80)
+  nameEn String? @map("name_en") @db.VarChar(80)
+
+  departments AdministrationDepartment[]
+
+  @@unique([name], name: "uniq_admin_dept_category_name")
+  @@map("administration_department_category")
+}
+
+// ========================
 // AdministrationDepartment
 // ========================
+/// 국가별 행정 부처/기관 (국방부, 외교부, 국정원 등).
+/// 카테고리로 전세계 비교. 설립/폐지일·후신(successor)으로 개편 이력(안기부→국정원 등) 표현.
 model AdministrationDepartment {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
@@ -308,16 +325,35 @@ model AdministrationDepartment {
   /// 상위 부처 ID
   parentId String? @map("parent_id") @db.Char(36)
 
+  /// 전세계 공통 카테고리 (국방·외교·재정·경제 등)
+  categoryId String? @map("category_id") @db.Char(36)
+
   /// 부처명
   name String @db.VarChar(100)
 
-  /// 설명
+  /// 썸네일 이미지 URL
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  /// 일반 설명 (소개, 연혁 등)
   description String?
 
+  /// 설립/설치일 (기관이 언제 만들어졌는지)
+  establishedDate DateTime? @map("established_date")
+
+  /// 폐지/통폐합일 (NULL이면 현존)
+  abolishedDate DateTime? @map("abolished_date")
+
+  /// 후신 부처 ID (개편·통폐합으로 이어지는 기관, 예: 안기부 → 국정원)
+  successorId String? @map("successor_id") @db.Char(36)
+
   //--- 관계 필드
-  country  Country                    @relation("Country_Department", fields: [countryId], references: [id], onDelete: Cascade)
-  parent   AdministrationDepartment?  @relation("DeptHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children AdministrationDepartment[] @relation("DeptHierarchy")
+  country    Country                              @relation("Country_Department", fields: [countryId], references: [id], onDelete: Cascade)
+  parent     AdministrationDepartment?            @relation("DeptHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  AdministrationDepartment[]            @relation("DeptHierarchy")
+  category   AdministrationDepartmentCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  successor   AdministrationDepartment?             @relation("DeptSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
+  predecessors AdministrationDepartment[]          @relation("DeptSuccessor")
+  events     AdministrationDepartmentEvent[]      @relation("DeptEvents")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -325,5 +361,64 @@ model AdministrationDepartment {
 
   @@index([countryId], name: "idx_admin_dept_countryId")
   @@index([parentId], name: "idx_admin_dept_parentId")
+  @@index([categoryId], name: "idx_admin_dept_categoryId")
+  @@index([establishedDate], name: "idx_admin_dept_establishedDate")
+  @@index([successorId], name: "idx_admin_dept_successorId")
   @@map("administration_department")
+}
+
+// ========================
+// AdministrationDepartmentEvent (기관 계획·조율·변경 — 사건(Event)과 동일한 구조로 시간순 기록)
+// ========================
+/// 기관별 계획, 조율, 정책, 개편 등을 사건처럼 기간·제목·설명으로 기록.
+enum AdministrationDepartmentEventType {
+  /// 계획 (정책 계획, 연도별 계획 등)
+  PLAN
+  /// 조율 (부처 간 조율, 협의 역할 등)
+  COORDINATION
+  /// 정책/권한 (정책 수립, 권한 변경)
+  POLICY
+  /// 개편/통폐합
+  RESTRUCTURE
+  /// 기타
+  OTHER
+}
+
+model AdministrationDepartmentEvent {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 기관
+  departmentId String @map("department_id") @db.Char(36)
+
+  /// 제목 (사건의 title과 동일)
+  title String @db.VarChar(200)
+
+  /// 내용/개요 (사건의 description과 동일)
+  description String? @db.Text
+
+  /// 기간(시작)
+  startDate DateTime? @map("start_date")
+
+  /// 기간(종료)
+  endDate DateTime? @map("end_date")
+
+  /// 유형 (계획, 조율, 정책, 개편 등)
+  eventType AdministrationDepartmentEventType @default(OTHER) @map("event_type")
+
+  /// 배경/여파 (선택, 사건의 background/aftermath와 동일)
+  background String? @db.Text
+  aftermath  String? @db.Text
+
+  /// 대표 이미지 URL (썸네일, 목록/카드용 1장)
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  //--- 관계
+  department AdministrationDepartment @relation("DeptEvents", fields: [departmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([departmentId], name: "idx_admin_dept_event_departmentId")
+  @@index([startDate], name: "idx_admin_dept_event_startDate")
+  @@map("administration_department_event")
 }

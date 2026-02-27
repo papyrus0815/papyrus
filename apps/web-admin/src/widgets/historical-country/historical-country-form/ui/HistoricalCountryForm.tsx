@@ -64,6 +64,7 @@ const historicalCountrySchema = z.object({
     .or(z.literal(undefined)),
   stateType: z.string().min(1, '국가 형태를 입력해주세요'),
   parentModernCountryIds: z.array(z.string()).optional(), // 여러 현대 국가 지원
+  parentHistoricalCountryIds: z.array(z.string()).optional(), // 상위 역사적 국가 지원
 })
 
 type HistoricalCountryFormData = z.infer<typeof historicalCountrySchema>
@@ -73,14 +74,22 @@ interface ModernCountryOption {
   name: string
 }
 
+interface HistoricalCountryOption {
+  id: string
+  name: string
+}
+
 interface HistoricalCountryFormProps {
   editing: HistoricalCountry | null
   modernCountries: ModernCountryOption[]
+  /** 상위 국가로 선택 가능한 역사적 국가 목록 (편집 중인 자신 제외해 전달) */
+  historicalCountries?: HistoricalCountryOption[]
   onClose: () => void
   onSave: (
     data: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
       id?: string
-      parentModernCountryIds?: string[] // 여러 현대 국가 ID 배열
+      parentModernCountryIds?: string[]
+      parentHistoricalCountryIds?: string[]
     },
   ) => Promise<void>
 }
@@ -117,6 +126,18 @@ const STATE_TYPE_OPTIONS = [
     desc: '공작이 통치하는 국가',
   },
   {
+    value: 'ELECTORATE',
+    label: '선제후국',
+    icon: '⚜️',
+    desc: '황제 선출권을 가진 제후의 영토',
+  },
+  {
+    value: 'MARGRAVIATE',
+    label: '변경백령',
+    icon: '🏴',
+    desc: '변경백이 다스리는 변경 지대의 영토',
+  },
+  {
     value: 'CALIPHATE',
     label: '칼리프국',
     icon: '☪️',
@@ -135,10 +156,10 @@ const STATE_TYPE_OPTIONS = [
     desc: '칸이 통치하는 유목 국가',
   },
   {
-    value: 'TRIBAL_CONFEDERATION',
-    label: '부족연합',
-    icon: '🛡️',
-    desc: '여러 부족의 연합체',
+    value: 'CONFEDERATION',
+    label: '연합',
+    icon: '🔗',
+    desc: '느슨한 형태의 국가 연합',
   },
   {
     value: 'CITY_STATE',
@@ -146,12 +167,37 @@ const STATE_TYPE_OPTIONS = [
     icon: '🏙️',
     desc: '독립적인 도시 형태의 국가',
   },
+  {
+    value: 'THEOCRACY',
+    label: '신정 국가',
+    icon: '⛪',
+    desc: '종교 지도자가 통치하는 국가',
+  },
+  {
+    value: 'TRIBAL_STATE',
+    label: '부족 국가/연합',
+    icon: '🛡️',
+    desc: '부족 또는 부족 연맹',
+  },
+  {
+    value: 'NOMADIC_EMPIRE',
+    label: '유목 제국',
+    icon: '🐎',
+    desc: '유목민이 세운 제국',
+  },
+  {
+    value: 'PERSONAL_UNION',
+    label: '동군연합',
+    icon: '👥',
+    desc: '같은 군주 아래 여러 정치체가 연합',
+  },
   { value: 'OTHER', label: '기타', icon: '📋', desc: '기타 국가 형태' },
 ]
 
 export function HistoricalCountryForm({
   editing,
   modernCountries,
+  historicalCountries = [],
   onClose,
   onSave,
 }: HistoricalCountryFormProps) {
@@ -172,6 +218,9 @@ export function HistoricalCountryForm({
   /** 현대 국가 선택 모달 표시 여부 */
   const [showModernCountryModal, setShowModernCountryModal] = useState(false)
 
+  /** 상위 역사적 국가 선택 모달 표시 여부 */
+  const [showParentHistoricalModal, setShowParentHistoricalModal] = useState(false)
+
   /** 시작 기원 선택 모달 표시 여부 */
   const [showStartEraModal, setShowStartEraModal] = useState(false)
 
@@ -182,6 +231,10 @@ export function HistoricalCountryForm({
   const [selectedModernCountries, setSelectedModernCountries] = useState<
     string[]
   >([])
+
+  /** 선택된 상위 역사적 국가 ID 배열 */
+  const [selectedParentHistoricalIds, setSelectedParentHistoricalIds] =
+    useState<string[]>([])
 
   /** 수정 시 상세 API로 시작/종료 시점 등 전체 필드 확실히 로드 */
   const { data: editingDetail } = useHistoricalCountry(editing?.id)
@@ -224,6 +277,7 @@ export function HistoricalCountryForm({
         // 수정 모드: formSource(상세 API 응답 우선)로 폼 채우기
         const raw = formSource as HistoricalCountry & {
           parentModernCountryIds?: string[]
+          parentHistoricalCountryIds?: string[]
           start_era?: string
           start_year?: number
           start_month?: number
@@ -234,6 +288,7 @@ export function HistoricalCountryForm({
           end_day?: number
         }
         const parentIds = raw?.parentModernCountryIds ?? []
+        const parentHistIds = raw?.parentHistoricalCountryIds ?? []
         const num = (v: number | null | undefined) =>
           v !== null && v !== undefined ? v : undefined
         const str = (v: string | null | undefined) => v || undefined
@@ -252,9 +307,11 @@ export function HistoricalCountryForm({
           endDay: num(raw?.endDay ?? raw?.end_day),
           stateType: (raw?.stateType ?? editing.stateType) || '',
           parentModernCountryIds: parentIds,
+          parentHistoricalCountryIds: parentHistIds,
         })
         setThumbnailPreview((raw?.thumbnailUrl ?? editing.thumbnailUrl) || '')
         setSelectedModernCountries(parentIds)
+        setSelectedParentHistoricalIds(parentHistIds)
       } else {
         // 생성 모드: 빈 값으로 초기화
         reset({
@@ -272,9 +329,11 @@ export function HistoricalCountryForm({
           endDay: undefined,
           stateType: '',
           parentModernCountryIds: [],
+          parentHistoricalCountryIds: [],
         })
         setThumbnailPreview('')
         setSelectedModernCountries([])
+        setSelectedParentHistoricalIds([])
       }
       setThumbnailFile(null)
     }
@@ -344,6 +403,10 @@ export function HistoricalCountryForm({
     if (selectedModernCountries.length > 0) {
       payload.parentModernCountryIds = selectedModernCountries
     }
+    // 상위 역사적 국가가 선택된 경우 추가
+    if (selectedParentHistoricalIds.length > 0) {
+      payload.parentHistoricalCountryIds = selectedParentHistoricalIds
+    }
 
     // 저장 및 폼 초기화
     await onSave(payload)
@@ -351,6 +414,7 @@ export function HistoricalCountryForm({
     setThumbnailPreview('')
     setThumbnailFile(null)
     setSelectedModernCountries([])
+    setSelectedParentHistoricalIds([])
     onClose()
   }
 
@@ -365,6 +429,7 @@ export function HistoricalCountryForm({
     setThumbnailUploadError(null)
     setThumbnailUploading(false)
     setSelectedModernCountries([])
+    setSelectedParentHistoricalIds([])
     onClose()
   }
 
@@ -414,6 +479,21 @@ export function HistoricalCountryForm({
    */
   const handleClearModernCountries = () => {
     setSelectedModernCountries([])
+  }
+
+  /**
+   * 상위 역사적 국가 선택/해제 (다중 선택)
+   */
+  const handleParentHistoricalToggle = (historicalCountryId: string) => {
+    setSelectedParentHistoricalIds((prev) =>
+      prev.includes(historicalCountryId)
+        ? prev.filter((id) => id !== historicalCountryId)
+        : [...prev, historicalCountryId],
+    )
+  }
+
+  const handleClearParentHistorical = () => {
+    setSelectedParentHistoricalIds([])
   }
 
   // ==================== Helper 함수 ====================
@@ -468,6 +548,16 @@ export function HistoricalCountryForm({
       .filter((country) => selectedModernCountries.includes(country.id))
       .map((country) => country.name)
     return `🌍 ${selectedNames.join(', ')}`
+  }
+
+  const getParentHistoricalLabel = () => {
+    if (selectedParentHistoricalIds.length === 0) {
+      return '없음'
+    }
+    const names = historicalCountries
+      .filter((c) => selectedParentHistoricalIds.includes(c.id))
+      .map((c) => c.name)
+    return `📜 ${names.join(', ')}`
   }
 
   // ==================== 조기 반환 ====================
@@ -665,6 +755,36 @@ export function HistoricalCountryForm({
                   </div>
                 )}
               </S.FormField>
+
+              {/* 상위 역사적 국가 (다중 선택, 역사적 국가도 상위로 지정 가능) */}
+              {historicalCountries.length > 0 && (
+                <S.FormField>
+                  <S.FormLabel htmlFor="parentHistoricalCountryIds">
+                    상위 역사적 국가 (선택, 여러 개 가능)
+                  </S.FormLabel>
+                  <S.SelectButton
+                    type="button"
+                    onClick={() => setShowParentHistoricalModal(true)}
+                    $hasValue={selectedParentHistoricalIds.length > 0}
+                  >
+                    <span>{getParentHistoricalLabel()}</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
+                    </svg>
+                  </S.SelectButton>
+                  {selectedParentHistoricalIds.length > 0 && (
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        marginTop: '4px',
+                      }}
+                    >
+                      {selectedParentHistoricalIds.length}개 선택됨
+                    </div>
+                  )}
+                </S.FormField>
+              )}
             </S.FormRow>
 
             {/* 존속 기간 */}
@@ -1351,6 +1471,103 @@ export function HistoricalCountryForm({
                       <S.SelectOptionIcon>🌍</S.SelectOptionIcon>
                       <S.SelectOptionText>{country.name}</S.SelectOptionText>
                       {selectedModernCountries.includes(country.id) && (
+                        <S.SelectOptionCheck>
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                          >
+                            <path
+                              d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                        </S.SelectOptionCheck>
+                      )}
+                    </S.SelectOption>
+                  ))}
+                </S.SelectModalContent>
+              </S.SelectModal>
+            </>,
+            document.body,
+          )
+        : null}
+
+      {/* ==================== 상위 역사적 국가 선택 모달 ==================== */}
+      {showParentHistoricalModal
+        ? createPortal(
+            <>
+              <S.SelectModalOverlay
+                as={motion.div}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                onClick={() => setShowParentHistoricalModal(false)}
+              />
+              <S.SelectModal
+                as={motion.div}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                style={{ transform: 'translate(-50%, -50%)' }}
+              >
+                <S.SelectModalHeader>
+                  <S.SelectModalTitle>
+                    상위 역사적 국가 선택 (여러 개 선택 가능)
+                  </S.SelectModalTitle>
+                  <S.SelectModalClose
+                    onClick={() => setShowParentHistoricalModal(false)}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </S.SelectModalClose>
+                </S.SelectModalHeader>
+                <S.SelectModalContent>
+                  {selectedParentHistoricalIds.length > 0 && (
+                    <div
+                      style={{
+                        padding: '12px',
+                        background: '#f3f4f6',
+                        borderRadius: '8px',
+                        marginBottom: '8px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span style={{ fontSize: '14px', color: '#374151' }}>
+                        {selectedParentHistoricalIds.length}개 선택됨
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleClearParentHistorical}
+                        style={{
+                          padding: '4px 12px',
+                          fontSize: '13px',
+                          color: '#dc2626',
+                          background: 'white',
+                          border: '1px solid #fecaca',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        전체 해제
+                      </button>
+                    </div>
+                  )}
+                  {historicalCountries.map((hc) => (
+                    <S.SelectOption
+                      key={hc.id}
+                      $active={selectedParentHistoricalIds.includes(hc.id)}
+                      onClick={() => handleParentHistoricalToggle(hc.id)}
+                    >
+                      <S.SelectOptionIcon>📜</S.SelectOptionIcon>
+                      <S.SelectOptionText>{hc.name}</S.SelectOptionText>
+                      {selectedParentHistoricalIds.includes(hc.id) && (
                         <S.SelectOptionCheck>
                           <svg
                             width="20"

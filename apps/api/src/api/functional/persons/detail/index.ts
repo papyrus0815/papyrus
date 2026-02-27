@@ -9,7 +9,7 @@ import { PlainFetcher } from "@nestia/fetcher/lib/PlainFetcher";
 import type { Primitive } from "typia";
 
 /**
- * ID로 인물 상세 조회 (관계 데이터 포함)
+ * ID로 인물 상세 조회 (본인 등록분만)
  * @controller PersonController.getDetailById
  * @path GET /persons/:id/detail
  * @accessor api.functional.persons.detail.getDetailById

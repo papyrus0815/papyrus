@@ -18,7 +18,7 @@ export * as demographic_indicators from "./demographic_indicators/index";
 export * as development_indicators from "./development_indicators/index";
 
 /**
- * 모든 국가 조회
+ * 모든 국가 조회 (본인 등록분만)
  *
  * @returns 국가 목록
  * @tag countries

@@ -133,4 +133,13 @@ export class CreateHistoricalCountryDto {
   @IsArray()
   @IsString({ each: true })
   parentModernCountryIds?: string[]
+
+  /**
+   * 상위 역사적 국가 ID 목록 (선택, 여러 개 가능)
+   * @example ["historical-country-uuid-1"]
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  parentHistoricalCountryIds?: string[]
 }

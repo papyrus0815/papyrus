@@ -45,6 +45,10 @@ enum AttachmentOwner {
   RESOURCE
   /// 행정구역
   ADMINISTRATIVE_DIVISION
+  /// 행정 부처/기관
+  ADMINISTRATION_DEPARTMENT
+  /// 기관 계획·조율 이벤트
+  ADMINISTRATION_DEPARTMENT_EVENT
 }
 
 /// Aggregate(이벤트) 대상 타입
@@ -81,6 +85,8 @@ enum AggregateType {
   HISTORICAL_COUNTRY
   /// 행정구역
   ADMINISTRATIVE_DIVISION
+  /// 행정 부처/기관
+  ADMINISTRATION_DEPARTMENT
   /// 도시
   CITY
   /// 계정

@@ -20,6 +20,7 @@ import { CityModule } from '../../../libs/city/city.module'
 import { NotificationModule } from '../../../libs/notification/notification.module'
 import { OrganizationModule } from '../../../libs/organization/infrastructure/organization.module'
 import { UploadModule } from '../../../libs/shared/upload/upload.module'
+import { AdministrationDepartmentModule } from '../../../libs/administration-department/administration-department.module'
 
 import {
   AppConfigModule,
@@ -55,6 +56,7 @@ import {
     NotificationModule,
     OrganizationModule,
     UploadModule,
+    AdministrationDepartmentModule,
     HealthModule,
   ],
   controllers: [AppController],

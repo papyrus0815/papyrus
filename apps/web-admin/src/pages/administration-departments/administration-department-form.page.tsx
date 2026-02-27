@@ -23,6 +23,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -197,6 +198,40 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     loadCountries()
     loadPersons()
   }, [])
+
+  // 수정 모드: 기존 부처 로드
+  useEffect(() => {
+    if (!isEditMode || !id) return
+    let cancelled = false
+    administrationDepartmentApi.getById(id).then((dept) => {
+      if (cancelled || !dept) return
+      setFormData((prev) => ({
+        ...prev,
+        name: dept.name,
+        countryId: dept.countryId,
+        parentId: dept.parentId ?? '',
+        description: dept.description ?? '',
+      }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isEditMode, id])
+
+  // 수정 모드: 국가 목록 로드 후 countryName 보정
+  useEffect(() => {
+    if (!formData.countryId || formData.countryName) return
+    const c =
+      modernCountries.find((x) => x.id === formData.countryId) ||
+      historicalCountries.find((x) => x.id === formData.countryId)
+    if (c) {
+      setFormData((prev) => ({
+        ...prev,
+        countryName: c.name,
+        countryFlag: 'flagEmoji' in c && c.flagEmoji ? c.flagEmoji : '',
+      }))
+    }
+  }, [formData.countryId, formData.countryName, modernCountries, historicalCountries])
 
   const loadCountries = async () => {
     try {
@@ -387,7 +422,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     return historyTypes.find(t => t.id === type) || historyTypes[historyTypes.length - 1]
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     playClickSound()
 
@@ -401,9 +436,25 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
       return
     }
 
-    // TODO: API 연동
-
-    navigate('/administration-departments')
+    try {
+      if (isEditMode && id) {
+        await administrationDepartmentApi.update(id, {
+          name: formData.name.trim(),
+          parentId: formData.parentId || null,
+          description: formData.description.trim() || null,
+        })
+      } else {
+        await administrationDepartmentApi.create({
+          name: formData.name.trim(),
+          countryId: formData.countryId,
+          parentId: formData.parentId || null,
+          description: formData.description.trim() || null,
+        })
+      }
+      navigate('/administration-departments')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '저장에 실패했습니다')
+    }
   }
 
   const handleCancel = () => {

@@ -2,6 +2,17 @@ import { Controller, Get, Patch, Param, Query } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { NotificationService } from '../application/notification.service'
 
+/** 알림 목록 항목 */
+export interface NotificationListItemDto {
+  id: string
+  title: string
+  preview?: string
+  time: string
+  unread: boolean
+  ownerType?: string
+  recordId?: string
+}
+
 @ApiTags('notifications')
 @Controller('notifications')
 export class NotificationController {
@@ -11,7 +22,7 @@ export class NotificationController {
   async list(
     @Query('limit') limit?: string,
     @Query('unreadOnly') unreadOnly?: string,
-  ) {
+  ): Promise<NotificationListItemDto[]> {
     const options: { limit?: number; unreadOnly?: boolean } = {}
     if (limit != null) {
       const n = parseInt(limit, 10)

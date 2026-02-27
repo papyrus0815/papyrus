@@ -1,8 +1,16 @@
 #!/usr/bin/env node
 
+import dotenv from 'dotenv'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { runCommands, success, error } from '../utils/common.js'
 import fs from 'fs'
-import path from 'path'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const root = path.resolve(__dirname, '../..')
+// Nestia가 API 앱을 로드할 때 ConfigModule 검증을 위해 env 로드
+dotenv.config({ path: path.join(root, 'env.development') })
+dotenv.config({ path: path.join(root, '.env') })
 
 async function main() {
   try {
@@ -89,8 +97,16 @@ async function main() {
 
       let content = fs.readFileSync(fullPath, 'utf-8')
 
-      // 이미 import가 있는지 확인
-      if (content.includes(importStatement)) {
+      // 이미 import가 있는지 확인 (Nestia는 쌍따옴표로 생성하므로 정확 일치 + 타입명/경로 포함 여부로 판단)
+      const typeNameMatch = importStatement.match(/import type \{ (\w+) \}/)
+      const pathMatch = importStatement.match(/from ["']([^"']+)["']/)
+      const alreadyImported =
+        content.includes(importStatement) ||
+        (typeNameMatch &&
+          pathMatch &&
+          content.includes(typeNameMatch[1]) &&
+          content.includes(pathMatch[1]))
+      if (alreadyImported) {
         return
       }
 

@@ -16,7 +16,6 @@ import { ChartsSection } from './charts-section.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
-import { PositionDefinitionsSection } from './position-definitions-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { HistorySection } from './history-section.widget'
 import { KPIGrid } from './kpi-grid.widget'
@@ -135,6 +134,7 @@ function CountryDetailInner({
   } | null>(null)
   const [isPopulationModalOpen, setIsPopulationModalOpen] = useState(false)
   const [isGdpModalOpen, setIsGdpModalOpen] = useState(false)
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
 
   // 선택된 행정구역 정보 상태
   const [selectedRegionInfo, setSelectedRegionInfo] = useState<{
@@ -343,10 +343,12 @@ function CountryDetailInner({
                       )}
 
                       {activeSubTab === 'government' && (
-                        <>
-                          <GovernmentInfoSection />
-                          <PositionDefinitionsSection country={country} />
-                        </>
+                        <GovernmentInfoSection
+                          countryId={country.id}
+                          categoryModalOpen={categoryModalOpen}
+                          onCloseCategoryModal={() => setCategoryModalOpen(false)}
+                          onOpenCategoryModal={() => setCategoryModalOpen(true)}
+                        />
                       )}
 
                       {activeSubTab === 'person' && (
