@@ -21,6 +21,17 @@ import { HistoricalCountry } from '../domain/historical-country.entity'
 import { CreateHistoricalCountryTransitionDto } from './dto/create-transition.dto'
 import { UpdateHistoricalCountryTransitionDto } from './dto/update-transition.dto'
 import type { HistoricalCountryTransitionResponseDto } from './dto/transition.response'
+import type { HistoricalCountryTransitionRecord } from '../domain/historical-country-transition.repository'
+import {
+  CreateHistoricalCountryMembershipDto,
+  UpdateHistoricalCountryMembershipDto,
+  type HistoricalCountryMembershipResponseDto,
+} from './dto/membership.dto'
+import {
+  CreateHistoricalCountryRelationDto,
+  UpdateHistoricalCountryRelationDto,
+  type HistoricalCountryRelationResponseDto,
+} from './dto/relation.dto'
 
 /**
  * 역사적 국가 API (개인 정보 플랫폼: 로그인한 계정 소유 데이터만)
@@ -67,6 +78,28 @@ export class HistoricalCountryController {
     return list.map((t) => this.transitionToResponseDto(t))
   }
 
+  @Get(':id/memberships')
+  async getMembershipsByHistoricalCountryId(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<HistoricalCountryMembershipResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const list =
+      await this.historicalCountryService.getMembershipsByHistoricalCountryId(id, accountId)
+    return list.map((m) => this.membershipToResponseDto(m))
+  }
+
+  @Get(':id/relations')
+  async getRelationsByHistoricalCountryId(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<HistoricalCountryRelationResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const list =
+      await this.historicalCountryService.getRelationsByHistoricalCountryId(id, accountId)
+    return list.map((r) => this.relationToResponseDto(r))
+  }
+
   /**
    * 역사적 국가 상세 조회 (본인 등록분만)
    *
@@ -96,6 +129,44 @@ export class HistoricalCountryController {
    * @returns 생성된 계승·변천
    * @tag historical-countries
    */
+  @Post('memberships')
+  async createMembership(
+    @Body() dto: CreateHistoricalCountryMembershipDto,
+    @Request() req: any,
+  ): Promise<HistoricalCountryMembershipResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const m = await this.historicalCountryService.createMembership(
+      {
+        historicalCountryId: dto.historicalCountryId,
+        memberCountryId: dto.memberCountryId,
+        role: dto.role,
+        membershipStartDate: dto.membershipStartDate ? new Date(dto.membershipStartDate) : null,
+        membershipEndDate: dto.membershipEndDate ? new Date(dto.membershipEndDate) : null,
+      },
+      accountId,
+    )
+    return this.membershipToResponseDto(m)
+  }
+
+  @Post('relations')
+  async createRelation(
+    @Body() dto: CreateHistoricalCountryRelationDto,
+    @Request() req: any,
+  ): Promise<HistoricalCountryRelationResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const r = await this.historicalCountryService.createRelation(
+      {
+        subjectCountryId: dto.subjectCountryId,
+        objectCountryId: dto.objectCountryId,
+        relationType: dto.relationType,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+      },
+      accountId,
+    )
+    return this.relationToResponseDto(r)
+  }
+
   @Post('transitions')
   async createTransition(
     @Body() dto: CreateHistoricalCountryTransitionDto,
@@ -107,7 +178,6 @@ export class HistoricalCountryController {
         predecessorId: dto.predecessorId,
         successorId: dto.successorId,
         eventType: dto.eventType,
-        eventDate: dto.eventDate,
       },
       accountId,
     )
@@ -145,7 +215,6 @@ export class HistoricalCountryController {
         parentModernCountryIds: dto.parentModernCountryIds,
         parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
         transitionEventType: dto.transitionEventType,
-        transitionEventDate: dto.transitionEventDate,
       },
       accountId,
     )
@@ -169,6 +238,44 @@ export class HistoricalCountryController {
     const accountId = req.user?.id ?? req.user?.sub
     const t = await this.historicalCountryService.updateTransition(tid, dto, accountId)
     return this.transitionToResponseDto(t)
+  }
+
+  @Put('memberships/:mid')
+  async updateMembership(
+    @Param('mid') mid: string,
+    @Body() dto: UpdateHistoricalCountryMembershipDto,
+    @Request() req: any,
+  ): Promise<HistoricalCountryMembershipResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const m = await this.historicalCountryService.updateMembership(
+      mid,
+      {
+        role: dto.role,
+        membershipStartDate: dto.membershipStartDate ? new Date(dto.membershipStartDate) : undefined,
+        membershipEndDate: dto.membershipEndDate ? new Date(dto.membershipEndDate) : undefined,
+      },
+      accountId,
+    )
+    return this.membershipToResponseDto(m)
+  }
+
+  @Put('relations/:rid')
+  async updateRelation(
+    @Param('rid') rid: string,
+    @Body() dto: UpdateHistoricalCountryRelationDto,
+    @Request() req: any,
+  ): Promise<HistoricalCountryRelationResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const r = await this.historicalCountryService.updateRelation(
+      rid,
+      {
+        relationType: dto.relationType,
+        startDate: dto.startDate != null ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate != null ? new Date(dto.endDate) : undefined,
+      },
+      accountId,
+    )
+    return this.relationToResponseDto(r)
   }
 
   /**
@@ -205,7 +312,6 @@ export class HistoricalCountryController {
         parentModernCountryIds: dto.parentModernCountryIds,
         parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
         transitionEventType: dto.transitionEventType,
-        transitionEventDate: dto.transitionEventDate,
       },
       accountId,
     )
@@ -226,6 +332,26 @@ export class HistoricalCountryController {
   ): Promise<void> {
     const accountId = req.user?.id ?? req.user?.sub
     await this.historicalCountryService.deleteTransition(tid, accountId)
+  }
+
+  @Delete('memberships/:mid')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMembership(
+    @Param('mid') mid: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.historicalCountryService.deleteMembership(mid, accountId)
+  }
+
+  @Delete('relations/:rid')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteRelation(
+    @Param('rid') rid: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.historicalCountryService.deleteRelation(rid, accountId)
   }
 
   /**
@@ -276,27 +402,47 @@ export class HistoricalCountryController {
     }
   }
 
-  private transitionToResponseDto(t: {
-    id: string
-    predecessorId: string
-    successorId: string
-    eventType: string
-    eventDate: Date
-    predecessorName?: string
-    successorName?: string
-    createdAt: Date
-    updatedAt: Date
-  }): HistoricalCountryTransitionResponseDto {
+  private transitionToResponseDto(t: HistoricalCountryTransitionRecord): HistoricalCountryTransitionResponseDto {
     return {
       id: t.id,
       predecessorId: t.predecessorId,
       successorId: t.successorId,
       eventType: t.eventType as HistoricalCountryTransitionResponseDto['eventType'],
-      eventDate: t.eventDate instanceof Date ? t.eventDate.toISOString() : (t.eventDate as string),
+      successorStartDate: t.successorStartDate,
       predecessorName: t.predecessorName,
       successorName: t.successorName,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
+    }
+  }
+
+  private membershipToResponseDto(m: import('../domain/historical-country-membership.repository').HistoricalCountryMembershipRecord): HistoricalCountryMembershipResponseDto {
+    return {
+      id: m.id,
+      historicalCountryId: m.historicalCountryId,
+      memberCountryId: m.memberCountryId,
+      role: m.role,
+      membershipStartDate: m.membershipStartDate?.toISOString() ?? null,
+      membershipEndDate: m.membershipEndDate?.toISOString() ?? null,
+      parentName: m.parentName,
+      memberName: m.memberName,
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+    }
+  }
+
+  private relationToResponseDto(r: import('../domain/historical-country-relation.repository').HistoricalCountryRelationRecord): HistoricalCountryRelationResponseDto {
+    return {
+      id: r.id,
+      subjectCountryId: r.subjectCountryId,
+      objectCountryId: r.objectCountryId,
+      relationType: r.relationType,
+      startDate: r.startDate?.toISOString() ?? null,
+      endDate: r.endDate?.toISOString() ?? null,
+      subjectCountryName: r.subjectCountryName,
+      objectCountryName: r.objectCountryName,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
     }
   }
 }

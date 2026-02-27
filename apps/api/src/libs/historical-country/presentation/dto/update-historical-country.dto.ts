@@ -147,8 +147,4 @@ export class UpdateHistoricalCountryDto {
   @IsOptional()
   @IsEnum(TransitionEventType)
   transitionEventType?: TransitionEventType
-
-  @IsOptional()
-  @IsString()
-  transitionEventDate?: string
 }

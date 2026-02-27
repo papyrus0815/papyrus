@@ -699,7 +699,6 @@ export default function CountryPage() {
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
       transitionEventType?: string
-      transitionEventDate?: string
     },
   ) {
     const loadingToast = toast.loading(
@@ -728,7 +727,6 @@ export default function CountryPage() {
             parentModernCountryIds: data.parentModernCountryIds,
             parentHistoricalCountryIds: data.parentHistoricalCountryIds,
             transitionEventType: data.transitionEventType,
-            transitionEventDate: data.transitionEventDate,
           },
         })
         toast.success('수정되었습니다', { id: loadingToast })
@@ -751,7 +749,6 @@ export default function CountryPage() {
           parentModernCountryIds: data.parentModernCountryIds,
           parentHistoricalCountryIds: data.parentHistoricalCountryIds,
           transitionEventType: data.transitionEventType,
-          transitionEventDate: data.transitionEventDate,
         })
         toast.success('등록되었습니다', { id: loadingToast })
       }
@@ -986,7 +983,7 @@ export default function CountryPage() {
         onSave={handleSave}
       />
 
-      {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 상위 현대/역사적 국가 표시) */}
+      {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 연결된 현대 국가·후임 국가 표시) */}
       <HistoricalCountryForm
         editing={
           editingHistorical

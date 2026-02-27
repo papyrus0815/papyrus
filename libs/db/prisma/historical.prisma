@@ -258,8 +258,6 @@ model HistoricalCountryTransition {
 
   /// 전환 이벤트 유형 (TransitionEventType Enum 참조)
   eventType TransitionEventType @map("event_type")
-  /// 전환 날짜
-  eventDate DateTime            @map("event_date")
 
   // --- 관계 필드
   predecessor HistoricalCountry @relation("PredecessorTransitions", fields: [predecessorId], references: [id], onDelete: Cascade)

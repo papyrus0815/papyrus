@@ -149,11 +149,4 @@ export class CreateHistoricalCountryDto {
   @IsOptional()
   @IsEnum(TransitionEventType)
   transitionEventType?: TransitionEventType
-
-  /**
-   * 상위(후임) 설정 시 변천 날짜 (ISO date, 예: 1392-07-17)
-   */
-  @IsOptional()
-  @IsString()
-  transitionEventDate?: string
 }

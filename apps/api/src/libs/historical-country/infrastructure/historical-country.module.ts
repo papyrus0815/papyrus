@@ -6,6 +6,8 @@ import { HistoricalCountryController } from '../presentation/historical-country.
 import { HistoricalCountryService } from '../application/historical-country.service'
 import { HistoricalCountryPrismaRepository } from './historical-country.prisma.repository'
 import { HistoricalCountryTransitionPrismaRepository } from './historical-country-transition.prisma.repository'
+import { HistoricalCountryMembershipPrismaRepository } from './historical-country-membership.prisma.repository'
+import { HistoricalCountryRelationPrismaRepository } from './historical-country-relation.prisma.repository'
 
 @Module({
   imports: [PrismaModule, NotificationModule, UploadModule],
@@ -14,6 +16,8 @@ import { HistoricalCountryTransitionPrismaRepository } from './historical-countr
     HistoricalCountryService,
     HistoricalCountryPrismaRepository,
     HistoricalCountryTransitionPrismaRepository,
+    HistoricalCountryMembershipPrismaRepository,
+    HistoricalCountryRelationPrismaRepository,
   ],
   exports: [HistoricalCountryService],
 })

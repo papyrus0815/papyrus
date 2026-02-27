@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common'
-import { HistoricalMembershipRole } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import {
   IHistoricalCountryRepository,
@@ -52,15 +51,16 @@ export class HistoricalCountryPrismaRepository
     return rows.map((r) => r.modernCountryId)
   }
 
+  /** 이 국가(전임)의 후임 국가 ID 목록. Transition에서만 조회 (Membership은 소속·구성 전용) */
   async findParentHistoricalCountryIdsByMemberId(
     memberCountryId: string,
   ): Promise<string[]> {
     const rows =
-      await this.prisma.historicalCountryMembership.findMany({
-        where: { memberCountryId },
-        select: { historicalCountryId: true },
+      await this.prisma.historicalCountryTransition.findMany({
+        where: { predecessorId: memberCountryId },
+        select: { successorId: true },
       })
-    return rows.map((r) => r.historicalCountryId)
+    return rows.map((r) => r.successorId)
   }
 
   async create(data: CreateHistoricalCountryData): Promise<HistoricalCountry> {
@@ -91,30 +91,19 @@ export class HistoricalCountryPrismaRepository
       },
     })
 
-    // 상위 역사적 국가 = 후임. 멤버십 생성 (이 국가가 전임, 상위가 후임)
+    // 상위 역사적 국가 = 후임. Transition만 생성 (Membership은 소속·구성 탭 전용)
     if (
       data.parentHistoricalCountryIds &&
-      data.parentHistoricalCountryIds.length > 0
+      data.parentHistoricalCountryIds.length > 0 &&
+      data.transitionEventType
     ) {
-      await this.prisma.historicalCountryMembership.createMany({
-        data: data.parentHistoricalCountryIds.map((historicalCountryId) => ({
-          historicalCountryId,
-          memberCountryId: country.id,
-          role: HistoricalMembershipRole.OTHER,
+      await this.prisma.historicalCountryTransition.createMany({
+        data: data.parentHistoricalCountryIds.map((successorId) => ({
+          predecessorId: country.id,
+          successorId,
+          eventType: data.transitionEventType!,
         })),
       })
-      // 변천 유형·날짜가 있으면 Transition도 생성 (전임=이 국가 → 후임=상위)
-      if (data.transitionEventType && data.transitionEventDate) {
-        const eventDate = new Date(data.transitionEventDate)
-        await this.prisma.historicalCountryTransition.createMany({
-          data: data.parentHistoricalCountryIds.map((successorId) => ({
-            predecessorId: country.id,
-            successorId,
-            eventType: data.transitionEventType!,
-            eventDate,
-          })),
-        })
-      }
     }
 
     return this.toEntity(country as any)
@@ -147,39 +136,24 @@ export class HistoricalCountryPrismaRepository
       })
     }
 
-    // 상위(후임) 멤버십 + 변천(Transition) 업데이트
+    // 상위(후임) Transition만 업데이트 (Membership은 소속·구성 탭 전용)
     if (data.parentHistoricalCountryIds !== undefined) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.historicalCountryMembership.deleteMany({
-          where: { memberCountryId: id },
-        })
-        await tx.historicalCountryTransition.deleteMany({
-          where: { predecessorId: id },
-        })
-        if (
-          data.parentHistoricalCountryIds &&
-          data.parentHistoricalCountryIds.length > 0
-        ) {
-          await tx.historicalCountryMembership.createMany({
-            data: data.parentHistoricalCountryIds.map((historicalCountryId) => ({
-              historicalCountryId,
-              memberCountryId: id,
-              role: HistoricalMembershipRole.OTHER,
-            })),
-          })
-          if (data.transitionEventType && data.transitionEventDate) {
-            const eventDate = new Date(data.transitionEventDate)
-            await tx.historicalCountryTransition.createMany({
-              data: data.parentHistoricalCountryIds.map((successorId) => ({
-                predecessorId: id,
-                successorId,
-                eventType: data.transitionEventType!,
-                eventDate,
-              })),
-            })
-          }
-        }
+      await this.prisma.historicalCountryTransition.deleteMany({
+        where: { predecessorId: id },
       })
+      if (
+        data.parentHistoricalCountryIds &&
+        data.parentHistoricalCountryIds.length > 0 &&
+        data.transitionEventType
+      ) {
+        await this.prisma.historicalCountryTransition.createMany({
+          data: data.parentHistoricalCountryIds.map((successorId) => ({
+            predecessorId: id,
+            successorId,
+            eventType: data.transitionEventType!,
+          })),
+        })
+      }
     }
 
     // 국가 정보 업데이트

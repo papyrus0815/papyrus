@@ -13,7 +13,21 @@ import type {
   CreateTransitionData,
   UpdateTransitionData,
 } from '../domain/historical-country-transition.repository'
+import type {
+  IHistoricalCountryMembershipRepository,
+  HistoricalCountryMembershipRecord,
+  CreateMembershipData,
+  UpdateMembershipData,
+} from '../domain/historical-country-membership.repository'
+import type {
+  IHistoricalCountryRelationRepository,
+  HistoricalCountryRelationRecord,
+  CreateRelationData,
+  UpdateRelationData,
+} from '../domain/historical-country-relation.repository'
 import { HistoricalCountryTransitionPrismaRepository } from '../infrastructure/historical-country-transition.prisma.repository'
+import { HistoricalCountryMembershipPrismaRepository } from '../infrastructure/historical-country-membership.prisma.repository'
+import { HistoricalCountryRelationPrismaRepository } from '../infrastructure/historical-country-relation.prisma.repository'
 import { NotificationService } from '../../notification/application/notification.service'
 import { UploadService } from '../../shared/upload/upload.service'
 
@@ -21,15 +35,21 @@ import { UploadService } from '../../shared/upload/upload.service'
 export class HistoricalCountryService {
   private readonly repository: IHistoricalCountryRepository
   private readonly transitionRepository: IHistoricalCountryTransitionRepository
+  private readonly membershipRepository: IHistoricalCountryMembershipRepository
+  private readonly relationRepository: IHistoricalCountryRelationRepository
 
   constructor(
     repository: HistoricalCountryPrismaRepository,
     transitionRepository: HistoricalCountryTransitionPrismaRepository,
+    membershipRepository: HistoricalCountryMembershipPrismaRepository,
+    relationRepository: HistoricalCountryRelationPrismaRepository,
     private readonly notificationService: NotificationService,
     private readonly uploadService: UploadService,
   ) {
     this.repository = repository
     this.transitionRepository = transitionRepository
+    this.membershipRepository = membershipRepository
+    this.relationRepository = relationRepository
   }
 
   /**
@@ -161,7 +181,7 @@ export class HistoricalCountryService {
    * 계승/변천 생성 (전임·후임 국가 모두 본인 소유여야 함)
    */
   async createTransition(
-    data: Omit<CreateTransitionData, 'eventDate'> & { eventDate: string | Date },
+    data: CreateTransitionData,
     accountId?: string,
   ): Promise<HistoricalCountryTransitionRecord> {
     if (accountId) {
@@ -175,12 +195,10 @@ export class HistoricalCountryService {
         )
       }
     }
-    const eventDate = typeof data.eventDate === 'string' ? new Date(data.eventDate) : data.eventDate
     return this.transitionRepository.create({
       predecessorId: data.predecessorId,
       successorId: data.successorId,
       eventType: data.eventType,
-      eventDate,
     })
   }
 
@@ -189,7 +207,7 @@ export class HistoricalCountryService {
    */
   async updateTransition(
     transitionId: string,
-    data: Omit<UpdateTransitionData, 'eventDate'> & { eventDate?: string | Date },
+    data: UpdateTransitionData,
     accountId?: string,
   ): Promise<HistoricalCountryTransitionRecord> {
     const existing = await this.transitionRepository.findById(transitionId)
@@ -207,13 +225,9 @@ export class HistoricalCountryService {
         )
       }
     }
-    const updateData: UpdateTransitionData = {
+    return this.transitionRepository.update(transitionId, {
       ...(data.eventType !== undefined && { eventType: data.eventType }),
-      ...(data.eventDate !== undefined && {
-        eventDate: typeof data.eventDate === 'string' ? new Date(data.eventDate) : data.eventDate,
-      }),
-    }
-    return this.transitionRepository.update(transitionId, updateData)
+    })
   }
 
   /**
@@ -236,5 +250,149 @@ export class HistoricalCountryService {
       }
     }
     await this.transitionRepository.delete(transitionId)
+  }
+
+  // --- 소속/구성 (Membership)
+
+  async getMembershipsByHistoricalCountryId(
+    historicalCountryId: string,
+    accountId?: string,
+  ): Promise<HistoricalCountryMembershipRecord[]> {
+    await this.getHistoricalCountryById(historicalCountryId, accountId)
+    return this.membershipRepository.findManyByHistoricalCountryId(historicalCountryId)
+  }
+
+  async createMembership(
+    data: CreateMembershipData,
+    accountId?: string,
+  ): Promise<HistoricalCountryMembershipRecord> {
+    if (accountId) {
+      const [parent, member] = await Promise.all([
+        this.repository.findById(data.historicalCountryId, accountId),
+        this.repository.findById(data.memberCountryId, accountId),
+      ])
+      if (!parent || !member) {
+        throw new ForbiddenException(
+          '상위·하위 국가는 모두 본인이 등록한 역사적 국가여야 합니다.',
+        )
+      }
+    }
+    return this.membershipRepository.create(data)
+  }
+
+  async updateMembership(
+    membershipId: string,
+    data: UpdateMembershipData,
+    accountId?: string,
+  ): Promise<HistoricalCountryMembershipRecord> {
+    const existing = await this.membershipRepository.findById(membershipId)
+    if (!existing) {
+      throw new NotFoundException(`Membership with id ${membershipId} not found`)
+    }
+    if (accountId) {
+      const [parent, member] = await Promise.all([
+        this.repository.findById(existing.historicalCountryId, accountId),
+        this.repository.findById(existing.memberCountryId, accountId),
+      ])
+      if (!parent && !member) {
+        throw new ForbiddenException(
+          '본인이 등록한 역사적 국가에 속한 소속 관계만 수정할 수 있습니다.',
+        )
+      }
+    }
+    return this.membershipRepository.update(membershipId, data)
+  }
+
+  async deleteMembership(membershipId: string, accountId?: string): Promise<void> {
+    const existing = await this.membershipRepository.findById(membershipId)
+    if (!existing) {
+      throw new NotFoundException(`Membership with id ${membershipId} not found`)
+    }
+    if (accountId) {
+      const [parent, member] = await Promise.all([
+        this.repository.findById(existing.historicalCountryId, accountId),
+        this.repository.findById(existing.memberCountryId, accountId),
+      ])
+      if (!parent && !member) {
+        throw new ForbiddenException(
+          '본인이 등록한 역사적 국가에 속한 소속 관계만 삭제할 수 있습니다.',
+        )
+      }
+    }
+    await this.membershipRepository.delete(membershipId)
+  }
+
+  // --- 국가 관계 (Relation)
+
+  async getRelationsByHistoricalCountryId(
+    historicalCountryId: string,
+    accountId?: string,
+  ): Promise<HistoricalCountryRelationRecord[]> {
+    await this.getHistoricalCountryById(historicalCountryId, accountId)
+    return this.relationRepository.findManyByHistoricalCountryId(historicalCountryId)
+  }
+
+  async createRelation(
+    data: CreateRelationData,
+    accountId?: string,
+  ): Promise<HistoricalCountryRelationRecord> {
+    if (accountId) {
+      const [subj, obj] = await Promise.all([
+        this.repository.findById(data.subjectCountryId, accountId),
+        this.repository.findById(data.objectCountryId, accountId),
+      ])
+      if (!subj || !obj) {
+        throw new ForbiddenException(
+          '관계의 주체·대상 국가는 모두 본인이 등록한 역사적 국가여야 합니다.',
+        )
+      }
+    }
+    return this.relationRepository.create({
+      ...data,
+      startDate: data.startDate ?? undefined,
+      endDate: data.endDate ?? undefined,
+    })
+  }
+
+  async updateRelation(
+    relationId: string,
+    data: UpdateRelationData,
+    accountId?: string,
+  ): Promise<HistoricalCountryRelationRecord> {
+    const existing = await this.relationRepository.findById(relationId)
+    if (!existing) {
+      throw new NotFoundException(`Relation with id ${relationId} not found`)
+    }
+    if (accountId) {
+      const [subj, obj] = await Promise.all([
+        this.repository.findById(existing.subjectCountryId, accountId),
+        this.repository.findById(existing.objectCountryId, accountId),
+      ])
+      if (!subj && !obj) {
+        throw new ForbiddenException(
+          '본인이 등록한 역사적 국가에 속한 관계만 수정할 수 있습니다.',
+        )
+      }
+    }
+    return this.relationRepository.update(relationId, data)
+  }
+
+  async deleteRelation(relationId: string, accountId?: string): Promise<void> {
+    const existing = await this.relationRepository.findById(relationId)
+    if (!existing) {
+      throw new NotFoundException(`Relation with id ${relationId} not found`)
+    }
+    if (accountId) {
+      const [subj, obj] = await Promise.all([
+        this.repository.findById(existing.subjectCountryId, accountId),
+        this.repository.findById(existing.objectCountryId, accountId),
+      ])
+      if (!subj && !obj) {
+        throw new ForbiddenException(
+          '본인이 등록한 역사적 국가에 속한 관계만 삭제할 수 있습니다.',
+        )
+      }
+    }
+    await this.relationRepository.delete(relationId)
   }
 }

@@ -1,8 +1,8 @@
 import { TransitionEventType } from '@prisma/client'
-import { IsDateString, IsEnum, IsUUID } from 'class-validator'
+import { IsEnum, IsUUID } from 'class-validator'
 
 /**
- * 계승/변천 관계 생성 DTO
+ * 계승/변천 관계 생성 DTO (날짜는 후임 국가의 존속 시작 시점 참조)
  */
 export class CreateHistoricalCountryTransitionDto {
   @IsUUID()
@@ -13,7 +13,4 @@ export class CreateHistoricalCountryTransitionDto {
 
   @IsEnum(TransitionEventType)
   eventType!: TransitionEventType
-
-  @IsDateString()
-  eventDate!: string
 }

@@ -9,7 +9,6 @@ import type { HistoricalCountry, Era } from '@/entities/historical-country/api'
 import { useHistoricalCountry } from '@/features/historical-country/use-historical-countries.hook'
 import { uploadImage } from '@/shared/api/upload'
 import type { TransitionEventType } from '@/shared/api/historical-countries'
-import { DatePickerModal } from '@/shared/ui/date-picker'
 import * as S from '../../../../pages/history/country/country.styles'
 
 const TRANSITION_EVENT_LABELS: Record<TransitionEventType, string> = {
@@ -80,7 +79,7 @@ const historicalCountrySchema = z.object({
     .or(z.literal(undefined)),
   stateType: z.string().min(1, '국가 형태를 입력해주세요'),
   parentModernCountryIds: z.array(z.string()).optional(), // 여러 현대 국가 지원
-  parentHistoricalCountryIds: z.array(z.string()).optional(), // 상위 역사적 국가 지원
+  parentHistoricalCountryIds: z.array(z.string()).optional(), // 후임 국가 ID 배열
 })
 
 type HistoricalCountryFormData = z.infer<typeof historicalCountrySchema>
@@ -98,7 +97,7 @@ interface HistoricalCountryOption {
 interface HistoricalCountryFormProps {
   editing: HistoricalCountry | null
   modernCountries: ModernCountryOption[]
-  /** 상위 국가로 선택 가능한 역사적 국가 목록 (편집 중인 자신 제외해 전달) */
+  /** 후임으로 선택 가능한 역사적 국가 목록 (편집 중인 자신 제외해 전달) */
   historicalCountries?: HistoricalCountryOption[]
   onClose: () => void
   onSave: (
@@ -107,7 +106,6 @@ interface HistoricalCountryFormProps {
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
       transitionEventType?: TransitionEventType
-      transitionEventDate?: string
     },
   ) => Promise<void>
 }
@@ -242,7 +240,7 @@ export function HistoricalCountryForm({
   /** 현대 국가 선택 모달 표시 여부 */
   const [showModernCountryModal, setShowModernCountryModal] = useState(false)
 
-  /** 상위 역사적 국가 선택 모달 표시 여부 */
+  /** 후임 국가 선택 모달 표시 여부 */
   const [showParentHistoricalModal, setShowParentHistoricalModal] = useState(false)
 
   /** 시작 기원 선택 모달 표시 여부 */
@@ -256,15 +254,13 @@ export function HistoricalCountryForm({
     string[]
   >([])
 
-  /** 선택된 상위 역사적 국가 ID 배열 (후임) */
+  /** 선택된 후임 국가 ID 배열 */
   const [selectedParentHistoricalIds, setSelectedParentHistoricalIds] =
     useState<string[]>([])
 
-  /** 상위(후임) 설정 시 변천 유형·날짜 */
+  /** 후임 설정 시 변천 유형 (날짜는 후임 국가의 존속 시작 시점 참조) */
   const [transitionEventType, setTransitionEventType] =
     useState<TransitionEventType>('SUCCESSION')
-  const [transitionEventDate, setTransitionEventDate] = useState('')
-  const [transitionDatePickerOpen, setTransitionDatePickerOpen] = useState(false)
 
   /** 수정 시 상세 API로 시작/종료 시점 등 전체 필드 확실히 로드 */
   const { data: editingDetail } = useHistoricalCountry(editing?.id)
@@ -429,15 +425,14 @@ export function HistoricalCountryForm({
       payload.id = editing.id
     }
 
-    // 상위 현대 국가가 선택된 경우 추가 (여러 국가 지원)
+    // 연결된 현대 국가가 선택된 경우 추가 (여러 국가 지원)
     if (selectedModernCountries.length > 0) {
       payload.parentModernCountryIds = selectedModernCountries
     }
-    // 상위(후임) 선택 시 추가 + 변천 유형·날짜 (API에서 Transition 생성에 사용)
+    // 후임 선택 시 추가 + 변천 유형 (날짜는 후임 국가 시작 시점 참조)
     if (selectedParentHistoricalIds.length > 0) {
       payload.parentHistoricalCountryIds = selectedParentHistoricalIds
       payload.transitionEventType = transitionEventType
-      payload.transitionEventDate = transitionEventDate || undefined
     }
 
     // 저장 및 폼 초기화
@@ -448,7 +443,6 @@ export function HistoricalCountryForm({
     setSelectedModernCountries([])
     setSelectedParentHistoricalIds([])
     setTransitionEventType('SUCCESSION')
-    setTransitionEventDate('')
     onClose()
   }
 
@@ -465,7 +459,6 @@ export function HistoricalCountryForm({
     setSelectedModernCountries([])
     setSelectedParentHistoricalIds([])
     setTransitionEventType('SUCCESSION')
-    setTransitionEventDate('')
     onClose()
   }
 
@@ -518,7 +511,7 @@ export function HistoricalCountryForm({
   }
 
   /**
-   * 상위 역사적 국가 선택/해제 (다중 선택)
+   * 후임 국가 선택/해제 (다중 선택)
    */
   const handleParentHistoricalToggle = (historicalCountryId: string) => {
     setSelectedParentHistoricalIds((prev) =>
@@ -764,10 +757,10 @@ export function HistoricalCountryForm({
                 )}
               </S.FormField>
 
-              {/* 상위 현대 국가 (다중 선택 지원) */}
+              {/* 연결된 현대 국가 (다중 선택 지원) */}
               <S.FormField>
                 <S.FormLabel htmlFor="parentModernCountryIds">
-                  상위 현대 국가 (선택, 여러 개 가능)
+                  연결된 현대 국가 (선택, 여러 개 가능)
                 </S.FormLabel>
                 <S.SelectButton
                   type="button"
@@ -792,12 +785,12 @@ export function HistoricalCountryForm({
                 )}
               </S.FormField>
 
-              {/* 상위 역사적 국가 = 후임 (이 국가가 어떤 국가로 이어졌는지). 예: 고려 → 조선 시 고려가 조선 선택 */}
+              {/* 후임 국가: 이 국가가 끝나고 어떤 국가로 이어졌는지. 예: 고려 → 조선 */}
               {historicalCountries.length > 0 && (
                 <>
                   <S.FormField>
                     <S.FormLabel htmlFor="parentHistoricalCountryIds">
-                      상위 역사적 국가 (후임)
+                      후임 국가
                     </S.FormLabel>
                     <S.SelectButton
                       type="button"
@@ -831,55 +824,41 @@ export function HistoricalCountryForm({
                     )}
                   </S.FormField>
                   {selectedParentHistoricalIds.length > 0 && (
-                    <S.FormRow>
-                      <S.FormField>
-                        <S.FormLabel>변천 유형</S.FormLabel>
-                        <select
-                          value={transitionEventType}
-                          onChange={(e) =>
-                            setTransitionEventType(e.target.value as TransitionEventType)
-                          }
-                          style={{
-                            width: '100%',
-                            padding: '12px 16px',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 12,
-                            fontSize: 14,
-                            color: '#111827',
-                            background: '#fff',
-                          }}
-                        >
-                          {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map(
-                            (k) => (
-                              <option key={k} value={k}>
-                                {TRANSITION_EVENT_LABELS[k]}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </S.FormField>
-                      <S.FormField>
-                        <S.FormLabel>변천 날짜</S.FormLabel>
-                        <button
-                          type="button"
-                          onClick={() => setTransitionDatePickerOpen(true)}
-                          style={{
-                            width: '100%',
-                            padding: '12px 16px',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 12,
-                            fontSize: 14,
-                            color: transitionEventDate ? '#111827' : '#9ca3af',
-                            background: '#fff',
-                            textAlign: 'left',
-                          }}
-                        >
-                          {transitionEventDate
-                            ? transitionEventDate.replace(/-/g, '.')
-                            : '날짜 선택'}
-                        </button>
-                      </S.FormField>
-                    </S.FormRow>
+                    <S.FormField>
+                      <S.FormLabel>변천 유형</S.FormLabel>
+                      <select
+                        value={transitionEventType}
+                        onChange={(e) =>
+                          setTransitionEventType(e.target.value as TransitionEventType)
+                        }
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 12,
+                          fontSize: 14,
+                          color: '#111827',
+                          background: '#fff',
+                        }}
+                      >
+                        {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map(
+                          (k) => (
+                            <option key={k} value={k}>
+                              {TRANSITION_EVENT_LABELS[k]}
+                            </option>
+                          )
+                        )}
+                      </select>
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: '#6b7280',
+                          marginTop: '6px',
+                        }}
+                      >
+                        변천 날짜는 후임 국가의 존속 시작 시점을 참조합니다.
+                      </div>
+                    </S.FormField>
                   )}
                 </>
               )}
@@ -1514,7 +1493,7 @@ export function HistoricalCountryForm({
               >
                 <S.SelectModalHeader>
                   <S.SelectModalTitle>
-                    상위 현대 국가 선택 (여러 개 선택 가능)
+                    연결된 현대 국가 선택 (여러 개 선택 가능)
                   </S.SelectModalTitle>
                   <S.SelectModalClose
                     onClick={() => setShowModernCountryModal(false)}
@@ -1592,7 +1571,7 @@ export function HistoricalCountryForm({
           )
         : null}
 
-      {/* ==================== 상위 역사적 국가 선택 모달 ==================== */}
+      {/* ==================== 후임 국가 선택 모달 ==================== */}
       {showParentHistoricalModal
         ? createPortal(
             <>
@@ -1611,7 +1590,7 @@ export function HistoricalCountryForm({
               >
                 <S.SelectModalHeader>
                   <S.SelectModalTitle>
-                    상위 역사적 국가 선택 (여러 개 선택 가능)
+                    후임 국가 선택 (이 국가가 이어져 간 나라)
                   </S.SelectModalTitle>
                   <S.SelectModalClose
                     onClick={() => setShowParentHistoricalModal(false)}
@@ -1898,17 +1877,6 @@ export function HistoricalCountryForm({
             document.body,
           )
         : null}
-
-      <DatePickerModal
-        isOpen={transitionDatePickerOpen}
-        onClose={() => setTransitionDatePickerOpen(false)}
-        onSelect={(date) => {
-          setTransitionEventDate(date)
-          setTransitionDatePickerOpen(false)
-        }}
-        initialDate={transitionEventDate || undefined}
-        title="변천 날짜 선택"
-      />
     </>
   )
 }

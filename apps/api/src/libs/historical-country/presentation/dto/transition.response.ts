@@ -8,7 +8,8 @@ export interface HistoricalCountryTransitionResponseDto {
   predecessorId: string
   successorId: string
   eventType: TransitionEventType
-  eventDate: string
+  /** 후임 국가의 존속 시작 시점 (표시용) */
+  successorStartDate: string | null
 
   /** 전임 국가 이름 (선택 표시용) */
   predecessorName?: string
