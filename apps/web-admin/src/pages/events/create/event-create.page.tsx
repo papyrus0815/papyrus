@@ -95,6 +95,11 @@ export const EventCreatePage: React.FC = () => {
   const editEventId = routerLocation.state?.editEventId as string | undefined
   const isEditMode = Boolean(editEventId)
 
+  // 역대 수반 업적 등록 등에서 넘어온 경우: 관련 인물 프리필
+  const prefillState = routerLocation.state as
+    | { prefillPersonId?: string; prefillPersonName?: string; prefillRole?: string }
+    | undefined
+
   // ===== 상태 관리 (기존 방식 유지, 점진적 마이그레이션 가능) =====
   const [currentStep, setCurrentStep] = useState<FormStep>(FORM_STEPS.BASIC)
   const [isLoadingEvent, setIsLoadingEvent] = useState(false)
@@ -296,6 +301,20 @@ export const EventCreatePage: React.FC = () => {
           return []
         }),
     ])
+  }, [])
+
+  // 역대 수반 등에서 "업적 등록"으로 진입 시 관련 인물 1명 프리필
+  useEffect(() => {
+    if (isEditMode || !prefillState?.prefillPersonId) return
+    setRelatedPersons([
+      {
+        personId: prefillState.prefillPersonId,
+        role: prefillState.prefillRole ?? '업적',
+        note: '',
+      },
+    ])
+    // 한 번만 적용 (state 초기화 방지)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 편집 모드일 때 기존 데이터 로드

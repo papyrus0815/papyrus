@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 
 import { motion } from 'framer-motion'
+import styled from 'styled-components'
 
 import type { AdministrationDepartment, AdministrationDepartmentCategory } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
@@ -13,6 +14,38 @@ import { mockGovernmentData } from '../mock'
 import type { HistoricalEvent } from '../mock/types'
 
 export type GovernmentContentTab = 'statistics' | 'ministries'
+
+/* 행정조직 탭 스타일 (country.styles OverviewSubTabBar/Button과 동일) */
+const GovTabNav = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 20px;
+  width: fit-content;
+  background: #f1f5f9;
+  border-radius: 20px;
+  overflow-x: auto;
+  &::-webkit-scrollbar { display: none; }
+`
+const GovTabButton = styled.button<{ $active?: boolean }>`
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: none;
+  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
+  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
+  font-size: 13px;
+  font-weight: ${(p) => (p.$active ? '600' : '500')};
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
+  &:hover {
+    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
+    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
+  }
+`
 
 export interface GovernmentInfoSectionProps {
   /** 국가 ID (있으면 중앙부처 탭에서 API 연동 CRUD) */
@@ -315,24 +348,24 @@ export function GovernmentInfoSection({ countryId, categoryModalOpen: categoryMo
         )}
       </header>
 
-      {/* 탭 + KPI 한 줄 */}
+      {/* 탭 (수반 기본정보/업적과 동일 스타일) + KPI */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 4 }}>
-          <S.OverviewSubTabBar style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-            <S.OverviewSubTabButton
-              $active={contentTab === 'statistics'}
-              onClick={() => setContentTab('statistics')}
-            >
-              통계
-            </S.OverviewSubTabButton>
-            <S.OverviewSubTabButton
-              $active={contentTab === 'ministries'}
-              onClick={() => setContentTab('ministries')}
-            >
-              중앙부처
-            </S.OverviewSubTabButton>
-          </S.OverviewSubTabBar>
-        </div>
+        <GovTabNav>
+          <GovTabButton
+            type="button"
+            $active={contentTab === 'statistics'}
+            onClick={() => setContentTab('statistics')}
+          >
+            통계
+          </GovTabButton>
+          <GovTabButton
+            type="button"
+            $active={contentTab === 'ministries'}
+            onClick={() => setContentTab('ministries')}
+          >
+            중앙부처
+          </GovTabButton>
+        </GovTabNav>
 
         {/* KPI 스트립 */}
         <div

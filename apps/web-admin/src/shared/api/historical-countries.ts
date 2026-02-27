@@ -105,3 +105,110 @@ export async function deleteHistoricalCountry(id: string): Promise<void> {
     throw error
   }
 }
+
+// --- 계승/변천 (Transition) API (SDK 미포함 시 직접 호출)
+
+export type TransitionEventType =
+  | 'FOUNDED'
+  | 'CONQUEST'
+  | 'TREATY'
+  | 'INDEPENDENCE'
+  | 'UNIFICATION'
+  | 'UNION'
+  | 'DISSOLVED'
+  | 'SUCCESSION'
+  | 'SECULARIZATION'
+  | 'SPLIT'
+  | 'OTHER'
+
+export interface HistoricalCountryTransitionDto {
+  id: string
+  predecessorId: string
+  successorId: string
+  eventType: TransitionEventType
+  eventDate: string
+  predecessorName?: string
+  successorName?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateHistoricalCountryTransitionDto {
+  predecessorId: string
+  successorId: string
+  eventType: TransitionEventType
+  eventDate: string
+}
+
+export interface UpdateHistoricalCountryTransitionDto {
+  eventType?: TransitionEventType
+  eventDate?: string
+}
+
+/**
+ * 해당 역사적 국가가 관여된 계승·변천 목록 조회
+ */
+export async function getTransitionsByHistoricalCountryId(
+  historicalCountryId: string,
+): Promise<HistoricalCountryTransitionDto[]> {
+  const conn = getApiConnection()
+  const path = `/historical-countries/${encodeURIComponent(historicalCountryId)}/transitions`
+  const res = await fetch(`${conn.host}${path}`, {
+    method: 'GET',
+    headers: { ...conn.headers },
+  })
+  if (!res.ok) throw new Error(await res.text())
+  const data = (await res.json()) as any
+  return data?.data ?? data
+}
+
+/**
+ * 계승/변천 관계 생성
+ */
+export async function createHistoricalCountryTransition(
+  data: CreateHistoricalCountryTransitionDto,
+): Promise<HistoricalCountryTransitionDto> {
+  const conn = getApiConnection()
+  const res = await fetch(`${conn.host}/historical-countries/transitions`, {
+    method: 'POST',
+    headers: { ...conn.headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  const out = (await res.json()) as any
+  return out?.data ?? out
+}
+
+/**
+ * 계승/변천 관계 수정
+ */
+export async function updateHistoricalCountryTransition(
+  transitionId: string,
+  data: UpdateHistoricalCountryTransitionDto,
+): Promise<HistoricalCountryTransitionDto> {
+  const conn = getApiConnection()
+  const path = `/historical-countries/transitions/${encodeURIComponent(transitionId)}`
+  const res = await fetch(`${conn.host}${path}`, {
+    method: 'PUT',
+    headers: { ...conn.headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  const out = (await res.json()) as any
+  return out?.data ?? out
+}
+
+/**
+ * 계승/변천 관계 삭제
+ */
+export async function deleteHistoricalCountryTransition(
+  transitionId: string,
+): Promise<void> {
+  const conn = getApiConnection()
+  const path = `/historical-countries/transitions/${encodeURIComponent(transitionId)}`
+  const res = await fetch(`${conn.host}${path}`, {
+    method: 'DELETE',
+    headers: { ...conn.headers },
+  })
+  if (!res.ok) throw new Error(await res.text())
+}

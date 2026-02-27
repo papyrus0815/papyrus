@@ -36,21 +36,20 @@ export interface MentionExtensionProps {
   militaryUnits?: unknown[]
 }
 
+/* 행정조직 폼 스타일: 테두리 #e5e7eb, 포커스 인디고 */
 const EditorContainer = styled.div`
   position: relative;
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: visible;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.04),
-    0 0 0 1px rgba(139, 92, 246, 0.08);
-  transition: all 0.3s ease;
-  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: #fff;
   width: 100%;
 
   &:focus-within {
-    box-shadow:
-      0 4px 16px rgba(139, 92, 246, 0.12),
-      0 0 0 2px rgba(139, 92, 246, 0.2);
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
 
@@ -58,15 +57,10 @@ const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 14px 18px;
-  background: linear-gradient(
-    135deg,
-    rgba(139, 92, 246, 0.02),
-    rgba(168, 85, 247, 0.01)
-  );
-  border-bottom: 1px solid rgba(139, 92, 246, 0.08);
-  backdrop-filter: blur(8px);
-  border-radius: 16px 16px 0 0;
+  padding: 12px 16px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 20px 20px 0 0;
   overflow: visible;
   width: 100%;
 `
@@ -75,27 +69,22 @@ const ToolbarButton = styled.button<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  height: 34px;
+  min-width: 32px;
+  height: 32px;
   padding: 0 8px;
   border: none;
-  border-radius: 8px;
-  background: ${({ $active }) =>
-    $active ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)' : 'transparent'};
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
+  border-radius: 10px;
+  background: ${({ $active }) => ($active ? '#4f46e5' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#fff' : '#64748b')};
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: background 0.15s ease, color 0.15s ease;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   position: relative;
   user-select: none;
 
   &:hover {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #7c3aed, #6d28d9)'
-        : 'rgba(139, 92, 246, 0.08)'};
-    color: ${({ $active }) => ($active ? '#ffffff' : '#8b5cf6')};
-    transform: translateY(-1px);
+    background: ${({ $active }) => ($active ? '#4338ca' : 'rgba(79, 70, 229, 0.1)')};
+    color: ${({ $active }) => ($active ? '#fff' : '#4f46e5')};
   }
 
   &:hover::after {
@@ -127,10 +116,6 @@ const ToolbarButton = styled.button<{ $active?: boolean }>`
     }
   }
 
-  &:active {
-    transform: translateY(0);
-  }
-
   &:disabled {
     opacity: 0.3;
     cursor: not-allowed;
@@ -152,37 +137,17 @@ const ToolbarButton = styled.button<{ $active?: boolean }>`
 
 const ToolbarDivider = styled.div`
   width: 1px;
-  height: 24px;
-  background: rgba(139, 92, 246, 0.12);
+  height: 22px;
+  background: #e2e8f0;
   margin: 5px 4px;
   align-self: center;
 `
 
 const EditorWrapper = styled.div`
-  background: #ffffff;
-  transition: all 0.2s ease;
+  background: #fff;
   position: relative;
-  border-radius: 0 0 16px 16px;
+  border-radius: 0 0 20px 20px;
   overflow: visible;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      135deg,
-      rgba(139, 92, 246, 0.01),
-      rgba(168, 85, 247, 0.005)
-    );
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    border-radius: 0 0 16px 16px;
-  }
-
-  &:focus-within::before {
-    opacity: 1;
-  }
 `
 
 const TitleInput = styled.input`
@@ -212,13 +177,7 @@ const TitleInput = styled.input`
 
 const TitleDivider = styled.div`
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(139, 92, 246, 0.15) 20%,
-    rgba(139, 92, 246, 0.15) 80%,
-    transparent
-  );
+  background: #e5e7eb;
   margin: 0 28px 8px 28px;
 `
 
@@ -272,10 +231,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
 
   h1 {
     font-size: 32px;
-    background: linear-gradient(135deg, #8b5cf6, #6366f1);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #4f46e5;
   }
 
   h2 {
@@ -319,29 +275,25 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   }
 
   a {
-    color: #8b5cf6;
+    color: #4f46e5;
     text-decoration: none;
-    border-bottom: 2px solid rgba(139, 92, 246, 0.3);
+    border-bottom: 1px solid rgba(79, 70, 229, 0.3);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, border-color 0.2s ease;
     font-weight: 500;
 
     &:hover {
-      color: #7c3aed;
-      border-bottom-color: #8b5cf6;
-      background: rgba(139, 92, 246, 0.05);
+      color: #4338ca;
+      border-bottom-color: #4f46e5;
+      background: rgba(79, 70, 229, 0.04);
     }
   }
 
   blockquote {
-    border-left: 4px solid #8b5cf6;
+    border-left: 4px solid #4f46e5;
     padding: 16px 24px;
     margin: 20px 0;
-    background: linear-gradient(
-      90deg,
-      rgba(139, 92, 246, 0.08),
-      rgba(168, 85, 247, 0.04)
-    );
+    background: rgba(79, 70, 229, 0.04);
     border-radius: 0 12px 12px 0;
     color: #475569;
     font-style: italic;
@@ -353,55 +305,46 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
       top: 8px;
       left: 12px;
       font-size: 48px;
-      color: rgba(139, 92, 246, 0.15);
+      color: rgba(79, 70, 229, 0.12);
       font-family: Georgia, serif;
       line-height: 1;
     }
   }
 
   code {
-    background: linear-gradient(
-      135deg,
-      rgba(139, 92, 246, 0.12),
-      rgba(99, 102, 241, 0.08)
-    );
+    background: rgba(79, 70, 229, 0.08);
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 13px;
     font-family:
       'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
-    color: #7c3aed;
+    color: #4f46e5;
     font-weight: 500;
-    border: 1px solid rgba(139, 92, 246, 0.15);
+    border: 1px solid rgba(79, 70, 229, 0.15);
   }
 
   pre {
-    background: linear-gradient(180deg, #fafbff, #ffffff);
+    background: #f8fafc;
     padding: 16px;
     border-radius: 12px;
-    border: 1px solid rgba(99, 102, 241, 0.12);
+    border: 1px solid #e5e7eb;
     overflow-x: auto;
     margin: 16px 0;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 
     code {
       background: transparent;
       padding: 0;
       color: #0f172a;
+      border: none;
     }
   }
 
   hr {
     border: none;
-    border-top: 2px solid rgba(99, 102, 241, 0.2);
+    border-top: 1px solid #e5e7eb;
     margin: 24px 0;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(99, 102, 241, 0.3),
-      transparent
-    );
-    height: 2px;
+    height: 1px;
     display: block;
   }
 
@@ -429,19 +372,19 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
       position: absolute;
       width: 12px;
       height: 12px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      border: 2px solid #ffffff;
+      background: #4f46e5;
+      border: 2px solid #fff;
       border-radius: 50%;
       cursor: nwse-resize;
       z-index: 10;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      transition: transform 0.2s ease;
       opacity: 0;
       pointer-events: none;
 
       &:hover {
         transform: scale(1.2);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
       }
 
       &.bottom-right {
@@ -462,30 +405,25 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     }
   }
 
-  /* 멘션 스타일 */
+  /* 멘션 스타일 - 행정조직 인디고 */
   .mention {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-    color: #ffffff !important;
+    background: #4f46e5;
+    color: #fff !important;
     padding: 3px 12px;
     border-radius: 20px;
     font-weight: 600;
     font-size: 13px;
     text-decoration: none;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: background 0.2s ease;
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.2);
 
     &:hover {
-      background: linear-gradient(135deg, #7c3aed, #6d28d9);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-    }
-
-    &:active {
-      transform: translateY(0);
+      background: #4338ca;
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
     }
   }
 
@@ -549,19 +487,16 @@ const MentionPopup = styled.div<{
   position: fixed;
   top: ${({ $top }) => $top}px;
   left: ${({ $left }) => $left}px;
-  background: #ffffff;
-  border: 1px solid rgba(139, 92, 246, 0.15);
-  border-radius: 16px;
-  box-shadow:
-    0 8px 24px rgba(15, 23, 42, 0.12),
-    0 20px 48px rgba(139, 92, 246, 0.15);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   padding: 12px;
   max-height: 380px;
   overflow-y: auto;
   min-width: 340px;
   z-index: 1000;
   display: ${({ $visible }) => ($visible ? 'block' : 'none')};
-  backdrop-filter: blur(12px);
 `
 
 // 이미지 설명 입력 모달 스타일
@@ -577,9 +512,10 @@ const ImageCaptionModalOverlay = styled.div<{ $visible: boolean }>`
 `
 
 const ImageCaptionModal = styled.div`
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   width: 90%;
   max-width: 480px;
   overflow: hidden;
@@ -589,7 +525,7 @@ const ImageCaptionModal = styled.div`
 
 const ImageCaptionModalHeader = styled.div`
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+  border-bottom: 1px solid #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -599,24 +535,24 @@ const ImageCaptionModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: #111827;
 `
 
 const ImageCaptionModalClose = styled.button`
   border: none;
   background: transparent;
-  padding: 4px;
+  padding: 6px;
   cursor: pointer;
   color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    color: #6366f1;
+    background: #f1f5f9;
+    color: #4f46e5;
   }
 `
 
@@ -630,27 +566,27 @@ const ImageCaptionModalContent = styled.div`
 const ImageCaptionInput = styled.input`
   width: 100%;
   padding: 12px 16px;
-  border: 1.5px solid rgba(99, 102, 241, 0.2);
-  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   font-size: 14px;
-  color: #0f172a;
-  background: #ffffff;
-  transition: all 0.2s ease;
+  color: #111827;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &:focus {
-    outline: none;
-    border-color: rgba(99, 102, 241, 0.5);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: #9ca3af;
   }
 `
 
 const ImageCaptionModalFooter = styled.div`
   padding: 16px 24px;
-  border-top: 1px solid rgba(99, 102, 241, 0.1);
+  border-top: 1px solid #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -658,32 +594,30 @@ const ImageCaptionModalFooter = styled.div`
 `
 
 const ImageCaptionButton = styled.button<{ $primary?: boolean }>`
-  padding: 10px 20px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 
   ${({ $primary }) =>
     $primary
       ? `
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: #ffffff;
-    
+    background: #6366f1;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
     &:hover {
-      background: linear-gradient(135deg, #4f46e5, #7c3aed);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+      background: #4f46e5;
     }
   `
       : `
-    background: #f1f5f9;
+    background: #fff;
     color: #64748b;
-    
+    border: 1px solid #e5e7eb;
     &:hover {
-      background: #e2e8f0;
+      background: #f1f5f9;
       color: #475569;
     }
   `}
@@ -691,12 +625,10 @@ const ImageCaptionButton = styled.button<{ $primary?: boolean }>`
 
 // 색상 선택기 스타일
 const ColorPickerDropdown = styled.div`
-  background: #ffffff;
-  border: 1px solid rgba(139, 92, 246, 0.15);
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 14px;
-  box-shadow:
-    0 8px 24px rgba(15, 23, 42, 0.12),
-    0 20px 48px rgba(139, 92, 246, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   padding: 14px;
   min-width: 260px;
 `
@@ -714,25 +646,20 @@ const ColorPickerItem = styled.div<{ $color: string; $selected: boolean }>`
   border-radius: 6px;
   background: ${({ $color }) => $color};
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid
-    ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.6)' : 'rgba(0, 0, 0, 0.1)'};
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  border: 2px solid ${({ $selected }) => ($selected ? '#4f46e5' : 'rgba(0, 0, 0, 0.1)')};
   box-shadow: ${({ $selected }) =>
-    $selected
-      ? '0 0 0 2px rgba(99, 102, 241, 0.2)'
-      : '0 1px 3px rgba(0, 0, 0, 0.1)'};
+    $selected ? '0 0 0 2px rgba(79, 70, 229, 0.15)' : '0 1px 3px rgba(0, 0, 0, 0.08)'};
 
   &:hover {
-    transform: scale(1.1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    border-color: rgba(99, 102, 241, 0.4);
+    border-color: rgba(79, 70, 229, 0.5);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 `
 
 const ColorPickerInputWrapper = styled.div`
   padding-top: 8px;
-  border-top: 1px solid rgba(99, 102, 241, 0.1);
+  border-top: 1px solid #e5e7eb;
 `
 
 // 컨텍스트 메뉴 스타일
@@ -744,12 +671,10 @@ const ContextMenu = styled.div<{
   position: fixed;
   top: ${({ $top }) => $top}px;
   left: ${({ $left }) => $left}px;
-  background: linear-gradient(180deg, #fafbff, #ffffff);
-  border: 1.5px solid rgba(99, 102, 241, 0.2);
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
-  box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.08),
-    0 16px 32px rgba(99, 102, 241, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   padding: 8px;
   z-index: 1000;
   display: ${({ $visible }) => ($visible ? 'block' : 'none')};
@@ -764,21 +689,17 @@ const ContextMenuItem = styled.button`
   padding: 10px 14px;
   border: none;
   background: transparent;
-  color: #0f172a;
+  color: #111827;
   font-size: 14px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(99, 102, 241, 0.12),
-      rgba(168, 85, 247, 0.08)
-    );
-    color: #6366f1;
+    background: rgba(79, 70, 229, 0.08);
+    color: #4f46e5;
   }
 
   svg {
@@ -801,9 +722,10 @@ const EntityLinkModalOverlay = styled.div<{ $visible: boolean }>`
 `
 
 const EntityLinkModal = styled.div`
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
@@ -814,7 +736,7 @@ const EntityLinkModal = styled.div`
 
 const EntityLinkModalHeader = styled.div`
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+  border-bottom: 1px solid #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -824,24 +746,24 @@ const EntityLinkModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: #111827;
 `
 
 const EntityLinkModalClose = styled.button`
   border: none;
   background: transparent;
-  padding: 4px;
+  padding: 6px;
   cursor: pointer;
   color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    color: #6366f1;
+    background: #f1f5f9;
+    color: #4f46e5;
   }
 `
 
@@ -857,33 +779,29 @@ const EntityLinkModalContent = styled.div`
 const EntityLinkSearchInput = styled.input`
   width: 100%;
   padding: 12px 16px;
-  border: 1.5px solid rgba(99, 102, 241, 0.2);
-  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   font-size: 14px;
-  color: #0f172a;
-  background: #ffffff;
-  transition: all 0.2s ease;
+  color: #111827;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &:focus {
-    outline: none;
-    border-color: rgba(99, 102, 241, 0.5);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 
   &::placeholder {
-    color: #94a3b8;
+    color: #9ca3af;
   }
 `
 
 const EntityLinkSelectedText = styled.div`
   padding: 12px 16px;
-  background: linear-gradient(
-    135deg,
-    rgba(245, 158, 11, 0.08),
-    rgba(251, 191, 36, 0.05)
-  );
+  background: rgba(245, 158, 11, 0.06);
   border: 1px solid rgba(245, 158, 11, 0.2);
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 13px;
   color: #78350f;
   font-weight: 500;
@@ -2351,12 +2269,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           disabled={selectedText.length === 0}
           title="엔티티 연결 (텍스트 선택 후 클릭)"
           style={{
-            background:
-              selectedText.length > 0
-                ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(251, 191, 36, 0.08))'
-                : undefined,
-            borderColor:
-              selectedText.length > 0 ? 'rgba(245, 158, 11, 0.3)' : undefined,
+            background: selectedText.length > 0 ? 'rgba(245, 158, 11, 0.08)' : undefined,
+            border: selectedText.length > 0 ? '1px solid rgba(245, 158, 11, 0.25)' : undefined,
           }}
         >
           <FiLink style={{ transform: 'rotate(-45deg)' }} />
@@ -2396,9 +2310,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             }}
             title="텍스트 색상"
             style={{
-              background: colorPickerVisible
-                ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
-                : undefined,
+              background: colorPickerVisible ? 'rgba(79, 70, 229, 0.1)' : undefined,
             }}
           >
             <FiDroplet style={{ color: currentColor }} />
@@ -2540,7 +2452,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                       style={{
                         width: '100%',
                         height: '32px',
-                        border: '1px solid rgba(99, 102, 241, 0.2)',
+                        border: '1px solid #e5e7eb',
                         borderRadius: '8px',
                         cursor: 'pointer',
                       }}
@@ -2615,8 +2527,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                         color: '#64748b',
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px',
-                        background:
-                          'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.05))',
+                        background: 'rgba(79, 70, 229, 0.06)',
                         borderRadius: '8px',
                         marginBottom: '4px',
                       }}
@@ -2649,7 +2560,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                             cursor: 'pointer',
                             background:
                               currentIndex === mentionSelectedIndex
-                                ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08))'
+                                ? 'rgba(79, 70, 229, 0.08)'
                                 : 'transparent',
                             borderRadius: '10px',
                             marginBottom: '4px',
@@ -2658,7 +2569,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                             gap: '12px',
                             border:
                               currentIndex === mentionSelectedIndex
-                                ? '1px solid rgba(99, 102, 241, 0.3)'
+                                ? '1px solid rgba(79, 70, 229, 0.2)'
                                 : '1px solid transparent',
                           }}
                           onMouseEnter={() =>
@@ -2889,8 +2800,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                             color: '#64748b',
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px',
-                            background:
-                              'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.05))',
+                            background: 'rgba(79, 70, 229, 0.06)',
                             borderRadius: '8px',
                             marginBottom: '4px',
                           }}
@@ -2925,7 +2835,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                                 cursor: 'pointer',
                                 background:
                                   currentIndex === entityLinkSelectedIndex
-                                    ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(251, 191, 36, 0.08))'
+                                    ? 'rgba(245, 158, 11, 0.08)'
                                     : 'transparent',
                                 borderRadius: '10px',
                                 marginBottom: '4px',
@@ -2934,7 +2844,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                                 gap: '12px',
                                 border:
                                   currentIndex === entityLinkSelectedIndex
-                                    ? '1px solid rgba(245, 158, 11, 0.3)'
+                                    ? '1px solid rgba(245, 158, 11, 0.25)'
                                     : '1px solid transparent',
                               }}
                               onMouseEnter={() =>

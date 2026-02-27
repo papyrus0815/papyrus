@@ -34,6 +34,7 @@ import {
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
+  CreateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
@@ -1169,6 +1170,89 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 재임 업적·한일 추가 (사건과 별도)
+   */
+  async createTenureAchievement(
+    tenureId: string,
+    dto: CreateTenureAchievementDto,
+  ): Promise<any> {
+    const achievement = await this.prisma.tenureAchievement.create({
+      data: {
+        tenureId,
+        title: dto.title,
+        description: dto.description ?? undefined,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        orderNum: dto.orderNum ?? 0,
+        showOnEventsPage: dto.showOnEventsPage ?? true,
+      },
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(achievement)
+  }
+
+  /**
+   * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
+   */
+  async findAchievementsForEventsPage(): Promise<any[]> {
+    const list = await this.prisma.tenureAchievement.findMany({
+      where: { showOnEventsPage: true },
+      include: {
+        tenure: {
+          include: {
+            person: {
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+                middleName: true,
+                nameDisplayOrder: true,
+              },
+            },
+            country: { select: { id: true, name: true, flagEmoji: true } },
+            historicalCountry: { select: { id: true, name: true } },
+            positionDefinition: { select: { title: true } },
+          },
+        },
+      },
+      orderBy: [{ startDate: 'asc' }, { orderNum: 'asc' }],
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(list)
+  }
+
+  /**
+   * 재임 업적 삭제
+   */
+  async deleteTenureAchievement(tenureId: string, achievementId: string): Promise<void> {
+    await this.prisma.tenureAchievement.deleteMany({
+      where: { id: achievementId, tenureId },
+    })
+  }
+
+  /**
    * 관직 정의 목록 조회 — 단일 레벨 전체 (재임 선택·관리 공통)
    */
   async findPositionDefinitions(_params?: {
@@ -1394,6 +1478,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             motherId: true,
           },
         },
+        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
       },
       orderBy: { startDate: 'desc' },
     })

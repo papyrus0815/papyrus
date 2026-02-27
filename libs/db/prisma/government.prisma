@@ -234,6 +234,8 @@ model GovernmentPositionTenure {
   historicalCountry  HistoricalCountry?            @relation("TenureHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
   person             Person                        @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
   regnalEras         RegnalEra[]                   @relation("TenureRegnalEras")
+  /// 재임 기간 중 업적·한일 (사건과 별도 개념)
+  achievements       TenureAchievement[]           @relation("TenureAchievements")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -247,6 +249,44 @@ model GovernmentPositionTenure {
   @@index([termNumber], name: "idx_gov_tenure_termNum")
   @@index([startDate], name: "idx_gov_tenure_startDate")
   @@map("government_position_tenure")
+}
+
+// ========================
+// TenureAchievement (재임 업적·한일)
+// ========================
+/// 재임 기간 중 수반이 한 일·업적. 사건(Event)과 별도로 관리하며, 사건 목록과 유사한 형태로 조회 가능.
+model TenureAchievement {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 재임 기록 (역대 수반 한 명의 한 재임)
+  tenureId String @map("tenure_id") @db.Char(36)
+
+  /// 제목 (예: 한글 창제, 대동법 시행)
+  title String @db.VarChar(200)
+
+  /// 설명 (선택)
+  description String? @db.Text
+
+  /// 시작일 (선택)
+  startDate DateTime? @map("start_date")
+
+  /// 종료일 (선택)
+  endDate DateTime? @map("end_date")
+
+  /// 표시 순서 (낮을수록 먼저)
+  orderNum Int? @default(0) @map("order_num")
+
+  /// 사건 페이지(연대표)에 표시할지 여부
+  showOnEventsPage Boolean @default(true) @map("show_on_events_page")
+
+  tenure GovernmentPositionTenure @relation("TenureAchievements", fields: [tenureId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([tenureId], name: "idx_tenure_achievement_tenureId")
+  @@index([showOnEventsPage], name: "idx_tenure_achievement_showOnEventsPage")
+  @@map("tenure_achievement")
 }
 
 // ========================

@@ -1,9 +1,9 @@
 import {
   Controller,
+  Delete,
   Get,
   Post,
   Put,
-  Delete,
   Body,
   Param,
   Query,
@@ -13,6 +13,7 @@ import { PersonService } from '../application/person.service'
 import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
+  CreateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
 } from './dto'
 
@@ -161,5 +162,37 @@ export class GovernmentPositionController {
   @Delete('tenures/:id')
   async deleteTenure(@Param('id') id: string): Promise<void> {
     await this.personService.deleteGovernmentPositionTenure(id)
+  }
+
+  /**
+   * 재임 업적·한일 추가 (사건과 별도 개념, 재위 기간 중 한 일)
+   */
+  @Post('tenures/:tenureId/achievements')
+  async addTenureAchievement(
+    @Param('tenureId') tenureId: string,
+    @Body() dto: CreateTenureAchievementDto,
+  ): Promise<any> {
+    const result = await this.personService.createTenureAchievement(tenureId, dto)
+    return serializeBigInt(result)
+  }
+
+  /**
+   * 사건 페이지(연대표)에 표시할 업적 목록 (showOnEventsPage=true)
+   */
+  @Get('achievements/for-events-page')
+  async getAchievementsForEventsPage(): Promise<any[]> {
+    const list = await this.personService.findAchievementsForEventsPage()
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 재임 업적 삭제
+   */
+  @Delete('tenures/:tenureId/achievements/:achievementId')
+  async deleteTenureAchievement(
+    @Param('tenureId') tenureId: string,
+    @Param('achievementId') achievementId: string,
+  ): Promise<void> {
+    await this.personService.deleteTenureAchievement(tenureId, achievementId)
   }
 }

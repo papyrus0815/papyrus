@@ -698,6 +698,8 @@ export default function CountryPage() {
       id?: string
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
+      transitionEventType?: string
+      transitionEventDate?: string
     },
   ) {
     const loadingToast = toast.loading(
@@ -725,6 +727,8 @@ export default function CountryPage() {
             stateType: data.stateType,
             parentModernCountryIds: data.parentModernCountryIds,
             parentHistoricalCountryIds: data.parentHistoricalCountryIds,
+            transitionEventType: data.transitionEventType,
+            transitionEventDate: data.transitionEventDate,
           },
         })
         toast.success('수정되었습니다', { id: loadingToast })
@@ -746,6 +750,8 @@ export default function CountryPage() {
           stateType: data.stateType,
           parentModernCountryIds: data.parentModernCountryIds,
           parentHistoricalCountryIds: data.parentHistoricalCountryIds,
+          transitionEventType: data.transitionEventType,
+          transitionEventDate: data.transitionEventDate,
         })
         toast.success('등록되었습니다', { id: loadingToast })
       }

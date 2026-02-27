@@ -11,6 +11,7 @@ import {
   CreateEducationDto,
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
+  CreateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   CreateLegalCareerDto,
   CreateMediaCareerDto,
@@ -169,6 +170,21 @@ export interface IPersonRepository {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]>
+  /**
+   * 재임 업적·한일 추가 (사건과 별도)
+   */
+  createTenureAchievement(
+    tenureId: string,
+    dto: CreateTenureAchievementDto,
+  ): Promise<any>
+  /**
+   * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
+   */
+  findAchievementsForEventsPage(): Promise<any[]>
+  /**
+   * 재임 업적 삭제
+   */
+  deleteTenureAchievement(tenureId: string, achievementId: string): Promise<void>
   /**
    * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (역대 수반 인물 선택용)
    */

@@ -409,6 +409,50 @@ export const personCareerApi = {
   },
 
   /**
+   * 재임 업적·한일 추가 (사건과 별도)
+   * POST /government-positions/tenures/:tenureId/achievements
+   */
+  createTenureAchievement: async (
+    tenureId: string,
+    dto: {
+      title: string
+      description?: string
+      startDate?: string
+      endDate?: string
+      orderNum?: number
+      showOnEventsPage?: boolean
+    },
+  ) => {
+    const response = await apiClient.post(
+      `/government-positions/tenures/${encodeURIComponent(tenureId)}/achievements`,
+      dto,
+    )
+    return response.data
+  },
+
+  /**
+   * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
+   * GET /government-positions/achievements/for-events-page
+   */
+  getAchievementsForEventsPage: async () => {
+    const response = await apiClient.get('/government-positions/achievements/for-events-page')
+    return response.data ?? []
+  },
+
+  /**
+   * 재임 업적 삭제
+   * DELETE /government-positions/tenures/:tenureId/achievements/:achievementId
+   */
+  deleteTenureAchievement: async (
+    tenureId: string,
+    achievementId: string,
+  ) => {
+    await apiClient.delete(
+      `/government-positions/tenures/${encodeURIComponent(tenureId)}/achievements/${encodeURIComponent(achievementId)}`,
+    )
+  },
+
+  /**
    * 인물의 재임 기록만 조회 (수정 페이지 경력 로딩용)
    * GET /persons/:id/tenures
    */

@@ -20,6 +20,7 @@ export const STATE_TYPE_LABELS: Record<HistoricalStateType, string> = {
   TRIBAL_STATE: '부족 국가',
   NOMADIC_EMPIRE: '유목 제국',
   DYNASTY: '왕조',
+  HEREDITARY: '세습',
   PERSONAL_UNION: '동군연합',
   OTHER: '기타',
 }
@@ -44,6 +45,7 @@ export const STATE_TYPE_COLORS: Record<HistoricalStateType, string> = {
   TRIBAL_STATE: '#84cc16', // 연두색
   NOMADIC_EMPIRE: '#eab308', // 노란색
   DYNASTY: '#6366f1', // 인디고
+  HEREDITARY: '#7c3aed', // 보라
   PERSONAL_UNION: '#8b5cf6', // 보라
   OTHER: '#6b7280', // 회색
 }
@@ -68,6 +70,7 @@ export const STATE_TYPE_EMOJIS: Record<HistoricalStateType, string> = {
   TRIBAL_STATE: '🏕️',
   NOMADIC_EMPIRE: '🐎',
   DYNASTY: '👨‍👩‍👧‍👦',
+  HEREDITARY: '🏛️',
   PERSONAL_UNION: '👥',
   OTHER: '🏴',
 }

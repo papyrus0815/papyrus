@@ -7,7 +7,7 @@ import {
   Max,
   IsArray,
 } from 'class-validator'
-import { HistoricalStateType, Era } from '@prisma/client'
+import { HistoricalStateType, Era, TransitionEventType } from '@prisma/client'
 
 /**
  * 역사적 국가 수정 DTO
@@ -137,11 +137,18 @@ export class UpdateHistoricalCountryDto {
   parentModernCountryIds?: string[]
 
   /**
-   * 상위 역사적 국가 ID 목록 (선택, 여러 개 가능)
-   * @example ["historical-country-uuid-1"]
+   * 상위 역사적 국가 ID 목록 (후임). 이 국가가 어떤 국가로 이어졌는지.
    */
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   parentHistoricalCountryIds?: string[]
+
+  @IsOptional()
+  @IsEnum(TransitionEventType)
+  transitionEventType?: TransitionEventType
+
+  @IsOptional()
+  @IsString()
+  transitionEventDate?: string
 }

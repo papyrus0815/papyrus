@@ -38,4 +38,24 @@ export class UploadService {
       // 삭제 실패 시 로그만 하고 예외 전파하지 않음 (DB 업데이트는 진행)
     }
   }
+
+  /**
+   * 업로드 디렉터리 기준 상대 경로로 저장된 파일을 디스크에서 삭제합니다.
+   * - Attachment.filePath 등 상대 경로 (예: images/xxx.png) 지원
+   */
+  async deleteFileByRelativePath(relativePath: string | null | undefined): Promise<void> {
+    if (!relativePath || typeof relativePath !== 'string') return
+    const trimmed = relativePath.trim().replace(/^\/+/, '')
+    if (!trimmed) return
+
+    const uploadPath = this.configService.app.uploadPath
+    const filePath = join(uploadPath, trimmed)
+
+    if (!existsSync(filePath)) return
+    try {
+      await unlink(filePath)
+    } catch {
+      // 삭제 실패 시 로그만 하고 예외 전파하지 않음
+    }
+  }
 }

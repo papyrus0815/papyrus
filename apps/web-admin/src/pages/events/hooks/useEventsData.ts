@@ -1,15 +1,24 @@
 /**
  * useEventsData Hook
- * 이벤트 데이터 페칭 및 변환 로직
+ * 이벤트 데이터 페칭 및 변환 로직 (사건 + 사건 페이지 표시 업적)
  */
 import { useEffect, useState } from 'react'
 
+import { personCareerApi } from '@/shared/api/person-career'
 import { getAllEvents } from '@/shared/api/events'
 
 import type {
   HistoricalEvent,
   HistoricalEventCategory,
 } from '../create/events.types'
+
+/** 사건 페이지에 표시되는 업적 메타 (카드 부가 표시용) */
+export interface TenureAchievementMeta {
+  personName: string
+  countryName?: string
+  tenureTitle?: string
+  achievementId: string
+}
 
 /**
  * 카테고리 매핑 (DB의 한글 카테고리명 -> 영문 타입)
@@ -102,6 +111,39 @@ function convertToHistoricalEvent(event: any): HistoricalEvent {
   }
 }
 
+/** 업적 API 응답을 HistoricalEvent 형태로 변환 (사건 페이지 목록용) */
+function convertAchievementToEvent(achievement: any): HistoricalEvent & { __isTenureAchievement?: boolean; __achievementMeta?: TenureAchievementMeta } {
+  const base = convertToHistoricalEvent({
+    id: achievement.id,
+    title: achievement.title,
+    description: achievement.description ?? '',
+    startDate: achievement.startDate ?? achievement.createdAt,
+    endDate: achievement.endDate,
+    category: { name: '기타' },
+    thumbnail: null,
+    parentEventId: null,
+    childEvents: [],
+    sectionTitles: [],
+  })
+  const person = achievement.tenure?.person
+  const personName = person
+    ? [person.name, person.surname].filter(Boolean).join(' ').trim() || '이름 없음'
+    : '—'
+  const country = achievement.tenure?.country || achievement.tenure?.historicalCountry
+  const countryName = country?.name
+  const tenureTitle = achievement.tenure?.positionDefinition?.title ?? achievement.tenure?.title
+  return {
+    ...base,
+    __isTenureAchievement: true,
+    __achievementMeta: {
+      achievementId: achievement.id,
+      personName,
+      countryName,
+      tenureTitle,
+    },
+  }
+}
+
 export function useEventsData() {
   const [events, setEvents] = useState<HistoricalEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -113,30 +155,34 @@ export function useEventsData() {
       setError(null)
 
       try {
-        const response = await getAllEvents()
+        const [response, achievements] = await Promise.all([
+          getAllEvents(),
+          personCareerApi.getAchievementsForEventsPage().catch(() => []),
+        ])
 
-        const allEvents: HistoricalEvent[] = []
+        const allEvents: (HistoricalEvent & { __isTenureAchievement?: boolean; __achievementMeta?: TenureAchievementMeta })[] = []
 
         response
-          // ✅ 최상위 이벤트만 필터링 (parentEventId가 없는 것만)
-          .filter((event) => !event.parentEventId)
-          .forEach((event) => {
-            const category = event.category?.name
-              ? CATEGORY_MAP[event.category.name] || 'other'
-              : 'other'
-
-            // 부모 이벤트 추가
+          .filter((event: any) => !event.parentEventId)
+          .forEach((event: any) => {
             const parentEventData = convertToHistoricalEvent(event)
             allEvents.push(parentEventData)
-
-            // 자식 이벤트들도 추가
-            if (event.childEvents && event.childEvents.length > 0) {
+            if (event.childEvents?.length) {
               event.childEvents.forEach((child: any) => {
-                const childEventData = convertToHistoricalEvent(child)
-                allEvents.push(childEventData)
+                allEvents.push(convertToHistoricalEvent(child))
               })
             }
           })
+
+        achievements.forEach((a: any) => {
+          allEvents.push(convertAchievementToEvent(a))
+        })
+
+        allEvents.sort((a, b) => {
+          const tA = a.startDate ? new Date(a.startDate).getTime() : 0
+          const tB = b.startDate ? new Date(b.startDate).getTime() : 0
+          return tA - tB
+        })
 
         setEvents(allEvents)
       } catch (err) {

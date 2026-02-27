@@ -6,10 +6,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import styled from 'styled-components'
-import { FiPlus, FiUser, FiCalendar, FiChevronRight, FiArrowLeft, FiChevronDown, FiSave } from 'react-icons/fi'
+import { FiPlus, FiUser, FiCalendar, FiChevronRight, FiArrowLeft, FiChevronDown, FiSave, FiAward, FiTrash2, FiInfo } from 'react-icons/fi'
 import { toast } from 'react-hot-toast'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { uploadImage } from '@/shared/api/upload'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
+import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
 import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { personCareerApi } from '@/shared/api/person-career'
 import { DatePickerModal } from '@/shared/ui/date-picker'
@@ -78,6 +81,34 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   )
   /** 역대 수반 페이지에서 사용자가 선택한 직책. null = 전체 */
   const [selectedPositionFilter, setSelectedPositionFilter] = useState<string | null>(null)
+  /** 수반 등록 시 소속 국가: null = 현대 국가(현재), 값 있으면 하위 역사적 국가 ID */
+  const [selectedAffinityHistoricalId, setSelectedAffinityHistoricalId] = useState<string | null>(
+    null,
+  )
+  const [affinityCountryModalOpen, setAffinityCountryModalOpen] = useState(false)
+
+  /** 업적: 컨텐츠 영역 인라인 폼용 (모달 없음) */
+  const [achievementTenureId, setAchievementTenureId] = useState<string | null>(null)
+  const [achievementPersonName, setAchievementPersonName] = useState('')
+  const [achievementTitle, setAchievementTitle] = useState('')
+  const [achievementDescription, setAchievementDescription] = useState('')
+  const [achievementStartDate, setAchievementStartDate] = useState('')
+  const [achievementEndDate, setAchievementEndDate] = useState('')
+  const [achievementShowOnEventsPage, setAchievementShowOnEventsPage] = useState(true)
+  const [achievementDateField, setAchievementDateField] = useState<'start' | 'end' | null>(null)
+  const [achievementSubmitting, setAchievementSubmitting] = useState(false)
+  /** 수정 폼 탭: 기본정보 | 업적 */
+  const [tenureFormTab, setTenureFormTab] = useState<'basic' | 'achievement'>('basic')
+
+  /** 현대 국가일 때 하위 역사적 국가 목록 (이 현대 국가에 연결된 역사적 국가) */
+  const { data: subordinateHistoricalFromApi = [] } = useHistoricalCountriesByModernCountry(
+    countryId ?? '',
+  )
+  const subordinateHistorical =
+    (country as any).historicalCountries?.length > 0
+      ? (country as any).historicalCountries
+      : subordinateHistoricalFromApi
+  const hasSubordinateHistorical = Array.isArray(subordinateHistorical) && subordinateHistorical.length > 0
 
   const { data: tenures = [], isLoading } = useQuery({
     queryKey: ['tenures-by-country', countryId, historicalCountryId],
@@ -190,7 +221,10 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
 
   React.useEffect(() => {
     if (!editingTenureId || !editingTenure) return
+    setTenureFormTab('basic')
     const t = editingTenure as any
+    setAchievementTenureId(editingTenureId)
+    setAchievementPersonName(getPersonName(t?.person))
     setSelectedPersonId(t.personId || '')
     const defId = t.positionDefinitionId || t.position?.id
     const defs = positionDefinitions as any[]
@@ -210,6 +244,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     setRegnalNumber(t.regnalNumber != null ? String(t.regnalNumber) : '')
     setRegnalName(getRegnalNameFromNotes(t.notes) || '')
     setShowOnEventsPage(t.showPositionInfo !== false)
+    setSelectedAffinityHistoricalId(t.historicalCountryId ?? null)
   }, [editingTenureId, editingTenure, positionDefinitions])
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -232,8 +267,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         positionDefinitionId: def?.id || undefined,
         title: def ? undefined : title.trim() || undefined,
         titleEn: def ? undefined : (titleEn.trim() || undefined),
-        countryId,
-        historicalCountryId,
+        countryId: selectedAffinityHistoricalId ? undefined : countryId ?? undefined,
+        historicalCountryId: selectedAffinityHistoricalId ?? historicalCountryId ?? undefined,
         startDate,
         endDate: endDate || undefined,
         termNumber: termNumber.trim() === '' ? null : (parseInt(termNumber, 10) || undefined),
@@ -263,6 +298,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     setEditingTenureId(null)
     setSelectedPersonId('')
     setSelectedPositionDefinitionId(null)
+    setSelectedAffinityHistoricalId(null)
     setTitle('')
     setTitleEn('')
     setStartDate('')
@@ -350,6 +386,47 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     if (!notes?.trim()) return null
     const m = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || notes.match(/왕명\s*:\s*(.+)/i)
     return m ? m[1].trim() : null
+  }
+
+  /** 업적/한일 등록 제출: 재임 전용 엔티티로 저장 (사건과 별도) */
+  const handleAchievementSubmit = async () => {
+    if (!achievementTenureId || !achievementTitle.trim()) {
+      toast.error('제목을 입력하세요.')
+      return
+    }
+    setAchievementSubmitting(true)
+    try {
+      await personCareerApi.createTenureAchievement(achievementTenureId, {
+        title: achievementTitle.trim(),
+        description: achievementDescription.trim() || undefined,
+        startDate: achievementStartDate || undefined,
+        endDate: achievementEndDate || undefined,
+        showOnEventsPage: achievementShowOnEventsPage,
+      })
+      toast.success('업적·한일이 등록되었습니다.')
+      setAchievementTitle('')
+      setAchievementDescription('')
+      setAchievementStartDate('')
+      setAchievementEndDate('')
+      setAchievementShowOnEventsPage(true)
+      queryClient.invalidateQueries({ queryKey: ['tenures-by-country', countryId, historicalCountryId] })
+    } catch (err: any) {
+      toast.error(err?.message ?? '등록에 실패했습니다.')
+    } finally {
+      setAchievementSubmitting(false)
+    }
+  }
+
+  /** 업적 삭제 */
+  const handleDeleteAchievement = async (tenureId: string, achievementId: string) => {
+    if (!window.confirm('이 업적을 삭제하시겠습니까?')) return
+    try {
+      await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
+      toast.success('업적이 삭제되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['tenures-by-country', countryId, historicalCountryId] })
+    } catch (err: any) {
+      toast.error(err?.message ?? '삭제에 실패했습니다.')
+    }
   }
 
   const selectedPerson =
@@ -787,8 +864,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                     style={{
                       width: '48px',
                       height: '48px',
-                      border: '4px solid #e2e8f0',
-                      borderTopColor: '#8b5cf6',
+                      border: '4px solid #e5e7eb',
+                      borderTopColor: '#6366f1',
                       borderRadius: '50%',
                       margin: '0 auto 16px',
                       animation: 'spin 1s linear infinite',
@@ -988,10 +1065,36 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                         <ItemRegnalName>왕명: {regnalFromNotes}</ItemRegnalName>
                                       )}
                                     </ItemRow>
+                                    {(t.achievements?.length ?? 0) > 0 && (
+                                      <ItemRow>
+                                        <AchievementChips>
+                                          {(t.achievements as any[]).slice(0, 5).map((a: any) => (
+                                            <AchievementChip key={a.id}>{a.title}</AchievementChip>
+                                          ))}
+                                          {(t.achievements as any[]).length > 5 && (
+                                            <AchievementChip $more>+{(t.achievements as any[]).length - 5}</AchievementChip>
+                                          )}
+                                        </AchievementChips>
+                                      </ItemRow>
+                                    )}
                                   </ListItemBody>
-                                  <ItemAction aria-label="인물 보기">
-                                    <FiChevronRight size={20} strokeWidth={2.5} />
-                                  </ItemAction>
+                                  <ItemActions>
+                                    <AchievementButton
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setEditingTenureId(t.id)
+                                        setView('register')
+                                      }}
+                                      title="수정·업적 등록"
+                                    >
+                                      <FiAward size={16} />
+                                      업적·한일
+                                    </AchievementButton>
+                                    <ItemAction aria-label="재임 수정">
+                                      <FiChevronRight size={20} strokeWidth={2.5} />
+                                    </ItemAction>
+                                  </ItemActions>
                                 </ListItem>
                               )
                             })}
@@ -1006,43 +1109,79 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
           </AnimatePresence>
         </div>
       ) : (
-        <>
-          <BackToListButton
-            type="button"
-            onClick={() => {
-              setEditingTenureId(null)
-              setView('list')
-            }}
-          >
-            <FiArrowLeft size={18} />
-            목록 보기
-          </BackToListButton>
-          <FormCardHeader>
-              <FormCardTitle>
-                {editingTenureId ? '수반 수정' : '수반 등록'}
-              </FormCardTitle>
-              <SubmitButton
-                type="submit"
-                form="heads-of-state-register-form"
-                disabled={isSubmitting || !selectedPersonId || (!title.trim() && !selectedPositionDefinitionId) || !startDate}
-              >
-                <FiSave size={16} />
-                {isSubmitting ? '저장 중…' : '저장'}
-              </SubmitButton>
-          </FormCardHeader>
+        <FormCardWrapper>
+          <HeadsFormHeader>
+            <BackToListButton
+              type="button"
+              onClick={() => {
+                setEditingTenureId(null)
+                setView('list')
+              }}
+            >
+              <FiArrowLeft size={18} />
+              목록 보기
+            </BackToListButton>
+            <HeadsFormTitle>{editingTenureId ? '수반 수정' : '수반 등록'}</HeadsFormTitle>
+            <SubmitButton
+              type="submit"
+              form="heads-of-state-register-form"
+              disabled={isSubmitting || !selectedPersonId || (!title.trim() && !selectedPositionDefinitionId) || !startDate}
+            >
+              <FiSave size={16} />
+              {isSubmitting ? '저장 중…' : '저장'}
+            </SubmitButton>
+          </HeadsFormHeader>
           <form id="heads-of-state-register-form" onSubmit={handleAddSubmit}>
               <FormSectionInner>
-                <SectionHeaderBlock>
-                  <FiUser size={28} />
-                  <div>
-                    <SectionHeaderTitle>재임 정보</SectionHeaderTitle>
-                    <SectionHeaderDesc>
-                      이 국가의 역대 수반(대통령·총리·국왕 등) 재임 기록을 등록합니다.
-                    </SectionHeaderDesc>
-                  </div>
-                </SectionHeaderBlock>
-          <FormRows>
-          <FieldRow>
+                {editingTenureId ? (
+                  <>
+                    <TabNavigation>
+                      <TabButton
+                        type="button"
+                        $active={tenureFormTab === 'basic'}
+                        onClick={() => setTenureFormTab('basic')}
+                      >
+                        <FiInfo size={16} />
+                        기본정보
+                      </TabButton>
+                      <TabButton
+                        type="button"
+                        $active={tenureFormTab === 'achievement'}
+                        onClick={() => setTenureFormTab('achievement')}
+                      >
+                        <FiAward size={16} />
+                        업적
+                      </TabButton>
+                    </TabNavigation>
+                    {tenureFormTab === 'basic' && (
+                      <TabPanel>
+                        <SubSectionTitle>기본정보</SubSectionTitle>
+                        <FormRows>
+            {!isHistorical && hasSubordinateHistorical && (
+              <FieldRow>
+                <FieldLabel>소속 국가</FieldLabel>
+                <FieldControl>
+                  <SelectTriggerButton
+                    type="button"
+                    onClick={() => setAffinityCountryModalOpen(true)}
+                    $hasValue
+                  >
+                    <span>
+                      {selectedAffinityHistoricalId
+                        ? (subordinateHistorical as any[]).find(
+                            (h: any) => h.id === selectedAffinityHistoricalId,
+                          )?.name ?? '역사적 국가'
+                        : `현대 국가 (현재: ${country.name})`}
+                    </span>
+                    <FiChevronDown size={20} />
+                  </SelectTriggerButton>
+                  <FieldHint>
+                    현대 국가 또는 이 국가에 연결된 하위 역사적 국가 중 하나를 선택하세요.
+                  </FieldHint>
+                </FieldControl>
+              </FieldRow>
+            )}
+            <FieldRow>
               <FieldLabel>인물 <Required>필수</Required></FieldLabel>
               <FieldControl $variant="person">
                 <PersonSelectButton
@@ -1185,19 +1324,324 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
               </FieldControl>
             </FieldRow>
           </FormRows>
-          <FormActions>
-            {editingTenureId && (
-              <DeleteButton type="button" onClick={handleDeleteTenure} disabled={isSubmitting}>
-                삭제
-              </DeleteButton>
-            )}
-            <ResetButton type="button" onClick={resetForm} disabled={isSubmitting}>
-              초기화
-            </ResetButton>
-          </FormActions>
+                        <FormActions>
+                          {editingTenureId && (
+                            <DeleteButton type="button" onClick={handleDeleteTenure} disabled={isSubmitting}>
+                              삭제
+                            </DeleteButton>
+                          )}
+                          <ResetButton type="button" onClick={resetForm} disabled={isSubmitting}>
+                            초기화
+                          </ResetButton>
+                        </FormActions>
+                      </TabPanel>
+                    )}
+                    {tenureFormTab === 'achievement' && editingTenureId && (
+                      <TabPanel>
+                        <AchievementSectionBlock>
+                          <SubSectionTitle>
+                            <FiAward size={20} />
+                            업적
+                          </SubSectionTitle>
+                          <AchievementSectionHint>
+                            재위 기간 중 한 일·업적을 등록합니다. (사건과 별도로 관리되며, 사건 페이지 표시를 켜면 연대표에 나옵니다.)
+                          </AchievementSectionHint>
+                          {(() => {
+                            const editingTenure = tenures.find((t: any) => t.id === editingTenureId) as any
+                            const achievements = (editingTenure?.achievements ?? []) as any[]
+                            return (
+                              <>
+                                {achievements.length > 0 && (
+                                  <AchievementCardList>
+                                    {achievements.map((a: any) => (
+                                      <AchievementCard key={a.id}>
+                                        <AchievementCardContent>
+                                          <strong className="title">{a.title}</strong>
+                                          {a.description && (
+                                            <div
+                                              className="desc prose"
+                                              dangerouslySetInnerHTML={{ __html: a.description }}
+                                            />
+                                          )}
+                                          {(a.startDate || a.endDate) && (
+                                            <span className="date">
+                                              {a.startDate ? formatDateForInput(a.startDate) : ''}
+                                              {a.startDate && a.endDate ? ' ~ ' : ''}
+                                              {a.endDate ? formatDateForInput(a.endDate) : ''}
+                                            </span>
+                                          )}
+                                        </AchievementCardContent>
+                                        <AchievementCardActions>
+                                          <DeleteAchievementButton
+                                            type="button"
+                                            onClick={() => handleDeleteAchievement(editingTenureId, a.id)}
+                                            title="업적 삭제"
+                                          >
+                                            <FiTrash2 size={16} />
+                                          </DeleteAchievementButton>
+                                        </AchievementCardActions>
+                                      </AchievementCard>
+                                    ))}
+                                  </AchievementCardList>
+                                )}
+                                <AchievementInlineForm>
+                                  <AchievementField>
+                                    <label>제목 (필수)</label>
+                                    <Input
+                                      type="text"
+                                      value={achievementTitle}
+                                      onChange={(e) => setAchievementTitle(e.target.value)}
+                                      placeholder="예: 한글 창제, 대동법 시행"
+                                    />
+                                  </AchievementField>
+                                  <AchievementField>
+                                    <label>시작일 / 종료일 (선택)</label>
+                                    <DatePairRow>
+                                      <SelectTriggerButton
+                                        type="button"
+                                        onClick={() => setAchievementDateField('start')}
+                                        $hasValue={!!achievementStartDate}
+                                      >
+                                        <FiCalendar size={16} />
+                                        <span>{achievementStartDate ? formatDateForInput(achievementStartDate) : '시작일 선택'}</span>
+                                        <FiChevronDown size={20} />
+                                      </SelectTriggerButton>
+                                      <SelectTriggerButton
+                                        type="button"
+                                        onClick={() => setAchievementDateField('end')}
+                                        $hasValue={!!achievementEndDate}
+                                      >
+                                        <FiCalendar size={16} />
+                                        <span>{achievementEndDate ? formatDateForInput(achievementEndDate) : '종료일 선택'}</span>
+                                        <FiChevronDown size={20} />
+                                      </SelectTriggerButton>
+                                    </DatePairRow>
+                                  </AchievementField>
+                                  <AchievementField>
+                                    <label>설명 (선택)</label>
+                                    <RichTextEditor
+                                      value={achievementDescription}
+                                      onChange={setAchievementDescription}
+                                      showTitle={false}
+                                      placeholder="내용을 입력하세요. 사건 등록과 동일하게 서식·이미지를 넣을 수 있습니다."
+                                      onImageUpload={async (file) => {
+                                        const result = await uploadImage(file)
+                                        return result.url ?? result
+                                      }}
+                                    />
+                                  </AchievementField>
+                                  <AchievementField>
+                                    <CheckboxRow>
+                                      <input
+                                        type="checkbox"
+                                        id="achievement-show-on-events-inline"
+                                        checked={achievementShowOnEventsPage}
+                                        onChange={(e) => setAchievementShowOnEventsPage(e.target.checked)}
+                                      />
+                                      <label htmlFor="achievement-show-on-events-inline">
+                                        사건 페이지(연대표)에 표시
+                                      </label>
+                                    </CheckboxRow>
+                                  </AchievementField>
+                                  <AchievementInlineActions>
+                                    <button
+                                      type="button"
+                                      className="submit"
+                                      onClick={() => handleAchievementSubmit()}
+                                      disabled={achievementSubmitting || !achievementTitle.trim()}
+                                    >
+                                      {achievementSubmitting ? '등록 중…' : '업적 추가'}
+                                    </button>
+                                  </AchievementInlineActions>
+                                </AchievementInlineForm>
+                              </>
+                            )
+                          })()}
+                        </AchievementSectionBlock>
+                      </TabPanel>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <SubSectionTitle>기본정보</SubSectionTitle>
+                    <FormRows>
+                      {!isHistorical && hasSubordinateHistorical && (
+                        <FieldRow>
+                          <FieldLabel>소속 국가</FieldLabel>
+                          <FieldControl>
+                            <SelectTriggerButton
+                              type="button"
+                              onClick={() => setAffinityCountryModalOpen(true)}
+                              $hasValue
+                            >
+                              <span>
+                                {selectedAffinityHistoricalId
+                                  ? (subordinateHistorical as any[]).find(
+                                      (h: any) => h.id === selectedAffinityHistoricalId,
+                                    )?.name ?? '역사적 국가'
+                                  : `현대 국가 (현재: ${country.name})`}
+                              </span>
+                              <FiChevronDown size={20} />
+                            </SelectTriggerButton>
+                            <FieldHint>
+                              현대 국가 또는 이 국가에 연결된 하위 역사적 국가 중 하나를 선택하세요.
+                            </FieldHint>
+                          </FieldControl>
+                        </FieldRow>
+                      )}
+                      <FieldRow>
+                        <FieldLabel>인물 <Required>필수</Required></FieldLabel>
+                        <FieldControl $variant="person">
+                          <PersonSelectButton
+                            type="button"
+                            onClick={() => setPersonSelectModalOpen(true)}
+                            $hasValue={!!selectedPersonId}
+                          >
+                            <PersonAvatar $hasImage={!!selectedPerson?.profileImageUrl}>
+                              {selectedPerson?.profileImageUrl ? (
+                                <img src={selectedPerson.profileImageUrl} alt="" />
+                              ) : (
+                                <FiUser size={22} />
+                              )}
+                            </PersonAvatar>
+                            <PersonLabel>
+                              {selectedPersonId
+                                ? getPersonName(selectedPerson)
+                                : '인물 선택'}
+                            </PersonLabel>
+                            <FiChevronRight size={20} strokeWidth={2.5} />
+                          </PersonSelectButton>
+                        </FieldControl>
+                      </FieldRow>
+                      <FieldRow>
+                        <FieldLabel>직책명 <Required>필수</Required></FieldLabel>
+                        <FieldControl>
+                          <SelectTriggerButton
+                            type="button"
+                            onClick={() => setPositionTitleModalOpen(true)}
+                            $hasValue={selectedPositionDefinitionId != null || title.trim() !== ''}
+                          >
+                            <span>{positionTitleLabel}</span>
+                            <FiChevronDown size={20} />
+                          </SelectTriggerButton>
+                        </FieldControl>
+                      </FieldRow>
+                      {isMonarchPosition && (
+                        <FieldRow>
+                          <FieldLabel>왕명</FieldLabel>
+                          <FieldControl>
+                            <Input
+                              value={regnalName}
+                              onChange={(e) => setRegnalName(e.target.value)}
+                              placeholder="예: 세종, 루이 14세, 강희"
+                            />
+                          </FieldControl>
+                        </FieldRow>
+                      )}
+                      {selectedPositionDefinitionId === null && (
+                        <>
+                          <FieldRow>
+                            <FieldLabel>직책명 (직접 입력)</FieldLabel>
+                            <FieldControl>
+                              <Input
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                placeholder="예: 최고지도자"
+                              />
+                            </FieldControl>
+                          </FieldRow>
+                          <FieldRow>
+                            <FieldLabel>직책명 (영문)</FieldLabel>
+                            <FieldControl>
+                              <Input
+                                value={titleEn}
+                                onChange={(e) => setTitleEn(e.target.value)}
+                                placeholder="예: Supreme Leader"
+                              />
+                            </FieldControl>
+                          </FieldRow>
+                        </>
+                      )}
+                      <FieldRow>
+                        <FieldLabel>취임일 · 퇴임일 <Required>필수</Required></FieldLabel>
+                        <FieldControl $variant="datePair">
+                          <DatePairRow>
+                            <SelectTriggerButton
+                              type="button"
+                              onClick={() => setStartDateModalOpen(true)}
+                              $hasValue={!!startDate}
+                            >
+                              <FiCalendar size={16} />
+                              <span>{startDate ? formatDateForInput(startDate) : '취임일'}</span>
+                              <FiChevronDown size={20} />
+                            </SelectTriggerButton>
+                            <SelectTriggerButton
+                              type="button"
+                              onClick={() => setEndDateModalOpen(true)}
+                              $hasValue={!!endDate}
+                            >
+                              <FiCalendar size={16} />
+                              <span>{endDate ? formatDateForInput(endDate) : '퇴임일 (선택)'}</span>
+                              <FiChevronDown size={20} />
+                            </SelectTriggerButton>
+                          </DatePairRow>
+                        </FieldControl>
+                      </FieldRow>
+                      <FieldRow>
+                        <FieldLabel>대수</FieldLabel>
+                        <FieldControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={termNumber}
+                            onChange={(e) => setTermNumber(e.target.value)}
+                            placeholder="예: 4 (세종 = 조선 제4대)"
+                            title="동아시아: 제n대"
+                          />
+                          <FieldHint>동아시아 군주·대통령용. 제4대 → 4 입력</FieldHint>
+                        </FieldControl>
+                      </FieldRow>
+                      <FieldRow>
+                        <FieldLabel>재위 번호</FieldLabel>
+                        <FieldControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={regnalNumber}
+                            onChange={(e) => setRegnalNumber(e.target.value)}
+                            placeholder="예: 14 (루이 14세)"
+                            title="서양 군주: 이름 뒤 숫자"
+                          />
+                          <FieldHint>서양 군주용. 루이 14세 → 14, 제임스 1세 → 1</FieldHint>
+                        </FieldControl>
+                      </FieldRow>
+                      <FieldRow>
+                        <FieldLabel>사건 페이지 노출</FieldLabel>
+                        <FieldControl>
+                          <CheckboxRow>
+                            <input
+                              type="checkbox"
+                              id="heads-show-on-events-new"
+                              checked={showOnEventsPage}
+                              onChange={(e) => setShowOnEventsPage(e.target.checked)}
+                            />
+                            <label htmlFor="heads-show-on-events-new">
+                              사건 목록 페이지에 이 수반을 노출합니다 (역대 수반 토글 시 표시)
+                            </label>
+                          </CheckboxRow>
+                        </FieldControl>
+                      </FieldRow>
+                    </FormRows>
+                    <FormActions>
+                      <ResetButton type="button" onClick={resetForm} disabled={isSubmitting}>
+                        초기화
+                      </ResetButton>
+                    </FormActions>
+                  </>
+                )}
               </FormSectionInner>
           </form>
-        </>
+        </FormCardWrapper>
       )}
 
       {personSelectModalOpen && (
@@ -1219,6 +1663,42 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         options={positionTitleOptions}
         selectedValue={selectedPositionDefinitionId ?? OTHER_POSITION_VALUE}
         onSelect={handlePositionTitleSelect}
+      />
+
+      {!isHistorical && hasSubordinateHistorical && (
+        <SelectModal
+          isOpen={affinityCountryModalOpen}
+          onClose={() => setAffinityCountryModalOpen(false)}
+          title="소속 국가 선택"
+          options={[
+            { value: '', label: `현대 국가 (현재: ${country.name})` },
+            ...(subordinateHistorical as any[]).map((h: any) => ({
+              value: h.id,
+              label: h.name,
+            })),
+          ]}
+          selectedValue={selectedAffinityHistoricalId ?? ''}
+          onSelect={(value) => {
+            setSelectedAffinityHistoricalId(value || null)
+            setAffinityCountryModalOpen(false)
+          }}
+        />
+      )}
+
+      <DatePickerModal
+        isOpen={achievementDateField !== null}
+        onClose={() => setAchievementDateField(null)}
+        title={achievementDateField === 'start' ? '시작일 선택' : '종료일 선택'}
+        initialDate={
+          achievementDateField === 'start'
+            ? achievementStartDate || undefined
+            : achievementEndDate || undefined
+        }
+        onSelect={(date) => {
+          if (achievementDateField === 'start') setAchievementStartDate(date)
+          else if (achievementDateField === 'end') setAchievementEndDate(date)
+          setAchievementDateField(null)
+        }}
       />
 
       <DatePickerModal
@@ -1583,8 +2063,54 @@ const ItemRegnalName = styled.span`
   font-style: italic;
 `
 
-const ItemAction = styled.span`
+const AchievementChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const AchievementChip = styled.span<{ $more?: boolean }>`
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-radius: 6px;
+  ${({ $more }) => $more && 'font-style: italic; color: #64748b;'}
+`
+
+const ItemActions = styled.span`
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const AchievementButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4f46e5;
+  background: #eef2ff;
+  border: 1px solid #e0e7ff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+
+  &:hover {
+    background: #e0e7ff;
+    color: #4338ca;
+  }
+
+  &:active {
+    background: #e5e7eb;
+  }
+`
+
+const ItemAction = styled.span`
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1595,40 +2121,342 @@ const ItemAction = styled.span`
   transition: color 0.2s ease, background 0.2s ease;
 
   ${ListItem}:hover & {
-    background: #ede9fe;
+    background: #eef2ff;
     color: var(--color-primary);
   }
 `
 
-/* 사건 등록 페이지와 동일한 폼 카드/필드 스타일 */
-const BORDER_COLOR = '#e2e8f0'
-const FOCUS_COLOR = '#8b5cf6'
+/* 기본정보 / 업적 구분 섹션 */
+/* 행정조직 섹션 제목과 동일 (예: 중앙부처 현황) */
+const SubSectionTitle = styled.h4`
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: -0.02em;
+`
+
+/* 행정조직 통계/중앙부처 탭과 동일 (콘텐츠 너비만, 가로 늘어나지 않음) */
+const TabNavigation = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 24px;
+  width: fit-content;
+  background: #f1f5f9;
+  border-radius: 20px;
+  overflow-x: auto;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`
+
+const TabButton = styled.button<{ $active?: boolean }>`
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: none;
+  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
+  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
+  font-size: 13px;
+  font-weight: ${(p) => (p.$active ? '600' : '500')};
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
+    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
+  }
+`
+
+const TabPanel = styled.div`
+  padding-top: 0;
+  margin-top: 24px;
+`
+
+const AchievementSectionBlock = styled.div`
+  margin-top: 0;
+  padding-top: 0;
+`
+
+const AchievementSectionHint = styled.p`
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+`
+
+const AchievementList = styled.ul`
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const AchievementListItem = styled.li`
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+
+  strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #0f172a;
+  }
+  .desc {
+    display: block;
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .date {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+`
+
+const AchievementCardList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+`
+
+const AchievementCard = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  transition: box-shadow 0.2s;
+  &:hover {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+`
+
+const AchievementCardContent = styled.div`
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  .title {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .desc.prose {
+    font-size: 14px;
+    color: #475569;
+    line-height: 1.6;
+    margin-bottom: 6px;
+  }
+  .desc.prose p {
+    margin: 0 0 0.5em;
+  }
+  .desc.prose p:last-child {
+    margin-bottom: 0;
+  }
+  .date {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+`
+
+const AchievementCardActions = styled.div`
+  flex-shrink: 0;
+`
+
+const DeleteAchievementButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #64748b;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  &:hover {
+    color: #dc2626;
+    background: #fee2e2;
+  }
+`
+
+const AchievementInlineForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+`
+
+const AchievementInlineActions = styled.div`
+  margin-top: 8px;
+
+  .submit {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    background: #6366f1;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  }
+  .submit:hover:not(:disabled) {
+    background: #4f46e5;
+  }
+  .submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
+
+const AchievementForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`
+
+const AchievementField = styled.div`
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 72px;
+  }
+`
+
+const AchievementDateRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  .date-btn {
+    flex: 1;
+    padding: 10px 14px;
+    font-size: 14px;
+    text-align: left;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #475569;
+    cursor: pointer;
+  }
+  .date-btn:hover {
+    background: #f1f5f9;
+  }
+  .sep {
+    color: #94a3b8;
+    font-size: 14px;
+  }
+`
+
+/* 행정조직과 동일한 디자인·색상 */
+const BORDER_COLOR = '#e5e7eb'
+const FOCUS_COLOR = '#4f46e5'
 const BG_INPUT = '#f8fafc'
-const TEXT_PRIMARY = '#1e293b'
+const TEXT_PRIMARY = '#0f172a'
 const TEXT_SECONDARY = '#64748b'
-const TEXT_MUTED = '#94a3b8'
+const TEXT_MUTED = '#6b7280'
+
+const FormCardWrapper = styled.div`
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+`
+
+/* 행정조직 부처 등록 헤더와 동일: 한 줄 (목록 보기 | 제목 | 저장) */
+const HeadsFormHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 28px;
+  background: #fff;
+  border-bottom: 1px solid #f3f4f6;
+  flex-wrap: wrap;
+`
+
+const HeadsFormTitle = styled.h2`
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.025em;
+  flex: 1;
+  min-width: 0;
+  @media (max-width: 640px) {
+    width: 100%;
+    order: -1;
+    margin-bottom: 8px;
+  }
+`
 
 const BackToListButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  margin-bottom: 20px;
-  font-size: 14px;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: ${TEXT_SECONDARY};
-  background: #ffffff;
-  border: 1.5px solid ${BORDER_COLOR};
-  border-radius: 10px;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
+  order: 0;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-    color: ${TEXT_PRIMARY};
+    background: #f1f5f9;
+    color: #475569;
     svg {
-      transform: translateX(-3px);
+      transform: translateX(-2px);
     }
   }
   svg {
@@ -1637,26 +2465,8 @@ const BackToListButton = styled.button`
   }
 `
 
-const FormCardHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 0;
-  border-bottom: 1.5px solid ${BORDER_COLOR};
-  background: transparent;
-  margin-bottom: 24px;
-`
-
-const FormCardTitle = styled.h2`
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: ${TEXT_PRIMARY};
-  letter-spacing: -0.02em;
-`
-
 const FormSectionInner = styled.div`
-  padding: 0;
+  padding: 28px 32px 32px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -1666,9 +2476,9 @@ const SectionHeaderBlock = styled.div`
   display: flex;
   gap: 20px;
   align-items: flex-start;
-  padding-bottom: 32px;
-  margin-bottom: 32px;
-  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e5e7eb;
 
   > svg {
     color: ${FOCUS_COLOR};
@@ -1698,34 +2508,29 @@ const FormRows = styled.div`
   gap: 0;
 `
 
+/* 행정조직 부처 등록 폼과 동일: grid 360px 1fr, borderBottom #f3f4f6 */
 const FieldRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  min-height: 72px;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 24px;
+  align-items: start;
   padding: 20px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f3f4f6;
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    min-height: 0;
-    padding: 24px 0;
+    grid-template-columns: 1fr;
+    padding: 20px 0;
   }
 `
 
 const FieldLabel = styled.label`
-  flex-shrink: 0;
-  width: 160px;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  color: ${TEXT_PRIMARY};
-  letter-spacing: -0.01em;
+  color: #374151;
+  padding-top: 10px;
 
   @media (max-width: 768px) {
-    width: 100%;
-    font-size: 14px;
+    padding-top: 0;
   }
 `
 
@@ -1745,7 +2550,7 @@ const CheckboxRow = styled.div`
   input[type='checkbox'] {
     width: 18px;
     height: 18px;
-    accent-color: #7c3aed;
+    accent-color: #6366f1;
     cursor: pointer;
   }
   label {
@@ -1757,10 +2562,9 @@ const CheckboxRow = styled.div`
 `
 
 const FieldControl = styled.div<{ $variant?: 'person' | 'datePair' }>`
-  flex: 1;
   min-width: 0;
   max-width: ${({ $variant }) =>
-    $variant === 'person' ? '360px' : $variant === 'datePair' ? '640px' : '520px'};
+    $variant === 'person' ? '360px' : $variant === 'datePair' ? '480px' : '380px'};
 `
 
 const DatePairRow = styled.div`
@@ -1781,88 +2585,87 @@ const Required = styled.span`
   margin-left: 4px;
 `
 
+/* 행정조직 부처 등록 input과 동일 */
 const Input = styled.input`
   width: 100%;
-  padding: 18px 20px;
-  font-size: 16px;
-  color: ${TEXT_PRIMARY};
-  background: ${BG_INPUT};
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 14px;
-  transition: all 0.2s ease;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #111827;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.2s ease;
 
   &::placeholder {
-    color: ${TEXT_MUTED};
+    color: #9ca3af;
   }
   &:hover {
-    border-color: #cbd5e1;
-    background: #f1f5f9;
+    border-color: #d1d5db;
   }
   &:focus {
-    outline: none;
     border-color: ${FOCUS_COLOR};
-    background: #ffffff;
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.08);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
 
+/* 행정조직 부처 등록 select 버튼과 동일 */
 const triggerButtonStyles = `
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px 20px;
-  font-size: 16px;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
   color: inherit;
-  background: ${BG_INPUT};
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.2s ease;
+  outline: none;
+  transition: border-color 0.2s ease;
 
   &:hover {
-    border-color: #cbd5e1;
-    background: #f1f5f9;
+    border-color: #d1d5db;
   }
   span {
     flex: 1;
   }
   svg:last-of-type {
     flex-shrink: 0;
-    color: ${TEXT_MUTED};
+    opacity: 0.5;
   }
 `
 
 const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   ${triggerButtonStyles}
-  color: ${({ $hasValue }) => ($hasValue ? TEXT_PRIMARY : TEXT_MUTED)};
+  color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
 `
 
-/* 인물 선택 전용: 아바타 + 이름 + 화살표 카드 스타일 */
+/* 행정조직 폼과 동일: input 스타일 */
 const PersonSelectButton = styled.button<{ $hasValue: boolean }>`
   width: 100%;
+  max-width: 360px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 18px;
-  font-size: 16px;
-  color: ${({ $hasValue }) => ($hasValue ? TEXT_PRIMARY : TEXT_MUTED)};
-  background: ${({ $hasValue }) => ($hasValue ? '#f8fafc' : '#f1f5f9')};
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 14px;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease;
 
   &:hover {
-    background: #e2e8f0;
-    border-color: #cbd5e1;
-    color: ${TEXT_PRIMARY};
+    border-color: #d1d5db;
   }
   svg:last-of-type {
     flex-shrink: 0;
-    color: ${TEXT_MUTED};
+    opacity: 0.5;
   }
 `
 
@@ -1900,26 +2703,25 @@ const PersonLabel = styled.span`
 const FormActions = styled.div`
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 40px;
-  padding-top: 32px;
-  border-top: 1px solid #f1f5f9;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #f3f4f6;
 `
 
 const DeleteButton = styled.button`
-  padding: 14px 24px;
-  font-size: 15px;
+  padding: 12px 24px;
+  font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  background: #ef4444;
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease;
 
   &:hover:not(:disabled) {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    transform: translateY(-1px);
+    background: #dc2626;
   }
   &:disabled {
     opacity: 0.6;
@@ -1931,20 +2733,20 @@ const SubmitButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 28px;
-  font-size: 15px;
+  padding: 10px 18px;
+  font-size: 13px;
   font-weight: 600;
   color: #ffffff;
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  background: #6366f1;
   border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
 
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.4);
+    background: #4f46e5;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
   }
   &:disabled {
     opacity: 0.5;
@@ -1953,19 +2755,19 @@ const SubmitButton = styled.button`
 `
 
 const ResetButton = styled.button`
-  padding: 14px 24px;
-  font-size: 15px;
+  padding: 12px 24px;
+  font-size: 14px;
   font-weight: 600;
-  color: ${TEXT_SECONDARY};
-  background: #ffffff;
-  border: 1.5px solid ${BORDER_COLOR};
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, color 0.2s ease;
 
   &:hover:not(:disabled) {
-    border-color: ${FOCUS_COLOR};
-    color: ${FOCUS_COLOR};
+    border-color: #4f46e5;
+    color: #4f46e5;
   }
   &:disabled {
     opacity: 0.5;

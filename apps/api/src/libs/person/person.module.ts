@@ -4,12 +4,13 @@ import { GovernmentPositionController } from './presentation/government-position
 import { PersonService } from './application/person.service'
 import { PersonPrismaRepository } from './infrastructure/person.prisma.repository'
 import { NotificationModule } from '../notification/notification.module'
+import { UploadModule } from '../shared/upload/upload.module'
 
 /**
  * 인물 모듈
  */
 @Module({
-  imports: [NotificationModule],
+  imports: [NotificationModule, UploadModule],
   controllers: [PersonController, GovernmentPositionController],
   providers: [PersonService, PersonPrismaRepository],
   exports: [PersonService],

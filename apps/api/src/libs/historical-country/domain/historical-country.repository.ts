@@ -1,5 +1,5 @@
 import { HistoricalCountry } from './historical-country.entity'
-import { HistoricalStateType, Era } from '@prisma/client'
+import { HistoricalStateType, Era, TransitionEventType } from '@prisma/client'
 
 /**
  * 역사적 국가 생성 데이터
@@ -19,7 +19,11 @@ export interface CreateHistoricalCountryData {
   endDay?: number
   stateType: HistoricalStateType
   parentModernCountryIds?: string[] // 현대 국가 ID 배열
-  parentHistoricalCountryIds?: string[] // 상위 역사적 국가 ID 배열
+  /** 상위 역사적 국가 = 후임 (이 국가가 이어간 국가). 예: 고려 → 조선 시 고려가 조선을 상위로 설정 */
+  parentHistoricalCountryIds?: string[]
+  /** 상위(후임) 설정 시 변천 유형·날짜 (각 후임에 동일 적용) */
+  transitionEventType?: TransitionEventType
+  transitionEventDate?: string // ISO date
   accountId?: string // 등록 계정 (개인 정보 플랫폼)
 }
 
@@ -41,7 +45,9 @@ export interface UpdateHistoricalCountryData {
   endDay?: number | null
   stateType?: HistoricalStateType
   parentModernCountryIds?: string[] // 현대 국가 ID 배열
-  parentHistoricalCountryIds?: string[] // 상위 역사적 국가 ID 배열
+  parentHistoricalCountryIds?: string[] // 상위(후임) ID 배열
+  transitionEventType?: TransitionEventType
+  transitionEventDate?: string
 }
 
 /**

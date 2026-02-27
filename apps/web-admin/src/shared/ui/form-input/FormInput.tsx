@@ -33,49 +33,43 @@ import styled from 'styled-components'
  * />
  * ```
  */
+/* 행정조직 폼 톤: #e5e7eb 테두리, 12px radius, 인디고 포커스 */
 export const FormInput = styled.input<{ $error?: boolean }>`
-  border: 1px solid ${({ $error }) => ($error ? '#ea4335' : '#dadce0')};
-  border-radius: 10px;
-  padding: 14px 16px;
-  background: ${({ $error }) => ($error ? '#fef7f7' : '#ffffff')};
-  color: #202124;
-  font-size: 15px;
+  border: 1px solid ${({ $error }) => ($error ? '#ea4335' : '#e5e7eb')};
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: ${({ $error }) => ($error ? '#fef2f2' : '#fff')};
+  color: #111827;
+  font-size: 14px;
   line-height: 1.5;
   font-weight: 400;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &::placeholder {
-    color: #9aa0a6;
+    color: #9ca3af;
   }
 
   &:focus {
     outline: none;
-    border-color: ${({ $error }) =>
-      $error ? '#ea4335' : 'var(--color-primary)'};
+    border-color: ${({ $error }) => ($error ? '#ea4335' : '#6366f1')};
     box-shadow: ${({ $error }) =>
-      $error
-        ? '0 0 0 3px rgba(234, 67, 53, 0.1)'
-        : '0 0 0 3px rgba(173, 70, 255, 0.1)'};
-    background: #ffffff;
+      $error ? '0 0 0 3px rgba(234, 67, 53, 0.1)' : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
   }
 
   &:hover:not(:focus) {
-    border-color: ${({ $error }) => ($error ? '#ea4335' : '#bdc1c6')};
+    border-color: ${({ $error }) => ($error ? '#ea4335' : '#d1d5db')};
   }
 
   &::-webkit-autofill {
-    -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
-    -webkit-text-fill-color: #202124;
-    caret-color: #202124;
+    -webkit-box-shadow: 0 0 0 1000px #fff inset;
+    -webkit-text-fill-color: #111827;
+    caret-color: #111827;
   }
 
   &:disabled {
-    background: #f1f3f4;
-    border-color: #dadce0;
-    color: #80868b;
+    background: #f9fafb;
+    border-color: #e5e7eb;
+    color: #6b7280;
     cursor: not-allowed;
   }
 

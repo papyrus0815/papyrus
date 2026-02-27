@@ -42,6 +42,7 @@ import {
   getAllEventCategories,
 } from '@/shared/api/event-categories'
 import { getAllEvents } from '@/shared/api/events'
+import { personCareerApi } from '@/shared/api/person-career'
 import { pathKeys } from '@/shared/router'
 import {
   CategoryModal,
@@ -132,12 +133,15 @@ export const EventsCatalogPage: React.FC = () => {
       .catch(() => setDbCategories([]))
   }, [])
 
-  // 실제 API에서 이벤트 데이터 불러오기 (연대표/역대 수반은 국가 페이지에서만 사용)
+  // 실제 API에서 이벤트 데이터 불러오기 (사건 + 사건 페이지 표시 업적)
   useEffect(() => {
     const fetchEvents = async () => {
       setIsLoading(true)
       try {
-        const response = await getAllEvents()
+        const [response, achievements] = await Promise.all([
+          getAllEvents(),
+          personCareerApi.getAchievementsForEventsPage().catch(() => []),
+        ])
 
         // API 응답을 HistoricalEvent 타입으로 변환
         const allEvents: HistoricalEvent[] = []
@@ -306,6 +310,53 @@ export const EventsCatalogPage: React.FC = () => {
               allEvents.push(descendantData)
             })
           })
+
+        // ✅ 사건 페이지 표시 업적 추가 (사건과 별도 엔티티)
+        achievements.forEach((a: any) => {
+          const person = a.tenure?.person
+          const personName = person
+            ? [person.name, person.surname].filter(Boolean).join(' ').trim() || '이름 없음'
+            : '—'
+          const country = a.tenure?.country || a.tenure?.historicalCountry
+          const countryName = country?.name
+          const startDate = a.startDate ?? a.createdAt
+          const achievementEvent: HistoricalEvent & { __isTenureAchievement?: boolean; __achievementMeta?: { personName: string; countryName?: string; tenureTitle?: string; achievementId: string } } = {
+            id: a.id,
+            title: a.title,
+            type: 'battle',
+            category: 'other',
+            description: a.description ?? '',
+            startDate: typeof startDate === 'string' ? startDate : new Date(startDate).toISOString(),
+            endDate: a.endDate ?? undefined,
+            tags: [],
+            background: '',
+            aftermath: '',
+            stats: { casualties: { total: 0, civilians: 0, military: 0 }, participatingNations: 0, theaters: 0, durationInYears: 0 },
+            hierarchy: {
+              id: a.id,
+              title: a.title,
+              summary: a.description ?? '',
+              period: { start: typeof startDate === 'string' ? startDate : new Date(startDate).toISOString(), end: a.endDate },
+              importance: 'notable',
+            },
+            timeline: [],
+            theaters: [],
+            keyFigures: [],
+            countries: [],
+            influence: [],
+            visuals: { heroImageUrl: '', thumbnailUrl: '', gallery: [] },
+            map: { summary: '', markers: [] },
+            quickFacts: { commandStructure: '', decisiveTechnology: '', intelligenceNotes: '', logisticalScale: '' },
+            __isTenureAchievement: true,
+            __achievementMeta: {
+              achievementId: a.id,
+              personName,
+              countryName,
+              tenureTitle: a.tenure?.positionDefinition?.title ?? a.tenure?.title,
+            },
+          }
+          allEvents.push(achievementEvent)
+        })
 
         setEvents(allEvents)
       } catch {
@@ -1095,6 +1146,21 @@ export const EventsCatalogPage: React.FC = () => {
                                   />
                                   <List.CompactListTitle>
                                     {node.title}
+                                    {(event as any).__isTenureAchievement && (
+                                      <span
+                                        style={{
+                                          marginLeft: 8,
+                                          fontSize: 11,
+                                          fontWeight: 600,
+                                          color: '#6d28d9',
+                                          background: '#f5f3ff',
+                                          padding: '2px 6px',
+                                          borderRadius: 4,
+                                        }}
+                                      >
+                                        업적
+                                      </span>
+                                    )}
                                     {hasChildren && depth === 0 && (
                                       <Modal.SummaryIconButton
                                         type="button"
@@ -1121,6 +1187,18 @@ export const EventsCatalogPage: React.FC = () => {
                                       width: '100%',
                                     }}
                                   >
+                                    {(event as any).__achievementMeta && (
+                                      <div
+                                        style={{
+                                          fontSize: 12,
+                                          color: '#64748b',
+                                        }}
+                                      >
+                                        {(event as any).__achievementMeta.personName}
+                                        {(event as any).__achievementMeta.countryName &&
+                                          ` · ${(event as any).__achievementMeta.countryName}`}
+                                      </div>
+                                    )}
                                     {(() => {
                                       const start = new Date(node.period.start)
                                       const end = node.period.end
@@ -1278,6 +1356,21 @@ export const EventsCatalogPage: React.FC = () => {
                                   />
                                   <List.CompactListTitle>
                                     {node.title}
+                                    {(event as any).__isTenureAchievement && (
+                                      <span
+                                        style={{
+                                          marginLeft: 8,
+                                          fontSize: 11,
+                                          fontWeight: 600,
+                                          color: '#6d28d9',
+                                          background: '#f5f3ff',
+                                          padding: '2px 6px',
+                                          borderRadius: 4,
+                                        }}
+                                      >
+                                        업적
+                                      </span>
+                                    )}
                                     {hasChildren && depth === 0 && (
                                       <Modal.SummaryIconButton
                                         type="button"
@@ -1304,6 +1397,18 @@ export const EventsCatalogPage: React.FC = () => {
                                       width: '100%',
                                     }}
                                   >
+                                    {(event as any).__achievementMeta && (
+                                      <div
+                                        style={{
+                                          fontSize: 12,
+                                          color: '#64748b',
+                                        }}
+                                      >
+                                        {(event as any).__achievementMeta.personName}
+                                        {(event as any).__achievementMeta.countryName &&
+                                          ` · ${(event as any).__achievementMeta.countryName}`}
+                                      </div>
+                                    )}
                                     {(() => {
                                       const start = new Date(node.period.start)
                                       const end = node.period.end

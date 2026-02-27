@@ -75,6 +75,8 @@ enum HistoricalStateType {
   NOMADIC_EMPIRE
   /// 왕조 / 가문 국가
   DYNASTY
+  /// 세습 (세습적 통치가 이어지는 정치체)
+  HEREDITARY
   /// 동군연합 (같은 군주 아래 여러 정치체가 연합)
   PERSONAL_UNION
   /// 기타
@@ -99,6 +101,8 @@ enum TransitionEventType {
   DISSOLVED
   /// 계승
   SUCCESSION
+  /// 세속화 (교단/기사단 국가 → 세속 국가, 예: 튜튼기사단 → 프로이센 공국)
+  SECULARIZATION
   /// 분열
   SPLIT
   /// 기타

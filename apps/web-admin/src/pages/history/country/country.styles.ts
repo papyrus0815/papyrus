@@ -1380,31 +1380,26 @@ export const ListRowMetaInside = styled.div`
 export { FormInput as Input }
 
 export const Select = styled.select<{ $error?: boolean }>`
-  border: 1px solid ${({ $error }) => ($error ? '#ea4335' : '#dadce0')};
-  border-radius: 10px;
-  padding: 14px 16px;
-  background: ${({ $error }) => ($error ? '#fef7f7' : '#ffffff')};
-  color: #202124;
-  font-size: 15px;
+  border: 1px solid ${({ $error }) => ($error ? '#ea4335' : '#e5e7eb')};
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: ${({ $error }) => ($error ? '#fef2f2' : '#fff')};
+  color: #111827;
+  font-size: 14px;
   line-height: 1.5;
   font-weight: 400;
   cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
   &:focus {
     outline: none;
-    border-color: ${({ $error }) =>
-      $error ? '#ea4335' : 'var(--color-primary)'};
+    border-color: ${({ $error }) => ($error ? '#ea4335' : '#6366f1')};
     box-shadow: ${({ $error }) =>
-      $error
-        ? '0 0 0 3px rgba(234, 67, 53, 0.1)'
-        : '0 0 0 3px rgba(173, 70, 255, 0.1)'};
-    background: #ffffff;
+      $error ? '0 0 0 3px rgba(234, 67, 53, 0.1)' : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
   }
+
   &:hover:not(:focus) {
-    border-color: ${({ $error }) => ($error ? '#ea4335' : '#bdc1c6')};
+    border-color: ${({ $error }) => ($error ? '#ea4335' : '#d1d5db')};
   }
 `
 
@@ -1417,20 +1412,17 @@ export const SelectButton = styled.button<{
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  border: 1px solid ${({ $error }) => ($error ? '#ea4335' : '#dadce0')};
-  border-radius: 10px;
-  padding: 14px 16px;
-  background: ${({ $error }) => ($error ? '#fef7f7' : '#ffffff')};
-  color: ${({ $hasValue }) => ($hasValue ? '#202124' : '#9aa0a6')};
-  font-size: 15px;
+  border: 1px solid ${({ $error }) => ($error ? '#ea4335' : '#e5e7eb')};
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: ${({ $error }) => ($error ? '#fef2f2' : '#fff')};
+  color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
+  font-size: 14px;
   line-height: 1.5;
   font-weight: 400;
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   span {
     flex: 1;
@@ -1442,32 +1434,22 @@ export const SelectButton = styled.button<{
   svg {
     flex-shrink: 0;
     opacity: 0.6;
-    transition: transform 0.2s ease;
   }
 
   &:hover {
-    border-color: ${({ $error }) => ($error ? '#ea4335' : '#bdc1c6')};
-
-    svg {
-      opacity: 1;
-    }
+    border-color: ${({ $error }) => ($error ? '#ea4335' : '#d1d5db')};
+    svg { opacity: 1; }
   }
 
   &:focus {
     outline: none;
-    border-color: ${({ $error }) =>
-      $error ? '#ea4335' : 'var(--color-primary)'};
+    border-color: ${({ $error }) => ($error ? '#ea4335' : '#6366f1')};
     box-shadow: ${({ $error }) =>
-      $error
-        ? '0 0 0 3px rgba(234, 67, 53, 0.1)'
-        : '0 0 0 3px rgba(173, 70, 255, 0.1)'};
-    background: #ffffff;
+      $error ? '0 0 0 3px rgba(234, 67, 53, 0.1)' : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
   }
 
   &:active {
-    svg {
-      transform: translateY(2px);
-    }
+    svg { transform: translateY(1px); }
   }
 `
 
@@ -1520,15 +1502,15 @@ export const FileUploadLabel = styled.label`
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  border: 2px dashed #dadce0;
-  border-radius: 10px;
-  background: #fafafa;
+  border: 2px dashed #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease;
 
   &:hover {
-    border-color: var(--color-primary);
-    background: #f3e8ff;
+    border-color: #6366f1;
+    background: #eef2ff;
   }
 `
 
@@ -1542,9 +1524,9 @@ export const FileUploadIcon = styled.div`
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #9146ff 100%);
-  color: #ffffff;
+  border-radius: 10px;
+  background: #6366f1;
+  color: #fff;
   flex-shrink: 0;
 `
 
@@ -3067,9 +3049,11 @@ export const RequiredFieldsNotice = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 24px;
-  background: #fff9e6;
-  border-bottom: 2px solid #ffd54f;
+  padding: 14px 20px;
+  background: #fefce8;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 4px;
 `
 
 export const RequiredFieldsIcon = styled.div`
@@ -3079,7 +3063,7 @@ export const RequiredFieldsIcon = styled.div`
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  color: #f57c00;
+  color: #ca8a04;
   font-size: 18px;
 `
 
@@ -3089,7 +3073,7 @@ export const RequiredFieldsText = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #5f6368;
+  color: #374151;
 `
 
 export const RequiredFieldsTitle = styled.span`
@@ -3140,7 +3124,7 @@ export const CloseButton = styled.button`
 export const SidePanelContent = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 28px 24px;
 `
 
 export const Form = styled.form`
@@ -3154,7 +3138,7 @@ export const FormSection = styled.div`
   flex-direction: column;
   gap: 20px;
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--border-color-light);
+  border-bottom: 1px solid #f3f4f6;
 
   &:last-of-type {
     border-bottom: none;
@@ -3175,23 +3159,23 @@ export const FormSectionIcon = styled.div`
   width: 40px;
   height: 40px;
   flex-shrink: 0;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #f0f7ff 0%, #e8f0fe 100%);
-  color: var(--color-primary);
+  border-radius: 12px;
+  background: #eef2ff;
+  color: #6366f1;
 `
 
 export const FormSectionTitle = styled.h3`
   margin: 0 0 4px 0;
   font-size: 16px;
   font-weight: 700;
-  color: #202124;
-  letter-spacing: -0.2px;
+  color: #111827;
+  letter-spacing: -0.025em;
 `
 
 export const FormSectionDescription = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #5f6368;
+  color: #6b7280;
   line-height: 1.5;
 `
 
@@ -3204,14 +3188,14 @@ export const FormRow = styled.div`
 export const FormField = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 `
 
 export const FormLabel = styled.label`
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #202124;
-  margin-bottom: 2px;
+  color: #374151;
+  margin-bottom: 0;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -3243,9 +3227,9 @@ export const FlagImage = styled.img`
 `
 
 export const SidePanelFooter = styled.div`
-  padding: 20px 24px;
-  border-top: 1px solid var(--border-color-light);
-  background: #fafbfc;
+  padding: 20px 28px;
+  border-top: 1px solid #f3f4f6;
+  background: #fff;
 `
 
 export const SubmitButton = styled.button`
@@ -3254,33 +3238,26 @@ export const SubmitButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 16px 24px;
+  padding: 14px 24px;
   border: none;
-  border-radius: 10px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #ffffff;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #9146ff 100%);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: #6366f1;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(173, 70, 255, 0.3);
+  transition: background 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
 
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(173, 70, 255, 0.4);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(173, 70, 255, 0.3);
+    background: #4f46e5;
   }
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    background: linear-gradient(135deg, #9aa0a6 0%, #80868b 100%);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    transform: none;
+    background: #94a3b8;
+    box-shadow: none;
   }
 
   svg {

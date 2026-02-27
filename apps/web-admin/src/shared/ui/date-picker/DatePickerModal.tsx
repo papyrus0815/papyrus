@@ -370,13 +370,14 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   )
 }
 
+/* 행정조직 모달 스타일: 테두리 #e5e7eb, 인디고 포커스 */
 const Overlay = styled.div`
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -385,32 +386,23 @@ const Overlay = styled.div`
   animation: fadeIn 0.2s ease;
 
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 `
 
 const ModalContainer = styled.div`
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
   width: 90%;
   max-width: 750px;
   animation: slideUp 0.3s ease;
 
   @keyframes slideUp {
-    from {
-      transform: translateY(30px);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
   }
 `
 
@@ -418,33 +410,34 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 24px 28px;
+  border-bottom: 1px solid #f3f4f6;
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: #111827;
+  letter-spacing: -0.025em;
 `
 
 const CloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: none;
-  background: #f1f5f9;
+  background: transparent;
   color: #64748b;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: #fee2e2;
-    color: #ef4444;
+    background: #f1f5f9;
+    color: #475569;
   }
 `
 
@@ -457,13 +450,13 @@ const LeftPanel = styled.div`
   flex: 0 0 260px;
   padding: 24px 20px;
   background: #f8fafc;
-  border-right: 1px solid #e2e8f0;
-  border-radius: 0 0 0 16px;
+  border-right: 1px solid #e5e7eb;
+  border-radius: 0 0 0 20px;
 `
 
 const RightPanel = styled.div`
   flex: 1;
-  padding: 24px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
 `
@@ -477,12 +470,10 @@ const SettingSection = styled.div`
 `
 
 const SettingLabel = styled.div`
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
   margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 `
 
 const EraSelector = styled.div`
@@ -494,17 +485,17 @@ const EraSelector = styled.div`
 const EraButton = styled.button<{ $isSelected: boolean }>`
   padding: 12px;
   font-size: 14px;
-  font-weight: 700;
-  color: ${({ $isSelected }) => ($isSelected ? '#111827' : '#6b7280')};
-  background: ${({ $isSelected }) => ($isSelected ? '#f3f4f6' : '#ffffff')};
-  border: 1.5px solid
-    ${({ $isSelected }) => ($isSelected ? '#d1d5db' : '#e5e7eb')};
-  border-radius: 8px;
+  font-weight: 600;
+  color: ${({ $isSelected }) => ($isSelected ? '#111827' : '#64748b')};
+  background: ${({ $isSelected }) => ($isSelected ? '#fff' : 'transparent')};
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+  box-shadow: ${({ $isSelected }) => ($isSelected ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
 
   &:hover {
-    background: ${({ $isSelected }) => ($isSelected ? '#e5e7eb' : '#f9fafb')};
+    background: ${({ $isSelected }) => ($isSelected ? '#fff' : 'rgba(255,255,255,0.6)')};
     border-color: #d1d5db;
   }
 `
@@ -518,41 +509,43 @@ const YearMonthDayRow = styled.div`
 
 const ShortInput = styled.input`
   width: 100%;
-  padding: 10px 12px;
-  font-size: 16px;
+  padding: 12px 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 8px;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   outline: none;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   text-align: center;
+  background: #fff;
 
   &:focus {
-    border-color: #8b5cf6;
-    background: #faf5ff;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 
   &::placeholder {
-    color: #cbd5e1;
+    color: #9ca3af;
   }
 `
 
 const ApplyDateButton = styled.button`
   margin-top: 16px;
   width: 100%;
-  padding: 12px;
+  padding: 12px 24px;
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: #8b5cf6;
+  background: #6366f1;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
 
   &:hover {
-    background: #7c3aed;
+    background: #4f46e5;
   }
 `
 
@@ -572,13 +565,13 @@ const NavButton = styled.button`
   border: none;
   background: #f1f5f9;
   color: #64748b;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: #faf5ff;
-    color: #8b5cf6;
+    background: rgba(79, 70, 229, 0.08);
+    color: #4f46e5;
   }
 `
 
@@ -594,16 +587,16 @@ const DateDisplayText = styled.div`
   gap: 8px;
   font-size: 17px;
   font-weight: 700;
-  color: #1e293b;
+  color: #111827;
 `
 
 const EraTag = styled.span`
   padding: 4px 8px;
-  background: #fee2e2;
+  background: #fef2f2;
   color: #dc2626;
   font-size: 11px;
   font-weight: 700;
-  border-radius: 4px;
+  border-radius: 6px;
 `
 
 const CalendarGrid = styled.div`
@@ -634,14 +627,14 @@ const DayCell = styled.button<{
   justify-content: center;
   height: 42px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: ${({ $isSelected }) => ($isSelected ? '600' : '500')};
   color: ${({ $isDisabled, $isSelected }) =>
-    $isDisabled ? '#e5e7eb' : $isSelected ? '#111827' : '#1f2937'};
-  background: ${({ $isSelected }) => ($isSelected ? '#f3f4f6' : 'transparent')};
+    $isDisabled ? '#e5e7eb' : $isSelected ? '#fff' : '#111827'};
+  background: ${({ $isSelected }) => ($isSelected ? '#4f46e5' : 'transparent')};
   cursor: ${({ $isDisabled }) => ($isDisabled ? 'not-allowed' : 'pointer')};
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
   position: relative;
 
   ${({ $isToday, $isSelected }) =>
@@ -649,23 +642,24 @@ const DayCell = styled.button<{
     !$isSelected &&
     `
     background: #fef3c7;
-    color: #f59e0b;
-    font-weight: 700;
+    color: #d97706;
+    font-weight: 600;
   `}
 
   &:hover:not(:disabled) {
     background: ${({ $isSelected, $isDisabled, $isToday }) =>
       $isSelected
-        ? '#e5e7eb'
+        ? '#4338ca'
         : $isDisabled
           ? 'transparent'
           : $isToday
             ? '#fef3c7'
-            : '#f9fafb'};
-    transform: ${({ $isDisabled }) => ($isDisabled ? 'none' : 'none')};
+            : 'rgba(79, 70, 229, 0.08)'};
+    color: ${({ $isSelected, $isDisabled }) =>
+      $isSelected && !$isDisabled ? '#fff' : undefined};
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
 `

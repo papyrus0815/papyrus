@@ -8,7 +8,23 @@ import { FormSidePanel } from '@/shared/ui/form-side-panel'
 import type { HistoricalCountry, Era } from '@/entities/historical-country/api'
 import { useHistoricalCountry } from '@/features/historical-country/use-historical-countries.hook'
 import { uploadImage } from '@/shared/api/upload'
+import type { TransitionEventType } from '@/shared/api/historical-countries'
+import { DatePickerModal } from '@/shared/ui/date-picker'
 import * as S from '../../../../pages/history/country/country.styles'
+
+const TRANSITION_EVENT_LABELS: Record<TransitionEventType, string> = {
+  FOUNDED: '건국',
+  CONQUEST: '정복',
+  TREATY: '조약',
+  INDEPENDENCE: '독립',
+  UNIFICATION: '통일',
+  UNION: '합병/연합',
+  DISSOLVED: '멸망',
+  SUCCESSION: '계승',
+  SECULARIZATION: '세속화',
+  SPLIT: '분열',
+  OTHER: '기타',
+}
 
 /**
  * 역사적 국가 Form 스키마
@@ -90,6 +106,8 @@ interface HistoricalCountryFormProps {
       id?: string
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
+      transitionEventType?: TransitionEventType
+      transitionEventDate?: string
     },
   ) => Promise<void>
 }
@@ -112,6 +130,12 @@ const STATE_TYPE_OPTIONS = [
     label: '왕조',
     icon: '🎭',
     desc: '세습적 왕가가 통치하는 국가',
+  },
+  {
+    value: 'HEREDITARY',
+    label: '세습',
+    icon: '🏛️',
+    desc: '세습적 통치가 이어지는 정치체',
   },
   {
     value: 'FEDERATION',
@@ -232,9 +256,15 @@ export function HistoricalCountryForm({
     string[]
   >([])
 
-  /** 선택된 상위 역사적 국가 ID 배열 */
+  /** 선택된 상위 역사적 국가 ID 배열 (후임) */
   const [selectedParentHistoricalIds, setSelectedParentHistoricalIds] =
     useState<string[]>([])
+
+  /** 상위(후임) 설정 시 변천 유형·날짜 */
+  const [transitionEventType, setTransitionEventType] =
+    useState<TransitionEventType>('SUCCESSION')
+  const [transitionEventDate, setTransitionEventDate] = useState('')
+  const [transitionDatePickerOpen, setTransitionDatePickerOpen] = useState(false)
 
   /** 수정 시 상세 API로 시작/종료 시점 등 전체 필드 확실히 로드 */
   const { data: editingDetail } = useHistoricalCountry(editing?.id)
@@ -403,9 +433,11 @@ export function HistoricalCountryForm({
     if (selectedModernCountries.length > 0) {
       payload.parentModernCountryIds = selectedModernCountries
     }
-    // 상위 역사적 국가가 선택된 경우 추가
+    // 상위(후임) 선택 시 추가 + 변천 유형·날짜 (API에서 Transition 생성에 사용)
     if (selectedParentHistoricalIds.length > 0) {
       payload.parentHistoricalCountryIds = selectedParentHistoricalIds
+      payload.transitionEventType = transitionEventType
+      payload.transitionEventDate = transitionEventDate || undefined
     }
 
     // 저장 및 폼 초기화
@@ -415,6 +447,8 @@ export function HistoricalCountryForm({
     setThumbnailFile(null)
     setSelectedModernCountries([])
     setSelectedParentHistoricalIds([])
+    setTransitionEventType('SUCCESSION')
+    setTransitionEventDate('')
     onClose()
   }
 
@@ -430,6 +464,8 @@ export function HistoricalCountryForm({
     setThumbnailUploading(false)
     setSelectedModernCountries([])
     setSelectedParentHistoricalIds([])
+    setTransitionEventType('SUCCESSION')
+    setTransitionEventDate('')
     onClose()
   }
 
@@ -756,23 +792,23 @@ export function HistoricalCountryForm({
                 )}
               </S.FormField>
 
-              {/* 상위 역사적 국가 (다중 선택, 역사적 국가도 상위로 지정 가능) */}
+              {/* 상위 역사적 국가 = 후임 (이 국가가 어떤 국가로 이어졌는지). 예: 고려 → 조선 시 고려가 조선 선택 */}
               {historicalCountries.length > 0 && (
-                <S.FormField>
-                  <S.FormLabel htmlFor="parentHistoricalCountryIds">
-                    상위 역사적 국가 (선택, 여러 개 가능)
-                  </S.FormLabel>
-                  <S.SelectButton
-                    type="button"
-                    onClick={() => setShowParentHistoricalModal(true)}
-                    $hasValue={selectedParentHistoricalIds.length > 0}
-                  >
-                    <span>{getParentHistoricalLabel()}</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                      <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
-                    </svg>
-                  </S.SelectButton>
-                  {selectedParentHistoricalIds.length > 0 && (
+                <>
+                  <S.FormField>
+                    <S.FormLabel htmlFor="parentHistoricalCountryIds">
+                      상위 역사적 국가 (후임)
+                    </S.FormLabel>
+                    <S.SelectButton
+                      type="button"
+                      onClick={() => setShowParentHistoricalModal(true)}
+                      $hasValue={selectedParentHistoricalIds.length > 0}
+                    >
+                      <span>{getParentHistoricalLabel()}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
+                      </svg>
+                    </S.SelectButton>
                     <div
                       style={{
                         fontSize: '12px',
@@ -780,10 +816,72 @@ export function HistoricalCountryForm({
                         marginTop: '4px',
                       }}
                     >
-                      {selectedParentHistoricalIds.length}개 선택됨
+                      이 국가가 어떤 국가로 이어졌는지. 예: 고려 → 조선
                     </div>
+                    {selectedParentHistoricalIds.length > 0 && (
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: '#374151',
+                          marginTop: '4px',
+                        }}
+                      >
+                        {selectedParentHistoricalIds.length}개 선택됨
+                      </div>
+                    )}
+                  </S.FormField>
+                  {selectedParentHistoricalIds.length > 0 && (
+                    <S.FormRow>
+                      <S.FormField>
+                        <S.FormLabel>변천 유형</S.FormLabel>
+                        <select
+                          value={transitionEventType}
+                          onChange={(e) =>
+                            setTransitionEventType(e.target.value as TransitionEventType)
+                          }
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 12,
+                            fontSize: 14,
+                            color: '#111827',
+                            background: '#fff',
+                          }}
+                        >
+                          {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map(
+                            (k) => (
+                              <option key={k} value={k}>
+                                {TRANSITION_EVENT_LABELS[k]}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </S.FormField>
+                      <S.FormField>
+                        <S.FormLabel>변천 날짜</S.FormLabel>
+                        <button
+                          type="button"
+                          onClick={() => setTransitionDatePickerOpen(true)}
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 12,
+                            fontSize: 14,
+                            color: transitionEventDate ? '#111827' : '#9ca3af',
+                            background: '#fff',
+                            textAlign: 'left',
+                          }}
+                        >
+                          {transitionEventDate
+                            ? transitionEventDate.replace(/-/g, '.')
+                            : '날짜 선택'}
+                        </button>
+                      </S.FormField>
+                    </S.FormRow>
                   )}
-                </S.FormField>
+                </>
               )}
             </S.FormRow>
 
@@ -1800,6 +1898,17 @@ export function HistoricalCountryForm({
             document.body,
           )
         : null}
+
+      <DatePickerModal
+        isOpen={transitionDatePickerOpen}
+        onClose={() => setTransitionDatePickerOpen(false)}
+        onSelect={(date) => {
+          setTransitionEventDate(date)
+          setTransitionDatePickerOpen(false)
+        }}
+        initialDate={transitionEventDate || undefined}
+        title="변천 날짜 선택"
+      />
     </>
   )
 }

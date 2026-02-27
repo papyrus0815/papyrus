@@ -91,7 +91,7 @@ export class HistoricalCountryPrismaRepository
       },
     })
 
-    // 상위 역사적 국가 멤버십 생성 (이 국가가 하위로 소속)
+    // 상위 역사적 국가 = 후임. 멤버십 생성 (이 국가가 전임, 상위가 후임)
     if (
       data.parentHistoricalCountryIds &&
       data.parentHistoricalCountryIds.length > 0
@@ -103,6 +103,18 @@ export class HistoricalCountryPrismaRepository
           role: HistoricalMembershipRole.OTHER,
         })),
       })
+      // 변천 유형·날짜가 있으면 Transition도 생성 (전임=이 국가 → 후임=상위)
+      if (data.transitionEventType && data.transitionEventDate) {
+        const eventDate = new Date(data.transitionEventDate)
+        await this.prisma.historicalCountryTransition.createMany({
+          data: data.parentHistoricalCountryIds.map((successorId) => ({
+            predecessorId: country.id,
+            successorId,
+            eventType: data.transitionEventType!,
+            eventDate,
+          })),
+        })
+      }
     }
 
     return this.toEntity(country as any)
@@ -135,11 +147,14 @@ export class HistoricalCountryPrismaRepository
       })
     }
 
-    // 상위 역사적 국가 멤버십 업데이트 (이 국가가 member로 소속된 관계)
+    // 상위(후임) 멤버십 + 변천(Transition) 업데이트
     if (data.parentHistoricalCountryIds !== undefined) {
       await this.prisma.$transaction(async (tx) => {
         await tx.historicalCountryMembership.deleteMany({
           where: { memberCountryId: id },
+        })
+        await tx.historicalCountryTransition.deleteMany({
+          where: { predecessorId: id },
         })
         if (
           data.parentHistoricalCountryIds &&
@@ -152,6 +167,17 @@ export class HistoricalCountryPrismaRepository
               role: HistoricalMembershipRole.OTHER,
             })),
           })
+          if (data.transitionEventType && data.transitionEventDate) {
+            const eventDate = new Date(data.transitionEventDate)
+            await tx.historicalCountryTransition.createMany({
+              data: data.parentHistoricalCountryIds.map((successorId) => ({
+                predecessorId: id,
+                successorId,
+                eventType: data.transitionEventType!,
+                eventDate,
+              })),
+            })
+          }
         }
       })
     }

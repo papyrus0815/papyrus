@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { EventMethod } from '@prisma/client'
+import { AttachmentOwner, EventMethod } from '@prisma/client'
 import {
   IPersonRepository,
   CreatePersonData,
@@ -7,6 +7,8 @@ import {
 } from '../domain/person.repository'
 import { PersonPrismaRepository } from '../infrastructure/person.prisma.repository'
 import { NotificationService } from '../../notification/application/notification.service'
+import { PrismaService } from '@prisma/prisma.service'
+import { UploadService } from '../../shared/upload/upload.service'
 import {
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -21,6 +23,7 @@ import {
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
+  CreateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
@@ -54,6 +57,8 @@ export class PersonService {
   constructor(
     private readonly personRepository: PersonPrismaRepository,
     private readonly notificationService: NotificationService,
+    private readonly prisma: PrismaService,
+    private readonly uploadService: UploadService,
   ) {}
 
   /**
@@ -136,7 +141,8 @@ export class PersonService {
   }
 
   /**
-   * 인물 삭제 (accountId 있으면 소유자만 가능)
+   * 인물 삭제 (accountId 있으면 소유자만 가능).
+   * 첨부파일(Attachment) 및 프로필/경력/학력/수상 이미지 파일도 함께 삭제합니다.
    */
   async delete(id: string, accountId?: string): Promise<void> {
     const person = await this.personRepository.findById(id, accountId)
@@ -145,6 +151,60 @@ export class PersonService {
         ? new ForbiddenException('본인이 등록한 인물만 삭제할 수 있습니다.')
         : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
     }
+
+    // 1) Attachment 테이블: PERSON 소유 첨부파일 조회 → 디스크 파일 삭제 → DB 레코드 삭제
+    const attachments = await this.prisma.attachment.findMany({
+      where: { ownerType: AttachmentOwner.PERSON, ownerId: id },
+    })
+    for (const att of attachments) {
+      await this.uploadService.deleteFileByRelativePath(att.filePath)
+    }
+    if (attachments.length > 0) {
+      await this.prisma.attachment.deleteMany({
+        where: { ownerType: AttachmentOwner.PERSON, ownerId: id },
+      })
+    }
+
+    // 2) 인물 관련 이미지 URL 수집 (프로필, 학력, 경력, 수상 등) 후 디스크 파일 삭제
+    const personWithImages = await this.prisma.person.findUnique({
+      where: { id },
+      select: {
+        profileImageUrl: true,
+        profileImages: { select: { url: true } },
+        educations: { select: { images: { select: { url: true } } } },
+        militaryCareers: { select: { images: { select: { url: true } } } },
+        businessCareers: { select: { images: { select: { url: true } } } },
+        academicCareers: { select: { images: { select: { url: true } } } },
+        religiousCareers: { select: { images: { select: { url: true } } } },
+        artistCareers: { select: { images: { select: { url: true } } } },
+        athleteCareers: { select: { images: { select: { url: true } } } },
+        mediaCareers: { select: { images: { select: { url: true } } } },
+        legalCareers: { select: { images: { select: { url: true } } } },
+        medicalCareers: { select: { images: { select: { url: true } } } },
+        awards: { select: { images: { select: { url: true } } } },
+      },
+    })
+    if (personWithImages) {
+      const urls: (string | null | undefined)[] = [
+        personWithImages.profileImageUrl ?? undefined,
+        ...(personWithImages.profileImages?.map((p) => p.url) ?? []),
+        ...(personWithImages.educations?.flatMap((e) => e.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.militaryCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.businessCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.academicCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.religiousCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.artistCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.athleteCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.mediaCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.legalCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.medicalCareers?.flatMap((c) => c.images?.map((i) => i.url) ?? []) ?? []),
+        ...(personWithImages.awards?.flatMap((a) => a.images?.map((i) => i.url) ?? []) ?? []),
+      ]
+      for (const url of urls) {
+        await this.uploadService.deleteFileByUrl(url)
+      }
+    }
+
     await this.personRepository.delete(id)
     await this.notificationService.notifyPerson(
       personDisplayName(person),
@@ -267,6 +327,30 @@ export class PersonService {
     historicalCountryId?: string
   }): Promise<any[]> {
     return this.personRepository.findTenuresByCountry(params)
+  }
+
+  /**
+   * 재임 업적·한일 추가 (사건과 별도)
+   */
+  async createTenureAchievement(
+    tenureId: string,
+    dto: CreateTenureAchievementDto,
+  ): Promise<any> {
+    return this.personRepository.createTenureAchievement(tenureId, dto)
+  }
+
+  /**
+   * 사건 페이지에 표시할 업적 목록
+   */
+  async findAchievementsForEventsPage(): Promise<any[]> {
+    return this.personRepository.findAchievementsForEventsPage()
+  }
+
+  /**
+   * 재임 업적 삭제
+   */
+  async deleteTenureAchievement(tenureId: string, achievementId: string): Promise<void> {
+    return this.personRepository.deleteTenureAchievement(tenureId, achievementId)
   }
 
   /**

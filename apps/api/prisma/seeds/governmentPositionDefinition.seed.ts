@@ -25,6 +25,8 @@ const DEFINITIONS: {
   { id: 'gov-pos-emperor', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '황제', titleEn: 'Emperor', rank: 1 },
   { id: 'gov-pos-tenno', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '천황', titleEn: 'Emperor', titleLocal: '天皇', rank: 1 },
   { id: 'gov-pos-shogun', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '쇼군', titleEn: 'Shogun', titleLocal: '将軍', rank: 2 },
+  { id: 'gov-pos-elector', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '선제후', titleEn: 'Prince-Elector', titleLocal: 'Kurfürst', rank: 2 },
+  { id: 'gov-pos-margrave', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '변경백', titleEn: 'Margrave', titleLocal: 'Markgraf', rank: 2 },
   { id: 'gov-pos-president', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '대통령', titleEn: 'President', rank: 1 },
   { id: 'gov-pos-khan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '칸', titleEn: 'Khagan', rank: 1 },
   { id: 'gov-pos-sultan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '술탄', titleEn: 'Sultan', rank: 1 },

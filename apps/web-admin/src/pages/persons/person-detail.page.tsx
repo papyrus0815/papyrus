@@ -11,12 +11,13 @@
  */
 import React, { useEffect, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { useDeletePerson } from '@/entities/person/api'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -368,11 +369,14 @@ function HeroImageGallery({
 export default function PersonDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const playClickSound = useClickSound()
+  const deletePersonMutation = useDeletePerson()
   const [useMockData, setUseMockData] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [selectedFamilyMember, setSelectedFamilyMember] =
     useState<FamilyMember | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
 
   // API로 인물 상세 정보 가져오기 (관계 데이터 포함)
@@ -494,6 +498,28 @@ export default function PersonDetailPage() {
           <PageTitleIcon>👤</PageTitleIcon>
           <PageTitleText>인물 상세</PageTitleText>
         </PageTitle>
+        {!useMockData && person?.id && (
+          <HeaderActions>
+            <EditButton
+              type="button"
+              onClick={() => {
+                playClickSound()
+                navigate(`/persons/${person.id}/edit`)
+              }}
+            >
+              편집
+            </EditButton>
+            <DeleteButton
+              type="button"
+              onClick={() => {
+                playClickSound()
+                setShowDeleteConfirm(true)
+              }}
+            >
+              삭제
+            </DeleteButton>
+          </HeaderActions>
+        )}
       </PageHeader>
 
       {/* 탭 내비게이션 */}
@@ -1793,6 +1819,65 @@ export default function PersonDetailPage() {
           </>
         )}
       </AnimatePresence>
+
+      {/* 인물 삭제 확인 모달 */}
+      <AnimatePresence>
+        {showDeleteConfirm && id && (
+          <>
+            <ModalOverlay
+              onClick={() => !deletePersonMutation.isPending && setShowDeleteConfirm(false)}
+            />
+            <ModalContent
+              as={motion.div}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            >
+              <ModalTitle>인물 삭제</ModalTitle>
+              <ModalClose
+                onClick={() => !deletePersonMutation.isPending && setShowDeleteConfirm(false)}
+                aria-label="닫기"
+              >
+                ×
+              </ModalClose>
+              <ModalBody>
+                <p style={{ margin: '0 0 20px', color: colors.text.secondary }}>
+                  이 인물을 삭제하시겠습니까? 첨부된 파일도 함께 삭제됩니다.
+                </p>
+                <ModalFooter style={{ display: 'flex', gap: 10 }}>
+                  <ModalButton
+                    type="button"
+                    style={{ flex: 1 }}
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deletePersonMutation.isPending}
+                  >
+                    취소
+                  </ModalButton>
+                  <DeleteConfirmButton
+                    type="button"
+                    style={{ flex: 1 }}
+                    onClick={() => {
+                      deletePersonMutation.mutate(id, {
+                        onSuccess: () => {
+                          queryClient.invalidateQueries({
+                            queryKey: ['person-detail', id],
+                          })
+                          navigate('/persons')
+                        },
+                        onSettled: () => setShowDeleteConfirm(false),
+                      })
+                    }}
+                    disabled={deletePersonMutation.isPending}
+                  >
+                    {deletePersonMutation.isPending ? '삭제 중...' : '삭제'}
+                  </DeleteConfirmButton>
+                </ModalFooter>
+              </ModalBody>
+            </ModalContent>
+          </>
+        )}
+      </AnimatePresence>
     </ModernWrap>
   )
 }
@@ -1917,6 +2002,50 @@ const PageTitleText = styled.h1`
 
   @media (max-width: 768px) {
     font-size: 18px;
+  }
+`
+
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+`
+
+const EditButton = styled.button`
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${colors.primary};
+  background: ${colors.background.white};
+  border: 1px solid ${colors.border.dark};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: ${colors.background.hover};
+    border-color: ${colors.primary};
+  }
+`
+
+const DeleteButton = styled.button`
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${colors.danger};
+  background: ${colors.background.white};
+  border: 1px solid ${colors.danger};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #fef2f2;
   }
 `
 
@@ -2166,12 +2295,6 @@ const StatLabel = styled.div`
   color: ${colors.text.tertiary};
   text-transform: uppercase;
   letter-spacing: 0.5px;
-`
-
-const HeaderActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
 `
 
 const IconButton = styled.button<{ $variant?: 'danger' }>`
@@ -3694,6 +3817,19 @@ const ModalButton = styled.button`
 
   &:active {
     transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
+
+const DeleteConfirmButton = styled(ModalButton)`
+  background: ${colors.danger};
+
+  &:hover:not(:disabled) {
+    background: #b91c1c;
   }
 `
 

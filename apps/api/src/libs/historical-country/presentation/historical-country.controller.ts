@@ -18,6 +18,9 @@ import { CreateHistoricalCountryDto } from './dto/create-historical-country.dto'
 import { UpdateHistoricalCountryDto } from './dto/update-historical-country.dto'
 import { HistoricalCountryResponseDto } from './dto/historical-country.response'
 import { HistoricalCountry } from '../domain/historical-country.entity'
+import { CreateHistoricalCountryTransitionDto } from './dto/create-transition.dto'
+import { UpdateHistoricalCountryTransitionDto } from './dto/update-transition.dto'
+import type { HistoricalCountryTransitionResponseDto } from './dto/transition.response'
 
 /**
  * 역사적 국가 API (개인 정보 플랫폼: 로그인한 계정 소유 데이터만)
@@ -47,6 +50,24 @@ export class HistoricalCountryController {
   }
 
   /**
+   * 해당 역사적 국가가 관여된 계승·변천 목록 조회 (전임 또는 후임)
+   *
+   * @param id 역사적 국가 ID
+   * @returns 계승·변천 목록
+   * @tag historical-countries
+   */
+  @Get(':id/transitions')
+  async getTransitionsByHistoricalCountryId(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<HistoricalCountryTransitionResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const list =
+      await this.historicalCountryService.getTransitionsByHistoricalCountryId(id, accountId)
+    return list.map((t) => this.transitionToResponseDto(t))
+  }
+
+  /**
    * 역사적 국가 상세 조회 (본인 등록분만)
    *
    * @param id 역사적 국가 ID
@@ -66,6 +87,31 @@ export class HistoricalCountryController {
       this.historicalCountryService.getParentHistoricalCountryIdsByMemberId(id),
     ])
     return this.toResponseDto(country, parentModernCountryIds, parentHistoricalCountryIds)
+  }
+
+  /**
+   * 계승/변천 관계 생성 (전임·후임 국가 모두 본인 소유)
+   *
+   * @param dto 계승·변천 생성 정보
+   * @returns 생성된 계승·변천
+   * @tag historical-countries
+   */
+  @Post('transitions')
+  async createTransition(
+    @Body() dto: CreateHistoricalCountryTransitionDto,
+    @Request() req: any,
+  ): Promise<HistoricalCountryTransitionResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const t = await this.historicalCountryService.createTransition(
+      {
+        predecessorId: dto.predecessorId,
+        successorId: dto.successorId,
+        eventType: dto.eventType,
+        eventDate: dto.eventDate,
+      },
+      accountId,
+    )
+    return this.transitionToResponseDto(t)
   }
 
   /**
@@ -98,10 +144,31 @@ export class HistoricalCountryController {
         stateType: dto.stateType,
         parentModernCountryIds: dto.parentModernCountryIds,
         parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
+        transitionEventType: dto.transitionEventType,
+        transitionEventDate: dto.transitionEventDate,
       },
       accountId,
     )
     return this.toResponseDto(country)
+  }
+
+  /**
+   * 계승/변천 관계 수정
+   *
+   * @param tid 계승·변천 ID
+   * @param dto 수정 정보
+   * @returns 수정된 계승·변천
+   * @tag historical-countries
+   */
+  @Put('transitions/:tid')
+  async updateTransition(
+    @Param('tid') tid: string,
+    @Body() dto: UpdateHistoricalCountryTransitionDto,
+    @Request() req: any,
+  ): Promise<HistoricalCountryTransitionResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const t = await this.historicalCountryService.updateTransition(tid, dto, accountId)
+    return this.transitionToResponseDto(t)
   }
 
   /**
@@ -137,10 +204,28 @@ export class HistoricalCountryController {
         stateType: dto.stateType,
         parentModernCountryIds: dto.parentModernCountryIds,
         parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
+        transitionEventType: dto.transitionEventType,
+        transitionEventDate: dto.transitionEventDate,
       },
       accountId,
     )
     return this.toResponseDto(country)
+  }
+
+  /**
+   * 계승/변천 관계 삭제
+   *
+   * @param tid 계승·변천 ID
+   * @tag historical-countries
+   */
+  @Delete('transitions/:tid')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteTransition(
+    @Param('tid') tid: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.historicalCountryService.deleteTransition(tid, accountId)
   }
 
   /**
@@ -188,6 +273,30 @@ export class HistoricalCountryController {
       parentHistoricalCountryIds,
       createdAt: country.createdAt.toISOString(),
       updatedAt: country.updatedAt.toISOString(),
+    }
+  }
+
+  private transitionToResponseDto(t: {
+    id: string
+    predecessorId: string
+    successorId: string
+    eventType: string
+    eventDate: Date
+    predecessorName?: string
+    successorName?: string
+    createdAt: Date
+    updatedAt: Date
+  }): HistoricalCountryTransitionResponseDto {
+    return {
+      id: t.id,
+      predecessorId: t.predecessorId,
+      successorId: t.successorId,
+      eventType: t.eventType as HistoricalCountryTransitionResponseDto['eventType'],
+      eventDate: t.eventDate instanceof Date ? t.eventDate.toISOString() : (t.eventDate as string),
+      predecessorName: t.predecessorName,
+      successorName: t.successorName,
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
     }
   }
 }

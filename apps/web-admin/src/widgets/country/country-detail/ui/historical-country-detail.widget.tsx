@@ -1,10 +1,22 @@
 import React, { useEffect, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import * as CountryStyles from '@/pages/history/country/country.styles'
+
+import {
+  getTransitionsByHistoricalCountryId,
+  createHistoricalCountryTransition,
+  deleteHistoricalCountryTransition,
+  getAllHistoricalCountries,
+  type HistoricalCountryTransitionDto,
+  type CreateHistoricalCountryTransitionDto,
+  type TransitionEventType,
+} from '@/shared/api/historical-countries'
+import { DatePickerModal } from '@/shared/ui/date-picker'
 
 import { historicalCountryMockData } from '../mock/historical-country.mock'
 import { CountryFlag } from '../../shared'
@@ -195,6 +207,21 @@ interface HistoricalCountryDetailProps {
 /**
  * 역사적 국가 상세 페이지
  */
+// 계승 이벤트 유형 한글 라벨 (배지·개요용, SuccessionSection보다 위에 정의)
+const TRANSITION_EVENT_LABELS: Record<string, string> = {
+  FOUNDED: '건국',
+  CONQUEST: '정복',
+  TREATY: '조약',
+  INDEPENDENCE: '독립',
+  UNIFICATION: '통일',
+  UNION: '합병/연합',
+  DISSOLVED: '멸망',
+  SUCCESSION: '계승',
+  SECULARIZATION: '세속화',
+  SPLIT: '분열',
+  OTHER: '기타',
+}
+
 export function HistoricalCountryDetail({
   country,
   isLoading = false,
@@ -206,6 +233,21 @@ export function HistoricalCountryDetail({
   const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(
     () => initialTab ?? 'overview',
   )
+
+  const isHistorical = country.type === 'historical'
+  const historicalCountryId = isHistorical ? country.id : null
+  const { data: transitions = [] } = useQuery({
+    queryKey: ['historical-country-transitions', historicalCountryId],
+    queryFn: () => getTransitionsByHistoricalCountryId(historicalCountryId!),
+    enabled: !!historicalCountryId,
+  })
+  // 이 국가가 후임인 변천 = 탄생 유형 (고려 → 조선 시 조선 입장에서 "계승")
+  const incomingTransition = transitions.find(
+    (t) => t.successorId === historicalCountryId,
+  )
+  const incomingCategoryLabel = incomingTransition
+    ? TRANSITION_EVENT_LABELS[incomingTransition.eventType] ?? incomingTransition.eventType
+    : null
 
   const handleTabChange = (tab: HistoricalCountryTab) => {
     setActiveTab(tab)
@@ -272,6 +314,7 @@ export function HistoricalCountryDetail({
                 duration={calculateDuration()}
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
+                incomingCategoryLabel={incomingCategoryLabel}
               />
 
               <AnimatePresence mode="wait">
@@ -283,7 +326,10 @@ export function HistoricalCountryDetail({
                   transition={{ duration: 0.2 }}
                 >
                   {activeTab === 'overview' && (
-                    <HistoricalOverviewSection country={country} />
+                    <HistoricalOverviewSection
+                      country={country}
+                      incomingCategoryLabel={incomingCategoryLabel}
+                    />
                   )}
                   {activeTab === 'events' && (
                     <HistoricalEventsSection country={country} />
@@ -482,6 +528,7 @@ function getStateTypeLabel(stateType: string): string {
     NOMADIC_EMPIRE: '유목 제국',
     TRIBAL_UNION: '부족연합',
     DYNASTY: '왕조',
+    HEREDITARY: '세습',
     PERSONAL_UNION: '동군연합',
     OTHER: '기타',
   }
@@ -498,6 +545,8 @@ interface HistoricalCountryTabsProps {
   duration: string | null
   activeTab: HistoricalCountryTab
   onTabChange: (tab: HistoricalCountryTab) => void
+  /** 이 국가가 후임인 변천의 카테고리 라벨 (예: 계승, 세속화) */
+  incomingCategoryLabel?: string | null
 }
 
 function HistoricalCountryTabs({
@@ -506,6 +555,7 @@ function HistoricalCountryTabs({
   duration,
   activeTab,
   onTabChange,
+  incomingCategoryLabel,
 }: HistoricalCountryTabsProps) {
   const tabs: { id: HistoricalCountryTab; label: string }[] = [
     { id: 'overview', label: '개요' },
@@ -1575,24 +1625,361 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
   )
 }
 
+// 계승 이벤트 유형 한글 라벨
+const TRANSITION_EVENT_LABELS: Record<TransitionEventType, string> = {
+  FOUNDED: '건국',
+  CONQUEST: '정복',
+  TREATY: '조약',
+  INDEPENDENCE: '독립',
+  UNIFICATION: '통일',
+  UNION: '합병/연합',
+  DISSOLVED: '멸망',
+  SUCCESSION: '계승',
+  SECULARIZATION: '세속화',
+  SPLIT: '분열',
+  OTHER: '기타',
+}
+
 // ============================================
 // 계승 관계 섹션
 // ============================================
 
 function SuccessionSection({ country }: { country: UnifiedCountry }) {
+  const queryClient = useQueryClient()
+  const [addOpen, setAddOpen] = useState(false)
+  const [form, setForm] = useState<{
+    successorId: string
+    eventType: TransitionEventType
+    eventDate: string
+  }>({ successorId: '', eventType: 'SUCCESSION', eventDate: '' })
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+
+  const isHistorical = country.type === 'historical'
+  const historicalCountryId = isHistorical ? country.id : null
+
+  const { data: transitions = [], isLoading } = useQuery({
+    queryKey: ['historical-country-transitions', historicalCountryId],
+    queryFn: () => getTransitionsByHistoricalCountryId(historicalCountryId!),
+    enabled: !!historicalCountryId,
+  })
+
+  const { data: historicalCountries = [] } = useQuery({
+    queryKey: ['historical-countries-list'],
+    queryFn: getAllHistoricalCountries,
+    enabled: addOpen,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (body: CreateHistoricalCountryTransitionDto) =>
+      createHistoricalCountryTransition(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['historical-country-transitions', historicalCountryId] })
+      setAddOpen(false)
+      setForm({ successorId: '', eventType: 'SUCCESSION', eventDate: '' })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (tid: string) => deleteHistoricalCountryTransition(tid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['historical-country-transitions', historicalCountryId] })
+    },
+  })
+
+  const handleAddSubmit = () => {
+    if (!historicalCountryId || !form.successorId || !form.eventDate) return
+    createMutation.mutate({
+      predecessorId: historicalCountryId,
+      successorId: form.successorId,
+      eventType: form.eventType,
+      eventDate: form.eventDate,
+    })
+  }
+
+  if (!isHistorical) {
+    return (
+      <div style={{ padding: 48, background: '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
+        <EmptyState message="계승 관계는 역사적 국가에서만 조회·등록할 수 있습니다." />
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
-        padding: '48px',
+        padding: '32px 48px 48px',
         background: '#fafafa',
         minHeight: 'calc(100vh - 300px)',
       }}
     >
-      <EmptyState
-        message="계승 관계 정보가 준비 중입니다"
-        description="전임 국가 및 후임 국가 관계가 표시됩니다"
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 24,
+          flexWrap: 'wrap',
+          gap: 16,
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
+          계승·변천 관계
+        </h3>
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          style={{
+            padding: '10px 20px',
+            background: '#6366f1',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          계승 추가
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>불러오는 중…</div>
+      ) : transitions.length === 0 ? (
+        <EmptyState
+          message="등록된 계승·변천 관계가 없습니다"
+          description="전임 국가 → 후임 국가, 이벤트 유형(계승·정복 등), 날짜를 등록할 수 있습니다."
+        />
+      ) : (
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {transitions.map((t) => (
+            <SuccessionRow
+              key={t.id}
+              transition={t}
+              currentCountryName={country.name}
+              onDelete={() => deleteMutation.mutate(t.id)}
+              isDeleting={deleteMutation.isPending}
+            />
+          ))}
+        </ul>
+      )}
+
+      {addOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setAddOpen(false)}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 20,
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              padding: 24,
+              width: '90%',
+              maxWidth: 440,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#111827' }}>
+              계승·변천 추가
+            </h4>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
+              전임: <strong>{country.name}</strong> → 후임 국가 선택
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                후임 국가
+              </label>
+              <select
+                value={form.successorId}
+                onChange={(e) => setForm((f) => ({ ...f, successorId: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  color: '#111827',
+                }}
+              >
+                <option value="">선택</option>
+                {historicalCountries
+                  .filter((c) => c.id !== historicalCountryId)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                유형
+              </label>
+              <select
+                value={form.eventType}
+                onChange={(e) => setForm((f) => ({ ...f, eventType: e.target.value as TransitionEventType }))}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  color: '#111827',
+                }}
+              >
+                {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map((k) => (
+                  <option key={k} value={k}>
+                    {TRANSITION_EVENT_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                날짜
+              </label>
+              <button
+                type="button"
+                onClick={() => setDatePickerOpen(true)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  color: form.eventDate ? '#111827' : '#9ca3af',
+                  background: '#fff',
+                  textAlign: 'left',
+                }}
+              >
+                {form.eventDate ? form.eventDate.replace(/-/g, '.') : '날짜 선택'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setAddOpen(false)}
+                style={{
+                  padding: '12px 24px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#64748b',
+                  background: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleAddSubmit}
+                disabled={!form.successorId || !form.eventDate || createMutation.isPending}
+                style={{
+                  padding: '12px 24px',
+                  border: 'none',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#fff',
+                  background: '#6366f1',
+                  cursor: 'pointer',
+                }}
+              >
+                {createMutation.isPending ? '등록 중…' : '등록'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DatePickerModal
+        isOpen={datePickerOpen}
+        onClose={() => setDatePickerOpen(false)}
+        onSelect={(date) => {
+          setForm((f) => ({ ...f, eventDate: date }))
+          setDatePickerOpen(false)
+        }}
+        initialDate={form.eventDate || undefined}
+        title="날짜 선택"
       />
     </div>
+  )
+}
+
+function SuccessionRow({
+  transition,
+  currentCountryName,
+  onDelete,
+  isDeleting,
+}: {
+  transition: HistoricalCountryTransitionDto
+  currentCountryName: string
+  onDelete: () => void
+  isDeleting: boolean
+}) {
+  const fromName = transition.predecessorName ?? '(전임)'
+  const toName = transition.successorName ?? '(후임)'
+  const eventLabel = TRANSITION_EVENT_LABELS[transition.eventType as TransitionEventType] ?? transition.eventType
+  const dateStr = transition.eventDate.slice(0, 10).replace(/-/g, '.')
+
+  return (
+    <li
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '16px 20px',
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 14,
+      }}
+    >
+      <span style={{ fontWeight: 600, color: '#0f172a' }}>{fromName}</span>
+      <span style={{ color: '#94a3b8' }}>→</span>
+      <span style={{ fontWeight: 600, color: '#0f172a' }}>{toName}</span>
+      <span
+        style={{
+          padding: '4px 10px',
+          background: '#f1f5f9',
+          borderRadius: 8,
+          fontSize: 12,
+          fontWeight: 600,
+          color: '#4f46e5',
+        }}
+      >
+        {eventLabel}
+      </span>
+      <span style={{ fontSize: 13, color: '#64748b' }}>{dateStr}</span>
+      <button
+        type="button"
+        onClick={onDelete}
+        disabled={isDeleting}
+        style={{
+          marginLeft: 'auto',
+          padding: '8px 12px',
+          fontSize: 12,
+          color: '#dc2626',
+          background: 'transparent',
+          border: '1px solid #fecaca',
+          borderRadius: 8,
+          cursor: isDeleting ? 'not-allowed' : 'pointer',
+        }}
+      >
+        {isDeleting ? '삭제 중…' : '삭제'}
+      </button>
+    </li>
   )
 }
 

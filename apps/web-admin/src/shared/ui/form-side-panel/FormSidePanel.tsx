@@ -115,16 +115,16 @@ const Overlay = styled.div`
   backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
 `
 
+/* 행정조직 폼 톤: 흰 배경, #e5e7eb 테두리, 인디고 포커스/버튼 */
 const Panel = styled.div`
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   width: min(600px, calc(100% - 40px));
-  background: #ffffff;
-  box-shadow:
-    -4px 0 24px rgba(0, 0, 0, 0.12),
-    -2px 0 8px rgba(0, 0, 0, 0.08);
+  background: #fff;
+  border-left: 1px solid #e5e7eb;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.06);
   z-index: ${Z_INDEX.DRAWER_CONTENT};
   display: flex;
   flex-direction: column;
@@ -134,20 +134,17 @@ const Header = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 24px 20px 24px;
-  border-bottom: 1px solid var(--border-color-light);
-  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+  padding: 24px 28px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
 `
 
 const Title = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #202124;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  color: #111827;
+  letter-spacing: -0.025em;
 `
 
 const CloseButton = styled.button`
@@ -158,49 +155,48 @@ const CloseButton = styled.button`
   height: 36px;
   border: none;
   background: transparent;
-  color: #5f6368;
+  color: #64748b;
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  border-radius: 10px;
+  transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #202124;
+    background: #f1f5f9;
+    color: #475569;
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
 `
 
 const Content = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 28px 24px;
 
-  /* 스크롤바 스타일링 */
   &::-webkit-scrollbar {
     width: 8px;
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f3f4;
+    background: #f8fafc;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: #e2e8f0;
     border-radius: 4px;
+  }
 
-    &:hover {
-      background: #bdc1c6;
-    }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
   }
 `
 
 const Footer = styled.div`
-  padding: 20px 24px;
-  border-top: 1px solid var(--border-color-light);
-  background: #fafbfc;
+  padding: 20px 28px;
+  border-top: 1px solid #f3f4f6;
+  background: #fff;
   display: flex;
   justify-content: stretch;
 `
@@ -213,32 +209,22 @@ const SubmitButton = styled.button`
   width: 100%;
   padding: 12px 24px;
   border: none;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #9146ff 100%);
-  color: #ffffff;
+  background: #6366f1;
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(173, 70, 255, 0.3);
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  transition: background 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
 
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(173, 70, 255, 0.4);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(0);
+    background: #4f46e5;
   }
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
     box-shadow: none;
   }
 

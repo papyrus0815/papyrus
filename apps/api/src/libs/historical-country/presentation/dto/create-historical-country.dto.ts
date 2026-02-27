@@ -7,7 +7,7 @@ import {
   Max,
   IsArray,
 } from 'class-validator'
-import { HistoricalStateType, Era } from '@prisma/client'
+import { HistoricalStateType, Era, TransitionEventType } from '@prisma/client'
 
 /**
  * 역사적 국가 생성 DTO
@@ -135,11 +135,25 @@ export class CreateHistoricalCountryDto {
   parentModernCountryIds?: string[]
 
   /**
-   * 상위 역사적 국가 ID 목록 (선택, 여러 개 가능)
+   * 상위 역사적 국가 ID 목록 (후임). 이 국가가 어떤 국가로 이어졌는지. 예: 고려 → 조선 시 고려가 [조선] 설정
    * @example ["historical-country-uuid-1"]
    */
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   parentHistoricalCountryIds?: string[]
+
+  /**
+   * 상위(후임) 설정 시 변천 유형 (상위가 1개 이상일 때 사용)
+   */
+  @IsOptional()
+  @IsEnum(TransitionEventType)
+  transitionEventType?: TransitionEventType
+
+  /**
+   * 상위(후임) 설정 시 변천 날짜 (ISO date, 예: 1392-07-17)
+   */
+  @IsOptional()
+  @IsString()
+  transitionEventDate?: string
 }
