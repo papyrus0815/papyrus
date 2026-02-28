@@ -1271,7 +1271,21 @@ const CardBody = styled.div`
   ul,
   ol {
     margin: 8px 0;
-    padding-left: 24px;
+    padding-left: 1.5em;
+    list-style-position: outside;
+  }
+  ul {
+    list-style-type: disc;
+  }
+  ol {
+    list-style-type: decimal;
+  }
+  li {
+    margin: 0.25em 0;
+    display: list-item;
+  }
+  li p {
+    margin: 0;
   }
 
   a {

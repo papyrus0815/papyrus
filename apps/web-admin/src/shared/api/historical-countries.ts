@@ -230,6 +230,7 @@ export interface HistoricalCountryMembershipDto {
   historicalCountryId: string
   memberCountryId: string
   role: HistoricalMembershipRole
+  isLeadingMember: boolean | null
   membershipStartDate: string | null
   membershipEndDate: string | null
   parentName?: string
@@ -242,12 +243,14 @@ export interface CreateHistoricalCountryMembershipDto {
   historicalCountryId: string
   memberCountryId: string
   role: HistoricalMembershipRole
+  isLeadingMember?: boolean
   membershipStartDate?: string
   membershipEndDate?: string
 }
 
 export interface UpdateHistoricalCountryMembershipDto {
   role?: HistoricalMembershipRole
+  isLeadingMember?: boolean
   membershipStartDate?: string
   membershipEndDate?: string
 }

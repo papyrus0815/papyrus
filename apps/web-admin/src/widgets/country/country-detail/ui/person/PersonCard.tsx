@@ -7,9 +7,11 @@ interface PersonCardProps {
   person: Person
   index: number
   onClick: () => void
+  /** 가문명 (dynastyId로 조회한 값, 있으면 표시) */
+  dynastyName?: string | null
 }
 
-export function PersonCard({ person, index, onClick }: PersonCardProps) {
+export function PersonCard({ person, index, onClick, dynastyName }: PersonCardProps) {
   const fullName = person.surname
     ? `${person.surname} ${person.name}`
     : person.name
@@ -46,6 +48,9 @@ export function PersonCard({ person, index, onClick }: PersonCardProps) {
           <Meta>
             <MetaBadge>{lifespan}</MetaBadge>
           </Meta>
+          {dynastyName && (
+            <DynastyBadge title="가문">가문: {dynastyName}</DynastyBadge>
+          )}
         </Info>
       </Content>
     </Card>
@@ -129,4 +134,12 @@ const MetaBadge = styled.span`
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
+`
+
+const DynastyBadge = styled.span`
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #7c3aed;
 `

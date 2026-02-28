@@ -158,6 +158,8 @@ model HistoricalCountry {
   name         String  @map("name") @db.VarChar(50)
   /// 국가명 (영문, 선택)
   enName       String? @map("en_name") @db.VarChar(50)
+  /// 국가명 유래 (어원·명칭 유래 설명)
+  nameOrigin   String? @map("name_origin") @db.Text
   /// 설명
   description  String? @map("description") @db.Text
   /// 대표 이미지 URL
@@ -232,6 +234,9 @@ model HistoricalCountry {
   /// 이 국가를 통치한 왕조들의 역사 (시기별)
   dynastyRules DynastyRule[] @relation("CountryDynastyRules")
 
+  /// 구성 민족 (예: 슬라브족, 게르만족) — Ethnicity와 다대다
+  ethnicities Ethnicity[] @relation("HistoricalCountryEthnicities")
+
   // --- 등록 계정 (개인 정보 플랫폼: 본인만 수정/삭제)
   accountId String?  @map("account_id") @db.Char(36)
   account   Account? @relation("AccountHistoricalCountries", fields: [accountId], references: [id], onDelete: SetNull)
@@ -283,6 +288,9 @@ model HistoricalCountryMembership {
 
   /// 소속 관계 내 역할 (HistoricalMembershipRole Enum 참조)
   role HistoricalMembershipRole @map("role")
+
+  /// 연방/연합 내 주축(주도국) 여부 (예: 독일 제국 내 프로이센)
+  isLeadingMember Boolean? @map("is_leading_member") @default(false)
 
   /// 소속 관계 시작일
   membershipStartDate DateTime? @map("membership_start_date")

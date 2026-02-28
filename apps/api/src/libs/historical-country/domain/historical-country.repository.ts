@@ -7,6 +7,7 @@ import { HistoricalStateType, Era, TransitionEventType } from '@prisma/client'
 export interface CreateHistoricalCountryData {
   name: string
   enName?: string
+  nameOrigin?: string
   description?: string
   thumbnailUrl?: string
   startEra?: Era
@@ -32,6 +33,7 @@ export interface CreateHistoricalCountryData {
 export interface UpdateHistoricalCountryData {
   name?: string
   enName?: string
+  nameOrigin?: string | null
   description?: string | null
   thumbnailUrl?: string | null
   startEra?: Era | null

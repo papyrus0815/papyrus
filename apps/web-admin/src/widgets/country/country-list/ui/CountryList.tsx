@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 
 import { AnimatePresence, motion } from 'framer-motion'
 
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { type ContinentOption, type Country } from '@/entities/country/api'
 import {
   COUNTRY_TYPE_LABELS,
@@ -63,6 +64,20 @@ const IconAdministration = () => (
     <path d="M8 21h8M12 17v4" />
   </svg>
 )
+const IconDynasty = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <path d="M9 22V12h6v10" />
+  </svg>
+)
+const IconEthnicity = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    <path d="M12 12v.01M12 6v.01M12 18v.01" />
+  </svg>
+)
 
 export type SortBy = 'name' | 'population' | 'area'
 export type ActiveTab = 'dashboard' | 'list'
@@ -93,6 +108,8 @@ export type DashboardContentView =
   | 'legislature'
   | 'military'
   | 'administration'
+  | 'dynasty'
+  | 'ethnicity'
 
 const DASHBOARD_MENU_ITEMS: {
   id: DashboardContentView
@@ -104,6 +121,8 @@ const DASHBOARD_MENU_ITEMS: {
   { id: 'legislature', label: '저원', icon: IconLegislature },
   { id: 'military', label: '군사', icon: IconMilitary },
   { id: 'administration', label: '행정부', icon: IconAdministration },
+  { id: 'dynasty', label: '가문', icon: IconDynasty },
+  { id: 'ethnicity', label: '민족', icon: IconEthnicity },
 ]
 
 function CountryListInner({
@@ -143,8 +162,19 @@ function CountryListInner({
   )
   const listRef = React.useRef<HTMLDivElement>(null)
 
-  // 대륙별로 그룹화 (현대 국가만; continentId 기준). 대륙 순서는 continents 배열 순서 유지
+  // 대륙별로 그룹화 (현대 국가만; continentId 기준). 과거만 선택 시 단일 그룹으로 플랫 목록
   const groupedByContinent = React.useMemo(() => {
+    // 과거(역사적)만 선택된 경우: 그룹 없이 단일 섹션으로 표시
+    if (countryTypeFilter === 'historical') {
+      if (filtered.length === 0) return []
+      return [
+        {
+          continentId: '__historical__',
+          name: '과거 국가',
+          countries: filtered,
+        },
+      ]
+    }
     const groups = new Map<string, typeof filtered>()
     const UNKNOWN = '__unknown__'
     for (const country of filtered) {
@@ -164,7 +194,7 @@ function CountryListInner({
       result.push({ continentId: '__unknown__', name: '미분류', countries: unknownList })
     }
     return result
-  }, [filtered, continents])
+  }, [filtered, continents, countryTypeFilter])
 
   // 액티브 국가가 변경되면 자동으로 펼치기
   React.useEffect(() => {
@@ -228,6 +258,7 @@ function CountryListInner({
   const handleClearFilters = () => {
     onQueryChange('')
     onContinentFilterChange('')
+    onCountryTypeFilterChange('all')
   }
 
   const handleAddClick = () => {
@@ -363,7 +394,7 @@ function CountryListInner({
                     : '면적순'}
               </S.FilterButton>
             </S.FilterWrapper>
-            {(query || continentFilter) && (
+            {(query || continentFilter || countryTypeFilter !== 'all') && (
               <S.ClearAllFiltersButton onClick={handleClearFilters}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <path
@@ -490,7 +521,7 @@ function CountryListInner({
                   overflow: 'hidden',
                 }}
               >
-            {(query || continentFilter) && (
+            {(query || continentFilter || countryTypeFilter !== 'all') && (
               <S.FilterResultBar>
                 <S.FilterResultText>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -513,7 +544,11 @@ function CountryListInner({
                     <S.EmptyFilterTitle>
                       {query
                         ? '일치하는 국가가 없어요'
-                        : '등록된 국가가 없어요'}
+                        : countryTypeFilter === 'historical'
+                          ? '등록된 과거 국가가 없어요'
+                          : countryTypeFilter === 'modern'
+                            ? '등록된 현대 국가가 없어요'
+                            : '등록된 국가가 없어요'}
                     </S.EmptyFilterTitle>
                     <S.EmptyFilterText>
                       {query && (
@@ -531,7 +566,15 @@ function CountryListInner({
                           필터를 초기화하거나 새 국가를 등록해보세요.
                         </>
                       )}
-                      {!query && !continentFilter && (
+                      {!query && countryTypeFilter === 'historical' && (
+                        <>
+                          과거(역사적) 국가를 등록한 뒤, 현대 국가 편집에서
+                          &quot;연결할 현대 국가&quot;로 지정하면 여기에 표시됩니다.
+                          <br />
+                          필터를 초기화하면 현대 국가 목록을 볼 수 있어요.
+                        </>
+                      )}
+                      {!query && !continentFilter && countryTypeFilter !== 'historical' && (
                         <>
                           아직 등록된 국가가 없어요.
                           <br />첫 국가를 등록해서 시작해보세요.
@@ -601,7 +644,7 @@ function CountryListInner({
                                 }}
                               >
                                 <img
-                                  src={country.thumbnailUrl}
+                                  src={getUploadImageUrl(country.thumbnailUrl)}
                                   alt={country.name}
                                   style={{
                                     width: '100%',
@@ -756,7 +799,7 @@ function CountryListInner({
                                           }}
                                         >
                                           <img
-                                            src={historical.thumbnailUrl}
+                                            src={getUploadImageUrl(historical.thumbnailUrl)}
                                             alt={historical.name}
                                             style={{
                                               width: '100%',

@@ -1,14 +1,20 @@
 import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { NestExpressApplication } from '@nestjs/platform-express'
+import { ExpressAdapter } from '@nestjs/platform-express'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
-import { json, urlencoded } from 'express'
+import type { Request, Response, NextFunction } from 'express'
+import express, { json, urlencoded } from 'express'
 
 import cookieParser from 'cookie-parser'
+import { existsSync } from 'fs'
 import { readFileSync } from 'fs'
-import { join } from 'path'
 
 import { AppConfigService } from '../../../libs/shared/config/index'
+import {
+  getUploadDirCandidates,
+  findUploadFilePath,
+} from '../../../libs/shared/upload/upload-path.util'
 import { AppModule } from './app.module'
 
 async function bootstrap() {
@@ -17,35 +23,58 @@ async function bootstrap() {
   console.log('🚀 Starting bootstrap process...')
 
   try {
-    console.log('📍 Step 1: Creating temporary app...')
-    // 임시로 앱을 만들어 config 가져오기
+    console.log('📍 Step 1: Getting config...')
     const tempApp = await NestFactory.create(AppModule, {
       logger: ['error', 'warn', 'log', 'debug', 'verbose'],
     })
-    console.log('📍 Step 2: Getting config service...')
     const configService = tempApp.get(AppConfigService)
     const config = configService.app
     const securityConfig = configService.security
-    console.log('📍 Step 3: Closing temporary app...')
     await tempApp.close()
 
-    console.log('📍 Step 4: Creating actual app...')
-    // 실제 앱 생성 (bodyParser: false 후 아래에서 10mb limit으로 직접 등록)
-    const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-      ...(securityConfig.useHttps
-        ? {
-            httpsOptions: {
-              key: readFileSync(config.sslKeyPath as string),
-              cert: readFileSync(config.sslCertPath as string),
-            },
-          }
-        : {}),
-      bodyParser: false,
+    console.log('📍 Step 2: Mounting /uploads and creating Nest app...')
+    const expressApp = express()
+    const uploadCandidates = getUploadDirCandidates(config.uploadPath)
+    expressApp.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
+      const raw = (req.originalUrl || req.url || '').split('?')[0]
+      const subpath = raw.replace(/^\/uploads\/?/, '').replace(/\/+/g, '/')
+      if (!subpath || subpath.includes('..')) {
+        res.status(400).send('Invalid path')
+        return
+      }
+      const filePath = findUploadFilePath(uploadCandidates, subpath)
+      if (!filePath) {
+        res.status(404).send('Not found')
+        return
+      }
+      res.sendFile(filePath, (err: Error | null) => {
+        if (err && !res.headersSent) res.status(500).send('Error')
+      })
     })
+    logger.log(
+      `📁 업로드 경로 후보: ${uploadCandidates.filter((d) => existsSync(d)).join(', ')}`,
+    )
+    expressApp.use(json({ limit: '10mb' }))
+    expressApp.use(urlencoded({ extended: true, limit: '10mb' }))
+    expressApp.use(cookieParser())
 
-    console.log('📍 Step 5: Configuring CORS...')
+    const app = await NestFactory.create<NestExpressApplication>(
+      AppModule,
+      new ExpressAdapter(expressApp),
+      {
+        ...(securityConfig.useHttps
+          ? {
+              httpsOptions: {
+                key: readFileSync(config.sslKeyPath as string),
+                cert: readFileSync(config.sslCertPath as string),
+              },
+            }
+          : {}),
+        bodyParser: false,
+      },
+    )
 
-    // CORS 설정
+    console.log('📍 Step 3: Configuring CORS...')
     app.enableCors({
       origin: (origin, cb) => {
         // 개발 환경에서는 모든 origin 허용
@@ -64,18 +93,6 @@ async function bootstrap() {
       },
       credentials: true,
       exposedHeaders: ['set-cookie', 'x-request-id'],
-    })
-
-    // Body parser (기본 ~100kb → 10mb로 상향, PayloadTooLargeError 방지)
-    app.use(json({ limit: '10mb' }))
-    app.use(urlencoded({ extended: true, limit: '10mb' }))
-
-    // 미들웨어
-    app.use(cookieParser())
-
-    // 정적 파일 서빙
-    app.useStaticAssets(join(process.cwd(), config.uploadPath), {
-      prefix: '/uploads',
     })
 
     // Swagger 설정

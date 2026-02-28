@@ -12,38 +12,18 @@ import { LoadingOverlay } from './LoadingOverlay'
 import { type OverviewSubTab, OverviewSubTabs } from './OverviewSubTabs'
 import { PersonTabContent } from './PersonTabContent'
 import { StatisticsModal } from './StatisticsModal'
-import { ChartsSection } from './charts-section.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
+import { EthnicitySection } from './ethnicity-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { HistorySection } from './history-section.widget'
-import { KPIGrid } from './kpi-grid.widget'
+import { LinkedHistoricalCountriesSection } from './linked-historical-countries-section.widget'
 import { MapRegionSection } from './map-region-section.widget'
 import { PersonListSection } from './person-list-section.widget'
 import { PersonStatsSection } from './person-stats-section.widget'
 
-// 목업 데이터
-const economicGrowthData = [
-  { year: '2018', growth: 2.8, avgGrowth: 2.5 },
-  { year: '2019', growth: 3.2, avgGrowth: 2.8 },
-  { year: '2020', growth: -2.5, avgGrowth: -2.0 },
-  { year: '2021', growth: 5.5, avgGrowth: 4.8 },
-  { year: '2022', growth: 4.1, avgGrowth: 3.9 },
-  { year: '2023', growth: 3.8, avgGrowth: 3.5 },
-  { year: '2024', growth: 4.2, avgGrowth: 3.8 },
-]
-
-const populationGrowthData = [
-  { year: '2018', rate: 0.52, projection: 0.5 },
-  { year: '2019', rate: 0.48, projection: 0.48 },
-  { year: '2020', rate: 0.35, projection: 0.45 },
-  { year: '2021', rate: 0.42, projection: 0.43 },
-  { year: '2022', rate: 0.38, projection: 0.4 },
-  { year: '2023', rate: 0.35, projection: 0.38 },
-  { year: '2024', rate: 0.32, projection: 0.35 },
-]
-
+// 목업 데이터 (지도 및 지역 탭용)
 const mockCities = [
   {
     id: '1',
@@ -80,24 +60,6 @@ const mockCities = [
     latitude: 36.3504,
     longitude: 127.3845,
   },
-]
-
-const exportData = [
-  { category: '반도체', value: 128 },
-  { category: '자동차', value: 95 },
-  { category: '석유제품', value: 76 },
-  { category: '선박', value: 64 },
-  { category: '기계류', value: 51 },
-  { category: '철강', value: 43 },
-]
-
-const importData = [
-  { category: '원유', value: 112 },
-  { category: '반도체', value: 89 },
-  { category: '천연가스', value: 67 },
-  { category: '기계류', value: 58 },
-  { category: '철강', value: 45 },
-  { category: '화학제품', value: 38 },
 ]
 
 export interface CountryDetailProps {
@@ -202,38 +164,6 @@ function CountryDetailInner({
       : '-'
   const gdpPerCapitaFormatted = '$45,000'
 
-  // 통계 데이터에서 KPI 메타 정보 계산
-  const latestPopulationGrowth =
-    populationGrowthData[populationGrowthData.length - 1]
-  const previousPopulationGrowth =
-    populationGrowthData[populationGrowthData.length - 2]
-  const populationGrowthChange =
-    latestPopulationGrowth && previousPopulationGrowth
-      ? (
-          ((latestPopulationGrowth.rate - previousPopulationGrowth.rate) /
-            previousPopulationGrowth.rate) *
-          100
-        ).toFixed(1)
-      : '0'
-  const populationGrowthRate = latestPopulationGrowth
-    ? `${latestPopulationGrowth.rate}%`
-    : '-'
-
-  const latestEconomicGrowth = economicGrowthData[economicGrowthData.length - 1]
-  const previousEconomicGrowth =
-    economicGrowthData[economicGrowthData.length - 2]
-  const economicGrowthChange =
-    latestEconomicGrowth && previousEconomicGrowth
-      ? (
-          ((latestEconomicGrowth.growth - previousEconomicGrowth.growth) /
-            Math.abs(previousEconomicGrowth.growth)) *
-          100
-        ).toFixed(1)
-      : '0'
-  const economicGrowthRate = latestEconomicGrowth
-    ? `${latestEconomicGrowth.growth}%`
-    : '-'
-
   const handleCityClick = (
     city: (typeof mockCities)[0] & {
       area?: string
@@ -323,14 +253,7 @@ function CountryDetailInner({
                       }}
                     >
                       {activeSubTab === 'statistics' && (
-                        <div>
-                          <ChartsSection
-                            economicGrowthData={economicGrowthData}
-                            populationGrowthData={populationGrowthData}
-                            exportData={exportData}
-                            importData={importData}
-                          />
-                        </div>
+                        <LinkedHistoricalCountriesSection country={country} />
                       )}
 
                       {activeSubTab === 'map' && (
@@ -349,6 +272,10 @@ function CountryDetailInner({
                           onCloseCategoryModal={() => setCategoryModalOpen(false)}
                           onOpenCategoryModal={() => setCategoryModalOpen(true)}
                         />
+                      )}
+
+                      {activeSubTab === 'ethnicity' && (
+                        <EthnicitySection countryId={country.id} />
                       )}
 
                       {activeSubTab === 'person' && (

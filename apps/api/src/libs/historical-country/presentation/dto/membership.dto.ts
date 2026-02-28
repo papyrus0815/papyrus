@@ -1,5 +1,5 @@
 import { HistoricalMembershipRole } from '@prisma/client'
-import { IsDateString, IsEnum, IsOptional, IsUUID } from 'class-validator'
+import { IsBoolean, IsDateString, IsEnum, IsOptional, IsUUID } from 'class-validator'
 
 export class CreateHistoricalCountryMembershipDto {
   @IsUUID()
@@ -10,6 +10,10 @@ export class CreateHistoricalCountryMembershipDto {
 
   @IsEnum(HistoricalMembershipRole)
   role!: HistoricalMembershipRole
+
+  @IsOptional()
+  @IsBoolean()
+  isLeadingMember?: boolean
 
   @IsOptional()
   @IsDateString()
@@ -26,6 +30,10 @@ export class UpdateHistoricalCountryMembershipDto {
   role?: HistoricalMembershipRole
 
   @IsOptional()
+  @IsBoolean()
+  isLeadingMember?: boolean
+
+  @IsOptional()
   @IsDateString()
   membershipStartDate?: string
 
@@ -39,6 +47,7 @@ export interface HistoricalCountryMembershipResponseDto {
   historicalCountryId: string
   memberCountryId: string
   role: HistoricalMembershipRole
+  isLeadingMember: boolean | null
   membershipStartDate: string | null
   membershipEndDate: string | null
   parentName?: string

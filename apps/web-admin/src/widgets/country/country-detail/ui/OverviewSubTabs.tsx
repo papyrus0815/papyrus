@@ -8,6 +8,7 @@ export type OverviewSubTab =
   | 'statistics'
   | 'map'
   | 'government'
+  | 'ethnicity'
   | 'person'
   | 'history'
 
@@ -49,6 +50,12 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             onClick={() => onSubTabChange('government')}
           >
             행정조직
+          </S.TabButton>
+          <S.TabButton
+            $active={activeSubTab === 'ethnicity'}
+            onClick={() => onSubTabChange('ethnicity')}
+          >
+            민족
           </S.TabButton>
           <S.TabButton
             $active={activeSubTab === 'person'}

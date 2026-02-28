@@ -9,11 +9,11 @@ import styled from 'styled-components'
 const TIMELINE_WIDTH = 72
 /** 타임라인 막대와 카드 영역 사이 여백(px) */
 const TIMELINE_TO_CARD_GAP = 40
-const CARD_WIDTH = 280
-const CARD_HEIGHT = 200
+const CARD_WIDTH = 320
+const CARD_HEIGHT = 240
 const CONNECTOR_GAP = 20
 const ROW_HEIGHT = CARD_HEIGHT + CONNECTOR_GAP
-const COL_STEP = CARD_WIDTH + 24
+const COL_STEP = CARD_WIDTH + 28
 /** 직책 구간 구분선과 카드 사이 여백(px). 구분선과 카드 겹침 방지 */
 const POSITION_GROUP_GAP_PX = 44
 /** 직책 그룹 사이 추가 간격(px). 세 그룹 간격 균일·넓게 */
@@ -26,15 +26,17 @@ const SEPARATOR_TO_CARD_GAP = 24
 const CARD_STACK_GAP_PX = 20
 /** 연도 기준 레이아웃 최대 높이(px). 범위가 크면 스크롤 없이 보이도록 상한 */
 const MAX_YEAR_BASED_HEIGHT = 900
-/** 데이터 있는 구간(세그먼트) 사이 갭(px). 데이터 없는 기간이 타임라인에서 길게 늘어나지 않도록 */
-const SEGMENT_GAP_PX = 24
+/** 세그먼트 하나당 높이 상한(px). 한 구간이 과도하게 늘어나 빈 공간 폭증 방지 */
+const MAX_SEGMENT_HEIGHT_PX = 1100
+/** 데이터 있는 구간(세그먼트) 사이 갭(px). 세기 구간을 넓게 느끼도록 */
+const SEGMENT_GAP_PX = 32
 /** 타임라인 세기/연도 라벨 블록 최소 높이(px). 짧은 구간에서도 연도가 보이도록 */
-const TIMELINE_LABEL_MIN_HEIGHT_PX = 22
-/** 연도 기준 시 카드 높이: 재임 연수당 px (min~max 사이). 짧은/긴 재임 시각적 구분 */
-const CARD_HEIGHT_PX_PER_YEAR = 10
-const CARD_HEIGHT_MIN_YEAR_BASED = 140
+const TIMELINE_LABEL_MIN_HEIGHT_PX = 24
+/** 연도 기준 시 카드 높이: 재임 연수당 px. 세기 구간을 넓게 */
+const CARD_HEIGHT_PX_PER_YEAR = 14
+const CARD_HEIGHT_MIN_YEAR_BASED = 200
 /** 긴 재임(예: 쇼와 63년)이 짧은 재임(예: 3년)보다 확실히 길어 보이도록 상한 확대 */
-const CARD_HEIGHT_MAX_YEAR_BASED = 680
+const CARD_HEIGHT_MAX_YEAR_BASED = 720
 
 interface LineageTreeProps {
   /** 세대별 재임 배열 (row 0 = 루트, row 1 = 그 자식들, ...) */
@@ -56,6 +58,8 @@ interface LineageTreeProps {
   variableCardHeight?: boolean
   /** 전체 보기에서 막대·카드를 실제 연도에 맞출 때 사용 (minYear~maxYear) */
   yearRange?: { minYear: number; maxYear: number }
+  /** 재임(tenure)에 대한 가문명 반환. 없으면 t.person?.dynasty?.name 사용 */
+  getDynastyNameForTenure?: (tenure: any) => string | null
   onCardClick: (tenureId: string) => void
 }
 
@@ -71,8 +75,13 @@ export function LineageTree({
   positionHeaders = [],
   variableCardHeight = false,
   yearRange,
+  getDynastyNameForTenure,
   onCardClick,
 }: LineageTreeProps) {
+  const resolveDynastyName = (t: any): string | null => {
+    if (getDynastyNameForTenure) return getDynastyNameForTenure(t)
+    return (t.person as { dynasty?: { name: string } } | undefined)?.dynasty?.name ?? null
+  }
   const totalRows = rows.length
   const totalCols =
     placement.size > 0
@@ -183,21 +192,48 @@ export function LineageTree({
     }
     merged.push({ start: curStart, end: curEnd })
 
-    const totalDataYears = merged.reduce(
+    /* 이어지는 재임(예: 4대 1294~1347, 5대 1347~1361)이 다른 세그먼트에 떨어지지 않도록,
+     * 어떤 재임이 두 인접 세그먼트 사이를 잇는 경우(span) 해당 세그먼트를 병합 */
+    const spanMerge = (list: { start: number; end: number }[]) => {
+      if (list.length <= 1) return list
+      const out: { start: number; end: number }[] = []
+      let [s, e] = [list[0].start, list[0].end]
+      for (let i = 1; i < list.length; i++) {
+        const seg = list[i]
+        const spanned = flat.some((t: any) => {
+          const start = getYearFromDate(t.startDate)
+          if (start == null) return false
+          const end = getYearFromDate(t.endDate) ?? new Date().getFullYear()
+          return start <= e && end >= seg.start
+        })
+        if (spanned || seg.start <= e + 1) {
+          e = Math.max(e, seg.end)
+        } else {
+          out.push({ start: s, end: e })
+          s = seg.start
+          e = seg.end
+        }
+      }
+      out.push({ start: s, end: e })
+      return out
+    }
+    const mergedSpanned = spanMerge(merged)
+
+    const totalDataYears = mergedSpanned.reduce(
       (s, seg) => s + (seg.end - seg.start),
       0,
     )
-    const nSeg = merged.length
+    const nSeg = mergedSpanned.length
     const gapTotal = (nSeg - 1) * SEGMENT_GAP_PX
     const available = Math.min(
       MAX_YEAR_BASED_HEIGHT - gapTotal,
       Math.max(500 - gapTotal, totalDataYears * 14),
     )
-    let segmentBaseHeights = merged.map(
+    let segmentBaseHeights = mergedSpanned.map(
       (seg) => ((seg.end - seg.start) / totalDataYears) * available,
     )
     /* 긴 재임(예: 쇼와 63년)이 있는 세그먼트는 재임 기간에 비례해 최소 높이 보장 */
-    const maxDurationBySeg = merged.map((seg, i) => {
+    const maxDurationBySeg = mergedSpanned.map((seg, i) => {
       const list = flat.filter((t: any) => {
         const start = getYearFromDate(t.startDate)
         if (start == null) return false
@@ -222,7 +258,7 @@ export function LineageTree({
       return Math.max(h, minH)
     })
 
-    const tenuresBySeg = merged.map((seg) => {
+    const tenuresBySeg = mergedSpanned.map((seg) => {
       const list: { id: string; start: number; end: number; col: number }[] = []
       flat.forEach((t: any) => {
         const start = getYearFromDate(t.startDate)
@@ -237,7 +273,7 @@ export function LineageTree({
 
     const segmentMinScales = segmentBaseHeights.map((baseH, segIdx) => {
       const list = tenuresBySeg[segIdx]
-      const seg = merged[segIdx]
+      const seg = mergedSpanned[segIdx]
       const range = seg.end - seg.start
       const byCol = new Map<
         number,
@@ -284,13 +320,13 @@ export function LineageTree({
       return minScale
     })
 
-    /* minScale 적용한 높이를 줄이면 같은 열 카드가 겹치므로, 상한 초과 시에도 scale-down 하지 않고 스크롤 허용 */
-    const segmentHeights = segmentBaseHeights.map(
-      (h, i) => h * segmentMinScales[i],
+    /* minScale 적용. 상한 초과 시 세그먼트 높이 캡으로 빈 공간 폭증 방지 */
+    let segmentHeights = segmentBaseHeights.map(
+      (h, i) => Math.min(h * segmentMinScales[i], MAX_SEGMENT_HEIGHT_PX),
     )
 
     let accTop = 0
-    const segments = merged.map((seg, i) => {
+    const segments = mergedSpanned.map((seg, i) => {
       const topPx = accTop
       const heightPx = segmentHeights[i]
       accTop += heightPx + SEGMENT_GAP_PX
@@ -305,11 +341,11 @@ export function LineageTree({
       const start = getYearFromDate(t.startDate)
       if (start == null) return
       const end = getYearFromDate(t.endDate) ?? new Date().getFullYear()
-      const segIdx = merged.findIndex(
+      const segIdx = mergedSpanned.findIndex(
         (seg) => start >= seg.start && start <= seg.end,
       )
       if (segIdx < 0) return
-      const seg = merged[segIdx]
+      const seg = mergedSpanned[segIdx]
       const segTop = segments[segIdx].topPx
       const segH = segments[segIdx].heightPx
       const range = seg.end - seg.start
@@ -329,7 +365,7 @@ export function LineageTree({
 
     /* 같은 열·같은 세그먼트에서 겹치는 카드는 아래로 쌓기 */
     const oldAccTop = segments.map((s) => s.topPx)
-    merged.forEach((seg, segIdx) => {
+    mergedSpanned.forEach((seg, segIdx) => {
       const list = tenuresBySeg[segIdx]
         .slice()
         .sort((a, b) => a.start - b.start || a.end - b.end)
@@ -379,6 +415,37 @@ export function LineageTree({
       }
       seg.topPx = newTop
       accTopNew += seg.heightPx + SEGMENT_GAP_PX
+    })
+
+    /* 세그먼트를 넘어서도 같은 열에서 이어지는 재임(prev.end ≈ curr.start)은 바로 아래로 붙이기 */
+    const flatWithYear = flat
+      .map((t: any) => {
+        const start = getYearFromDate(t.startDate)
+        if (start == null) return null
+        const end = getYearFromDate(t.endDate) ?? new Date().getFullYear()
+        const col = placement.get(t.id)?.col ?? 0
+        return { id: t.id, start, end, col }
+      })
+      .filter(Boolean) as { id: string; start: number; end: number; col: number }[]
+    const byColAll = new Map<number, typeof flatWithYear>()
+    flatWithYear.forEach((item) => {
+      const arr = byColAll.get(item.col) ?? []
+      arr.push(item)
+      byColAll.set(item.col, arr)
+    })
+    byColAll.forEach((colList) => {
+      colList.sort((a, b) => a.start - b.start || a.end - b.end)
+      for (let i = 1; i < colList.length; i++) {
+        const prev = colList[i - 1]
+        const curr = colList[i]
+        const prevPos = positionByYear.get(prev.id)
+        const currPos = positionByYear.get(curr.id)
+        if (!prevPos || !currPos) continue
+        const needTop = prevPos.topPx + prevPos.heightPx + CARD_STACK_GAP_PX
+        if (curr.start <= prev.end + 1 && currPos.topPx > needTop) {
+          currPos.topPx = needTop
+        }
+      }
     })
 
     return {
@@ -609,9 +676,21 @@ export function LineageTree({
     return spans
   }, [rows, useYearBasedLayout, yearBasedLayout])
 
-  /** SVG 연결선: 부모 카드 하단 중앙 → 세로 → 가로 → 각 자식 카드 상단 중앙 (그리드와 동일 좌표계) */
+  /** tenure id → tenure (선 끝 뱃지 라벨/색상용) */
+  const tenureById = useMemo(() => {
+    const m = new Map<string, any>()
+    rows.flat().forEach((t: any) => m.set(t.id, t))
+    return m
+  }, [rows])
+
+  /** SVG 연결선: 부모 카드 하단 중앙 → 세로 → 가로 → 각 자식 카드 상단 중앙. 꼭지점·끝점(뱃지) 포함 */
   const connectorPaths = useMemo(() => {
-    const paths: { d: string; key: string }[] = []
+    const paths: {
+      d: string
+      key: string
+      vertices: { x: number; y: number }[]
+      endpoints: { childId: string; x: number; y: number; label: string; bg: string; color: string; border: string }[]
+    }[] = []
     parentToChildren.forEach((childIds, parentId) => {
       const parent = placement.get(parentId)
       if (!parent || childIds.length === 0) return
@@ -634,16 +713,39 @@ export function LineageTree({
       const leftX = colCenter(minCol)
       const rightX = colCenter(maxCol)
 
+      const vertices: { x: number; y: number }[] = [
+        { x: parentBottomX, y: parentBottomY },
+        { x: parentBottomX, y: connectorY },
+        { x: leftX, y: connectorY },
+        { x: rightX, y: connectorY },
+      ]
+
       let d = `M ${parentBottomX} ${parentBottomY} L ${parentBottomX} ${connectorY}`
       d += ` L ${leftX} ${connectorY} L ${rightX} ${connectorY}`
+      const endpoints: { childId: string; x: number; y: number; label: string; bg: string; color: string; border: string }[] = []
       children.forEach((c) => {
         const cx = colCenter(c.pos.col)
+        vertices.push({ x: cx, y: connectorY }, { x: cx, y: childTopY })
         d += ` M ${cx} ${connectorY} L ${cx} ${childTopY}`
+        const tenure = tenureById.get(c.id)
+        const label = getPositionLabel?.(tenure) ?? ''
+        if (label) {
+          const colors = getBadgeColorsForLabel(label)
+          endpoints.push({
+            childId: c.id,
+            x: cx,
+            y: childTopY,
+            label,
+            bg: colors.bg,
+            color: colors.color,
+            border: colors.border,
+          })
+        }
       })
-      paths.push({ d, key: parentId })
+      paths.push({ d, key: parentId, vertices, endpoints })
     })
     return paths
-  }, [placement, parentToChildren])
+  }, [placement, parentToChildren, tenureById, getPositionLabel])
 
   /** 자식 tenure id → 부모 tenure (카드에 "↑ 부/이전" 표시용) */
   const childToParentTenure = useMemo(() => {
@@ -661,7 +763,7 @@ export function LineageTree({
     return map
   }, [rows, parentToChildren])
 
-  /** 재위 연도·기간 문자열 "(N년, YYYY~YYYY)" */
+  /** 재위 연도·기간 문자열 "YYYY~YYYY, N년" (연도 먼저, 재임 년수는 뒤에) */
   const getReignLabel = (t: any) => {
     const start = t.startDate ? new Date(t.startDate).getFullYear() : null
     const end = t.endDate ? new Date(t.endDate).getFullYear() : null
@@ -670,7 +772,7 @@ export function LineageTree({
       start != null && endYear != null ? Math.max(0, endYear - start) : null
     if (start == null && endYear == null) return '재위 기간 미상'
     const range = end == null ? `${start}~현재` : `${start}~${endYear}`
-    return years != null ? `(${years}년, ${range})` : `(${range})`
+    return years != null ? `(${range}, ${years}년)` : `(${range})`
   }
 
   return (
@@ -761,20 +863,25 @@ export function LineageTree({
                   const personName = getPersonName(t.person)
                   const mainLabel = regnalName || personName
                   const subLabel = regnalName ? personName : null
+                  /** 메인은 몇 대(초대/제N대). termNumber 없을 때만 N세 표시 */
                   const orderLabel =
-                    t.regnalNumber != null
-                      ? `${t.regnalNumber}세`
-                      : t.termNumber === 1
+                    t.termNumber != null
+                      ? t.termNumber === 1
                         ? '초대'
                         : `제${t.termNumber}대`
+                      : t.regnalNumber != null
+                        ? `${t.regnalNumber}세`
+                        : '—'
                   const reignLabel = getReignLabel(t)
                   const parentTenure = childToParentTenure.get(t.id)
                   const parentOrderLabel = parentTenure
-                    ? parentTenure.regnalNumber != null
-                      ? `${parentTenure.regnalNumber}세`
-                      : parentTenure.termNumber === 1
+                    ? parentTenure.termNumber != null
+                      ? parentTenure.termNumber === 1
                         ? '초대'
                         : `제${parentTenure.termNumber}대`
+                      : parentTenure.regnalNumber != null
+                        ? `${parentTenure.regnalNumber}세`
+                        : ''
                     : ''
                   const parentRegnal =
                     parentTenure && getRegnalNameFromNotes(parentTenure.notes)
@@ -801,6 +908,8 @@ export function LineageTree({
                         }
                       }}
                     >
+                      <TreeCardOrder>{orderLabel}</TreeCardOrder>
+                      <TreeCardReign>{reignLabel}</TreeCardReign>
                       <TreeCardHead>
                         {getPositionLabel?.(t) && (() => {
                           const label = getPositionLabel(t)
@@ -811,13 +920,14 @@ export function LineageTree({
                             </TreeCardPositionBadge>
                           )
                         })()}
-                        <TreeCardOrder>{orderLabel}</TreeCardOrder>
                       </TreeCardHead>
                       <TreeCardMainName>{mainLabel}</TreeCardMainName>
                       {subLabel && (
                         <TreeCardSubName>{subLabel}</TreeCardSubName>
                       )}
-                      <TreeCardReign>{reignLabel}</TreeCardReign>
+                      {resolveDynastyName(t) && (
+                        <TreeCardDynasty>가문: {resolveDynastyName(t)}</TreeCardDynasty>
+                      )}
                       {parentTenure && parentDisplay && (
                         <TreeCardRelation>
                           ↑ 이전: {parentDisplay} ({parentOrderLabel})
@@ -899,20 +1009,25 @@ export function LineageTree({
                       const personName = getPersonName(t.person)
                       const mainLabel = regnalName || personName
                       const subLabel = regnalName ? personName : null
+                      /** 메인은 몇 대(초대/제N대). termNumber 없을 때만 N세 표시 */
                       const orderLabel =
-                        t.regnalNumber != null
-                          ? `${t.regnalNumber}세`
-                          : t.termNumber === 1
+                        t.termNumber != null
+                          ? t.termNumber === 1
                             ? '초대'
                             : `제${t.termNumber}대`
+                          : t.regnalNumber != null
+                            ? `${t.regnalNumber}세`
+                            : '—'
                       const reignLabel = getReignLabel(t)
                       const parentTenure = childToParentTenure.get(t.id)
                       const parentOrderLabel = parentTenure
-                        ? parentTenure.regnalNumber != null
-                          ? `${parentTenure.regnalNumber}세`
-                          : parentTenure.termNumber === 1
+                        ? parentTenure.termNumber != null
+                          ? parentTenure.termNumber === 1
                             ? '초대'
                             : `제${parentTenure.termNumber}대`
+                          : parentTenure.regnalNumber != null
+                            ? `${parentTenure.regnalNumber}세`
+                            : ''
                         : ''
                       const parentRegnal =
                         parentTenure &&
@@ -953,6 +1068,8 @@ export function LineageTree({
                               }
                             }}
                           >
+                            <TreeCardOrder>{orderLabel}</TreeCardOrder>
+                            <TreeCardReign>{reignLabel}</TreeCardReign>
                             <TreeCardHead>
                               {getPositionLabel?.(t) && (() => {
                                 const label = getPositionLabel(t)
@@ -963,13 +1080,14 @@ export function LineageTree({
                                   </TreeCardPositionBadge>
                                 )
                               })()}
-                              <TreeCardOrder>{orderLabel}</TreeCardOrder>
                             </TreeCardHead>
                             <TreeCardMainName>{mainLabel}</TreeCardMainName>
                             {subLabel && (
                               <TreeCardSubName>{subLabel}</TreeCardSubName>
                             )}
-                            <TreeCardReign>{reignLabel}</TreeCardReign>
+                            {resolveDynastyName(t) && (
+                              <TreeCardDynasty>가문: {resolveDynastyName(t)}</TreeCardDynasty>
+                            )}
                             {parentTenure && parentDisplay && (
                               <TreeCardRelation>
                                 ↑ 이전: {parentDisplay} ({parentOrderLabel})
@@ -995,29 +1113,59 @@ export function LineageTree({
                 </TreeGrid>
                 {/* 직책별 섹션 사이 구분선 비표시 */}
                 {connectorPaths.length > 0 && !useYearBasedLayout && (
-                  <TreeSvg
-                    width={TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP + treeWidth}
-                    height={svgHeight}
-                    style={{
-                      position: 'absolute',
-                      left: -(TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP),
-                      top: 0,
-                      pointerEvents: 'none',
-                      zIndex: 5,
-                    }}
-                  >
-                    {connectorPaths.map(({ d, key }) => (
-                      <path
-                        key={key}
-                        d={d}
-                        fill="none"
-                        stroke="rgba(99, 102, 241, 0.35)"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    ))}
-                  </TreeSvg>
+                  <>
+                    <TreeSvg
+                      width={TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP + treeWidth}
+                      height={svgHeight}
+                      style={{
+                        position: 'absolute',
+                        left: -(TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP),
+                        top: 0,
+                        pointerEvents: 'none',
+                        zIndex: 5,
+                      }}
+                    >
+                      {connectorPaths.map(({ d, key }) => (
+                        <path
+                          key={key}
+                          d={d}
+                          fill="none"
+                          stroke="rgba(99, 102, 241, 0.28)"
+                          strokeWidth="1.25"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ))}
+                    </TreeSvg>
+                    <ConnectorBadgesLayer
+                      style={{
+                        position: 'absolute',
+                        left: -(TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP),
+                        top: 0,
+                        width: TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP + treeWidth,
+                        height: svgHeight,
+                        pointerEvents: 'none',
+                        zIndex: 6,
+                      }}
+                    >
+                      {connectorPaths.flatMap((p) =>
+                        p.endpoints.map((ep) => (
+                          <ConnectorEndBadge
+                            key={ep.childId}
+                            $bg={ep.bg}
+                            $color={ep.color}
+                            $border={ep.border}
+                            style={{
+                              left: ep.x,
+                              top: ep.y,
+                            }}
+                          >
+                            {ep.label}
+                          </ConnectorEndBadge>
+                        )),
+                      )}
+                    </ConnectorBadgesLayer>
+                  </>
                 )}
               </TreeArea>
             </>
@@ -1032,7 +1180,7 @@ export function LineageTree({
 }
 
 /* ─── 디자인: 깔끔·트렌디 (미니멀, 여백, 소프트 섀도우) ─── */
-const BORDER_SUBTLE = 'rgba(0, 0, 0, 0.06)'
+const BORDER_SUBTLE = '#e5e7eb'
 const SHADOW_SOFT = '0 1px 3px rgba(0, 0, 0, 0.04)'
 const SHADOW_CARD = '0 2px 12px rgba(0, 0, 0, 0.04)'
 const SHADOW_CARD_HOVER = '0 8px 24px rgba(99, 102, 241, 0.12)'
@@ -1213,6 +1361,35 @@ const TreeSvg = styled.svg`
   pointer-events: none;
 `
 
+/** 선 끝 뱃지 컨테이너 — SVG와 동일 좌표계 */
+const ConnectorBadgesLayer = styled.div`
+  position: absolute;
+  box-sizing: border-box;
+`
+
+/** 연결선 끝지점에 놓는 직책 뱃지 — 선 끝에 가깝게, 작은 필 */
+const ConnectorEndBadge = styled.span<{
+  $bg: string
+  $color: string
+  $border: string
+}>`
+  position: absolute;
+  transform: translate(-50%, -100%);
+  margin-bottom: -4px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  background: ${({ $bg }) => $bg};
+  color: ${({ $color }) => $color};
+  border: 1px solid ${({ $border }) => $border};
+  line-height: 1.2;
+`
+
 const TreeGrid = styled.div`
   position: absolute;
   left: 0;
@@ -1233,24 +1410,26 @@ const TreeYearBasedWrap = styled.div`
   box-sizing: border-box;
 `
 
-/** 연도 기준 카드 — 깔끔한 카드 */
+/** 연도 기준 카드 — 넓은 카드, 얇은 테두리, 글자 넘침 방지 */
 const TreeCardYearBased = styled.div`
   box-sizing: border-box;
   position: absolute;
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
-  padding: 24px 24px;
+  padding: 20px 22px;
   background: #fff;
   border: 1px solid ${BORDER_SUBTLE};
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: ${SHADOW_CARD};
   cursor: pointer;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
   text-align: left;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: flex-start;
+  overflow: hidden;
+  word-break: break-word;
 
   &:hover {
     box-shadow: ${SHADOW_CARD_HOVER};
@@ -1269,10 +1448,10 @@ const TreeCard = styled.div`
   box-sizing: border-box;
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
-  padding: 24px 24px;
+  padding: 20px 22px;
   background: #fff;
   border: 1px solid ${BORDER_SUBTLE};
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: ${SHADOW_CARD};
   cursor: pointer;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
@@ -1280,8 +1459,10 @@ const TreeCard = styled.div`
   text-align: left;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: flex-start;
+  overflow: hidden;
+  word-break: break-word;
 
   &:hover {
     box-shadow: ${SHADOW_CARD_HOVER};
@@ -1330,19 +1511,42 @@ const TreeCardPositionBadge = styled.span<{
   ${({ $badgeBorder }) => ($badgeBorder != null ? `border: 1px solid ${$badgeBorder};` : '')}
 `
 
-const TreeCardOrder = styled.span`
-  font-size: 12px;
-  font-weight: 500;
-  color: #64748b;
+/** 몇 대(초대/제N대) — 카드에서 가장 중요 */
+const TreeCardOrder = styled.div`
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
+  margin-bottom: 8px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+/** 재임 기간 — 두 번째로 강조, 잘 보이게 */
+const TreeCardReign = styled.div`
+  font-size: 15px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const TreeCardMainName = styled.div`
-  font-size: 18px;
-  font-weight: 600;
-  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
   letter-spacing: -0.02em;
   line-height: 1.35;
   margin-bottom: 4px;
+  max-width: 100%;
+  overflow-wrap: break-word;
 `
 
 const TreeCardSubName = styled.div`
@@ -1351,15 +1555,18 @@ const TreeCardSubName = styled.div`
   color: #64748b;
   margin-bottom: 6px;
   line-height: 1.4;
+  max-width: 100%;
+  overflow-wrap: break-word;
 `
 
-const TreeCardReign = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${ACCENT};
-  margin-bottom: 8px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+const TreeCardDynasty = styled.div`
+  font-size: 12px;
+  font-weight: 500;
+  color: #7c3aed;
+  margin-bottom: 6px;
+  line-height: 1.4;
+  max-width: 100%;
+  overflow-wrap: break-word;
 `
 
 const TreeCardRelation = styled.div`

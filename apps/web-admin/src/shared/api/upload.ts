@@ -2,7 +2,7 @@
  * 파일 업로드 API
  */
 
-const getApiHost = (): string => {
+export const getApiHost = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL
 
   if (envUrl === '') {
@@ -15,6 +15,19 @@ const getApiHost = (): string => {
   }
 
   return 'http://localhost:8000'
+}
+
+/**
+ * 업로드 이미지 URL을 API 기준 전체 URL로 변환.
+ * - 상대 경로(/uploads/...)일 때 API 호스트를 붙여서 프록시/다른 도메인에서도 이미지 로드 보장.
+ */
+export function getUploadImageUrl(path: string | null | undefined): string {
+  if (!path || typeof path !== 'string') return ''
+  const trimmed = path.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
+  const base = getApiHost().replace(/\/$/, '')
+  return trimmed.startsWith('/') ? `${base}${trimmed}` : `${base}/${trimmed}`
 }
 
 export interface UploadImageResponse {
@@ -53,18 +66,32 @@ export function validateImageFile(file: File): void {
   }
 }
 
+/** 이미지 업로드 시 저장할 하위 폴더 (용도별 분리) */
+export type UploadImageCategory =
+  | 'countries'
+  | 'persons'
+  | 'events'
+  | 'ministries'
+  | 'attachments'
+
 /**
  * 이미지 업로드 (클라이언트 유효성 검사 후 전송)
+ * @param file - 업로드할 이미지 파일
+ * @param category - 용도별 폴더. 미지정 시 'attachments'
  */
 export async function uploadImage(
   file: File,
+  category: UploadImageCategory = 'attachments',
 ): Promise<UploadImageResponse> {
   validateImageFile(file)
 
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch(`${getApiHost()}/upload/image`, {
+  const url = new URL(`${getApiHost()}/upload/image`)
+  url.searchParams.set('category', category)
+
+  const response = await fetch(url.toString(), {
     method: 'POST',
     body: formData,
   })

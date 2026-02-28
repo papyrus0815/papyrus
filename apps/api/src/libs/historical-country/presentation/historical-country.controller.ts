@@ -140,6 +140,7 @@ export class HistoricalCountryController {
         historicalCountryId: dto.historicalCountryId,
         memberCountryId: dto.memberCountryId,
         role: dto.role,
+        isLeadingMember: dto.isLeadingMember ?? null,
         membershipStartDate: dto.membershipStartDate ? new Date(dto.membershipStartDate) : null,
         membershipEndDate: dto.membershipEndDate ? new Date(dto.membershipEndDate) : null,
       },
@@ -201,6 +202,7 @@ export class HistoricalCountryController {
       {
         name: dto.name,
         enName: dto.enName,
+        nameOrigin: dto.nameOrigin,
         description: dto.description,
         thumbnailUrl: dto.thumbnailUrl,
         startEra: dto.startEra,
@@ -251,6 +253,7 @@ export class HistoricalCountryController {
       mid,
       {
         role: dto.role,
+        isLeadingMember: dto.isLeadingMember,
         membershipStartDate: dto.membershipStartDate ? new Date(dto.membershipStartDate) : undefined,
         membershipEndDate: dto.membershipEndDate ? new Date(dto.membershipEndDate) : undefined,
       },
@@ -298,6 +301,7 @@ export class HistoricalCountryController {
       {
         name: dto.name,
         enName: dto.enName,
+        nameOrigin: dto.nameOrigin,
         description: dto.description,
         thumbnailUrl: dto.thumbnailUrl,
         startEra: dto.startEra,
@@ -379,6 +383,7 @@ export class HistoricalCountryController {
       id: country.id,
       name: country.name,
       enName: country.enName,
+      nameOrigin: country.nameOrigin,
       description: country.description,
       thumbnailUrl: country.thumbnailUrl,
 
@@ -422,6 +427,7 @@ export class HistoricalCountryController {
       historicalCountryId: m.historicalCountryId,
       memberCountryId: m.memberCountryId,
       role: m.role,
+      isLeadingMember: m.isLeadingMember,
       membershipStartDate: m.membershipStartDate?.toISOString() ?? null,
       membershipEndDate: m.membershipEndDate?.toISOString() ?? null,
       parentName: m.parentName,

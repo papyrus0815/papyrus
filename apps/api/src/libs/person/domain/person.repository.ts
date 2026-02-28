@@ -12,6 +12,7 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
+  UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   CreateLegalCareerDto,
   CreateMediaCareerDto,
@@ -181,6 +182,14 @@ export interface IPersonRepository {
    * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
    */
   findAchievementsForEventsPage(): Promise<any[]>
+  /**
+   * 재임 업적 수정
+   */
+  updateTenureAchievement(
+    tenureId: string,
+    achievementId: string,
+    dto: UpdateTenureAchievementDto,
+  ): Promise<any>
   /**
    * 재임 업적 삭제
    */

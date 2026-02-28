@@ -3,6 +3,7 @@ import React from 'react'
 import styled from 'styled-components'
 
 import type { HistoricalCountry } from '@/entities/historical-country/api'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { Spinner } from '@/shared/ui/spinner'
 
 interface HistoricalCountryDetailProps {
@@ -131,7 +132,7 @@ export function HistoricalCountryDetail({
         {/* 헤더: 썸네일 + 국가명 */}
         <Header>
           {country.thumbnailUrl ? (
-            <Thumbnail src={country.thumbnailUrl} alt={country.name} />
+            <Thumbnail src={getUploadImageUrl(country.thumbnailUrl)} alt={country.name} />
           ) : (
             <ThumbnailPlaceholder>🏛️</ThumbnailPlaceholder>
           )}
@@ -188,6 +189,14 @@ export function HistoricalCountryDetail({
               <InfoItem>
                 <InfoLabel>국가명 (영문)</InfoLabel>
                 <InfoValue>{country.enName}</InfoValue>
+              </InfoItem>
+            )}
+            {(country as any).nameOrigin && (
+              <InfoItem style={{ gridColumn: '1 / -1' }}>
+                <InfoLabel>국가명 유래</InfoLabel>
+                <InfoValue style={{ whiteSpace: 'pre-wrap' }}>
+                  {(country as any).nameOrigin}
+                </InfoValue>
               </InfoItem>
             )}
             <InfoItem>

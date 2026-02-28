@@ -5,7 +5,7 @@ import styled from 'styled-components'
 
 import type { AdministrationDepartment, AdministrationDepartmentCategory } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
-import { uploadImage, validateImageFile } from '@/shared/api/upload'
+import { getUploadImageUrl, uploadImage, validateImageFile } from '@/shared/api/upload'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 import * as S from '@/pages/history/country/country.styles'
@@ -1014,14 +1014,14 @@ export function GovernmentInfoSection({ countryId, categoryModalOpen: categoryMo
                 </div>
               </div>
 
-              <input ref={thumbnailInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; e.target.value = ''; try { validateImageFile(file); setThumbnailUploading(true); const res = await uploadImage(file); setMinistryForm((f) => ({ ...f, thumbnailUrl: res.url })); } catch (err) { alert(err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.'); } finally { setThumbnailUploading(false); } }} />
+              <input ref={thumbnailInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; e.target.value = ''; try { validateImageFile(file); setThumbnailUploading(true); const res = await uploadImage(file, 'ministries'); setMinistryForm((f) => ({ ...f, thumbnailUrl: res.url })); } catch (err) { alert(err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.'); } finally { setThumbnailUploading(false); } }} />
 
               <div style={{ padding: '28px 32px 32px', display: 'flex', flexDirection: 'column', gap: 0 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
                   <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>썸네일</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div role="button" tabIndex={0} onClick={() => thumbnailInputRef.current?.click()} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); thumbnailInputRef.current?.click() } }} style={{ width: '100%', maxWidth: 280, aspectRatio: '16/10', borderRadius: 14, border: '2px dashed #e5e7eb', background: ministryForm.thumbnailUrl ? 'transparent' : '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: thumbnailUploading ? 'wait' : 'pointer' }}>
-                      {thumbnailUploading ? <span style={{ fontSize: 13, color: '#94a3b8' }}>업로드 중…</span> : ministryForm.thumbnailUrl ? <img src={ministryForm.thumbnailUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none' }} /> : <span style={{ fontSize: 13, color: '#94a3b8' }}>이미지 선택</span>}
+                      {thumbnailUploading ? <span style={{ fontSize: 13, color: '#94a3b8' }}>업로드 중…</span> : ministryForm.thumbnailUrl ? <img src={getUploadImageUrl(ministryForm.thumbnailUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none' }} /> : <span style={{ fontSize: 13, color: '#94a3b8' }}>이미지 선택</span>}
                     </div>
                     {ministryForm.thumbnailUrl && <button type="button" onClick={(e) => { e.stopPropagation(); setMinistryForm((f) => ({ ...f, thumbnailUrl: '' })) }} style={{ alignSelf: 'flex-start', marginTop: 4, padding: '6px 12px', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 10, background: '#fff', color: '#64748b', cursor: 'pointer' }}>제거</button>}
                   </div>
@@ -1154,7 +1154,7 @@ export function GovernmentInfoSection({ countryId, categoryModalOpen: categoryMo
                         <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
                           <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
                             {dept.thumbnailUrl ? (
-                              <img src={dept.thumbnailUrl} alt="" style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 16 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                              <img src={getUploadImageUrl(dept.thumbnailUrl)} alt="" style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 16 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
                             ) : (
                               <div style={{ width: 88, height: 88, borderRadius: 16, background: 'linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 24 }}>—</div>
                             )}

@@ -7,6 +7,7 @@ export interface HistoricalCountryResponseDto {
   id: string
   name: string
   enName: string | null
+  nameOrigin: string | null
   description: string | null
   thumbnailUrl: string | null
 

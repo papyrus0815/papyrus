@@ -14,6 +14,7 @@ import { type UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 
 import styled from 'styled-components'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import * as S from '../../../../pages/history/country/country.styles'
 import { formatEventPeriod, formatRelativeTime } from '../relative-time'
 
@@ -93,7 +94,7 @@ const FeedTime = styled.span`
 `
 const BoardList = styled.ul`
   margin: 0;
-  padding: 0;
+  padding: 0 8px 0 0;
   list-style: none;
   display: flex;
   flex-direction: column;
@@ -101,7 +102,7 @@ const BoardList = styled.ul`
   max-height: 320px;
   overflow-y: auto;
   &::-webkit-scrollbar {
-    width: 5px;
+    width: 6px;
   }
   &::-webkit-scrollbar-track {
     background: #f1f5f9;
@@ -128,6 +129,17 @@ const TwoCol = styled.div`
     grid-template-columns: 1fr;
   }
 `
+const ThreeCol = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
+  @media (max-width: 1100px) {
+    grid-template-columns: 1fr 1fr;
+  }
+  @media (max-width: 700px) {
+    grid-template-columns: 1fr;
+  }
+`
 const FeedPanel = styled.section`
   background: #ffffff;
   border: 1px solid #e8ecf1;
@@ -140,6 +152,15 @@ const FeedPanelTitle = styled.h3`
   font-weight: 700;
   color: #475569;
   letter-spacing: 0.03em;
+`
+const CountryTypeChip = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
 `
 const EventRow = styled.div`
   display: grid;
@@ -197,7 +218,7 @@ const EventPeriod = styled.div`
 `
 const EventList = styled.ul`
   margin: 0;
-  padding: 0;
+  padding: 0 8px 0 0;
   list-style: none;
   display: flex;
   flex-direction: column;
@@ -205,7 +226,7 @@ const EventList = styled.ul`
   max-height: 320px;
   overflow-y: auto;
   &::-webkit-scrollbar {
-    width: 5px;
+    width: 6px;
   }
   &::-webkit-scrollbar-track {
     background: #f1f5f9;
@@ -220,6 +241,31 @@ const EventList = styled.ul`
 /** API Country에 gdpUsdBn이 있을 수 있음 */
 type CountryWithOptionalGdp = Country & { gdpUsdBn?: number | null }
 
+/** 국기 이미지 또는 이모지 폴백 (이미지 로드 실패 시 이모지 표시) */
+function CountryFeedFlag({
+  thumbnailUrl,
+  flagEmoji,
+}: {
+  thumbnailUrl?: string | null
+  flagEmoji: string
+}) {
+  const [imgError, setImgError] = React.useState(false)
+  const showImg = thumbnailUrl && !imgError
+  return (
+    <>
+      {showImg && (
+        <img
+          src={getUploadImageUrl(thumbnailUrl!)}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={() => setImgError(true)}
+        />
+      )}
+      {!showImg && <span>{flagEmoji}</span>}
+    </>
+  )
+}
+
 /** 등록 현황 게시판 한 건 (디자인: 배지 + 이름, 문장형 텍스트 없음) */
 export type RegistrationFeedItem = {
   date: string
@@ -227,6 +273,10 @@ export type RegistrationFeedItem = {
   primaryLabel: string
   countryName?: string | null
   profileImageUrl?: string | null
+  /** 국가일 때 국기 이미지 URL */
+  thumbnailUrl?: string | null
+  /** 국가일 때 국기 이모지 폴백 (예: 🇰🇷) */
+  flagEmoji?: string | null
 }
 
 /** 사건 일주일 내 한 건 */
@@ -239,6 +289,17 @@ export type RecentEventItem = {
   endDate?: string | null
 }
 
+/** 국가(현대·역사적) 등록 현황 일주일 내 한 건 */
+export type CountryRegistrationFeedItem = {
+  date: string
+  name: string
+  type: 'modern' | 'historical'
+  /** 국기 이미지 URL (있으면 이미지 표시) */
+  thumbnailUrl?: string | null
+  /** 현대 국가일 때 이모지 폴백 (예: 🇰🇷) */
+  flagEmoji?: string | null
+}
+
 interface CountryDashboardProps {
   countries?: Country[]
   filtered?: UnifiedCountry[]
@@ -247,6 +308,7 @@ interface CountryDashboardProps {
   onCountryEdit?: (country: Country) => void
   registrationFeed?: RegistrationFeedItem[]
   recentEvents?: RecentEventItem[]
+  countryRegistrationFeed?: CountryRegistrationFeedItem[]
 }
 
 export function CountryDashboard({
@@ -257,6 +319,7 @@ export function CountryDashboard({
   onCountryEdit,
   registrationFeed = [],
   recentEvents = [],
+  countryRegistrationFeed = [],
 }: CountryDashboardProps) {
   const listState = useCountryListState()
   const countries = countriesProp ?? listState.countries
@@ -372,8 +435,8 @@ export function CountryDashboard({
             </S.GlobalMetricCard>
           </S.GlobalMetricsGrid>
 
-          {/* 등록 현황 | 사건 (2열) */}
-          <TwoCol>
+          {/* 등록 현황 | 사건 | 국가(현대·역사적) 등록 현황 (3열) */}
+          <ThreeCol>
             <FeedPanel>
               <FeedPanelTitle>등록 현황</FeedPanelTitle>
               {registrationFeed.length === 0 ? (
@@ -387,8 +450,13 @@ export function CountryDashboard({
                           <FeedAvatar $type={item.type}>
                             {item.type === 'person' && item.profileImageUrl ? (
                               <img src={item.profileImageUrl} alt="" />
+                            ) : item.type === 'country' ? (
+                              <CountryFeedFlag
+                                thumbnailUrl={item.thumbnailUrl}
+                                flagEmoji={item.flagEmoji || '🌍'}
+                              />
                             ) : (
-                              <span>{item.type === 'country' ? '🌍' : '👤'}</span>
+                              <span>👤</span>
                             )}
                           </FeedAvatar>
                           <FeedLabelBlock>
@@ -437,7 +505,36 @@ export function CountryDashboard({
                 </EventList>
               )}
             </FeedPanel>
-          </TwoCol>
+            <FeedPanel>
+              <FeedPanelTitle>국가(현대, 역사적) 등록 현황</FeedPanelTitle>
+              {countryRegistrationFeed.length === 0 ? (
+                <BoardEmpty>최근 일주일 내 등록된 국가가 없습니다.</BoardEmpty>
+              ) : (
+                <BoardList>
+                  {countryRegistrationFeed.map((item, index) => (
+                    <li key={`${item.date}-${item.type}-${item.name}-${index}`}>
+                      <FeedRow>
+                        <FeedRowLeft>
+                          <FeedAvatar $type="country">
+                            <CountryFeedFlag
+                              thumbnailUrl={item.thumbnailUrl}
+                              flagEmoji={item.type === 'modern' ? (item.flagEmoji || '🌍') : '🏛️'}
+                            />
+                          </FeedAvatar>
+                          <FeedLabelBlock>
+                            <CountryTypeChip>{item.type === 'modern' ? '현대' : '역사적'}</CountryTypeChip>
+                            <FeedPrimaryLabel>{item.name}</FeedPrimaryLabel>
+                            <FeedActionSuffix>등록</FeedActionSuffix>
+                          </FeedLabelBlock>
+                        </FeedRowLeft>
+                        <FeedTime>{formatRelativeTime(item.date)}</FeedTime>
+                      </FeedRow>
+                    </li>
+                  ))}
+                </BoardList>
+              )}
+            </FeedPanel>
+          </ThreeCol>
 
           <S.DashboardSectionTitle>
             <S.SectionTitleIcon>

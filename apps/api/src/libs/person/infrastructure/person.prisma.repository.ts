@@ -35,6 +35,7 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
+  UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
@@ -139,6 +140,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       posthumousName: person.posthumousName,
       // 관계
       dynastyId: person.dynastyId,
+      dynasty:
+        person.dynasty != null
+          ? { id: person.dynasty.id, name: person.dynasty.name }
+          : null,
       religionId: person.religionId,
       denominationId: person.denominationId,
       fatherId: person.fatherId,
@@ -378,6 +383,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
       include: {
         countryAffiliations: true,
+        dynasty: { select: { id: true, name: true } },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))
@@ -1244,6 +1250,46 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 재임 업적 수정
+   */
+  async updateTenureAchievement(
+    tenureId: string,
+    achievementId: string,
+    dto: UpdateTenureAchievementDto,
+  ): Promise<any> {
+    const data: any = {}
+    if (dto.title !== undefined) data.title = dto.title
+    if (dto.description !== undefined) data.description = dto.description
+    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null
+    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.orderNum !== undefined) data.orderNum = dto.orderNum
+    if (dto.showOnEventsPage !== undefined) data.showOnEventsPage = dto.showOnEventsPage
+    const existing = await this.prisma.tenureAchievement.findFirst({
+      where: { id: achievementId, tenureId },
+    })
+    if (!existing) {
+      throw new Error('TenureAchievement not found')
+    }
+    const achievement = await this.prisma.tenureAchievement.update({
+      where: { id: achievementId },
+      data,
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(achievement)
+  }
+
+  /**
    * 재임 업적 삭제
    */
   async deleteTenureAchievement(tenureId: string, achievementId: string): Promise<void> {
@@ -1476,6 +1522,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             profileImageUrl: true,
             fatherId: true,
             motherId: true,
+            dynastyId: true,
+            dynasty: { select: { id: true, name: true } },
           },
         },
         achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
@@ -1541,6 +1589,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
         countryAffiliations: true,
+        dynasty: { select: { id: true, name: true } },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))

@@ -30,6 +30,13 @@ export class UpdateHistoricalCountryDto {
   enName?: string
 
   /**
+   * 국가명 유래 (어원·명칭 유래 설명)
+   */
+  @IsOptional()
+  @IsString()
+  nameOrigin?: string | null
+
+  /**
    * 설명
    * @example "조선은 1392년부터 1897년까지 존재한 한국의 왕조입니다."
    */

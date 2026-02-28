@@ -160,7 +160,7 @@ export function CountryForm({
     setImageUploadError(null)
     setImageUploading(true)
     try {
-      const result = await uploadImage(file)
+      const result = await uploadImage(file, 'countries')
       const url = (result.url ?? '').length > 255 ? (result.url ?? '').slice(0, 255) : (result.url ?? '')
       setValue('thumbnailUrl', url, { shouldValidate: true })
       setThumbnailPreview(result.url ?? '')

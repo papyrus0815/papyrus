@@ -8,6 +8,11 @@ import { type Person } from '@/shared/api/person'
 import { PersonCard } from './PersonCard'
 import { PersonFilters } from './PersonFilters'
 
+interface DynastyItem {
+  id: string
+  name: string
+}
+
 interface PersonListProps {
   persons: Person[]
   searchTerm: string
@@ -22,6 +27,8 @@ interface PersonListProps {
   currentPage: number
   onPageChange: (page: number) => void
   itemsPerPage: number
+  /** 가문 목록 (인물 카드에 가문명 표시용) */
+  dynasties?: DynastyItem[]
 }
 
 export function PersonList({
@@ -38,6 +45,7 @@ export function PersonList({
   currentPage,
   onPageChange,
   itemsPerPage,
+  dynasties = [],
 }: PersonListProps) {
   const [showGenderModal, setShowGenderModal] = React.useState(false)
   const [showStatusModal, setShowStatusModal] = React.useState(false)
@@ -133,14 +141,22 @@ export function PersonList({
       ) : (
         <>
           <Grid>
-            {paginatedPersons.map((person, index) => (
-              <PersonCard
-                key={person.id}
-                person={person}
-                index={index}
-                onClick={() => onPersonClick(person.id)}
-              />
-            ))}
+            {paginatedPersons.map((person, index) => {
+              const dynastyId = (person as { dynastyId?: string | null }).dynastyId
+              const dynastyFromApi = (person as { dynasty?: { id: string; name: string } | null }).dynasty
+              const dynastyName =
+                dynastyFromApi?.name ??
+                (dynastyId != null ? dynasties.find((d) => d.id === dynastyId)?.name : undefined)
+              return (
+                <PersonCard
+                  key={person.id}
+                  person={person}
+                  index={index}
+                  onClick={() => onPersonClick(person.id)}
+                  dynastyName={dynastyName}
+                />
+              )
+            })}
           </Grid>
 
           {totalPages > 1 && (

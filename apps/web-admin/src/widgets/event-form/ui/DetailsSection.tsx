@@ -290,7 +290,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
                 placeholder="내용을 작성하세요. @를 입력하면 인물, 사건, 국가 등을 검색할 수 있습니다."
                 onImageUpload={async (file) => {
                   try {
-                    const result = await uploadImage(file)
+                    const result = await uploadImage(file, 'events')
                     return result.url
                   } catch {
                     // 실패 시 데이터 URL 백업

@@ -1,5 +1,7 @@
 import { CSSProperties } from 'react'
 
+import { getUploadImageUrl } from '@/shared/api/upload'
+
 interface CountryFlagProps {
   thumbnailUrl?: string | null
   countryName: string
@@ -27,7 +29,7 @@ export function CountryFlag({
   if (thumbnailUrl) {
     return (
       <img
-        src={thumbnailUrl}
+        src={getUploadImageUrl(thumbnailUrl)}
         alt={countryName}
         className={className}
         style={{

@@ -53,7 +53,7 @@ export function CountryListStateProvider({
   const [query, setQuery] = useState('')
   const [continentFilter, setContinentFilter] = useState('')
   const [countryTypeFilter, setCountryTypeFilter] = useState<CountryTypeFilter>('all')
-  const [sortBy, setSortBy] = useState<SortBy>('name')
+  const [sortBy, setSortBy] = useState<SortBy>('area')
 
   const filtered = useMemo(() => {
     const searchTextLower = query.trim().toLowerCase()

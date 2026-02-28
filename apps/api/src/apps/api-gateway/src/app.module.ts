@@ -20,7 +20,9 @@ import { CityModule } from '../../../libs/city/city.module'
 import { NotificationModule } from '../../../libs/notification/notification.module'
 import { OrganizationModule } from '../../../libs/organization/infrastructure/organization.module'
 import { UploadModule } from '../../../libs/shared/upload/upload.module'
+import { UploadServeMiddleware } from '../../../libs/shared/upload/upload-serve.middleware'
 import { AdministrationDepartmentModule } from '../../../libs/administration-department/administration-department.module'
+import { EthnicityModule } from '../../../libs/ethnicity/ethnicity.module'
 
 import {
   AppConfigModule,
@@ -57,10 +59,12 @@ import {
     OrganizationModule,
     UploadModule,
     AdministrationDepartmentModule,
+    EthnicityModule,
     HealthModule,
   ],
   controllers: [AppController],
   providers: [
+    UploadServeMiddleware,
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
@@ -83,6 +87,8 @@ import {
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // /uploads 요청은 라우터보다 먼저 처리 (미들웨어에서 경로 체크 후 파일 서빙)
+    consumer.apply(UploadServeMiddleware).forRoutes('*')
     consumer.apply(RequestIdMiddleware).forRoutes('*')
   }
 }

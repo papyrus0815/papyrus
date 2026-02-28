@@ -282,7 +282,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               setThumbnailFile(file)
 
               try {
-                const result = await uploadImage(file)
+                const result = await uploadImage(file, 'events')
                 URL.revokeObjectURL(previewUrl)
                 setThumbnail(result.url)
               } catch {

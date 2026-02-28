@@ -24,6 +24,7 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
+  UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
   MilitaryCareerResponseDto,
@@ -344,6 +345,17 @@ export class PersonService {
    */
   async findAchievementsForEventsPage(): Promise<any[]> {
     return this.personRepository.findAchievementsForEventsPage()
+  }
+
+  /**
+   * 재임 업적 수정
+   */
+  async updateTenureAchievement(
+    tenureId: string,
+    achievementId: string,
+    dto: UpdateTenureAchievementDto,
+  ): Promise<any> {
+    return this.personRepository.updateTenureAchievement(tenureId, achievementId, dto)
   }
 
   /**

@@ -169,18 +169,30 @@ model Ethnicity {
   /// 민족명
   name String @unique @db.VarChar(100)
 
+  /// 현지명/원어명 (자족명, 엔도님)
+  nameLocal String? @map("name_local") @db.VarChar(100)
+
   /// 설명
   description String? @db.Text
 
   /// 썸네일
   thumbnailUrl String? @db.VarChar(255)
 
+  /// 상위 민족 ID (예: 동슬라브족 → 슬라브족)
+  parentId String? @map("parent_id") @db.Char(36)
+
   //--- 관계 필드
-  countries Country[]
+  parent   Ethnicity?  @relation("EthnicityHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Ethnicity[] @relation("EthnicityHierarchy")
+
+  countries          Country[]           @relation("CountryEthnicities")
+  /// 이 민족이 구성원으로 포함된 역사적 국가 (예: 슬라브족 → 키예프 루스, 게르만족 → 프랑크 왕국)
+  historicalCountries HistoricalCountry[] @relation("HistoricalCountryEthnicities")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([parentId], name: "idx_ethnicity_parentId")
   @@map("ethnicity")
 }

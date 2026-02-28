@@ -110,21 +110,6 @@ export default function HistoryLayout() {
 
                   <SidebarItem
                     as={Link}
-                    to="/history/dynasties"
-                    $active={isActive('/history/dynasties')}
-                  >
-                    <SidebarIcon>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <path d="M9 22V12h6v10" />
-                      </svg>
-                    </SidebarIcon>
-                    <SidebarLabel>가문</SidebarLabel>
-                    <Badge>0</Badge>
-                  </SidebarItem>
-
-                  <SidebarItem
-                    as={Link}
                     to="/history/jobs"
                     $active={isActive('/history/jobs')}
                   >
@@ -184,20 +169,6 @@ export default function HistoryLayout() {
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
-                </svg>
-              </CollapsedIconItem>
-
-              <CollapsedIconItem
-                as={motion.button}
-                onClick={() => navigate('/history/dynasties')}
-                $active={isActive('/history/dynasties')}
-                title="가문"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <path d="M9 22V12h6v10" />
                 </svg>
               </CollapsedIconItem>
 
@@ -264,25 +235,6 @@ export default function HistoryLayout() {
           <TabBarLabel $active={isActive('/history/country')}>국가</TabBarLabel>
           {/* 활성 상태일 때 상단 인디케이터 표시 */}
           {isActive('/history/country') && <ActiveIndicator />}
-        </TabBarItem>
-
-        {/* 가문 탭 버튼 */}
-        <TabBarItem
-          whileTap={{ scale: 0.95 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-          onClick={() => navigate('/history/dynasties')}
-          $active={isActive('/history/dynasties')}
-        >
-          <TabBarIcon $active={isActive('/history/dynasties')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <path d="M9 22V12h6v10" />
-            </svg>
-          </TabBarIcon>
-          <TabBarLabel $active={isActive('/history/dynasties')}>
-            가문
-          </TabBarLabel>
-          {isActive('/history/dynasties') && <ActiveIndicator />}
         </TabBarItem>
 
         {/* 직업 탭 버튼 */}

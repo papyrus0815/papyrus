@@ -29,6 +29,14 @@ export class CreateHistoricalCountryDto {
   enName?: string
 
   /**
+   * 국가명 유래 (어원·명칭 유래 설명)
+   * @example "조선은 '아침이 밝다'는 뜻의 한자어에서 유래하였다."
+   */
+  @IsOptional()
+  @IsString()
+  nameOrigin?: string
+
+  /**
    * 설명
    * @example "조선은 1392년부터 1897년까지 존재한 한국의 왕조입니다."
    */

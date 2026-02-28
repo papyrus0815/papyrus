@@ -31,7 +31,7 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
-import { GiCrossedSwords, GiCrown } from 'react-icons/gi'
+import { GiCrossedSwords } from 'react-icons/gi'
 import { IoFemaleSharp, IoMaleSharp } from 'react-icons/io5'
 import { RiGovernmentLine } from 'react-icons/ri'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -75,18 +75,6 @@ import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { StepNavigation } from '@/widgets/event-form/ui'
-
-import {
-  MonarchField,
-  MonarchFieldBadge,
-  MonarchFieldGroup,
-  MonarchFieldLabel,
-  MonarchHint,
-  MonarchIcon,
-  MonarchSection,
-  MonarchSectionHeader,
-  MonarchTitle,
-} from './person-create-styles'
 
 // 디자인 토큰
 const DESIGN_TOKENS = {
@@ -1158,7 +1146,7 @@ export default function PersonCreatePage() {
     }
 
     try {
-      const uploaded = await Promise.all(files.map((file) => uploadImage(file)))
+      const uploaded = await Promise.all(files.map((file) => uploadImage(file, 'persons')))
       const items = uploaded
         .map((response) => response.url)
         .filter(Boolean)
@@ -1371,7 +1359,7 @@ export default function PersonCreatePage() {
 
     setIsUploadingImage(true)
     try {
-      const uploaded = await Promise.all(files.map((file) => uploadImage(file)))
+      const uploaded = await Promise.all(files.map((file) => uploadImage(file, 'persons')))
       const urls = uploaded.map((response) => response.url).filter(Boolean)
 
       setFormData((prev) => {
@@ -1433,7 +1421,7 @@ export default function PersonCreatePage() {
     setIsUploadingImage(true)
     try {
       const uploaded = await Promise.all(
-        imageFiles.map((file) => uploadImage(file)),
+        imageFiles.map((file) => uploadImage(file, 'persons')),
       )
       const urls = uploaded.map((response) => response.url).filter(Boolean)
 
@@ -3011,166 +2999,6 @@ export default function PersonCreatePage() {
                     </div>
                   </FormField>
                 </FormRow>
-
-                {/* 👑 왕/군주 칭호 - 직업이 왕/군주이거나 가문이 있을 때 표시 */}
-                {(() => {
-                  // 선택된 직업 이름들 가져오기
-                  const selectedJobNames = formData.jobIds
-                    .map((id) => jobs.find((j) => j.id === id)?.name)
-                    .filter(Boolean) as string[]
-
-                  // 왕/군주 관련 직업인지 확인
-                  const monarchKeywords = [
-                    '왕',
-                    '여왕',
-                    '황제',
-                    '황후',
-                    '국왕',
-                    '천황',
-                    '술탄',
-                    '차르',
-                    '칸',
-                    '왕세자',
-                    '황태자',
-                  ]
-                  const isMonarch = selectedJobNames.some((name) =>
-                    monarchKeywords.some((keyword) => name.includes(keyword)),
-                  )
-
-                  // 왕/군주이거나 가문이 있으면 표시
-                  if (!isMonarch && !formData.dynastyId) return null
-
-                  return (
-                    <FormRow>
-                      <FormLabel>왕/군주 칭호</FormLabel>
-                      <FormField>
-                        <MonarchSection>
-                          <MonarchSectionHeader>
-                            <MonarchIcon>
-                              <GiCrown />
-                            </MonarchIcon>
-                            <MonarchTitle>왕/군주 칭호</MonarchTitle>
-                          </MonarchSectionHeader>
-
-                          <MonarchHint>
-                            {isMonarch
-                              ? '직업이 왕/군주로 선택되었습니다. 왕호, 묘호, 시호 등을 입력하세요.'
-                              : '가문에 속한 왕족의 경우 왕호, 묘호, 시호 등을 입력할 수 있습니다.'}
-                          </MonarchHint>
-
-                          <MonarchFieldGroup>
-                            {/* 왕호/재위명 */}
-                            <MonarchField>
-                              <MonarchFieldLabel>
-                                왕호/재위명
-                                <MonarchFieldBadge>서양식</MonarchFieldBadge>
-                              </MonarchFieldLabel>
-                              <Input
-                                type="text"
-                                placeholder="예: Louis, Henry, Elizabeth, James"
-                                value={formData.regnalName}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    'regnalName',
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                              <Hint
-                                style={{
-                                  fontSize: '0.75rem',
-                                  marginTop: '0.5rem',
-                                  color: '#78350f',
-                                }}
-                              >
-                                서양 군주의 재위명을 입력하세요. 재위 번호(14세
-                                등)는 경력 등록 시 입력합니다.
-                              </Hint>
-                            </MonarchField>
-
-                            {/* 묘호 */}
-                            <MonarchField>
-                              <MonarchFieldLabel>
-                                묘호
-                                <MonarchFieldBadge>
-                                  동아시아식
-                                </MonarchFieldBadge>
-                              </MonarchFieldLabel>
-                              <Input
-                                type="text"
-                                placeholder="예: 세종, 태종, 고종, 성조(聖祖)"
-                                value={formData.templeName}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    'templeName',
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                              <Hint
-                                style={{
-                                  fontSize: '0.75rem',
-                                  marginTop: '0.5rem',
-                                  color: '#78350f',
-                                }}
-                              >
-                                한중일 군주의 묘호를 입력하세요. (예: 조선 세종,
-                                청 강희제/성조)
-                              </Hint>
-                            </MonarchField>
-
-                            {/* 시호 */}
-                            <MonarchField>
-                              <MonarchFieldLabel>
-                                시호
-                                <MonarchFieldBadge>선택사항</MonarchFieldBadge>
-                              </MonarchFieldLabel>
-                              <Input
-                                type="text"
-                                placeholder="예: 세종장헌영문예무인성명효대왕, 무열왕"
-                                value={formData.posthumousName}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    'posthumousName',
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                              <Hint
-                                style={{
-                                  fontSize: '0.75rem',
-                                  marginTop: '0.5rem',
-                                  color: '#78350f',
-                                }}
-                              >
-                                군주의 완전한 시호를 입력하세요. 매우 길 수
-                                있으므로 선택사항입니다.
-                              </Hint>
-                            </MonarchField>
-                          </MonarchFieldGroup>
-
-                          <Hint
-                            style={{
-                              marginTop: '16px',
-                              color: '#92400e',
-                              fontSize: '0.875rem',
-                            }}
-                          >
-                            예시:
-                            <br />• 조선 제4대 국왕 세종: 묘호 "세종", 시호
-                            "세종장헌영문예무인성명효대왕"
-                            <br />• 프랑스 루이 14세: 왕호 "Louis" (재위 번호
-                            "14"는 아래 재임 기록에서 입력)
-                            <br />• 영국 제임스 1세/6세: 왕호 "James" (잉글랜드
-                            "1", 스코틀랜드 "6"은 각 재위 기록에서 입력)
-                            <br />• 청나라 강희제: 묘호 "성조(聖祖)", 연호
-                            "강희(康熙)"는 경력사항 탭에서 입력
-                          </Hint>
-                        </MonarchSection>
-                      </FormField>
-                    </FormRow>
-                  )
-                })()}
 
                 {/* 소속 및 관계 정보 - 개선된 디자인 */}
                 <FormRow>

@@ -26,6 +26,8 @@ export class CountryController {
    * @returns CountryResponseDto
    */
   private toResponseDto(country: Country): CountryResponseDto {
+    const created = country.createdAt
+    const updated = country.updatedAt
     return {
       id: country.id,
       name: country.name,
@@ -41,6 +43,8 @@ export class CountryController {
       currencyId: country.currencyId,
       languageId: country.languageId,
       continentId: country.continentId,
+      createdAt: created instanceof Date ? created.toISOString() : typeof created === 'string' ? created : undefined,
+      updatedAt: updated instanceof Date ? updated.toISOString() : typeof updated === 'string' ? updated : undefined,
       historicalCountries: country.historicalCountries?.map((hc) => ({
         id: hc.id,
         name: hc.name,

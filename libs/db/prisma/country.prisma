@@ -76,7 +76,7 @@ model Country {
   economicIndicators        CountryEconomicIndicator[]
   demographicIndicators     CountryDemographicIndicator[]
   developmentIndicators     CountryDevelopmentIndicator[]
-  ethnicities               Ethnicity[]
+  ethnicities               Ethnicity[]  @relation("CountryEthnicities")
   persons                   Person[]                         @relation("CountryToPerson")
   personAffiliations        PersonCountryAffiliation[]       @relation("PersonCountryAffiliations")
   adminDivisionConfigs      CountryAdminDivisionConfig[]

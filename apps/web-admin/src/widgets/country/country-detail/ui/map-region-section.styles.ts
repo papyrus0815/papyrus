@@ -1,13 +1,13 @@
 import styled, { css } from 'styled-components'
 
 // ============================================
-// 🎨 현대적인 색상 시스템 (2024 트렌드)
+// 🎨 현대적인 색상 시스템 (2024 트렌드) — 행정조직 탭과 동일 톤
 // ============================================
 export const COLORS = {
-  // Primary - 모던한 인디고 블루
-  primary: '#4f46e5',
-  primaryLight: '#6366f1',
-  primaryDark: '#4338ca',
+  // Primary - 행정조직과 동일 인디고
+  primary: '#6366f1',
+  primaryLight: '#818cf8',
+  primaryDark: '#4f46e5',
   primaryUltraLight: '#eef2ff',
 
   // Accent - 포인트 색상
@@ -33,12 +33,12 @@ export const COLORS = {
     primary100: '#ede9fe',
   },
 
-  // Border colors - 얇고 세련되게
+  // Border colors - 행정조직과 동일 (#e5e7eb)
   border: {
-    light: '#e4e4e7',
-    medium: '#d4d4d8',
+    light: '#e5e7eb',
+    medium: '#d1d5db',
     dark: '#71717a',
-    primary: '#4f46e5',
+    primary: '#6366f1',
   },
 
   // Badge colors - 모던한 파스텔
@@ -49,14 +49,63 @@ export const COLORS = {
     cyan: { bg: '#cffafe', text: '#155e75', border: '#a5f3fc' },
   },
 
-  // Shadows - 부드러운 그림자
+  // Shadows - 부드러운 그림자 (행정조직 카드와 동일)
   shadow: {
     sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
     md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+    card: '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
     lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     xl: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
   },
 } as const
+
+// ============================================
+// 행정조직 탭 스타일 (GovTabNav / GovTabButton과 동일)
+// ============================================
+export const MapRegionTabNav = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 20px;
+  width: fit-content;
+  background: #f1f5f9;
+  border-radius: 20px;
+  overflow-x: auto;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`
+
+export const MapRegionTabButton = styled.button<{ $active?: boolean }>`
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: none;
+  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
+  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
+  font-size: 13px;
+  font-weight: ${(p) => (p.$active ? '600' : '500')};
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
+  &:hover {
+    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
+    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
+  }
+`
+
+/** 행정조직 SectionLabel과 동일 — 섹션 제목용 */
+export const MapRegionSectionLabel = styled.div`
+  margin-bottom: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+`
 
 // ============================================
 // 🎯 전체 화면 활용 - 컨테이너 최소화

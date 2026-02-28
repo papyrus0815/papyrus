@@ -30,6 +30,8 @@ export interface PersonResponseDto {
   posthumousName: string | null
   // 관계
   dynastyId: string | null
+  /** 가문 (목록/재임 응답에서 노출, id·name만) */
+  dynasty?: { id: string; name: string } | null
   religionId: string | null
   denominationId: string | null
   fatherId: string | null

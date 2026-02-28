@@ -5,6 +5,7 @@ export interface HistoricalCountryMembershipRecord {
   historicalCountryId: string
   memberCountryId: string
   role: HistoricalMembershipRole
+  isLeadingMember: boolean | null
   membershipStartDate: Date | null
   membershipEndDate: Date | null
   parentName?: string
@@ -17,12 +18,14 @@ export interface CreateMembershipData {
   historicalCountryId: string
   memberCountryId: string
   role: HistoricalMembershipRole
+  isLeadingMember?: boolean | null
   membershipStartDate?: Date | null
   membershipEndDate?: Date | null
 }
 
 export interface UpdateMembershipData {
   role?: HistoricalMembershipRole
+  isLeadingMember?: boolean | null
   membershipStartDate?: Date | null
   membershipEndDate?: Date | null
 }

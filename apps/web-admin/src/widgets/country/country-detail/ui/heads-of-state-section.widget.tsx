@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import styled from 'styled-components'
-import { FiPlus, FiUser, FiCalendar, FiChevronRight, FiArrowLeft, FiChevronDown, FiSave, FiAward, FiTrash2, FiInfo } from 'react-icons/fi'
+import { FiPlus, FiUser, FiCalendar, FiChevronRight, FiArrowLeft, FiChevronDown, FiSave, FiAward, FiTrash2, FiInfo, FiEdit2 } from 'react-icons/fi'
 import { toast } from 'react-hot-toast'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
@@ -97,6 +97,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const [achievementShowOnEventsPage, setAchievementShowOnEventsPage] = useState(true)
   const [achievementDateField, setAchievementDateField] = useState<'start' | 'end' | null>(null)
   const [achievementSubmitting, setAchievementSubmitting] = useState(false)
+  /** 수정 중인 업적 ID (설정 시 폼이 수정 모드) */
+  const [editingAchievementId, setEditingAchievementId] = useState<string | null>(null)
   /** 수정 폼 탭: 기본정보 | 업적 */
   const [tenureFormTab, setTenureFormTab] = useState<'basic' | 'achievement'>('basic')
 
@@ -188,10 +190,17 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     ? (positionDefinitions as any[]).find((d) => d.id === selectedPositionDefinitionId)
     : null
 
-  /** 직책명별로 묶은 재임 목록 (목록 뷰 섹션·계보 직책 선택용). 쇼군/대통령/총리/국왕 등 직책별 구분 */
+  /** 재임 기록의 소속 국가 표시명 (역사적 국가·현대 국가 구분). 헤더에 "신성로마제국 · 황제"처럼 표시하기 위함 */
+  const getCountryNameForTenure = React.useCallback(
+    (t: any) =>
+      (t?.historicalCountry?.name ?? t?.country?.name ?? (country as { name?: string })?.name ?? '').trim(),
+    [country],
+  )
+
+  /** 국가·직책별로 묶은 재임 목록. "신성로마제국 · 황제", "브란덴부르크 선제후국 · 선제후"처럼 소속 국가별로 구분 */
   const tenuresByPosition = React.useMemo(() => {
     const defs = positionDefinitions as any[]
-    const getKey = (t: any) => {
+    const getPositionLabel = (t: any) => {
       const defId = t.positionDefinitionId ?? t.position?.id
       const def = defId && defs.length ? defs.find((d: any) => d.id === defId) : null
       if (def?.title) return def.title.trim()
@@ -200,15 +209,26 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     }
     const map = new Map<string, any[]>()
     tenures.forEach((t: any) => {
-      const key = getKey(t)
+      const countryName = getCountryNameForTenure(t)
+      const positionLabel = getPositionLabel(t)
+      const key = countryName ? `${countryName} · ${positionLabel}` : positionLabel
       const list = map.get(key) ?? []
       list.push(t)
       map.set(key, list)
     })
+    const getRankForLabel = (label: string) => {
+      const positionPart = label.includes(' · ') ? label.split(' · ')[1]?.trim() ?? label : label
+      return defs.find((d: any) => d.title === positionPart)?.rank ?? 999
+    }
     return Array.from(map.entries())
       .map(([label, list]) => ({ label, tenures: list }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'ko'))
-  }, [tenures, positionDefinitions])
+      .sort((a, b) => {
+        const rankA = getRankForLabel(a.label)
+        const rankB = getRankForLabel(b.label)
+        if (rankA !== rankB) return rankA - rankB
+        return a.label.localeCompare(b.label, 'ko')
+      })
+  }, [tenures, positionDefinitions, getCountryNameForTenure])
 
   const isMonarchPosition =
     selectedPositionDefinition?.positionType === 'HEAD_OF_STATE' ||
@@ -222,6 +242,12 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   React.useEffect(() => {
     if (!editingTenureId || !editingTenure) return
     setTenureFormTab('basic')
+    setEditingAchievementId(null)
+    setAchievementTitle('')
+    setAchievementDescription('')
+    setAchievementStartDate('')
+    setAchievementEndDate('')
+    setAchievementShowOnEventsPage(true)
     const t = editingTenure as any
     setAchievementTenureId(editingTenureId)
     setAchievementPersonName(getPersonName(t?.person))
@@ -388,30 +414,53 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     return m ? m[1].trim() : null
   }
 
-  /** 업적/한일 등록 제출: 재임 전용 엔티티로 저장 (사건과 별도) */
+  /** 업적 폼 초기화 (추가 모드로) */
+  const resetAchievementForm = () => {
+    setEditingAchievementId(null)
+    setAchievementTitle('')
+    setAchievementDescription('')
+    setAchievementStartDate('')
+    setAchievementEndDate('')
+    setAchievementShowOnEventsPage(true)
+  }
+
+  /** 업적 수정 모드로 폼 채우기 */
+  const startEditAchievement = (a: { id: string; title?: string; description?: string; startDate?: string; endDate?: string; showOnEventsPage?: boolean }) => {
+    setEditingAchievementId(a.id)
+    setAchievementTitle(a.title ?? '')
+    setAchievementDescription(a.description ?? '')
+    setAchievementStartDate(a.startDate ?? '')
+    setAchievementEndDate(a.endDate ?? '')
+    setAchievementShowOnEventsPage(a.showOnEventsPage ?? true)
+  }
+
+  /** 업적/한일 등록 또는 수정 제출 */
   const handleAchievementSubmit = async () => {
-    if (!achievementTenureId || !achievementTitle.trim()) {
+    const tenureId = achievementTenureId ?? editingTenureId
+    if (!tenureId || !achievementTitle.trim()) {
       toast.error('제목을 입력하세요.')
       return
     }
     setAchievementSubmitting(true)
     try {
-      await personCareerApi.createTenureAchievement(achievementTenureId, {
+      const dto = {
         title: achievementTitle.trim(),
         description: achievementDescription.trim() || undefined,
         startDate: achievementStartDate || undefined,
         endDate: achievementEndDate || undefined,
         showOnEventsPage: achievementShowOnEventsPage,
-      })
-      toast.success('업적·한일이 등록되었습니다.')
-      setAchievementTitle('')
-      setAchievementDescription('')
-      setAchievementStartDate('')
-      setAchievementEndDate('')
-      setAchievementShowOnEventsPage(true)
+      }
+      if (editingAchievementId) {
+        await personCareerApi.updateTenureAchievement(tenureId, editingAchievementId, dto)
+        toast.success('업적이 수정되었습니다.')
+      } else {
+        await personCareerApi.createTenureAchievement(tenureId, dto)
+        toast.success('업적·한일이 등록되었습니다.')
+      }
+      resetAchievementForm()
       queryClient.invalidateQueries({ queryKey: ['tenures-by-country', countryId, historicalCountryId] })
     } catch (err: any) {
-      toast.error(err?.message ?? '등록에 실패했습니다.')
+      toast.error(err?.message ?? (editingAchievementId ? '수정에 실패했습니다.' : '등록에 실패했습니다.'))
     } finally {
       setAchievementSubmitting(false)
     }
@@ -422,6 +471,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     if (!window.confirm('이 업적을 삭제하시겠습니까?')) return
     try {
       await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
+      if (editingAchievementId === achievementId) resetAchievementForm()
       toast.success('업적이 삭제되었습니다.')
       queryClient.invalidateQueries({ queryKey: ['tenures-by-country', countryId, historicalCountryId] })
     } catch (err: any) {
@@ -438,16 +488,13 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const effectivePositionLabel =
     selectedPositionFilter ?? selectedLineagePositionLabel
 
-  /** 계보도에서 선택된 직책의 재임만 사용. 직책별로 계보 분리(국왕 계보 / 쇼군 계보 등) */
+  /** 계보도에서 선택된 직책의 재임만 사용. 대수/세 없어도 포함(변경백 등은 대수 없음). 정렬: 대수·세 → 재임 시작일 */
   const lineageTenures = React.useMemo(() => {
     const source =
       effectivePositionLabel != null
         ? tenuresByPosition.find((g) => g.label === effectivePositionLabel)?.tenures ?? []
         : tenures
-    const withOrder = source.filter(
-      (t: any) => t.termNumber != null || t.regnalNumber != null,
-    )
-    return [...withOrder].sort((a: any, b: any) => {
+    return [...source].sort((a: any, b: any) => {
       const orderA = a.termNumber ?? a.regnalNumber ?? 0
       const orderB = b.termNumber ?? b.regnalNumber ?? 0
       if (orderA !== orderB) return orderA - orderB
@@ -457,12 +504,9 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     })
   }, [tenures, tenuresByPosition, effectivePositionLabel])
 
-  /** 계보 표시 가능한 직책 그룹(대수/재위번호 있는 재임이 하나 이상인 그룹) */
+  /** 계보 표시 가능한 직책 그룹(재임이 하나 이상인 직책. 대수 없어도 표시 가능) */
   const lineageEligibleGroups = React.useMemo(
-    () =>
-      tenuresByPosition.filter((g) =>
-        g.tenures.some((t: any) => t.termNumber != null || t.regnalNumber != null),
-      ),
+    () => tenuresByPosition.filter((g) => g.tenures.length > 0),
     [tenuresByPosition],
   )
 
@@ -591,20 +635,20 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const mergedLineageAll = React.useMemo(() => {
     if (selectedPositionFilter != null) return null
     const defs = positionDefinitions as any[]
-    const getRank = (label: string) =>
-      defs.find((d: any) => d.title === label)?.rank ?? 999
+    const getRank = (label: string) => {
+      const positionPart = label.includes(' · ') ? label.split(' · ')[1]?.trim() ?? label : label
+      return defs.find((d: any) => d.title === positionPart)?.rank ?? 999
+    }
     const all = lineageEligibleGroups.flatMap((g) => g.tenures)
-    const withOrder = all
-      .filter((t: any) => t.termNumber != null || t.regnalNumber != null)
-      .sort((a: any, b: any) => {
-        const startA = a.startDate ? new Date(a.startDate).getTime() : 0
-        const startB = b.startDate ? new Date(b.startDate).getTime() : 0
-        if (startA !== startB) return startA - startB
-        const oa = a.termNumber ?? a.regnalNumber ?? 0
-        const ob = b.termNumber ?? b.regnalNumber ?? 0
-        return oa - ob
-      })
-    if (withOrder.length === 0) return null
+    const sorted = [...all].sort((a: any, b: any) => {
+      const oa = a.termNumber ?? a.regnalNumber ?? 0
+      const ob = b.termNumber ?? b.regnalNumber ?? 0
+      if (oa !== ob) return oa - ob
+      const startA = a.startDate ? new Date(a.startDate).getTime() : 0
+      const startB = b.startDate ? new Date(b.startDate).getTime() : 0
+      return startA - startB
+    })
+    if (sorted.length === 0) return null
     const getCentury = (t: any) => {
       if (!t?.startDate) return 0
       const y = new Date(t.startDate).getFullYear()
@@ -613,7 +657,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     const getPosition = (t: any) =>
       lineageEligibleGroups.find((g) => g.tenures.some((x: any) => x.id === t.id))?.label ?? '—'
     const byCentury = new Map<number, any[]>()
-    withOrder.forEach((t: any) => {
+    sorted.forEach((t: any) => {
       const c = getCentury(t)
       const list = byCentury.get(c) ?? []
       list.push(t)
@@ -658,8 +702,12 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       const orderToRowIndex = (order: number) =>
         order <= 1 ? 0 : Math.floor((order - 2) / 2) + 1
       const subRowByTenureId = new Map<string, number>()
+      const startTime = (t: any) => (t?.startDate ? new Date(t.startDate).getTime() : 0)
       positionsOrder.forEach((pos) => {
-        const list = (byPos.get(pos) ?? []).sort((a: any, b: any) => orderNum(a) - orderNum(b))
+        const list = (byPos.get(pos) ?? []).sort(
+          (a: any, b: any) =>
+            orderNum(a) - orderNum(b) || startTime(a) - startTime(b),
+        )
         if (list.length === 0) return
         const byRow = new Map<number, any[]>()
         list.forEach((t: any) => {
@@ -670,7 +718,12 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         })
         const positionRows = Array.from(byRow.keys())
           .sort((a, b) => a - b)
-          .map((r) => (byRow.get(r) ?? []).sort((a: any, b: any) => orderNum(a) - orderNum(b)))
+          .map((r) =>
+            (byRow.get(r) ?? []).sort(
+              (a: any, b: any) =>
+                orderNum(a) - orderNum(b) || startTime(a) - startTime(b),
+            ),
+          )
         positionRows.forEach((row, rowIdx) => {
           row.forEach((t: any) => subRowByTenureId.set(t.id, rowIdx))
         })
@@ -705,10 +758,10 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     )
     let colStart = 0
     const columnStartByPosition = new Map<string, number>()
-    /* 스페이서 열 없이 연속 배치. 구분은 구분선 + POSITION_GROUP_GAP_PX로만 */
+    /* 직책(국가·직책) 그룹당 열 1개. 같은 그룹 수반은 연도 기준 레이아웃에서 같은 열에 세로로 쌓임 */
     positionsWithData.forEach((pos) => {
       columnStartByPosition.set(pos, colStart)
-      colStart += maxPerPosition.get(pos) ?? 0
+      colStart += 1
     })
     const rows = allRows
     const placement = new Map<string, { row: number; col: number }>()
@@ -723,8 +776,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       positionsWithData.forEach((pos) => {
         const list = (byPos.get(pos) ?? []).sort(sortByOrder)
         const startCol = columnStartByPosition.get(pos) ?? 0
-        list.forEach((t: any, i: number) => {
-          placement.set(t.id, { row: rowIdx, col: startCol + i })
+        list.forEach((t: any) => {
+          placement.set(t.id, { row: rowIdx, col: startCol })
         })
       })
     })
@@ -735,7 +788,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     const positionHeaders = positionsWithData.map((pos) => ({
       label: pos,
       startCol: columnStartByPosition.get(pos) ?? 0,
-      colCount: maxPerPosition.get(pos) ?? 0,
+      colCount: 1,
     }))
     const allTenures = rows.flat()
     const getYear = (s: string | null | undefined): number | null => {
@@ -770,6 +823,19 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const getPositionLabel = (t: any) =>
     tenureIdToPositionLabel.get(t.id) ?? (t.title || t.position?.title) ?? '—'
 
+  /** 계보도 카드용: 재임 인물의 가문명 (tenure.person.dynasty 우선, 없으면 persons 목록에서 조회) */
+  const getDynastyNameForTenure = React.useCallback(
+    (t: any) => {
+      const fromTenure = (t?.person as { dynasty?: { name: string } } | undefined)?.dynasty?.name
+      if (fromTenure) return fromTenure
+      const pid = normId(t?.person?.id ?? (t as any)?.personId)
+      if (!pid) return null
+      const p = personById.get(pid) ?? persons.find((x: any) => normId(x.id) === pid)
+      return (p as { dynasty?: { name: string } } | undefined)?.dynasty?.name ?? null
+    },
+    [personById, persons],
+  )
+
   /** 세대별 그룹: 재위/대수로 행 배치. 1대만 첫 행, 2·3대 같은 행, 4·5대 같은 행 … (형제 가로 배치). */
   const lineageRows = React.useMemo(() => {
     if (lineageTenures.length === 0) return []
@@ -792,8 +858,12 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       byRow.set(rowIdx, list)
     })
     const rowIndexes = Array.from(byRow.keys()).sort((a, b) => a - b)
+    const startTime = (t: any) => (t?.startDate ? new Date(t.startDate).getTime() : 0)
     const rows = rowIndexes.map((r) =>
-      (byRow.get(r) ?? []).sort((a: any, b: any) => orderNum(a) - orderNum(b)),
+      (byRow.get(r) ?? []).sort(
+        (a: any, b: any) =>
+          orderNum(a) - orderNum(b) || startTime(a) - startTime(b),
+      ),
     )
     return rows.length > 0 ? rows : [lineageTenures]
   }, [lineageTenures])
@@ -939,7 +1009,9 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                         {listViewMode === 'lineage' && lineageTenures.length > 0
                           ? effectivePositionLabel
                             ? `${effectivePositionLabel} 계보`
-                            : '역대 수반 계보'
+                            : (country as { name?: string })?.name
+                              ? `${(country as { name: string }).name} · 역대 수반 계보`
+                              : '역대 수반 계보'
                           : '재임 목록'}
                         {tenures.length > 0 && (
                           <span className="count">
@@ -981,6 +1053,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                           formatDate={formatDate}
                           getRegnalNameFromNotes={getRegnalNameFromNotes}
                           getPositionLabel={getPositionLabel}
+                          getDynastyNameForTenure={getDynastyNameForTenure}
                           separatorBeforeCols={mergedLineageAll.separatorBeforeCols}
                           positionHeaders={mergedLineageAll.positionHeaders}
                           onCardClick={(tenureId) => {
@@ -996,6 +1069,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                           getPersonName={getPersonName}
                           formatDate={formatDate}
                           getRegnalNameFromNotes={getRegnalNameFromNotes}
+                          getDynastyNameForTenure={getDynastyNameForTenure}
                           onCardClick={(tenureId) => {
                             setEditingTenureId(tenureId)
                             setView('register')
@@ -1063,6 +1137,11 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                       )}
                                       {regnalFromNotes && (
                                         <ItemRegnalName>왕명: {regnalFromNotes}</ItemRegnalName>
+                                      )}
+                                      {(t.person as { dynasty?: { id: string; name: string } | null })?.dynasty?.name && (
+                                        <ItemDynastyName>
+                                          가문: {(t.person as { dynasty: { name: string } }).dynasty.name}
+                                        </ItemDynastyName>
                                       )}
                                     </ItemRow>
                                     {(t.achievements?.length ?? 0) > 0 && (
@@ -1372,6 +1451,13 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                           )}
                                         </AchievementCardContent>
                                         <AchievementCardActions>
+                                          <EditAchievementButton
+                                            type="button"
+                                            onClick={() => startEditAchievement(a)}
+                                            title="업적 수정"
+                                          >
+                                            <FiEdit2 size={16} />
+                                          </EditAchievementButton>
                                           <DeleteAchievementButton
                                             type="button"
                                             onClick={() => handleDeleteAchievement(editingTenureId, a.id)}
@@ -1425,7 +1511,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                       showTitle={false}
                                       placeholder="내용을 입력하세요. 사건 등록과 동일하게 서식·이미지를 넣을 수 있습니다."
                                       onImageUpload={async (file) => {
-                                        const result = await uploadImage(file)
+                                        const result = await uploadImage(file, 'persons')
                                         return result.url ?? result
                                       }}
                                     />
@@ -1444,13 +1530,27 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                     </CheckboxRow>
                                   </AchievementField>
                                   <AchievementInlineActions>
+                                    {editingAchievementId && (
+                                      <button
+                                        type="button"
+                                        className="cancel"
+                                        onClick={() => resetAchievementForm()}
+                                        disabled={achievementSubmitting}
+                                      >
+                                        취소
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       className="submit"
                                       onClick={() => handleAchievementSubmit()}
                                       disabled={achievementSubmitting || !achievementTitle.trim()}
                                     >
-                                      {achievementSubmitting ? '등록 중…' : '업적 추가'}
+                                      {achievementSubmitting
+                                        ? (editingAchievementId ? '수정 중…' : '등록 중…')
+                                        : editingAchievementId
+                                          ? '수정 완료'
+                                          : '업적 추가'}
                                     </button>
                                   </AchievementInlineActions>
                                 </AchievementInlineForm>
@@ -1709,6 +1809,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         onSelect={(date) => {
           setStartDate(date)
           setStartDateModalOpen(false)
+          setEndDateModalOpen(true)
         }}
       />
 
@@ -2063,6 +2164,12 @@ const ItemRegnalName = styled.span`
   font-style: italic;
 `
 
+const ItemDynastyName = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: #7c3aed;
+`
+
 const AchievementChips = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -2278,6 +2385,25 @@ const AchievementCardContent = styled.div`
   .desc.prose p:last-child {
     margin-bottom: 0;
   }
+  .desc.prose ul,
+  .desc.prose ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+    list-style-position: outside;
+  }
+  .desc.prose ul {
+    list-style-type: disc;
+  }
+  .desc.prose ol {
+    list-style-type: decimal;
+  }
+  .desc.prose li {
+    margin: 0.25em 0;
+    display: list-item;
+  }
+  .desc.prose li p {
+    margin: 0;
+  }
   .date {
     font-size: 12px;
     color: #94a3b8;
@@ -2286,6 +2412,28 @@ const AchievementCardContent = styled.div`
 
 const AchievementCardActions = styled.div`
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const EditAchievementButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #64748b;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  &:hover {
+    color: #4f46e5;
+    background: #eef2ff;
+  }
 `
 
 const DeleteAchievementButton = styled.button`
@@ -2319,6 +2467,28 @@ const AchievementInlineForm = styled.div`
 
 const AchievementInlineActions = styled.div`
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  .cancel {
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    background: #fff;
+    color: #64748b;
+  }
+  .cancel:hover:not(:disabled) {
+    background: #f8fafc;
+    color: #475569;
+  }
+  .cancel:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 
   .submit {
     padding: 10px 18px;

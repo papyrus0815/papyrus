@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
+import { dynastyApi } from '@/shared/api/dynasty'
 import { personApi, type Person } from '@/shared/api/person'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { PersonList } from './person/PersonList'
@@ -40,6 +42,12 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
 
     fetchPersons()
   }, [countryId])
+
+  const { data: dynasties = [] } = useQuery({
+    queryKey: ['dynasties'],
+    queryFn: () => dynastyApi.getAll(),
+    staleTime: 1000 * 60 * 5,
+  })
 
   // Fetch person detail
   useEffect(() => {
@@ -143,6 +151,7 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
           currentPage={currentPage}
           onPageChange={setCurrentPage}
           itemsPerPage={itemsPerPage}
+          dynasties={dynasties}
         />
       </Container>
     </Wrap>

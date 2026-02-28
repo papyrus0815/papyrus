@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
+import { dynastyApi } from '@/shared/api/dynasty'
 import { personApi } from '@/shared/api/person'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
@@ -170,6 +171,15 @@ const PersonLifespan = styled.div`
   gap: 6px;
 `
 
+const CardDynasty = styled.div`
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #7c3aed;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+`
+
 const TombstoneIcon = styled.span`
   font-size: 14px;
   line-height: 1;
@@ -228,6 +238,11 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
     queryFn: () => personApi.getByCountryId(countryId),
     staleTime: 1000 * 60 * 2,
   })
+  const { data: dynasties = [] } = useQuery({
+    queryKey: ['dynasties'],
+    queryFn: () => dynastyApi.getAll(),
+    staleTime: 1000 * 60 * 5,
+  })
 
   if (isLoading) {
     return (
@@ -270,6 +285,11 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
             const bioExcerpt =
               bioText.length > 120 ? `${bioText.slice(0, 120)}…` : bioText || null
             const displayImage = person.profileImageUrl
+            const dynastyId = (person as { dynastyId?: string | null }).dynastyId
+            const dynastyFromApi = (person as { dynasty?: { name: string } | null }).dynasty
+            const dynastyName =
+              dynastyFromApi?.name ??
+              (dynastyId != null ? dynasties.find((d) => d.id === dynastyId)?.name : undefined)
             return (
               <Card
                 key={person.id}
@@ -301,6 +321,9 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
                       {isDeceased && <TombstoneIcon aria-hidden>🪦</TombstoneIcon>}
                       {lifespan}
                     </PersonLifespan>
+                    {dynastyName && (
+                      <CardDynasty title="가문">가문: {dynastyName}</CardDynasty>
+                    )}
                     {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
                   </PersonInfo>
                 </CardContent>

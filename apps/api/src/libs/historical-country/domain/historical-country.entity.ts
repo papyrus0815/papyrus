@@ -8,6 +8,7 @@ export class HistoricalCountry {
   id: string
   name: string
   enName: string
+  nameOrigin: string | null
   description: string | null
   thumbnailUrl: string | null
 
@@ -31,6 +32,7 @@ export class HistoricalCountry {
     id: string
     name: string
     enName: string
+    nameOrigin?: string | null
     description?: string | null
     thumbnailUrl?: string | null
     startEra?: Era | null
@@ -48,6 +50,7 @@ export class HistoricalCountry {
     this.id = data.id
     this.name = data.name
     this.enName = data.enName
+    this.nameOrigin = data.nameOrigin ?? null
     this.description = data.description ?? null
     this.thumbnailUrl = data.thumbnailUrl ?? null
     this.startEra = data.startEra ?? null

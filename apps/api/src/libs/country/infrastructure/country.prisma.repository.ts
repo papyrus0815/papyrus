@@ -190,6 +190,8 @@ export class CountryPrismaRepository implements CountryRepository {
       continentId: data.continentId,
       historicalCountries: historicalCountries || [],
       accountId: data.accountId ?? undefined,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
     })
   }
 }

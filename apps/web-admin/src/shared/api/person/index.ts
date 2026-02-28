@@ -37,6 +37,8 @@ export type Person = {
     name: string
     flagEmoji?: string | null
   } | null
+  /** 가문 (목록/재임 응답에서 포함될 수 있음) */
+  dynasty?: { id: string; name: string } | null
   birthCity?: { id: string; name: string; countryId: string } | null
   deathCity?: { id: string; name: string; countryId: string } | null
 }

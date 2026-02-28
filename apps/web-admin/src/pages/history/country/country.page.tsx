@@ -38,6 +38,8 @@ import {
 import { getAllEvents } from '@/shared/api/events'
 import { CountryDashboard } from '@/widgets/country/country-dashboard'
 import { CountryDetail } from '@/widgets/country/country-detail'
+import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-section.widget'
+import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
 import { CountryForm } from '@/widgets/country/country-form'
 import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
 import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
@@ -51,16 +53,16 @@ import { zodResolver } from '@hookform/resolvers/zod'
 
 import * as S from './country.styles'
 
-/** 대시보드 메뉴 선택 시 오른쪽 컨텐츠 (통계 제외) */
+/** 대시보드 메뉴 선택 시 오른쪽 컨텐츠 (통계·가문·민족 제외 — 해당 뷰는 각각 전용 섹션으로 렌더) */
 function DashboardMenuContent({
   view,
   onNavigateFullPage,
 }: {
-  view: Exclude<DashboardContentView, 'stats'>
+  view: Exclude<DashboardContentView, 'stats' | 'dynasty' | 'ethnicity'>
   onNavigateFullPage: (path: string) => void
 }) {
   const configs: Record<
-    Exclude<DashboardContentView, 'stats'>,
+    Exclude<DashboardContentView, 'stats' | 'dynasty' | 'ethnicity'>,
     { title: string; desc: string; fullPath?: string; fullLabel?: string }
   > = {
     heads: {
@@ -148,7 +150,7 @@ export default function CountryPage() {
   // 등록 현황 게시판용
   const { data: apiPersons } = usePersons()
 
-  /** 등록 현황: 일주일(7일) 내, 디자인용 primaryLabel + countryName (문장형 텍스트 없음) */
+  /** 등록 현황: 일주일(7일) 내, 디자인용 primaryLabel + countryName (문장형 텍스트 없음, 국기 이미지 포함) */
   const registrationFeed = useMemo(() => {
     type Item = {
       date: string
@@ -156,6 +158,8 @@ export default function CountryPage() {
       primaryLabel: string
       countryName?: string | null
       profileImageUrl?: string | null
+      thumbnailUrl?: string | null
+      flagEmoji?: string | null
     }
     const items: Item[] = []
     const now = Date.now()
@@ -164,13 +168,15 @@ export default function CountryPage() {
     const rawPersons = apiPersons ?? []
     const countriesList = apiCountries ?? []
 
-    rawCountries.forEach((c: { name?: string; createdAt?: string }) => {
+    rawCountries.forEach((c: { name?: string; createdAt?: string; thumbnailUrl?: string | null; flagEmoji?: string | null }) => {
       const date = c.createdAt
       if (!date || now - new Date(date).getTime() > oneWeekMs) return
       items.push({
         date,
         type: 'country',
         primaryLabel: c.name || '국가',
+        thumbnailUrl: c.thumbnailUrl ?? null,
+        flagEmoji: c.flagEmoji ?? null,
       })
     })
     rawPersons.forEach(
@@ -205,6 +211,46 @@ export default function CountryPage() {
     items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     return items.slice(0, 50)
   }, [apiCountries, apiPersons])
+
+  /** 국가(현대, 역사적) 등록 현황: 일주일(7일) 내 생성된 현대 국가·역사적 국가 (국기 이미지 포함) */
+  const countryRegistrationFeed = useMemo(() => {
+    type Item = {
+      date: string
+      name: string
+      type: 'modern' | 'historical'
+      thumbnailUrl?: string | null
+      flagEmoji?: string | null
+    }
+    const items: Item[] = []
+    const now = Date.now()
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000
+    const rawModern = apiCountries ?? []
+    const rawHistorical = apiHistoricalCountries ?? []
+
+    rawModern.forEach((c: { name?: string; createdAt?: string; thumbnailUrl?: string | null; flagEmoji?: string | null }) => {
+      const date = c.createdAt
+      if (!date || now - new Date(date).getTime() > oneWeekMs) return
+      items.push({
+        date,
+        name: c.name ?? '국가',
+        type: 'modern',
+        thumbnailUrl: c.thumbnailUrl ?? null,
+        flagEmoji: c.flagEmoji ?? null,
+      })
+    })
+    rawHistorical.forEach((c: { name?: string; createdAt?: string; thumbnailUrl?: string | null }) => {
+      const date = c.createdAt
+      if (!date || now - new Date(date).getTime() > oneWeekMs) return
+      items.push({
+        date,
+        name: c.name ?? '역사적 국가',
+        type: 'historical',
+        thumbnailUrl: c.thumbnailUrl ?? null,
+      })
+    })
+    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    return items.slice(0, 50)
+  }, [apiCountries, apiHistoricalCountries])
 
   /** 사건(events) 일주일 내 데이터만 조회 (createdSinceDays로 API에서 필터) */
   useEffect(() => {
@@ -917,7 +963,12 @@ export default function CountryPage() {
                       onCountryEdit={setEditing}
                       registrationFeed={registrationFeed}
                       recentEvents={recentEvents}
+                      countryRegistrationFeed={countryRegistrationFeed}
                     />
+                  ) : dashboardContentView === 'dynasty' ? (
+                    <DynastySection />
+                  ) : dashboardContentView === 'ethnicity' ? (
+                    <EthnicityDashboardSection />
                   ) : (
                     <DashboardMenuContent
                       view={dashboardContentView}

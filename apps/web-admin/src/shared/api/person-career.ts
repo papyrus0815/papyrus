@@ -431,6 +431,29 @@ export const personCareerApi = {
   },
 
   /**
+   * 재임 업적 수정
+   * PATCH /government-positions/tenures/:tenureId/achievements/:achievementId
+   */
+  updateTenureAchievement: async (
+    tenureId: string,
+    achievementId: string,
+    dto: {
+      title?: string
+      description?: string
+      startDate?: string
+      endDate?: string
+      orderNum?: number
+      showOnEventsPage?: boolean
+    },
+  ) => {
+    const response = await apiClient.patch(
+      `/government-positions/tenures/${encodeURIComponent(tenureId)}/achievements/${encodeURIComponent(achievementId)}`,
+      dto,
+    )
+    return response.data
+  },
+
+  /**
    * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
    * GET /government-positions/achievements/for-events-page
    */

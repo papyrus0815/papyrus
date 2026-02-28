@@ -6,6 +6,7 @@ import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import * as CountryStyles from '@/pages/history/country/country.styles'
+import { getUploadImageUrl } from '@/shared/api/upload'
 
 import {
   getTransitionsByHistoricalCountryId,
@@ -14,6 +15,7 @@ import {
   getAllHistoricalCountries,
   getMembershipsByHistoricalCountryId,
   createHistoricalCountryMembership,
+  updateHistoricalCountryMembership,
   deleteHistoricalCountryMembership,
   getRelationsByHistoricalCountryId,
   createHistoricalCountryRelation,
@@ -23,6 +25,7 @@ import {
   type TransitionEventType,
   type HistoricalCountryMembershipDto,
   type CreateHistoricalCountryMembershipDto,
+  type UpdateHistoricalCountryMembershipDto,
   type HistoricalMembershipRole,
   type HistoricalCountryRelationDto,
   type CreateHistoricalCountryRelationDto,
@@ -32,6 +35,7 @@ import {
 import { historicalCountryMockData } from '../mock/historical-country.mock'
 import { CountryFlag } from '../../shared'
 import * as S from './CountryDetail.styles'
+import { EthnicitySection } from './ethnicity-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { LoadingOverlay } from './LoadingOverlay'
 
@@ -115,6 +119,7 @@ export type HistoricalCountryTab =
   | 'figures' // 주요 인물
   | 'heads' // 수장 (국왕, 황제 등)
   | 'government' // 행정조직 (관직 정의, 행정기구)
+  | 'ethnicity' // 구성 민족
   | 'succession' // 계승 관계
   | 'membership' // 소속·구성 (신성로마-제후국 등)
   | 'relation' // 국가 관계 (한·중 조공, 동맹 등)
@@ -358,6 +363,9 @@ export function HistoricalCountryDetail({
                       행정조직 정보는 현대 국가 상세에서 확인할 수 있습니다.
                     </div>
                   )}
+                  {activeTab === 'ethnicity' && (
+                    <EthnicitySection historicalCountryId={country.id} />
+                  )}
                   {activeTab === 'succession' && (
                     <SuccessionSection country={country} />
                   )}
@@ -582,6 +590,7 @@ function HistoricalCountryTabs({
     { id: 'figures', label: '인물' },
     { id: 'heads', label: '역대 수반' },
     { id: 'government', label: '행정조직' },
+    { id: 'ethnicity', label: '민족' },
     { id: 'succession', label: '계승' },
     { id: 'membership', label: '소속·구성' },
     { id: 'relation', label: '국가 관계' },
@@ -1507,7 +1516,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                 }}
               >
                 <img
-                  src={figure.imageUrl}
+                  src={getUploadImageUrl(figure.imageUrl)}
                   alt={figure.name}
                   style={{
                     width: '100%',
@@ -1929,17 +1938,23 @@ const RELATION_TYPE_LABELS: Record<HistoricalRelationType, string> = {
   WAR: '전쟁',
   SUZERAIN_VASSAL: '종주국-속국',
   TRIBUTARY: '조공·책봉',
-  PERSONAL_UNION: '개인 연합',
+  PERSONAL_UNION: '동군연합',
 }
 
 function MembershipSection({ country }: { country: UnifiedCountry }) {
   const queryClient = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
+  const [editingMembership, setEditingMembership] = useState<HistoricalCountryMembershipDto | null>(null)
   const [form, setForm] = useState<{
     asParent: boolean
     otherCountryId: string
     role: HistoricalMembershipRole
-  }>({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE' })
+    isLeadingMember: boolean
+  }>({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE', isLeadingMember: false })
+  const [editForm, setEditForm] = useState<{ role: HistoricalMembershipRole; isLeadingMember: boolean }>({
+    role: 'VASSAL_STATE',
+    isLeadingMember: false,
+  })
 
   const isHistorical = country.type === 'historical'
   const historicalCountryId = isHistorical ? country.id : null
@@ -1962,7 +1977,16 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['historical-country-memberships', historicalCountryId] })
       setAddOpen(false)
-      setForm({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE' })
+      setForm({ asParent: true, otherCountryId: '', role: 'VASSAL_STATE', isLeadingMember: false })
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ mid, data }: { mid: string; data: UpdateHistoricalCountryMembershipDto }) =>
+      updateHistoricalCountryMembership(mid, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['historical-country-memberships', historicalCountryId] })
+      setEditingMembership(null)
     },
   })
 
@@ -1979,6 +2003,23 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
       historicalCountryId: form.asParent ? historicalCountryId : form.otherCountryId,
       memberCountryId: form.asParent ? form.otherCountryId : historicalCountryId,
       role: form.role,
+      isLeadingMember: form.role === 'CONFEDERATION_MEMBER' || form.role === 'UNION' ? form.isLeadingMember : undefined,
+    })
+  }
+
+  const openEdit = (m: HistoricalCountryMembershipDto) => {
+    setEditingMembership(m)
+    setEditForm({ role: m.role, isLeadingMember: !!m.isLeadingMember })
+  }
+
+  const handleEditSubmit = () => {
+    if (!editingMembership) return
+    updateMutation.mutate({
+      mid: editingMembership.id,
+      data: {
+        role: editForm.role,
+        isLeadingMember: editForm.role === 'CONFEDERATION_MEMBER' || editForm.role === 'UNION' ? editForm.isLeadingMember : false,
+      },
     })
   }
 
@@ -2015,12 +2056,52 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
               <span style={{ padding: '4px 10px', background: '#f1f5f9', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#4f46e5' }}>
                 {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
               </span>
-              <button type="button" onClick={() => deleteMutation.mutate(m.id)} disabled={deleteMutation.isPending} style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: 12, color: '#dc2626', background: 'transparent', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>
-                삭제
-              </button>
+              {m.isLeadingMember && (
+                <span style={{ padding: '4px 8px', background: '#fef3c7', borderRadius: 8, fontSize: 11, fontWeight: 600, color: '#b45309' }}>주축</span>
+              )}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => openEdit(m)} style={{ padding: '6px 12px', fontSize: 12, color: '#4f46e5', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>
+                  수정
+                </button>
+                <button type="button" onClick={() => deleteMutation.mutate(m.id)} disabled={deleteMutation.isPending} style={{ padding: '6px 12px', fontSize: 12, color: '#dc2626', background: 'transparent', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>
+                  삭제
+                </button>
+              </div>
             </li>
           ))}
         </ul>
+      )}
+      {editingMembership && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setEditingMembership(null)}>
+          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e5e7eb', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#111827' }}>소속·구성 수정</h4>
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#64748b' }}>
+              {editingMembership.parentName ?? '(상위)'} — {editingMembership.memberName ?? '(하위)'}
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>역할</label>
+              <select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value as HistoricalMembershipRole }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+                {(Object.keys(MEMBERSHIP_ROLE_LABELS) as HistoricalMembershipRole[]).map((k) => (
+                  <option key={k} value={k}>{MEMBERSHIP_ROLE_LABELS[k]}</option>
+                ))}
+              </select>
+            </div>
+            {(editForm.role === 'CONFEDERATION_MEMBER' || editForm.role === 'UNION') && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={editForm.isLeadingMember} onChange={(e) => setEditForm((f) => ({ ...f, isLeadingMember: e.target.checked }))} />
+                  주축(주도국)
+                </label>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setEditingMembership(null)} style={{ padding: '12px 24px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#64748b', background: '#fff', cursor: 'pointer' }}>취소</button>
+              <button type="button" onClick={handleEditSubmit} disabled={updateMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
+                {updateMutation.isPending ? '저장 중…' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {addOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setAddOpen(false)}>
@@ -2050,6 +2131,15 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
                 ))}
               </select>
             </div>
+            {(form.role === 'CONFEDERATION_MEMBER' || form.role === 'UNION') && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={form.isLeadingMember} onChange={(e) => setForm((f) => ({ ...f, isLeadingMember: e.target.checked }))} />
+                  주축(주도국)
+                </label>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>연방·연합 내에서 주도적 역할을 한 구성원 (예: 독일 제국 내 프로이센)</p>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
               <button type="button" onClick={() => setAddOpen(false)} style={{ padding: '12px 24px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#64748b', background: '#fff', cursor: 'pointer' }}>취소</button>
               <button type="button" onClick={handleAddSubmit} disabled={!form.otherCountryId || createMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
@@ -2135,7 +2225,7 @@ function RelationSection({ country }: { country: UnifiedCountry }) {
       {isLoading ? (
         <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>불러오는 중…</div>
       ) : relations.length === 0 ? (
-        <EmptyState message="등록된 국가 관계가 없습니다" description="조공·책봉, 동맹, 전쟁, 종주국-속국, 개인 연합 등을 등록할 수 있습니다." />
+        <EmptyState message="등록된 국가 관계가 없습니다" description="조공·책봉, 동맹, 전쟁, 종주국-속국, 동군연합 등을 등록할 수 있습니다." />
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {relations.map((r) => (
@@ -2365,7 +2455,7 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
                 }}
               >
                 <img
-                  src={item.imageUrl}
+                  src={getUploadImageUrl(item.imageUrl)}
                   alt={item.name}
                   style={{
                     width: '100%',
@@ -3306,7 +3396,7 @@ function PersonsTab({
                 }}
               >
                 <img
-                  src={person.imageUrl}
+                  src={getUploadImageUrl(person.imageUrl)}
                   alt={person.name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />

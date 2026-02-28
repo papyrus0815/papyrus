@@ -50,4 +50,10 @@ export class CountryResponseDto {
     required: false,
   })
   historicalCountries?: HistoricalCountrySimpleResponseDto[]
+
+  @ApiProperty({ description: '등록 일시', required: false })
+  createdAt?: string
+
+  @ApiProperty({ description: '수정 일시', required: false })
+  updatedAt?: string
 }

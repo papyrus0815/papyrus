@@ -2,6 +2,7 @@ import {
   Controller,
   Delete,
   Get,
+  Patch,
   Post,
   Put,
   Body,
@@ -14,6 +15,7 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
+  UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
 } from './dto'
 
@@ -183,6 +185,23 @@ export class GovernmentPositionController {
   async getAchievementsForEventsPage(): Promise<any[]> {
     const list = await this.personService.findAchievementsForEventsPage()
     return list.map(serializeBigInt)
+  }
+
+  /**
+   * 재임 업적 수정
+   */
+  @Patch('tenures/:tenureId/achievements/:achievementId')
+  async updateTenureAchievement(
+    @Param('tenureId') tenureId: string,
+    @Param('achievementId') achievementId: string,
+    @Body() dto: UpdateTenureAchievementDto,
+  ): Promise<any> {
+    const result = await this.personService.updateTenureAchievement(
+      tenureId,
+      achievementId,
+      dto,
+    )
+    return serializeBigInt(result)
   }
 
   /**

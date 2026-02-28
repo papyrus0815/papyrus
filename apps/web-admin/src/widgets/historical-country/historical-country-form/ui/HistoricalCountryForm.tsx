@@ -31,6 +31,7 @@ const TRANSITION_EVENT_LABELS: Record<TransitionEventType, string> = {
 const historicalCountrySchema = z.object({
   name: z.string().min(1, '국가명(한글)을 입력해주세요'),
   enName: z.string().optional(),
+  nameOrigin: z.string().optional(),
   description: z.string().optional(),
   thumbnailUrl: z.string().optional(),
   // 존속 시작
@@ -321,6 +322,7 @@ export function HistoricalCountryForm({
         reset({
           name: (raw?.name ?? editing.name) || '',
           enName: (raw?.enName ?? editing.enName) || '',
+          nameOrigin: (raw?.nameOrigin ?? (editing as any).nameOrigin) || '',
           description: (raw?.description ?? editing.description) || '',
           thumbnailUrl: (raw?.thumbnailUrl ?? editing.thumbnailUrl) || '',
           startEra: str(raw?.startEra ?? raw?.start_era),
@@ -343,6 +345,7 @@ export function HistoricalCountryForm({
         reset({
           name: '',
           enName: '',
+          nameOrigin: '',
           description: '',
           thumbnailUrl: '',
           startEra: undefined,
@@ -378,7 +381,7 @@ export function HistoricalCountryForm({
     setThumbnailUploadError(null)
     setThumbnailUploading(true)
     try {
-      const result = await uploadImage(file)
+      const result = await uploadImage(file, 'countries')
       const url = (result.url ?? '').length > 255 ? (result.url ?? '').slice(0, 255) : (result.url ?? '')
       setValue('thumbnailUrl', url, { shouldValidate: true })
       setThumbnailPreview(result.url ?? '')
@@ -405,6 +408,7 @@ export function HistoricalCountryForm({
     } = {
       name: data.name,
       enName: data.enName,
+      nameOrigin: data.nameOrigin || null,
       description: data.description || null,
       thumbnailUrl: data.thumbnailUrl || null,
       // 존속 시작 날짜
@@ -733,6 +737,23 @@ export function HistoricalCountryForm({
                 )}
               </S.FormField>
             </S.FormRow>
+
+            {/* 국가명 유래 */}
+            <S.FormField>
+              <S.FormLabel htmlFor="nameOrigin">국가명 유래</S.FormLabel>
+              <S.Input
+                as="textarea"
+                id="nameOrigin"
+                rows={3}
+                placeholder="국가명의 어원·명칭 유래를 입력해주세요"
+                {...register('nameOrigin')}
+                $error={!!errors.nameOrigin}
+                style={{ minHeight: '80px', resize: 'vertical' }}
+              />
+              {errors.nameOrigin && (
+                <S.ErrorMessage>{errors.nameOrigin.message}</S.ErrorMessage>
+              )}
+            </S.FormField>
 
             <S.FormRow>
               {/* 국가 형태 */}

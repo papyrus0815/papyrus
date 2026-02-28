@@ -63,6 +63,7 @@ export class HistoricalCountryMembershipPrismaRepository
         historicalCountryId: data.historicalCountryId,
         memberCountryId: data.memberCountryId,
         role: data.role,
+        isLeadingMember: data.isLeadingMember ?? undefined,
         membershipStartDate: data.membershipStartDate ?? undefined,
         membershipEndDate: data.membershipEndDate ?? undefined,
       },
@@ -82,6 +83,7 @@ export class HistoricalCountryMembershipPrismaRepository
       where: { id },
       data: {
         ...(data.role !== undefined && { role: data.role }),
+        ...(data.isLeadingMember !== undefined && { isLeadingMember: data.isLeadingMember }),
         ...(data.membershipStartDate !== undefined && {
           membershipStartDate: data.membershipStartDate,
         }),
@@ -106,6 +108,7 @@ export class HistoricalCountryMembershipPrismaRepository
     historicalCountryId: string
     memberCountryId: string
     role: string
+    isLeadingMember: boolean | null
     membershipStartDate: Date | null
     membershipEndDate: Date | null
     historicalCountry: { name: string }
@@ -118,6 +121,7 @@ export class HistoricalCountryMembershipPrismaRepository
       historicalCountryId: row.historicalCountryId,
       memberCountryId: row.memberCountryId,
       role: row.role as HistoricalCountryMembershipRecord['role'],
+      isLeadingMember: row.isLeadingMember,
       membershipStartDate: row.membershipStartDate,
       membershipEndDate: row.membershipEndDate,
       parentName: row.historicalCountry.name,

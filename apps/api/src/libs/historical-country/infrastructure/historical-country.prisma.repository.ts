@@ -68,6 +68,7 @@ export class HistoricalCountryPrismaRepository
       data: {
         name: data.name,
         enName: data.enName,
+        nameOrigin: data.nameOrigin,
         description: data.description,
         thumbnailUrl: data.thumbnailUrl,
         startEra: data.startEra,
@@ -162,6 +163,7 @@ export class HistoricalCountryPrismaRepository
       data: {
         name: data.name,
         enName: data.enName,
+        nameOrigin: data.nameOrigin,
         description: data.description,
         thumbnailUrl: data.thumbnailUrl,
         startEra: data.startEra,
@@ -190,6 +192,7 @@ export class HistoricalCountryPrismaRepository
       id: data.id,
       name: data.name,
       enName: data.enName,
+      nameOrigin: data.nameOrigin,
       description: data.description,
       thumbnailUrl: data.thumbnailUrl,
       startEra: data.startEra,

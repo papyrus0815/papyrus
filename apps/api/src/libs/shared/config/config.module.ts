@@ -25,8 +25,8 @@ const validationSchema = Joi.object({
   SSL_KEY_PATH: Joi.string().optional(),
   SSL_CRT_PATH: Joi.string().optional(),
 
-  // Uploads
-  UPLOAD_PATH: Joi.string().default('./uploads'),
+  // Uploads (기본: API 앱 내 uploads)
+  UPLOAD_PATH: Joi.string().default('./apps/api/uploads'),
   MAX_FILE_SIZE: Joi.number().default(10 * 1024 * 1024), // 10MB
 })
 

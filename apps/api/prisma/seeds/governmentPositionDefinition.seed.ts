@@ -27,6 +27,10 @@ const DEFINITIONS: {
   { id: 'gov-pos-shogun', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '쇼군', titleEn: 'Shogun', titleLocal: '将軍', rank: 2 },
   { id: 'gov-pos-elector', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '선제후', titleEn: 'Prince-Elector', titleLocal: 'Kurfürst', rank: 2 },
   { id: 'gov-pos-margrave', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '변경백', titleEn: 'Margrave', titleLocal: 'Markgraf', rank: 2 },
+  // 신성로마제국 등 복합 직책 (로마왕·이탈리아왕·황제를 같은 국가에서 겸직)
+  { id: 'gov-pos-king-of-the-romans', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '로마왕', titleEn: 'King of the Romans', titleLocal: 'Rex Romanorum', rank: 2 },
+  { id: 'gov-pos-king-of-italy', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '이탈리아왕', titleEn: 'King of Italy', titleLocal: 'Rex Italiae', rank: 2 },
+  { id: 'gov-pos-hre-emperor', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '신성로마황제', titleEn: 'Holy Roman Emperor', titleLocal: 'Imperator Romanorum', rank: 1 },
   { id: 'gov-pos-president', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '대통령', titleEn: 'President', rank: 1 },
   { id: 'gov-pos-khan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '칸', titleEn: 'Khagan', rank: 1 },
   { id: 'gov-pos-sultan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '술탄', titleEn: 'Sultan', rank: 1 },

@@ -99,6 +99,8 @@ apps/api/uploads/*
 !apps/api/uploads/.gitkeep
 !apps/api/uploads/images/.gitkeep
 !apps/api/uploads/README.md
+# 루트 uploads (업로드 이미지 제외)
+uploads/
 
 # ========================================
 # Docker

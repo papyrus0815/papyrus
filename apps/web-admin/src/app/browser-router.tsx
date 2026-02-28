@@ -12,6 +12,7 @@ import {
 import { useSessionStore } from '@/entities/session/session.store'
 // FSD 구조에 맞는 static imports (지연 로딩 제거)
 import { dashboardRoute } from '@/pages/dashboard/dashboard.route'
+import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
 import { eventPageRoute } from '@/pages/events/event-route'
 import { historyPageRoute } from '@/pages/history/history.route'
@@ -140,6 +141,8 @@ const appRouterConfig = [
           personsRoute,
           // 행정기구·조직 라우트
           ...organizationsRoutes,
+          // 민족 라우트
+          ...ethnicitiesRoutes,
           // 히스토리 그룹 하위 라우트
           historyPageRoute,
         ],
