@@ -22,6 +22,7 @@ import { pathKeys } from '@/shared/router'
 import type { Era } from '@/entities/person/api'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal'
+import { PersonRegisterView } from '@/shared/ui/person-register-modal'
 import { SelectModal } from '@/shared/ui/select-modal'
 
 import { PositionCategoryCrudModal } from './PositionCategoryCrudModal'
@@ -140,6 +141,7 @@ export default function PersonPage() {
   ]
 
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+  const [showRegisterForm, setShowRegisterForm] = useState(false)
   const [showCategoryCrudModal, setShowCategoryCrudModal] = useState(false)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
@@ -418,13 +420,25 @@ export default function PersonPage() {
 
   return (
     <Wrap>
-      {/* 메인 컨텐츠 */}
+      {/* 메인 컨텐츠: 등록 폼 표시 시 리스트 대신 폼만 표시 */}
       <Container
         as={motion.div}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
+        {showRegisterForm ? (
+          <RegisterFormWrap>
+            <PersonRegisterView
+              onCancel={() => setShowRegisterForm(false)}
+              onSuccess={(personId) => {
+                setShowRegisterForm(false)
+                setSelectedPersonId(personId)
+              }}
+            />
+          </RegisterFormWrap>
+        ) : (
+          <>
         {/* 대시보드 요약 카드 (사건 페이지 스타일) */}
         <DashboardGrid
           as={motion.div}
@@ -836,20 +850,24 @@ export default function PersonPage() {
           </ListColumn>
         </ListArea>
         </ListRow>
+          </>
+        )}
       </Container>
 
-      {/* 플로팅 + 버튼 (등록 페이지로 이동) */}
-      <FloatingButton
-        as={motion.button}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => navigate('/persons/create')}
-        title="인물 등록"
-      >
-        +
-      </FloatingButton>
+      {/* 플로팅 + 버튼: 클릭 시 리스트 영역이 등록 폼으로 전환 (페이지 이동 없음) */}
+      {!showRegisterForm && (
+        <FloatingButton
+          as={motion.button}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowRegisterForm(true)}
+          title="인물 등록"
+        >
+          +
+        </FloatingButton>
+      )}
 
-      {/* 사이드바 제거됨 - 이제 /persons/create 페이지 사용 */}
+      {/* 구 사이드바 폼 (미사용) */}
       {false && (
         <>
           <Form
@@ -1931,6 +1949,12 @@ const Container = styled.div`
     padding: 16px;
     gap: 20px;
   }
+`
+
+const RegisterFormWrap = styled.div`
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
 `
 
 const LoadingMessage = styled.div`

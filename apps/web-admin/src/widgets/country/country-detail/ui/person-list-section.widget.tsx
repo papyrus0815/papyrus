@@ -2,16 +2,20 @@
  * 국가별 인물 리스트 섹션
  * - 현대 국가: 해당 국가(countryId) 소속 인물 전체 조회
  * - 인물 페이지와 동일한 카드 UI
+ * - 인물 등록: 리스트 영역이 등록 폼으로 전환 (모달 아님)
  */
-import { useQuery } from '@tanstack/react-query'
+import React, { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
+import { FiPlus } from 'react-icons/fi'
 import { dynastyApi } from '@/shared/api/dynasty'
 import { personApi } from '@/shared/api/person'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import type { Person } from '@/entities/person/api'
+import { PersonRegisterView } from '@/shared/ui/person-register-modal'
 
 const THEME = {
   primary: '#6366f1',
@@ -43,12 +47,57 @@ interface PersonListSectionProps {
   countryId: string
 }
 
-const SectionHeader = styled.div`
+const SectionHeaderRow = styled.div`
   margin-top: 28px;
-  padding: 20px 0;
+  padding: 20px 24px 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+`
+
+const SectionHeader = styled.div`
   font-size: 18px;
   font-weight: 700;
   color: #0f172a;
+`
+
+const AddPersonButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: #6366f1;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+
+  &:hover {
+    background: #4f46e5;
+  }
+  &:active {
+    transform: scale(0.98);
+  }
+`
+
+/* 수반 등록 폼 컨테이너와 동일: 전체 영역 사용, 카드형 배경·테두리·둥근 모서리 */
+const RegisterFormWrap = styled.div`
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 `
 
 const AdaptiveGrid = styled.div`
@@ -233,6 +282,8 @@ const ErrorWrap = styled.div`
 
 export function PersonListSection({ countryId }: PersonListSectionProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [showRegisterForm, setShowRegisterForm] = useState(false)
   const { data: persons = [], isLoading, error } = useQuery({
     queryKey: ['persons-by-country', countryId],
     queryFn: () => personApi.getByCountryId(countryId),
@@ -261,9 +312,35 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
     )
   }
 
+  if (showRegisterForm) {
+    return (
+      <RegisterFormWrap>
+        <PersonRegisterView
+          embedInCard={false}
+          initialCountryId={countryId}
+          onCancel={() => setShowRegisterForm(false)}
+          onSuccess={(personId) => {
+            queryClient.invalidateQueries({ queryKey: ['persons-by-country', countryId] })
+            setShowRegisterForm(false)
+            navigate(pathKeys.persons.detail(personId))
+          }}
+        />
+      </RegisterFormWrap>
+    )
+  }
+
   return (
     <>
-      <SectionHeader>인물 리스트 ({persons.length}명)</SectionHeader>
+      <SectionHeaderRow>
+        <SectionHeader>인물 리스트 ({persons.length}명)</SectionHeader>
+        <AddPersonButton
+          type="button"
+          onClick={() => setShowRegisterForm(true)}
+        >
+          <FiPlus size={18} />
+          인물 등록
+        </AddPersonButton>
+      </SectionHeaderRow>
       {persons.length === 0 ? (
         <EmptyState>이 국가에 등록된 인물이 없습니다.</EmptyState>
       ) : (
