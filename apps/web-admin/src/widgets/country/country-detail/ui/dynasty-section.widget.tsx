@@ -466,7 +466,7 @@ export function DynastySection() {
                             <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{dynasty.name}</div>
                             {dateRange && <div style={{ fontSize: 13, color: '#64748b', marginTop: 6 }}>기간: {dateRange}</div>}
                             {dynasty.description && (
-                              <div style={{ fontSize: 13, color: '#64748b', marginTop: 10, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                              <div style={{ fontSize: 13, color: '#64748b', marginTop: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
                                 {dynasty.description}
                               </div>
                             )}
