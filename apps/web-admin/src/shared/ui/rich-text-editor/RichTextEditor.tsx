@@ -65,7 +65,7 @@ const Toolbar = styled.div`
   width: 100%;
 `
 
-const ToolbarButton = styled.button<{ $active?: boolean }>`
+const ToolbarButton = styled.button.attrs({ type: 'button' })<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;

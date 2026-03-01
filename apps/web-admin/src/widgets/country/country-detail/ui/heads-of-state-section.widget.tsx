@@ -17,7 +17,14 @@ import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { personCareerApi } from '@/shared/api/person-career'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/PersonSelectModal'
+import {
+  DateFieldsRow,
+  DateFieldBtn,
+  FieldHint,
+  Input as RegisterInput,
+  Required,
+} from '@/shared/ui/register-form-layout'
+import { DateRangeField, PersonSelectField } from '@/shared/ui/form-fields'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { LineageTree } from './lineage-tree.widget'
@@ -61,8 +68,6 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
   const [personSelectModalOpen, setPersonSelectModalOpen] = useState(false)
   const [positionTitleModalOpen, setPositionTitleModalOpen] = useState(false)
-  const [startDateModalOpen, setStartDateModalOpen] = useState(false)
-  const [endDateModalOpen, setEndDateModalOpen] = useState(false)
   const [selectedPersonId, setSelectedPersonId] = useState('')
   /** 직책: DB 관직 정의 ID. null이면 기타(직접 입력) */
   const [selectedPositionDefinitionId, setSelectedPositionDefinitionId] = useState<string | null>(null)
@@ -1236,6 +1241,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                     {tenureFormTab === 'basic' && (
                       <TabPanel>
                         <SubSectionTitle>기본정보</SubSectionTitle>
+                        <SectionHint>재임 기간·직책·인물 등 기본 정보를 입력합니다.</SectionHint>
                         <FormRows>
             {!isHistorical && hasSubordinateHistorical && (
               <FieldRow>
@@ -1255,38 +1261,24 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                     </span>
                     <FiChevronDown size={20} />
                   </SelectTriggerButton>
-                  <FieldHint>
-                    현대 국가 또는 이 국가에 연결된 하위 역사적 국가 중 하나를 선택하세요.
-                  </FieldHint>
+                  <FieldHint>현대 국가 또는 연결된 하위 역사적 국가 중 하나를 선택하세요.</FieldHint>
                 </FieldControl>
               </FieldRow>
             )}
+            <PersonSelectField
+              label="인물"
+              required
+              hint="재임 기록에 연결할 인물을 선택하세요."
+              value={selectedPersonId}
+              selectedPerson={selectedPerson}
+              persons={allPersonsForModal}
+              isModalOpen={personSelectModalOpen}
+              onModalOpenChange={setPersonSelectModalOpen}
+              onSelect={setSelectedPersonId}
+              placeholder="인물 선택"
+            />
             <FieldRow>
-              <FieldLabel>인물 <Required>필수</Required></FieldLabel>
-              <FieldControl $variant="person">
-                <PersonSelectButton
-                  type="button"
-                  onClick={() => setPersonSelectModalOpen(true)}
-                  $hasValue={!!selectedPersonId}
-                >
-                  <PersonAvatar $hasImage={!!selectedPerson?.profileImageUrl}>
-                    {selectedPerson?.profileImageUrl ? (
-                      <img src={selectedPerson.profileImageUrl} alt="" />
-                    ) : (
-                      <FiUser size={22} />
-                    )}
-                  </PersonAvatar>
-                  <PersonLabel>
-                    {selectedPersonId
-                      ? getPersonName(selectedPerson)
-                      : '인물 선택'}
-                  </PersonLabel>
-                  <FiChevronRight size={20} strokeWidth={2.5} />
-                </PersonSelectButton>
-              </FieldControl>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>직책명 <Required>필수</Required></FieldLabel>
+              <FieldLabel>직책명 <Required aria-label="필수" /></FieldLabel>
               <FieldControl>
               <SelectTriggerButton
                 type="button"
@@ -1334,31 +1326,17 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                 </FieldRow>
               </>
             )}
-            <FieldRow>
-              <FieldLabel>취임일 · 퇴임일 <Required>필수</Required></FieldLabel>
-              <FieldControl $variant="datePair">
-                <DatePairRow>
-                  <SelectTriggerButton
-                    type="button"
-                    onClick={() => setStartDateModalOpen(true)}
-                    $hasValue={!!startDate}
-                  >
-                    <FiCalendar size={16} />
-                    <span>{startDate ? formatDateForInput(startDate) : '취임일'}</span>
-                    <FiChevronDown size={20} />
-                  </SelectTriggerButton>
-                  <SelectTriggerButton
-                    type="button"
-                    onClick={() => setEndDateModalOpen(true)}
-                    $hasValue={!!endDate}
-                  >
-                    <FiCalendar size={16} />
-                    <span>{endDate ? formatDateForInput(endDate) : '퇴임일 (선택)'}</span>
-                    <FiChevronDown size={20} />
-                  </SelectTriggerButton>
-                </DatePairRow>
-              </FieldControl>
-            </FieldRow>
+            <DateRangeField
+              label="취임일 · 퇴임일"
+              required
+              startValue={startDate}
+              endValue={endDate}
+              onStartChange={setStartDate}
+              onEndChange={setEndDate}
+              startPlaceholder="취임일"
+              endPlaceholder="퇴임일 (선택)"
+              openEndAfterStart
+            />
             <FieldRow>
               <FieldLabel>대수</FieldLabel>
               <FieldControl>
@@ -1390,17 +1368,18 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
             <FieldRow>
               <FieldLabel>사건 페이지 노출</FieldLabel>
               <FieldControl>
-                <CheckboxRow>
-                  <input
-                    type="checkbox"
-                    id="heads-show-on-events"
-                    checked={showOnEventsPage}
-                    onChange={(e) => setShowOnEventsPage(e.target.checked)}
-                  />
-                  <label htmlFor="heads-show-on-events">
-                    사건 목록 페이지에 이 수반을 노출합니다 (역대 수반 토글 시 표시)
-                  </label>
-                </CheckboxRow>
+                <EventsPageCheckWrap>
+                  <CheckboxLabelRow>
+                    <input
+                      type="checkbox"
+                      id="heads-show-on-events"
+                      checked={showOnEventsPage}
+                      onChange={(e) => setShowOnEventsPage(e.target.checked)}
+                    />
+                    <label htmlFor="heads-show-on-events">연대표·사건 목록에 표시</label>
+                  </CheckboxLabelRow>
+                  <FieldHint>역대 수반 토글 시 목록에 포함됩니다.</FieldHint>
+                </EventsPageCheckWrap>
               </FieldControl>
             </FieldRow>
           </FormRows>
@@ -1424,7 +1403,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                             업적
                           </SubSectionTitle>
                           <AchievementSectionHint>
-                            재위 기간 중 한 일·업적을 등록합니다. (사건과 별도로 관리되며, 사건 페이지 표시를 켜면 연대표에 나옵니다.)
+                            재위 기간 중 업적·한 일을 등록합니다. 사건 페이지 표시를 켜면 연대표에 노출됩니다.
                           </AchievementSectionHint>
                           {(() => {
                             const editingTenure = tenures.find((t: any) => t.id === editingTenureId) as any
@@ -1474,17 +1453,19 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                 <AchievementInlineForm>
                                   <AchievementField>
                                     <label>제목 (필수)</label>
-                                    <Input
-                                      type="text"
-                                      value={achievementTitle}
-                                      onChange={(e) => setAchievementTitle(e.target.value)}
-                                      placeholder="예: 한글 창제, 대동법 시행"
-                                    />
+                                    <AchievementTitleInputWrap>
+                                      <RegisterInput
+                                        type="text"
+                                        value={achievementTitle}
+                                        onChange={(e) => setAchievementTitle(e.target.value)}
+                                        placeholder="예: 한글 창제, 대동법 시행"
+                                      />
+                                    </AchievementTitleInputWrap>
                                   </AchievementField>
                                   <AchievementField>
                                     <label>시작일 / 종료일 (선택)</label>
-                                    <DatePairRow>
-                                      <SelectTriggerButton
+                                    <DateFieldsRow>
+                                      <DateFieldBtn
                                         type="button"
                                         onClick={() => setAchievementDateField('start')}
                                         $hasValue={!!achievementStartDate}
@@ -1492,8 +1473,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                         <FiCalendar size={16} />
                                         <span>{achievementStartDate ? formatDateForInput(achievementStartDate) : '시작일 선택'}</span>
                                         <FiChevronDown size={20} />
-                                      </SelectTriggerButton>
-                                      <SelectTriggerButton
+                                      </DateFieldBtn>
+                                      <DateFieldBtn
                                         type="button"
                                         onClick={() => setAchievementDateField('end')}
                                         $hasValue={!!achievementEndDate}
@@ -1501,8 +1482,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                         <FiCalendar size={16} />
                                         <span>{achievementEndDate ? formatDateForInput(achievementEndDate) : '종료일 선택'}</span>
                                         <FiChevronDown size={20} />
-                                      </SelectTriggerButton>
-                                    </DatePairRow>
+                                      </DateFieldBtn>
+                                    </DateFieldsRow>
                                   </AchievementField>
                                   <AchievementField>
                                     <label>설명 (선택)</label>
@@ -1565,6 +1546,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                 ) : (
                   <>
                     <SubSectionTitle>기본정보</SubSectionTitle>
+                    <SectionHint>재임 기간·직책·인물 등 기본 정보를 입력합니다.</SectionHint>
                     <FormRows>
                       {!isHistorical && hasSubordinateHistorical && (
                         <FieldRow>
@@ -1584,38 +1566,24 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                               </span>
                               <FiChevronDown size={20} />
                             </SelectTriggerButton>
-                            <FieldHint>
-                              현대 국가 또는 이 국가에 연결된 하위 역사적 국가 중 하나를 선택하세요.
-                            </FieldHint>
+                            <FieldHint>현대 국가 또는 연결된 하위 역사적 국가 중 하나를 선택하세요.</FieldHint>
                           </FieldControl>
                         </FieldRow>
                       )}
+                      <PersonSelectField
+                        label="인물"
+                        required
+                        hint="재임 기록에 연결할 인물을 선택하세요."
+                        value={selectedPersonId}
+                        selectedPerson={selectedPerson}
+                        persons={allPersonsForModal}
+                        isModalOpen={personSelectModalOpen}
+                        onModalOpenChange={setPersonSelectModalOpen}
+                        onSelect={setSelectedPersonId}
+                        placeholder="인물 선택"
+                      />
                       <FieldRow>
-                        <FieldLabel>인물 <Required>필수</Required></FieldLabel>
-                        <FieldControl $variant="person">
-                          <PersonSelectButton
-                            type="button"
-                            onClick={() => setPersonSelectModalOpen(true)}
-                            $hasValue={!!selectedPersonId}
-                          >
-                            <PersonAvatar $hasImage={!!selectedPerson?.profileImageUrl}>
-                              {selectedPerson?.profileImageUrl ? (
-                                <img src={selectedPerson.profileImageUrl} alt="" />
-                              ) : (
-                                <FiUser size={22} />
-                              )}
-                            </PersonAvatar>
-                            <PersonLabel>
-                              {selectedPersonId
-                                ? getPersonName(selectedPerson)
-                                : '인물 선택'}
-                            </PersonLabel>
-                            <FiChevronRight size={20} strokeWidth={2.5} />
-                          </PersonSelectButton>
-                        </FieldControl>
-                      </FieldRow>
-                      <FieldRow>
-                        <FieldLabel>직책명 <Required>필수</Required></FieldLabel>
+                        <FieldLabel>직책명 <Required aria-label="필수" /></FieldLabel>
                         <FieldControl>
                           <SelectTriggerButton
                             type="button"
@@ -1663,31 +1631,17 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                           </FieldRow>
                         </>
                       )}
-                      <FieldRow>
-                        <FieldLabel>취임일 · 퇴임일 <Required>필수</Required></FieldLabel>
-                        <FieldControl $variant="datePair">
-                          <DatePairRow>
-                            <SelectTriggerButton
-                              type="button"
-                              onClick={() => setStartDateModalOpen(true)}
-                              $hasValue={!!startDate}
-                            >
-                              <FiCalendar size={16} />
-                              <span>{startDate ? formatDateForInput(startDate) : '취임일'}</span>
-                              <FiChevronDown size={20} />
-                            </SelectTriggerButton>
-                            <SelectTriggerButton
-                              type="button"
-                              onClick={() => setEndDateModalOpen(true)}
-                              $hasValue={!!endDate}
-                            >
-                              <FiCalendar size={16} />
-                              <span>{endDate ? formatDateForInput(endDate) : '퇴임일 (선택)'}</span>
-                              <FiChevronDown size={20} />
-                            </SelectTriggerButton>
-                          </DatePairRow>
-                        </FieldControl>
-                      </FieldRow>
+                      <DateRangeField
+                        label="취임일 · 퇴임일"
+                        required
+                        startValue={startDate}
+                        endValue={endDate}
+                        onStartChange={setStartDate}
+                        onEndChange={setEndDate}
+                        startPlaceholder="취임일"
+                        endPlaceholder="퇴임일 (선택)"
+                        openEndAfterStart
+                      />
                       <FieldRow>
                         <FieldLabel>대수</FieldLabel>
                         <FieldControl>
@@ -1719,17 +1673,18 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                       <FieldRow>
                         <FieldLabel>사건 페이지 노출</FieldLabel>
                         <FieldControl>
-                          <CheckboxRow>
-                            <input
-                              type="checkbox"
-                              id="heads-show-on-events-new"
-                              checked={showOnEventsPage}
-                              onChange={(e) => setShowOnEventsPage(e.target.checked)}
-                            />
-                            <label htmlFor="heads-show-on-events-new">
-                              사건 목록 페이지에 이 수반을 노출합니다 (역대 수반 토글 시 표시)
-                            </label>
-                          </CheckboxRow>
+                          <EventsPageCheckWrap>
+                            <CheckboxLabelRow>
+                              <input
+                                type="checkbox"
+                                id="heads-show-on-events-new"
+                                checked={showOnEventsPage}
+                                onChange={(e) => setShowOnEventsPage(e.target.checked)}
+                              />
+                              <label htmlFor="heads-show-on-events-new">연대표·사건 목록에 표시</label>
+                            </CheckboxLabelRow>
+                            <FieldHint>역대 수반 토글 시 목록에 포함됩니다.</FieldHint>
+                          </EventsPageCheckWrap>
                         </FieldControl>
                       </FieldRow>
                     </FormRows>
@@ -1743,18 +1698,6 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
               </FormSectionInner>
           </form>
         </FormCardWrapper>
-      )}
-
-      {personSelectModalOpen && (
-        <PersonSelectModal
-          persons={allPersonsForModal}
-          selectedPersonId={selectedPersonId}
-          onSelect={(id) => {
-            setSelectedPersonId(id)
-            setPersonSelectModalOpen(false)
-          }}
-          onClose={() => setPersonSelectModalOpen(false)}
-        />
       )}
 
       <SelectModal
@@ -1808,28 +1751,6 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         }}
       />
 
-      <DatePickerModal
-        isOpen={startDateModalOpen}
-        onClose={() => setStartDateModalOpen(false)}
-        title="취임일 선택"
-        initialDate={startDate || undefined}
-        onSelect={(date) => {
-          setStartDate(date)
-          setStartDateModalOpen(false)
-          setEndDateModalOpen(true)
-        }}
-      />
-
-      <DatePickerModal
-        isOpen={endDateModalOpen}
-        onClose={() => setEndDateModalOpen(false)}
-        title="퇴임일 선택"
-        initialDate={endDate || undefined}
-        onSelect={(date) => {
-          setEndDate(date)
-          setEndDateModalOpen(false)
-        }}
-      />
     </SectionOuter>
   )
 }
@@ -2315,6 +2236,14 @@ const AchievementSectionHint = styled.p`
   line-height: 1.5;
 `
 
+/** 기본정보·업적 탭 공용: 섹션 제목 아래 설명 */
+const SectionHint = styled.p`
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+`
+
 const AchievementList = styled.ul`
   list-style: none;
   margin: 0 0 20px;
@@ -2523,6 +2452,10 @@ const AchievementForm = styled.div`
   gap: 16px;
 `
 
+const AchievementTitleInputWrap = styled.div`
+  max-width: 480px;
+`
+
 const AchievementField = styled.div`
   label {
     display: block;
@@ -2711,12 +2644,30 @@ const FieldLabel = styled.label`
   }
 `
 
-const FieldHint = styled.span`
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-  color: ${TEXT_SECONDARY};
-  line-height: 1.4;
+const EventsPageCheckWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const CheckboxLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  input[type='checkbox'] {
+    width: 18px;
+    height: 18px;
+    accent-color: #6366f1;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  label {
+    font-size: 14px;
+    color: ${TEXT_PRIMARY};
+    cursor: pointer;
+    user-select: none;
+  }
 `
 
 const CheckboxRow = styled.div`
@@ -2753,13 +2704,6 @@ const DatePairRow = styled.div`
     flex: 1;
     min-width: 0;
   }
-`
-
-const Required = styled.span`
-  font-size: 12px;
-  font-weight: 400;
-  color: ${TEXT_MUTED};
-  margin-left: 4px;
 `
 
 /* 행정조직 부처 등록 input과 동일 */
@@ -2818,63 +2762,6 @@ const triggerButtonStyles = `
 const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   ${triggerButtonStyles}
   color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
-`
-
-/* 행정조직 폼과 동일: input 스타일 */
-const PersonSelectButton = styled.button<{ $hasValue: boolean }>`
-  width: 100%;
-  max-width: 360px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  font-size: 14px;
-  color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.2s ease;
-
-  &:hover {
-    border-color: #d1d5db;
-  }
-  svg:last-of-type {
-    flex-shrink: 0;
-    opacity: 0.5;
-  }
-`
-
-const PersonAvatar = styled.div<{ $hasImage: boolean }>`
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: ${({ $hasImage }) => ($hasImage ? 'transparent' : 'linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%)')};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  svg {
-    color: #6366f1;
-  }
-`
-
-const PersonLabel = styled.span`
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 `
 
 const FormActions = styled.div`
