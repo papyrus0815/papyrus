@@ -142,6 +142,7 @@ export default function PersonPage() {
 
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
   const [showRegisterForm, setShowRegisterForm] = useState(false)
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
   const [showCategoryCrudModal, setShowCategoryCrudModal] = useState(false)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
@@ -291,7 +292,14 @@ export default function PersonPage() {
               )}
             </DetailImageWrap>
             <DetailThumbActions>
-              <DetailActionBtn type="button" $edit onClick={() => navigate(`/persons/${person.id}/edit`)}>
+              <DetailActionBtn
+                type="button"
+                $edit
+                onClick={() => {
+                  setEditingPersonId(person.id)
+                  setShowRegisterForm(true)
+                }}
+              >
                 <FiEdit2 size={14} />
                 수정
               </DetailActionBtn>
@@ -430,9 +438,14 @@ export default function PersonPage() {
         {showRegisterForm ? (
           <RegisterFormWrap>
             <PersonRegisterView
-              onCancel={() => setShowRegisterForm(false)}
+              editPersonId={editingPersonId}
+              onCancel={() => {
+                setShowRegisterForm(false)
+                setEditingPersonId(null)
+              }}
               onSuccess={(personId) => {
                 setShowRegisterForm(false)
+                setEditingPersonId(null)
                 setSelectedPersonId(personId)
               }}
             />
@@ -860,7 +873,10 @@ export default function PersonPage() {
           as={motion.button}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowRegisterForm(true)}
+          onClick={() => {
+            setEditingPersonId(null)
+            setShowRegisterForm(true)
+          }}
           title="인물 등록"
         >
           +

@@ -284,6 +284,7 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showRegisterForm, setShowRegisterForm] = useState(false)
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
   const { data: persons = [], isLoading, error } = useQuery({
     queryKey: ['persons-by-country', countryId],
     queryFn: () => personApi.getByCountryId(countryId),
@@ -317,12 +318,17 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
       <RegisterFormWrap>
         <PersonRegisterView
           embedInCard={false}
-          initialCountryId={countryId}
-          onCancel={() => setShowRegisterForm(false)}
+          initialCountryId={editingPersonId ? undefined : countryId}
+          editPersonId={editingPersonId}
+          onCancel={() => {
+            setShowRegisterForm(false)
+            setEditingPersonId(null)
+          }}
           onSuccess={(personId) => {
             queryClient.invalidateQueries({ queryKey: ['persons-by-country', countryId] })
             setShowRegisterForm(false)
-            navigate(pathKeys.persons.detail(personId))
+            setEditingPersonId(null)
+            if (!editingPersonId) navigate(pathKeys.persons.detail(personId))
           }}
         />
       </RegisterFormWrap>
@@ -335,7 +341,10 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
         <SectionHeader>인물 리스트 ({persons.length}명)</SectionHeader>
         <AddPersonButton
           type="button"
-          onClick={() => setShowRegisterForm(true)}
+          onClick={() => {
+            setEditingPersonId(null)
+            setShowRegisterForm(true)
+          }}
         >
           <FiPlus size={18} />
           인물 등록
@@ -370,7 +379,10 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
             return (
               <Card
                 key={person.id}
-                onClick={() => navigate(pathKeys.persons.detail(person.id))}
+                onClick={() => {
+                  setEditingPersonId(person.id)
+                  setShowRegisterForm(true)
+                }}
               >
                 <CardImageWrapper>
                   {displayImage ? (

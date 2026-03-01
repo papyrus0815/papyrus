@@ -3,7 +3,7 @@
  * - 인물 등록 페이지 출생국가 선택 모달과 동일한 UI: 좌측 필터(국가 타입·대륙), 우측 검색·리스트
  * - 인물 등록(출생/활동국가), 수반 소속 국가 등에서 공용
  */
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -72,13 +72,25 @@ export function CountrySearchModal({
   const multiSelect = Boolean(onSelectMultiple)
   /** 다중 선택 시 모달 내부 선택 ID (모달 열릴 때 selectedCountryIds로 초기화) */
   const [multiSelectedIds, setMultiSelectedIds] = useState<string[]>([])
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
     if (isOpen) {
-      setCountryType(historicalOnly ? 'historical' : 'modern')
-      setSelectedContinent('all')
-      setSearchTerm('')
-      if (multiSelect) setMultiSelectedIds(selectedCountryIds)
+      const justOpened = !wasOpenRef.current
+      wasOpenRef.current = true
+      if (justOpened) {
+        const selectedInHistorical =
+          selectedCountryId &&
+          historicalCountries.some((c) => c.id === selectedCountryId)
+        setCountryType(
+          historicalOnly ? 'historical' : selectedInHistorical ? 'historical' : 'modern',
+        )
+        setSelectedContinent('all')
+        setSearchTerm('')
+        if (multiSelect) setMultiSelectedIds(selectedCountryIds)
+      }
+    } else {
+      wasOpenRef.current = false
     }
   }, [isOpen, multiSelect, selectedCountryIds, historicalOnly])
 

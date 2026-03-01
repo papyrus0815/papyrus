@@ -38,6 +38,16 @@ const HEADS_POSITION_TYPES = new Set([
   'ROYAL_NOBLE_TITLE',
 ])
 
+/** 계보도 열 순서: 국가원수 좌측, 이어서 정부수반·섭정·왕족/귀족 */
+const POSITION_TYPE_ORDER: Record<string, number> = {
+  HEAD_OF_STATE: 0,
+  HEAD_OF_GOVERNMENT: 1,
+  REGENT: 2,
+  HEIR_APPARENT: 3,
+  ROYAL_NOBLE_TITLE: 4,
+  OTHER: 5,
+}
+
 const OTHER_POSITION_VALUE = 'OTHER'
 
 /** 특정 직책 계보도에서 선 연결 없음용 */
@@ -222,13 +232,21 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       list.push(t)
       map.set(key, list)
     })
-    const getRankForLabel = (label: string) => {
-      const positionPart = label.includes(' · ') ? label.split(' · ')[1]?.trim() ?? label : label
-      return defs.find((d: any) => d.title === positionPart)?.rank ?? 999
+    const getPositionPart = (label: string) =>
+      label.includes(' · ') ? label.split(' · ')[1]?.trim() ?? label : label
+    const getDefForLabel = (label: string) => {
+      const part = getPositionPart(label)
+      return defs.find((d: any) => d.title === part)
     }
+    const getRankForLabel = (label: string) => getDefForLabel(label)?.rank ?? 999
+    const getTypeOrder = (label: string) =>
+      POSITION_TYPE_ORDER[getDefForLabel(label)?.positionType ?? 'OTHER'] ?? 99
     return Array.from(map.entries())
       .map(([label, list]) => ({ label, tenures: list }))
       .sort((a, b) => {
+        const orderA = getTypeOrder(a.label)
+        const orderB = getTypeOrder(b.label)
+        if (orderA !== orderB) return orderA - orderB
         const rankA = getRankForLabel(a.label)
         const rankB = getRankForLabel(b.label)
         if (rankA !== rankB) return rankA - rankB
@@ -637,13 +655,21 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     })
   }, [lineageEligibleGroups, selectedPositionFilter, personById, persons])
 
-  /** 전체일 때: 모든 직책을 세기별로 묶어 하나의 막대·하나의 트리로 표시. 랭크 순으로 직책 정렬, 같은 세로 열에는 같은 직책만, 직책 구간마다 구분선 */
+  /** 전체일 때: 모든 직책을 세기별로 묶어 하나의 막대·하나의 트리로 표시. 직책 타입 순(국가원수→왕족/귀족) 후 랭크 순 정렬 */
   const mergedLineageAll = React.useMemo(() => {
     if (selectedPositionFilter != null) return null
     const defs = positionDefinitions as any[]
-    const getRank = (label: string) => {
-      const positionPart = label.includes(' · ') ? label.split(' · ')[1]?.trim() ?? label : label
-      return defs.find((d: any) => d.title === positionPart)?.rank ?? 999
+    const getPositionPart = (label: string) =>
+      label.includes(' · ') ? label.split(' · ')[1]?.trim() ?? label : label
+    const getDef = (label: string) => {
+      const part = getPositionPart(label)
+      return defs.find((d: any) => d.title === part)
+    }
+    const getRank = (label: string) => getDef(label)?.rank ?? 999
+    const getPositionTypeOrder = (label: string) => {
+      const def = getDef(label)
+      const type = def?.positionType ?? 'OTHER'
+      return POSITION_TYPE_ORDER[type] ?? 99
     }
     const all = lineageEligibleGroups.flatMap((g) => g.tenures)
     const sorted = [...all].sort((a: any, b: any) => {
@@ -686,7 +712,12 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     const getPersonId = (t: any) => normId(t?.person?.id ?? (t as any)?.personId)
     const centuries = Array.from(byCentury.keys()).sort((a, b) => a - b)
     const positionsOrder = [...lineageEligibleGroups]
-      .sort((a, b) => getRank(a.label) - getRank(b.label))
+      .sort((a, b) => {
+        const orderA = getPositionTypeOrder(a.label)
+        const orderB = getPositionTypeOrder(b.label)
+        if (orderA !== orderB) return orderA - orderB
+        return getRank(a.label) - getRank(b.label)
+      })
       .map((g) => g.label)
     const allRows: any[][] = []
     centuries.forEach((c) => {

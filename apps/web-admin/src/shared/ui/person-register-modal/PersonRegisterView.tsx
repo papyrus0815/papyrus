@@ -226,6 +226,8 @@ export interface PersonRegisterViewProps {
   onSuccess?: (personId: string) => void
   /** false면 FormCardWrapper 없이 헤더+폼만 렌더 (외부에서 수반 등록 폼처럼 카드로 감쌀 때 사용) */
   embedInCard?: boolean
+  /** 있으면 수정 모드: 해당 인물 로드 후 폼에 채우고 저장 시 update 호출 */
+  editPersonId?: string | null
 }
 
 export function PersonRegisterView({
@@ -233,7 +235,9 @@ export function PersonRegisterView({
   onCancel,
   onSuccess,
   embedInCard = true,
+  editPersonId,
 }: PersonRegisterViewProps) {
+  const isEditMode = Boolean(editPersonId)
   // 기본 정보
   const [name, setName] = useState('')
   const [surname, setSurname] = useState('')
@@ -323,6 +327,57 @@ export function PersonRegisterView({
     setCountryId(initialCountryId ?? '')
     setCountryName('')
   }, [initialCountryId])
+
+  useEffect(() => {
+    if (!editPersonId) return
+    let cancelled = false
+    personApi
+      .getById(editPersonId)
+      .then((p: any) => {
+        if (cancelled || !p) return
+        setName(p.name ?? '')
+        setSurname(p.surname ?? '')
+        setMiddleName(p.middleName ?? '')
+        setNameFormat((p.nameDisplayOrder === 'western' ? 'western' : 'korean') as 'korean' | 'western')
+        setOriginalName(p.originalName ?? '')
+        setSurnameMeaning(p.surnameMeaning ?? '')
+        setNameMeaning(p.nameMeaning ?? '')
+        setMiddleNameMeaning(p.middleNameMeaning ?? '')
+        setGender(p.gender ?? '')
+        setBiography(p.biography ?? '')
+        setProfileImageUrl(p.profileImageUrl ?? '')
+        setRegnalName(p.regnalName ?? '')
+        setTempleName(p.templeName ?? '')
+        setPosthumousName(p.posthumousName ?? '')
+        setCountryId(p.countryId ?? '')
+        setBirthCityId(p.birthCityId ?? '')
+        setDeathCityId(p.deathCityId ?? '')
+        setDynastyId(p.dynastyId ?? '')
+        setReligionId(p.religionId ?? '')
+        setJobId(p.jobId ?? '')
+        setFatherId(p.fatherId ?? '')
+        setMotherId(p.motherId ?? '')
+        setSpouseId(p.spouseId ?? '')
+        if (p.birthDate) {
+          const b = parseDateString(p.birthDate)
+          setBirthEra(b.era)
+          setBirthYear(String(b.year))
+          setBirthMonth(b.month != null ? String(b.month) : '')
+          setBirthDay(b.day != null ? String(b.day) : '')
+          setIsBirthDateUnknown(false)
+        } else setIsBirthDateUnknown(true)
+        if (p.deathDate) {
+          const d = parseDateString(p.deathDate)
+          setDeathEra(d.era)
+          setDeathYear(String(d.year))
+          setDeathMonth(d.month != null ? String(d.month) : '')
+          setDeathDay(d.day != null ? String(d.day) : '')
+          setIsDeathDateUnknown(false)
+        } else setIsDeathDateUnknown(true)
+      })
+      .catch(() => toast.error('인물 정보를 불러오지 못했습니다.'))
+    return () => { cancelled = true }
+  }, [editPersonId])
 
   useEffect(() => {
     if (!countryId || (!modernCountries.length && !historicalCountries.length)) return
@@ -541,14 +596,21 @@ export function PersonRegisterView({
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      const created = await personApi.create(buildPayload())
-      const personId = (created as any)?.id ?? (created as any)?.data?.id
-      toast.success('인물이 등록되었습니다.')
-      onSuccess?.(personId)
-      onCancel()
+      if (isEditMode && editPersonId) {
+        await personApi.update(editPersonId, buildPayload())
+        toast.success('인물 정보가 수정되었습니다.')
+        onSuccess?.(editPersonId)
+        onCancel()
+      } else {
+        const created = await personApi.create(buildPayload())
+        const personId = (created as any)?.id ?? (created as any)?.data?.id
+        toast.success('인물이 등록되었습니다.')
+        onSuccess?.(personId)
+        onCancel()
+      }
     } catch (err: any) {
-      setError(err?.message ?? '등록에 실패했습니다.')
-      toast.error(err?.message ?? '등록에 실패했습니다.')
+      setError(err?.message ?? (isEditMode ? '수정에 실패했습니다.' : '등록에 실패했습니다.'))
+      toast.error(err?.message ?? (isEditMode ? '수정에 실패했습니다.' : '등록에 실패했습니다.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -563,13 +625,13 @@ export function PersonRegisterView({
           <FiArrowLeft size={18} />
           목록 보기
         </BackButton>
-        <FormHeaderTitle>인물 등록</FormHeaderTitle>
+        <FormHeaderTitle>{isEditMode ? '인물 수정' : '인물 등록'}</FormHeaderTitle>
         <SubmitButton
           type="submit"
           form="person-register-form"
           disabled={isSubmitting}
         >
-          {isSubmitting ? '등록 중…' : '등록'}
+          {isSubmitting ? (isEditMode ? '저장 중…' : '등록 중…') : isEditMode ? '저장' : '등록'}
         </SubmitButton>
       </FormHeader>
       <form id="person-register-form" onSubmit={handleSubmit}>
