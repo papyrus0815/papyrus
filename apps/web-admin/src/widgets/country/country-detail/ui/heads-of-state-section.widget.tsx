@@ -16,6 +16,7 @@ import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
 import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { personCareerApi } from '@/shared/api/person-career'
 import { DatePickerModal } from '@/shared/ui/date-picker'
+import { CountrySearchModal } from '@/shared/ui/country-search-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/PersonSelectModal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -1766,22 +1767,28 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       />
 
       {!isHistorical && hasSubordinateHistorical && (
-        <SelectModal
+        <CountrySearchModal
           isOpen={affinityCountryModalOpen}
           onClose={() => setAffinityCountryModalOpen(false)}
           title="소속 국가 선택"
-          options={[
-            { value: '', label: `현대 국가 (현재: ${country.name})` },
-            ...(subordinateHistorical as any[]).map((h: any) => ({
-              value: h.id,
-              label: h.name,
-            })),
+          placeholder="국가명으로 검색..."
+          modernCountries={[
+            {
+              id: '',
+              name: `현대 국가 (현재: ${country.name})`,
+              flagEmoji: (country as any).flagEmoji ?? null,
+            },
           ]}
-          selectedValue={selectedAffinityHistoricalId ?? ''}
-          onSelect={(value) => {
-            setSelectedAffinityHistoricalId(value || null)
-            setAffinityCountryModalOpen(false)
-          }}
+          historicalCountries={(subordinateHistorical as any[]).map((h: any) => ({
+            id: h.id,
+            name: h.name,
+            flagEmoji: (h as any).flagEmoji ?? null,
+            enName: h.enName,
+            startYear: h.startYear,
+            endYear: h.endYear,
+          }))}
+          selectedCountryId={selectedAffinityHistoricalId ?? ''}
+          onSelect={({ id }) => setSelectedAffinityHistoricalId(id || null)}
         />
       )}
 

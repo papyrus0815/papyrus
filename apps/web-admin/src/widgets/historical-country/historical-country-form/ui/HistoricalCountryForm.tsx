@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
+import { FiSearch } from 'react-icons/fi'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -9,6 +10,7 @@ import type { HistoricalCountry, Era } from '@/entities/historical-country/api'
 import { useHistoricalCountry } from '@/features/historical-country/use-historical-countries.hook'
 import { uploadImage } from '@/shared/api/upload'
 import type { TransitionEventType } from '@/shared/api/historical-countries'
+import { CountrySearchModal } from '@/shared/ui/country-search-modal'
 import * as S from '../../../../pages/history/country/country.styles'
 
 const TRANSITION_EVENT_LABELS: Record<TransitionEventType, string> = {
@@ -243,6 +245,9 @@ export function HistoricalCountryForm({
 
   /** 후임 국가 선택 모달 표시 여부 */
   const [showParentHistoricalModal, setShowParentHistoricalModal] = useState(false)
+
+  /** 국가 형태 모달 내 검색어 */
+  const [stateTypeSearch, setStateTypeSearch] = useState('')
 
   /** 시작 기원 선택 모달 표시 여부 */
   const [showStartEraModal, setShowStartEraModal] = useState(false)
@@ -580,7 +585,7 @@ export function HistoricalCountryForm({
     const selectedNames = modernCountries
       .filter((country) => selectedModernCountries.includes(country.id))
       .map((country) => country.name)
-    return `🌍 ${selectedNames.join(', ')}`
+    return selectedNames.join(', ')
   }
 
   const getParentHistoricalLabel = () => {
@@ -592,6 +597,17 @@ export function HistoricalCountryForm({
       .map((c) => c.name)
     return `📜 ${names.join(', ')}`
   }
+
+  /** 국가 형태 모달: 검색어로 필터링된 옵션 */
+  const filteredStateTypeOptions = useMemo(() => {
+    const q = stateTypeSearch.trim().toLowerCase()
+    if (!q) return STATE_TYPE_OPTIONS
+    return STATE_TYPE_OPTIONS.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        (opt.desc && opt.desc.toLowerCase().includes(q)),
+    )
+  }, [stateTypeSearch])
 
   // ==================== 조기 반환 ====================
 
@@ -1428,19 +1444,30 @@ export function HistoricalCountryForm({
                 as={motion.div}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                onClick={() => setShowStateTypeModal(false)}
+                onClick={() => {
+                  setShowStateTypeModal(false)
+                  setStateTypeSearch('')
+                }}
               />
               <S.SelectModal
                 as={motion.div}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.2 }}
-                style={{ transform: 'translate(-50%, -50%)' }}
+                style={{
+                  transform: 'translate(-50%, -50%)',
+                  height: 'min(520px, 85vh)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
               >
                 <S.SelectModalHeader>
                   <S.SelectModalTitle>국가 형태 선택</S.SelectModalTitle>
                   <S.SelectModalClose
-                    onClick={() => setShowStateTypeModal(false)}
+                    onClick={() => {
+                      setShowStateTypeModal(false)
+                      setStateTypeSearch('')
+                    }}
                   >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                       <path
@@ -1450,8 +1477,17 @@ export function HistoricalCountryForm({
                     </svg>
                   </S.SelectModalClose>
                 </S.SelectModalHeader>
-                <S.SelectModalContent>
-                  {STATE_TYPE_OPTIONS.map((option) => (
+                <S.ModalSearchWrap>
+                  <FiSearch size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                  <S.ModalSearchInput
+                    type="text"
+                    placeholder="형태 검색 (예: 왕국, 제국)"
+                    value={stateTypeSearch}
+                    onChange={(e) => setStateTypeSearch(e.target.value)}
+                  />
+                </S.ModalSearchWrap>
+                <S.SelectModalContent style={{ maxHeight: 320, flex: '1 1 0', minHeight: 0 }}>
+                  {filteredStateTypeOptions.map((option) => (
                     <S.SelectOption
                       key={option.value}
                       $active={selectedStateType === option.value}
@@ -1464,6 +1500,7 @@ export function HistoricalCountryForm({
                           flexDirection: 'column',
                           gap: '4px',
                           flex: 1,
+                          minWidth: 0,
                         }}
                       >
                         <S.SelectOptionText>{option.label}</S.SelectOptionText>
@@ -1488,6 +1525,13 @@ export function HistoricalCountryForm({
                       )}
                     </S.SelectOption>
                   ))}
+                  {filteredStateTypeOptions.length === 0 && (
+                    <S.EmptyState style={{ padding: '24px 16px' }}>
+                      <span style={{ color: '#9ca3af', fontSize: 14 }}>
+                        검색 결과가 없습니다.
+                      </span>
+                    </S.EmptyState>
+                  )}
                 </S.SelectModalContent>
               </S.SelectModal>
             </>,
@@ -1495,199 +1539,38 @@ export function HistoricalCountryForm({
           )
         : null}
 
-      {/* ==================== 현대 국가 선택 모달 (다중 선택 지원) ==================== */}
-      {showModernCountryModal
-        ? createPortal(
-            <>
-              <S.SelectModalOverlay
-                as={motion.div}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => setShowModernCountryModal(false)}
-              />
-              <S.SelectModal
-                as={motion.div}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-                style={{ transform: 'translate(-50%, -50%)' }}
-              >
-                <S.SelectModalHeader>
-                  <S.SelectModalTitle>
-                    연결된 현대 국가 선택 (여러 개 선택 가능)
-                  </S.SelectModalTitle>
-                  <S.SelectModalClose
-                    onClick={() => setShowModernCountryModal(false)}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.SelectModalClose>
-                </S.SelectModalHeader>
-                <S.SelectModalContent>
-                  {selectedModernCountries.length > 0 && (
-                    <div
-                      style={{
-                        padding: '12px',
-                        background: '#f3f4f6',
-                        borderRadius: '8px',
-                        marginBottom: '8px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontSize: '14px', color: '#374151' }}>
-                        {selectedModernCountries.length}개 선택됨
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleClearModernCountries}
-                        style={{
-                          padding: '4px 12px',
-                          fontSize: '13px',
-                          color: '#dc2626',
-                          background: 'white',
-                          border: '1px solid #fecaca',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        전체 해제
-                      </button>
-                    </div>
-                  )}
-                  {modernCountries.map((country) => (
-                    <S.SelectOption
-                      key={country.id}
-                      $active={selectedModernCountries.includes(country.id)}
-                      onClick={() => handleModernCountryToggle(country.id)}
-                    >
-                      <S.SelectOptionIcon>🌍</S.SelectOptionIcon>
-                      <S.SelectOptionText>{country.name}</S.SelectOptionText>
-                      {selectedModernCountries.includes(country.id) && (
-                        <S.SelectOptionCheck>
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                          >
-                            <path
-                              d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        </S.SelectOptionCheck>
-                      )}
-                    </S.SelectOption>
-                  ))}
-                </S.SelectModalContent>
-              </S.SelectModal>
-            </>,
-            document.body,
-          )
-        : null}
+      {/* 연결된 현대 국가 선택: 공용 모달 (현대 국가만 표시, 다중 선택) */}
+      <CountrySearchModal
+        isOpen={showModernCountryModal}
+        onClose={() => setShowModernCountryModal(false)}
+        title="연결된 현대 국가 선택 (여러 개 선택 가능)"
+        modernCountries={modernCountries.map((c) => ({ id: c.id, name: c.name }))}
+        historicalCountries={[]}
+        modernOnly
+        selectedCountryIds={selectedModernCountries}
+        onSelectMultiple={(countries) =>
+          setSelectedModernCountries(countries.map((c) => c.id))
+        }
+        placeholder="국가명으로 검색..."
+      />
 
-      {/* ==================== 후임 국가 선택 모달 ==================== */}
-      {showParentHistoricalModal
-        ? createPortal(
-            <>
-              <S.SelectModalOverlay
-                as={motion.div}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => setShowParentHistoricalModal(false)}
-              />
-              <S.SelectModal
-                as={motion.div}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2 }}
-                style={{ transform: 'translate(-50%, -50%)' }}
-              >
-                <S.SelectModalHeader>
-                  <S.SelectModalTitle>
-                    후임 국가 선택 (이 국가가 이어져 간 나라)
-                  </S.SelectModalTitle>
-                  <S.SelectModalClose
-                    onClick={() => setShowParentHistoricalModal(false)}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.SelectModalClose>
-                </S.SelectModalHeader>
-                <S.SelectModalContent>
-                  {selectedParentHistoricalIds.length > 0 && (
-                    <div
-                      style={{
-                        padding: '12px',
-                        background: '#f3f4f6',
-                        borderRadius: '8px',
-                        marginBottom: '8px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontSize: '14px', color: '#374151' }}>
-                        {selectedParentHistoricalIds.length}개 선택됨
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleClearParentHistorical}
-                        style={{
-                          padding: '4px 12px',
-                          fontSize: '13px',
-                          color: '#dc2626',
-                          background: 'white',
-                          border: '1px solid #fecaca',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        전체 해제
-                      </button>
-                    </div>
-                  )}
-                  {historicalCountries.map((hc) => (
-                    <S.SelectOption
-                      key={hc.id}
-                      $active={selectedParentHistoricalIds.includes(hc.id)}
-                      onClick={() => handleParentHistoricalToggle(hc.id)}
-                    >
-                      <S.SelectOptionIcon>📜</S.SelectOptionIcon>
-                      <S.SelectOptionText>{hc.name}</S.SelectOptionText>
-                      {selectedParentHistoricalIds.includes(hc.id) && (
-                        <S.SelectOptionCheck>
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                          >
-                            <path
-                              d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        </S.SelectOptionCheck>
-                      )}
-                    </S.SelectOption>
-                  ))}
-                </S.SelectModalContent>
-              </S.SelectModal>
-            </>,
-            document.body,
-          )
-        : null}
+      {/* 후임 국가 선택: 공용 모달 (역사적 국가만 표시, 다중 선택) */}
+      <CountrySearchModal
+        isOpen={showParentHistoricalModal}
+        onClose={() => setShowParentHistoricalModal(false)}
+        title="후임 국가 선택 (이 국가가 이어져 간 나라)"
+        modernCountries={[]}
+        historicalCountries={historicalCountries.map((c) => ({
+          id: c.id,
+          name: c.name,
+        }))}
+        historicalOnly
+        selectedCountryIds={selectedParentHistoricalIds}
+        onSelectMultiple={(countries) =>
+          setSelectedParentHistoricalIds(countries.map((c) => c.id))
+        }
+        placeholder="국가명으로 검색..."
+      />
 
       {/* ==================== 시작 기원 선택 모달 ==================== */}
       {showStartEraModal

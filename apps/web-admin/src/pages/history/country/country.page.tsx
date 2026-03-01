@@ -1037,9 +1037,11 @@ export default function CountryPage() {
       {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 연결된 현대 국가·후임 국가 표시) */}
       <HistoricalCountryForm
         editing={
-          editingHistorical
-            ? (editingHistoricalDetail ?? editingHistorical)
-            : null
+          editingHistorical === null
+            ? null
+            : editingHistorical?.id
+              ? (editingHistoricalDetail ?? editingHistorical)
+              : editingHistorical
         }
         modernCountries={countries.map((countryItem) => ({
           id: countryItem.id,

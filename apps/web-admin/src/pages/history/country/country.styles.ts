@@ -3411,6 +3411,65 @@ export const SelectModalContent = styled.div`
   }
 `
 
+export const ModalSearchWrap = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+`
+
+export const ModalSearchInput = styled.input`
+  flex: 1;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #111827;
+  background: #fff;
+  &::placeholder {
+    color: #9ca3af;
+  }
+  &:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  }
+`
+
+export const SelectModalFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 18px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 22px 22px;
+`
+
+export const SelectModalFooterCount = styled.span`
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+`
+
+export const SelectModalFooterButton = styled.button`
+  padding: 8px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: #4f46e5;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+  &:hover {
+    background: #4338ca;
+  }
+`
+
 export const SelectOption = styled.button<{ $active?: boolean }>`
   width: 100%;
   display: flex;

@@ -73,6 +73,7 @@ import { getAllReligions } from '@/shared/api/religions'
 import { uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { CountrySearchModal } from '@/shared/ui/country-search-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { StepNavigation } from '@/widgets/event-form/ui'
 
@@ -3479,135 +3480,47 @@ export default function PersonCreatePage() {
         </Modal>
       )}
 
-      {/* 국가 선택 모달 - 기본 정보와 경력 모두에서 사용 */}
+      {/* 국가 선택 모달 - 기본 정보(출생국가)와 경력(활동국가) 공용 */}
       {showCountryModal && (
-        <Modal onClick={() => setShowCountryModal(false)}>
-          <ModalContent onClick={(e) => e.stopPropagation()}>
-            <ModalHeader>
-              <ModalTitle>
-                {countryModalContext === 'birth'
-                  ? '출생 국가 선택'
-                  : '활동 국가 선택'}
-              </ModalTitle>
-              <ModalCloseButton onClick={() => setShowCountryModal(false)}>
-                <FiX />
-              </ModalCloseButton>
-            </ModalHeader>
-
-            <ModalBody>
-              {/* 좌측 필터 영역 */}
-              <FilterSidebar>
-                <FilterSidebarSection>
-                  <FilterSidebarTitle>국가 타입</FilterSidebarTitle>
-                  <CountryTypeOption
-                    $active={countryType === 'modern'}
-                    onClick={() => {
-                      setCountryType('modern')
-                      setSelectedContinent('all')
-                      setSelectedParentCountry('all')
-                    }}
-                  >
-                    <RadioButton $active={countryType === 'modern'}>
-                      <ModalRadioDot $active={countryType === 'modern'} />
-                    </RadioButton>
-                    <span>현대 국가</span>
-                  </CountryTypeOption>
-                  <CountryTypeOption
-                    $active={countryType === 'historical'}
-                    onClick={() => {
-                      setCountryType('historical')
-                      setSelectedContinent('all')
-                      setSelectedParentCountry('all')
-                    }}
-                  >
-                    <RadioButton $active={countryType === 'historical'}>
-                      <ModalRadioDot $active={countryType === 'historical'} />
-                    </RadioButton>
-                    <span>역사적 국가</span>
-                  </CountryTypeOption>
-                </FilterSidebarSection>
-
-                <FilterSidebarSection>
-                  <FilterSidebarTitle>대륙</FilterSidebarTitle>
-                  <FilterOptionButton
-                    $active={selectedContinent === 'all'}
-                    onClick={() => setSelectedContinent('all')}
-                  >
-                    전체
-                  </FilterOptionButton>
-                  {continents.map((continent) => (
-                    <FilterOptionButton
-                      key={continent}
-                      $active={selectedContinent === continent}
-                      onClick={() => setSelectedContinent(continent)}
-                    >
-                      {continent}
-                    </FilterOptionButton>
-                  ))}
-                </FilterSidebarSection>
-              </FilterSidebar>
-
-              {/* 우측 리스트 영역 */}
-              <ListArea>
-                <SearchWrapper>
-                  <FiSearch />
-                  <SearchInput
-                    type="text"
-                    placeholder="국가 검색..."
-                    value={countrySearchTerm}
-                    onChange={(e) => setCountrySearchTerm(e.target.value)}
-                  />
-                </SearchWrapper>
-
-                <ModalList>
-                  {filteredCountries.map((country) => (
-                    <ModalListItem
-                      key={country.id}
-                      $selected={
-                        countryModalContext === 'birth'
-                          ? formData.birthCountryId === country.id
-                          : activeCareer?.countryId === country.id
-                      }
-                      onClick={() => {
-                        playClick()
-                        if (countryModalContext === 'birth') {
-                          handleInputChange('birthCountryId', country.id)
-                        } else if (activeCareerId) {
-                          handleCareerInputChange(
-                            activeCareerId,
-                            'countryId',
-                            country.id,
-                          )
-                        }
-                        setShowCountryModal(false)
-                        setCountrySearchTerm('')
-                      }}
-                    >
-                      <CountryItemContent>
-                        {country.flagEmoji && (
-                          <CountryFlag>{country.flagEmoji}</CountryFlag>
-                        )}
-                        <CountryName>{country.name}</CountryName>
-                        {country.startYear && (
-                          <CountryPeriod>
-                            ({country.startYear}
-                            {country.endYear
-                              ? ` - ${country.endYear}`
-                              : ' - 현재'}
-                            )
-                          </CountryPeriod>
-                        )}
-                      </CountryItemContent>
-                    </ModalListItem>
-                  ))}
-                  {filteredCountries.length === 0 && (
-                    <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
-                  )}
-                </ModalList>
-              </ListArea>
-            </ModalBody>
-          </ModalContent>
-        </Modal>
+        <CountrySearchModal
+          isOpen={showCountryModal}
+          onClose={() => setShowCountryModal(false)}
+          title={
+            countryModalContext === 'birth'
+              ? '출생 국가 선택'
+              : '활동 국가 선택'
+          }
+          placeholder="국가명으로 검색..."
+          modernCountries={countries.map((c) => ({
+            id: c.id,
+            name: c.name,
+            flagEmoji: c.flagEmoji,
+            continentId: (c as { continentId?: string }).continentId ?? null,
+          }))}
+          historicalCountries={historicalCountries.map((c) => ({
+            id: c.id,
+            name: c.name,
+            flagEmoji: (c as { flagEmoji?: string }).flagEmoji ?? null,
+            enName: (c as { enName?: string }).enName ?? null,
+            startYear: (c as { startYear?: number }).startYear ?? null,
+            endYear: (c as { endYear?: number }).endYear ?? null,
+          }))}
+          continentList={continentList.map((c) => ({ id: c.id, name: c.name }))}
+          selectedCountryId={
+            countryModalContext === 'birth'
+              ? formData.birthCountryId ?? null
+              : activeCareer?.countryId ?? null
+          }
+          onSelect={({ id, isHistorical }) => {
+            playClick()
+            if (countryModalContext === 'birth') {
+              handleInputChange('birthCountryId', id)
+            } else if (activeCareerId) {
+              handleCareerInputChange(activeCareerId, 'countryId', id)
+            }
+            setShowCountryModal(false)
+          }}
+        />
       )}
 
       {/* 기존 모달들은 currentStep === 'basic'일 때만 표시 */}
