@@ -309,44 +309,46 @@ export function GovernmentInfoSection({ countryId, categoryModalOpen: categoryMo
         position: 'relative',
       }}
     >
-      {/* 헤더 + 카테고리 설정 */}
-      <header style={{ paddingBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.04em', lineHeight: 1.25 }}>
-            행정조직
-          </h2>
-          <p style={{ margin: '10px 0 0', fontSize: 15, color: '#64748b', lineHeight: 1.55, maxWidth: 540, fontWeight: 500 }}>
-            중앙·헌법기관, 산하기관, 지방자치단체 구성과 예산·주요 사건을 한눈에 볼 수 있습니다.
-          </p>
-        </div>
-        {onOpenCategoryModal && (
-          <button
-            type="button"
-            onClick={onOpenCategoryModal}
-            aria-label="부처 카테고리 설정"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 18px',
-              borderRadius: 12,
-              border: '1px solid #e5e7eb',
-              background: '#fff',
-              color: '#374151',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            카테고리 설정
-          </button>
-        )}
-      </header>
+      {/* 헤더 — 대시보드 Hero 스타일 + 카테고리 설정 */}
+      <S.GlobalDashboardHero>
+        <S.HeroContent style={{ flexWrap: 'wrap', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+            <S.HeroTextGroup>
+              <S.HeroTitle>행정조직</S.HeroTitle>
+              <S.HeroSubtitle>
+                중앙·헌법기관, 산하기관, 지방자치단체 구성과 예산·주요 사건을 한눈에 볼 수 있습니다.
+              </S.HeroSubtitle>
+            </S.HeroTextGroup>
+          </div>
+          {onOpenCategoryModal && (
+            <button
+              type="button"
+              onClick={onOpenCategoryModal}
+              aria-label="부처 카테고리 설정"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 18px',
+                borderRadius: 12,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              카테고리 설정
+            </button>
+          )}
+        </S.HeroContent>
+      </S.GlobalDashboardHero>
 
       {/* 탭 (수반 기본정보/업적과 동일 스타일) + KPI */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

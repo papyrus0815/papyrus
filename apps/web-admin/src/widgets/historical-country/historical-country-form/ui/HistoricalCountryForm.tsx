@@ -310,6 +310,7 @@ export function HistoricalCountryForm({
         const raw = formSource as HistoricalCountry & {
           parentModernCountryIds?: string[]
           parentHistoricalCountryIds?: string[]
+          transitionEventType?: TransitionEventType
           start_era?: string
           start_year?: number
           start_month?: number
@@ -345,6 +346,9 @@ export function HistoricalCountryForm({
         setThumbnailPreview((raw?.thumbnailUrl ?? editing.thumbnailUrl) || '')
         setSelectedModernCountries(parentIds)
         setSelectedParentHistoricalIds(parentHistIds)
+        setTransitionEventType(
+          (raw?.transitionEventType as TransitionEventType) ?? 'SUCCESSION',
+        )
       } else {
         // 생성 모드: 빈 값으로 초기화
         reset({
@@ -368,6 +372,7 @@ export function HistoricalCountryForm({
         setThumbnailPreview('')
         setSelectedModernCountries([])
         setSelectedParentHistoricalIds([])
+        setTransitionEventType('SUCCESSION')
       }
       setThumbnailFile(null)
     }

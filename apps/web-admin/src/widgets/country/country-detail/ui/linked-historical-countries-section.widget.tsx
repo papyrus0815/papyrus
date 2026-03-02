@@ -27,6 +27,7 @@ import {
   getTransitionsByHistoricalCountryId,
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
+import * as CountryStyles from '@/pages/history/country/country.styles'
 
 /* 행정조직·인물과 동일: 단일 악센트, 회색 톤 */
 const MAIN = '#6366f1'
@@ -604,22 +605,38 @@ function getChains(
   return components
 }
 
-/** 메인 계보(루트→말단 최장 경로)와 합류 브랜치를 나눔. 브랜치끼리 계승으로 이어지면 같은 줄에 배치 */
+/**
+ * 메인 계보(루트→말단 최장 경로)와 합류 브랜치를 나눔.
+ * transitionByEdge가 주어지면 메인 행은 **계승(SUCCESSION)** 변천만으로 구성하고,
+ * 멸망(DISSOLVED) 등 다른 유형은 브랜치(위/아래 줄)로 배치해 같은 줄에 잘못 이어져 보이지 않게 함.
+ * getNodeEndYear가 주어지면, 동일 길이 계보일 때 **가장 최근(endYear 큰) 계보**를 메인으로 선택해
+ * 멸망선이 사라지지 않도록 함.
+ */
 function getMainPathAndBranchRows(
   chain: string[],
   edges: { predecessorId: string; successorId: string }[],
+  transitionByEdge?: Map<string, HistoricalCountryTransitionDto>,
+  getNodeEndYear?: (id: string) => number | null,
 ): string[][] {
   const idSet = new Set(chain)
   const inChain = edges.filter(
     (e) => idSet.has(e.predecessorId) && idSet.has(e.successorId),
   )
+  // 메인 행: 계승(SUCCESSION) 변천만 사용. 없으면 전체 edge 사용(기존 동작)
+  const inChainForMain = transitionByEdge
+    ? inChain.filter((e) => {
+        const t = transitionByEdge.get(`${e.predecessorId}\t${e.successorId}`)
+        return t?.eventType === 'SUCCESSION'
+      })
+    : inChain
+
   const successors = new Map<string, string[]>()
   chain.forEach((id) => successors.set(id, []))
-  inChain.forEach(({ predecessorId, successorId }) => {
+  inChainForMain.forEach(({ predecessorId, successorId }) => {
     successors.get(predecessorId)!.push(successorId)
   })
   const roots = chain.filter(
-    (id) => !inChain.some((e) => e.successorId === id),
+    (id) => !inChainForMain.some((e) => e.successorId === id),
   )
   function longestPathFrom(id: string): string[] {
     const succs = successors.get(id) ?? []
@@ -634,7 +651,17 @@ function getMainPathAndBranchRows(
   let mainPath: string[] = []
   for (const r of roots) {
     const path = longestPathFrom(r)
-    if (path.length > mainPath.length) mainPath = path
+    if (path.length > mainPath.length) {
+      mainPath = path
+    } else if (
+      path.length === mainPath.length &&
+      path.length > 0 &&
+      getNodeEndYear
+    ) {
+      const pathEnd = getNodeEndYear(path[path.length - 1]) ?? -Infinity
+      const mainEnd = getNodeEndYear(mainPath[mainPath.length - 1]) ?? -Infinity
+      if (pathEnd > mainEnd) mainPath = path
+    }
   }
   const mainSet = new Set(mainPath)
   const branches = chain.filter((id) => !mainSet.has(id))
@@ -738,18 +765,31 @@ export function LinkedHistoricalCountriesSection({
     return { chains: chainsList, transitionByEdge: edgeMap }
   }, [list, transitions, memberships])
 
-  /** 메인 계보(최장 경로) 1행 + 합류 브랜치 각 1행 → 튜튼→프로이센공국→프로이센왕국 / 브란덴부르크 */
+  /** 메인 계보(최장 경로) 1행 + 합류 브랜치 각 1행. 메인 행은 계승(SUCCESSION)만, 멸망 등은 브랜치로. 동일 길이면 가장 최근(endYear) 계보를 메인으로 */
   const flowRowsByChain = useMemo(() => {
+    const transitionEdges = transitions.map((t) => ({
+      predecessorId: t.predecessorId,
+      successorId: t.successorId,
+    }))
+    const getNodeEndYear = (id: string): number | null => {
+      const h = idToCountry.get(id) as
+        | { endYear?: number | null; end_year?: number; endEra?: string | null; end_era?: string }
+        | undefined
+      if (!h) return null
+      const y = h.endYear ?? h.end_year
+      if (y == null) return null
+      const era = h.endEra ?? h.end_era
+      return era === 'BC' ? -Math.abs(Number(y)) : Number(y)
+    }
     return chains.map((chain) =>
       getMainPathAndBranchRows(
         chain,
-        transitions.map((t) => ({
-          predecessorId: t.predecessorId,
-          successorId: t.successorId,
-        })),
+        transitionEdges,
+        transitionByEdge,
+        getNodeEndYear,
       ),
     )
-  }, [chains, transitions])
+  }, [chains, transitions, transitionByEdge, idToCountry])
 
   /** 흐름도 좌측 연도 바용: 연결된 국가들의 연도 범위 (BC는 음수). 숫자 보정 적용 */
   const flowYearRange = useMemo(() => {
@@ -857,6 +897,7 @@ export function LinkedHistoricalCountriesSection({
       fromCenterPct: number
       toCenterPct: number
       type: 'successor' | 'personal_union' | 'membership'
+      eventType?: TransitionEventType
       membershipRole?: string
       isLeadingMember?: boolean
     }[] = []
@@ -879,9 +920,10 @@ export function LinkedHistoricalCountriesSection({
             relations: [],
             memberships: [],
           }
-          const successorId = transitions.find(
+          const successorTransition = transitions.find(
             (t) => t.predecessorId === branchId,
-          )?.successorId
+          )
+          const successorId = successorTransition?.successorId
           if (successorId && mainRowIds.has(successorId)) {
             out.push({
               fromId: branchId,
@@ -891,6 +933,7 @@ export function LinkedHistoricalCountriesSection({
               fromCenterPct,
               toCenterPct: toCenter(successorId),
               type: 'successor',
+              eventType: successorTransition?.eventType,
             })
           }
           rels.relations
@@ -935,6 +978,34 @@ export function LinkedHistoricalCountriesSection({
           })
         }
       }
+      // 메인 행 카드 → 브랜치 행 변천선 (예: 아프샤르→이란 숭고국 멸망). 멸망선이 사라지지 않도록
+      const mainLayout0 = flowLayout[chainIdx]?.[0] ?? []
+      for (let i = 0; i < rows[0].length; i++) {
+        const mainId = rows[0][i]
+        const successorTransition = transitions.find(
+          (t) => t.predecessorId === mainId,
+        )
+        const successorId = successorTransition?.successorId
+        if (!successorId || mainRowIds.has(successorId)) continue
+        const branchRowIdx = rows.findIndex(
+          (row, idx) => idx >= 1 && row.includes(successorId),
+        )
+        if (branchRowIdx < 0) continue
+        const branchLayout = flowLayout[chainIdx]?.[branchRowIdx] ?? []
+        const toNode = branchLayout.find((x) => x.id === successorId)
+        const fromNode = mainLayout0.find((x) => x.id === mainId)
+        if (!toNode || !fromNode) continue
+        out.push({
+          fromId: mainId,
+          toId: successorId,
+          fromGlobalRow: globalRowOffset + 0,
+          toGlobalRow: globalRowOffset + branchRowIdx,
+          fromCenterPct: fromNode.leftPct + fromNode.widthPct / 2,
+          toCenterPct: toNode.leftPct + toNode.widthPct / 2,
+          type: 'successor',
+          eventType: successorTransition?.eventType,
+        })
+      }
       globalRowOffset += rows.length
     })
     return out
@@ -945,7 +1016,7 @@ export function LinkedHistoricalCountriesSection({
     const map = new Map<
       string,
       {
-        successor: string[]
+        successor: Array<{ fromId: string; eventType?: TransitionEventType }>
         personalUnion: string[]
         membership: Array<{ id: string; role: string; isLeadingMember: boolean }>
       }
@@ -958,7 +1029,8 @@ export function LinkedHistoricalCountriesSection({
           membership: [],
         })
       const entry = map.get(c.toId)!
-      if (c.type === 'successor') entry.successor.push(c.fromId)
+      if (c.type === 'successor')
+        entry.successor.push({ fromId: c.fromId, eventType: c.eventType })
       else if (c.type === 'personal_union') entry.personalUnion.push(c.fromId)
       else if (c.type === 'membership' && c.membershipRole != null)
         entry.membership.push({
@@ -967,8 +1039,29 @@ export function LinkedHistoricalCountriesSection({
           isLeadingMember: c.isLeadingMember ?? false,
         })
     })
+    // 메인 행에서 같은 줄 이전 카드→현재 카드 변천도 배지에 포함 (잔드·아프샤르 둘 다 멸망 등)
+    flowRowsByChain.forEach((rows) => {
+      const mainRow = rows[0]
+      if (!mainRow) return
+      for (let i = 1; i < mainRow.length; i++) {
+        const prevId = mainRow[i - 1]
+        const toId = mainRow[i]
+        const t = transitionByEdge.get(`${prevId}\t${toId}`)
+        if (!t) continue
+        if (!map.has(toId))
+          map.set(toId, {
+            successor: [],
+            personalUnion: [],
+            membership: [],
+          })
+        map.get(toId)!.successor.push({
+          fromId: prevId,
+          eventType: t.eventType as TransitionEventType,
+        })
+      }
+    })
     return map
-  }, [flowConnectors])
+  }, [flowConnectors, flowRowsByChain, transitionByEdge])
 
   /** 관계 유형별로 선을 분리 (계승 / 동군연합 / 연방 각각 따로, 끝에 해당 관계만 라벨) */
   const flowConnectorsByBranch = useMemo(() => {
@@ -1016,44 +1109,16 @@ export function LinkedHistoricalCountriesSection({
         position: 'relative',
       }}
     >
-      <header
-        style={{
-          paddingBottom: 24,
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 24,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 26,
-              fontWeight: 800,
-              color: TITLE,
-              letterSpacing: '-0.04em',
-              lineHeight: 1.25,
-            }}
-          >
-            연결된 역사적 국가와 관계
-          </h2>
-          <p
-            style={{
-              margin: '10px 0 0',
-              fontSize: 15,
-              color: MUTED,
-              lineHeight: 1.55,
-              maxWidth: 560,
-              fontWeight: 500,
-            }}
-          >
-            이 현대 국가에 연결된 역사적 국가의 변천·소속·수평 관계를 목록 또는
-            흐름도로 확인할 수 있습니다.
-          </p>
-        </div>
-      </header>
+      <CountryStyles.GlobalDashboardHero>
+        <CountryStyles.HeroContent>
+          <CountryStyles.HeroTextGroup>
+            <CountryStyles.HeroTitle>역사적 국가</CountryStyles.HeroTitle>
+            <CountryStyles.HeroSubtitle>
+              이 현대 국가에 연결된 역사적 국가의 변천·소속·수평 관계를 목록 또는 흐름도로 확인할 수 있습니다.
+            </CountryStyles.HeroSubtitle>
+          </CountryStyles.HeroTextGroup>
+        </CountryStyles.HeroContent>
+      </CountryStyles.GlobalDashboardHero>
 
       {/* 요약 지표 — 행정조직과 동일 톤 */}
       <section aria-label="연결된 역사적 국가 요약">
@@ -1318,7 +1383,9 @@ export function LinkedHistoricalCountriesSection({
                               FLOW_ROW_GAP / 2
                             const labelText =
                               group.type === 'successor'
-                                ? '계승'
+                                ? (TRANSITION_EVENT_LABELS[
+                                    group.list[0]?.eventType as TransitionEventType
+                                  ] ?? '계승')
                                 : group.type === 'personal_union'
                                   ? '동군연합'
                                   : group.list[0]?.type === 'membership' && group.list[0]?.membershipRole
@@ -1507,29 +1574,40 @@ export function LinkedHistoricalCountriesSection({
                                           return null
                                         return (
                                           <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                            {incoming.successor.length > 0 && (
-                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginRight: 2 }}>계승</span>
-                                                {incoming.successor.map((bid) => (
-                                                  <span
-                                                    key={`s-${bid}`}
-                                                    title={`계승: ${idToCountry.get(bid)?.name ?? bid}`}
-                                                    style={{
-                                                      flexShrink: 0,
-                                                      fontSize: 10,
-                                                      fontWeight: 600,
-                                                      color: '#4f46e5',
-                                                      background: '#eef2ff',
-                                                      padding: '2px 6px',
-                                                      borderRadius: 4,
-                                                      border: '1px solid #c7d2fe',
-                                                    }}
-                                                  >
-                                                    ← {idToCountry.get(bid)?.name ?? bid}
+                                            {incoming.successor.length > 0 && (() => {
+                                              // 변천 유형별로 그룹 (멸망/계승 등 각각 라벨 표시)
+                                              const byEventType = new Map<string, Array<{ fromId: string; eventType?: TransitionEventType }>>()
+                                              incoming.successor.forEach((s) => {
+                                                const key = s.eventType ?? 'SUCCESSION'
+                                                if (!byEventType.has(key)) byEventType.set(key, [])
+                                                byEventType.get(key)!.push(s)
+                                              })
+                                              return Array.from(byEventType.entries()).map(([eventType, list]) => (
+                                                <div key={eventType} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginRight: 2 }}>
+                                                    {TRANSITION_EVENT_LABELS[eventType as TransitionEventType] ?? '계승'}
                                                   </span>
-                                                ))}
-                                              </div>
-                                            )}
+                                                  {list.map((s) => (
+                                                    <span
+                                                      key={`s-${s.fromId}`}
+                                                      title={`${TRANSITION_EVENT_LABELS[s.eventType as TransitionEventType] ?? '계승'}: ${idToCountry.get(s.fromId)?.name ?? s.fromId}`}
+                                                      style={{
+                                                        flexShrink: 0,
+                                                        fontSize: 10,
+                                                        fontWeight: 600,
+                                                        color: '#4f46e5',
+                                                        background: '#eef2ff',
+                                                        padding: '2px 6px',
+                                                        borderRadius: 4,
+                                                        border: '1px solid #c7d2fe',
+                                                      }}
+                                                    >
+                                                      ← {idToCountry.get(s.fromId)?.name ?? s.fromId}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              ))
+                                            })()}
                                             {incoming.personalUnion.length > 0 && (
                                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                                                 <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginRight: 2 }}>동군연합</span>

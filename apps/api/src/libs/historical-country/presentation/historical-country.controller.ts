@@ -115,11 +115,18 @@ export class HistoricalCountryController {
     const accountId = req.user?.id ?? req.user?.sub
     const country =
       await this.historicalCountryService.getHistoricalCountryById(id, accountId)
-    const [parentModernCountryIds, parentHistoricalCountryIds] = await Promise.all([
-      this.historicalCountryService.getModernCountryIdsByHistoricalCountryId(id),
-      this.historicalCountryService.getParentHistoricalCountryIdsByMemberId(id),
-    ])
-    return this.toResponseDto(country, parentModernCountryIds, parentHistoricalCountryIds)
+    const [parentModernCountryIds, parentHistoricalCountryIds, transitionEventType] =
+      await Promise.all([
+        this.historicalCountryService.getModernCountryIdsByHistoricalCountryId(id),
+        this.historicalCountryService.getParentHistoricalCountryIdsByMemberId(id),
+        this.historicalCountryService.getTransitionEventTypeByPredecessorId(id),
+      ])
+    return this.toResponseDto(
+      country,
+      parentModernCountryIds,
+      parentHistoricalCountryIds,
+      transitionEventType ?? undefined,
+    )
   }
 
   /**
@@ -378,6 +385,7 @@ export class HistoricalCountryController {
     country: HistoricalCountry,
     parentModernCountryIds?: string[],
     parentHistoricalCountryIds?: string[],
+    transitionEventType?: string,
   ): HistoricalCountryResponseDto {
     return {
       id: country.id,
@@ -402,6 +410,7 @@ export class HistoricalCountryController {
       stateType: country.stateType,
       parentModernCountryIds,
       parentHistoricalCountryIds,
+      transitionEventType: transitionEventType as HistoricalCountryResponseDto['transitionEventType'],
       createdAt: country.createdAt.toISOString(),
       updatedAt: country.updatedAt.toISOString(),
     }

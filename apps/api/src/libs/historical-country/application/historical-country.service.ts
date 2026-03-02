@@ -93,6 +93,15 @@ export class HistoricalCountryService {
   }
 
   /**
+   * 이 국가(전임)의 변천 이벤트 유형 조회 (후임 transition 1건 기준)
+   */
+  async getTransitionEventTypeByPredecessorId(
+    predecessorId: string,
+  ): Promise<string | null> {
+    return this.repository.findTransitionEventTypeByPredecessorId(predecessorId)
+  }
+
+  /**
    * 역사적 국가 생성 (accountId 있으면 소유자로 저장)
    */
   async createHistoricalCountry(

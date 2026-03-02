@@ -75,6 +75,11 @@ export interface IHistoricalCountryRepository {
   findParentHistoricalCountryIdsByMemberId(memberCountryId: string): Promise<string[]>
 
   /**
+   * 이 국가(전임)의 변천 이벤트 유형 조회 (후임 transition 1건 기준)
+   */
+  findTransitionEventTypeByPredecessorId(predecessorId: string): Promise<TransitionEventType | null>
+
+  /**
    * 역사적 국가 생성 (data.accountId 또는 별도 accountId 사용)
    */
   create(data: CreateHistoricalCountryData): Promise<HistoricalCountry>

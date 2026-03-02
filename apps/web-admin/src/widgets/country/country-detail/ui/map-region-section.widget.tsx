@@ -11,6 +11,7 @@ import {
   mockAdministrativeRegions,
   mockCityDetails,
 } from '../mock'
+import * as CountryStyles from '@/pages/history/country/country.styles'
 import * as S from './CountryDetail.styles'
 import { MapRegionAdministrativeView } from './MapRegionAdministrativeView'
 import { MapRegionInfrastructureView } from './MapRegionInfrastructureView'
@@ -461,16 +462,16 @@ export function MapRegionSection({
         position: 'relative',
       }}
     >
-      <header style={{ paddingBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.04em', lineHeight: 1.25 }}>
-            행정구역
-          </h2>
-          <p style={{ margin: '10px 0 0', fontSize: 15, color: '#64748b', lineHeight: 1.55, maxWidth: 540, fontWeight: 500 }}>
-            행정구역, 자연 지리, 인프라를 지도와 목록으로 확인할 수 있습니다.
-          </p>
-        </div>
-      </header>
+      <CountryStyles.GlobalDashboardHero>
+        <CountryStyles.HeroContent>
+          <CountryStyles.HeroTextGroup>
+            <CountryStyles.HeroTitle>행정구역</CountryStyles.HeroTitle>
+            <CountryStyles.HeroSubtitle>
+              행정구역, 자연 지리, 인프라를 지도와 목록으로 확인할 수 있습니다.
+            </CountryStyles.HeroSubtitle>
+          </CountryStyles.HeroTextGroup>
+        </CountryStyles.HeroContent>
+      </CountryStyles.GlobalDashboardHero>
 
       {/* 탭 + 요약 스트립 — 행정조직과 동일 구조 (탭 위 라벨 없음, 탭 아래 KPI 스트립) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
