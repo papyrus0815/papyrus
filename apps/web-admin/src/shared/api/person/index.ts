@@ -1,7 +1,6 @@
 import * as personsApi from '@api/functional/persons'
 
-import { getApiConnection } from '../client'
-import { getPersonsByTenureCountry } from '../persons'
+import { apiConnection, getApiConnection } from '../client'
 
 export type Era = 'BC' | 'AD'
 
@@ -102,21 +101,21 @@ export const personApi = {
     return Array.isArray(result) ? result : []
   },
 
+  /** 국가별 인물 전체 (countryId 소속 + 해당 국가 재임 인물). GET /persons/by-country/:countryId */
   getByCountryId: async (countryId: string) => {
-    const [byBirthCountry, byTenure] = await Promise.all([
-      (async () => {
-        const allPersons = await personApi.getAll()
-        return allPersons.filter(
-          (p: Person & { country_id?: string }) =>
-            (p.countryId ?? p.country_id) === countryId,
-        )
-      })(),
-      getPersonsByTenureCountry({ countryId }).catch(() => []),
-    ])
-    const byId = new Map<string, Person>()
-    for (const p of byBirthCountry) byId.set(p.id, p)
-    for (const p of byTenure) if (!byId.has(p.id)) byId.set(p.id, p as Person)
-    return Array.from(byId.values())
+    const conn = getApiConnection()
+    const url = `${apiConnection.host}/persons/by-country/${encodeURIComponent(countryId)}`
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(conn.headers?.Authorization && { Authorization: conn.headers.Authorization }),
+      },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return (Array.isArray(data) ? data : data?.data ?? []) as Person[]
   },
 
   getById: async (id: string) => {

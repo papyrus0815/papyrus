@@ -390,6 +390,63 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 국가별 인물 목록 조회 (person.countryId = countryId, accountId 무관)
+   * 국가 페이지 인물 리스트에서 "전체 인물" 표시용.
+   */
+  async findPersonsByCountryId(countryId: string): Promise<PersonResponseDto[]> {
+    const persons = await this.prisma.person.findMany({
+      where: { countryId },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
+      include: {
+        countryAffiliations: true,
+        dynasty: { select: { id: true, name: true } },
+      },
+    })
+    return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  /**
+   * 해당 현대 국가 또는 연결된 역사적 국가에 소속(affiliation)이 있는 인물 조회
+   * Person.countryId가 아닌 PersonCountryAffiliation 기준 (독일 → 신성로마제국 연결 인물 포함)
+   */
+  async findPersonsByAffiliationInCountry(countryId: string): Promise<PersonResponseDto[]> {
+    const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+      .findMany({
+        where: { modernCountryId: countryId },
+        select: { historicalCountryId: true },
+      })
+      .then((rows) => rows.map((r) => r.historicalCountryId))
+
+    const affiliationWhere =
+      linkedHistoricalIds.length > 0
+        ? {
+            OR: [
+              { countryId },
+              { historicalCountryId: { in: linkedHistoricalIds } },
+            ],
+          }
+        : { countryId }
+
+    const affs = await this.prisma.personCountryAffiliation.findMany({
+      where: affiliationWhere,
+      select: { personId: true },
+      distinct: ['personId'],
+    })
+    const personIds = affs.map((a) => a.personId)
+    if (personIds.length === 0) return []
+
+    const persons = await this.prisma.person.findMany({
+      where: { id: { in: personIds } },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
+      include: {
+        countryAffiliations: true,
+        dynasty: { select: { id: true, name: true } },
+      },
+    })
+    return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  /**
    * 인물 목록 조회 (정부 직책 포함, accountId 있으면 해당 계정 소유만)
    */
   async findAllWithGovernmentPositions(accountId?: string) {

@@ -116,6 +116,17 @@ export interface IPersonRepository {
   findAll(accountId?: string): Promise<PersonResponseDto[]>
 
   /**
+   * 국가별 인물 목록 조회 (countryId 소속 전체, accountId 무관 — 국가 페이지 인물 리스트용)
+   */
+  findPersonsByCountryId(countryId: string): Promise<PersonResponseDto[]>
+
+  /**
+   * 해당 현대 국가 또는 연결된 역사적 국가에 소속(affiliation)이 있는 인물 조회
+   * (PersonCountryAffiliation: 출생지·시민권·봉사국 등)
+   */
+  findPersonsByAffiliationInCountry(countryId: string): Promise<PersonResponseDto[]>
+
+  /**
    * ID로 인물 조회 (accountId 있으면 해당 계정 소유만 반환)
    */
   findById(id: string, accountId?: string): Promise<PersonResponseDto | null>

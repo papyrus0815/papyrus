@@ -70,6 +70,25 @@ export class PersonService {
   }
 
   /**
+   * 국가별 인물 전체 조회 (해당 국가와 직접 연결된 인물만, accountId 무관)
+   * - person.countryId = 해당 국가
+   * - 해당 국가(또는 연결된 역사적 국가)에 재임 기록
+   * - PersonCountryAffiliation으로 해당 국가 또는 연결된 역사적 국가 소속 (출생지·시민권·봉사국 등)
+   */
+  async findPersonsByCountry(countryId: string): Promise<PersonResponseDto[]> {
+    const [byCountryId, byTenure, byAffiliation] = await Promise.all([
+      this.personRepository.findPersonsByCountryId(countryId),
+      this.personRepository.findPersonsWithTenureInCountry({ countryId }),
+      this.personRepository.findPersonsByAffiliationInCountry(countryId),
+    ])
+    const byId = new Map<string, PersonResponseDto>()
+    for (const p of byCountryId) byId.set(p.id, p)
+    for (const p of byTenure) if (!byId.has(p.id)) byId.set(p.id, p)
+    for (const p of byAffiliation) if (!byId.has(p.id)) byId.set(p.id, p)
+    return Array.from(byId.values())
+  }
+
+  /**
    * 해당 국가(또는 연결된 역사적 국가)에 재임이 있는 인물만 조회
    */
   async findPersonsWithTenureInCountry(params: {
