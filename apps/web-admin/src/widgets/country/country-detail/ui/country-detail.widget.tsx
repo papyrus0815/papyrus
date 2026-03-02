@@ -325,6 +325,7 @@ function CountryDetailInner({
                         minHeight: 0,
                         display: 'flex',
                         flexDirection: 'column',
+                        overflow: 'auto',
                       }}
                     >
                       {activeSubTab === 'statistics' && country && (

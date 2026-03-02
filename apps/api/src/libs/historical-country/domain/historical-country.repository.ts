@@ -65,6 +65,11 @@ export interface IHistoricalCountryRepository {
   findById(id: string, accountId?: string): Promise<HistoricalCountry | null>
 
   /**
+   * 여러 ID 중 accountId 소유인 것만 조회 (배치 조회 권한 필터용)
+   */
+  findManyByIdsWithAccount(ids: string[], accountId: string): Promise<HistoricalCountry[]>
+
+  /**
    * 역사적 국가에 연결된 현대 국가 ID 목록 조회
    */
   findModernCountryIdsByHistoricalCountryId(id: string): Promise<string[]>

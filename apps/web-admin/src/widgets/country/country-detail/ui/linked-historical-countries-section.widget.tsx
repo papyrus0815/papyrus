@@ -7,7 +7,7 @@
  */
 import React, { useMemo, useState } from 'react'
 
-import { useQueries } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -22,9 +22,9 @@ import {
   type HistoricalMembershipRole,
   type HistoricalRelationType,
   type TransitionEventType,
-  getMembershipsByHistoricalCountryId,
-  getRelationsByHistoricalCountryId,
-  getTransitionsByHistoricalCountryId,
+  getMembershipsByHistoricalCountryIds,
+  getRelationsByHistoricalCountryIds,
+  getTransitionsByHistoricalCountryIds,
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
 import * as CountryStyles from '@/pages/history/country/country.styles'
@@ -225,43 +225,77 @@ const ViewModeTab = styled.button<{ $active?: boolean }>`
   }
 `
 
+const LoadingBarTrack = styled.div`
+  height: 4px;
+  width: 100%;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+`
+const LoadingBarFill = styled.div`
+  height: 100%;
+  width: 40%;
+  background: ${MAIN};
+  border-radius: 2px;
+  animation: loadingBar 1.2s ease-in-out infinite;
+  @keyframes loadingBar {
+    0% {
+      transform: translateX(-100%);
+    }
+    50% {
+      transform: translateX(250%);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+`
+
+const LinkedDataLoadingWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: 16px;
+  color: ${MUTED};
+  font-size: 14px;
+  font-weight: 500;
+`
+const LinkedDataSpinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: ${MAIN};
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`
+
 /** 흐름도: 하단 연도 축과 같은 가로 스케일 — 카드 left/width = 연도 구간 */
 const FLOW_ROW_HEIGHT = 128
 /** 이 연수 미만이면 카드 대신 필(툴팁) 표기 */
 const SHORT_DURATION_YEARS = 20
 
-/** 흐름도 스크롤 — 카드+연도축이 같은 너비로 함께 스크롤, 스크롤바는 막대바 아래. flex:1로 남은 높이 채우고 하단 막대는 항상 뷰 하단에 */
+/** 흐름도 컨텐츠 래퍼 — 스크롤은 상위(전체 영역)에서 처리, 여기서는 overflow 없음 */
 const FlowContentScroll = styled.div`
   width: 100%;
   min-width: 0;
-  flex: 1;
-  min-height: 0;
-  overflow-x: auto;
-  overflow-y: auto;
   padding-bottom: 20px;
   display: flex;
   flex-direction: column;
-  &::-webkit-scrollbar {
-    height: 6px;
-  }
-  &::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-  }
 `
 
-/** 스크롤 안 한 덩어리 — 연도 범위에 따라 최소 너비(한 세기당 더 넓게). flex column으로 하단 축을 항상 아래로 */
+/** 흐름도 내부 — 연도 범위에 따라 최소 너비. 상위에서 스크롤되므로 flex:1 제거 */
 const FLOW_TIMELINE_BASE_MIN_WIDTH = 960
 const FLOW_PX_PER_YEAR = 6
 const FlowScrollInner = styled.div<{ $minWidth: number }>`
   width: 100%;
   min-width: ${(p) => p.$minWidth}px;
-  flex: 1;
-  min-height: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -423,6 +457,81 @@ const RelationBadge = styled.span`
   white-space: nowrap;
 `
 
+/** 전체 보기 모달 — 화면을 채우는 모달 */
+const FlowFullViewOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+`
+
+const FlowFullViewModal = styled.div`
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+`
+
+const FlowFullViewHeader = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid ${BORDER};
+  background: #fafafa;
+`
+
+const FlowFullViewTitle = styled.h2`
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: ${TITLE};
+`
+
+const FlowFullViewCloseBtn = styled.button`
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  background: #ffffff;
+  border: 1px solid ${BORDER};
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+
+  &:hover {
+    background: #f1f5f9;
+    color: ${TITLE};
+    border-color: #cbd5e1;
+  }
+`
+
+const FlowFullViewBody = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  box-sizing: border-box;
+`
+
 export interface LinkedHistoricalCountriesSectionProps {
   country: UnifiedCountry
 }
@@ -460,78 +569,66 @@ function getCountryYearRange(
   return { startYear: s, endYear: e }
 }
 
-/** 연결된 국가 ID 집합 내에서만 유효한 변천만 필터 */
-function useTransitionsWithinLinked(
-  linkedIds: string[],
-): HistoricalCountryTransitionDto[] {
+/** 연결된 국가 ID 기준 변천·관계·소속 일괄 조회 (배치 API 3회, 로딩 상태 반환) */
+function useLinkedTransitionsRelationsMemberships(linkedIds: string[]): {
+  transitions: HistoricalCountryTransitionDto[]
+  relations: HistoricalCountryRelationDto[]
+  memberships: HistoricalCountryMembershipDto[]
+  isLoading: boolean
+} {
   const idSet = useMemo(() => new Set(linkedIds), [linkedIds])
-  const queries = useQueries({
-    queries: linkedIds.map((id) => ({
-      queryKey: ['historical-country-transitions', id],
-      queryFn: () => getTransitionsByHistoricalCountryId(id),
-      enabled: linkedIds.length > 0,
-    })),
+  const { data, isLoading } = useQuery({
+    queryKey: ['historical-country-linked-batch', linkedIds.slice().sort().join(',')],
+    queryFn: async () => {
+      const [transitions, relations, memberships] = await Promise.all([
+        getTransitionsByHistoricalCountryIds(linkedIds),
+        getRelationsByHistoricalCountryIds(linkedIds),
+        getMembershipsByHistoricalCountryIds(linkedIds),
+      ])
+      return { transitions, relations, memberships }
+    },
+    enabled: linkedIds.length > 0,
   })
-  const allData = useMemo(() => queries.flatMap((q) => q.data ?? []), [queries])
-  return useMemo(() => {
+
+  const transitions = useMemo(() => {
+    if (!data?.transitions) return []
     const seen = new Set<string>()
-    return allData.filter((t) => {
+    return data.transitions.filter((t) => {
       if (!idSet.has(t.predecessorId) || !idSet.has(t.successorId)) return false
       if (seen.has(t.id)) return false
       seen.add(t.id)
       return true
     })
-  }, [allData, idSet])
-}
+  }, [data?.transitions, idSet])
 
-/** 연결된 국가 ID 집합 내에서만 유효한 관계만 필터 */
-function useRelationsWithinLinked(
-  linkedIds: string[],
-): HistoricalCountryRelationDto[] {
-  const idSet = useMemo(() => new Set(linkedIds), [linkedIds])
-  const queries = useQueries({
-    queries: linkedIds.map((id) => ({
-      queryKey: ['historical-country-relations', id],
-      queryFn: () => getRelationsByHistoricalCountryId(id),
-      enabled: linkedIds.length > 0,
-    })),
-  })
-  const allData = useMemo(() => queries.flatMap((q) => q.data ?? []), [queries])
-  return useMemo(() => {
+  const relations = useMemo(() => {
+    if (!data?.relations) return []
     const seen = new Set<string>()
-    return allData.filter((r) => {
-      if (!idSet.has(r.subjectCountryId) || !idSet.has(r.objectCountryId))
-        return false
+    return data.relations.filter((r) => {
+      if (!idSet.has(r.subjectCountryId) || !idSet.has(r.objectCountryId)) return false
       if (seen.has(r.id)) return false
       seen.add(r.id)
       return true
     })
-  }, [allData, idSet])
-}
+  }, [data?.relations, idSet])
 
-/** 연결된 국가 ID 집합 내에서만 유효한 소속만 필터 */
-function useMembershipsWithinLinked(
-  linkedIds: string[],
-): HistoricalCountryMembershipDto[] {
-  const idSet = useMemo(() => new Set(linkedIds), [linkedIds])
-  const queries = useQueries({
-    queries: linkedIds.map((id) => ({
-      queryKey: ['historical-country-memberships', id],
-      queryFn: () => getMembershipsByHistoricalCountryId(id),
-      enabled: linkedIds.length > 0,
-    })),
-  })
-  const allData = useMemo(() => queries.flatMap((q) => q.data ?? []), [queries])
-  return useMemo(() => {
+  const memberships = useMemo(() => {
+    if (!data?.memberships) return []
     const seen = new Set<string>()
-    return allData.filter((m) => {
-      if (!idSet.has(m.historicalCountryId) || !idSet.has(m.memberCountryId))
-        return false
+    return data.memberships.filter((m) => {
+      if (!idSet.has(m.historicalCountryId) || !idSet.has(m.memberCountryId)) return false
       if (seen.has(m.id)) return false
       seen.add(m.id)
       return true
     })
-  }, [allData, idSet])
+  }, [data?.memberships, idSet])
+
+  return {
+    transitions,
+    relations,
+    memberships,
+    isLoading,
+  }
 }
 
 /** 한 컴포넌트 내 위상 정렬 (루트→리프) */
@@ -695,10 +792,15 @@ export function LinkedHistoricalCountriesSection({
   const list = country.historicalCountries ?? []
   const count = list.length
   const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
+  const [flowFullViewOpen, setFlowFullViewOpen] = useState(false)
 
-  const transitions = useTransitionsWithinLinked(list.map((h) => h.id))
-  const relations = useRelationsWithinLinked(list.map((h) => h.id))
-  const memberships = useMembershipsWithinLinked(list.map((h) => h.id))
+  const linkedIds = useMemo(() => list.map((h) => h.id), [list])
+  const {
+    transitions,
+    relations,
+    memberships,
+    isLoading: isLinkedDataLoading,
+  } = useLinkedTransitionsRelationsMemberships(linkedIds)
   const idToCountry = useMemo(() => {
     const m = new Map<string, (typeof list)[0]>()
     list.forEach((h) => m.set(h.id, h))
@@ -1093,6 +1195,11 @@ export function LinkedHistoricalCountriesSection({
     totalFlowRows * FLOW_ROW_HEIGHT +
     Math.max(0, totalFlowRows - 1) * FLOW_ROW_GAP
 
+  const flowMinWidth = Math.max(
+    FLOW_TIMELINE_BASE_MIN_WIDTH,
+    (flowYearRange.maxYear - flowYearRange.minYear) * FLOW_PX_PER_YEAR,
+  )
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -1104,8 +1211,8 @@ export function LinkedHistoricalCountriesSection({
         gap: 32,
         padding: '36px 32px 48px',
         background: '#ffffff',
-        flex: 1,
-        minHeight: 0,
+        flex: viewMode === 'flow' ? '0 0 auto' : 1,
+        minHeight: viewMode === 'flow' ? 'auto' : 0,
         position: 'relative',
       }}
     >
@@ -1119,99 +1226,6 @@ export function LinkedHistoricalCountriesSection({
           </CountryStyles.HeroTextGroup>
         </CountryStyles.HeroContent>
       </CountryStyles.GlobalDashboardHero>
-
-      {/* 요약 지표 — 행정조직과 동일 톤 */}
-      <section aria-label="연결된 역사적 국가 요약">
-        <SectionLabel>요약 지표</SectionLabel>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-            gap: 20,
-          }}
-        >
-          <StatCard
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            }
-            title="연결된 역사적 국가"
-            value={count}
-            unit="개"
-          />
-          <StatCard
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            }
-            title="변천 관계"
-            value={transitions.length}
-            unit="건"
-          />
-          <StatCard
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            }
-            title="수평 관계"
-            value={relations.length}
-            unit="건"
-          />
-          <StatCard
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-            }
-            title="소속 관계"
-            value={memberships.length}
-            unit="건"
-          />
-        </div>
-      </section>
 
       {/* 탭: 목록 | 흐름도 */}
       <div
@@ -1247,7 +1261,110 @@ export function LinkedHistoricalCountriesSection({
         </span>
       </div>
 
-      {viewMode === 'list' && (
+      {isLinkedDataLoading && (
+        <LoadingBarTrack role="progressbar" aria-label="데이터 로딩 중">
+          <LoadingBarFill />
+        </LoadingBarTrack>
+      )}
+
+      {isLinkedDataLoading ? (
+        <LinkedDataLoadingWrap>
+          <LinkedDataSpinner />
+          <span>변천·관계·소속 데이터를 불러오는 중...</span>
+        </LinkedDataLoadingWrap>
+      ) : viewMode === 'list' ? (
+        <>
+        <section aria-label="연결된 역사적 국가 요약">
+          <SectionLabel>요약 지표</SectionLabel>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+              gap: 20,
+            }}
+          >
+            <StatCard
+              icon={
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+              }
+              title="연결된 역사적 국가"
+              value={count}
+              unit="개"
+            />
+            <StatCard
+              icon={
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              }
+              title="변천 관계"
+              value={transitions.length}
+              unit="건"
+            />
+            <StatCard
+              icon={
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              }
+              title="수평 관계"
+              value={relations.length}
+              unit="건"
+            />
+            <StatCard
+              icon={
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              }
+              title="소속 관계"
+              value={memberships.length}
+              unit="건"
+            />
+          </div>
+        </section>
         <section aria-label="연결된 역사적 국가 목록">
           <SectionLabel>역사적 국가 목록</SectionLabel>
           {count === 0 ? (
@@ -1280,20 +1397,47 @@ export function LinkedHistoricalCountriesSection({
             </div>
           )}
         </section>
-      )}
-
-      {viewMode === 'flow' && (
+        </>
+      ) : (
         <section
           aria-label="국가 계보 흐름도"
           style={{
             display: 'flex',
             flexDirection: 'column',
-            flex: 1,
-            minHeight: 0,
-            overflow: 'hidden',
+            width: '100%',
+            minWidth: 0,
           }}
         >
-          <SectionLabel>국가 계보 흐름도</SectionLabel>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 12,
+              marginBottom: 18,
+            }}
+          >
+            <SectionLabel>국가 계보 흐름도</SectionLabel>
+            {count > 0 && (
+              <button
+                type="button"
+                onClick={() => setFlowFullViewOpen(true)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#4f46e5',
+                  background: '#eef2ff',
+                  border: '1px solid #c7d2fe',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                전체 보기
+              </button>
+            )}
+          </div>
           {count === 0 ? (
             <EmptyCard>
               이 현대 국가에 연결된 역사적 국가가 없습니다. 역사적 국가를 등록한
@@ -1306,20 +1450,11 @@ export function LinkedHistoricalCountriesSection({
                 flexDirection: 'column',
                 gap: 0,
                 width: '100%',
-                minWidth: 0,
-                flex: 1,
-                minHeight: 0,
-                overflow: 'hidden',
+                minWidth: flowMinWidth,
               }}
             >
               <FlowContentScroll>
-                <FlowScrollInner
-                  $minWidth={Math.max(
-                    FLOW_TIMELINE_BASE_MIN_WIDTH,
-                    (flowYearRange.maxYear - flowYearRange.minYear) *
-                      FLOW_PX_PER_YEAR,
-                  )}
-                >
+                <FlowScrollInner $minWidth={flowMinWidth}>
                   <FlowContent>
                     {totalFlowRows > 0 &&
                       flowConnectorsByBranch.length > 0 && (
@@ -1763,6 +1898,559 @@ export function LinkedHistoricalCountriesSection({
             </div>
           )}
         </section>
+      )}
+
+      {flowFullViewOpen && viewMode === 'flow' && count > 0 && (
+        <FlowFullViewOverlay
+          onClick={() => setFlowFullViewOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="flow-fullview-title"
+        >
+          <FlowFullViewModal onClick={(e) => e.stopPropagation()}>
+            <FlowFullViewHeader>
+              <FlowFullViewTitle id="flow-fullview-title">
+                국가 계보 흐름도 — 전체 보기
+              </FlowFullViewTitle>
+              <FlowFullViewCloseBtn
+                type="button"
+                onClick={() => setFlowFullViewOpen(false)}
+              >
+                닫기
+              </FlowFullViewCloseBtn>
+            </FlowFullViewHeader>
+            <FlowFullViewBody>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0,
+                  width: '100%',
+                  minWidth: flowMinWidth,
+                }}
+              >
+                <FlowContentScroll>
+                  <FlowScrollInner $minWidth={flowMinWidth}>
+                    <FlowContent>
+                      {totalFlowRows > 0 &&
+                        flowConnectorsByBranch.length > 0 && (
+                          <div
+                            aria-hidden
+                            style={{
+                              position: 'absolute',
+                              left: 0,
+                              top: 0,
+                              width: '100%',
+                              height: flowRowsTotalHeight,
+                              pointerEvents: 'none',
+                              zIndex: 10,
+                            }}
+                          >
+                            <svg
+                              width="100%"
+                              height={flowRowsTotalHeight}
+                              style={{ display: 'block' }}
+                              preserveAspectRatio="none"
+                              viewBox={`0 0 100 ${flowRowsTotalHeight}`}
+                            >
+                              {flowConnectorsByBranch.map((group, i) => {
+                                const midX =
+                                  group.list.reduce(
+                                    (s, c) => s + c.toCenterPct,
+                                    0,
+                                  ) / group.list.length
+                                const fromX = group.fromCenterPct
+                                const rowCenter = (r: number) =>
+                                  16 +
+                                  (r + 0.5) * (FLOW_ROW_HEIGHT + FLOW_ROW_GAP) -
+                                  FLOW_ROW_GAP / 2
+                                const fromY = rowCenter(group.fromGlobalRow)
+                                const toY = rowCenter(group.toGlobalRow)
+                                return (
+                                  <line
+                                    key={i}
+                                    x1={fromX}
+                                    y1={fromY}
+                                    x2={midX}
+                                    y2={toY}
+                                    stroke="#a5b4fc"
+                                    strokeWidth={1.5}
+                                    strokeLinecap="round"
+                                    vectorEffect="non-scaling-stroke"
+                                  />
+                                )
+                              })}
+                            </svg>
+                            {flowConnectorsByBranch.map((group, i) => {
+                              const midX =
+                                group.list.reduce(
+                                  (s, c) => s + c.toCenterPct,
+                                  0,
+                                ) / group.list.length
+                              const toY =
+                                16 +
+                                (group.toGlobalRow + 0.5) * (FLOW_ROW_HEIGHT + FLOW_ROW_GAP) -
+                                FLOW_ROW_GAP / 2
+                              const labelText =
+                                group.type === 'successor'
+                                  ? (TRANSITION_EVENT_LABELS[
+                                      group.list[0]?.eventType as TransitionEventType
+                                    ] ?? '계승')
+                                  : group.type === 'personal_union'
+                                    ? '동군연합'
+                                    : group.list[0]?.type === 'membership' &&
+                                        group.list[0]?.membershipRole
+                                      ? group.list[0].isLeadingMember
+                                        ? '연방·주축'
+                                        : (MEMBERSHIP_ROLE_LABELS[
+                                            group.list[0].membershipRole as keyof typeof MEMBERSHIP_ROLE_LABELS
+                                          ] ?? group.list[0].membershipRole)
+                                      : ''
+                              return labelText ? (
+                                <div
+                                  key={`label-${i}`}
+                                  style={{
+                                    position: 'absolute',
+                                    left: `${midX}%`,
+                                    top: toY,
+                                    transform: 'translate(-50%, -100%)',
+                                    marginBottom: -4,
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    color: '#64748b',
+                                    background: '#f8fafc',
+                                    padding: '3px 8px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e2e8f0',
+                                    whiteSpace: 'nowrap',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                                  }}
+                                >
+                                  {labelText}
+                                </div>
+                              ) : null
+                            })}
+                          </div>
+                        )}
+                    {flowRowsByChain.flatMap((rows, chainIdx) =>
+                      rows.map((orderedChain, rowIdx) => {
+                        const range =
+                          flowYearRange.maxYear - flowYearRange.minYear
+                        const toPct = (y: number) =>
+                          range === 0
+                            ? 0
+                            : ((y - flowYearRange.minYear) / range) * 100
+                        return (
+                          <FlowRow key={`${chainIdx}-${rowIdx}`}>
+                            {orderedChain.map((id, index) => {
+                              const h = idToCountry.get(id)
+                              const yr = h ? getCountryYearRange(h) : null
+                              if (!h || !yr) return null
+                              const leftPct = toPct(yr.startYear)
+                              const endPct = toPct(yr.endYear)
+                              const widthPct = Math.max(
+                                0.5,
+                                endPct - leftPct,
+                              )
+                              const spanYears = yr.endYear - yr.startYear
+                              const isShortDuration =
+                                spanYears < SHORT_DURATION_YEARS
+                              const nextId = orderedChain[index + 1]
+                              const transition = nextId
+                                ? transitionByEdge.get(`${id}\t${nextId}`)
+                                : null
+                              const rels = countryRelations.get(id) ?? {
+                                transitions: [],
+                                relations: [],
+                                memberships: [],
+                              }
+                              const hasPersonalUnionWithNext =
+                                !!nextId &&
+                                !transition &&
+                                rels.relations.some(
+                                  (r) =>
+                                    (r.subjectCountryId === nextId ||
+                                      r.objectCountryId === nextId) &&
+                                    r.relationType === 'PERSONAL_UNION',
+                                )
+                              const connectorPct = toPct(yr.endYear)
+                              const periodText = formatPeriod({
+                                startEra: h.startEra,
+                                startYear: h.startYear,
+                                endEra: h.endEra,
+                                endYear: h.endYear,
+                              })
+                              const tooltipText = `${h.name} (${periodText})`
+                              return (
+                                <React.Fragment key={id}>
+                                  {isShortDuration ? (
+                                    <FlowCardPill
+                                      type="button"
+                                      $leftPct={leftPct}
+                                      $widthPct={widthPct}
+                                      title={tooltipText}
+                                      onClick={() =>
+                                        navigate(
+                                          pathKeys.history.countryDetail(h.id),
+                                        )
+                                      }
+                                    >
+                                      <span
+                                        style={{
+                                          fontSize: 13,
+                                          fontWeight: 600,
+                                          color: TITLE,
+                                        }}
+                                      >
+                                        {h.name}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: 11,
+                                          color: MUTED,
+                                        }}
+                                      >
+                                        {periodText}
+                                      </span>
+                                    </FlowCardPill>
+                                  ) : (
+                                    <FlowCard
+                                      type="button"
+                                      $leftPct={leftPct}
+                                      $widthPct={widthPct}
+                                      title={tooltipText}
+                                      onClick={() =>
+                                        navigate(
+                                          pathKeys.history.countryDetail(h.id),
+                                        )
+                                      }
+                                    >
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 10,
+                                          minWidth: 0,
+                                        }}
+                                      >
+                                        {h.thumbnailUrl ? (
+                                          <img
+                                            src={h.thumbnailUrl}
+                                            alt=""
+                                            style={{
+                                              width: 32,
+                                              height: 20,
+                                              objectFit: 'cover',
+                                              borderRadius: 4,
+                                            }}
+                                          />
+                                        ) : (
+                                          <span
+                                            style={{
+                                              width: 32,
+                                              height: 20,
+                                              borderRadius: 4,
+                                              background: BORDER,
+                                              display: 'inline-block',
+                                            }}
+                                          />
+                                        )}
+                                        <div
+                                          style={{
+                                            flex: 1,
+                                            minWidth: 0,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {h.name}
+                                        </div>
+                                      </div>
+                                      {rowIdx === 0 && (() => {
+                                        const incoming =
+                                          incomingRelationsByMainId.get(id)
+                                        if (
+                                          !incoming ||
+                                          (incoming.successor.length === 0 &&
+                                            incoming.personalUnion.length === 0 &&
+                                            incoming.membership.length === 0)
+                                        )
+                                          return null
+                                        return (
+                                          <div
+                                            style={{
+                                              marginTop: 4,
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              gap: 6,
+                                            }}
+                                          >
+                                            {incoming.successor.length > 0 &&
+                                              (() => {
+                                                const byEventType = new Map<
+                                                  string,
+                                                  Array<{
+                                                    fromId: string
+                                                    eventType?: TransitionEventType
+                                                  }>
+                                                >()
+                                                incoming.successor.forEach(
+                                                  (s) => {
+                                                    const key =
+                                                      s.eventType ?? 'SUCCESSION'
+                                                    if (!byEventType.has(key))
+                                                      byEventType.set(key, [])
+                                                    byEventType
+                                                      .get(key)!
+                                                      .push(s)
+                                                  },
+                                                )
+                                                return Array.from(
+                                                  byEventType.entries(),
+                                                ).map(([eventType, list]) => (
+                                                  <div
+                                                    key={eventType}
+                                                    style={{
+                                                      display: 'flex',
+                                                      flexWrap: 'wrap',
+                                                      gap: 4,
+                                                      alignItems: 'center',
+                                                    }}
+                                                  >
+                                                    <span
+                                                      style={{
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        color: '#64748b',
+                                                        marginRight: 2,
+                                                      }}
+                                                    >
+                                                      {TRANSITION_EVENT_LABELS[
+                                                        eventType as TransitionEventType
+                                                      ] ?? '계승'}
+                                                    </span>
+                                                    {list.map((s) => (
+                                                      <span
+                                                        key={`s-${s.fromId}`}
+                                                        title={`${TRANSITION_EVENT_LABELS[s.eventType as TransitionEventType] ?? '계승'}: ${idToCountry.get(s.fromId)?.name ?? s.fromId}`}
+                                                        style={{
+                                                          flexShrink: 0,
+                                                          fontSize: 10,
+                                                          fontWeight: 600,
+                                                          color: '#4f46e5',
+                                                          background: '#eef2ff',
+                                                          padding: '2px 6px',
+                                                          borderRadius: 4,
+                                                          border: '1px solid #c7d2fe',
+                                                        }}
+                                                      >
+                                                        ←{' '}
+                                                        {idToCountry.get(s.fromId)
+                                                          ?.name ?? s.fromId}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                ))
+                                              })()}
+                                            {incoming.personalUnion.length > 0 && (
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  flexWrap: 'wrap',
+                                                  gap: 4,
+                                                  alignItems: 'center',
+                                                }}
+                                              >
+                                                <span
+                                                  style={{
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    color: '#64748b',
+                                                    marginRight: 2,
+                                                  }}
+                                                >
+                                                  동군연합
+                                                </span>
+                                                {incoming.personalUnion.map(
+                                                  (bid) => (
+                                                    <span
+                                                      key={`p-${bid}`}
+                                                      style={{
+                                                        flexShrink: 0,
+                                                        fontSize: 10,
+                                                        fontWeight: 600,
+                                                        color: '#6366f1',
+                                                        background: '#f5f3ff',
+                                                        padding: '2px 6px',
+                                                        borderRadius: 4,
+                                                        border: '1px solid #ddd6fe',
+                                                      }}
+                                                    >
+                                                      {idToCountry.get(bid)
+                                                        ?.name ?? bid}
+                                                    </span>
+                                                  ),
+                                                )}
+                                              </div>
+                                            )}
+                                            {incoming.membership.length > 0 && (
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  flexWrap: 'wrap',
+                                                  gap: 4,
+                                                  alignItems: 'center',
+                                                }}
+                                              >
+                                                <span
+                                                  style={{
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    color: '#64748b',
+                                                    marginRight: 2,
+                                                  }}
+                                                >
+                                                  연방
+                                                </span>
+                                                {incoming.membership.map(
+                                                  (m) => (
+                                                    <span
+                                                      key={`m-${m.id}`}
+                                                      style={{
+                                                        flexShrink: 0,
+                                                        fontSize: 10,
+                                                        fontWeight: 600,
+                                                        color: '#64748b',
+                                                        background: '#f1f5f9',
+                                                        padding: '2px 6px',
+                                                        borderRadius: 4,
+                                                        border: '1px solid #e2e8f0',
+                                                      }}
+                                                    >
+                                                      {idToCountry.get(m.id)
+                                                        ?.name ?? m.id}
+                                                    </span>
+                                                  ),
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )
+                                      })()}
+                                      <div
+                                        style={{
+                                          fontSize: 11,
+                                          color: MUTED,
+                                          marginTop: 2,
+                                        }}
+                                      >
+                                        {periodText}
+                                      </div>
+                                      <div
+                                        style={{
+                                          marginTop: 4,
+                                          display: 'flex',
+                                          flexWrap: 'wrap',
+                                          gap: 4,
+                                        }}
+                                      >
+                                        <RelationBadge>
+                                          {getStateTypeLabel(h.stateType)}
+                                        </RelationBadge>
+                                      </div>
+                                      <FlowCardRelations
+                                        rels={rels}
+                                        idToCountry={idToCountry}
+                                        currentId={id}
+                                      />
+                                    </FlowCard>
+                                  )}
+                                  {transition && (
+                                    <FlowConnector
+                                      $leftPct={connectorPct}
+                                      title={
+                                        TRANSITION_EVENT_LABELS[
+                                          transition.eventType as TransitionEventType
+                                        ] ?? transition.eventType
+                                      }
+                                    >
+                                      <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="#6366f1"
+                                        strokeWidth="2.5"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <path d="M5 12h14M12 5l7 7-7 7" />
+                                      </svg>
+                                    </FlowConnector>
+                                  )}
+                                  {hasPersonalUnionWithNext && (
+                                    <FlowConnector
+                                      $leftPct={connectorPct}
+                                      title="동군연합"
+                                    >
+                                      <svg
+                                        width="14"
+                                        height="14"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="#6366f1"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                      </svg>
+                                    </FlowConnector>
+                                  )}
+                                </React.Fragment>
+                              )
+                            })}
+                          </FlowRow>
+                        )
+                      }),
+                    )}
+                    </FlowContent>
+                    <FlowBottomAxisWrap>
+                      <FlowBottomAxisTrack>
+                        <FlowBottomAxisBar />
+                        {flowYearRange.labels.map((year) => {
+                          const range =
+                            flowYearRange.maxYear - flowYearRange.minYear
+                          const leftPct =
+                            range === 0
+                              ? 50
+                              : ((year - flowYearRange.minYear) / range) * 100
+                          const label =
+                            flowYearRange.currentYear != null &&
+                            year === flowYearRange.currentYear
+                              ? '현재'
+                              : year < 0
+                                ? `BC ${Math.abs(year)}`
+                                : String(year)
+                          return (
+                            <FlowBottomAxisLabel
+                              key={year}
+                              $leftPct={leftPct}
+                            >
+                              {label}
+                            </FlowBottomAxisLabel>
+                          )
+                        })}
+                      </FlowBottomAxisTrack>
+                    </FlowBottomAxisWrap>
+                  </FlowScrollInner>
+                </FlowContentScroll>
+              </div>
+            </FlowFullViewBody>
+          </FlowFullViewModal>
+        </FlowFullViewOverlay>
       )}
     </motion.div>
   )

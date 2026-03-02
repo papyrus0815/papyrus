@@ -16,11 +16,18 @@ export class HistoricalCountryRelationPrismaRepository
   async findManyByHistoricalCountryId(
     historicalCountryId: string,
   ): Promise<HistoricalCountryRelationRecord[]> {
+    return this.findManyByHistoricalCountryIds([historicalCountryId])
+  }
+
+  async findManyByHistoricalCountryIds(
+    historicalCountryIds: string[],
+  ): Promise<HistoricalCountryRelationRecord[]> {
+    if (historicalCountryIds.length === 0) return []
     const rows = await this.prisma.historicalCountryRelation.findMany({
       where: {
         OR: [
-          { subjectCountryId: historicalCountryId },
-          { objectCountryId: historicalCountryId },
+          { subjectCountryId: { in: historicalCountryIds } },
+          { objectCountryId: { in: historicalCountryIds } },
         ],
       },
       include: {

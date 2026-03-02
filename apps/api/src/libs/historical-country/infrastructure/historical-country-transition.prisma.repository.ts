@@ -67,11 +67,18 @@ export class HistoricalCountryTransitionPrismaRepository
   async findManyByHistoricalCountryId(
     historicalCountryId: string,
   ): Promise<HistoricalCountryTransitionRecord[]> {
+    return this.findManyByHistoricalCountryIds([historicalCountryId])
+  }
+
+  async findManyByHistoricalCountryIds(
+    historicalCountryIds: string[],
+  ): Promise<HistoricalCountryTransitionRecord[]> {
+    if (historicalCountryIds.length === 0) return []
     const rows = await this.prisma.historicalCountryTransition.findMany({
       where: {
         OR: [
-          { predecessorId: historicalCountryId },
-          { successorId: historicalCountryId },
+          { predecessorId: { in: historicalCountryIds } },
+          { successorId: { in: historicalCountryIds } },
         ],
       },
       include: {

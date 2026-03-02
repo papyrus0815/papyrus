@@ -8,6 +8,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common'
@@ -58,6 +59,54 @@ export class HistoricalCountryController {
     const countries =
       await this.historicalCountryService.getAllHistoricalCountries(accountId)
     return countries.map((country) => this.toResponseDto(country))
+  }
+
+  /**
+   * 여러 역사적 국가의 계승·변천 목록 일괄 조회 (ids 쿼리: 쉼표 구분)
+   * @tag historical-countries
+   */
+  @Get('by-ids/transitions')
+  async getTransitionsByHistoricalCountryIds(
+    @Query('ids') idsQuery: string,
+    @Request() req: any,
+  ): Promise<HistoricalCountryTransitionResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const ids = idsQuery ? idsQuery.split(',').map((s) => s.trim()).filter(Boolean) : []
+    const list =
+      await this.historicalCountryService.getTransitionsByHistoricalCountryIds(ids, accountId)
+    return list.map((t) => this.transitionToResponseDto(t))
+  }
+
+  /**
+   * 여러 역사적 국가의 소속·구성 목록 일괄 조회 (ids 쿼리: 쉼표 구분)
+   * @tag historical-countries
+   */
+  @Get('by-ids/memberships')
+  async getMembershipsByHistoricalCountryIds(
+    @Query('ids') idsQuery: string,
+    @Request() req: any,
+  ): Promise<HistoricalCountryMembershipResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const ids = idsQuery ? idsQuery.split(',').map((s) => s.trim()).filter(Boolean) : []
+    const list =
+      await this.historicalCountryService.getMembershipsByHistoricalCountryIds(ids, accountId)
+    return list.map((m) => this.membershipToResponseDto(m))
+  }
+
+  /**
+   * 여러 역사적 국가의 수평 관계 목록 일괄 조회 (ids 쿼리: 쉼표 구분)
+   * @tag historical-countries
+   */
+  @Get('by-ids/relations')
+  async getRelationsByHistoricalCountryIds(
+    @Query('ids') idsQuery: string,
+    @Request() req: any,
+  ): Promise<HistoricalCountryRelationResponseDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    const ids = idsQuery ? idsQuery.split(',').map((s) => s.trim()).filter(Boolean) : []
+    const list =
+      await this.historicalCountryService.getRelationsByHistoricalCountryIds(ids, accountId)
+    return list.map((r) => this.relationToResponseDto(r))
   }
 
   /**

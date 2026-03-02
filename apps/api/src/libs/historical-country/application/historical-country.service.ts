@@ -187,6 +187,22 @@ export class HistoricalCountryService {
   }
 
   /**
+   * 여러 역사적 국가가 관여된 계승·변천 목록 일괄 조회 (accountId 있으면 소유분만)
+   */
+  async getTransitionsByHistoricalCountryIds(
+    historicalCountryIds: string[],
+    accountId?: string,
+  ): Promise<HistoricalCountryTransitionRecord[]> {
+    const ids =
+      accountId && historicalCountryIds.length > 0
+        ? (await this.repository.findManyByIdsWithAccount(historicalCountryIds, accountId)).map(
+            (c) => c.id,
+          )
+        : historicalCountryIds
+    return this.transitionRepository.findManyByHistoricalCountryIds(ids)
+  }
+
+  /**
    * 계승/변천 생성 (전임·후임 국가 모두 본인 소유여야 함)
    */
   async createTransition(
@@ -271,6 +287,22 @@ export class HistoricalCountryService {
     return this.membershipRepository.findManyByHistoricalCountryId(historicalCountryId)
   }
 
+  /**
+   * 여러 역사적 국가의 소속·구성 목록 일괄 조회 (accountId 있으면 소유분만)
+   */
+  async getMembershipsByHistoricalCountryIds(
+    historicalCountryIds: string[],
+    accountId?: string,
+  ): Promise<HistoricalCountryMembershipRecord[]> {
+    const ids =
+      accountId && historicalCountryIds.length > 0
+        ? (await this.repository.findManyByIdsWithAccount(historicalCountryIds, accountId)).map(
+            (c) => c.id,
+          )
+        : historicalCountryIds
+    return this.membershipRepository.findManyByHistoricalCountryIds(ids)
+  }
+
   async createMembership(
     data: CreateMembershipData,
     accountId?: string,
@@ -339,6 +371,22 @@ export class HistoricalCountryService {
   ): Promise<HistoricalCountryRelationRecord[]> {
     await this.getHistoricalCountryById(historicalCountryId, accountId)
     return this.relationRepository.findManyByHistoricalCountryId(historicalCountryId)
+  }
+
+  /**
+   * 여러 역사적 국가가 관여된 수평 관계 목록 일괄 조회 (accountId 있으면 소유분만)
+   */
+  async getRelationsByHistoricalCountryIds(
+    historicalCountryIds: string[],
+    accountId?: string,
+  ): Promise<HistoricalCountryRelationRecord[]> {
+    const ids =
+      accountId && historicalCountryIds.length > 0
+        ? (await this.repository.findManyByIdsWithAccount(historicalCountryIds, accountId)).map(
+            (c) => c.id,
+          )
+        : historicalCountryIds
+    return this.relationRepository.findManyByHistoricalCountryIds(ids)
   }
 
   async createRelation(

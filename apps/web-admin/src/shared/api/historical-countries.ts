@@ -361,6 +361,52 @@ export async function getRelationsByHistoricalCountryId(
   return data?.data ?? data
 }
 
+/** 여러 역사적 국가의 변천·소속·관계 일괄 조회 (호출 3회로 통합) */
+export async function getTransitionsByHistoricalCountryIds(
+  historicalCountryIds: string[],
+): Promise<HistoricalCountryTransitionDto[]> {
+  if (historicalCountryIds.length === 0) return []
+  const conn = getApiConnection()
+  const ids = historicalCountryIds.join(',')
+  const res = await fetch(
+    `${conn.host}/historical-countries/by-ids/transitions?ids=${encodeURIComponent(ids)}`,
+    { method: 'GET', headers: { ...conn.headers } },
+  )
+  if (!res.ok) throw new Error(await res.text())
+  const data = (await res.json()) as any
+  return data?.data ?? data
+}
+
+export async function getMembershipsByHistoricalCountryIds(
+  historicalCountryIds: string[],
+): Promise<HistoricalCountryMembershipDto[]> {
+  if (historicalCountryIds.length === 0) return []
+  const conn = getApiConnection()
+  const ids = historicalCountryIds.join(',')
+  const res = await fetch(
+    `${conn.host}/historical-countries/by-ids/memberships?ids=${encodeURIComponent(ids)}`,
+    { method: 'GET', headers: { ...conn.headers } },
+  )
+  if (!res.ok) throw new Error(await res.text())
+  const data = (await res.json()) as any
+  return data?.data ?? data
+}
+
+export async function getRelationsByHistoricalCountryIds(
+  historicalCountryIds: string[],
+): Promise<HistoricalCountryRelationDto[]> {
+  if (historicalCountryIds.length === 0) return []
+  const conn = getApiConnection()
+  const ids = historicalCountryIds.join(',')
+  const res = await fetch(
+    `${conn.host}/historical-countries/by-ids/relations?ids=${encodeURIComponent(ids)}`,
+    { method: 'GET', headers: { ...conn.headers } },
+  )
+  if (!res.ok) throw new Error(await res.text())
+  const data = (await res.json()) as any
+  return data?.data ?? data
+}
+
 export async function createHistoricalCountryRelation(
   data: CreateHistoricalCountryRelationDto,
 ): Promise<HistoricalCountryRelationDto> {

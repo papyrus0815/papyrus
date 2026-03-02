@@ -29,6 +29,7 @@ export interface UpdateRelationData {
 
 export interface IHistoricalCountryRelationRepository {
   findManyByHistoricalCountryId(historicalCountryId: string): Promise<HistoricalCountryRelationRecord[]>
+  findManyByHistoricalCountryIds(historicalCountryIds: string[]): Promise<HistoricalCountryRelationRecord[]>
   findById(id: string): Promise<HistoricalCountryRelationRecord | null>
   create(data: CreateRelationData): Promise<HistoricalCountryRelationRecord>
   update(id: string, data: UpdateRelationData): Promise<HistoricalCountryRelationRecord>

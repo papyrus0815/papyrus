@@ -25,6 +25,7 @@ export interface UpdateTransitionData {
 
 export interface IHistoricalCountryTransitionRepository {
   findManyByHistoricalCountryId(historicalCountryId: string): Promise<HistoricalCountryTransitionRecord[]>
+  findManyByHistoricalCountryIds(historicalCountryIds: string[]): Promise<HistoricalCountryTransitionRecord[]>
   findById(id: string): Promise<HistoricalCountryTransitionRecord | null>
   create(data: CreateTransitionData): Promise<HistoricalCountryTransitionRecord>
   update(id: string, data: UpdateTransitionData): Promise<HistoricalCountryTransitionRecord>

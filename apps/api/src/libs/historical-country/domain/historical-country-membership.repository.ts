@@ -32,6 +32,7 @@ export interface UpdateMembershipData {
 
 export interface IHistoricalCountryMembershipRepository {
   findManyByHistoricalCountryId(historicalCountryId: string): Promise<HistoricalCountryMembershipRecord[]>
+  findManyByHistoricalCountryIds(historicalCountryIds: string[]): Promise<HistoricalCountryMembershipRecord[]>
   findManyByMemberCountryId(memberCountryId: string): Promise<HistoricalCountryMembershipRecord[]>
   findById(id: string): Promise<HistoricalCountryMembershipRecord | null>
   create(data: CreateMembershipData): Promise<HistoricalCountryMembershipRecord>
