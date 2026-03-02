@@ -7,6 +7,11 @@ export class CreateCountryDto {
   @IsNotEmpty()
   name!: string
 
+  @ApiProperty({ description: '공식/전체 명칭 (예: 대한민국, Republic of Korea)', required: false })
+  @IsString()
+  @IsOptional()
+  fullName?: string
+
   @ApiProperty({ description: '로컬 국가명', required: false })
   @IsString()
   @IsOptional()

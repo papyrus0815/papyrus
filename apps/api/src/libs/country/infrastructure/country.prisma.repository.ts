@@ -103,6 +103,7 @@ export class CountryPrismaRepository implements CountryRepository {
     const country = await this.prisma.country.create({
       data: {
         name: data.name,
+        fullName: data.fullName,
         localName: data.localName,
         flagEmoji: data.flagEmoji,
         isoCode: data.isoCode,
@@ -127,6 +128,7 @@ export class CountryPrismaRepository implements CountryRepository {
       where: { id },
       data: {
         name: data.name,
+        fullName: data.fullName,
         localName: data.localName,
         flagEmoji: data.flagEmoji,
         isoCode: data.isoCode,
@@ -176,6 +178,7 @@ export class CountryPrismaRepository implements CountryRepository {
     return new Country({
       id: data.id,
       name: data.name,
+      fullName: data.fullName,
       localName: data.localName,
       flagEmoji: data.flagEmoji,
       isoCode: data.isoCode,

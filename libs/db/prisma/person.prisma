@@ -159,6 +159,10 @@ model Person {
   childrenFromMother Person[]              @relation("ParentChildMother")
   foundedCompanies   Company[]             @relation("FounderToCompany")
 
+  // 배우자 관계 (혼인 시작/종료일 등)
+  spouseRelationsAsPerson PersonSpouse[]   @relation("PersonAsPerson")
+  spouseRelationsAsSpouse PersonSpouse[]   @relation("PersonAsSpouse")
+
   // 새로운 국가 관계
   countryAffiliations PersonCountryAffiliation[]
 
@@ -215,6 +219,29 @@ model Person {
   @@index([birthCityId], name: "idx_person_birthCityId")
   @@index([deathCityId], name: "idx_person_deathCityId")
   @@map("person")
+}
+
+// ========================
+// PersonSpouse (배우자 관계)
+// ========================
+/// 인물 간 배우자 관계. 혼인 기간·비고 관리.
+model PersonSpouse {
+  id                String    @id @default(uuid()) @db.Char(36)
+  personId          String    @map("person_id") @db.Char(36)
+  spouseId          String    @map("spouse_id") @db.Char(36)
+  marriageStartDate DateTime? @map("marriage_start_date") @db.DateTime(3)
+  marriageEndDate   DateTime? @map("marriage_end_date") @db.DateTime(3)
+  note              String?   @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  person Person @relation("PersonAsPerson", fields: [personId], references: [id], onDelete: Cascade)
+  spouse Person @relation("PersonAsSpouse", fields: [spouseId], references: [id], onDelete: Cascade)
+
+  @@index([personId], name: "idx_person_spouse_personId")
+  @@index([spouseId], name: "idx_person_spouse_spouseId")
+  @@unique([personId, spouseId], name: "person_spouse_person_id_spouse_id_key")
+  @@map("person_spouse")
 }
 
 // ========================

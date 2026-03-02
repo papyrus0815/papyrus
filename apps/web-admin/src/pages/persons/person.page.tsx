@@ -175,7 +175,7 @@ export default function PersonPage() {
     }
   }, [draggingHandle, getCenturyFromClientX, setCenturyStart, setCenturyEnd])
 
-  /** 인물 선택 시 로딩을 먼저 보여주고 ID 변경 (바뀐 정보가 잠깐 노출되지 않도록) */
+  /** 인물 선택 시 로딩 표시 후 ID 변경 */
   const handleSelectPerson = (id: string) => {
     if (id !== selectedPersonId) setIsDetailLoading(true)
     setSelectedPersonId(id)
@@ -184,17 +184,19 @@ export default function PersonPage() {
   /** 닫는 동안은 2열 유지해 카드가 커졌다 작아지는 현상 방지 */
   const hasDetailLayout = !!selectedPersonId || isClosing
 
-  /** 현재 페이지 인물을 세기별로 그룹 (최신 세기 먼저: 21 → 0) */
+  /** 현재 페이지 인물을 세기별로 그룹 (최신 세기 먼저: 21 → 0, 세기 미상은 마지막) */
+  const CENTURY_UNKNOWN = 999
   const personsByCentury = useMemo(() => {
     const map = new Map<number, (typeof paginatedPersons)[number][]>()
+    const birthYearOf = (p: any) => p?.birthYear ?? p?.birth_year
     paginatedPersons.forEach((p) => {
-      const c = getCentury((p as { birthYear?: number }).birthYear, p.birthEra)
-      if (c != null) {
-        if (!map.has(c)) map.set(c, [])
-        map.get(c)!.push(p)
-      }
+      const year = birthYearOf(p)
+      const c = getCentury(year, p?.birthEra ?? p?.birth_era)
+      const key = c != null ? c : CENTURY_UNKNOWN
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(p)
     })
-    return Array.from(map.entries()).sort(([a], [b]) => b - a)
+    return Array.from(map.entries()).sort(([a], [b]) => (a === CENTURY_UNKNOWN ? 1 : b === CENTURY_UNKNOWN ? -1 : b - a))
   }, [paginatedPersons, getCentury])
 
   useEffect(() => {
@@ -443,10 +445,10 @@ export default function PersonPage() {
                 setShowRegisterForm(false)
                 setEditingPersonId(null)
               }}
-              onSuccess={(personId) => {
+              onSuccess={() => {
                 setShowRegisterForm(false)
                 setEditingPersonId(null)
-                setSelectedPersonId(personId)
+                setSelectedPersonId(null)
               }}
             />
           </RegisterFormWrap>
@@ -558,7 +560,7 @@ export default function PersonPage() {
             type="button"
             onClick={() => setShowSortModal(true)}
           >
-            <span>{sortBy === 'birthYear' ? '연생순' : '국가순'}</span>
+            <span>{sortBy === 'name' ? '이름순' : sortBy === 'birthYear' ? '연생순' : '국가순'}</span>
             <FiChevronRight size={14} />
           </FilterTriggerButton>
           <SortOrderGroup>
@@ -753,7 +755,7 @@ export default function PersonPage() {
                 {personsByCentury.map(([century, list]) => (
                     <CenturySection key={century}>
                       <CenturyHeading>
-                        {century < 0 ? `기원전 ${-century}세기` : `${century}세기`}
+                        {century === 999 ? '세기 미상' : century < 0 ? `기원전 ${-century}세기` : `${century}세기`}
                       </CenturyHeading>
                       <AdaptiveGrid $twoRows={hasDetailLayout}>
                         {list.map((person) => {
@@ -821,6 +823,20 @@ export default function PersonPage() {
                                     </CardMetaRow>
                                   )}
                                   {roleLabel && <CardRole>{roleLabel}</CardRole>}
+                                  {(() => {
+                                    const p = person as { fatherId?: string; motherId?: string; spouseId?: string; father_id?: string; mother_id?: string; spouse_id?: string }
+                                    const fid = p.fatherId ?? p.father_id
+                                    const mid = p.motherId ?? p.mother_id
+                                    const sid = p.spouseId ?? p.spouse_id
+                                    if (!fid && !mid && !sid) return null
+                                    return (
+                                      <CardFamily>
+                                        {fid && <span>부: {getPersonDisplayName(persons?.find((x) => x.id === fid), true) || '—'}</span>}
+                                        {mid && <span>모: {getPersonDisplayName(persons?.find((x) => x.id === mid), true) || '—'}</span>}
+                                        {sid && <span>배우자: {getPersonDisplayName(persons?.find((x) => x.id === sid), true) || '—'}</span>}
+                                      </CardFamily>
+                                    )
+                                  })()}
                                   {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
                                 </PersonInfo>
                               </CardContent>
@@ -1769,11 +1785,12 @@ export default function PersonPage() {
         onClose={() => setShowSortModal(false)}
         title="정렬 기준"
         options={[
+          { value: 'name', label: '이름순' },
           { value: 'birthYear', label: '연생순' },
           { value: 'countryName', label: '국가 이름순' },
         ]}
         selectedValue={sortBy}
-        onSelect={(value: 'birthYear' | 'countryName') => {
+        onSelect={(value: 'name' | 'birthYear' | 'countryName') => {
           setSortBy(value)
           setShowSortModal(false)
         }}
@@ -2457,7 +2474,7 @@ const ListArea = styled.div<{ $hasDetail?: boolean }>`
   }
 `
 
-/* 좌측: 인물 상세 — 카드 우측 이동 시 남은 영역 전부 상세로 */
+/* 좌측: 인물 상세 */
 const DetailPanel = styled.div`
   flex: 1;
   min-width: 0;
@@ -3252,6 +3269,21 @@ const CardRole = styled.span`
   color: #64748b;
   font-weight: 500;
   letter-spacing: 0.01em;
+`
+
+const CardFamily = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #64748b;
+  span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+  }
 `
 
 const CardBio = styled.p`

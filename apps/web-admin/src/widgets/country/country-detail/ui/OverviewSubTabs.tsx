@@ -6,6 +6,7 @@ import * as S from '@/pages/history/country/country.styles'
 
 export type OverviewSubTab =
   | 'statistics'
+  | 'linkedHistorical'
   | 'map'
   | 'government'
   | 'ethnicity'
@@ -37,13 +38,19 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             $active={activeSubTab === 'statistics'}
             onClick={() => onSubTabChange('statistics')}
           >
-            통계 및 지표
+            대시보드
+          </S.TabButton>
+          <S.TabButton
+            $active={activeSubTab === 'linkedHistorical'}
+            onClick={() => onSubTabChange('linkedHistorical')}
+          >
+            역사적 국가
           </S.TabButton>
           <S.TabButton
             $active={activeSubTab === 'map'}
             onClick={() => onSubTabChange('map')}
           >
-            지도 및 지역
+            행정구역
           </S.TabButton>
           <S.TabButton
             $active={activeSubTab === 'government'}

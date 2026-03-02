@@ -23,6 +23,7 @@ export interface UnifiedCountry {
   thumbnailUrl?: string | null
 
   // 현대 국가 전용 필드
+  fullName?: string | null
   localName?: string | null
   isoCode?: string | null
   flagEmoji?: string | null
@@ -58,6 +59,7 @@ export function modernToUnified(country: Country): UnifiedCountry {
     id: country.id,
     name: country.name,
     type: 'modern',
+    fullName: (country as any).fullName ?? undefined,
     localName: country.localName,
     isoCode: country.isoCode,
     flagEmoji: country.flagEmoji,

@@ -177,6 +177,7 @@ export function CountrySearchModal({
               <FilterSidebarSection>
                 <FilterSidebarTitle>국가 타입</FilterSidebarTitle>
                 <CountryTypeOption
+                  type="button"
                   $active={countryType === 'modern'}
                   onClick={() => {
                     setCountryType('modern')
@@ -189,6 +190,7 @@ export function CountrySearchModal({
                   <span>현대 국가</span>
                 </CountryTypeOption>
                 <CountryTypeOption
+                  type="button"
                   $active={countryType === 'historical'}
                   onClick={() => {
                     setCountryType('historical')
@@ -206,6 +208,7 @@ export function CountrySearchModal({
             <FilterSidebarSection>
               <FilterSidebarTitle>대륙</FilterSidebarTitle>
               <FilterOptionButton
+                type="button"
                 $active={selectedContinent === 'all'}
                 onClick={() => setSelectedContinent('all')}
               >
@@ -213,6 +216,7 @@ export function CountrySearchModal({
               </FilterOptionButton>
               {continents.map((name) => (
                 <FilterOptionButton
+                  type="button"
                   key={name}
                   $active={selectedContinent === name}
                   onClick={() => setSelectedContinent(name)}
@@ -237,6 +241,7 @@ export function CountrySearchModal({
             <ModalList>
               {filteredCountries.map((country) => (
                 <ModalListItem
+                  type="button"
                   key={country.id}
                   $selected={isItemSelected(country.id)}
                   onClick={() => handleSelect(country)}

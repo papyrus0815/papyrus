@@ -26,7 +26,6 @@ export interface HistoricalCountryResponseDto {
   stateType: HistoricalStateType
   /** 연결된 현대 국가 ID 목록 (상위 현대 국가) */
   parentModernCountryIds?: string[]
-  /** 상위 역사적 국가 ID 목록 */
   parentHistoricalCountryIds?: string[]
   createdAt: string
   updatedAt: string

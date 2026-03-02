@@ -1847,8 +1847,11 @@ export const DetailPaneRelative = styled.div`
   position: relative;
   width: 100%;
   height: calc(100vh - var(--header-height));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  background: #ffffff;
 
   /* 커스텀 스크롤바 */
   &::-webkit-scrollbar {
@@ -3563,8 +3566,10 @@ export const Actions = styled.div`
 
 // Analytics Dashboard Styles
 export const AnalyticsDashboard = styled.div`
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+  background: #ffffff;
   min-height: calc(100vh - var(--header-height));
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;

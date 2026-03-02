@@ -8,6 +8,9 @@ export class CountryResponseDto {
   @ApiProperty({ description: '국가명' })
   name!: string
 
+  @ApiProperty({ description: '공식/전체 명칭 (예: 대한민국, Republic of Korea)', required: false })
+  fullName?: string | null
+
   @ApiProperty({ description: '로컬 국가명', required: false })
   localName?: string | null
 

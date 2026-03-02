@@ -96,6 +96,7 @@ export function CountryForm({
       if (editing.id) {
         reset({
           name: editing.name || '',
+          fullName: (editing as any).fullName || '',
           localName: editing.localName || '',
           isoCode: editing.isoCode || '',
           flagEmoji: editing.flagEmoji || '',
@@ -113,6 +114,7 @@ export function CountryForm({
         // 생성 모드: 완전히 빈 값으로 초기화
         reset({
           name: '',
+          fullName: '',
           localName: '',
           isoCode: '',
           flagEmoji: '',
@@ -201,6 +203,7 @@ export function CountryForm({
     await onSave({
       id: editing?.id,
       name: data.name,
+      fullName: data.fullName,
       localName: data.localName,
       isoCode: data.isoCode,
       flagEmoji: data.flagEmoji,
@@ -404,6 +407,17 @@ export function CountryForm({
               )}
             </S.FormField>
           </S.FormRow>
+          <S.FormField>
+            <S.FormLabel>공식 명칭 (풀네임)</S.FormLabel>
+            <S.Input
+              {...register('fullName')}
+              placeholder="예: 대한민국, 일본국, Republic of Korea"
+              $error={!!errors.fullName}
+            />
+            {errors.fullName && (
+              <S.ErrorMessage>{errors.fullName.message}</S.ErrorMessage>
+            )}
+          </S.FormField>
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>ISO 코드</S.FormLabel>

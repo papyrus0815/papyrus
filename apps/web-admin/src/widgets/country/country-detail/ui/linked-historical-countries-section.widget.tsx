@@ -1,6 +1,6 @@
 /**
  * 연결된 역사적 국가와 관계 섹션
- * - 현대 국가 상세 > 통계 및 지표 탭에서 사용
+ * - 현대 국가 상세 > 대시보드 탭에서 사용
  * - 탭: 목록 | 흐름도 (역대 수반 계보도 스타일 참조)
  * - 변천·소속·수평 관계 정보를 모두 표시
  * - 깔끔하고 트렌디한 디자인
@@ -229,13 +229,17 @@ const FLOW_ROW_HEIGHT = 128
 /** 이 연수 미만이면 카드 대신 필(툴팁) 표기 */
 const SHORT_DURATION_YEARS = 20
 
-/** 흐름도 스크롤 — 카드+연도축이 같은 너비로 함께 스크롤, 스크롤바는 막대바 아래 */
+/** 흐름도 스크롤 — 카드+연도축이 같은 너비로 함께 스크롤, 스크롤바는 막대바 아래. flex:1로 남은 높이 채우고 하단 막대는 항상 뷰 하단에 */
 const FlowContentScroll = styled.div`
   width: 100%;
   min-width: 0;
+  flex: 1;
+  min-height: 0;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   padding-bottom: 20px;
+  display: flex;
+  flex-direction: column;
   &::-webkit-scrollbar {
     height: 6px;
   }
@@ -249,21 +253,26 @@ const FlowContentScroll = styled.div`
   }
 `
 
-/** 스크롤 안 한 덩어리 — 연도 범위에 따라 최소 너비(한 세기당 더 넓게) */
+/** 스크롤 안 한 덩어리 — 연도 범위에 따라 최소 너비(한 세기당 더 넓게). flex column으로 하단 축을 항상 아래로 */
 const FLOW_TIMELINE_BASE_MIN_WIDTH = 960
 const FLOW_PX_PER_YEAR = 6
 const FlowScrollInner = styled.div<{ $minWidth: number }>`
   width: 100%;
   min-width: ${(p) => p.$minWidth}px;
+  flex: 1;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
 `
 
-/** 흐름도 카드 영역 — FlowScrollInner와 동일 너비, 패딩 없이 축과 정확히 맞춤 */
+/** 흐름도 카드 영역 — FlowScrollInner와 동일 너비, flex:1로 남은 공간 채워 하단 연도축을 뷰 하단으로 */
 const FlowContent = styled.div`
   position: relative;
   width: 100%;
   min-width: 0;
-  padding: 16px 0 0;
+  flex: 1;
+  padding: 16px 0 32px 0;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -361,12 +370,13 @@ const FlowConnector = styled.div<{ $leftPct: number }>`
   box-shadow: 0 1px 3px rgba(99, 102, 241, 0.1);
 `
 
-/** 하단 연도 축 래퍼 — 카드와 동일 너비, 막대바↔스크롤 간격 확보 */
+/** 하단 연도 축 래퍼 — 카드와 동일 너비, 카드↔막대바 간격 충분히 확보 */
 const FlowBottomAxisWrap = styled.div`
   width: 100%;
   min-width: 0;
-  padding-top: 16px;
-  padding-bottom: 12px;
+  margin-top: 24px;
+  padding-top: 40px;
+  padding-bottom: 16px;
   flex-shrink: 0;
   box-sizing: border-box;
 `
@@ -1001,7 +1011,8 @@ export function LinkedHistoricalCountriesSection({
         gap: 32,
         padding: '36px 32px 48px',
         background: '#ffffff',
-        minHeight: 'calc(100vh - 200px)',
+        flex: 1,
+        minHeight: 0,
         position: 'relative',
       }}
     >
@@ -1207,7 +1218,16 @@ export function LinkedHistoricalCountriesSection({
       )}
 
       {viewMode === 'flow' && (
-        <section aria-label="국가 계보 흐름도">
+        <section
+          aria-label="국가 계보 흐름도"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
+        >
           <SectionLabel>국가 계보 흐름도</SectionLabel>
           {count === 0 ? (
             <EmptyCard>
@@ -1222,6 +1242,8 @@ export function LinkedHistoricalCountriesSection({
                 gap: 0,
                 width: '100%',
                 minWidth: 0,
+                flex: 1,
+                minHeight: 0,
                 overflow: 'hidden',
               }}
             >

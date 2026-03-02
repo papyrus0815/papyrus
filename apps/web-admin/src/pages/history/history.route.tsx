@@ -41,7 +41,7 @@ export const historyPageRoute: RouteObject = {
           },
         },
         {
-          path: `${ROUTES.HISTORY.COUNTRY}/:countryId`,
+          path: `${ROUTES.HISTORY.COUNTRY}/:countryId/dashboard`,
           lazy: async () => {
             const [{ countryLoader }, { default: Component }] =
               await Promise.all([
@@ -53,6 +53,61 @@ export const historyPageRoute: RouteObject = {
         },
         {
           path: `${ROUTES.HISTORY.COUNTRY}/:countryId/heads-of-state`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: `${ROUTES.HISTORY.COUNTRY}/:countryId/persons`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: `${ROUTES.HISTORY.COUNTRY}/:countryId/historical`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: `${ROUTES.HISTORY.COUNTRY}/:countryId/regions`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: `${ROUTES.HISTORY.COUNTRY}/:countryId/government`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: `${ROUTES.HISTORY.COUNTRY}/:countryId`,
           lazy: async () => {
             const [{ countryLoader }, { default: Component }] =
               await Promise.all([

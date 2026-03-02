@@ -88,6 +88,11 @@ const ThumbnailUploadInput = styled.input`
   display: none;
 `
 
+const OriginalNameInputWrap = styled.div`
+  max-width: 480px;
+  width: 100%;
+`
+
 const FieldRowMulti = styled.div`
   display: grid;
   grid-template-columns: 360px 1fr;
@@ -358,20 +363,34 @@ export function PersonRegisterView({
         setFatherId(p.fatherId ?? '')
         setMotherId(p.motherId ?? '')
         setSpouseId(p.spouseId ?? '')
-        if (p.birthDate) {
-          const b = parseDateString(p.birthDate)
-          setBirthEra(b.era)
-          setBirthYear(String(b.year))
-          setBirthMonth(b.month != null ? String(b.month) : '')
-          setBirthDay(b.day != null ? String(b.day) : '')
+        if (p.birthYear != null || p.birthDate) {
+          if (p.birthYear != null) {
+            setBirthEra((p.birthEra as Era) ?? 'AD')
+            setBirthYear(String(p.birthYear))
+            setBirthMonth(p.birthMonth != null ? String(p.birthMonth) : '')
+            setBirthDay(p.birthDay != null ? String(p.birthDay) : '')
+          } else if (p.birthDate) {
+            const b = parseDateString(p.birthDate)
+            setBirthEra(b.era)
+            setBirthYear(String(b.year))
+            setBirthMonth(b.month != null ? String(b.month) : '')
+            setBirthDay(b.day != null ? String(b.day) : '')
+          }
           setIsBirthDateUnknown(false)
         } else setIsBirthDateUnknown(true)
-        if (p.deathDate) {
-          const d = parseDateString(p.deathDate)
-          setDeathEra(d.era)
-          setDeathYear(String(d.year))
-          setDeathMonth(d.month != null ? String(d.month) : '')
-          setDeathDay(d.day != null ? String(d.day) : '')
+        if (p.deathYear != null || p.deathDate) {
+          if (p.deathYear != null) {
+            setDeathEra((p.deathEra as Era) ?? 'AD')
+            setDeathYear(String(p.deathYear))
+            setDeathMonth(p.deathMonth != null ? String(p.deathMonth) : '')
+            setDeathDay(p.deathDay != null ? String(p.deathDay) : '')
+          } else if (p.deathDate) {
+            const d = parseDateString(p.deathDate)
+            setDeathEra(d.era)
+            setDeathYear(String(d.year))
+            setDeathMonth(d.month != null ? String(d.month) : '')
+            setDeathDay(d.day != null ? String(d.day) : '')
+          }
           setIsDeathDateUnknown(false)
         } else setIsDeathDateUnknown(true)
       })
@@ -689,7 +708,9 @@ export function PersonRegisterView({
               <FieldRow>
                 <FieldLabel>이름 원어</FieldLabel>
                 <FieldControl>
-                  <Input value={originalName} onChange={(e) => setOriginalName(e.target.value)} placeholder="예: Franklin D. Roosevelt" />
+                  <OriginalNameInputWrap>
+                    <Input value={originalName} onChange={(e) => setOriginalName(e.target.value)} placeholder="예: Franklin D. Roosevelt" />
+                  </OriginalNameInputWrap>
                 </FieldControl>
               </FieldRow>
               <CheckboxRowTwo>

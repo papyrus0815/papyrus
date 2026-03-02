@@ -24,9 +24,29 @@ export const pathKeys = {
     /** 국가 상세 고유 URL (경로 기반) */
     countryDetail: (countryId: string) =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/`,
-    /** 국가 상세 내 역대 수반 탭 고유 URL */
+    /** 국가 상세 대시보드 탭 고유 URL */
+    countryDashboard: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/dashboard`,
+    /** 국가 상세 내 역대 수반 탭 고유 URL (인물 하위 뷰, 하위 호환용) */
     countryHeadsOfState: (countryId: string) =>
-      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/heads-of-state/`,
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/heads-of-state`,
+    /**
+     * 국가 상세 내 인물 탭 고유 URL.
+     * 하위 뷰: tab=stats(통계·최근 인물) | list(인물 리스트) | heads(역대 수반). 생략 시 stats.
+     */
+    countryPersons: (countryId: string, tab?: 'stats' | 'list' | 'heads') =>
+      tab
+        ? `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/persons?tab=${tab}`
+        : `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/persons`,
+    /** 국가 상세 내 연결된 역사적 국가 탭 고유 URL */
+    countryHistorical: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/historical`,
+    /** 국가 상세 내 행정구역(지도·지역) 탭 고유 URL */
+    countryRegions: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/regions`,
+    /** 국가 상세 내 행정조직 탭 고유 URL */
+    countryGovernment: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/government`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
   },
 

@@ -168,7 +168,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
             <FiGlobe size={20} />
             {title}
           </ModalTitle>
-          <CloseButton onClick={onClose}>
+          <CloseButton type="button" onClick={onClose}>
             <FiX size={20} />
           </CloseButton>
         </ModalHeader>
@@ -189,6 +189,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
               />
               {searchQuery && (
                 <ClearButton
+                  type="button"
                   onClick={() => {
                     playClickSound()
                     setSearchQuery('')
@@ -203,6 +204,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
           {/* 국가 유형 탭 + 정렬 */}
           <TabSection>
             <Tab
+              type="button"
               $active={countryType === 'modern'}
               onClick={() => {
                 playClickSound()
@@ -210,9 +212,12 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
               }}
             >
               현대 국가
-              <CountBadge>{filteredModernCountries.length}</CountBadge>
+              <CountBadge $active={countryType === 'modern'}>
+                {filteredModernCountries.length}
+              </CountBadge>
             </Tab>
             <Tab
+              type="button"
               $active={countryType === 'historical'}
               onClick={() => {
                 playClickSound()
@@ -220,7 +225,9 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
               }}
             >
               역사적 국가
-              <CountBadge>{filteredHistoricalCountries.length}</CountBadge>
+              <CountBadge $active={countryType === 'historical'}>
+                {filteredHistoricalCountries.length}
+              </CountBadge>
             </Tab>
             <SortRow>
               <SortLabel>정렬</SortLabel>
@@ -256,6 +263,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
               </SortFieldSelect>
               <SortOrderGroup>
                 <SortOrderBtn
+                  type="button"
                   $active={sortOrder === 'asc'}
                   onClick={() => {
                     playClickSound()
@@ -265,6 +273,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                   오름차순
                 </SortOrderBtn>
                 <SortOrderBtn
+                  type="button"
                   $active={sortOrder === 'desc'}
                   onClick={() => {
                     playClickSound()
@@ -297,6 +306,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                 const historical = country as HistoricalCountryResponseDto
                 return (
                   <CountryCard
+                    type="button"
                     key={country.id}
                     $selected={isSelected}
                     onClick={() =>
@@ -378,49 +388,46 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
   )
 }
 
+/* 행정조직 디자인 톤: 깔끔·트렌디 */
+const ACCENT = '#6366f1'
+const ACCENT_HOVER = '#4f46e5'
+const BORDER = '#e5e7eb'
+const BORDER_LIGHT = '#f3f4f6'
+const BG_MUTED = '#f8fafc'
+const TEXT = '#0f172a'
+const TEXT_MUTED = '#64748b'
+const TEXT_SUBTLE = '#94a3b8'
+
 const Overlay = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease;
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+  padding: 20px;
+  animation: overlayIn 0.2s ease;
+  @keyframes overlayIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 `
 
 const ModalContainer = styled.div`
   background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
-  width: 92%;
-  max-width: 820px;
-  max-height: 68vh;
+  border-radius: 20px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 800px;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.3s ease;
-
-  @keyframes slideUp {
-    from {
-      transform: translateY(20px);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
+  animation: modalUp 0.25s ease;
+  @keyframes modalUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
   }
 `
 
@@ -428,36 +435,42 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 24px 28px;
+  border-bottom: 1px solid ${BORDER_LIGHT};
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${TEXT};
+  letter-spacing: -0.02em;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+
+  svg {
+    color: ${ACCENT};
+    flex-shrink: 0;
+  }
 `
 
 const CloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: none;
-  background: rgba(148, 163, 184, 0.08);
-  color: #94a3b8;
-  border-radius: 10px;
+  background: ${BG_MUTED};
+  color: ${TEXT_MUTED};
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
+    background: rgba(99, 102, 241, 0.1);
+    color: ${ACCENT};
   }
 `
 
@@ -470,8 +483,9 @@ const ModalBody = styled.div`
 `
 
 const SearchSection = styled.div`
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  padding: 20px 28px;
+  border-bottom: 1px solid ${BORDER_LIGHT};
+  background: #fff;
 `
 
 const SearchInputWrapper = styled.div`
@@ -482,8 +496,8 @@ const SearchInputWrapper = styled.div`
 
 const SearchIcon = styled.div`
   position: absolute;
-  left: 14px;
-  color: #94a3b8;
+  left: 16px;
+  color: ${TEXT_SUBTLE};
   display: flex;
   align-items: center;
   pointer-events: none;
@@ -491,21 +505,21 @@ const SearchIcon = styled.div`
 
 const SearchInput = styled.input`
   width: 100%;
-  padding: 12px 44px 12px 44px;
-  font-size: 14px;
-  color: #0f172a;
-  border: 2px solid rgba(226, 232, 240, 1);
+  padding: 14px 48px 14px 48px;
+  font-size: 15px;
+  color: ${TEXT};
+  border: 1px solid ${BORDER};
   border-radius: 12px;
   outline: none;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${TEXT_SUBTLE};
   }
 
   &:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.08);
+    border-color: ${ACCENT};
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
   }
 `
 
@@ -515,17 +529,17 @@ const ClearButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: none;
-  background: rgba(148, 163, 184, 0.1);
-  color: #64748b;
-  border-radius: 6px;
+  background: ${BG_MUTED};
+  color: ${TEXT_MUTED};
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.08);
     color: #ef4444;
   }
 `
@@ -533,44 +547,41 @@ const ClearButton = styled.button`
 const TabSection = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
-  background: rgba(248, 250, 252, 0.6);
+  gap: 8px;
+  padding: 16px 28px;
+  background: ${BG_MUTED};
+  border-bottom: 1px solid ${BORDER_LIGHT};
   flex-wrap: wrap;
 `
 
 const Tab = styled.button<{ $active: boolean }>`
-  flex: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
-  background: ${({ $active }) =>
-    $active ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent'};
-  border: none;
-  border-radius: 10px;
+  color: ${({ $active }) => ($active ? '#fff' : TEXT_MUTED)};
+  background: ${({ $active }) => ($active ? ACCENT : 'transparent')};
+  border: 1px solid ${({ $active }) => ($active ? ACCENT : BORDER)};
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-        : 'rgba(99, 102, 241, 0.08)'};
-    color: ${({ $active }) => ($active ? '#ffffff' : '#6366f1')};
+    background: ${({ $active }) => ($active ? ACCENT_HOVER : 'rgba(99, 102, 241, 0.08)')};
+    border-color: ${({ $active }) => ($active ? ACCENT_HOVER : ACCENT)};
+    color: ${({ $active }) => ($active ? '#fff' : ACCENT)};
   }
 `
 
-const CountBadge = styled.span`
+const CountBadge = styled.span<{ $active?: boolean }>`
   padding: 2px 8px;
   font-size: 12px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
+  font-weight: 600;
+  background: ${({ $active }) => ($active ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.06)')};
+  border-radius: 10px;
 `
 
 const SortRow = styled.div`
@@ -584,26 +595,25 @@ const SortRow = styled.div`
 const SortLabel = styled.span`
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: ${TEXT_MUTED};
 `
 
 const SortFieldSelect = styled.select`
-  padding: 8px 28px 8px 12px;
+  padding: 8px 32px 8px 12px;
   font-size: 13px;
-  color: #475569;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 8px;
+  color: ${TEXT};
+  background: #fff;
+  border: 1px solid ${BORDER};
+  border-radius: 10px;
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
-  min-width: 100px;
 
   &:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.4);
+    border-color: ${ACCENT};
   }
 `
 
@@ -613,26 +623,20 @@ const SortOrderGroup = styled.div`
 `
 
 const SortOrderBtn = styled.button<{ $active: boolean }>`
-  padding: 8px 12px;
+  padding: 8px 14px;
   font-size: 12px;
   font-weight: 600;
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'rgba(248, 250, 252, 0.8)'};
-  border: 1px solid
-    ${({ $active }) => ($active ? 'transparent' : 'rgba(226, 232, 240, 0.8)')};
-  border-radius: 8px;
+  color: ${({ $active }) => ($active ? '#fff' : TEXT_MUTED)};
+  background: ${({ $active }) => ($active ? ACCENT : '#fff')};
+  border: 1px solid ${({ $active }) => ($active ? ACCENT : BORDER)};
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-        : 'rgba(99, 102, 241, 0.1)'};
-    color: ${({ $active }) => ($active ? '#ffffff' : '#6366f1')};
+    background: ${({ $active }) => ($active ? ACCENT_HOVER : 'rgba(99, 102, 241, 0.08)')};
+    border-color: ${ACCENT};
+    color: ${({ $active }) => ($active ? '#fff' : ACCENT)};
   }
 `
 
@@ -640,61 +644,55 @@ const CardGrid = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 24px 24px;
+  padding: 20px 28px 28px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
   align-content: start;
 
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(226, 232, 240, 0.3);
-    border-radius: 4px;
+    background: ${BORDER_LIGHT};
+    border-radius: 3px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
-    border-radius: 4px;
+    background: #cbd5e1;
+    border-radius: 3px;
 
     &:hover {
-      background: rgba(148, 163, 184, 0.6);
+      background: #94a3b8;
     }
   }
 `
 
 const CountryCard = styled.button<{ $selected: boolean }>`
   position: relative;
-  aspect-ratio: 1;
-  min-height: 140px;
-  padding: 12px 10px;
+  min-height: 120px;
+  padding: 16px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 8px;
   font-size: 14px;
   font-weight: ${({ $selected }) => ($selected ? '600' : '500')};
-  color: ${({ $selected }) => ($selected ? '#6366f1' : '#0f172a')};
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(99, 102, 241, 0.08)' : 'transparent'};
-  border: 1.5px solid
-    ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.35)' : 'rgba(226, 232, 240, 0.6)'};
+  color: ${({ $selected }) => ($selected ? ACCENT : TEXT)};
+  background: ${({ $selected }) => ($selected ? 'rgba(99, 102, 241, 0.06)' : '#fff')};
+  border: 2px solid ${({ $selected }) => ($selected ? ACCENT : BORDER)};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 
   &:hover {
-    background: ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.04)'};
-    border-color: rgba(99, 102, 241, 0.35);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    background: ${({ $selected }) => ($selected ? 'rgba(99, 102, 241, 0.1)' : 'rgba(99, 102, 241, 0.04)')};
+    border-color: ${ACCENT};
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
   }
 `
 
@@ -707,7 +705,7 @@ const CardFlag = styled.span`
 const CardName = styled.span`
   font-size: 13px;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.3;
   color: inherit;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -728,10 +726,10 @@ const CardMetaList = styled.div`
 `
 
 const CardMetaRow = styled.span`
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
-  line-height: 1.3;
-  color: #94a3b8;
+  line-height: 1.35;
+  color: ${TEXT_SUBTLE};
   display: block;
   white-space: nowrap;
   overflow: hidden;
@@ -748,17 +746,18 @@ const CardMetaRow = styled.span`
 
 const CardCheck = styled.div`
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
+  top: 10px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #ffffff;
+  background: ${ACCENT};
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
 `
 
 const EmptyState = styled.div`
@@ -767,17 +766,18 @@ const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 20px;
-  color: #94a3b8;
+  padding: 56px 24px;
+  color: ${TEXT_SUBTLE};
   gap: 16px;
 
   svg {
-    opacity: 0.3;
+    opacity: 0.35;
+    color: ${TEXT_MUTED};
   }
 `
 
 const EmptyText = styled.div`
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
-  color: #64748b;
+  color: ${TEXT_MUTED};
 `

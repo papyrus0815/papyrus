@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-hot-toast'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { pathKeys } from '@/shared/router'
 
@@ -124,12 +124,26 @@ export default function CountryPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const params = useParams<{ countryId?: string }>()
+  const [searchParams] = useSearchParams()
   const inHistory = location.pathname.startsWith('/history')
 
   /** 경로 기반 URL의 countryId (현대/과거 국가 공통 고유 ID) */
   const countryIdFromUrl = params.countryId ?? null
   /** 역대 수반 탭 전용 URL 여부 (/history/country/:id/heads-of-state) */
   const isHeadsOfStateUrl = location.pathname.includes('/heads-of-state')
+  /** 인물 탭 전용 URL 여부 (/history/country/:id/persons, 하위 뷰는 ?tab=stats|list|heads) */
+  const isPersonsUrl = /\/history\/country\/[^/]+\/persons\/?$/.test(location.pathname)
+  /** 연결된 역사적 국가 탭 전용 URL 여부 (/history/country/:id/historical) */
+  const isLinkedHistoricalUrl =
+    /\/history\/country\/[^/]+\/historical\/?$/.test(location.pathname)
+  /** 행정구역 탭 전용 URL 여부 (/history/country/:id/regions) */
+  const isRegionsUrl =
+    /\/history\/country\/[^/]+\/regions\/?$/.test(location.pathname)
+  /** 행정조직 탭 전용 URL 여부 (/history/country/:id/government) */
+  const isGovernmentUrl =
+    /\/history\/country\/[^/]+\/government\/?$/.test(location.pathname)
+  /** 대시보드 탭 전용 URL 여부 (/history/country/:id/dashboard) */
+  const isDashboardUrl = /\/history\/country\/[^/]+\/dashboard\/?$/.test(location.pathname)
 
   // ==================== API Hooks ====================
   // 현대 국가 데이터
@@ -150,16 +164,17 @@ export default function CountryPage() {
   // 등록 현황 게시판용
   const { data: apiPersons } = usePersons()
 
-  /** 등록 현황: 일주일(7일) 내, 디자인용 primaryLabel + countryName (문장형 텍스트 없음, 국기 이미지 포함) */
+  /** 등록 현황: 일주일(7일) 내 등록된 인물만. primaryLabel + countryName, 인물 카드 클릭 시 해당 국가 인물 리스트로 이동용 personId·countryId 포함. (국가 등록은 별도 패널 "국가(현대, 역사적) 등록 현황"에서 표시) */
   const registrationFeed = useMemo(() => {
     type Item = {
       date: string
-      type: 'country' | 'person'
+      type: 'person'
       primaryLabel: string
       countryName?: string | null
       profileImageUrl?: string | null
-      thumbnailUrl?: string | null
-      flagEmoji?: string | null
+      /** 인물일 때: 클릭 시 해당 국가 인물 리스트로 이동용 (현대 국가 ID, 역사적 국가 소속이어도 소속 현대 국가로) */
+      personId?: string
+      countryId?: string | null
     }
     const items: Item[] = []
     const now = Date.now()
@@ -168,19 +183,26 @@ export default function CountryPage() {
     const rawPersons = apiPersons ?? []
     const countriesList = apiCountries ?? []
 
-    rawCountries.forEach((c: { name?: string; createdAt?: string; thumbnailUrl?: string | null; flagEmoji?: string | null }) => {
-      const date = c.createdAt
-      if (!date || now - new Date(date).getTime() > oneWeekMs) return
-      items.push({
-        date,
-        type: 'country',
-        primaryLabel: c.name || '국가',
-        thumbnailUrl: c.thumbnailUrl ?? null,
-        flagEmoji: c.flagEmoji ?? null,
-      })
-    })
+    const modernIds = new Set(
+      (rawCountries as { id?: string }[]).map((c) => c.id).filter(Boolean),
+    )
+    const historicalToModern = new Map<string, string>()
+    ;(rawCountries as { id?: string; historicalCountries?: { id: string }[] }[]).forEach(
+      (c) => {
+        ;(c.historicalCountries || []).forEach((h) => {
+          if (c.id && h.id) historicalToModern.set(h.id, c.id)
+        })
+      },
+    )
+    const getEffectiveModernCountryId = (countryId: string | null | undefined): string | null => {
+      if (!countryId) return null
+      if (modernIds.has(countryId)) return countryId
+      return historicalToModern.get(countryId) ?? null
+    }
+
     rawPersons.forEach(
       (p: {
+        id?: string
         name?: string | null
         surname?: string | null
         createdAt?: string
@@ -199,12 +221,15 @@ export default function CountryPage() {
                 (c) => c.id === p.countryId,
               )?.name
             : undefined)
+        const effectiveModernId = getEffectiveModernCountryId(p.countryId ?? undefined)
         items.push({
           date,
           type: 'person',
           primaryLabel: displayName,
           countryName: countryName ?? undefined,
           profileImageUrl: p.profileImageUrl,
+          personId: p.id,
+          countryId: effectiveModernId ?? undefined,
         })
       },
     )
@@ -310,6 +335,7 @@ export default function CountryPage() {
     return apiCountries.map((country) => ({
       id: country.id,
       name: country.name,
+      fullName: (country as any).fullName ?? undefined,
       localName: country.localName || undefined,
       isoCode: country.isoCode || undefined,
       flagEmoji: country.flagEmoji || undefined,
@@ -382,6 +408,11 @@ export default function CountryPage() {
     setSelectedId(countryIdFromUrl || null)
   }, [countryIdFromUrl])
 
+  // URL에 countryId가 있으면 상세(목록) 탭으로 전환 (등록 현황 카드 클릭·인물 리스트 탭 등으로 진입 시)
+  useEffect(() => {
+    if (countryIdFromUrl) setActiveTab('list')
+  }, [countryIdFromUrl])
+
   /** 상세 전환 시 별도 로딩 없음(데이터 이미 있음) */
   const isLoading = false
   // URL에 countryId가 있으면 목록 탭으로 열기 (직접 진입 시 상세 패널이 보이도록)
@@ -438,6 +469,7 @@ export default function CountryPage() {
     if (editing) {
       reset({
         name: editing.name || '',
+        fullName: (editing as any).fullName || '',
         localName: editing.localName || '',
         isoCode: editing.isoCode || '',
         flagEmoji: editing.flagEmoji || '',
@@ -575,15 +607,34 @@ export default function CountryPage() {
     [apiHistoricalCountries],
   )
 
-  /** 상세 패널 내 탭 변경 시 URL 연동 (역대 수반 등) */
+  /** 상세 패널 내 탭 변경 시 URL 연동 (인물·역대 수반·인물 리스트·역사적 국가·행정구역·행정조직 등) */
   const handleDetailTabChange = useCallback(
-    (tab: 'heads' | null) => {
+    (tab: 'person' | 'heads' | 'persons-list' | 'linked-historical' | 'regions' | 'government' | null) => {
       if (!selectedId) return
-      if (tab === 'heads') navigate(pathKeys.history.countryHeadsOfState(selectedId))
+      if (tab === 'person') navigate(pathKeys.history.countryPersons(selectedId))
+      else if (tab === 'heads') navigate(pathKeys.history.countryPersons(selectedId, 'heads'))
+      else if (tab === 'persons-list') navigate(pathKeys.history.countryPersons(selectedId, 'list'))
+      else if (tab === 'linked-historical') navigate(pathKeys.history.countryHistorical(selectedId))
+      else if (tab === 'regions') navigate(pathKeys.history.countryRegions(selectedId))
+      else if (tab === 'government') navigate(pathKeys.history.countryGovernment(selectedId))
       else navigate(pathKeys.history.countryDetail(selectedId))
     },
     [navigate, selectedId],
   )
+
+  /** 인물 하위 탭 변경 시 URL만 갱신 (?tab=stats|list|heads) */
+  const handlePersonInnerTabChange = useCallback(
+    (tab: 'stats' | 'list' | 'heads') => {
+      if (!selectedId) return
+      navigate(pathKeys.history.countryPersons(selectedId, tab))
+    },
+    [navigate, selectedId],
+  )
+
+  /** 대시보드 뷰로 전환 시 URL을 대시보드 경로로 갱신 */
+  const handleDashboardView = useCallback(() => {
+    if (selectedId) navigate(pathKeys.history.countryDashboard(selectedId))
+  }, [navigate, selectedId])
 
   /**
    * 현대 국가 삭제
@@ -626,6 +677,7 @@ export default function CountryPage() {
           id: data.id,
           data: {
             name: data.name,
+            fullName: (data as any).fullName,
             localName: data.localName,
             isoCode: data.isoCode,
             flagEmoji: data.flagEmoji,
@@ -643,6 +695,7 @@ export default function CountryPage() {
         // 생성
         await createMutation.mutateAsync({
           name: data.name,
+          fullName: (data as any).fullName,
           localName: data.localName,
           isoCode: data.isoCode,
           flagEmoji: data.flagEmoji,
@@ -678,6 +731,7 @@ export default function CountryPage() {
     handleSave({
       id: editing?.id || undefined,
       name: data.name,
+      fullName: data.fullName || undefined,
       localName: data.localName || undefined,
       isoCode: data.isoCode || undefined,
       flagEmoji: data.flagEmoji || undefined,
@@ -964,6 +1018,11 @@ export default function CountryPage() {
                       registrationFeed={registrationFeed}
                       recentEvents={recentEvents}
                       countryRegistrationFeed={countryRegistrationFeed}
+                      onRegistrationPersonClick={(item) => {
+                        if (item.type === 'person' && item.countryId) {
+                          navigate(pathKeys.history.countryPersons(item.countryId, 'list'))
+                        }
+                      }}
                     />
                   ) : dashboardContentView === 'dynasty' ? (
                     <DynastySection />
@@ -991,8 +1050,29 @@ export default function CountryPage() {
                     isLoading={isLoading}
                     onEdit={handleEditFromDetail}
                     onDelete={handleDeleteFromDetail}
-                    initialDetailTab={isHeadsOfStateUrl ? 'heads' : undefined}
+                    initialDetailTab={
+                      isDashboardUrl
+                        ? 'dashboard'
+                        : isHeadsOfStateUrl
+                          ? 'heads'
+                          : isPersonsUrl
+                            ? (() => {
+                                const tab = searchParams.get('tab')
+                                if (tab === 'list') return 'persons-list'
+                                if (tab === 'heads') return 'heads'
+                                return 'person'
+                              })()
+                            : isLinkedHistoricalUrl
+                              ? 'linked-historical'
+                              : isRegionsUrl
+                                ? 'regions'
+                                : isGovernmentUrl
+                                  ? 'government'
+                                  : undefined
+                    }
                     onDetailTabChange={handleDetailTabChange}
+                    onPersonInnerTabChange={handlePersonInnerTabChange}
+                    onDashboardView={handleDashboardView}
                   />
                 </motion.div>
               ) : (

@@ -75,7 +75,7 @@ export function usePersonPage() {
   const [genderFilter, setGenderFilter] = useState<string>('ALL')
   const [countryFilter, setCountryFilter] = useState<string[]>([])
   const [continentFilter, setContinentFilter] = useState<string>('ALL')
-  const [sortBy, setSortBy] = useState<'birthYear' | 'countryName'>('birthYear')
+  const [sortBy, setSortBy] = useState<'name' | 'birthYear' | 'countryName'>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 12
@@ -182,7 +182,8 @@ export function usePersonPage() {
       }
 
       // 세기 필터 (시작~끝 세기 사이 출생 인물만, start/end 순서 무관)
-      const personCentury = getCentury(person.birthYear, person.birthEra)
+      const birthYear = person.birthYear ?? (person as { birth_year?: number }).birth_year
+      const personCentury = getCentury(birthYear, person.birthEra ?? (person as { birth_era?: string }).birth_era)
       const [lo, hi] = [Math.min(centuryStart, centuryEnd), Math.max(centuryStart, centuryEnd)]
       const matchesCentury =
         personCentury == null ? false : personCentury >= lo && personCentury <= hi
@@ -196,13 +197,18 @@ export function usePersonPage() {
       )
     })
 
-    // 정렬 (오름차순/내림차순 적용)
+    // 정렬 (이름순 기본, 오름차순/내림차순 적용)
     const dir = sortOrder === 'desc' ? -1 : 1
+    const yearOf = (p: any) => p?.birthYear ?? p?.birth_year ?? 9999
     return filtered.sort((personA, personB) => {
       let cmp = 0
-      if (sortBy === 'birthYear') {
-        const yearA = personA.birthYear || 9999
-        const yearB = personB.birthYear || 9999
+      if (sortBy === 'name') {
+        const nameA = getPersonDisplayName(personA, true) || ''
+        const nameB = getPersonDisplayName(personB, true) || ''
+        cmp = nameA.localeCompare(nameB, 'ko')
+      } else if (sortBy === 'birthYear') {
+        const yearA = yearOf(personA)
+        const yearB = yearOf(personB)
         cmp = yearA - yearB
       } else if (sortBy === 'countryName') {
         const countryA = countries?.find(

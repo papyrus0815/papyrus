@@ -3,6 +3,7 @@ import { HistoricalCountrySimple } from './country.repository'
 export class Country {
   id!: string
   name!: string
+  fullName?: string | null
   localName?: string | null
   flagEmoji?: string | null
   isoCode?: string | null

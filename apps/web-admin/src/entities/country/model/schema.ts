@@ -8,6 +8,11 @@ export const countrySchema = z.object({
     .string()
     .min(1, '국가명을 입력하세요')
     .max(100, '국가명은 100자 이내여야 합니다'),
+  fullName: z
+    .string()
+    .max(150, '공식 명칭은 150자 이내여야 합니다')
+    .transform((val) => val || undefined)
+    .optional(),
   localName: z
     .string()
     .max(100, '로컬명은 100자 이내여야 합니다')

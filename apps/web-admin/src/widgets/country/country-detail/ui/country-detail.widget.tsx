@@ -18,6 +18,7 @@ import { GovernmentInfoSection } from './government-info-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { HistorySection } from './history-section.widget'
+import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { LinkedHistoricalCountriesSection } from './linked-historical-countries-section.widget'
 import { MapRegionSection } from './map-region-section.widget'
 import { PersonListSection } from './person-list-section.widget'
@@ -68,9 +69,22 @@ export interface CountryDetailProps {
   isLoading?: boolean
   onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
-  /** URL 연동: 역대 수반 등 특정 탭으로 진입 시 */
-  initialDetailTab?: 'heads'
-  onDetailTabChange?: (tab: 'heads' | null) => void
+  /** URL 연동: 인물·역대 수반·인물 리스트·대시보드·역사적 국가·행정구역·행정조직 등 특정 탭으로 진입 시 */
+  initialDetailTab?:
+    | 'person'
+    | 'heads'
+    | 'persons-list'
+    | 'dashboard'
+    | 'linked-historical'
+    | 'regions'
+    | 'government'
+  onDetailTabChange?: (
+    tab: 'person' | 'heads' | 'persons-list' | 'linked-historical' | 'regions' | 'government' | null
+  ) => void
+  /** 인물 탭 내 하위 탭(통계/리스트/역대 수반) 클릭 시 URL 갱신 (?tab=) */
+  onPersonInnerTabChange?: (tab: 'stats' | 'list' | 'heads') => void
+  /** 대시보드(overview + statistics) 뷰로 전환 시 URL 갱신용 */
+  onDashboardView?: () => void
 }
 
 /**
@@ -84,6 +98,8 @@ function CountryDetailInner({
   onDelete,
   initialDetailTab,
   onDetailTabChange,
+  onPersonInnerTabChange,
+  onDashboardView,
 }: CountryDetailProps) {
   const [activeTab, setActiveTab] = useState<CountryDetailTab>('overview')
   const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>('statistics')
@@ -112,21 +128,61 @@ function CountryDetailInner({
     setMapLocation(null)
   }, [country?.id])
 
-  // activeSubTab 변경 시 selectedRegionInfo 초기화 (지도 및 지역 → 통계 및 지표로 이동 시)
+  // activeSubTab 변경 시 selectedRegionInfo 초기화 (지도 및 지역 → 대시보드로 이동 시)
   React.useEffect(() => {
     if (activeSubTab !== 'map') {
       setSelectedRegionInfo(null)
     }
   }, [activeSubTab])
 
-  // URL 등으로 역대 수반(heads) 진입 시 → 인물 서브탭 + 역대 수반 탭으로 열기
+  // URL 등으로 인물 / 역대 수반 / 인물 리스트 / 대시보드 / 역사적 국가 / 행정구역 / 행정조직 진입 시 → 해당 탭으로 열기
   React.useEffect(() => {
-    if (initialDetailTab === 'heads') {
+    if (initialDetailTab === 'dashboard') {
+      setActiveTab('overview')
+      setActiveSubTab('statistics')
+    } else if (initialDetailTab === 'person') {
+      setActiveTab('overview')
+      setActiveSubTab('person')
+      setPersonInnerTab('stats')
+    } else if (initialDetailTab === 'heads') {
       setActiveTab('overview')
       setActiveSubTab('person')
       setPersonInnerTab('heads')
+    } else if (initialDetailTab === 'persons-list') {
+      setActiveTab('overview')
+      setActiveSubTab('person')
+      setPersonInnerTab('list')
+    } else if (initialDetailTab === 'linked-historical') {
+      setActiveTab('overview')
+      setActiveSubTab('linkedHistorical')
+    } else if (initialDetailTab === 'regions') {
+      setActiveTab('overview')
+      setActiveSubTab('map')
+    } else if (initialDetailTab === 'government') {
+      setActiveTab('overview')
+      setActiveSubTab('government')
     }
   }, [initialDetailTab])
+
+  const handleOverviewSubTabChange = React.useCallback(
+    (tab: OverviewSubTab) => {
+      setActiveSubTab(tab)
+      if (tab === 'statistics') onDashboardView?.()
+      else if (tab === 'person') onDetailTabChange?.('person')
+      else if (tab === 'linkedHistorical') onDetailTabChange?.('linked-historical')
+      else if (tab === 'map') onDetailTabChange?.('regions')
+      else if (tab === 'government') onDetailTabChange?.('government')
+    },
+    [onDashboardView, onDetailTabChange],
+  )
+
+  const handleMainTabChange = React.useCallback(
+    (tab: CountryDetailTab) => {
+      setActiveTab(tab)
+      if (tab === 'overview' && activeSubTab === 'statistics') onDashboardView?.()
+    },
+    [activeSubTab, onDashboardView],
+  )
 
   if (!country) {
     return <EmptyState />
@@ -203,19 +259,26 @@ function CountryDetailInner({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            style={{ width: '100%', height: '100%' }}
+            style={{
+              width: '100%',
+              height: '100%',
+              minHeight: 0,
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
           >
             {/* 우측 사이드바 메뉴: 대시보드, 인물, 군대, 주요 사건 */}
             <CountryDetailTabs
               activeTab={activeTab}
-              onTabChange={setActiveTab}
+              onTabChange={handleMainTabChange}
             />
 
-            {/* 상단 헤더 메뉴: 통계 및 지표, 지도 및 지역, 행정조직 (overview 탭에서만) */}
+            {/* 상단 헤더 메뉴: 대시보드, 역사적 국가, 행정구역, 행정조직 등 (overview 탭에서만) */}
             {activeTab === 'overview' && (
               <OverviewSubTabs
                 activeSubTab={activeSubTab}
-                onSubTabChange={setActiveSubTab}
+                onSubTabChange={handleOverviewSubTabChange}
               />
             )}
 
@@ -223,7 +286,7 @@ function CountryDetailInner({
               as={motion.div}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              style={{ gap: 0 }}
+              style={{ gap: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
               <CountryDetailHeader
                 country={country}
@@ -237,6 +300,12 @@ function CountryDetailInner({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
                 >
                   {/* KPI Grid 제거 - 불필요한 공간 낭비 */}
 
@@ -251,8 +320,18 @@ function CountryDetailInner({
                         duration: 0.32,
                         ease: [0.25, 0.1, 0.25, 1],
                       }}
+                      style={{
+                        flex: 1,
+                        minHeight: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                      }}
                     >
-                      {activeSubTab === 'statistics' && (
+                      {activeSubTab === 'statistics' && country && (
+                        <CountryDetailDashboard country={country} />
+                      )}
+
+                      {activeSubTab === 'linkedHistorical' && country && (
                         <LinkedHistoricalCountriesSection country={country} />
                       )}
 
@@ -279,31 +358,40 @@ function CountryDetailInner({
                       )}
 
                       {activeSubTab === 'person' && (
-                        <div style={{ marginTop: 28 }}>
+                        <div style={{ marginTop: 12 }}>
                           <CountryDetailStyles.PersonInnerTabBar role="tablist" aria-label="인물 하위 메뉴">
                             <CountryDetailStyles.PersonInnerTabButton
                               role="tab"
                               aria-selected={personInnerTab === 'stats'}
                               $active={personInnerTab === 'stats'}
-                              onClick={() => setPersonInnerTab('stats')}
+                              onClick={() => {
+                                setPersonInnerTab('stats')
+                                onPersonInnerTabChange?.('stats')
+                              }}
                             >
                               통계·최근 인물
                             </CountryDetailStyles.PersonInnerTabButton>
                             <CountryDetailStyles.PersonInnerTabButton
                               role="tab"
-                              aria-selected={personInnerTab === 'heads'}
-                              $active={personInnerTab === 'heads'}
-                              onClick={() => setPersonInnerTab('heads')}
+                              aria-selected={personInnerTab === 'list'}
+                              $active={personInnerTab === 'list'}
+                              onClick={() => {
+                                setPersonInnerTab('list')
+                                onPersonInnerTabChange?.('list')
+                              }}
                             >
-                              역대 수반
+                              인물 리스트
                             </CountryDetailStyles.PersonInnerTabButton>
                             <CountryDetailStyles.PersonInnerTabButton
                               role="tab"
-                              aria-selected={personInnerTab === 'list'}
-                              $active={personInnerTab === 'list'}
-                              onClick={() => setPersonInnerTab('list')}
+                              aria-selected={personInnerTab === 'heads'}
+                              $active={personInnerTab === 'heads'}
+                              onClick={() => {
+                                setPersonInnerTab('heads')
+                                onPersonInnerTabChange?.('heads')
+                              }}
                             >
-                              인물 리스트
+                              역대 수반
                             </CountryDetailStyles.PersonInnerTabButton>
                           </CountryDetailStyles.PersonInnerTabBar>
                           {personInnerTab === 'stats' && (

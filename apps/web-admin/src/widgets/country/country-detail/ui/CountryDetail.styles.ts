@@ -1482,9 +1482,11 @@ export const CountryNameGlass = styled.div`
   flex-direction: column;
   gap: 4px;
   max-width: min(90%, 420px);
+  min-width: 120px;
 
   @media (max-width: 768px) {
     padding: 14px 18px;
+    min-width: 100px;
   }
 `
 
@@ -1523,6 +1525,10 @@ export const AnalyticsCountryName = styled.h1`
     0 1px 3px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: keep-all;
 
   @media (max-width: 1024px) {
     font-size: 36px;

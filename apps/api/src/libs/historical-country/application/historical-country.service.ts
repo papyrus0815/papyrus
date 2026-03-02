@@ -82,7 +82,7 @@ export class HistoricalCountryService {
   }
 
   /**
-   * 역사적 국가가 소속된 상위 역사적 국가 ID 목록 조회
+   * 이 국가(전임)의 후임 역사적 국가 ID 목록 조회
    */
   async getParentHistoricalCountryIdsByMemberId(
     memberCountryId: string,

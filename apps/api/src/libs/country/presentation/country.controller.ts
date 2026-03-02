@@ -31,6 +31,7 @@ export class CountryController {
     return {
       id: country.id,
       name: country.name,
+      fullName: country.fullName,
       localName: country.localName,
       flagEmoji: country.flagEmoji,
       isoCode: country.isoCode,
@@ -150,6 +151,7 @@ export class CountryController {
     const country = await this.countryService.createCountry(
       {
         name: dto.name,
+        fullName: dto.fullName,
         localName: dto.localName,
         flagEmoji: dto.flagEmoji,
         isoCode: dto.isoCode,
@@ -185,6 +187,7 @@ export class CountryController {
       id,
       {
         name: dto.name,
+        fullName: dto.fullName,
         localName: dto.localName,
         flagEmoji: dto.flagEmoji,
         isoCode: dto.isoCode,

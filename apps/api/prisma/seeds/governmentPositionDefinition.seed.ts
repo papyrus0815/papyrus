@@ -34,7 +34,7 @@ const DEFINITIONS: {
   { id: 'gov-pos-president', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '대통령', titleEn: 'President', rank: 1 },
   { id: 'gov-pos-khan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '칸', titleEn: 'Khagan', rank: 1 },
   { id: 'gov-pos-sultan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '술탄', titleEn: 'Sultan', rank: 1 },
-  { id: 'gov-pos-supreme-leader', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '최고지도자', titleEn: 'Supreme Leader', rank: 1 },
+  { id: 'gov-pos-supreme-leader', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '최고지도자(라흐바르)', titleEn: 'Supreme Leader (Rahbar)', titleLocal: 'رهبر', rank: 1 },
   { id: 'gov-pos-chairman', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '국가주석', titleEn: 'President', titleLocal: '国家主席', rank: 1 },
   { id: 'gov-pos-federal-president', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '대통령(연방)', titleEn: 'Federal President', rank: 1 },
   { id: 'gov-pos-pm', positionType: GovernmentPositionType.HEAD_OF_GOVERNMENT, title: '총리', titleEn: 'Prime Minister', rank: 1 },

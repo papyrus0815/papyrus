@@ -31,8 +31,11 @@ model Country {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가명
+  /// 국가명 (표시용 단축명)
   name String @unique @db.VarChar(100)
+
+  /// 공식/전체 명칭 (예: 대한민국, 일본국, Republic of Korea — ** 공화국 등)
+  fullName String? @map("full_name") @db.VarChar(150)
 
   /// 로컬 국가명
   localName String? @map("local_name") @db.VarChar(100)

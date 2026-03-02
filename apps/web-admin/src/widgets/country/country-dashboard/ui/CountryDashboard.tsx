@@ -266,17 +266,16 @@ function CountryFeedFlag({
   )
 }
 
-/** 등록 현황 게시판 한 건 (디자인: 배지 + 이름, 문장형 텍스트 없음) */
+/** 등록 현황 게시판 한 건 — 인물만 (국가 등록은 별도 패널 "국가(현대, 역사적) 등록 현황"에서 표시) */
 export type RegistrationFeedItem = {
   date: string
-  type: 'country' | 'person'
+  type: 'person'
   primaryLabel: string
   countryName?: string | null
   profileImageUrl?: string | null
-  /** 국가일 때 국기 이미지 URL */
-  thumbnailUrl?: string | null
-  /** 국가일 때 국기 이모지 폴백 (예: 🇰🇷) */
-  flagEmoji?: string | null
+  /** 클릭 시 해당 국가 인물 리스트로 이동용 */
+  personId?: string
+  countryId?: string | null
 }
 
 /** 사건 일주일 내 한 건 */
@@ -309,6 +308,8 @@ interface CountryDashboardProps {
   registrationFeed?: RegistrationFeedItem[]
   recentEvents?: RecentEventItem[]
   countryRegistrationFeed?: CountryRegistrationFeedItem[]
+  /** 등록 현황에서 인물 카드 클릭 시 (해당 국가 인물 리스트로 이동용) */
+  onRegistrationPersonClick?: (item: RegistrationFeedItem) => void
 }
 
 export function CountryDashboard({
@@ -320,6 +321,7 @@ export function CountryDashboard({
   registrationFeed = [],
   recentEvents = [],
   countryRegistrationFeed = [],
+  onRegistrationPersonClick,
 }: CountryDashboardProps) {
   const listState = useCountryListState()
   const countries = countriesProp ?? listState.countries
@@ -440,37 +442,51 @@ export function CountryDashboard({
             <FeedPanel>
               <FeedPanelTitle>등록 현황</FeedPanelTitle>
               {registrationFeed.length === 0 ? (
-                <BoardEmpty>아직 등록된 국가·인물이 없습니다.</BoardEmpty>
+                <BoardEmpty>아직 등록된 인물이 없습니다.</BoardEmpty>
               ) : (
                 <BoardList>
-                  {registrationFeed.map((item, index) => (
-                    <li key={`${item.date}-${item.type}-${index}`}>
-                      <FeedRow>
-                        <FeedRowLeft>
-                          <FeedAvatar $type={item.type}>
-                            {item.type === 'person' && item.profileImageUrl ? (
-                              <img src={item.profileImageUrl} alt="" />
-                            ) : item.type === 'country' ? (
-                              <CountryFeedFlag
-                                thumbnailUrl={item.thumbnailUrl}
-                                flagEmoji={item.flagEmoji || '🌍'}
-                              />
-                            ) : (
-                              <span>👤</span>
-                            )}
-                          </FeedAvatar>
-                          <FeedLabelBlock>
-                            {item.type === 'person' && item.countryName && (
-                              <FeedCountryChip>{item.countryName}</FeedCountryChip>
-                            )}
-                            <FeedPrimaryLabel>{item.primaryLabel}</FeedPrimaryLabel>
-                            <FeedActionSuffix>등록</FeedActionSuffix>
-                          </FeedLabelBlock>
-                        </FeedRowLeft>
-                        <FeedTime>{formatRelativeTime(item.date)}</FeedTime>
-                      </FeedRow>
-                    </li>
-                  ))}
+                  {registrationFeed.map((item, index) => {
+                    const isPersonClickable =
+                      item.type === 'person' &&
+                      item.countryId &&
+                      typeof onRegistrationPersonClick === 'function'
+                    return (
+                      <li key={`${item.date}-${item.type}-${item.personId ?? index}`}>
+                        <FeedRow
+                          as={isPersonClickable ? 'button' : 'div'}
+                          type={isPersonClickable ? 'button' : undefined}
+                          onClick={
+                            isPersonClickable
+                              ? () => onRegistrationPersonClick!(item)
+                              : undefined
+                          }
+                          style={
+                            isPersonClickable
+                              ? { cursor: 'pointer', textAlign: 'left', width: '100%' }
+                              : undefined
+                          }
+                        >
+                          <FeedRowLeft>
+                            <FeedAvatar $type="person">
+                              {item.profileImageUrl ? (
+                                <img src={item.profileImageUrl} alt="" />
+                              ) : (
+                                <span>👤</span>
+                              )}
+                            </FeedAvatar>
+                            <FeedLabelBlock>
+                              {item.countryName && (
+                                <FeedCountryChip>{item.countryName}</FeedCountryChip>
+                              )}
+                              <FeedPrimaryLabel>{item.primaryLabel}</FeedPrimaryLabel>
+                              <FeedActionSuffix>등록</FeedActionSuffix>
+                            </FeedLabelBlock>
+                          </FeedRowLeft>
+                          <FeedTime>{formatRelativeTime(item.date)}</FeedTime>
+                        </FeedRow>
+                      </li>
+                    )
+                  })}
                 </BoardList>
               )}
             </FeedPanel>
