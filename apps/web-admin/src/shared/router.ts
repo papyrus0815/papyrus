@@ -47,6 +47,20 @@ export const pathKeys = {
     /** 국가 상세 내 행정조직 탭 고유 URL */
     countryGovernment: (countryId: string) =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/government`,
+    /** 국가 상세 내 연대표(전체 사건) 탭 고유 URL. form=create 시 사건 등록 폼 표시 */
+    countryEvents: (countryId: string, form?: 'create') =>
+      form === 'create'
+        ? `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/events?form=create`
+        : `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/events`,
+    /** 연대표/대시보드 — 인물 뷰 (국가 미선택 시 전체 인물) */
+    dashboardPersons: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/persons`,
+    /** 연대표/대시보드 — 연대표(전체 사건) 뷰 */
+    dashboardEvents: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events`,
+    /** 연대표/대시보드 — 통계 뷰 (전 세계 국가 통계) */
+    dashboard: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
   },
 

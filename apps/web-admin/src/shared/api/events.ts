@@ -22,12 +22,15 @@ const getConnection = () => nestiaApiService.getConnection()
 
 /**
  * 모든 사건 조회 (페이징 지원)
+ * countryId: 현대 국가 또는 역사적 국가 ID로 연관 사건만 조회
  */
 export async function getAllEvents(params?: {
   offset?: number
   limit?: number
   /** 일주일만: 7 전달 시 createdAt이 최근 N일 이내인 사건만 반환 */
   createdSinceDays?: number
+  /** 연관 국가(현대/역사적) ID로 필터 */
+  countryId?: string
 }): Promise<EventResponseDto[]> {
   try {
     const connection = getConnection()
@@ -40,6 +43,9 @@ export async function getAllEvents(params?: {
     }
     if (params?.createdSinceDays !== undefined) {
       url.searchParams.set('createdSinceDays', params.createdSinceDays.toString())
+    }
+    if (params?.countryId) {
+      url.searchParams.set('countryId', params.countryId)
     }
 
     const response = await fetch(url.toString(), {

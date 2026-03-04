@@ -36,6 +36,8 @@ export const useEventFilters = (
     typeof FILTER_ALL | string
   >(FILTER_ALL)
   const [showFlatView, setShowFlatView] = useState(false)
+  /** 교황 등 전역 수반 표시 (모든 국가에서 다 뜨는 직책). true=표시, false=숨김 */
+  const [showGlobalHeadsOfState, setShowGlobalHeadsOfState] = useState(true)
 
   // ===== 사용 가능한 필터 옵션 =====
   const availableCountries = useMemo(() => {
@@ -191,6 +193,7 @@ export const useEventFilters = (
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
     setSelectedPositionType(FILTER_ALL)
+    setShowGlobalHeadsOfState(true)
   }
 
   return {
@@ -203,6 +206,7 @@ export const useEventFilters = (
     selectedCountry,
     selectedPositionType,
     showFlatView,
+    showGlobalHeadsOfState,
 
     // 세터
     setSelectedCategory,
@@ -213,6 +217,7 @@ export const useEventFilters = (
     setSelectedCountry,
     setSelectedPositionType,
     setShowFlatView,
+    setShowGlobalHeadsOfState,
 
     // 계산된 값
     availableCountries,

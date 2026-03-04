@@ -8,8 +8,6 @@ import {
   FiBriefcase,
   FiCalendar,
   FiCheck,
-  FiChevronDown,
-  FiFilter,
   FiMapPin,
   FiSearch,
   FiUser,
@@ -19,6 +17,21 @@ import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+
+// 디자인 토큰
+const BRAND = {
+  primary: '#6366f1',
+  primaryLight: '#eef2ff',
+  primaryMuted: '#c7d2fe',
+  text: '#0f172a',
+  textMuted: '#64748b',
+  textSubtle: '#94a3b8',
+  surface: '#f8fafc',
+  border: '#e2e8f0',
+  borderLight: '#f1f5f9',
+  white: '#ffffff',
+  error: '#ef4444',
+}
 
 interface PersonSelectModalProps {
   persons: PersonResponseDto[]
@@ -183,28 +196,30 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
       <ModalBox onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
           <ModalTitle>인물 선택</ModalTitle>
-          <ModalCloseButton onClick={onClose}>
-            <FiX size={20} />
+          <ModalCloseButton onClick={onClose} aria-label="닫기">
+            <FiX size={20} strokeWidth={2.5} />
           </ModalCloseButton>
         </ModalHeader>
 
         {/* 검색 바 */}
         <SearchSection>
-          <SearchInput
-            type="text"
-            placeholder="이름 또는 생몰년도로 검색..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            autoFocus
-          />
+          <SearchWrapper>
+            <FiSearch size={20} className="search-icon" />
+            <SearchInput
+              type="text"
+              placeholder="이름 또는 생몰년도로 검색..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+          </SearchWrapper>
         </SearchSection>
 
         <SplitModalBody>
           {/* 좌측: 필터 사이드바 */}
           <FilterSidebar>
             <FilterSidebarHeader>
-              <FiFilter size={14} />
-              필터
+              <span className="label">필터</span>
               {activeFilterCount > 0 && (
                 <FilterBadge>{activeFilterCount}</FilterBadge>
               )}
@@ -329,20 +344,23 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
           <PersonsArea>
             <PersonsHeader>
               {filteredPersons.length > 0 ? (
-                <span>
-                  검색 결과: {filteredPersons.length}명 / 전체 {persons.length}
-                  명
-                </span>
+                <ResultCount>
+                  <span className="count">{filteredPersons.length}</span>
+                  <span className="total">/ {persons.length}명</span>
+                </ResultCount>
               ) : (
-                <span style={{ color: '#ef4444' }}>검색 결과가 없습니다</span>
+                <EmptyMessage>검색 결과가 없습니다</EmptyMessage>
               )}
             </PersonsHeader>
 
             <PersonsList>
               {filteredPersons.length === 0 ? (
                 <EmptyState>
-                  <FiUser size={48} style={{ opacity: 0.2 }} />
-                  <p>검색 결과가 없습니다</p>
+                  <EmptyIconWrap>
+                    <FiUser size={40} strokeWidth={1.5} />
+                  </EmptyIconWrap>
+                  <EmptyText>검색 결과가 없습니다</EmptyText>
+                  <EmptySub>필터를 조정하거나 검색어를 변경해 보세요</EmptySub>
                 </EmptyState>
               ) : (
                 filteredPersons.map((person) => {
@@ -369,49 +387,49 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                       $selected={isSelected}
                       onClick={() => handleSelect(person)}
                     >
-                      <PersonCardContent>
-                        <PersonAvatar $selected={isSelected}>
-                          {person.profileImageUrl ? (
-                            <img src={person.profileImageUrl} alt={fullName} />
-                          ) : (
-                            <FiUser size={24} />
+                      <PersonAvatar $selected={isSelected}>
+                        {person.profileImageUrl ? (
+                          <img src={person.profileImageUrl} alt={fullName} />
+                        ) : (
+                          <FiUser size={22} strokeWidth={2} />
+                        )}
+                      </PersonAvatar>
+
+                      <PersonMainInfo>
+                        <PersonNameRow>
+                          <PersonName>{fullName}</PersonName>
+                          {isSelected ? (
+                            <SelectedBadge>
+                              <FiCheck size={14} strokeWidth={3} />
+                            </SelectedBadge>
+                          ) : null}
+                        </PersonNameRow>
+
+                        <PersonMetaRow>
+                          {lifespan && (
+                            <PersonMeta>
+                              <FiCalendar size={11} />
+                              <span>{lifespan}</span>
+                            </PersonMeta>
                           )}
-                        </PersonAvatar>
-
-                        <PersonMainInfo>
-                          <PersonNameRow>
-                            <PersonName>{fullName}</PersonName>
-                            <ToggleButton $selected={isSelected}>
-                              <ToggleSlider $selected={isSelected} />
-                            </ToggleButton>
-                          </PersonNameRow>
-
-                          <PersonMetaRow>
-                            {lifespan && (
-                              <PersonMeta>
-                                <FiCalendar size={12} />
-                                <span>{lifespan}</span>
-                              </PersonMeta>
-                            )}
-                            {primaryJob && (
-                              <PersonMeta>
-                                <FiBriefcase size={12} />
-                                <span>{primaryJob}</span>
-                              </PersonMeta>
-                            )}
-                            {primaryCountry && (
-                              <PersonMeta>
-                                <FiMapPin size={12} />
-                                <span>{primaryCountry}</span>
-                              </PersonMeta>
-                            )}
-                          </PersonMetaRow>
-
-                          {!lifespan && !primaryJob && !primaryCountry && (
-                            <PersonDates $empty>정보 없음</PersonDates>
+                          {primaryJob && (
+                            <PersonMeta>
+                              <FiBriefcase size={11} />
+                              <span>{primaryJob}</span>
+                            </PersonMeta>
                           )}
-                        </PersonMainInfo>
-                      </PersonCardContent>
+                          {primaryCountry && (
+                            <PersonMeta>
+                              <FiMapPin size={11} />
+                              <span>{primaryCountry}</span>
+                            </PersonMeta>
+                          )}
+                        </PersonMetaRow>
+
+                        {!lifespan && !primaryJob && !primaryCountry && (
+                          <PersonDates $empty>정보 없음</PersonDates>
+                        )}
+                      </PersonMainInfo>
                     </PersonCard>
                   )
                 })
@@ -427,48 +445,45 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
 // Styled Components
 const ModalOverlay = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(4px);
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 24px;
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 `
 
 const ModalBox = styled.div`
-  background: #fff;
-  border-radius: 20px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.15);
+  background: ${BRAND.white};
+  border-radius: 24px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 24px 48px -12px rgba(0, 0, 0, 0.15),
+    0 12px 24px -8px rgba(0, 0, 0, 0.08);
   width: 100%;
-  max-width: 880px;
+  max-width: 900px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideUp 0.25s ease;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
   @keyframes slideUp {
     from {
-      transform: translateY(16px);
+      transform: translateY(24px) scale(0.98);
       opacity: 0;
     }
     to {
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
       opacity: 1;
     }
   }
@@ -478,65 +493,86 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px;
-  border-bottom: 1px solid #eee;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid ${BRAND.borderLight};
 `
 
-const ModalTitle = styled.h3`
+const ModalTitle = styled.h2`
   margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  color: #111;
-  letter-spacing: -0.03em;
+  font-size: 20px;
+  font-weight: 700;
+  color: ${BRAND.text};
+  letter-spacing: -0.04em;
+  line-height: 1.3;
 `
 
 const ModalCloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border: none;
-  background: #f5f5f5;
-  color: #666;
+  background: ${BRAND.surface};
+  color: ${BRAND.textMuted};
   border-radius: 12px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: all 0.2s ease;
 
   &:hover {
-    background: var(--color-primary-100, #f3e8ff);
-    color: var(--color-primary);
+    background: ${BRAND.primaryLight};
+    color: ${BRAND.primary};
   }
 `
 
 const SearchSection = styled.div`
-  padding: 20px 28px;
-  border-bottom: 1px solid #eee;
+  padding: 16px 28px 20px;
+`
+
+const SearchWrapper = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  .search-icon {
+    position: absolute;
+    left: 18px;
+    color: ${BRAND.textSubtle};
+    pointer-events: none;
+    transition: color 0.2s ease;
+  }
+
+  &:focus-within .search-icon {
+    color: ${BRAND.primary};
+  }
 `
 
 const SearchInput = styled.input`
   width: 100%;
-  padding: 16px 20px;
-  font-size: 16px;
-  color: #111;
-  border: 2px solid #eee;
-  border-radius: 12px;
+  padding: 14px 18px 14px 48px;
+  font-size: 15px;
+  font-weight: 500;
+  color: ${BRAND.text};
+  background: ${BRAND.surface};
+  border: 1px solid ${BRAND.border};
+  border-radius: 14px;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.2s ease;
 
   &::placeholder {
-    color: #999;
+    color: ${BRAND.textSubtle};
   }
 
   &:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 4px rgba(173, 70, 255, 0.12);
+    background: ${BRAND.white};
+    border-color: ${BRAND.primary};
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
   }
 `
 
 const SplitModalBody = styled.div`
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 200px 1fr;
   min-height: 420px;
   overflow: hidden;
 
@@ -547,22 +583,22 @@ const SplitModalBody = styled.div`
 `
 
 const FilterSidebar = styled.div`
-  background: #fafafa;
-  border-right: 1px solid #eee;
+  background: ${BRAND.surface};
+  border-right: 1px solid ${BRAND.borderLight};
   overflow-y: auto;
   padding: 20px 16px;
 
   &::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #ddd;
-    border-radius: 3px;
+    background: ${BRAND.border};
+    border-radius: 4px;
   }
 
   @media (max-width: 768px) {
     border-right: none;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid ${BRAND.borderLight};
     max-height: 220px;
   }
 `
@@ -570,16 +606,15 @@ const FilterSidebar = styled.div`
 const FilterSidebarHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #111;
-  padding: 0 4px 16px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid #eee;
+  gap: 8px;
+  padding: 0 4px 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid ${BRAND.borderLight};
 
-  svg {
-    color: var(--color-primary);
+  .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: ${BRAND.text};
   }
 `
 
@@ -587,57 +622,65 @@ const FilterBadge = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
   padding: 0 6px;
-  background: var(--color-primary);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 11px;
+  background: ${BRAND.primary};
+  color: ${BRAND.white};
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
   margin-left: auto;
 `
 
 const FilterGroup = styled.div`
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 `
 
 const FilterLabel = styled.label`
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: #555;
+  color: ${BRAND.textMuted};
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
 
   svg {
-    color: var(--color-primary);
+    color: ${BRAND.primary};
+    opacity: 0.9;
   }
 `
 
 const FilterSelect = styled.select`
   width: 100%;
-  padding: 12px 14px;
-  font-size: 14px;
+  padding: 10px 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: #111;
-  background: #fff;
-  border: 2px solid #eee;
+  color: ${BRAND.text};
+  background: ${BRAND.white};
+  border: 1px solid ${BRAND.border};
   border-radius: 10px;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
 
-  &:hover, &:focus {
-    border-color: var(--color-primary);
+  &:hover {
+    border-color: ${BRAND.primaryMuted};
+  }
+  &:focus {
+    border-color: ${BRAND.primary};
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
   }
 `
 
 const FilterDivider = styled.div`
   height: 1px;
-  background: #eee;
+  background: ${BRAND.border};
   margin: 16px 0;
+  opacity: 0.6;
 `
 
 const ResetFiltersButton = styled.button`
@@ -646,18 +689,19 @@ const ResetFiltersButton = styled.button`
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 12px;
-  font-size: 13px;
+  padding: 10px 12px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--color-primary);
-  background: var(--color-primary-100, #f3e8ff);
+  color: ${BRAND.primary};
+  background: ${BRAND.primaryLight};
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: all 0.2s ease;
 
   &:hover {
-    opacity: 0.9;
+    background: ${BRAND.primaryMuted};
+    color: ${BRAND.white};
   }
 `
 
@@ -668,24 +712,44 @@ const PersonsArea = styled.div`
 `
 
 const PersonsHeader = styled.div`
-  padding: 16px 28px;
-  font-size: 14px;
+  padding: 14px 28px;
+  border-bottom: 1px solid ${BRAND.borderLight};
+`
+
+const ResultCount = styled.div`
+  font-size: 13px;
   font-weight: 500;
-  color: #666;
-  border-bottom: 1px solid #eee;
+  color: ${BRAND.textMuted};
+
+  .count {
+    color: ${BRAND.primary};
+    font-weight: 700;
+  }
+  .total {
+    color: ${BRAND.textSubtle};
+  }
+`
+
+const EmptyMessage = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${BRAND.error};
 `
 
 const PersonsList = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 20px 28px;
+  padding: 16px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #ddd;
-    border-radius: 4px;
+    background: ${BRAND.border};
+    border-radius: 3px;
   }
 `
 
@@ -694,57 +758,71 @@ const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 24px;
-  color: #bbb;
+  padding: 64px 24px;
+`
 
-  p {
-    margin: 20px 0 0;
-    font-size: 16px;
-    font-weight: 500;
-    color: #888;
-  }
+const EmptyIconWrap = styled.div`
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${BRAND.surface};
+  border-radius: 50%;
+  color: ${BRAND.textSubtle};
+  margin-bottom: 20px;
+  opacity: 0.7;
+`
+
+const EmptyText = styled.p`
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: ${BRAND.textMuted};
+`
+
+const EmptySub = styled.p`
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${BRAND.textSubtle};
 `
 
 const PersonCard = styled.button<{ $selected: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
-  padding: 18px 20px;
-  margin-bottom: 10px;
+  padding: 14px 18px;
   background: ${({ $selected }) =>
-    $selected ? 'var(--color-primary-100, #f3e8ff)' : '#fff'};
-  border: 2px solid
-    ${({ $selected }) =>
-      $selected ? 'var(--color-primary)' : '#eee'};
+    $selected ? BRAND.primaryLight : BRAND.white};
+  border: 1px solid
+    ${({ $selected }) => ($selected ? BRAND.primaryMuted : BRAND.borderLight)};
   border-radius: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: left;
 
   &:hover {
-    border-color: var(--color-primary);
+    border-color: ${({ $selected }) =>
+      $selected ? BRAND.primary : BRAND.primaryMuted};
     background: ${({ $selected }) =>
-      $selected ? 'var(--color-primary-100, #f3e8ff)' : 'var(--color-primary-100, #faf5ff)'};
+      $selected ? BRAND.primaryLight : BRAND.surface};
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06);
   }
 `
 
-const PersonCardContent = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  width: 100%;
-`
-
 const PersonAvatar = styled.div<{ $selected?: boolean }>`
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: ${({ $selected }) =>
-    $selected ? 'var(--color-primary)' : '#f0f0f0'};
-  border-radius: 14px;
-  color: ${({ $selected }) => ($selected ? '#fff' : '#888')};
+    $selected
+      ? `linear-gradient(135deg, ${BRAND.primary} 0%, #818cf8 100%)`
+      : `linear-gradient(135deg, ${BRAND.surface} 0%, #e2e8f0 100%)`};
+  border-radius: 50%;
+  color: ${({ $selected }) => ($selected ? BRAND.white : BRAND.textSubtle)};
   flex-shrink: 0;
   overflow: hidden;
 
@@ -760,7 +838,8 @@ const PersonMainInfo = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  margin-left: 16px;
 `
 
 const PersonNameRow = styled.div`
@@ -771,10 +850,23 @@ const PersonNameRow = styled.div`
 `
 
 const PersonName = styled.div`
-  font-size: 17px;
-  font-weight: 600;
-  color: #111;
-  letter-spacing: -0.02em;
+  font-size: 15px;
+  font-weight: 700;
+  color: ${BRAND.text};
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+`
+
+const SelectedBadge = styled.div`
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${BRAND.primary};
+  color: ${BRAND.white};
+  border-radius: 50%;
+  flex-shrink: 0;
 `
 
 const PersonMetaRow = styled.div`
@@ -787,14 +879,15 @@ const PersonMetaRow = styled.div`
 const PersonMeta = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 5px;
+  font-size: 12px;
   font-weight: 500;
-  color: #666;
+  color: ${BRAND.textMuted};
 
   svg {
-    color: var(--color-primary);
+    color: ${BRAND.textSubtle};
     flex-shrink: 0;
+    opacity: 0.8;
   }
 
   span {
@@ -806,36 +899,8 @@ const PersonMeta = styled.div`
 `
 
 const PersonDates = styled.div<{ $empty?: boolean }>`
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: ${({ $empty }) => ($empty ? '#999' : '#666')};
-`
-
-const ToggleButton = styled.div<{ $selected: boolean }>`
-  position: relative;
-  width: 44px;
-  height: 24px;
-  background: ${({ $selected }) =>
-    $selected ? 'var(--color-primary)' : '#e0e0e0'};
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  flex-shrink: 0;
-  border: none;
-
-  &:hover {
-    opacity: 0.9;
-  }
-`
-
-const ToggleSlider = styled.div<{ $selected: boolean }>`
-  position: absolute;
-  top: 2px;
-  left: ${({ $selected }) => ($selected ? '22px' : '2px')};
-  width: 20px;
-  height: 20px;
-  background: #fff;
-  border-radius: 50%;
-  transition: all 0.25s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  color: ${({ $empty }) =>
+    $empty ? BRAND.textSubtle : BRAND.textMuted};
 `

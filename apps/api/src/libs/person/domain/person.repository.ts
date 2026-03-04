@@ -182,6 +182,7 @@ export interface IPersonRepository {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]>
+  findGlobalTenures(): Promise<any[]>
   /**
    * 재임 업적·한일 추가 (사건과 별도)
    */

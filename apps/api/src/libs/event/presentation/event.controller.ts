@@ -133,6 +133,7 @@ export class EventController {
     @Query('offset') offset?: string,
     @Query('limit') limit?: string,
     @Query('createdSinceDays') createdSinceDays?: string,
+    @Query('countryId') countryId?: string,
     @Request() req?: any,
   ): Promise<EventResponseDto[]> {
     const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
@@ -143,18 +144,33 @@ export class EventController {
       sinceDays != null && !Number.isNaN(sinceDays) && sinceDays > 0
         ? new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
         : undefined
+    const filterCountryId =
+      countryId && typeof countryId === 'string' && countryId.trim()
+        ? countryId.trim()
+        : undefined
 
-    console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}, createdSinceDays=${sinceDays ?? 'all'}`)
+    console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}, createdSinceDays=${sinceDays ?? 'all'}, countryId=${filterCountryId ?? 'all'}`)
     console.log(`👤 req.user:`, req.user)
     console.log(`👤 userId:`, userId)
 
     // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
+    // countryId 있으면: 해당 국가(현대 또는 역사적)에 연관된 사건만
     const events = await this.prisma.event.findMany({
       where: {
         parentEventId: null,
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
+        ...(filterCountryId && {
+          countryRelations: {
+            some: {
+              OR: [
+                { countryId: filterCountryId },
+                { historicalCountryId: filterCountryId },
+              ],
+            },
+          },
+        }),
       },
       skip,
       take,

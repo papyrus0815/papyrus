@@ -11,7 +11,10 @@ import type { HistoricalEvent } from '../../../pages/events/create/events.types'
 import { MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS } from '../../../pages/events/list/mock-government-positions'
 import { transformEventsFromApi } from './eventTransformers'
 
-export const useEvents = (pageSizeParam: number = 20) => {
+export const useEvents = (
+  pageSizeParam: number = 20,
+  countryId?: string | null,
+) => {
   const [events, setEvents] = useState<HistoricalEvent[]>([])
   const [personsWithGovPositions, setPersonsWithGovPositions] = useState<
     typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
@@ -38,6 +41,7 @@ export const useEvents = (pageSizeParam: number = 20) => {
         getAllEvents({
           offset: currentOffset,
           limit,
+          ...(countryId && { countryId }),
         }),
         getAllPersonsWithGovernmentPositions(),
       ])
@@ -79,7 +83,7 @@ export const useEvents = (pageSizeParam: number = 20) => {
 
   useEffect(() => {
     fetchMoreEvents(true)
-  }, [])
+  }, [countryId ?? ''])
 
   return {
     events,

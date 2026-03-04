@@ -113,6 +113,7 @@ export interface HeadOfStateDuringEvent {
  * @param eventEndDate 사건 종료일 (없으면 시작일만 사용)
  * @param persons 모든 인물 목록 (governmentPositions 포함)
  * @param positionTypeFilter 직업 필터 (선택사항)
+ * @param excludePositionDefinitionIds 이 ID 목록에 있는 직책(예: 교황)은 제외
  * @returns 해당 기간에 집권했던 국가 원수 목록
  */
 export function findHeadsOfStateDuringPeriod(
@@ -120,6 +121,7 @@ export function findHeadsOfStateDuringPeriod(
   eventEndDate: string | undefined,
   persons: any[],
   positionTypeFilter?: string,
+  excludePositionDefinitionIds?: readonly string[],
 ): HeadOfStateDuringEvent[] {
   const result: HeadOfStateDuringEvent[] = []
   const eventStart = new Date(eventStartDate)
@@ -158,6 +160,10 @@ export function findHeadsOfStateDuringPeriod(
     if (person.governmentPositions?.length > 0) {
       person.governmentPositions.forEach((tenure: any) => {
         if (tenure.showPositionInfo === false) return
+        if (excludePositionDefinitionIds?.length) {
+          const posDefId = tenure.positionDefinition?.id ?? tenure.positionDefinitionId
+          if (posDefId && excludePositionDefinitionIds.includes(posDefId)) return
+        }
         if (positionTypeFilter && positionTypeFilter !== 'all') {
           if (tenure.positionType !== positionTypeFilter) return
         } else {
@@ -168,8 +174,16 @@ export function findHeadsOfStateDuringPeriod(
         if (!isOverlapping(tenureStart, tenure.endDate ? tenureEnd : null))
           return
         const country = tenure.country || tenure.historicalCountry
-        if (country) {
-          pushPerson(person, {
+        const countryLabel = country
+          ? { id: country.id, name: country.name }
+          : {
+              id: 'global',
+              name:
+                tenure.positionDefinition?.title ||
+                tenure.title ||
+                '전역',
+            }
+        pushPerson(person, {
             position: {
               id: tenure.id,
               title: tenure.title,
@@ -183,9 +197,8 @@ export function findHeadsOfStateDuringPeriod(
               endDate: tenure.endDate,
               showPositionInfo: tenure.showPositionInfo,
             },
-            country: { id: country.id, name: country.name },
+            country: countryLabel,
           })
-        }
       })
     }
     // 사건 페이지는 연대표(국가 페이지)에 등록한 수반(GovernmentPositionTenure)만 사용.

@@ -36,10 +36,12 @@ import {
   useUpdateHistoricalCountry,
 } from '@/features/historical-country'
 import { getAllEvents } from '@/shared/api/events'
+import { PersonDashboardSection } from '@/widgets/country/person-dashboard-section'
 import { CountryDashboard } from '@/widgets/country/country-dashboard'
 import { CountryDetail } from '@/widgets/country/country-detail'
 import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-section.widget'
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
+import { EventsTimelineSection } from '@/widgets/country/country-detail/ui/events-timeline-section.widget'
 import { CountryForm } from '@/widgets/country/country-form'
 import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
 import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
@@ -53,22 +55,24 @@ import { zodResolver } from '@hookform/resolvers/zod'
 
 import * as S from './country.styles'
 
-/** 대시보드 메뉴 선택 시 오른쪽 컨텐츠 (통계·가문·민족 제외 — 해당 뷰는 각각 전용 섹션으로 렌더) */
+/** 대시보드 메뉴 선택 시 오른쪽 컨텐츠 (통계·가문·민족·전체사건·인물 제외 — 해당 뷰는 각각 전용 섹션으로 렌더) */
 function DashboardMenuContent({
   view,
   onNavigateFullPage,
 }: {
-  view: Exclude<DashboardContentView, 'stats' | 'dynasty' | 'ethnicity'>
+  view: Exclude<
+    DashboardContentView,
+    'stats' | 'person' | 'dynasty' | 'ethnicity' | 'events'
+  >
   onNavigateFullPage: (path: string) => void
 }) {
   const configs: Record<
-    Exclude<DashboardContentView, 'stats' | 'dynasty' | 'ethnicity'>,
+    Exclude<
+      DashboardContentView,
+      'stats' | 'person' | 'dynasty' | 'ethnicity' | 'events'
+    >,
     { title: string; desc: string; fullPath?: string; fullLabel?: string }
   > = {
-    heads: {
-      title: '행정 수반',
-      desc: '좌측에서 국가를 선택한 뒤 해당 국가의 역대 수반 탭에서 확인할 수 있습니다.',
-    },
     legislature: {
       title: '저원 (입법 기관)',
       desc: '조직·입법 기관 정보를 관리합니다.',
@@ -88,7 +92,9 @@ function DashboardMenuContent({
       fullLabel: '',
     },
   }
-  const { title, desc, fullPath, fullLabel } = configs[view]
+  const config = configs[view]
+  if (!config) return null
+  const { title, desc, fullPath, fullLabel } = config
   return (
     <S.DashboardMenuContentPanel>
       <S.DashboardMenuContentTitle>{title}</S.DashboardMenuContentTitle>
@@ -144,6 +150,14 @@ export default function CountryPage() {
     /\/history\/country\/[^/]+\/government\/?$/.test(location.pathname)
   /** 대시보드 탭 전용 URL 여부 (/history/country/:id/dashboard) */
   const isDashboardUrl = /\/history\/country\/[^/]+\/dashboard\/?$/.test(location.pathname)
+  /** 연대표(전체 사건) 탭 전용 URL 여부 (/history/country/:id/events) */
+  const isEventsUrl = /\/history\/country\/[^/]+\/events\/?$/.test(location.pathname)
+  /** 연대표/대시보드 인물 뷰 URL (/history/dashboard/persons) */
+  const isDashboardPersonsUrl = /\/history\/dashboard\/persons\/?$/.test(location.pathname)
+  /** 연대표/대시보드 연대표(전체 사건) 뷰 URL (/history/dashboard/events) */
+  const isDashboardEventsUrl = /\/history\/dashboard\/events\/?$/.test(location.pathname)
+  /** 연대표/대시보드 통계 뷰 URL (/history/dashboard) */
+  const isDashboardStatsUrl = /\/history\/dashboard\/?$/.test(location.pathname)
 
   // ==================== API Hooks ====================
   // 현대 국가 데이터
@@ -413,6 +427,18 @@ export default function CountryPage() {
     if (countryIdFromUrl) setActiveTab('list')
   }, [countryIdFromUrl])
 
+  // 연대표(events) URL 진입 시 대시보드 뷰를 'events'로
+  useEffect(() => {
+    if (isEventsUrl && countryIdFromUrl) setDashboardContentView('events')
+  }, [isEventsUrl, countryIdFromUrl])
+
+  // 연대표/대시보드 인물·연대표·통계 URL 진입 시 뷰 동기화
+  useEffect(() => {
+    if (isDashboardPersonsUrl) setDashboardContentView('person')
+    else if (isDashboardEventsUrl) setDashboardContentView('events')
+    else if (isDashboardStatsUrl) setDashboardContentView('stats')
+  }, [isDashboardPersonsUrl, isDashboardEventsUrl, isDashboardStatsUrl])
+
   /** 상세 전환 시 별도 로딩 없음(데이터 이미 있음) */
   const isLoading = false
   // URL에 countryId가 있으면 목록 탭으로 열기 (직접 진입 시 상세 패널이 보이도록)
@@ -420,7 +446,12 @@ export default function CountryPage() {
     countryIdFromUrl ? 'list' : 'dashboard',
   )
   const [dashboardContentView, setDashboardContentView] =
-    useState<DashboardContentView>('stats')
+    useState<DashboardContentView>(() => {
+      if (isDashboardPersonsUrl) return 'person'
+      if (isDashboardEventsUrl) return 'events'
+      if (isDashboardStatsUrl) return 'stats'
+      return 'stats'
+    })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [recentEvents, setRecentEvents] = useState<
     {
@@ -997,7 +1028,15 @@ export default function CountryPage() {
             showCountryTypeModal={showCountryTypeModal}
             setShowCountryTypeModal={setShowCountryTypeModal}
             dashboardContentView={dashboardContentView}
-            onDashboardMenuSelect={setDashboardContentView}
+            onDashboardMenuSelect={(id) => {
+              setDashboardContentView(id)
+              if (id === 'person') navigate(pathKeys.history.dashboardPersons())
+              else if (id === 'events') {
+                if (selectedId) navigate(pathKeys.history.countryEvents(selectedId))
+                else navigate(pathKeys.history.dashboardEvents())
+              }
+              else if (id === 'stats') navigate(pathKeys.history.dashboard())
+            }}
           />
 
           <S.DetailPane>
@@ -1009,7 +1048,7 @@ export default function CountryPage() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  style={{ width: '100%', minHeight: '100%' }}
+                  style={{ width: '100%', height: '100%', minHeight: '100%' }}
                 >
                   {dashboardContentView === 'stats' ? (
                     <CountryDashboard
@@ -1028,6 +1067,18 @@ export default function CountryPage() {
                     <DynastySection />
                   ) : dashboardContentView === 'ethnicity' ? (
                     <EthnicityDashboardSection />
+                  ) : dashboardContentView === 'events' ? (
+                    <EventsTimelineSection
+                      countryId={selectedId ?? undefined}
+                      initialFormFromSearchParams={searchParams.get('form') === 'create'}
+                      onNavigateToForm={(toForm) => {
+                        if (selectedId) {
+                          navigate(toForm ? pathKeys.history.countryEvents(selectedId, 'create') : pathKeys.history.countryEvents(selectedId))
+                        }
+                      }}
+                    />
+                  ) : dashboardContentView === 'person' ? (
+                    <PersonDashboardSection />
                   ) : (
                     <DashboardMenuContent
                       view={dashboardContentView}

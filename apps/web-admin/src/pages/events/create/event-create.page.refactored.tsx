@@ -76,10 +76,23 @@ import {
   MilitaryEventForm,
 } from './military-event-form'
 
-export const EventCreatePageRefactored: React.FC = () => {
+export interface EventCreatePageRefactoredProps {
+  /** 대시보드 등 임베드 시: 전체 화면 레이아웃 없음, onBack/onSuccess 사용 */
+  embed?: boolean
+  /** 뒤로가기(이전 페이지) 시 호출. 미전달 시 /events 로 이동 */
+  onBack?: () => void
+  /** 등록/수정 성공 시 호출. 미전달 시 /events 로 이동 */
+  onSuccess?: () => void
+}
+
+export const EventCreatePageRefactored: React.FC<
+  EventCreatePageRefactoredProps
+> = ({ embed = false, onBack: onBackProp, onSuccess }) => {
   const navigate = useNavigate()
   const { eventId: editEventId } = useParams<{ eventId?: string }>()
   const playClickSound = useClickSound()
+
+  const handleBack = onBackProp ?? (() => navigate(pathKeys.events.root()))
 
   // 편집 모드 감지
   const isEditMode = Boolean(editEventId)
@@ -442,7 +455,11 @@ export const EventCreatePageRefactored: React.FC = () => {
         toast.success('사건이 성공적으로 등록되었습니다!')
       }
 
-      navigate(pathKeys.events.root())
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        navigate(pathKeys.events.root())
+      }
     } catch (error) {
       toast.error(
         `사건 등록에 실패했습니다: ${
@@ -452,16 +469,16 @@ export const EventCreatePageRefactored: React.FC = () => {
     }
   }
 
-  return (
-    <S.PageWrapper>
-      <S.ContentWrapper>
+  const content = (
+    <>
+    <S.ContentWrapper>
         {/* ===== Widget: Step Navigation ===== */}
         <StepNavigation
           steps={steps}
           currentStep={currentStep}
           setCurrentStep={setCurrentStep}
           playClickSound={playClickSound}
-          onBack={() => navigate(pathKeys.events.root())}
+          onBack={handleBack}
         />
 
         {/* 우측: 폼 */}
@@ -1207,8 +1224,17 @@ export const EventCreatePageRefactored: React.FC = () => {
         ]}
         multiSelect={true}
       />
-    </S.PageWrapper>
+    </>
   )
+
+  if (embed) {
+    return (
+      <div style={{ width: '100%', minHeight: 0, overflow: 'auto' }}>
+        {content}
+      </div>
+    )
+  }
+  return <S.PageWrapper>{content}</S.PageWrapper>
 }
 
 export default EventCreatePageRefactored

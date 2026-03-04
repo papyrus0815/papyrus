@@ -37,6 +37,8 @@ interface FiltersPanelProps {
   selectedPositionType: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
   showFlatView: boolean
+  /** 교황 등 전역 수반 표시 (모든 국가에서 다 뜨는 직책) */
+  showGlobalHeadsOfState?: boolean
   hasActiveFilters: boolean
   isLoading: boolean
   sortBy: string
@@ -55,6 +57,7 @@ interface FiltersPanelProps {
   onShowCountryModal: () => void
   onShowPositionTypeModal: () => void
   onToggleFlatView: () => void
+  onToggleShowGlobalHeadsOfState?: () => void
   onResetFilters: () => void
   onSelectCentury: (century: CenturyFilter) => void
   onSortChange: (sortBy: string) => void
@@ -68,6 +71,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   selectedPositionType,
   selectedCentury,
   showFlatView,
+  showGlobalHeadsOfState = true,
   hasActiveFilters,
   isLoading,
   sortBy,
@@ -82,6 +86,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   onShowCountryModal,
   onShowPositionTypeModal,
   onToggleFlatView,
+  onToggleShowGlobalHeadsOfState,
   onResetFilters,
   onSelectCentury,
   onSortChange,
@@ -226,6 +231,23 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
             <Filter.SwitchThumb $active={!showFlatView} />
           </Filter.Switch>
         </Filter.FilterToggle>
+
+        {/* 교황 등 전역 수반 표시 토글 */}
+        {onToggleShowGlobalHeadsOfState && (
+          <Filter.FilterToggle
+            title="교황 등 전역 수반(모든 국가에 영향을 미친 인물)을 역대 수반 목록에 표시합니다. 끄면 숨깁니다."
+          >
+            <FiUsers size={12} style={{ color: '#64748b' }} />
+            <Filter.FilterToggleLabel>교황 등 전역</Filter.FilterToggleLabel>
+            <Filter.Switch
+              type="button"
+              $active={showGlobalHeadsOfState}
+              onClick={onToggleShowGlobalHeadsOfState}
+            >
+              <Filter.SwitchThumb $active={showGlobalHeadsOfState} />
+            </Filter.Switch>
+          </Filter.FilterToggle>
+        )}
       </Filter.FilterBlock>
 
       {hasActiveFilters && (

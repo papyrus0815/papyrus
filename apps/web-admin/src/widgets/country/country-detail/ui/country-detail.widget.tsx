@@ -288,46 +288,57 @@ function CountryDetailInner({
               animate={{ opacity: 1 }}
               style={{ gap: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
-              <CountryDetailHeader
-                country={country}
-                continentName={continent?.name}
-                onEdit={onEdit}
-                onDelete={onDelete}
-              />
+              {/* 스크롤 영역: 국기 이미지 영역은 스크롤 시 함께 올라가고, 헤더·탭메뉴만 상단 고정 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'auto',
+                }}
+              >
+                <CountryDetailHeader
+                  country={country}
+                  continentName={continent?.name}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                />
 
-              {activeTab === 'overview' && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  {/* KPI Grid 제거 - 불필요한 공간 낭비 */}
+                {activeTab === 'overview' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    {/* KPI Grid 제거 - 불필요한 공간 낭비 */}
 
-                  {/* 서브 탭 콘텐츠 — opacity만 사용해 스르륵 크로스페이드 */}
-                  <AnimatePresence initial={false} mode="wait">
-                    <motion.div
-                      key={activeSubTab}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{
-                        duration: 0.32,
-                        ease: [0.25, 0.1, 0.25, 1],
-                      }}
-                      style={{
-                        flex: 1,
-                        minHeight: 0,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'auto',
-                      }}
-                    >
+                    {/* 서브 탭 콘텐츠 — opacity만 사용해 스르륵 크로스페이드 */}
+                    <AnimatePresence initial={false} mode="wait">
+                      <motion.div
+                        key={activeSubTab}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{
+                          duration: 0.32,
+                          ease: [0.25, 0.1, 0.25, 1],
+                        }}
+                        style={{
+                          flex: 1,
+                          minHeight: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                        }}
+                      >
                       {activeSubTab === 'statistics' && country && (
                         <CountryDetailDashboard country={country} />
                       )}
@@ -359,7 +370,7 @@ function CountryDetailInner({
                       )}
 
                       {activeSubTab === 'person' && (
-                        <div style={{ marginTop: 12 }}>
+                        <div style={{ marginTop: 12, paddingLeft: '20px' }}>
                           <CountryDetailStyles.PersonInnerTabBar role="tablist" aria-label="인물 하위 메뉴">
                             <CountryDetailStyles.PersonInnerTabButton
                               role="tab"
@@ -410,20 +421,21 @@ function CountryDetailInner({
                       {activeSubTab === 'history' && (
                         <HistorySection selectedCountry={country} />
                       )}
-                    </motion.div>
-                  </AnimatePresence>
-                </motion.div>
-              )}
+                      </motion.div>
+                    </AnimatePresence>
+                  </motion.div>
+                )}
 
-              {activeTab === 'people' && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <PersonTabContent countryId={country.id} />
-                </motion.div>
-              )}
+                {activeTab === 'people' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <PersonTabContent countryId={country.id} />
+                  </motion.div>
+                )}
+              </motion.div>
             </CountryStyles.AnalyticsDashboard>
 
             {isPopulationModalOpen && (

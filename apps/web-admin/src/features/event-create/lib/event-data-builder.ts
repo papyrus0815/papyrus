@@ -285,7 +285,30 @@ export const buildEventSubmitData = (params: {
   childEventIds?: string[] // 기존 사건을 하위 사건으로 연결
   /** 키워드 (동일 사건 매핑용) */
   keywords?: string[]
+  /** 다중 이미지(대시보드 등). 있으면 thumbnail 대신 사용 */
+  eventImages?: Array<{ imageUrl: string; caption?: string; order: number; isPrimary: boolean }>
 }) => {
+  const resolvedEventImages =
+    params.eventImages && params.eventImages.length > 0
+      ? params.eventImages.map((img) => ({
+          imageUrl: img.imageUrl,
+          caption: img.caption,
+          source: undefined,
+          order: img.order,
+          isPrimary: img.isPrimary,
+        }))
+      : params.thumbnail
+        ? [
+            {
+              imageUrl: params.thumbnail,
+              caption: undefined,
+              source: undefined,
+              order: 0,
+              isPrimary: true,
+            },
+          ]
+        : undefined
+
   return {
     title: params.title,
     description: params.description || undefined,
@@ -329,18 +352,8 @@ export const buildEventSubmitData = (params: {
             sectionType: 'content',
           }))
         : undefined,
-    // ✅ 새 구조: eventImages (썸네일을 이미지 배열로 변환)
-    eventImages: params.thumbnail
-      ? [
-          {
-            imageUrl: params.thumbnail,
-            caption: undefined,
-            source: undefined,
-            order: 0,
-            isPrimary: true,
-          },
-        ]
-      : undefined,
+    // ✅ 새 구조: eventImages (썸네일 또는 다중 이미지)
+    eventImages: resolvedEventImages,
     militaryEvent:
       params.militaryEvent &&
       (params.militaryEvent.belligerentSides?.length ||

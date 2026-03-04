@@ -760,6 +760,26 @@ export function PersonRegisterView({
                   <SelectModal isOpen={showGenderModal} onClose={() => setShowGenderModal(false)} options={GENDER_OPTIONS} selectedValue={gender} onSelect={(v) => { setGender(v); setShowGenderModal(false) }} title="성별 선택" />
                 </FieldControl>
               </FieldRow>
+              <FieldRow>
+                <FieldLabel>직업</FieldLabel>
+                <FieldControl>
+                  <SelectBtn type="button" $hasValue={!!jobName} onClick={() => setShowJobModal(true)}>
+                    <span>{jobName || '선택 안 함'}</span>
+                    <FiChevronDown size={16} />
+                  </SelectBtn>
+                  <SelectModal
+                    isOpen={showJobModal}
+                    onClose={() => setShowJobModal(false)}
+                    options={[{ value: '', label: '선택 안 함' }, ...jobs.map((j) => ({ value: j.id, label: getJobLabel(j) }))]}
+                    selectedValue={jobId}
+                    onSelect={(v) => {
+                      setJobId(v)
+                      setShowJobModal(false)
+                    }}
+                    title="직업 선택"
+                  />
+                </FieldControl>
+              </FieldRow>
             </FormRows>
           )}
 

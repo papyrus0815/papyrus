@@ -37,3 +37,8 @@ export type SummaryViewMode =
  * 특수 필터 값
  */
 export const FILTER_ALL = 'all' as const
+
+/**
+ * 전역 표시 직책 ID (교황 등 — 모든 국가 화면에서 표시되며 토글로 켜고 끌 수 있음)
+ */
+export const GLOBAL_POSITION_DEFINITION_IDS = ['gov-pos-pope'] as const

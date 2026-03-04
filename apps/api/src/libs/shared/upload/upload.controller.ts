@@ -19,6 +19,7 @@ import { diskStorage } from 'multer'
 import { extname, join } from 'path'
 import { existsSync, mkdirSync } from 'fs'
 import { AppConfigService } from '../config'
+import { setUploadDirForMulter, uploadDirForMulter } from './upload-path.util'
 
 /** 허용되는 이미지 업로드 카테고리 (저장 하위 폴더명) */
 export const UPLOAD_IMAGE_CATEGORIES = [
@@ -49,7 +50,8 @@ export class UploadController {
 
   constructor(private readonly configService: AppConfigService) {
     this.uploadPath = this.configService.app.uploadPath
-    const imagePath = join(this.uploadPath, 'images')
+    setUploadDirForMulter(this.uploadPath)
+    const imagePath = join(uploadDirForMulter, 'images')
     if (!existsSync(imagePath)) {
       mkdirSync(imagePath, { recursive: true })
     }
@@ -60,26 +62,28 @@ export class UploadController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
-        destination: (() => {
-          const uploadPath =
-            (this as unknown as UploadController).uploadPath || './uploads'
-          return (
-            req: Express.Request,
-            _file: Express.Multer.File,
-            cb: (error: Error | null, destination: string) => void,
-          ) => {
-            const raw =
-              (req as unknown as { query?: { category?: string } }).query
-                ?.category
-            const category = isUploadImageCategory(raw) ? raw : 'attachments'
-            const { year, month } = getDatePath()
-            const imagePath = join(uploadPath, 'images', category, year, month)
-            if (!existsSync(imagePath)) {
-              mkdirSync(imagePath, { recursive: true })
-            }
-            cb(null, imagePath)
+        destination: (
+          req: Express.Request,
+          _file: Express.Multer.File,
+          cb: (error: Error | null, destination: string) => void,
+        ) => {
+          const raw =
+            (req as unknown as { query?: { category?: string } }).query
+              ?.category
+          const category = isUploadImageCategory(raw) ? raw : 'attachments'
+          const { year, month } = getDatePath()
+          const imagePath = join(
+            uploadDirForMulter,
+            'images',
+            category,
+            year,
+            month,
+          )
+          if (!existsSync(imagePath)) {
+            mkdirSync(imagePath, { recursive: true })
           }
-        }).bind(this)(),
+          cb(null, imagePath)
+        },
         filename: (_req, file, cb) => {
           const uniqueSuffix =
             Date.now() + '-' + Math.round(Math.random() * 1e9)

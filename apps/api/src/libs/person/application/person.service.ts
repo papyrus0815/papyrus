@@ -350,6 +350,13 @@ export class PersonService {
   }
 
   /**
+   * 전역 수반(교황 등) 재임 기록 조회 — 국가에 속하지 않는 직책
+   */
+  async findGlobalTenures(): Promise<any[]> {
+    return this.personRepository.findGlobalTenures()
+  }
+
+  /**
    * 재임 업적·한일 추가 (사건과 별도)
    */
   async createTenureAchievement(

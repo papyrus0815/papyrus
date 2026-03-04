@@ -149,7 +149,19 @@ export class PersonPrismaRepository implements IPersonRepository {
       fatherId: person.fatherId,
       motherId: person.motherId,
       jobId: person.jobId,
+      job:
+        person.job != null
+          ? { id: person.job.id, title: person.job.title }
+          : null,
       countryId: this.getEffectiveBirthCountryId(person),
+      country:
+        person.country != null
+          ? {
+              id: person.country.id,
+              name: person.country.name,
+              flagEmoji: person.country.flagEmoji ?? null,
+            }
+          : null,
       birthCityId: person.birthCityId ?? null,
       deathCityId: person.deathCityId ?? null,
       showLifespanOnEventList: person.showLifespanOnEventList,
@@ -383,7 +395,13 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
       include: {
         countryAffiliations: true,
+        country: { select: { id: true, name: true, flagEmoji: true } },
         dynasty: { select: { id: true, name: true } },
+        job: { select: { id: true, title: true } },
+        GovernmentTenures: {
+          select: { id: true, positionType: true },
+          orderBy: { startDate: 'desc' },
+        },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))
@@ -399,7 +417,13 @@ export class PersonPrismaRepository implements IPersonRepository {
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
         countryAffiliations: true,
+        country: { select: { id: true, name: true, flagEmoji: true } },
         dynasty: { select: { id: true, name: true } },
+        job: { select: { id: true, title: true } },
+        GovernmentTenures: {
+          select: { id: true, positionType: true },
+          orderBy: { startDate: 'desc' },
+        },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))
@@ -440,7 +464,13 @@ export class PersonPrismaRepository implements IPersonRepository {
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
         countryAffiliations: true,
+        country: { select: { id: true, name: true, flagEmoji: true } },
         dynasty: { select: { id: true, name: true } },
+        job: { select: { id: true, title: true } },
+        GovernmentTenures: {
+          select: { id: true, positionType: true },
+          orderBy: { startDate: 'desc' },
+        },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))
@@ -515,6 +545,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           where: { id, accountId },
           include: {
             countryAffiliations: true,
+            dynasty: { select: { id: true, name: true } },
+            job: { select: { id: true, title: true } },
             GovernmentTenures: {
               include: {
                 positionDefinition: true,
@@ -529,6 +561,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           where: { id },
           include: {
             countryAffiliations: true,
+            dynasty: { select: { id: true, name: true } },
+            job: { select: { id: true, title: true } },
             GovernmentTenures: {
               include: {
                 positionDefinition: true,
@@ -1603,6 +1637,49 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 전역 수반(국가에 속하지 않는 직책: 교황 등) 재임 기록 조회
+   * countryId, historicalCountryId가 모두 null인 tenure
+   */
+  async findGlobalTenures(): Promise<any[]> {
+    const tenures = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        countryId: null,
+        historicalCountryId: null,
+      },
+      include: {
+        positionDefinition: true,
+        country: true,
+        historicalCountry: true,
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            nameDisplayOrder: true,
+            profileImageUrl: true,
+          },
+        },
+        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+      },
+      orderBy: { startDate: 'desc' },
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(tenures)
+  }
+
+  /**
    * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (역대 수반 인물 선택용)
    */
   async findPersonsWithTenureInCountry(params: {
@@ -1646,7 +1723,13 @@ export class PersonPrismaRepository implements IPersonRepository {
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
         countryAffiliations: true,
+        country: { select: { id: true, name: true, flagEmoji: true } },
         dynasty: { select: { id: true, name: true } },
+        job: { select: { id: true, title: true } },
+        GovernmentTenures: {
+          select: { id: true, positionType: true },
+          orderBy: { startDate: 'desc' },
+        },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))

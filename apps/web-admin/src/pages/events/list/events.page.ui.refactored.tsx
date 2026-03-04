@@ -65,7 +65,16 @@ import * as Modal from '../styles/modal.styles'
 import { formatDateRange } from '../utils/events.utils'
 import { MOCK_POSITION_TYPES } from './mock-government-positions'
 
-export const EventsCatalogPageRefactored: React.FC = () => {
+export interface EventsCatalogPageRefactoredProps {
+  /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 사건 */
+  countryId?: string | null
+  /** 대시보드 등에 임베드 시 상단 타이틀/여백 축소 */
+  embed?: boolean
+}
+
+export const EventsCatalogPageRefactored: React.FC<
+  EventsCatalogPageRefactoredProps
+> = ({ countryId, embed = false }) => {
   const navigate = useNavigate()
 
   // ===== Tab State =====
@@ -79,7 +88,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
   const { bookmarks, toggleBookmark } = useBookmarks()
   const { addRecentEvent } = useRecentEvents()
 
-  // ===== Entity: Events Data =====
+  // ===== Entity: Events Data (countryId 있으면 해당 국가 연관 사건만) =====
   const {
     events,
     personsWithGovPositions,
@@ -87,7 +96,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     hasMore,
     fetchMoreEvents,
     resetAndFetch,
-  } = useEvents(pageSize)
+  } = useEvents(pageSize, countryId)
 
   // ===== Entity: Categories Data =====
   const [dbCategories, setDbCategories] = useState<EventCategoryDto[]>([])
@@ -136,6 +145,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     selectedCountry,
     selectedPositionType,
     showFlatView,
+    showGlobalHeadsOfState,
     setSelectedCategory,
     setKeyword,
     setSortBy,
@@ -144,6 +154,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     setSelectedCountry,
     setSelectedPositionType,
     setShowFlatView,
+    setShowGlobalHeadsOfState,
     availableCountries,
     availableCenturies,
     filteredEvents,
@@ -172,7 +183,12 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     eventHeadsOfState,
     expandedTenureGroups,
     toggleTenureGroupExpansion,
-  } = useHeadsOfState(events, personsWithGovPositions, selectedPositionType)
+  } = useHeadsOfState(
+    events,
+    personsWithGovPositions,
+    selectedPositionType,
+    showGlobalHeadsOfState,
+  )
 
   // ===== Feature: Tenure Groups =====
   const tenureGroups = useTenureGroups(
@@ -342,11 +358,27 @@ export const EventsCatalogPageRefactored: React.FC = () => {
     return null
   }, [summaryEventId, events])
 
-  return (
-    <Layout.PageScene>
-      <Layout.PageWrapper>
-        {/* ===== 상단 필터 바 ===== */}
-        <Layout.TopFilterBar>
+  const content = (
+    <>
+      {embed && (
+        <div
+          style={{
+            padding: '12px 16px 8px',
+            fontSize: 15,
+            fontWeight: 700,
+            color: '#0f172a',
+          }}
+        >
+          연대표
+          {countryId && (
+            <span style={{ fontWeight: 500, color: '#64748b', marginLeft: 8 }}>
+              · 선택한 국가에 연관된 사건
+            </span>
+          )}
+        </div>
+      )}
+      {/* ===== 상단 필터 바 ===== */}
+      <Layout.TopFilterBar>
           <FiltersPanel
             keyword={keyword}
             selectedCategory={selectedCategory}
@@ -354,6 +386,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             selectedPositionType={selectedPositionType}
             selectedCentury={selectedCentury}
             showFlatView={showFlatView}
+            showGlobalHeadsOfState={showGlobalHeadsOfState}
             hasActiveFilters={hasActiveFilters}
             isLoading={isLoading}
             sortBy={sortBy}
@@ -368,6 +401,9 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             onShowCountryModal={() => setShowCountryModal(true)}
             onShowPositionTypeModal={() => setShowPositionTypeModal(true)}
             onToggleFlatView={() => setShowFlatView(!showFlatView)}
+            onToggleShowGlobalHeadsOfState={() =>
+              setShowGlobalHeadsOfState((prev) => !prev)
+            }
             onResetFilters={handleResetFilters}
             onSelectCentury={setSelectedCentury}
             onSortChange={(newSortBy) => {
@@ -515,7 +551,28 @@ export const EventsCatalogPageRefactored: React.FC = () => {
             <div>삭제된 사건 목록</div>
           )}
         </Layout.CatalogSplit>
-      </Layout.PageWrapper>
+    </>
+  )
+
+  const embedWrapperStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    padding: '0 16px',
+  }
+
+  return (
+    <>
+      {embed ? (
+        <div style={embedWrapperStyle}>{content}</div>
+      ) : (
+        <Layout.PageScene>
+          <Layout.PageWrapper>{content}</Layout.PageWrapper>
+        </Layout.PageScene>
+      )}
 
       {/* ===== Modal: Category Selection ===== */}
       <CategoryModal
@@ -618,7 +675,7 @@ export const EventsCatalogPageRefactored: React.FC = () => {
           </>,
           document.body,
         )}
-    </Layout.PageScene>
+    </>
   )
 }
 

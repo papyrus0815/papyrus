@@ -4,9 +4,20 @@
  */
 
 import { existsSync } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, isAbsolute } from 'path'
 
 const CWD = process.cwd()
+
+/**
+ * Multer destination 콜백에서 사용할 업로드 루트 경로.
+ * (데코레이터 평가 시점에는 인스턴스가 없어 this.uploadPath를 쓸 수 없으므로,
+ * 컨트롤러 생성자에서 설정하고 콜백에서 이 값을 참조)
+ */
+export let uploadDirForMulter: string = resolve(CWD, 'apps/api/uploads')
+
+export function setUploadDirForMulter(path: string): void {
+  uploadDirForMulter = isAbsolute(path) ? path : resolve(CWD, path)
+}
 
 /** 업로드 루트 후보 목록 (실제 사용 시 existsSync로 파일 존재 여부 확인) */
 export function getUploadDirCandidates(configPath: string): string[] {

@@ -25,6 +25,9 @@ export interface CountryListStateContextValue {
   // 원본(배지 등용)
   countries: Country[]
   continents: ContinentOption[]
+  // 인물 등록 모달 (PersonDashboardSection 등에서 열기)
+  showPersonRegisterModal: boolean
+  setShowPersonRegisterModal: (v: boolean) => void
 }
 
 const CountryListStateContext = React.createContext<CountryListStateContextValue | null>(null)
@@ -54,6 +57,7 @@ export function CountryListStateProvider({
   const [continentFilter, setContinentFilter] = useState('')
   const [countryTypeFilter, setCountryTypeFilter] = useState<CountryTypeFilter>('all')
   const [sortBy, setSortBy] = useState<SortBy>('area')
+  const [showPersonRegisterModal, setShowPersonRegisterModal] = useState(false)
 
   const filtered = useMemo(() => {
     const searchTextLower = query.trim().toLowerCase()
@@ -124,8 +128,10 @@ export function CountryListStateProvider({
       filtered,
       countries,
       continents,
+      showPersonRegisterModal,
+      setShowPersonRegisterModal,
     }),
-    [query, continentFilter, countryTypeFilter, sortBy, filtered, countries, continents],
+    [query, continentFilter, countryTypeFilter, sortBy, filtered, countries, continents, showPersonRegisterModal],
   )
 
   return (

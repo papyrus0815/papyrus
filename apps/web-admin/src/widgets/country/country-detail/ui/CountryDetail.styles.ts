@@ -1409,9 +1409,8 @@ export const MiniFlagWrapper = styled.div`
   overflow: hidden;
   z-index: 1;
   border-radius: 0;
-  margin-left: -16px;
   margin-right: -16px;
-  width: calc(100% + 32px);
+  width: calc(100% + 16px);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.06),
     0 2px 12px rgba(0, 0, 0, 0.03);

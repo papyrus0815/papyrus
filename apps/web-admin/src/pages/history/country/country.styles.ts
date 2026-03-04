@@ -1313,7 +1313,7 @@ export const VirtualList = styled.div`
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
-  padding: 6px 8px 12px 8px;
+  padding: 6px 0 12px 8px;
   background: #ffffff;
 
   /* 작고 깔끔한 스크롤바 */
@@ -1542,17 +1542,17 @@ export const FileUploadText = styled.span`
 
 export const ListRow = styled.button<{ $active?: boolean }>`
   width: 100%;
-  padding: 14px 16px;
+  padding: 8px 10px 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   background: #ffffff;
   border: 1px solid #f1f5f9;
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
   transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-  min-height: 56px;
+  min-height: 48px;
   line-height: 1.3;
   position: relative;
   flex-shrink: 0;
@@ -1562,8 +1562,8 @@ export const ListRow = styled.button<{ $active?: boolean }>`
     content: '';
     position: absolute;
     left: 0;
-    top: 10px;
-    bottom: 10px;
+    top: 6px;
+    bottom: 6px;
     width: 2px;
     background: #6366f1;
     border-radius: 2px;
@@ -1585,14 +1585,14 @@ export const ListRow = styled.button<{ $active?: boolean }>`
   }
 
   @media (max-width: 768px) {
-    padding: 12px 14px;
-    min-height: 52px;
+    padding: 8px 10px;
+    min-height: 46px;
     border-radius: 8px;
   }
 
   @media (max-width: 480px) {
-    padding: 10px 12px;
-    min-height: 48px;
+    padding: 6px 8px;
+    min-height: 44px;
   }
 `
 
@@ -1835,6 +1835,7 @@ export const DetailPane = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0;
+  height: calc(100vh - var(--header-height));
   min-height: 0;
   border-left: none; /* 우측 중복 보더 제거 */
 
@@ -3564,7 +3565,7 @@ export const Actions = styled.div`
   gap: 8px;
 `
 
-// Analytics Dashboard Styles
+// Analytics Dashboard Styles (좌측 패딩 0으로 리스트와 컨텐츠 영역 붙임)
 export const AnalyticsDashboard = styled.div`
   background: #ffffff;
   min-height: calc(100vh - var(--header-height));
@@ -3573,7 +3574,7 @@ export const AnalyticsDashboard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 0 16px;
+  padding: 0 16px 0 0;
 
   @media (max-width: 768px) {
     padding: 20px;

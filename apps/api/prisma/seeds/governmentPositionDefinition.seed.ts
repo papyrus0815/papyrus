@@ -31,6 +31,7 @@ const DEFINITIONS: {
   { id: 'gov-pos-king-of-the-romans', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '로마왕', titleEn: 'King of the Romans', titleLocal: 'Rex Romanorum', rank: 2 },
   { id: 'gov-pos-king-of-italy', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '이탈리아왕', titleEn: 'King of Italy', titleLocal: 'Rex Italiae', rank: 2 },
   { id: 'gov-pos-hre-emperor', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '신성로마황제', titleEn: 'Holy Roman Emperor', titleLocal: 'Imperator Romanorum', rank: 1 },
+  { id: 'gov-pos-pope', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '교황', titleEn: 'Pope', titleLocal: 'Papa', rank: 1 },
   { id: 'gov-pos-president', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '대통령', titleEn: 'President', rank: 1 },
   { id: 'gov-pos-khan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '칸', titleEn: 'Khagan', rank: 1 },
   { id: 'gov-pos-sultan', positionType: GovernmentPositionType.HEAD_OF_STATE, title: '술탄', titleEn: 'Sultan', rank: 1 },

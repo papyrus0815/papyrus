@@ -13,6 +13,7 @@ import {
 } from '@/entities/country/model/unified-types'
 import * as S from '@/pages/history/country/country.styles'
 
+import { PersonRegisterViewModal } from './PersonRegisterViewModal'
 import { useCountryListState } from '../country-list-state.context'
 
 // Dashboard summary SVG icons
@@ -104,12 +105,20 @@ interface CountryListProps {
 
 export type DashboardContentView =
   | 'stats'
-  | 'heads'
+  | 'person'
   | 'legislature'
   | 'military'
   | 'administration'
   | 'dynasty'
   | 'ethnicity'
+  | 'events'
+
+const IconEvents = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+)
 
 const DASHBOARD_MENU_ITEMS: {
   id: DashboardContentView
@@ -117,12 +126,13 @@ const DASHBOARD_MENU_ITEMS: {
   icon: React.ComponentType
 }[] = [
   { id: 'stats', label: '전 세계 국가 통계', icon: IconGlobe },
-  { id: 'heads', label: '행정 수반', icon: IconExecutive },
+  { id: 'person', label: '인물', icon: IconPeople },
   { id: 'legislature', label: '저원', icon: IconLegislature },
   { id: 'military', label: '군사', icon: IconMilitary },
   { id: 'administration', label: '행정부', icon: IconAdministration },
   { id: 'dynasty', label: '가문', icon: IconDynasty },
   { id: 'ethnicity', label: '민족', icon: IconEthnicity },
+  { id: 'events', label: '전체 사건', icon: IconEvents },
 ]
 
 function CountryListInner({
@@ -155,6 +165,8 @@ function CountryListInner({
     setCountryTypeFilter: onCountryTypeFilterChange,
     sortBy,
     setSortBy: onSortByChange,
+    showPersonRegisterModal,
+    setShowPersonRegisterModal,
   } = useCountryListState()
   const [showAddTypeModal, setShowAddTypeModal] = React.useState(false)
   const [expandedCountries, setExpandedCountries] = React.useState<Set<string>>(
@@ -265,12 +277,16 @@ function CountryListInner({
     setShowAddTypeModal(true)
   }
 
-  const handleSelectAddType = (type: 'modern' | 'historical') => {
+  const handleSelectAddType = (
+    type: 'modern' | 'historical' | 'person',
+  ) => {
     setShowAddTypeModal(false)
     if (type === 'modern') {
       onAdd()
-    } else if (onAddHistorical) {
+    } else if (type === 'historical' && onAddHistorical) {
       onAddHistorical()
+    } else if (type === 'person') {
+      setShowPersonRegisterModal(true)
     }
   }
 
@@ -894,7 +910,7 @@ function CountryListInner({
                 transition={{ duration: 0.2 }}
               >
                 <S.SelectModalHeader>
-                  <S.SelectModalTitle>등록할 국가 타입</S.SelectModalTitle>
+                  <S.SelectModalTitle>등록</S.SelectModalTitle>
                   <S.SelectModalClose
                     onClick={() => setShowAddTypeModal(false)}
                   >
@@ -963,12 +979,36 @@ function CountryListInner({
                       </span>
                     </div>
                   </S.SelectOption>
+                  <S.SelectOption onClick={() => handleSelectAddType('person')}>
+                    <S.SelectOptionIcon>
+                      <IconPeople />
+                    </S.SelectOptionIcon>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>인물</span>
+                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                        역사적 인물 등록 (이름, 생몰년, 소속 국가 등)
+                      </span>
+                    </div>
+                  </S.SelectOption>
                 </S.SelectModalContent>
               </S.SelectModal>
             </>,
             document.body,
           )
         : null}
+
+      {/* 인물 등록 모달 - 등록 버튼 폼과 동일한 디자인 */}
+      <PersonRegisterViewModal
+        isOpen={showPersonRegisterModal}
+        onClose={() => setShowPersonRegisterModal(false)}
+        onSuccess={() => setShowPersonRegisterModal(false)}
+      />
     </>
   )
 }

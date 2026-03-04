@@ -179,12 +179,8 @@ export const FieldLabel = styled.label`
 
 export const FieldControl = styled.div<{ $variant?: 'person' | 'datePair' }>`
   min-width: 0;
-  ${(p) =>
-    p.$variant === 'person'
-      ? 'max-width: 360px;'
-      : p.$variant === 'datePair'
-        ? 'max-width: 480px;'
-        : ''}
+  max-width: ${(p) =>
+    p.$variant === 'person' ? '360px' : p.$variant === 'datePair' ? '480px' : '360px'};
 `
 
 /** 인물 등록 출생일·사망일 / 역대 수반 취임일·퇴임일 공용: 2열 그리드, 달력 버튼 */

@@ -458,7 +458,9 @@ export const personCareerApi = {
    * GET /government-positions/achievements/for-events-page
    */
   getAchievementsForEventsPage: async () => {
-    const response = await apiClient.get('/government-positions/achievements/for-events-page')
+    const response = await apiClient.get(
+      '/government-positions/achievements/for-events-page',
+    )
     return response.data ?? []
   },
 
@@ -466,10 +468,7 @@ export const personCareerApi = {
    * 재임 업적 삭제
    * DELETE /government-positions/tenures/:tenureId/achievements/:achievementId
    */
-  deleteTenureAchievement: async (
-    tenureId: string,
-    achievementId: string,
-  ) => {
+  deleteTenureAchievement: async (tenureId: string, achievementId: string) => {
     await apiClient.delete(
       `/government-positions/tenures/${encodeURIComponent(tenureId)}/achievements/${encodeURIComponent(achievementId)}`,
     )
@@ -482,6 +481,20 @@ export const personCareerApi = {
   getTenuresByPersonId: async (personId: string) => {
     const response = await apiClient.get(`/persons/${personId}/tenures`)
     return response.data ?? []
+  },
+
+  /**
+   * 전역 수반(교황 등) 재임 기록 목록 조회
+   * GET /government-positions/global/tenures
+   */
+  getGlobalTenures: async () => {
+    const response = await apiClient.get('/government-positions/global/tenures')
+    const raw = response.data ?? []
+    return Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === 'object' && 'data' in raw && Array.isArray((raw as any).data)
+        ? (raw as any).data
+        : []
   },
 
   /**
@@ -508,7 +521,12 @@ export const personCareerApi = {
       return []
     }
     if (Array.isArray(raw)) return raw
-    if (raw && typeof raw === 'object' && 'data' in raw && Array.isArray((raw as any).data)) {
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      'data' in raw &&
+      Array.isArray((raw as any).data)
+    ) {
       return (raw as any).data
     }
     return []
@@ -517,13 +535,16 @@ export const personCareerApi = {
   /**
    * 관직 정의 목록 조회 (전역 단일 레벨)
    */
-  getPositionDefinitions: async (params: {
-    countryId?: string
-    historicalCountryId?: string
-  } = {}) => {
+  getPositionDefinitions: async (
+    params: {
+      countryId?: string
+      historicalCountryId?: string
+    } = {},
+  ) => {
     const q = new URLSearchParams()
     if (params.countryId) q.set('countryId', params.countryId)
-    if (params.historicalCountryId) q.set('historicalCountryId', params.historicalCountryId)
+    if (params.historicalCountryId)
+      q.set('historicalCountryId', params.historicalCountryId)
     const response = await apiClient.get(
       `/government-positions/definitions?${q.toString()}`,
     )
@@ -534,15 +555,22 @@ export const personCareerApi = {
    * 관직 정의 단건 조회
    */
   getPositionDefinitionById: async (id: string) => {
-    const response = await apiClient.get(`/government-positions/definitions/${id}`)
+    const response = await apiClient.get(
+      `/government-positions/definitions/${id}`,
+    )
     return response.data
   },
 
   /**
    * 관직 정의 생성
    */
-  createPositionDefinition: async (dto: CreateGovernmentPositionDefinitionDto) => {
-    const response = await apiClient.post('/government-positions/definitions', dto)
+  createPositionDefinition: async (
+    dto: CreateGovernmentPositionDefinitionDto,
+  ) => {
+    const response = await apiClient.post(
+      '/government-positions/definitions',
+      dto,
+    )
     return response.data
   },
 

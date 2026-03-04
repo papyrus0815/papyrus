@@ -85,8 +85,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const [titleEn, setTitleEn] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [termNumber, setTermNumber] = useState('')
-  const [regnalNumber, setRegnalNumber] = useState('')
+  const [regnalNumber, setRegnalNumber] = useState('') // 대수/재위번호 통합
   const [regnalName, setRegnalName] = useState('')
   /** 사건 페이지(역대 수반 토글)에 이 재임을 노출할지 여부 */
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
@@ -128,7 +127,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       : subordinateHistoricalFromApi
   const hasSubordinateHistorical = Array.isArray(subordinateHistorical) && subordinateHistorical.length > 0
 
-  const { data: tenures = [], isLoading } = useQuery({
+  const { data: countryTenures = [], isLoading } = useQuery({
     queryKey: ['tenures-by-country', countryId, historicalCountryId],
     queryFn: () =>
       personCareerApi.getTenuresByCountry({
@@ -137,6 +136,26 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       }),
     enabled: !!countryId || !!historicalCountryId,
   })
+
+  /** 전역 수반(교황 등) — 흐름도에 함께 노출 */
+  const { data: globalTenures = [] } = useQuery({
+    queryKey: ['global-tenures'],
+    queryFn: () => personCareerApi.getGlobalTenures(),
+    enabled: !!countryId || !!historicalCountryId,
+  })
+
+  /** 전역 수반 중 직책명이 "교황"인 것만 — 전체 국가 흐름도에 노출 */
+  const popeTenures = React.useMemo(() => {
+    const titleOf = (t: any) =>
+      (t?.positionDefinition?.title ?? t?.position?.title ?? t?.title ?? '').trim()
+    return (globalTenures as any[]).filter((t) => titleOf(t) === '교황')
+  }, [globalTenures])
+
+  /** 국가 재임 + 교황(전역) 병합 */
+  const tenures = React.useMemo(
+    () => [...(countryTenures as any[]), ...popeTenures],
+    [countryTenures, popeTenures],
+  )
 
   // 최소 1초 로딩 표시 후 부드럽게 전환
   useEffect(() => {
@@ -197,6 +216,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     queryClient.invalidateQueries({
       queryKey: ['tenures-by-country', countryId, historicalCountryId],
     })
+    queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
     queryClient.invalidateQueries({
       queryKey: ['position-definitions', countryId, historicalCountryId],
     })
@@ -220,8 +240,10 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
       const defId = t.positionDefinitionId ?? t.position?.id
       const def = defId && defs.length ? defs.find((d: any) => d.id === defId) : null
       if (def?.title) return def.title.trim()
-      const title = (t.title || t.position?.title || '').trim()
-      return title || '(기타)'
+      // 전역 수반(교황 등): API 응답에 positionDefinition 내장
+      const embeddedTitle = (t.positionDefinition?.title ?? t.position?.title ?? t.title ?? '').trim()
+      if (embeddedTitle) return embeddedTitle
+      return '(기타)'
     }
     const map = new Map<string, any[]>()
     tenures.forEach((t: any) => {
@@ -290,8 +312,9 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     }
     setStartDate(t.startDate || '')
     setEndDate(t.endDate || '')
-    setTermNumber(t.termNumber != null ? String(t.termNumber) : '')
-    setRegnalNumber(t.regnalNumber != null ? String(t.regnalNumber) : '')
+    setRegnalNumber(
+      t.regnalNumber != null ? String(t.regnalNumber) : t.termNumber != null ? String(t.termNumber) : ''
+    )
     setRegnalName(getRegnalNameFromNotes(t.notes) || '')
     setShowOnEventsPage(t.showPositionInfo !== false)
     setSelectedAffinityHistoricalId(t.historicalCountryId ?? null)
@@ -321,7 +344,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         historicalCountryId: selectedAffinityHistoricalId ?? historicalCountryId ?? undefined,
         startDate,
         endDate: endDate || undefined,
-        termNumber: termNumber.trim() === '' ? null : (parseInt(termNumber, 10) || undefined),
+        termNumber: regnalNumber.trim() === '' ? null : (parseInt(regnalNumber, 10) || undefined),
         regnalNumber: regnalNumber.trim() === '' ? null : (parseInt(regnalNumber, 10) || undefined),
         notes: notesValue,
         showPositionInfo: showOnEventsPage,
@@ -353,7 +376,6 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     setTitleEn('')
     setStartDate('')
     setEndDate('')
-    setTermNumber('')
     setRegnalNumber('')
     setRegnalName('')
     setShowOnEventsPage(true)
@@ -590,15 +612,20 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     return null
   }
 
-  /** personId → full person (서버 persons 목록, fatherId/motherId 포함). 키는 normId로 통일 */
+  /** personId → full person. 국가 재임 인물 + 전역 재임(교황 등) 인물 포함. lineage 부모-자식 해석용 */
   const personById = React.useMemo(() => {
     const map = new Map<string, any>()
     persons.forEach((p: any) => {
       const k = normId(p.id)
       if (k) map.set(k, p)
     })
+    popeTenures.forEach((t: any) => {
+      const p = t?.person
+      const k = p ? normId(p.id) : null
+      if (k && !map.has(k)) map.set(k, p)
+    })
     return map
-  }, [persons])
+  }, [persons, popeTenures])
 
   /** 직책별 계보 데이터 (전체일 때 mergedLineageAll에서 사용). 행은 항상 재위/대수 세대별. */
   const lineageByGroup = React.useMemo(() => {
@@ -1369,31 +1396,19 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
               openEndAfterStart
             />
             <FieldRow>
-              <FieldLabel>대수</FieldLabel>
-              <FieldControl>
-                <Input
-                  type="number"
-                  min={1}
-                  value={termNumber}
-                  onChange={(e) => setTermNumber(e.target.value)}
-                  placeholder="예: 4 (세종 = 조선 제4대)"
-                  title="동아시아: 제n대"
-                />
-                <FieldHint>동아시아 군주·대통령용. 제4대 → 4 입력</FieldHint>
-              </FieldControl>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>재위 번호</FieldLabel>
+              <FieldLabel>대수/재위번호</FieldLabel>
               <FieldControl>
                 <Input
                   type="number"
                   min={1}
                   value={regnalNumber}
                   onChange={(e) => setRegnalNumber(e.target.value)}
-                  placeholder="예: 14 (루이 14세)"
-                  title="서양 군주: 이름 뒤 숫자"
+                  placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
+                  title="역대 순번"
                 />
-                <FieldHint>서양 군주용. 루이 14세 → 14, 제임스 1세 → 1</FieldHint>
+                <FieldHint>
+                  역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대) 등 숫자만 입력
+                </FieldHint>
               </FieldControl>
             </FieldRow>
             <FieldRow>
@@ -1674,31 +1689,19 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                         openEndAfterStart
                       />
                       <FieldRow>
-                        <FieldLabel>대수</FieldLabel>
-                        <FieldControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={termNumber}
-                            onChange={(e) => setTermNumber(e.target.value)}
-                            placeholder="예: 4 (세종 = 조선 제4대)"
-                            title="동아시아: 제n대"
-                          />
-                          <FieldHint>동아시아 군주·대통령용. 제4대 → 4 입력</FieldHint>
-                        </FieldControl>
-                      </FieldRow>
-                      <FieldRow>
-                        <FieldLabel>재위 번호</FieldLabel>
+                        <FieldLabel>대수/재위번호</FieldLabel>
                         <FieldControl>
                           <Input
                             type="number"
                             min={1}
                             value={regnalNumber}
                             onChange={(e) => setRegnalNumber(e.target.value)}
-                            placeholder="예: 14 (루이 14세)"
-                            title="서양 군주: 이름 뒤 숫자"
+                            placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
+                            title="역대 순번"
                           />
-                          <FieldHint>서양 군주용. 루이 14세 → 14, 제임스 1세 → 1</FieldHint>
+                          <FieldHint>
+                            역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대) 등 숫자만 입력
+                          </FieldHint>
                         </FieldControl>
                       </FieldRow>
                       <FieldRow>

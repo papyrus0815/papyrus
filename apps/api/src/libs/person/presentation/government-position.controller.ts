@@ -58,6 +58,15 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 전역 수반(교황 등) 재임 기록 — 국가에 속하지 않는 직책
+   */
+  @Get('global/tenures')
+  async getGlobalTenures(): Promise<any[]> {
+    const list = await this.personService.findGlobalTenures()
+    return list.map(serializeBigInt)
+  }
+
+  /**
    * 역사적 국가별 재임 기록 (REST) - GET /government-positions/historical-countries/:id/tenures
    */
   @Get('historical-countries/:historicalCountryId/tenures')

@@ -90,7 +90,8 @@ function GovStatCard({
 }
 
 interface PersonStatsProps {
-  countryId: string
+  /** 국가 ID. 미전달 시 전체 인물 통계 */
+  countryId?: string | null
   /** true면 상단 여백 겹침 없음(탭 아래 등) — 카드 그리드 marginTop 0 */
   noOverlap?: boolean
 }
@@ -142,9 +143,11 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
     setIsLoading(true)
     const fetchData = async () => {
       try {
-        const data = await personApi.getByCountryId(countryId)
-        setPersons(data)
-        calculateStats(data)
+        const data = countryId
+          ? await personApi.getByCountryId(countryId)
+          : await personApi.getAll()
+        setPersons(Array.isArray(data) ? data : [])
+        calculateStats(Array.isArray(data) ? data : [])
       } catch {
         // fetch failed, keep state as-is
       } finally {
@@ -577,7 +580,13 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{person.name}</div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{person.role || '역할 없음'}</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {person.country && (
+                      <span>{person.country.flagEmoji && `${person.country.flagEmoji} `}{person.country.name}</span>
+                    )}
+                    {person.country && (person.job?.title || (person as { role?: string }).role || '역할 없음') && <span>·</span>}
+                    <span>{person.job?.title || (person as { role?: string }).role || '역할 없음'}</span>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, fontSize: 12, color: '#64748b' }}>
                   <span>출생 {person.birthDate ? new Date(person.birthDate).getFullYear() : '미상'}</span>

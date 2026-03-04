@@ -26,6 +26,8 @@ export const ROUTES = {
     DYNASTIES: 'dynasties',
     JOBS: 'jobs',
     MILITARY_UNITS: 'military-units',
+    /** 연대표/대시보드 공통 세그먼트 (인물·연대표 등) */
+    DASHBOARD: 'dashboard',
   },
 
   // Error Pages

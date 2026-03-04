@@ -41,6 +41,39 @@ export const historyPageRoute: RouteObject = {
           },
         },
         {
+          path: `${ROUTES.HISTORY.DASHBOARD}/persons`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: `${ROUTES.HISTORY.DASHBOARD}/events`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: ROUTES.HISTORY.DASHBOARD,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
           path: `${ROUTES.HISTORY.COUNTRY}/:countryId/dashboard`,
           lazy: async () => {
             const [{ countryLoader }, { default: Component }] =
@@ -97,6 +130,17 @@ export const historyPageRoute: RouteObject = {
         },
         {
           path: `${ROUTES.HISTORY.COUNTRY}/:countryId/government`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
+          path: `${ROUTES.HISTORY.COUNTRY}/:countryId/events`,
           lazy: async () => {
             const [{ countryLoader }, { default: Component }] =
               await Promise.all([
