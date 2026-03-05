@@ -58,6 +58,12 @@ export const pathKeys = {
     /** 연대표/대시보드 — 연대표(전체 사건) 뷰 */
     dashboardEvents: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events`,
+    /** 연대표/대시보드 — 사건 상세 (대시보드 전용, /events 로 가지 않음) */
+    dashboardEventDetail: (eventId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events/${encodeURIComponent(eventId)}`,
+    /** 연대표/대시보드 — 사건 수정 (대시보드 영역 내 수정 폼) */
+    dashboardEventEdit: (eventId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events/${encodeURIComponent(eventId)}/edit`,
     /** 연대표/대시보드 — 통계 뷰 (전 세계 국가 통계) */
     dashboard: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}`,

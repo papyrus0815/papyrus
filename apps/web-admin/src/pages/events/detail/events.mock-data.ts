@@ -1,4 +1,4 @@
-import { HistoricalEvent } from './create/events.types'
+import { HistoricalEvent } from '../create/events.types'
 
 export const MOCK_HISTORICAL_EVENTS: HistoricalEvent[] = [
   {

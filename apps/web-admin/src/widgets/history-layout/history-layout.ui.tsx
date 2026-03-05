@@ -857,9 +857,15 @@ const Badge = styled.span`
 `
 
 /**
- * 메인 컨텐츠 영역
+ * 메인 컨텐츠 영역 — 스크롤만 이 영역에서 되도록, 대시보드/국가 목록(사이드바)은 고정
+ * 상단 여백 없이 컨텐츠가 바로 붙도록 padding 0
  */
 const Content = styled.div`
   min-width: 0;
+  height: calc(100vh - var(--header-height));
+  overflow-y: auto;
+  overflow-x: hidden;
   background: #ffffff;
+  padding: 0;
+  -webkit-overflow-scrolling: touch;
 `

@@ -41,6 +41,7 @@ import { CountryDashboard } from '@/widgets/country/country-dashboard'
 import { CountryDetail } from '@/widgets/country/country-detail'
 import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-section.widget'
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
+import { DashboardEventDetailPage } from '@/pages/history/country/dashboard-event-detail.page'
 import { EventsTimelineSection } from '@/widgets/country/country-detail/ui/events-timeline-section.widget'
 import { CountryForm } from '@/widgets/country/country-form'
 import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
@@ -129,7 +130,7 @@ function DashboardMenuContent({
 export default function CountryPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const params = useParams<{ countryId?: string }>()
+  const params = useParams<{ countryId?: string; eventId?: string }>()
   const [searchParams] = useSearchParams()
   const inHistory = location.pathname.startsWith('/history')
 
@@ -154,8 +155,8 @@ export default function CountryPage() {
   const isEventsUrl = /\/history\/country\/[^/]+\/events\/?$/.test(location.pathname)
   /** 연대표/대시보드 인물 뷰 URL (/history/dashboard/persons) */
   const isDashboardPersonsUrl = /\/history\/dashboard\/persons\/?$/.test(location.pathname)
-  /** 연대표/대시보드 연대표(전체 사건) 뷰 URL (/history/dashboard/events) */
-  const isDashboardEventsUrl = /\/history\/dashboard\/events\/?$/.test(location.pathname)
+  /** 연대표/대시보드 연대표(전체 사건) 뷰 URL (/history/dashboard/events, /events/:eventId, /events/:eventId/edit) */
+  const isDashboardEventsUrl = /\/history\/dashboard\/events(\/[^/]+)?(\/edit)?\/?$/.test(location.pathname)
   /** 연대표/대시보드 통계 뷰 URL (/history/dashboard) */
   const isDashboardStatsUrl = /\/history\/dashboard\/?$/.test(location.pathname)
 
@@ -995,22 +996,7 @@ export default function CountryPage() {
         countries={countries}
         continents={CONTINENTS}
       >
-        <CountryMobileUI
-          activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab)
-            if (tab === 'dashboard') handleClearCountry()
-          }}
-          isMobileListOpen={isMobileListOpen}
-          onMobileListOpenChange={setIsMobileListOpen}
-          selectedId={selectedId}
-          onSelectCountry={handleSelectCountry}
-          onShowContinentModal={() => setShowContinentModal(true)}
-          onShowSortModal={() => setShowSortModal(true)}
-          onAddCountry={() => setEditing({} as Country)}
-          inHistory={inHistory}
-        />
-
+        {/* 히스토리 모드: MainGrid를 먼저 배치해 대시보드/국가목록 탭이 상단에 붙도록 함 */}
         <S.MainGrid $noSidebar={inHistory}>
           <CountryList
             selectedId={selectedId}
@@ -1068,15 +1054,28 @@ export default function CountryPage() {
                   ) : dashboardContentView === 'ethnicity' ? (
                     <EthnicityDashboardSection />
                   ) : dashboardContentView === 'events' ? (
-                    <EventsTimelineSection
-                      countryId={selectedId ?? undefined}
-                      initialFormFromSearchParams={searchParams.get('form') === 'create'}
-                      onNavigateToForm={(toForm) => {
-                        if (selectedId) {
-                          navigate(toForm ? pathKeys.history.countryEvents(selectedId, 'create') : pathKeys.history.countryEvents(selectedId))
-                        }
-                      }}
-                    />
+                    params.eventId && location.pathname.endsWith('/edit') ? (
+                      <EventsTimelineSection
+                        countryId={selectedId ?? undefined}
+                        initialFormFromSearchParams={false}
+                        onNavigateToForm={() => {}}
+                        editEventId={params.eventId}
+                        onEditBack={() => navigate(pathKeys.history.dashboardEventDetail(params.eventId!))}
+                        onEditSuccess={() => navigate(pathKeys.history.dashboardEventDetail(params.eventId!))}
+                      />
+                    ) : params.eventId ? (
+                      <DashboardEventDetailPage />
+                    ) : (
+                      <EventsTimelineSection
+                        countryId={selectedId ?? undefined}
+                        initialFormFromSearchParams={searchParams.get('form') === 'create'}
+                        onNavigateToForm={(toForm) => {
+                          if (selectedId) {
+                            navigate(toForm ? pathKeys.history.countryEvents(selectedId, 'create') : pathKeys.history.countryEvents(selectedId))
+                          }
+                        }}
+                      />
+                    )
                   ) : dashboardContentView === 'person' ? (
                     <PersonDashboardSection />
                   ) : (
@@ -1147,6 +1146,22 @@ export default function CountryPage() {
             </AnimatePresence>
           </S.DetailPane>
         </S.MainGrid>
+
+        <CountryMobileUI
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab)
+            if (tab === 'dashboard') handleClearCountry()
+          }}
+          isMobileListOpen={isMobileListOpen}
+          onMobileListOpenChange={setIsMobileListOpen}
+          selectedId={selectedId}
+          onSelectCountry={handleSelectCountry}
+          onShowContinentModal={() => setShowContinentModal(true)}
+          onShowSortModal={() => setShowSortModal(true)}
+          onAddCountry={() => setEditing({} as Country)}
+          inHistory={inHistory}
+        />
 
         <CountryListModals
           showContinentModal={showContinentModal}

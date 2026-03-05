@@ -44,6 +44,8 @@ export interface DateRangeFieldProps {
   endPlaceholder?: string
   /** 취임일 선택 후 퇴임일 모달 자동 오픈 (기본 true) */
   openEndAfterStart?: boolean
+  /** true면 FieldRow/FieldLabel 없이 컨트롤(날짜 버튼)만 렌더 (모달 등에서 레이블을 직접 쓸 때) */
+  renderControlOnly?: boolean
 }
 
 export const DateRangeField: React.FC<DateRangeFieldProps> = ({
@@ -56,6 +58,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   startPlaceholder = '취임일',
   endPlaceholder = '퇴임일 (선택)',
   openEndAfterStart = true,
+  renderControlOnly = false,
 }) => {
   const [startModalOpen, setStartModalOpen] = useState(false)
   const [endModalOpen, setEndModalOpen] = useState(false)
@@ -71,36 +74,44 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
     setEndModalOpen(false)
   }
 
+  const dateButtons = (
+    <DateFieldsRow>
+      <DateFieldBtn
+        type="button"
+        onClick={() => setStartModalOpen(true)}
+        $hasValue={!!startValue}
+      >
+        <FiCalendar size={16} />
+        <span>{startValue ? formatDateDisplay(startValue) : startPlaceholder}</span>
+        <FiChevronDown size={20} />
+      </DateFieldBtn>
+      <DateFieldBtn
+        type="button"
+        onClick={() => setEndModalOpen(true)}
+        $hasValue={!!endValue}
+      >
+        <FiCalendar size={16} />
+        <span>{endValue ? formatDateDisplay(endValue) : endPlaceholder}</span>
+        <FiChevronDown size={20} />
+      </DateFieldBtn>
+    </DateFieldsRow>
+  )
+
   return (
     <>
-      <FieldRow>
-        <FieldLabel>
-          {label}
-          {required && <Required aria-label="필수" />}
-        </FieldLabel>
-        <FieldControl $variant="datePair">
-          <DateFieldsRow>
-            <DateFieldBtn
-              type="button"
-              onClick={() => setStartModalOpen(true)}
-              $hasValue={!!startValue}
-            >
-              <FiCalendar size={16} />
-              <span>{startValue ? formatDateDisplay(startValue) : startPlaceholder}</span>
-              <FiChevronDown size={20} />
-            </DateFieldBtn>
-            <DateFieldBtn
-              type="button"
-              onClick={() => setEndModalOpen(true)}
-              $hasValue={!!endValue}
-            >
-              <FiCalendar size={16} />
-              <span>{endValue ? formatDateDisplay(endValue) : endPlaceholder}</span>
-              <FiChevronDown size={20} />
-            </DateFieldBtn>
-          </DateFieldsRow>
-        </FieldControl>
-      </FieldRow>
+      {renderControlOnly ? (
+        <div style={{ width: '100%', minWidth: 0 }}>{dateButtons}</div>
+      ) : (
+        <FieldRow>
+          <FieldLabel>
+            {label}
+            {required && <Required aria-label="필수" />}
+          </FieldLabel>
+          <FieldControl $variant="datePair">
+            {dateButtons}
+          </FieldControl>
+        </FieldRow>
+      )}
 
       <DatePickerModal
         isOpen={startModalOpen}

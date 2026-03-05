@@ -1270,9 +1270,24 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       setMentionResults([])
 
       const selection = window.getSelection()
-      if (!selection || selection.rangeCount === 0) return
+      if (!selection) return
 
-      const range = selection.getRangeAt(0)
+      // 클릭으로 선택 시 포커스가 팝업으로 가서 selection이 에디터가 아님 → 저장된 range 사용
+      const savedRange = mentionRangeRef.current
+      const useSavedRange =
+        savedRange &&
+        editorRef.current.contains(savedRange.startContainer)
+
+      let range: Range
+      if (useSavedRange && savedRange) {
+        selection.removeAllRanges()
+        selection.addRange(savedRange)
+        range = savedRange
+        mentionRangeRef.current = null
+      } else {
+        if (selection.rangeCount === 0) return
+        range = selection.getRangeAt(0)
+      }
 
       // @ 기호부터 현재 커서까지의 텍스트 찾기
       let node = range.startContainer
@@ -2575,6 +2590,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                           onMouseEnter={() =>
                             setMentionSelectedIndex(currentIndex)
                           }
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                          }}
                           onClick={() => {
                             playClickSound()
                             insertMention(item)

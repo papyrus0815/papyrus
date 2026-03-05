@@ -46,6 +46,27 @@ const GovTabButton = styled.button<{ $active?: boolean }>`
   }
 `
 
+const Root = styled(motion.div)<{ $isForm?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: ${(p) => (p.$isForm ? 0 : 32)}px;
+  padding: ${(p) => (p.$isForm ? '24px 28px 0' : '36px 32px 48px')};
+  background: #ffffff;
+  position: relative;
+  min-height: ${(p) => (p.$isForm ? 0 : 'calc(100vh - 200px)')};
+  height: ${(p) => (p.$isForm ? '100%' : 'auto')};
+  overflow: ${(p) => (p.$isForm ? 'hidden' : 'visible')};
+  box-sizing: ${(p) => (p.$isForm ? 'border-box' : 'border-box')};
+`
+
+const FormSection = styled.section`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`
+
 export interface EventsTimelineSectionProps {
   /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 */
   countryId?: string | null
@@ -53,15 +74,24 @@ export interface EventsTimelineSectionProps {
   initialFormFromSearchParams?: boolean
   /** 목록↔폼 전환 시 URL 동기화 (form 열기: true, 목록: false) */
   onNavigateToForm?: (toForm: boolean) => void
+  /** 수정 모드: 전달 시 목록/헤더 없이 수정 폼만 표시 (dashboard/events/:id/edit) */
+  editEventId?: string | null
+  /** 수정 폼에서 뒤로가기 시 (상세로 이동) */
+  onEditBack?: () => void
+  /** 수정 완료 시 (상세로 이동) */
+  onEditSuccess?: () => void
 }
 
 export function EventsTimelineSection({
   countryId,
   initialFormFromSearchParams,
   onNavigateToForm,
+  editEventId,
+  onEditBack,
+  onEditSuccess,
 }: EventsTimelineSectionProps) {
   const navigate = useNavigate()
-  const [pageSize] = useState(20)
+  const [pageSize] = useState(10000)
   const [view, setView] = useState<'list' | 'form'>(() =>
     initialFormFromSearchParams ? 'form' : 'list',
   )
@@ -94,20 +124,31 @@ export function EventsTimelineSection({
     goToList()
   }
 
+  if (editEventId && onEditBack && onEditSuccess) {
+    return (
+      <Root
+        $isForm
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
+        <FormSection aria-label="사건 수정">
+          <EventCreateFormDashboard
+            eventId={editEventId}
+            onBack={onEditBack}
+            onSuccess={onEditSuccess}
+          />
+        </FormSection>
+      </Root>
+    )
+  }
+
   return (
-    <motion.div
+    <Root
+      $isForm={view === 'form'}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 32,
-        padding: '36px 32px 48px',
-        background: '#ffffff',
-        minHeight: 'calc(100vh - 200px)',
-        position: 'relative',
-      }}
     >
       {/* 헤더 — 가문·민족과 동일 */}
       <header
@@ -211,12 +252,12 @@ export function EventsTimelineSection({
       )}
 
       {view === 'form' ? (
-        <section aria-label="사건 등록" style={{ paddingTop: 8, padding: '20px 0 32px' }}>
+        <FormSection aria-label="사건 등록">
           <EventCreateFormDashboard
             onBack={goToList}
             onSuccess={handleCreateSuccess}
           />
-        </section>
+        </FormSection>
       ) : (
       <section aria-label="연대표 현황" style={{ paddingTop: 8 }}>
         <div style={{ marginBottom: 28 }}>
@@ -224,7 +265,7 @@ export function EventsTimelineSection({
             연대표 현황
           </h3>
           <p style={{ margin: '6px 0 0', fontSize: 14, color: '#64748b', fontWeight: 500 }}>
-            등록된 사건 목록입니다. 카드를 클릭하면 상세 페이지로 이동합니다.
+            등록된 사건 목록입니다. 카드를 클릭하면 연대표 상세로 이동합니다.
           </p>
         </div>
 
@@ -300,7 +341,7 @@ export function EventsTimelineSection({
                 <button
                   key={evt.id}
                   type="button"
-                  onClick={() => navigate(pathKeys.events.detail(evt.id))}
+                  onClick={() => navigate(pathKeys.history.dashboardEventDetail(evt.id))}
                   style={{
                     textAlign: 'left',
                     background: '#fff',
@@ -350,7 +391,7 @@ export function EventsTimelineSection({
           </div>
         )}
 
-        {hasMore && (
+        {hasMore && pageSize <= 100 && (
           <div style={{ marginTop: 24, textAlign: 'center' }}>
             <button
               type="button"
@@ -373,6 +414,6 @@ export function EventsTimelineSection({
         )}
       </section>
       )}
-    </motion.div>
+    </Root>
   )
 }

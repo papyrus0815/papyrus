@@ -12,6 +12,7 @@ import {
   FiGlobe,
   FiGrid,
   FiLayers,
+  FiUsers,
   FiX,
 } from 'react-icons/fi'
 

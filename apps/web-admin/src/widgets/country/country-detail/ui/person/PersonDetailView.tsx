@@ -1,9 +1,14 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import styled from 'styled-components'
+import { FiEdit2, FiPlus } from 'react-icons/fi'
+
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel'
 
 interface PersonDetailViewProps {
   person: any
+  /** 수반 등록 후 상세 다시 불러올 때 호출 (예: 부모에서 setPersonDetail) */
+  onTenureAdded?: () => void
 }
 
 type TabType = 'overview' | 'genealogy' | 'activities' | 'works'
@@ -42,8 +47,10 @@ const ErrorDesc = styled.p`
   margin: 0;
 `
 
-export function PersonDetailView({ person }: PersonDetailViewProps) {
+export function PersonDetailView({ person, onTenureAdded }: PersonDetailViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [tenureModalOpen, setTenureModalOpen] = useState(false)
+  const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
 
   // 데이터 검증
   if (!person) {
@@ -74,6 +81,16 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
 
   return (
     <Container>
+      {/* 인물 상세 헤더 (통계·리스트 헤더와 동일 구조) */}
+      <DetailPageHeader>
+        <div>
+          <DetailPageTitle>인물 상세</DetailPageTitle>
+          <DetailPageDesc>
+            기본 정보, 가계도, 활동, 저작을 확인할 수 있습니다.
+          </DetailPageDesc>
+        </div>
+      </DetailPageHeader>
+
       {/* 히어로 이미지 */}
       <Hero>
         {person.profileImageUrl ? (
@@ -154,7 +171,7 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
               <StatCard>
                 <StatLabel>정부 직위</StatLabel>
                 <StatValue>
-                  {person.governmentPositions?.length || 0}건
+                  {(person.governmentPositions ?? person.governmentTenures ?? []).length}건
                 </StatValue>
                 <StatSubtext>역임 직위</StatSubtext>
               </StatCard>
@@ -280,14 +297,7 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
           >
-            {(!person.militaryCommands ||
-              person.militaryCommands.length === 0) &&
-            (!person.organizationRoles ||
-              person.organizationRoles.length === 0) &&
-            (!person.events || person.events.length === 0) ? (
-              <EmptyState>활동 정보가 없습니다</EmptyState>
-            ) : (
-              <ActivitiesGrid>
+            <ActivitiesGrid>
                 {person.militaryCommands &&
                   person.militaryCommands.length > 0 && (
                     <ActivityCard>
@@ -320,17 +330,33 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
                       </ActivityList>
                     </ActivityCard>
                   )}
-                {person.governmentPositions &&
-                  person.governmentPositions.length > 0 && (
-                    <ActivityCard>
-                      <ActivityCardTitle>
-                        정부 직위 ({person.governmentPositions.length}건)
-                      </ActivityCardTitle>
-                      <ActivityList>
-                        {person.governmentPositions.map((tenure: any) => (
+                <ActivityCard>
+                  <ActivityCardTitleRow>
+                    <ActivityCardTitle>
+                      정부 직위 ({(person.governmentPositions ?? person.governmentTenures ?? []).length}건)
+                    </ActivityCardTitle>
+                    <TenureAddBtn
+                      type="button"
+                      onClick={() => {
+                        setEditingTenureId(null)
+                        setTenureModalOpen(true)
+                      }}
+                    >
+                      <FiPlus size={14} />
+                      수반 등록
+                    </TenureAddBtn>
+                  </ActivityCardTitleRow>
+                  {(person.governmentPositions ?? person.governmentTenures ?? []).length > 0 ? (
+                    <ActivityList>
+                      {(person.governmentPositions ?? person.governmentTenures ?? []).map((tenure: any) => (
                           <EventItem key={tenure.id}>
                             <EventHeader>
-                              <EventName>{tenure.position.title}</EventName>
+                              <EventName>
+                                {tenure.positionDefinition?.title ??
+                                  tenure.position?.title ??
+                                  tenure.title ??
+                                  '직책'}
+                              </EventName>
                               {tenure.startDate && (
                                 <EventDate>
                                   {new Date(
@@ -345,17 +371,17 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
                                 </EventDate>
                               )}
                             </EventHeader>
-                            {tenure.position.country && (
+                            {(tenure.country ?? tenure.position?.country) && (
                               <EventDescription>
-                                🏛️ {tenure.position.country.name}
-                                {tenure.position.rank &&
+                                🏛️ {(tenure.country ?? tenure.position?.country)?.name}
+                                {(tenure.position?.rank != null) &&
                                   ` • 서열 ${tenure.position.rank}`}
                               </EventDescription>
                             )}
-                            {tenure.position.historicalCountry && (
+                            {(tenure.historicalCountry ?? tenure.position?.historicalCountry) && (
                               <EventDescription>
-                                🏛️ {tenure.position.historicalCountry.name}
-                                {tenure.position.rank &&
+                                🏛️ {(tenure.historicalCountry ?? tenure.position?.historicalCountry)?.name}
+                                {(tenure.position?.rank != null) &&
                                   ` • 서열 ${tenure.position.rank}`}
                               </EventDescription>
                             )}
@@ -365,12 +391,40 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
                                 {tenure.notes}
                               </EventNote>
                             )}
+                            <TenureRowEditBtn
+                              type="button"
+                              onClick={() => {
+                                setEditingTenureId(tenure.id)
+                                setTenureModalOpen(true)
+                              }}
+                            >
+                              <FiEdit2 size={12} />
+                              수정
+                            </TenureRowEditBtn>
                           </EventItem>
                         ))}
-                      </ActivityList>
-                    </ActivityCard>
+                    </ActivityList>
+                  ) : (
+                    <TenureEmptyText>
+                      등록된 재임 기록이 없습니다. <strong>수반 등록</strong>으로 추가하세요.
+                    </TenureEmptyText>
                   )}
-                {person.events && person.events.length > 0 && (
+                </ActivityCard>
+                <TenureRegisterPanel
+                  personId={person.id}
+                  open={tenureModalOpen}
+                  onClose={() => {
+                    setTenureModalOpen(false)
+                    setEditingTenureId(null)
+                  }}
+                  onSuccess={() => {
+                    setTenureModalOpen(false)
+                    setEditingTenureId(null)
+                    onTenureAdded?.()
+                  }}
+                  tenureId={editingTenureId ?? undefined}
+                />
+                {person.events && person.events.length > 0 ? (
                   <ActivityCard>
                     <ActivityCardTitle>
                       주요 사건 ({person.events.length}건)
@@ -448,9 +502,8 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
                       ))}
                     </ActivityList>
                   </ActivityCard>
-                )}
+                ) : null}
               </ActivitiesGrid>
-            )}
           </TabContent>
         )}
 
@@ -488,16 +541,45 @@ export function PersonDetailView({ person }: PersonDetailViewProps) {
 const Container = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 28px;
+  padding: 0 4px;
+`
+
+const DetailPageHeader = styled.header`
+  padding-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 24px;
+  flex-wrap: wrap;
+`
+
+const DetailPageTitle = styled.h2`
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
+`
+
+const DetailPageDesc = styled.p`
+  margin: 10px 0 0 0;
+  font-size: 15px;
+  color: #64748b;
+  line-height: 1.55;
+  max-width: 540px;
+  font-weight: 500;
 `
 
 const Hero = styled.div`
   position: relative;
   width: 100%;
-  height: 300px;
-  border-radius: 16px;
+  height: 280px;
+  border-radius: 14px;
   overflow: hidden;
-  background: #2d3748;
+  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 `
 
 const HeroImage = styled.img`
@@ -512,7 +594,7 @@ const HeroPlaceholder = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.25);
 `
 
 const HeroOverlay = styled.div`
@@ -526,79 +608,92 @@ const HeroOverlay = styled.div`
 
 const HeroTitle = styled.h1`
   margin: 0;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  color: white;
+  color: #fff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 `
 
 const HeroSubtitle = styled.p`
-  margin: 8px 0 0 0;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.9);
+  margin: 6px 0 0 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
   font-weight: 500;
 `
 
-const TabMenu = styled.div`
+const TabMenu = styled.nav`
   display: flex;
-  gap: 8px;
-  border-bottom: 1px solid #f0f0f0;
-  padding: 0 4px;
+  gap: 4px;
+  padding: 6px;
+  background: #f1f5f9;
+  border-radius: 12px;
+  width: fit-content;
 `
 
 const TabButton = styled.button<{ $active?: boolean }>`
-  padding: 12px 20px;
+  padding: 10px 18px;
   border: none;
-  background: transparent;
-  color: ${({ $active }) => ($active ? '#111' : '#999')};
+  border-radius: 8px;
+  background: ${({ $active }) => ($active ? '#fff' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#0f172a' : '#64748b')};
   font-size: 14px;
-  font-weight: 600;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
-  border-bottom: 2px solid
-    ${({ $active }) => ($active ? '#000' : 'transparent')};
-  transition: all 0.2s;
+  box-shadow: ${({ $active }) => ($active ? '0 1px 3px rgba(0,0,0,0.06)' : 'none')};
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
 
   &:hover {
-    color: #111;
+    color: #0f172a;
+    background: ${({ $active }) => ($active ? '#fff' : 'rgba(255,255,255,0.7)')};
   }
 `
 
 const TabContent = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
 `
 
 const StatsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
 `
 
 const StatCard = styled.div`
   background: #fff;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  &:hover {
+    border-color: #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
 `
 
 const StatLabel = styled.div`
-  font-size: 13px;
-  color: #666;
-  font-weight: 500;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 `
 
 const StatValue = styled.div`
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
-  color: #111;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 `
 
 const StatSubtext = styled.div`
   font-size: 12px;
-  color: #999;
+  color: #94a3b8;
 `
 
 const InfoGrid = styled.div`
@@ -609,9 +704,10 @@ const InfoGrid = styled.div`
 
 const InfoCard = styled.div`
   background: #fff;
-  border: 1px solid #f0f0f0;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const InfoCardLabel = styled.div`
@@ -628,9 +724,10 @@ const InfoCardValue = styled.div`
 
 const BiographyCard = styled.div`
   background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
   padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const BiographyTitle = styled.h3`
@@ -694,9 +791,10 @@ const SectionTitle = styled.h3`
 
 const FamilyGroup = styled.div`
   background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
   padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const FamilyGroupTitle = styled.h4`
@@ -712,9 +810,10 @@ const FamilyGrid = styled.div`
 `
 
 const FamilyCard = styled.div`
-  background: #fafafa;
+  background: #f8fafc;
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
 `
 
 const FamilyName = styled.div`
@@ -737,15 +836,71 @@ const ActivitiesGrid = styled.div`
 
 const ActivityCard = styled.div`
   background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
-  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const ActivityCardTitle = styled.h4`
   margin: 0 0 16px 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
+  color: #0f172a;
+`
+
+const ActivityCardTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  ${ActivityCardTitle} { margin: 0; }
+`
+
+const TenureAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.06);
+    color: #4f46e5;
+  }
+`
+
+const TenureEmptyText = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  strong { color: #475569; font-weight: 600; }
+`
+
+const TenureRowEditBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6366f1;
+  background: #fff;
+  border: 1px solid #e0e7ff;
+  border-radius: 6px;
+  cursor: pointer;
+  &:hover {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+  }
 `
 
 const ActivityList = styled.div`
@@ -755,21 +910,22 @@ const ActivityList = styled.div`
 `
 
 const ActivityItem = styled.div`
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 8px;
+  padding: 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #f1f5f9;
 `
 
 const ActivityName = styled.div`
   font-size: 14px;
-  color: #333;
-  font-weight: 500;
+  color: #334155;
+  font-weight: 600;
   margin-bottom: 4px;
 `
 
 const ActivityMeta = styled.div`
   font-size: 12px;
-  color: #999;
+  color: #64748b;
 `
 
 const WorksGrid = styled.div`
@@ -780,9 +936,10 @@ const WorksGrid = styled.div`
 
 const WorkCard = styled.div`
   background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
   padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const WorkTitle = styled.h4`

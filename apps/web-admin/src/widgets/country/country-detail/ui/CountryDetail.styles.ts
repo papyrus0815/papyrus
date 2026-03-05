@@ -508,32 +508,122 @@ export const SectionTitle = styled.h2`
   }
 `
 
-/** 인물 탭 내 서브탭 바 (통계·최근 인물 | 역대 수반) */
+/** 인물 탭 내 서브탭 바 — 국가선택 탭(대시보드, 역사적 국가, 행정구역)과 동일 디자인 + 하단 보더 */
 export const PersonInnerTabBar = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 20px;
-  margin-bottom: 24px;
-  padding-bottom: 12px;
+  gap: 8px;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 8px 2px;
   border-bottom: 1px solid #e2e8f0;
+  background: transparent;
+  overflow-x: auto;
+  &::-webkit-scrollbar { display: none; }
 `
 
 export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
-  padding: 10px 18px;
-  border-radius: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
   border: none;
-  background: ${({ $active }) => ($active ? '#f1f5f9' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#0f172a' : '#64748b')};
-  font-size: 14px;
+  background: transparent;
+  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
+  font-size: 13px;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  transition: color 0.15s ease, background 0.15s ease;
 
   &:hover {
-    background: ${({ $active }) => ($active ? '#f1f5f9' : '#f8fafc')};
-    color: #0f172a;
+    color: #6366f1;
+    background: #eef2ff;
   }
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 0;
+    height: 2px;
+    background: #6366f1;
+    border-radius: 2px;
+    opacity: ${({ $active }) => ($active ? 1 : 0)};
+    transition: opacity 0.15s ease;
+  }
+`
+
+/** 인물 하위 메뉴 — 전체 사건 GovTabNav와 동일 pill 스타일, 헤더와 간격은 상위 gap 32px로 통일 */
+export const PersonInnerPillNav = styled.nav`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 20px;
+  width: fit-content;
+  background: #f1f5f9;
+  border-radius: 20px;
+`
+
+export const PersonInnerPillBtn = styled.button<{ $active?: boolean }>`
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: none;
+  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#4f46e5' : '#64748b')};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  box-shadow: ${({ $active }) => ($active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    color: #4f46e5;
+    background: ${({ $active }) => ($active ? '#ffffff' : 'rgba(255,255,255,0.7)')};
+  }
+`
+
+/** 인물 탭 공통 헤더 — 전체 사건(EventsTimelineSection)과 동일: paddingBottom 24px, 다음 요소와 gap 32px */
+export const PersonTabSharedHeader = styled.header`
+  padding: 0 0 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  align-items: start;
+  gap: 24px;
+`
+
+/** 헤더 왼쪽 블록 — 제목·설명 항상 같은 영역 */
+export const PersonTabSharedHeaderLeft = styled.div`
+  min-width: 0;
+`
+
+export const PersonTabSharedTitle = styled.h2`
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
+`
+
+export const PersonTabSharedDesc = styled.p`
+  margin: 10px 0 0 0;
+  font-size: 15px;
+  color: #64748b;
+  line-height: 1.55;
+  max-width: 540px;
+  font-weight: 500;
+`
+
+/** 헤더 오른쪽 슬롯 — 항상 같은 너비로 두어 왼쪽 문구 위치 고정 */
+export const PersonTabSharedHeaderRight = styled.div`
+  width: 140px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
 `
 
 export const SimpleHeaderSubtitle = styled.p`

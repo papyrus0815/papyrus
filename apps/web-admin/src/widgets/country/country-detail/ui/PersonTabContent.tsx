@@ -157,7 +157,21 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
                     상세 정보를 불러오는 중...
                   </LoadingMessage>
                 ) : personDetail ? (
-                  <PersonDetailView person={personDetail} />
+                  <PersonDetailView
+                    person={personDetail}
+                    onTenureAdded={
+                      selectedPersonId
+                        ? async () => {
+                            try {
+                              const detail = await getPersonDetailById(selectedPersonId)
+                              setPersonDetail(detail)
+                            } catch {
+                              // ignore
+                            }
+                          }
+                        : undefined
+                    }
+                  />
                 ) : (
                   <ErrorMessage>
                     <ErrorIcon>

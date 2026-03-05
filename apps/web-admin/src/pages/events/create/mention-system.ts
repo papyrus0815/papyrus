@@ -102,8 +102,15 @@ export const MENTION_TYPE_CONFIG: Record<
     label: '인물',
     icon: FiUsers,
     color: '#6366f1',
-    searchFields: ['name'],
-    getName: (item: unknown) => (item as PersonResponseDto).name,
+    searchFields: ['name', 'surname'],
+    getName: (item: unknown) => {
+      const p = item as PersonResponseDto
+      const name = p.name ?? ''
+      const surname = p.surname ?? ''
+      const order = (p.nameDisplayOrder as string) ?? 'korean'
+      if (order === 'western') return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
+      return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
+    },
     getSubtitle: (item: unknown) =>
       (item as PersonResponseDto).birthYear
         ? `${(item as PersonResponseDto).birthYear}년`

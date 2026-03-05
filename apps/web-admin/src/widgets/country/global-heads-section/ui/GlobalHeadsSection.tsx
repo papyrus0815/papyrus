@@ -899,15 +899,15 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
       </div>
 
       <section aria-label="전역 수반 현황" style={{ paddingTop: 4 }}>
-        <SectionHeading style={embedded ? { marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 } : { marginBottom: 16 }}>
-          <div>
-            <SectionTitle>전역 수반 현황</SectionTitle>
-            {!embedded && (
+        <SectionHeading style={embedded ? { marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 12 } : { marginBottom: 16 }}>
+          {!embedded && (
+            <div>
+              <SectionTitle>전역 수반 현황</SectionTitle>
               <SectionDesc>
                 등록된 전역 수반 목록입니다. 카드를 클릭하면 수정·삭제할 수 있습니다.
               </SectionDesc>
-            )}
-          </div>
+            </div>
+          )}
           {embedded && (
             <AddButton type="button" onClick={handleAdd} aria-label="전역 수반 등록">
               <FiPlus size={18} />

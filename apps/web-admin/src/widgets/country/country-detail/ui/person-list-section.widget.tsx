@@ -11,6 +11,14 @@ import { PersonListContent } from '@/shared/ui/person-list-content'
 
 interface PersonListSectionProps {
   countryId: string
+  /** 리스트 ↔ 인물 상세 전환 시 호출 (상단 공통 헤더 문구 변경용) */
+  onViewChange?: (view: 'list' | 'detail') => void
+  /** true면 상단 타이틀·설명 행 숨김 (국가 상세 인물 탭에서 공통 헤더 사용) */
+  hideMainHeader?: boolean
+  /** true면 리스트 내 '인물 등록' 버튼 숨김 (헤더 우측에 배치된 경우) */
+  hideCreateButton?: boolean
+  /** 값이 바뀔 때마다 등록 폼 열기 (헤더 버튼에서 사용) */
+  registerTrigger?: number
 }
 
 const LoadingWrap = styled.div`
@@ -36,7 +44,13 @@ const ErrorWrap = styled.div`
   text-align: center;
 `
 
-export function PersonListSection({ countryId }: PersonListSectionProps) {
+export function PersonListSection({
+  countryId,
+  onViewChange,
+  hideMainHeader,
+  hideCreateButton,
+  registerTrigger,
+}: PersonListSectionProps) {
   const queryClient = useQueryClient()
   const { data: persons = [], isLoading, error } = useQuery({
     queryKey: ['persons-by-country', countryId],
@@ -71,6 +85,11 @@ export function PersonListSection({ countryId }: PersonListSectionProps) {
       title="인물 리스트"
       emptyMessage="이 국가에 등록된 인물이 없습니다."
       emptyFilterMessage="검색·필터 조건에 맞는 인물이 없습니다."
+      onViewChange={onViewChange}
+      hideMainHeader={hideMainHeader}
+      hideCreateButton={hideCreateButton}
+      registerTrigger={registerTrigger}
+      enableCountryFilter={false}
     />
   )
 }

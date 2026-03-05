@@ -1,8 +1,7 @@
 /**
- * 사건 등록 폼 — 인물 등록 폼(국가 대시보드 persons 탭)과 동일한 디자인
- * 공용 register-form-layout + 탭(기본 정보 / 관계 / 본문), 본문은 RichTextEditor + 섹션 추가/삭제
+ * 사건 등록/수정 폼 — 공용 register-form-layout + 탭(기본 정보 / 관계 / 본문)
  */
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { FiArrowLeft, FiCalendar, FiChevronDown, FiFileText, FiInfo, FiLink, FiPlus, FiX } from 'react-icons/fi'
 import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
@@ -11,7 +10,7 @@ import type { EventSection } from '@/features/event-create/model/use-event-basic
 import { buildEventSubmitData, extractMentions, validateBasicInfo } from '@/features/event-create/lib'
 import { useBasicInfoForm } from '@/features/event-form/model'
 import { useRelationshipsForm } from '@/features/event-form/model/useRelationshipsForm'
-import { createEvent } from '@/shared/api/events'
+import { createEvent, getEventById, getEventsByParentId, updateEvent } from '@/shared/api/events'
 import { getUploadImageUrl, uploadImage, validateImageFile } from '@/shared/api/upload'
 import {
   BackButton,
@@ -20,8 +19,6 @@ import {
   FieldControl,
   FieldLabel,
   FieldRow,
-  FormCardWrapper,
-  FormHeader,
   FormHeaderTitle,
   FormRows,
   Input,
@@ -36,6 +33,50 @@ import { PersonSelectModal } from '@/shared/ui/person-select-modal'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 
+const CategoryChip = styled.button<{ $active?: boolean }>`
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${(p) => (p.$active ? '#fff' : '#475569')};
+  background: ${(p) => (p.$active ? '#6366f1' : '#f1f5f9')};
+  border: 1px solid ${(p) => (p.$active ? '#6366f1' : BORDER_COLOR)};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover {
+    background: ${(p) => (p.$active ? '#4f46e5' : '#e2e8f0')};
+  }
+`
+
+const InputShort = styled(Input)`
+  max-width: 280px;
+`
+
+const DateFieldsRowWide = styled(DateFieldsRow)`
+  max-width: 560px;
+  grid-template-columns: 1fr 1fr;
+  & > button {
+    min-width: 200px;
+    white-space: nowrap;
+  }
+`
+
+const TextArea = styled.textarea`
+  width: 100%;
+  max-width: 100%;
+  min-height: 140px;
+  padding: 12px 16px;
+  font-size: 14px;
+  border: 1px solid ${BORDER_COLOR};
+  border-radius: 12px;
+  resize: vertical;
+  &:focus {
+    outline: none;
+    border-color: ${FOCUS_COLOR};
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  }
+`
+
 const SelectInput = styled.select`
   width: 100%;
   max-width: 380px;
@@ -47,27 +88,6 @@ const SelectInput = styled.select`
   border-radius: 12px;
   outline: none;
   &:focus {
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
-`
-
-/** 사건명·위치 등 짧은 입력용 (가로 폭 제한) */
-const InputShort = styled(Input)`
-  max-width: 280px;
-`
-
-const TextArea = styled.textarea`
-  width: 100%;
-  max-width: 440px;
-  min-height: 80px;
-  padding: 12px 16px;
-  font-size: 14px;
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 12px;
-  resize: vertical;
-  &:focus {
-    outline: none;
     border-color: ${FOCUS_COLOR};
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
@@ -96,6 +116,53 @@ const ChipRemoveBtn = styled.button`
   }
 `
 
+const ContentTabWrap = styled.div`
+  width: 100%;
+  min-height: 0;
+`
+
+const DashboardFormWrap = styled.div`
+  background: #ffffff;
+  border-radius: 0;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+`
+
+const FormBodyScroll = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 28px 32px;
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 3px;
+  }
+`
+
+const DashboardFormHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 28px;
+  background: #fff;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+`
+
 const AddSectionBtn = styled.button`
   padding: 10px 18px;
   font-size: 13px;
@@ -111,41 +178,20 @@ const AddSectionBtn = styled.button`
 `
 
 const RemoveSectionBtn = styled.button<{ $disabled?: boolean }>`
-  padding: 8px 12px;
-  font-size: 12px;
+  flex-shrink: 0;
+  min-width: 72px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
   color: ${(p) => (p.$disabled ? '#9ca3af' : '#64748b')};
   background: ${(p) => (p.$disabled ? '#f3f4f6' : '#f1f5f9')};
   border: none;
   border-radius: 10px;
   cursor: ${(p) => (p.$disabled ? 'not-allowed' : 'pointer')};
+  transition: color 0.15s, background 0.15s;
   &:hover {
     color: ${(p) => (p.$disabled ? '#9ca3af' : '#dc2626')};
     background: ${(p) => (p.$disabled ? '#f3f4f6' : '#fee2e2')};
-  }
-`
-
-/** 본문 탭: 섹션이 늘어나면 컨테이너도 함께 늘어남 */
-const ContentTabWrap = styled.div`
-  width: 100%;
-  min-height: 0;
-`
-
-/** 폼 본문(탭+내용) 전체 영역 스크롤: 섹션이 늘어나면 이 영역에 스크롤 생김 */
-const FormBodyScroll = styled.div`
-  max-height: min(75vh, 720px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 28px 32px 32px;
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
   }
 `
 
@@ -154,6 +200,13 @@ const EditorWrap = styled.div`
   max-width: 100%;
   min-width: 0;
   min-height: 200px;
+`
+
+/** 본문 섹션 내용용: 가로 전체 사용(FieldControl max-width 제한 없음) */
+const SectionContentControl = styled.div`
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 `
 
 const ImageGrid = styled.div`
@@ -240,21 +293,6 @@ const CategoryGrid = styled.div`
   flex-wrap: wrap;
   gap: 10px;
   max-width: 480px;
-`
-
-const CategoryChip = styled.button<{ $active?: boolean }>`
-  padding: 10px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${(p) => (p.$active ? '#fff' : '#475569')};
-  background: ${(p) => (p.$active ? '#6366f1' : '#f1f5f9')};
-  border: 1px solid ${(p) => (p.$active ? '#6366f1' : BORDER_COLOR)};
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  &:hover {
-    background: ${(p) => (p.$active ? '#4f46e5' : '#e2e8f0')};
-  }
 `
 
 const ModalOverlay = styled.div`
@@ -353,12 +391,16 @@ function formatDateDisplay(dateStr: string): string {
 export interface EventCreateFormDashboardProps {
   onBack: () => void
   onSuccess: () => void
+  /** 수정 모드: 전달 시 사건 로드 후 수정 폼으로 동작 */
+  eventId?: string | null
 }
 
 export function EventCreateFormDashboard({
   onBack,
   onSuccess,
+  eventId: editEventId,
 }: EventCreateFormDashboardProps) {
+  const isEditMode = Boolean(editEventId)
   const {
     dbCategories,
     availableCountries,
@@ -382,6 +424,11 @@ export function EventCreateFormDashboard({
   const [sections, setSections] = useState<EventSection[]>(() => [
     { id: '1', title: 'Part 1', content: '', mentions: [] },
   ])
+  const [isLoadingEvent, setIsLoadingEvent] = useState(isEditMode)
+  /** 수정 시 API에서 받은 연관 국가 이름 (availableCountries 로드 전에도 표시용) */
+  const [loadedRelatedCountryDisplay, setLoadedRelatedCountryDisplay] = useState<
+    Array<{ id: string; name: string; isHistorical: boolean }>
+  >([])
 
   const {
     title,
@@ -390,10 +437,12 @@ export function EventCreateFormDashboard({
     setDescription,
     startDate,
     setStartDate,
+    startTime,
+    setStartTime,
     endDate,
     setEndDate,
-    startTime,
     endTime,
+    setEndTime,
     category,
     setCategory,
     thumbnail,
@@ -405,12 +454,122 @@ export function EventCreateFormDashboard({
     relatedHistoricalCountryIds,
     setRelatedHistoricalCountryIds,
     tags,
+    setKeywords,
     isValid,
     getDateError,
   } = useBasicInfoForm()
 
   const rel = useRelationshipsForm(availableEvents, availablePersons)
   const dateError = getDateError()
+
+  useEffect(() => {
+    if (!editEventId) {
+      setLoadedRelatedCountryDisplay([])
+      return
+    }
+    let cancelled = false
+    const load = async () => {
+      setIsLoadingEvent(true)
+      try {
+        const event = await getEventById(editEventId)
+        if (cancelled) return
+
+        setTitle(event.title ?? '')
+        setDescription(event.description ?? '')
+        setLocation(event.location ?? '')
+
+        if (event.startDate) {
+          const d = String(event.startDate).split('T')[0]
+          setStartDate(d)
+          const dt = new Date(event.startDate)
+          if (!isNaN(dt.getTime()) && (dt.getHours() !== 0 || dt.getMinutes() !== 0)) {
+            setStartTime(`${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`)
+          }
+        }
+
+        const endDateStr =
+          event.endDate == null || event.endDate === ''
+            ? ''
+            : typeof event.endDate === 'string'
+              ? event.endDate.includes('T')
+                ? event.endDate.split('T')[0]
+                : event.endDate
+              : (event.endDate as Date)?.toISOString?.()?.slice(0, 10) ?? ''
+        setEndDate(endDateStr)
+        if (event.endDate) {
+          const dt = new Date(event.endDate)
+          if (!isNaN(dt.getTime()) && (dt.getHours() !== 0 || dt.getMinutes() !== 0)) {
+            setEndTime(`${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`)
+          }
+        }
+
+        const categoryId = (event as { category?: { id: string } }).category?.id ?? event.categoryId
+        if (categoryId != null && String(categoryId) !== '') setCategory(String(categoryId))
+
+        if (event.keywords?.length) setKeywords(event.keywords)
+
+        let modernIds: string[] = Array.isArray(event.relatedCountryIds) ? event.relatedCountryIds.map(String) : (event.relatedCountries?.map((c: { id: string }) => String(c.id)) ?? [])
+        let historicalIds: string[] = Array.isArray(event.relatedHistoricalCountryIds) ? event.relatedHistoricalCountryIds.map(String) : (event.relatedHistoricalCountries?.map((c: { id: string }) => String(c.id)) ?? [])
+        const countryRels = (event as { countryRelations?: Array<{ countryId?: string; historicalCountryId?: string }> }).countryRelations
+        if (countryRels?.length) {
+          const fromRelsModern = countryRels.map((r) => r.countryId).filter(Boolean) as string[]
+          const fromRelsHistorical = countryRels.map((r) => r.historicalCountryId).filter(Boolean) as string[]
+          modernIds = [...new Set([...modernIds, ...fromRelsModern])]
+          historicalIds = [...new Set([...historicalIds, ...fromRelsHistorical])]
+        }
+        setRelatedCountryIds(modernIds)
+        setRelatedHistoricalCountryIds(historicalIds)
+
+        const loadedDisplay: Array<{ id: string; name: string; isHistorical: boolean }> = []
+        ;(event.relatedCountries ?? []).forEach((c: { id: string; name?: string }) =>
+          loadedDisplay.push({ id: String(c.id), name: (c as { name?: string }).name ?? String(c.id), isHistorical: false }),
+        )
+        ;(event.relatedHistoricalCountries ?? []).forEach((c: { id: string; name?: string }) =>
+          loadedDisplay.push({ id: String(c.id), name: (c as { name?: string }).name ?? String(c.id), isHistorical: true }),
+        )
+        setLoadedRelatedCountryDisplay(loadedDisplay)
+
+        const thumbUrl = event.thumbnail ?? (event.eventImages?.find((img: { isPrimary?: boolean }) => img.isPrimary)?.imageUrl ?? event.eventImages?.[0]?.imageUrl)
+        if (thumbUrl) setThumbnail(String(thumbUrl))
+        if (event.parentEventId) rel.setParentEventId(event.parentEventId)
+        if (event.eventSections?.length) {
+          type SectionRow = { id: string; title: string; content: string; order?: number }
+          const sectionsRaw: SectionRow[] = event.eventSections as SectionRow[]
+          setSections(
+            sectionsRaw
+              .slice()
+              .sort((a: SectionRow, b: SectionRow) => (a.order ?? 0) - (b.order ?? 0))
+              .map((s: SectionRow) => ({ id: s.id, title: s.title, content: s.content, mentions: [] })),
+          )
+        }
+        if (event.eventImages?.length) {
+          setEventImages(
+            event.eventImages.map((img: { imageUrl: string; caption?: string; order: number; isPrimary: boolean }) => ({
+              imageUrl: img.imageUrl || '',
+              caption: img.caption ?? undefined,
+              order: typeof img.order === 'number' ? img.order : 0,
+              isPrimary: Boolean(img.isPrimary),
+            })),
+          )
+        } else {
+          setEventImages([])
+        }
+        const childEvents = await getEventsByParentId(editEventId)
+        if (cancelled) return
+        setChildEventIds(childEvents.map((c) => c.id))
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : '사건 정보를 불러오지 못했습니다.'
+          toast.error(msg)
+          setFormError(msg.includes('본인') ? '본인이 등록한 사건만 수정할 수 있습니다.' : '사건 정보를 불러오지 못했습니다.')
+        }
+      } finally {
+        if (!cancelled) setIsLoadingEvent(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [editEventId])
 
   const addSection = () => {
     setSections((prev) => [
@@ -462,8 +621,13 @@ export function EventCreateFormDashboard({
         childEventIds: childEventIds.length > 0 ? childEventIds : undefined,
         eventImages: eventImages.length > 0 ? eventImages : undefined,
       })
-      await createEvent(eventData as Parameters<typeof createEvent>[0])
-      toast.success('사건이 등록되었습니다.')
+      if (isEditMode && editEventId) {
+        await updateEvent(editEventId, eventData as Parameters<typeof updateEvent>[1])
+        toast.success('사건이 수정되었습니다.')
+      } else {
+        await createEvent(eventData as Parameters<typeof createEvent>[0])
+        toast.success('사건이 등록되었습니다.')
+      }
       onSuccess()
     } catch (err) {
       const msg =
@@ -511,16 +675,28 @@ export function EventCreateFormDashboard({
 
   const selectedCountriesForDisplay = useMemo(() => {
     const list: Array<{ id: string; name: string; isHistorical: boolean }> = []
+    const idStr = (id: string) => String(id)
     relatedCountryIds.forEach((id) => {
-      const c = availableCountries.find((x) => x.id === id)
-      if (c?.name) list.push({ id, name: c.name, isHistorical: false })
+      const loaded = loadedRelatedCountryDisplay.find((x) => x.id === idStr(id) && !x.isHistorical)
+      if (loaded) {
+        list.push(loaded)
+        return
+      }
+      const c = availableCountries.find((x) => String(x.id) === idStr(id))
+      if (c?.name) list.push({ id: idStr(id), name: c.name, isHistorical: false })
+      else list.push({ id: idStr(id), name: idStr(id), isHistorical: false })
     })
     relatedHistoricalCountryIds.forEach((id) => {
-      const c = availableHistoricalCountries.find((x) => x.id === id)
-      list.push({ id, name: (c as { name?: string })?.name ?? id, isHistorical: true })
+      const loaded = loadedRelatedCountryDisplay.find((x) => x.id === idStr(id) && x.isHistorical)
+      if (loaded) {
+        list.push(loaded)
+        return
+      }
+      const c = availableHistoricalCountries.find((x) => String(x.id) === idStr(id))
+      list.push({ id: idStr(id), name: (c as { name?: string })?.name ?? idStr(id), isHistorical: true })
     })
     return list
-  }, [relatedCountryIds, relatedHistoricalCountryIds, availableCountries, availableHistoricalCountries])
+  }, [relatedCountryIds, relatedHistoricalCountryIds, availableCountries, availableHistoricalCountries, loadedRelatedCountryDisplay])
 
   const handleStartDateSelect = (date: string) => {
     setStartDate(date)
@@ -560,23 +736,23 @@ export function EventCreateFormDashboard({
 
   return (
     <>
-      <FormCardWrapper>
-        <FormHeader>
+      <DashboardFormWrap>
+        <DashboardFormHeader>
           <BackButton type="button" onClick={onBack}>
             <FiArrowLeft size={18} />
             목록으로
           </BackButton>
-          <FormHeaderTitle>사건 등록</FormHeaderTitle>
+          <FormHeaderTitle>{isEditMode ? '사건 수정' : '사건 등록'}</FormHeaderTitle>
           <SubmitButton
             type="button"
             onClick={handleSubmit}
-            disabled={!isValid() || isSaving}
+            disabled={!isValid() || isSaving || isLoadingEvent}
           >
-            {isSaving ? '등록 중…' : '등록'}
+            {isSaving ? (isEditMode ? '수정 중…' : '등록 중…') : isLoadingEvent ? '불러오는 중…' : (isEditMode ? '수정' : '등록')}
           </SubmitButton>
-        </FormHeader>
+        </DashboardFormHeader>
 
-        <form id="event-create-form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+        <form id="event-create-form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <FormBodyScroll>
             {formError && (
               <div
@@ -644,13 +820,13 @@ export function EventCreateFormDashboard({
                 <FieldRow>
                   <FieldLabel>설명</FieldLabel>
                   <FieldControl>
-                    <TextArea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="사건 개요 또는 설명" rows={3} />
+                    <TextArea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="사건 개요 또는 설명" rows={6} />
                   </FieldControl>
                 </FieldRow>
                 <FieldRow>
                   <FieldLabel>시작일 · 종료일</FieldLabel>
                   <FieldControl>
-                    <DateFieldsRow>
+                    <DateFieldsRowWide>
                       <DateFieldBtn type="button" $hasValue={!!startDate} onClick={() => setShowStartDateModal(true)}>
                         <FiCalendar size={18} />
                         <span>{formatDateDisplay(startDate)}</span>
@@ -661,7 +837,7 @@ export function EventCreateFormDashboard({
                         <span>{formatDateDisplay(endDate)}</span>
                         <FiChevronDown size={16} />
                       </DateFieldBtn>
-                    </DateFieldsRow>
+                    </DateFieldsRowWide>
                   </FieldControl>
                 </FieldRow>
                 <FieldRow>
@@ -672,8 +848,8 @@ export function EventCreateFormDashboard({
                         <CategoryChip
                           key={c.id}
                           type="button"
-                          $active={category === c.id}
-                          onClick={() => setCategory(category === c.id ? '' : c.id)}
+                          $active={String(category) === String(c.id)}
+                          onClick={() => setCategory(String(category) === String(c.id) ? '' : String(c.id))}
                         >
                           {c.name}
                         </CategoryChip>
@@ -731,13 +907,13 @@ export function EventCreateFormDashboard({
                       <FieldRow>
                         <FieldLabel>섹션 제목</FieldLabel>
                         <FieldControl>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                             <Input
                               type="text"
                               value={sec.title}
                               onChange={(e) => updateSection(sec.id, { title: e.target.value })}
                               placeholder="예: Part 1"
-                              style={{ maxWidth: 320 }}
+                              style={{ maxWidth: 320, flex: '1 1 200px' }}
                             />
                             <RemoveSectionBtn
                               type="button"
@@ -752,7 +928,7 @@ export function EventCreateFormDashboard({
                       </FieldRow>
                       <FieldRow>
                         <FieldLabel>섹션 내용</FieldLabel>
-                        <FieldControl>
+                        <SectionContentControl>
                           <EditorWrap>
                             <RichTextEditor
                               value={sec.content}
@@ -767,7 +943,7 @@ export function EventCreateFormDashboard({
                               }}
                             />
                           </EditorWrap>
-                        </FieldControl>
+                        </SectionContentControl>
                       </FieldRow>
                     </React.Fragment>
                   ))}
@@ -892,7 +1068,7 @@ export function EventCreateFormDashboard({
             )}
           </FormBodyScroll>
         </form>
-      </FormCardWrapper>
+      </DashboardFormWrap>
 
       <DatePickerModal
         isOpen={showStartDateModal}

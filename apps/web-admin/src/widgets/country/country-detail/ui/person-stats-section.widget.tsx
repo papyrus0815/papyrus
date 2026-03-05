@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiSettings } from 'react-icons/fi'
-import styled from 'styled-components'
 
 import { PositionCategoryCrudModal } from '@/pages/persons/PositionCategoryCrudModal'
 import { type Person, personApi } from '@/shared/api/person'
@@ -18,25 +17,6 @@ const sectionLabelStyle: React.CSSProperties = {
   textTransform: 'uppercase',
 }
 
-const PersonTabNav = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  margin-bottom: 20px;
-  width: fit-content;
-  background: #f1f5f9;
-  border-radius: 20px;
-`
-const PersonTabBtn = styled.span`
-  padding: 10px 18px;
-  border-radius: 14px;
-  background: #ffffff;
-  color: #4f46e5;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
-`
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div style={sectionLabelStyle}>{children}</div>
 }
@@ -64,7 +44,8 @@ function GovStatCard({
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+        transition:
+          'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-2px)'
@@ -77,12 +58,48 @@ function GovStatCard({
         e.currentTarget.style.borderColor = '#e5e7eb'
       }}
     >
-      <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: accentColor, flexShrink: 0 }}>{icon}</div>
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: '#f3f4f6',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: accentColor,
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
       <div>
-        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{title}</div>
+        <div
+          style={{
+            fontSize: 11,
+            color: '#6b7280',
+            marginBottom: 4,
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {title}
+        </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontSize: 24, fontWeight: 700, color: '#111827', letterSpacing: '-0.03em' }}>{value}</span>
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#6b7280' }}>{unit}</span>
+          <span
+            style={{
+              fontSize: 24,
+              fontWeight: 700,
+              color: '#111827',
+              letterSpacing: '-0.03em',
+            }}
+          >
+            {value}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#6b7280' }}>
+            {unit}
+          </span>
         </div>
       </div>
     </div>
@@ -94,6 +111,11 @@ interface PersonStatsProps {
   countryId?: string | null
   /** true면 상단 여백 겹침 없음(탭 아래 등) — 카드 그리드 marginTop 0 */
   noOverlap?: boolean
+  /** true면 타이틀·설명 헤더 숨김 (국가 상세 인물 탭에서 공통 헤더 사용) */
+  hideHeader?: boolean
+  /** hideHeader일 때 관직 카테고리 모달 제어 (부모가 헤더에 버튼 배치) */
+  categoryModalOpen?: boolean
+  onCategoryModalOpenChange?: (open: boolean) => void
 }
 
 interface PersonStats {
@@ -119,10 +141,24 @@ interface PersonStats {
 const MIN_LOADING_MS = 1000
 const FADE_DURATION = 0.35
 
-export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
+export function PersonStatsSection({
+  countryId,
+  noOverlap,
+  hideHeader,
+  categoryModalOpen,
+  onCategoryModalOpenChange,
+}: PersonStatsProps) {
   const [persons, setPersons] = useState<Person[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [showCategoryCrudModal, setShowCategoryCrudModal] = useState(false)
+  const [internalCategoryModal, setInternalCategoryModal] = useState(false)
+  const showCategoryCrudModal =
+    hideHeader && categoryModalOpen !== undefined
+      ? categoryModalOpen
+      : internalCategoryModal
+  const setShowCategoryCrudModal =
+    hideHeader && onCategoryModalOpenChange
+      ? onCategoryModalOpenChange
+      : setInternalCategoryModal
   const loadStartRef = useRef<number>(Date.now())
   const minLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [stats, setStats] = useState<PersonStats>({
@@ -285,321 +321,864 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
               display: 'flex',
               flexDirection: 'column',
               gap: 32,
-              padding: '36px 32px 48px',
+
               background: '#ffffff',
               minHeight: 'calc(100vh - 200px)',
               position: 'relative',
             }}
           >
-      <header style={{ paddingBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.04em', lineHeight: 1.25 }}>
-            인물 통계
-          </h2>
-          <p style={{ margin: '10px 0 0', fontSize: 15, color: '#64748b', lineHeight: 1.55, maxWidth: 540, fontWeight: 500 }}>
-            총 인물 수, 역할·세기별 분포, 최근 등록 인물을 한눈에 볼 수 있습니다.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCategoryCrudModal(true) }}
-          aria-label="관직 카테고리 관리"
-          title="관직 카테고리 관리"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-        >
-          <FiSettings size={18} />
-          관직 카테고리
-        </button>
-      </header>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <PersonTabNav>
-          <PersonTabBtn>통계</PersonTabBtn>
-        </PersonTabNav>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap', padding: '20px 28px', background: '#fff', borderRadius: 16, border: '1px solid #e5e7eb' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>총 인물</span>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em' }}>{stats.totalPersons}<span style={{ fontSize: 14, fontWeight: 500, color: '#64748b', marginLeft: 2 }}>명</span></span>
-        </div>
-        <span style={{ width: 1, height: 24, background: '#e2e8f0', borderRadius: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>남 / 여</span>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em' }}>{stats.maleCount}<span style={{ fontSize: 14, fontWeight: 500, color: '#64748b' }}> / </span>{stats.femaleCount}<span style={{ fontSize: 14, fontWeight: 500, color: '#64748b', marginLeft: 2 }}>명</span></span>
-        </div>
-        <span style={{ width: 1, height: 24, background: '#e2e8f0', borderRadius: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>생존 / 사망</span>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em' }}>{stats.aliveCount}<span style={{ fontSize: 14, fontWeight: 500, color: '#64748b' }}> / </span>{stats.deceasedCount}<span style={{ fontSize: 14, fontWeight: 500, color: '#64748b', marginLeft: 2 }}>명</span></span>
-        </div>
-        <span style={{ width: 1, height: 24, background: '#e2e8f0', borderRadius: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>평균 나이</span>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em' }}>{stats.averageAge}<span style={{ fontSize: 14, fontWeight: 500, color: '#64748b', marginLeft: 2 }}>세</span></span>
-        </div>
-        </div>
-      </div>
-
-      {/* 요약 지표 (행정조직 StatCard 스타일) */}
-      <section aria-label="요약 지표">
-        <SectionLabel>요약 지표</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 20 }}>
-          <GovStatCard accentColor={MAIN} icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>} title="총 인물" value={stats.totalPersons} unit="명" />
-          <GovStatCard accentColor="#3b82f6" icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>} title="남성" value={stats.maleCount} unit="명" />
-          <GovStatCard accentColor="#ec4899" icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg>} title="여성" value={stats.femaleCount} unit="명" />
-          <GovStatCard accentColor="#10b981" icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>} title="생존" value={stats.aliveCount} unit="명" />
-          <GovStatCard accentColor="#64748b" icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>} title="사망" value={stats.deceasedCount} unit="명" />
-        </div>
-      </section>
-
-      {/* 역할별 분포 */}
-      <section aria-label="역할별 분포">
-        <SectionLabel>역할별 분포</SectionLabel>
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid rgba(0,0,0,0.06)',
-            borderRadius: 24,
-            padding: 0,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
-            overflow: 'hidden',
-          }}
-        >
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-            {Object.entries(stats.byRole)
-              .sort(([, a], [, b]) => b - a)
-              .map(([role, count], idx) => {
-                const pct = stats.totalPersons > 0 ? (count / stats.totalPersons) * 100 : 0
-                return (
-                  <li
-                    key={idx}
+            {!hideHeader && (
+              <header
+                style={{
+                  paddingBottom: 24,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: 24,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div>
+                  <h2
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 16,
-                      padding: '12px 24px',
-                      borderBottom: idx < Object.keys(stats.byRole).length - 1 ? '1px solid #f1f5f9' : 'none',
-                      transition: 'background 0.15s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#f8fafc'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent'
+                      margin: 0,
+                      fontSize: 26,
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      letterSpacing: '-0.04em',
+                      lineHeight: 1.25,
                     }}
                   >
-                    <span style={{ flex: '0 0 140px', fontSize: 13, fontWeight: 500, color: '#0f172a' }}>{role}</span>
-                    <div style={{ flex: 1, minWidth: 0, height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${pct}%`,
-                          minWidth: pct > 0 ? 4 : 0,
-                          background: MAIN,
-                          borderRadius: 3,
-                          transition: 'width 0.25s ease',
-                        }}
-                      />
-                    </div>
-                    <span style={{ flex: '0 0 56px', fontSize: 13, fontWeight: 600, color: '#475569', textAlign: 'right' }}>
-                      {count}명
-                    </span>
-                  </li>
-                )
-              })}
-          </ul>
-          {Object.keys(stats.byRole).length === 0 && (
-            <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#94a3b8' }}>
-              역할 정보가 있는 인물이 없습니다.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* 출생 세기별 분포 */}
-      <section aria-label="출생 세기별 분포">
-        <SectionLabel>출생 세기별 분포</SectionLabel>
-      <div
-        style={{
-          background: '#ffffff',
-          border: '1px solid rgba(0,0,0,0.06)',
-          borderRadius: 24,
-          padding: 28,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
-        }}
-      >
-        <p style={{ margin: '0 0 16px', fontSize: 12, color: '#64748b', fontWeight: 500 }}>
-          출생 연도 기준 세기별 분류
-        </p>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(9, 1fr)',
-            gap: '6px 10px',
-            alignItems: 'flex-end',
-            height: '140px',
-          }}
-        >
-          {(() => {
-            const centuryOrder = [
-              '15세기 이전',
-              '15세기',
-              '16세기',
-              '17세기',
-              '18세기',
-              '19세기',
-              '20세기',
-              '21세기',
-              '22세기 이후',
-            ]
-            const maxCount = Math.max(1, ...Object.values(stats.byCentury), 0)
-            const barMaxHeight = 88
-            return centuryOrder.map((century, idx) => {
-              const count = stats.byCentury[century] ?? 0
-              const height = maxCount > 0 ? (count / maxCount) * barMaxHeight : 0
-              return (
-                <div
-                  key={idx}
+                    인물 통계
+                  </h2>
+                  <p
+                    style={{
+                      margin: '10px 0 0',
+                      fontSize: 15,
+                      color: '#64748b',
+                      lineHeight: 1.55,
+                      maxWidth: 540,
+                      fontWeight: 500,
+                    }}
+                  >
+                    총 인물 수, 역할·세기별 분포, 최근 등록 인물을 한눈에 볼 수
+                    있습니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowCategoryCrudModal(true)
+                  }}
+                  aria-label="관직 카테고리 관리"
+                  title="관직 카테고리 관리"
                   style={{
-                    display: 'flex',
-                    flexDirection: 'column',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 6,
-                    minWidth: 0,
+                    gap: 8,
+                    padding: '10px 18px',
+                    borderRadius: 12,
+                    border: '1px solid #e5e7eb',
+                    background: '#fff',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    fontSize: 13,
+                    fontWeight: 600,
                   }}
                 >
-                  <div
-                    style={{
-                      width: '100%',
-                      minHeight: count > 0 ? 14 : 0,
-                      height: `${height}px`,
-                      background: count > 0 ? MAIN : 'rgba(226, 232, 240, 0.5)',
-                      borderRadius: '6px 6px 0 0',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      justifyContent: 'center',
-                      padding: count > 0 ? '4px 2px' : 0,
-                      color: count > 0 ? '#fff' : 'transparent',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      transition: 'opacity 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (count > 0) e.currentTarget.style.opacity = '0.9'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.opacity = '1'
-                    }}
-                    title={`${century}: ${count}명`}
-                  >
-                    {count > 0 ? count : ''}
-                  </div>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 500,
-                      color: '#64748b',
-                      textAlign: 'center',
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {century}
-                  </span>
-                </div>
-              )
-            })
-          })()}
-        </div>
-        {Object.keys(stats.byCentury).length === 0 && (
-          <div
-            style={{
-              marginTop: '16px',
-              textAlign: 'center',
-              color: '#94a3b8',
-              fontSize: '14px',
-            }}
-          >
-            출생 연도 정보가 있는 인물이 없습니다.
-          </div>
-        )}
-      </div>
-      </section>
+                  <FiSettings size={18} />
+                  관직 카테고리
+                </button>
+              </header>
+            )}
 
-      {/* 최근 등록 인물 */}
-      <section aria-label="최근 등록 인물">
-        <SectionLabel>최근 등록 인물</SectionLabel>
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid rgba(0,0,0,0.06)',
-            borderRadius: 24,
-            padding: 0,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
-            overflow: 'hidden',
-          }}
-        >
-          <div style={{ padding: '16px 24px', borderBottom: '1px solid #f1f5f9' }}>
-            <p style={{ margin: 0, fontSize: 12, color: '#64748b', fontWeight: 500 }}>
-              가장 최근에 등록된 인물 6명
-            </p>
-          </div>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-            {stats.recentPersons.map((person, idx) => (
-              <li
-                key={idx}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 16,
-                  padding: '14px 24px',
-                  borderBottom: idx < stats.recentPersons.length - 1 ? '1px solid #f1f5f9' : 'none',
-                  transition: 'background 0.15s ease',
+                  gap: 28,
+                  flexWrap: 'wrap',
+                  padding: '20px 28px',
+                  background: '#fff',
+                  borderRadius: 16,
+                  border: '1px solid #e5e7eb',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#f8fafc'
+              >
+                <div
+                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#64748b',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    총 인물
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      letterSpacing: '-0.03em',
+                    }}
+                  >
+                    {stats.totalPersons}
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        marginLeft: 2,
+                      }}
+                    >
+                      명
+                    </span>
+                  </span>
+                </div>
+                <span
+                  style={{
+                    width: 1,
+                    height: 24,
+                    background: '#e2e8f0',
+                    borderRadius: 1,
+                  }}
+                />
+                <div
+                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#64748b',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    남 / 여
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      letterSpacing: '-0.03em',
+                    }}
+                  >
+                    {stats.maleCount}
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: '#64748b',
+                      }}
+                    >
+                      {' '}
+                      /{' '}
+                    </span>
+                    {stats.femaleCount}
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        marginLeft: 2,
+                      }}
+                    >
+                      명
+                    </span>
+                  </span>
+                </div>
+                <span
+                  style={{
+                    width: 1,
+                    height: 24,
+                    background: '#e2e8f0',
+                    borderRadius: 1,
+                  }}
+                />
+                <div
+                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#64748b',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    생존 / 사망
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      letterSpacing: '-0.03em',
+                    }}
+                  >
+                    {stats.aliveCount}
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: '#64748b',
+                      }}
+                    >
+                      {' '}
+                      /{' '}
+                    </span>
+                    {stats.deceasedCount}
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        marginLeft: 2,
+                      }}
+                    >
+                      명
+                    </span>
+                  </span>
+                </div>
+                <span
+                  style={{
+                    width: 1,
+                    height: 24,
+                    background: '#e2e8f0',
+                    borderRadius: 1,
+                  }}
+                />
+                <div
+                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#64748b',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    평균 나이
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      letterSpacing: '-0.03em',
+                    }}
+                  >
+                    {stats.averageAge}
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        marginLeft: 2,
+                      }}
+                    >
+                      세
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 요약 지표 (행정조직 StatCard 스타일) */}
+            <section aria-label="요약 지표">
+              <SectionLabel>요약 지표</SectionLabel>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5, 1fr)',
+                  gap: 20,
                 }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
+              >
+                <GovStatCard
+                  accentColor={MAIN}
+                  icon={
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  }
+                  title="총 인물"
+                  value={stats.totalPersons}
+                  unit="명"
+                />
+                <GovStatCard
+                  accentColor="#3b82f6"
+                  icon={
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                    </svg>
+                  }
+                  title="남성"
+                  value={stats.maleCount}
+                  unit="명"
+                />
+                <GovStatCard
+                  accentColor="#ec4899"
+                  icon={
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                    </svg>
+                  }
+                  title="여성"
+                  value={stats.femaleCount}
+                  unit="명"
+                />
+                <GovStatCard
+                  accentColor="#10b981"
+                  icon={
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  }
+                  title="생존"
+                  value={stats.aliveCount}
+                  unit="명"
+                />
+                <GovStatCard
+                  accentColor="#64748b"
+                  icon={
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="15" y1="9" x2="9" y2="15" />
+                      <line x1="9" y1="9" x2="15" y2="15" />
+                    </svg>
+                  }
+                  title="사망"
+                  value={stats.deceasedCount}
+                  unit="명"
+                />
+              </div>
+            </section>
+
+            {/* 역할별 분포 */}
+            <section aria-label="역할별 분포">
+              <SectionLabel>역할별 분포</SectionLabel>
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  borderRadius: 24,
+                  padding: 0,
+                  boxShadow:
+                    '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                  overflow: 'hidden',
+                }}
+              >
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {Object.entries(stats.byRole)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([role, count], idx) => {
+                      const pct =
+                        stats.totalPersons > 0
+                          ? (count / stats.totalPersons) * 100
+                          : 0
+                      return (
+                        <li
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 16,
+                            padding: '12px 24px',
+                            borderBottom:
+                              idx < Object.keys(stats.byRole).length - 1
+                                ? '1px solid #f1f5f9'
+                                : 'none',
+                            transition: 'background 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f8fafc'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent'
+                          }}
+                        >
+                          <span
+                            style={{
+                              flex: '0 0 140px',
+                              fontSize: 13,
+                              fontWeight: 500,
+                              color: '#0f172a',
+                            }}
+                          >
+                            {role}
+                          </span>
+                          <div
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              height: 6,
+                              background: '#e2e8f0',
+                              borderRadius: 3,
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${pct}%`,
+                                minWidth: pct > 0 ? 4 : 0,
+                                background: MAIN,
+                                borderRadius: 3,
+                                transition: 'width 0.25s ease',
+                              }}
+                            />
+                          </div>
+                          <span
+                            style={{
+                              flex: '0 0 56px',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: '#475569',
+                              textAlign: 'right',
+                            }}
+                          >
+                            {count}명
+                          </span>
+                        </li>
+                      )
+                    })}
+                </ul>
+                {Object.keys(stats.byRole).length === 0 && (
+                  <div
+                    style={{
+                      padding: 24,
+                      textAlign: 'center',
+                      fontSize: 13,
+                      color: '#94a3b8',
+                    }}
+                  >
+                    역할 정보가 있는 인물이 없습니다.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* 출생 세기별 분포 */}
+            <section aria-label="출생 세기별 분포">
+              <SectionLabel>출생 세기별 분포</SectionLabel>
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  borderRadius: 24,
+                  padding: 28,
+                  boxShadow:
+                    '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                }}
+              >
+                <p
+                  style={{
+                    margin: '0 0 16px',
+                    fontSize: 12,
+                    color: '#64748b',
+                    fontWeight: 500,
+                  }}
+                >
+                  출생 연도 기준 세기별 분류
+                </p>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(9, 1fr)',
+                    gap: '6px 10px',
+                    alignItems: 'flex-end',
+                    height: '140px',
+                  }}
+                >
+                  {(() => {
+                    const centuryOrder = [
+                      '15세기 이전',
+                      '15세기',
+                      '16세기',
+                      '17세기',
+                      '18세기',
+                      '19세기',
+                      '20세기',
+                      '21세기',
+                      '22세기 이후',
+                    ]
+                    const maxCount = Math.max(
+                      1,
+                      ...Object.values(stats.byCentury),
+                      0,
+                    )
+                    const barMaxHeight = 88
+                    return centuryOrder.map((century, idx) => {
+                      const count = stats.byCentury[century] ?? 0
+                      const height =
+                        maxCount > 0 ? (count / maxCount) * barMaxHeight : 0
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 6,
+                            minWidth: 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '100%',
+                              minHeight: count > 0 ? 14 : 0,
+                              height: `${height}px`,
+                              background:
+                                count > 0 ? MAIN : 'rgba(226, 232, 240, 0.5)',
+                              borderRadius: '6px 6px 0 0',
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              justifyContent: 'center',
+                              padding: count > 0 ? '4px 2px' : 0,
+                              color: count > 0 ? '#fff' : 'transparent',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              transition: 'opacity 0.2s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (count > 0)
+                                e.currentTarget.style.opacity = '0.9'
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.opacity = '1'
+                            }}
+                            title={`${century}: ${count}명`}
+                          >
+                            {count > 0 ? count : ''}
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 500,
+                              color: '#64748b',
+                              textAlign: 'center',
+                              lineHeight: 1.2,
+                            }}
+                          >
+                            {century}
+                          </span>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+                {Object.keys(stats.byCentury).length === 0 && (
+                  <div
+                    style={{
+                      marginTop: '16px',
+                      textAlign: 'center',
+                      color: '#94a3b8',
+                      fontSize: '14px',
+                    }}
+                  >
+                    출생 연도 정보가 있는 인물이 없습니다.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* 최근 등록 인물 */}
+            <section aria-label="최근 등록 인물">
+              <SectionLabel>최근 등록 인물</SectionLabel>
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  borderRadius: 24,
+                  padding: 0,
+                  boxShadow:
+                    '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                  overflow: 'hidden',
                 }}
               >
                 <div
                   style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    background: '#f1f5f9',
-                    color: person.gender === 'MALE' ? '#3b82f6' : '#ec4899',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 15,
-                    fontWeight: 600,
-                    flexShrink: 0,
+                    padding: '16px 24px',
+                    borderBottom: '1px solid #f1f5f9',
                   }}
                 >
-                  {person.name[0]}
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12,
+                      color: '#64748b',
+                      fontWeight: 500,
+                    }}
+                  >
+                    가장 최근에 등록된 인물 6명
+                  </p>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{person.name}</div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {person.country && (
-                      <span>{person.country.flagEmoji && `${person.country.flagEmoji} `}{person.country.name}</span>
-                    )}
-                    {person.country && (person.job?.title || (person as { role?: string }).role || '역할 없음') && <span>·</span>}
-                    <span>{person.job?.title || (person as { role?: string }).role || '역할 없음'}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, fontSize: 12, color: '#64748b' }}>
-                  <span>출생 {person.birthDate ? new Date(person.birthDate).getFullYear() : '미상'}</span>
-                  <span style={{ width: 1, height: 10, background: '#e2e8f0', borderRadius: 1 }} />
-                  <span style={{ color: person.deathDate ? '#64748b' : '#10b981', fontWeight: 500 }}>
-                    {person.deathDate ? '사망' : '생존'}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {stats.recentPersons.map((person, idx) => (
+                    <li
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 16,
+                        padding: '14px 24px',
+                        borderBottom:
+                          idx < stats.recentPersons.length - 1
+                            ? '1px solid #f1f5f9'
+                            : 'none',
+                        transition: 'background 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#f8fafc'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: '50%',
+                          background: '#f1f5f9',
+                          color:
+                            person.gender === 'MALE' ? '#3b82f6' : '#ec4899',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 15,
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {person.name[0]}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: '#0f172a',
+                          }}
+                        >
+                          {[person.surname, person.name]
+                            .filter(Boolean)
+                            .join(' ') || person.name}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 6,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          {person.country && (
+                            <span
+                              style={{
+                                fontSize: 12,
+                                color: '#64748b',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {person.country.flagEmoji &&
+                                `${person.country.flagEmoji} `}
+                              {person.country.name}
+                            </span>
+                          )}
+                          {(() => {
+                            const tenures = (
+                              person as {
+                                governmentTenures?: Array<{
+                                  positionDefinition?: { title?: string }
+                                  title?: string
+                                }>
+                              }
+                            ).governmentTenures
+                            const tenureTitles = tenures
+                              ? (Array.from(
+                                  new Set(
+                                    tenures
+                                      .map(
+                                        (t) =>
+                                          t.positionDefinition?.title ||
+                                          t.title,
+                                      )
+                                      .filter(Boolean),
+                                  ),
+                                ) as string[])
+                              : []
+                            if (tenureTitles.length > 0) {
+                              return (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: 6,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      color: '#6366f1',
+                                      letterSpacing: '0.05em',
+                                      textTransform: 'uppercase',
+                                    }}
+                                  >
+                                    직책
+                                  </span>
+                                  {tenureTitles.slice(0, 3).map((title) => (
+                                    <span
+                                      key={title}
+                                      style={{
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: '#4f46e5',
+                                        background:
+                                          'linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%)',
+                                        border: '1px solid #c4b5fd',
+                                        borderRadius: 14,
+                                        padding: '3px 10px',
+                                        boxShadow:
+                                          '0 1px 2px rgba(99, 102, 241, 0.1)',
+                                      }}
+                                    >
+                                      {title}
+                                    </span>
+                                  ))}
+                                  {tenureTitles.length > 3 && (
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        color: '#6366f1',
+                                      }}
+                                    >
+                                      +{tenureTitles.length - 3}
+                                    </span>
+                                  )}
+                                </span>
+                              )
+                            }
+                            return (
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  color: '#64748b',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {person.job?.title ||
+                                  (person as { role?: string }).role ||
+                                  '역할 없음'}
+                              </span>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          flexShrink: 0,
+                          fontSize: 12,
+                          color: '#64748b',
+                        }}
+                      >
+                        <span>
+                          출생{' '}
+                          {person.birthDate
+                            ? new Date(person.birthDate).getFullYear()
+                            : '미상'}
+                        </span>
+                        <span
+                          style={{
+                            width: 1,
+                            height: 10,
+                            background: '#e2e8f0',
+                            borderRadius: 1,
+                          }}
+                        />
+                        <span
+                          style={{
+                            color: person.deathDate ? '#64748b' : '#10b981',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {person.deathDate ? '사망' : '생존'}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
           </motion.div>
         )}
       </AnimatePresence>
@@ -610,4 +1189,3 @@ export function PersonStatsSection({ countryId, noOverlap }: PersonStatsProps) {
     </div>
   )
 }
-

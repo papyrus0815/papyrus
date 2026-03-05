@@ -19,16 +19,19 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { getEventById } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 
+import { EventHierarchyNode, EventMapMarker } from '../create/events.types'
+import type { HistoricalEvent } from '../create/events.types'
 import { MOCK_HISTORICAL_EVENTS } from './events.mock-data'
-import { EventHierarchyNode, EventMapMarker } from './events.types'
+import { mapEventResponseToHistoricalEvent } from '../utils/event-detail.mapper'
 import {
   findEventById,
   formatCompactNumber,
   formatDateRange,
   hierarchyDepth,
-} from './events.utils'
+} from '../utils/events.utils'
 
 const SECTION_LINKS = [
   { id: 'overview', label: '개요' },
@@ -53,21 +56,41 @@ export const EventDetailPage: React.FC = () => {
   const { eventId } = useParams()
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState<string>('overview')
+  const [eventFromApi, setEventFromApi] = useState<HistoricalEvent | null>(null)
+  const [loadingApi, setLoadingApi] = useState(false)
+  const [apiError, setApiError] = useState<Error | null>(null)
 
-  const selectedEvent = useMemo(
-    () => findEventById(MOCK_HISTORICAL_EVENTS, eventId),
+  const eventFromMock = useMemo(
+    () => (eventId ? findEventById(MOCK_HISTORICAL_EVENTS, eventId) : null),
     [eventId],
   )
 
-  // 관련 사건 목록 (같은 카테고리)
+  // 목업에 없으면 API로 조회 (대시보드/목록에서 클릭한 사건)
+  useEffect(() => {
+    if (!eventId || eventFromMock) {
+      setEventFromApi(null)
+      setApiError(null)
+      return
+    }
+    setLoadingApi(true)
+    setApiError(null)
+    getEventById(eventId)
+      .then((dto) => setEventFromApi(mapEventResponseToHistoricalEvent(dto)))
+      .catch((err) => setApiError(err instanceof Error ? err : new Error(String(err))))
+      .finally(() => setLoadingApi(false))
+  }, [eventId, eventFromMock])
+
+  const selectedEvent = eventFromMock ?? eventFromApi
+
+  // 관련 사건 목록 (같은 카테고리, 목업 데이터만)
   const relatedEvents = useMemo(() => {
-    if (!selectedEvent) return []
+    if (!selectedEvent || eventFromApi) return []
     return MOCK_HISTORICAL_EVENTS.filter(
       (event) =>
         event.category === selectedEvent.category &&
         event.id !== selectedEvent.id,
     ).slice(0, 10)
-  }, [selectedEvent])
+  }, [selectedEvent, eventFromApi])
 
   const scrollToSection = useCallback((targetId: string, updateHash = true) => {
     const target = document.getElementById(targetId)
@@ -126,6 +149,37 @@ export const EventDetailPage: React.FC = () => {
       }, 100)
     }
   }, [selectedEvent, scrollToSection])
+
+  if (loadingApi) {
+    return (
+      <PageWrapper>
+        <EmptyStateWrapper>
+          <EmptyState>
+            <p>사건 정보를 불러오는 중…</p>
+          </EmptyState>
+        </EmptyStateWrapper>
+      </PageWrapper>
+    )
+  }
+
+  if (apiError) {
+    return (
+      <PageWrapper>
+        <EmptyStateWrapper>
+          <EmptyState>
+            <p>사건을 불러오지 못했습니다.</p>
+            <span>{apiError.message}</span>
+          </EmptyState>
+          <BackLink
+            type="button"
+            onClick={() => navigate(pathKeys.events.root())}
+          >
+            사건 목록으로 돌아가기
+          </BackLink>
+        </EmptyStateWrapper>
+      </PageWrapper>
+    )
+  }
 
   if (!selectedEvent) {
     return (

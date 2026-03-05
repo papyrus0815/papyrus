@@ -6,10 +6,10 @@ import { FormInput } from '@/shared/ui/form-input'
 
 export const Wrap = styled.div<{ $inHistory?: boolean }>`
   width: 100%;
-  min-height: 100vh;
+  min-height: ${({ $inHistory }) => ($inHistory ? 'auto' : '100vh')};
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: flex-start;
   background: #ffffff;
   padding: ${({ $inHistory }) => ($inHistory ? '0' : '64px 0 0')};
@@ -127,11 +127,12 @@ export const ListPane = styled.div<{ $inHistory?: boolean }>`
   background: #ffffff;
   position: sticky;
   top: var(--header-height);
-  border-right: 1px solid #f1f5f9;
+  border-right: 1px solid #eee;
   overflow: hidden;
+  padding-top: 0;
 
   @media (max-width: 1024px) {
-    display: none; /* 태블릿/모바일에서는 숨기고 MobileListPane 사용 */
+    display: none;
   }
 `
 
@@ -493,7 +494,9 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   align-items: center;
   gap: 6px;
   position: relative;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
   font-family:
     'Roboto',
     -apple-system,
@@ -571,7 +574,10 @@ export const OverviewSubTabButton = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.2s ease;
   font-family: inherit;
   white-space: nowrap;
   box-shadow: ${({ $active }) =>
@@ -579,7 +585,8 @@ export const OverviewSubTabButton = styled.button<{ $active?: boolean }>`
 
   &:hover {
     color: ${({ $active }) => ($active ? '#4f46e5' : '#475569')};
-    background: ${({ $active }) => ($active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
+    background: ${({ $active }) =>
+      $active ? '#ffffff' : 'rgba(255,255,255,0.6)'};
   }
 `
 
@@ -894,7 +901,9 @@ export const AddIconButton = styled.button`
   background: #6366f1;
   color: #fff;
   cursor: pointer;
-  transition: background 0.15s ease, opacity 0.15s ease;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
 
   &:hover {
     background: #4f46e5;
@@ -1129,7 +1138,10 @@ export const ClearAllFiltersButton = styled.button`
   color: #64748b;
   background: #ffffff;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
   white-space: nowrap;
 
   &:hover {
@@ -1172,7 +1184,10 @@ export const AddButton = styled.button`
   color: #0f172a;
   background: #ffffff;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
   white-space: nowrap;
 
   &:hover {
@@ -1389,13 +1404,17 @@ export const Select = styled.select<{ $error?: boolean }>`
   line-height: 1.5;
   font-weight: 400;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:focus {
     outline: none;
     border-color: ${({ $error }) => ($error ? '#ea4335' : '#6366f1')};
     box-shadow: ${({ $error }) =>
-      $error ? '0 0 0 3px rgba(234, 67, 53, 0.1)' : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
+      $error
+        ? '0 0 0 3px rgba(234, 67, 53, 0.1)'
+        : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
   }
 
   &:hover:not(:focus) {
@@ -1422,7 +1441,9 @@ export const SelectButton = styled.button<{
   font-weight: 400;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 
   span {
     flex: 1;
@@ -1438,18 +1459,24 @@ export const SelectButton = styled.button<{
 
   &:hover {
     border-color: ${({ $error }) => ($error ? '#ea4335' : '#d1d5db')};
-    svg { opacity: 1; }
+    svg {
+      opacity: 1;
+    }
   }
 
   &:focus {
     outline: none;
     border-color: ${({ $error }) => ($error ? '#ea4335' : '#6366f1')};
     box-shadow: ${({ $error }) =>
-      $error ? '0 0 0 3px rgba(234, 67, 53, 0.1)' : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
+      $error
+        ? '0 0 0 3px rgba(234, 67, 53, 0.1)'
+        : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
   }
 
   &:active {
-    svg { transform: translateY(1px); }
+    svg {
+      transform: translateY(1px);
+    }
   }
 `
 
@@ -1506,7 +1533,9 @@ export const FileUploadLabel = styled.label`
   border-radius: 12px;
   background: #f9fafb;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 
   &:hover {
     border-color: #6366f1;
@@ -1551,7 +1580,10 @@ export const ListRow = styled.button<{ $active?: boolean }>`
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
   min-height: 48px;
   line-height: 1.3;
   position: relative;
@@ -1654,7 +1686,9 @@ export const ExpandButton = styled.button`
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
   border-radius: 4px;
 
   &:hover {
@@ -1681,7 +1715,9 @@ export const FlagBadge = styled.span`
   background: #f8fafc;
   font-size: 20px;
   border: 1px solid #f1f5f9;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
   flex-shrink: 0;
 
   ${ListRow}:hover & {
@@ -1769,7 +1805,9 @@ export const RadioDot = styled.span<{ $active?: boolean }>`
   border-radius: 50%;
   background: ${({ $active }) => ($active ? '#6366f1' : 'transparent')};
   border: 2px solid ${({ $active }) => ($active ? '#6366f1' : '#e2e8f0')};
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 `
 
 export const MetaDate = styled.span`
@@ -1837,6 +1875,7 @@ export const DetailPane = styled.div`
   gap: 0;
   height: calc(100vh - var(--header-height));
   min-height: 0;
+  overflow-y: auto;
   border-left: none; /* 우측 중복 보더 제거 */
 
   @media (max-width: 1024px) {
@@ -2290,7 +2329,9 @@ export const GlobalWidget = styled.div`
   flex-direction: column;
   gap: 18px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 
   &:hover {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
@@ -2350,7 +2391,9 @@ export const GlobalMetricCard = styled.div`
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
   border-right: 1px solid #f1f5f9;
   border-bottom: 1px solid #f1f5f9;
 
@@ -3282,7 +3325,10 @@ export const FilterButton = styled.button<{ $active?: boolean }>`
   color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
   background: ${({ $active }) => ($active ? '#eef2ff' : '#ffffff')};
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
 
@@ -3390,7 +3436,9 @@ export const SelectModalClose = styled.button`
   background: transparent;
   color: #6b7280;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 
   &:hover {
     background: #f3f4f6;
@@ -3486,7 +3534,9 @@ export const SelectOption = styled.button<{ $active?: boolean }>`
   background: ${({ $active }) => ($active ? '#f5f3ff' : 'transparent')};
   color: ${({ $active }) => ($active ? '#4f46e5' : '#374151')};
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   text-align: left;
   font-size: 15px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
@@ -4160,8 +4210,7 @@ export const RankBadge = styled.div<{ $rank: number }>`
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: ${(p) =>
-    p.$rank <= 3 ? 'rgba(99, 102, 241, 0.15)' : '#f1f5f9'};
+  background: ${(p) => (p.$rank <= 3 ? 'rgba(99, 102, 241, 0.15)' : '#f1f5f9')};
   color: ${(p) => (p.$rank <= 3 ? '#6366f1' : '#64748b')};
   font-size: 12px;
   font-weight: 700;
@@ -4253,7 +4302,13 @@ export const BarChartRank = styled.div<{ $rank: number }>`
   font-size: 11px;
   font-weight: 800;
   color: ${(p) =>
-    p.$rank === 1 ? '#92400e' : p.$rank === 2 ? '#475569' : p.$rank === 3 ? '#78350f' : '#64748b'};
+    p.$rank === 1
+      ? '#92400e'
+      : p.$rank === 2
+        ? '#475569'
+        : p.$rank === 3
+          ? '#78350f'
+          : '#64748b'};
   background: ${(p) =>
     p.$rank === 1
       ? 'linear-gradient(135deg, #fde047 0%, #f59e0b 100%)'
@@ -4262,8 +4317,7 @@ export const BarChartRank = styled.div<{ $rank: number }>`
         : p.$rank === 3
           ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
           : '#f1f5f9'};
-  box-shadow: ${(p) =>
-    p.$rank <= 3 ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'};
+  box-shadow: ${(p) => (p.$rank <= 3 ? '0 1px 2px rgba(0,0,0,0.08)' : 'none')};
 `
 
 export const BarChartValue = styled.div`
@@ -4524,7 +4578,10 @@ export const SummaryCard = styled.div`
   background: #ffffff;
   border: 1px solid #f1f5f9;
   border-radius: 10px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
 
   &:hover {
     border-color: #e2e8f0;
@@ -4597,7 +4654,9 @@ export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
   font-weight: ${(p) => (p.$active ? 600 : 500)};
   text-align: left;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     background: ${(p) => (p.$active ? '#e0e7ff' : '#f1f5f9')};
@@ -4652,7 +4711,10 @@ export const DashboardMenuContentButton = styled.button`
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 
   &:hover {
     background: #f8fafc;

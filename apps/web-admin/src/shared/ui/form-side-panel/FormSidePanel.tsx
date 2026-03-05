@@ -23,6 +23,8 @@ interface FormSidePanelProps {
   headerExtra?: React.ReactNode
   /** 폼 컨텐츠 */
   children: React.ReactNode
+  /** 패널 너비(px). 기본 600. 수반 등록 등 그리드 폼은 760 권장 */
+  panelWidth?: number
 }
 
 /**
@@ -40,6 +42,7 @@ export function FormSidePanel({
   submitDisabled = false,
   headerExtra,
   children,
+  panelWidth = 600,
 }: FormSidePanelProps) {
   return (
     <AnimatePresence>
@@ -57,6 +60,7 @@ export function FormSidePanel({
 
           {/* 우측 사이드 패널 */}
           <Panel
+            $width={panelWidth}
             as={motion.div}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -110,124 +114,122 @@ export function FormSidePanel({
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background: ${OVERLAY_STYLES.BACKGROUND};
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: ${Z_INDEX.DRAWER_OVERLAY};
-  backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
 `
 
-/* 행정조직 폼 톤: 흰 배경, #e5e7eb 테두리, 인디고 포커스/버튼 */
-const Panel = styled.div`
+const Panel = styled.div<{ $width?: number }>`
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(600px, calc(100% - 40px));
-  background: #fff;
-  border-left: 1px solid #e5e7eb;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.06);
+  width: min(${(p) => p.$width ?? 600}px, calc(100% - 20px));
+  max-height: 100vh;
+  background: #ffffff;
   z-index: ${Z_INDEX.DRAWER_CONTENT};
   display: flex;
   flex-direction: column;
+  border-radius: 16px 0 0 16px;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.06);
 `
 
 const Header = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fff;
+  padding: 22px 26px 20px;
+  flex-shrink: 0;
 `
 
 const Title = styled.h2`
   margin: 0;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
-  color: #111827;
-  letter-spacing: -0.025em;
+  color: #0f172a;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
 `
 
 const CloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: none;
-  background: transparent;
+  background: #f8fafc;
   color: #64748b;
   cursor: pointer;
-  border-radius: 10px;
-  transition: background 0.2s ease, color 0.2s ease;
+  border-radius: 12px;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
 
   &:hover {
     background: #f1f5f9;
-    color: #475569;
+    color: #334155;
   }
-
   &:active {
-    transform: scale(0.97);
+    transform: scale(0.96);
   }
 `
 
 const Content = styled.div`
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 28px 24px;
+  overflow-x: hidden;
+  padding: 26px 26px 28px;
 
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
-
   &::-webkit-scrollbar-track {
-    background: #f8fafc;
+    background: transparent;
   }
-
   &::-webkit-scrollbar-thumb {
     background: #e2e8f0;
-    border-radius: 4px;
+    border-radius: 3px;
   }
-
   &::-webkit-scrollbar-thumb:hover {
     background: #cbd5e1;
   }
 `
 
 const Footer = styled.div`
-  padding: 20px 28px;
-  border-top: 1px solid #f3f4f6;
-  background: #fff;
-  display: flex;
-  justify-content: stretch;
+  padding: 20px 26px 26px;
+  flex-shrink: 0;
 `
 
 const SubmitButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 12px 24px;
+  padding: 15px 24px;
   border: none;
-  background: #6366f1;
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
   color: #fff;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
-  transition: background 0.2s ease;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  transition: filter 0.2s, transform 0.15s;
 
   &:hover:not(:disabled) {
-    background: #4f46e5;
+    filter: brightness(1.06);
+    transform: translateY(-1px);
   }
-
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    box-shadow: none;
+    transform: none;
+    filter: none;
   }
-
   svg {
     width: 20px;
     height: 20px;
