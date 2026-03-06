@@ -237,6 +237,9 @@ model HistoricalCountry {
   /// 구성 민족 (예: 슬라브족, 게르만족) — Ethnicity와 다대다
   ethnicities Ethnicity[] @relation("HistoricalCountryEthnicities")
 
+  /// 용어 사전 (본문 문구·관직 설명)
+  glossaryTerms GlossaryTerm[] @relation("GlossaryTermHistoricalCountry")
+
   // --- 등록 계정 (개인 정보 플랫폼: 본인만 수정/삭제)
   accountId String?  @map("account_id") @db.Char(36)
   account   Account? @relation("AccountHistoricalCountries", fields: [accountId], references: [id], onDelete: SetNull)

@@ -8,7 +8,9 @@ import { FiEdit2, FiX } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { dynastyApi } from '@/shared/api/dynasty'
 import { getEventById, type EventResponseDto } from '@/shared/api/events'
+import { getGlossaryTermById } from '@/shared/api/glossary'
 import { pathKeys } from '@/shared/router'
 import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
 
@@ -140,8 +142,9 @@ const Prose = styled.div`
   white-space: pre-wrap;
   word-break: break-word;
 
-  /* 본문 내 인물 멘션 — 밑줄 링크, @ 기호 없음(HTML에서 제거) */
-  .mention {
+  /* 본문 내 인물/가문 등 엔티티 — 멘션(기존) 또는 엔티티 연결 */
+  .mention,
+  .entity-link {
     color: #121212;
     font-weight: 600;
     text-decoration: underline;
@@ -153,8 +156,24 @@ const Prose = styled.div`
     border: none;
     padding: 0;
   }
-  .mention:hover {
+  .mention:hover,
+  .entity-link:hover {
     color: #374151;
+  }
+
+  /* 본문 내 용어(문구·관직 설명) */
+  .term {
+    color: #0d9488;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: help;
+    padding: 0 2px;
+    border-radius: 4px;
+    background: rgba(13, 148, 136, 0.06);
+  }
+  .term:hover {
+    background: rgba(13, 148, 136, 0.12);
   }
 `
 
@@ -384,6 +403,62 @@ const MentionModalBody = styled.div`
   }
 `
 
+const TermTooltipOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: transparent;
+`
+const TermTooltipPopover = styled.div<{ $x: number; $y: number }>`
+  position: fixed;
+  left: ${({ $x }) => $x}px;
+  top: ${({ $y }) => $y}px;
+  transform: translate(12px, 12px);
+  max-width: 360px;
+  padding: 14px 18px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  z-index: 1000;
+  font-family: ${SansFamily};
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #0d9488;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+`
+
+const DynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
+  position: fixed;
+  left: ${({ $x }) => $x}px;
+  top: ${({ $y }) => $y}px;
+  transform: translate(12px, 12px);
+  max-width: 360px;
+  padding: 14px 18px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  z-index: 1000;
+  font-family: ${SansFamily};
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #6d28d9;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+`
+
 /** 본문 HTML에서 멘션 스팬의 선두 @ 제거 (상세에서는 이름만 표시) */
 function stripMentionAt(html: string): string {
   return html.replace(/(<span[^>]*class="[^"]*mention[^"]*"[^>]*>)@/g, '$1')
@@ -396,6 +471,20 @@ export function DashboardEventDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [mentionPersonId, setMentionPersonId] = useState<string | null>(null)
+  const [termTooltip, setTermTooltip] = useState<{
+    termId: string
+    name: string
+    description: string | null
+    x: number
+    y: number
+  } | null>(null)
+  const [dynastyTooltip, setDynastyTooltip] = useState<{
+    dynastyId: string
+    name: string
+    description: string | null
+    x: number
+    y: number
+  } | null>(null)
 
   useEffect(() => {
     if (!eventId) {
@@ -412,13 +501,99 @@ export function DashboardEventDetailPage() {
       .finally(() => setLoading(false))
   }, [eventId])
 
+  useEffect(() => {
+    if (!termTooltip) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setTermTooltip(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [termTooltip])
+
+  useEffect(() => {
+    if (!dynastyTooltip) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDynastyTooltip(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dynastyTooltip])
+
   const handleProseClick = useCallback((e: React.MouseEvent) => {
-    const el = (e.target as HTMLElement).closest('.mention[data-type="person"]')
-    if (el) {
-      const id = el.getAttribute('data-id')
+    const target = e.target as HTMLElement
+    // 인물: .mention (기존) 또는 .entity-link (엔티티 연결)
+    const personMentionEl = target.closest('.mention[data-type="person"]')
+    const personLinkEl = target.closest('.entity-link[data-entity-type="person"]')
+    const personEl = personMentionEl ?? personLinkEl
+    if (personEl) {
+      const id =
+        personEl.getAttribute('data-id') ??
+        personEl.getAttribute('data-entity-id')
       if (id) {
         e.preventDefault()
         setMentionPersonId(id)
+      }
+      return
+    }
+    // 가문: .mention (기존) 또는 .entity-link (엔티티 연결)
+    const dynastyMentionEl = target.closest('.mention[data-type="dynasty"]')
+    const dynastyLinkEl = target.closest('.entity-link[data-entity-type="dynasty"]')
+    const dynastyEl = dynastyMentionEl ?? dynastyLinkEl
+    if (dynastyEl) {
+      const id =
+        dynastyEl.getAttribute('data-id') ??
+        dynastyEl.getAttribute('data-entity-id')
+      const name =
+        dynastyEl.getAttribute('data-name') ??
+        dynastyEl.getAttribute('data-entity-name') ??
+        ''
+      if (id) {
+        e.preventDefault()
+        setDynastyTooltip({
+          dynastyId: id,
+          name,
+          description: null,
+          x: e.clientX,
+          y: e.clientY,
+        })
+        dynastyApi.getById(id)
+          .then((d) => {
+            setDynastyTooltip((prev) =>
+              prev ? { ...prev, description: d.description ?? null } : null,
+            )
+          })
+          .catch(() => {
+            setDynastyTooltip((prev) =>
+              prev ? { ...prev, description: '(정보를 불러올 수 없습니다)' } : null,
+            )
+          })
+      }
+      return
+    }
+    const termEl = target.closest('.term')
+    if (termEl) {
+      const termId = termEl.getAttribute('data-term-id')
+      const name = termEl.getAttribute('data-term-name') || termEl.textContent || ''
+      if (termId) {
+        e.preventDefault()
+        setTermTooltip({
+          termId,
+          name,
+          description: null,
+          x: e.clientX,
+          y: e.clientY,
+        })
+        getGlossaryTermById(termId)
+          .then((t) => {
+            setTermTooltip((prev) =>
+              prev ? { ...prev, description: t.description } : null,
+            )
+          })
+          .catch(() => {
+            setTermTooltip((prev) =>
+              prev ? { ...prev, description: '(설명을 불러올 수 없습니다)' } : null,
+            )
+          })
       }
     }
   }, [])
@@ -746,6 +921,46 @@ export function DashboardEventDetailPage() {
             </MentionModalPanel>
           </MentionModalOverlay>
         )}
+
+      {termTooltip && (
+        <TermTooltipOverlay
+          role="presentation"
+          onClick={() => setTermTooltip(null)}
+        >
+          <TermTooltipPopover
+            $x={termTooltip.x}
+            $y={termTooltip.y}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <strong>{termTooltip.name}</strong>
+            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {termTooltip.description === null
+                ? ' 로딩…'
+                : termTooltip.description || '(설명 없음)'}
+            </span>
+          </TermTooltipPopover>
+        </TermTooltipOverlay>
+      )}
+
+      {dynastyTooltip && (
+        <TermTooltipOverlay
+          role="presentation"
+          onClick={() => setDynastyTooltip(null)}
+        >
+          <DynastyTooltipPopover
+            $x={dynastyTooltip.x}
+            $y={dynastyTooltip.y}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <strong>가문 · {dynastyTooltip.name}</strong>
+            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {dynastyTooltip.description === null
+                ? ' 로딩…'
+                : dynastyTooltip.description || '(설명 없음)'}
+            </span>
+          </DynastyTooltipPopover>
+        </TermTooltipOverlay>
+      )}
       </AnimatePresence>
     </Page>
   )

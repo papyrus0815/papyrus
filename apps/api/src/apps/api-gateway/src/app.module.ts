@@ -23,6 +23,7 @@ import { UploadModule } from '../../../libs/shared/upload/upload.module'
 import { UploadServeMiddleware } from '../../../libs/shared/upload/upload-serve.middleware'
 import { AdministrationDepartmentModule } from '../../../libs/administration-department/administration-department.module'
 import { EthnicityModule } from '../../../libs/ethnicity/ethnicity.module'
+import { GlossaryModule } from '../../../libs/glossary/glossary.module'
 
 import {
   AppConfigModule,
@@ -60,6 +61,7 @@ import {
     UploadModule,
     AdministrationDepartmentModule,
     EthnicityModule,
+    GlossaryModule,
     HealthModule,
   ],
   controllers: [AppController],

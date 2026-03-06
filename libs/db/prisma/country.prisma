@@ -108,6 +108,9 @@ model Country {
   /// 이 국가를 통치한/통치하는 왕조들의 역사 (입헌군주제 등)
   dynastyRules DynastyModernRule[] @relation("CountryDynastyRules")
 
+  /// 용어 사전 (본문 문구·관직 설명)
+  glossaryTerms GlossaryTerm[] @relation("GlossaryTermCountry")
+
   //--- 등록 계정 (개인 정보 플랫폼)
   accountId String? @map("account_id") @db.Char(36)
   account   Account? @relation("AccountCountries", fields: [accountId], references: [id], onDelete: SetNull)

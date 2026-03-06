@@ -36,6 +36,7 @@ import type { HistoricalEvent } from './events.types'
 export type MentionEntityType =
   // 인물/조직
   | 'person'
+  | 'dynasty'       // 가문
   | 'organization'
   | 'militaryUnit'
   
@@ -184,6 +185,18 @@ export const MENTION_TYPE_CONFIG: Record<
     getName: (item: unknown) => (item as MilitaryUnit).name,
     getSubtitle: (item: unknown) =>
       (item as MilitaryUnit).country?.name || undefined,
+  },
+  dynasty: {
+    label: '가문',
+    icon: FiHome,
+    color: '#7c3aed',
+    searchFields: ['name', 'description'],
+    getName: (item: unknown) =>
+      (item as { name: string; [key: string]: unknown }).name,
+    getSubtitle: (item: unknown) =>
+      (item as { description?: string })?.description
+        ? String((item as { description: string }).description).slice(0, 30) + '…'
+        : undefined,
   },
   weapon: {
     label: '무기',
@@ -391,6 +404,7 @@ export function searchMentionEntities(
     historicalCountries?: HistoricalCountryResponseDto[]
     cities?: Array<{ id: string; name: string; [key: string]: unknown }>
     militaryUnits?: MilitaryUnit[]
+    dynasties?: Array<{ id: string; name: string; description?: string; [key: string]: unknown }>
   },
 ): MentionItem[] {
   const results: MentionItem[] = []
@@ -530,6 +544,33 @@ export function searchMentionEntities(
           icon: MENTION_TYPE_CONFIG.militaryUnit.icon,
           color: MENTION_TYPE_CONFIG.militaryUnit.color,
           data: unit,
+        })
+      })
+  }
+
+  // 가문 검색
+  if (entities.dynasties) {
+    entities.dynasties
+      .filter((d) =>
+        shouldShowAll
+          ? true
+          : MENTION_TYPE_CONFIG.dynasty.searchFields.some((field) =>
+              (d as unknown as Record<string, unknown>)[field]
+                ?.toString()
+                .toLowerCase()
+                .includes(normalizedSearch),
+            ),
+      )
+      .slice(0, shouldShowAll ? 3 : 5)
+      .forEach((d) => {
+        results.push({
+          type: 'dynasty',
+          id: d.id,
+          name: MENTION_TYPE_CONFIG.dynasty.getName(d),
+          subtitle: MENTION_TYPE_CONFIG.dynasty.getSubtitle?.(d),
+          icon: MENTION_TYPE_CONFIG.dynasty.icon,
+          color: MENTION_TYPE_CONFIG.dynasty.color,
+          data: d,
         })
       })
   }

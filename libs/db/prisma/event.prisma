@@ -310,6 +310,36 @@ model EventSection {
 }
 
 // ========================
+// GlossaryTerm (용어 사전 — 본문 문구·관직 설명)
+// ========================
+/// 사건 본문에서 문구·관직 등에 설명을 붙이기 위한 용어. 본문에서 선택 후 연결하면 상세 보기에서 설명 표시.
+model GlossaryTerm {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 표시명 (본문에 노출되는 단어/문구)
+  name String @db.VarChar(200)
+
+  /// 설명 (툴팁/팝오버로 표시)
+  description String? @db.Text
+
+  /// 소속 국가 (선택, 필터/스코프용)
+  countryId String? @map("country_id") @db.Char(36)
+  country   Country? @relation("GlossaryTermCountry", fields: [countryId], references: [id], onDelete: SetNull)
+
+  /// 소속 역사적 국가 (선택)
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("GlossaryTermHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_glossary_term_countryId")
+  @@index([historicalCountryId], name: "idx_glossary_term_historicalCountryId")
+  @@index([name], name: "idx_glossary_term_name")
+  @@map("glossary_term")
+}
+
+// ========================
 // EventImage (사건 이미지)
 // ========================
 model EventImage {

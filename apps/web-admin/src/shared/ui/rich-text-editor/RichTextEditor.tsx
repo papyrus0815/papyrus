@@ -25,6 +25,13 @@ import {
   MENTION_TYPE_CONFIG,
   searchMentionEntities,
 } from '@/pages/events/create/mention-system'
+import {
+  createGlossaryTerm,
+  getGlossaryTermById,
+  getGlossaryTerms,
+  updateGlossaryTerm,
+  type GlossaryTermDto,
+} from '@/shared/api/glossary'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 
 // 멘션 엔티티 props 타입
@@ -34,6 +41,7 @@ export interface MentionExtensionProps {
   countries?: unknown[]
   historicalCountries?: unknown[]
   militaryUnits?: unknown[]
+  dynasties?: unknown[]
 }
 
 /* 행정조직 폼 스타일: 테두리 #e5e7eb, 포커스 인디고 */
@@ -405,29 +413,73 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     }
   }
 
-  /* 멘션 스타일 - 행정조직 인디고 */
+  /* 멘션 스타일 - 타입별 색상 팔레트 */
   .mention {
-    background: #4f46e5;
-    color: #fff !important;
-    padding: 3px 12px;
-    border-radius: 20px;
-    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-weight: 500;
     font-size: 13px;
     text-decoration: none;
     cursor: pointer;
-    transition: background 0.2s ease;
+    transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.2);
+    background: rgba(99, 102, 241, 0.1);
+    color: #4338ca !important;
 
     &:hover {
-      background: #4338ca;
-      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+      background: rgba(99, 102, 241, 0.18);
+    }
+
+    &[data-type='person'] {
+      background: rgba(99, 102, 241, 0.1);
+      color: #4338ca !important;
+      &:hover { background: rgba(99, 102, 241, 0.18); }
+    }
+    &[data-type='dynasty'] {
+      background: rgba(124, 58, 237, 0.1);
+      color: #6d28d9 !important;
+      &:hover { background: rgba(124, 58, 237, 0.18); }
+    }
+    &[data-type='event'] {
+      background: rgba(217, 119, 6, 0.1);
+      color: #b45309 !important;
+      &:hover { background: rgba(217, 119, 6, 0.18); }
+    }
+    &[data-type='country'] {
+      background: rgba(34, 197, 94, 0.1);
+      color: #15803d !important;
+      &:hover { background: rgba(34, 197, 94, 0.18); }
+    }
+    &[data-type='historicalCountry'] {
+      background: rgba(139, 92, 246, 0.1);
+      color: #6d28d9 !important;
+      &:hover { background: rgba(139, 92, 246, 0.18); }
+    }
+    &[data-type='militaryUnit'] {
+      background: rgba(239, 68, 68, 0.1);
+      color: #b91c1c !important;
+      &:hover { background: rgba(239, 68, 68, 0.18); }
     }
   }
 
   /* 엔티티 링크 스타일 */
+  /* 용어(문구·관직 설명) 스타일 */
+  .term {
+    color: #0d9488;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: help;
+    padding: 0 2px;
+    border-radius: 4px;
+    background: rgba(13, 148, 136, 0.06);
+    &:hover {
+      background: rgba(13, 148, 136, 0.12);
+    }
+  }
+
   .entity-link {
     background: linear-gradient(
       135deg,
@@ -477,26 +529,6 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
       opacity: 1;
     }
   }
-`
-
-const MentionPopup = styled.div<{
-  $visible: boolean
-  $top: number
-  $left: number
-}>`
-  position: fixed;
-  top: ${({ $top }) => $top}px;
-  left: ${({ $left }) => $left}px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
-  padding: 12px;
-  max-height: 380px;
-  overflow-y: auto;
-  min-width: 340px;
-  z-index: 1000;
-  display: ${({ $visible }) => ($visible ? 'block' : 'none')};
 `
 
 // 이미지 설명 입력 모달 스타일
@@ -681,7 +713,7 @@ const ContextMenu = styled.div<{
   min-width: 180px;
 `
 
-const ContextMenuItem = styled.button`
+const ContextMenuItem = styled.button.attrs({ type: 'button' })`
   display: flex;
   align-items: center;
   gap: 12px;
@@ -824,6 +856,122 @@ const EntityLinkResultsList = styled.div`
   overflow-y: auto;
 `
 
+/* 용어 연결 모달 (문구·관직 설명) */
+const TermLinkModalOverlay = styled.div<{ $visible: boolean }>`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: ${({ $visible }) => ($visible ? 'flex' : 'none')};
+  align-items: center;
+  justify-content: center;
+`
+const TermLinkModal = styled.div`
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  width: 90%;
+  max-width: 440px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+`
+const TermLinkModalHeader = styled.div`
+  padding: 20px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`
+const TermLinkModalTitle = styled.h3`
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+`
+const TermLinkModalClose = styled.button`
+  padding: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #64748b;
+  border-radius: 10px;
+  &:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+`
+const TermLinkModalContent = styled.div`
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+  flex: 1;
+`
+const TermLinkSearchInput = styled.input`
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  box-sizing: border-box;
+  &:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+`
+const TermLinkResultsList = styled.div`
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+`
+const TermLinkNewSection = styled.div`
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+`
+const TermLinkNewLabel = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 8px;
+`
+const TermLinkNewInput = styled.input`
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+`
+const TermLinkNewTextarea = styled.textarea`
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 14px;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  resize: vertical;
+  box-sizing: border-box;
+`
+const TermLinkNewButton = styled.button<{ $primary?: boolean }>`
+  margin-top: 10px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid ${(p) => (p.$primary ? '#6366f1' : '#e5e7eb')};
+  background: ${(p) => (p.$primary ? '#6366f1' : '#fff')};
+  color: ${(p) => (p.$primary ? '#fff' : '#475569')};
+  cursor: pointer;
+  &:hover {
+    background: ${(p) => (p.$primary ? '#4f46e5' : '#f8fafc')};
+  }
+`
+
 interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
@@ -866,17 +1014,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     setInternalTitle(title)
   }, [title])
 
-  // 멘션 관련 상태
-  const [mentionPopupVisible, setMentionPopupVisible] = useState(false)
-  const [mentionQuery, setMentionQuery] = useState('')
-  const [mentionResults, setMentionResults] = useState<MentionItem[]>([])
-  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
-  const [mentionPopupPosition, setMentionPopupPosition] = useState({
-    top: 0,
-    left: 0,
-  })
-  const mentionRangeRef = useRef<Range | null>(null)
-
   // 엔티티 링크 관련 상태
   const [entityLinkModalVisible, setEntityLinkModalVisible] = useState(false)
   const [entityLinkQuery, setEntityLinkQuery] = useState('')
@@ -889,6 +1026,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     top: 0,
     left: 0,
   })
+
+  // 용어 연결 모달 상태
+  const [termLinkModalVisible, setTermLinkModalVisible] = useState(false)
+  const [termLinkQuery, setTermLinkQuery] = useState('')
+  const [termLinkResults, setTermLinkResults] = useState<GlossaryTermDto[]>([])
+  const [termLinkSelectedIndex, setTermLinkSelectedIndex] = useState(0)
+  const [termLinkNewName, setTermLinkNewName] = useState('')
+  const [termLinkNewDesc, setTermLinkNewDesc] = useState('')
+
+  // 용어 수정 모달 (에디터에서 .term 클릭 시)
+  const [termEditModalVisible, setTermEditModalVisible] = useState(false)
+  const [termEditId, setTermEditId] = useState<string | null>(null)
+  const [termEditName, setTermEditName] = useState('')
+  const [termEditDesc, setTermEditDesc] = useState('')
+  const [termEditLoading, setTermEditLoading] = useState(false)
 
   // 이미지 설명 모달 관련 상태
   const [imageCaptionModalVisible, setImageCaptionModalVisible] =
@@ -1230,443 +1382,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     updateFormatState()
   }, [onChange, updateFormatState])
 
-  // 멘션 검색
-  const searchMentions = useCallback(
-    (query: string) => {
-      if (!mentionEntities) {
-        setMentionResults([])
-        return
-      }
-
-      // 검색어가 없으면 결과 표시 안 함
-      if (!query || query.trim() === '') {
-        setMentionResults([])
-        return
-      }
-
-      const results = searchMentionEntities(query, {
-        persons: mentionEntities.persons as never[],
-        events: mentionEntities.events as never[],
-        countries: mentionEntities.countries as never[],
-        historicalCountries: mentionEntities.historicalCountries as never[],
-        militaryUnits: mentionEntities.militaryUnits as never[],
-      })
-
-      // 최대 30개로 제한
-      setMentionResults(results.slice(0, 30))
-      setMentionSelectedIndex(0)
-    },
-    [mentionEntities],
-  )
-
-  // 멘션 삽입
-  const insertMention = useCallback(
-    (item: MentionItem) => {
-      if (!editorRef.current) return
-
-      // 먼저 팝업 닫기
-      setMentionPopupVisible(false)
-      setMentionQuery('')
-      setMentionResults([])
-
-      const selection = window.getSelection()
-      if (!selection) return
-
-      // 클릭으로 선택 시 포커스가 팝업으로 가서 selection이 에디터가 아님 → 저장된 range 사용
-      const savedRange = mentionRangeRef.current
-      const useSavedRange =
-        savedRange &&
-        editorRef.current.contains(savedRange.startContainer)
-
-      let range: Range
-      if (useSavedRange && savedRange) {
-        selection.removeAllRanges()
-        selection.addRange(savedRange)
-        range = savedRange
-        mentionRangeRef.current = null
-      } else {
-        if (selection.rangeCount === 0) return
-        range = selection.getRangeAt(0)
-      }
-
-      // @ 기호부터 현재 커서까지의 텍스트 찾기
-      let node = range.startContainer
-      let textBefore = ''
-      let startOffset = 0
-      let parentElement: HTMLElement | null = null
-
-      if (node.nodeType === Node.TEXT_NODE) {
-        const textNode = node as Text
-        const offset = range.startOffset
-        textBefore = textNode.textContent?.substring(0, offset) || ''
-        startOffset = offset
-        parentElement = textNode.parentElement
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-        parentElement = node as HTMLElement
-        // 요소 노드인 경우 이전 텍스트 찾기
-        const textContent = parentElement.textContent || ''
-        const offset = range.startOffset
-        textBefore = textContent.substring(0, offset)
-      }
-
-      const atIndex = textBefore.lastIndexOf('@')
-      if (atIndex === -1) return
-
-      // @부터 현재 위치까지 삭제할 범위 생성
-      const deleteRange = document.createRange()
-
-      if (node.nodeType === Node.TEXT_NODE) {
-        const textNode = node as Text
-        deleteRange.setStart(textNode, atIndex)
-        deleteRange.setEnd(textNode, startOffset)
-      } else {
-        // 요소 노드인 경우 - 부모 요소에서 찾기
-        if (parentElement) {
-          const textNodes: Text[] = []
-          const walker = document.createTreeWalker(
-            parentElement,
-            NodeFilter.SHOW_TEXT,
-            null,
-          )
-          let textNode: Text | null
-          while ((textNode = walker.nextNode() as Text | null)) {
-            textNodes.push(textNode)
-          }
-
-          // @가 포함된 텍스트 노드 찾기
-          for (const tn of textNodes) {
-            const text = tn.textContent || ''
-            const index = text.indexOf('@')
-            if (index !== -1) {
-              deleteRange.setStart(tn, index)
-              deleteRange.setEnd(tn, text.length)
-              break
-            }
-          }
-        } else {
-          return
-        }
-      }
-
-      // @와 입력된 텍스트 삭제
-      deleteRange.deleteContents()
-
-      // 멘션 요소 생성
-      const mentionSpan = document.createElement('span')
-      mentionSpan.className = 'mention'
-      mentionSpan.setAttribute('data-type', item.type)
-      mentionSpan.setAttribute('data-id', item.id)
-      mentionSpan.setAttribute('data-name', item.name)
-      mentionSpan.setAttribute('contenteditable', 'false') // 멘션 내부 편집 방지
-      mentionSpan.textContent = `@${item.name}`
-
-      // 멘션 삽입
-      deleteRange.insertNode(mentionSpan)
-
-      // 멘션 뒤에 공백 텍스트 노드 추가 (커서 위치용)
-      const parent = mentionSpan.parentNode
-      if (parent) {
-        // 멘션 뒤에 공백 추가
-        const spaceText = document.createTextNode(' ')
-        parent.insertBefore(spaceText, mentionSpan.nextSibling)
-
-        // 커서를 공백 뒤로 이동
-        const newRange = document.createRange()
-        newRange.setStartAfter(spaceText)
-        newRange.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(newRange)
-
-        // 에디터 포커스 유지
-        if (editorRef.current) {
-          editorRef.current.focus()
-        }
-      } else {
-        // 부모가 없으면 멘션 뒤에 공백 추가 후 커서 이동
-        const parent = mentionSpan.parentNode as Node | null
-        if (parent && parent.nodeType === Node.ELEMENT_NODE) {
-          const spaceText = document.createTextNode(' ')
-          const nextSibling = mentionSpan.nextSibling
-          if (nextSibling) {
-            parent.insertBefore(spaceText, nextSibling)
-          } else {
-            parent.appendChild(spaceText)
-          }
-
-          // 커서를 공백 뒤로 이동
-          const newRange = document.createRange()
-          newRange.setStartAfter(spaceText)
-          newRange.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(newRange)
-        } else {
-          // 부모가 정말 없으면 멘션 뒤로 커서 이동
-          const newRange = document.createRange()
-          newRange.setStartAfter(mentionSpan)
-          newRange.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(newRange)
-        }
-      }
-
-      // 에디터 포커스 유지
-      if (editorRef.current) {
-        editorRef.current.focus()
-      }
-
-      // 포맷 상태 업데이트
-      updateFormatState()
-      handleContentChange()
-    },
-    [handleContentChange],
-  )
-
   // 키 입력 핸들러
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // 멘션 팝업이 열려있을 때
-      if (mentionPopupVisible) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          setMentionSelectedIndex((prev) =>
-            prev < mentionResults.length - 1 ? prev + 1 : 0,
-          )
-          return
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          setMentionSelectedIndex((prev) =>
-            prev > 0 ? prev - 1 : mentionResults.length - 1,
-          )
-          return
-        }
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          if (mentionResults[mentionSelectedIndex]) {
-            insertMention(mentionResults[mentionSelectedIndex])
-          }
-          return
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          setMentionPopupVisible(false)
-          setMentionQuery('')
-          return
-        }
-      }
-
-      // 멘션 요소 내부에서는 @ 감지하지 않음
-      const selection = window.getSelection()
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0)
-        const container = range.commonAncestorContainer
-        let element: HTMLElement | null = null
-
-        if (container.nodeType === Node.TEXT_NODE) {
-          element = container.parentElement
-        } else if (container.nodeType === Node.ELEMENT_NODE) {
-          element = container as HTMLElement
-        }
-
-        // 멘션 요소 내부인지 확인
-        if (element && element.closest('.mention')) {
-          // 멘션 요소 내부에서는 팝업 닫기
-          if (mentionPopupVisible) {
-            setMentionPopupVisible(false)
-            setMentionQuery('')
-            setMentionResults([])
-          }
-          return // 멘션 요소 내부에서는 @ 감지하지 않음
-        }
-
-        // 멘션 요소 바로 뒤에 커서가 있는지 확인
-        if (container.nodeType === Node.TEXT_NODE) {
-          const textNode = container as Text
-          const prevSibling = textNode.previousSibling
-          if (
-            prevSibling &&
-            prevSibling.nodeType === Node.ELEMENT_NODE &&
-            (prevSibling as HTMLElement).classList.contains('mention')
-          ) {
-            // 멘션 바로 뒤에 커서가 있으면 @ 감지하지 않음
-            if (mentionPopupVisible) {
-              setMentionPopupVisible(false)
-              setMentionQuery('')
-              setMentionResults([])
-            }
-            // 스페이스나 @ 입력 시에도 무시
-            if (e.key === ' ' || e.key === '@') {
-              return
-            }
-          }
-        }
-
-        // 멘션 요소 바로 앞에 @가 있는지 확인 (멘션 요소 내부의 @는 무시)
-        if (container.nodeType === Node.TEXT_NODE) {
-          const textNode = container as Text
-          const text = textNode.textContent || ''
-          const offset = range.startOffset
-          const textBefore = text.substring(0, offset)
-          const atIndex = textBefore.lastIndexOf('@')
-
-          if (atIndex !== -1) {
-            // @ 바로 뒤에 멘션 요소가 있는지 확인
-            const prevSibling = textNode.previousSibling
-            if (
-              prevSibling &&
-              prevSibling.nodeType === Node.ELEMENT_NODE &&
-              (prevSibling as HTMLElement).classList.contains('mention') &&
-              atIndex === 0
-            ) {
-              // 멘션 요소 바로 뒤에 @가 있으면 무시
-              if (mentionPopupVisible) {
-                setMentionPopupVisible(false)
-                setMentionQuery('')
-                setMentionResults([])
-              }
-              return
-            }
-          }
-        }
-      }
-
-      // @ 입력 감지 및 멘션 검색
-      if (mentionEntities) {
-        const selection = window.getSelection()
-        if (!selection || selection.rangeCount === 0) return
-
-        const range = selection.getRangeAt(0)
-        let node = range.startContainer
-        let textBefore = ''
-
-        if (node.nodeType === Node.TEXT_NODE) {
-          const textNode = node as Text
-          const offset = range.startOffset
-          textBefore = textNode.textContent?.substring(0, offset) || ''
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-          // 요소 노드인 경우 이전 텍스트 찾기
-          const element = node as HTMLElement
-          // 멘션 요소 내부가 아닌지 확인
-          if (element.closest('.mention')) {
-            return
-          }
-          const textContent = element.textContent || ''
-          const offset = range.startOffset
-          textBefore = textContent.substring(0, offset)
-        }
-
-        // @ 찾기
-        const atIndex = textBefore.lastIndexOf('@')
-
-        if (atIndex !== -1) {
-          // @와 커서 사이에 공백이나 특수문자가 있는지 확인
-          const textAfterAt = textBefore.substring(atIndex + 1)
-          const hasSpaceOrSpecial = /[\s\n\r<>]/.test(textAfterAt)
-
-          // @ 바로 뒤에 멘션 요소가 있는지 확인
-          let hasMentionAfter = false
-          if (node.nodeType === Node.TEXT_NODE) {
-            const textNode = node as Text
-            const parent = textNode.parentElement
-            if (parent) {
-              // 현재 텍스트 노드의 이전 형제 요소들 확인
-              let currentNode: Node | null = textNode
-              while (currentNode && currentNode !== parent) {
-                const prevSibling = currentNode.previousSibling
-                if (
-                  prevSibling &&
-                  prevSibling.nodeType === Node.ELEMENT_NODE &&
-                  (prevSibling as HTMLElement).classList.contains('mention')
-                ) {
-                  hasMentionAfter = true
-                  break
-                }
-                currentNode = currentNode.parentNode
-              }
-
-              // 직접 이전 형제 확인
-              if (!hasMentionAfter) {
-                const directPrevSibling = textNode.previousSibling
-                if (
-                  directPrevSibling &&
-                  directPrevSibling.nodeType === Node.ELEMENT_NODE &&
-                  (directPrevSibling as HTMLElement).classList.contains(
-                    'mention',
-                  )
-                ) {
-                  hasMentionAfter = true
-                }
-              }
-            }
-          }
-
-          if (
-            !hasSpaceOrSpecial &&
-            !hasMentionAfter &&
-            textAfterAt.length < 50
-          ) {
-            // 검색어가 너무 길면 무시
-            const query = textAfterAt
-            mentionRangeRef.current = range.cloneRange()
-
-            // 커서 위치 계산 (정확한 위치)
-            const rect = range.getBoundingClientRect()
-
-            // 커서가 보이지 않거나 유효하지 않으면 팝업 표시하지 않음
-            if (
-              (rect.width === 0 && rect.height === 0) ||
-              rect.top === 0 ||
-              rect.left === 0
-            ) {
-              return
-            }
-
-            // 에디터 컨테이너의 위치 확인
-            const editorRect = editorRef.current?.getBoundingClientRect()
-            if (!editorRect) return
-
-            // 팝업 위치 계산 (커서 위치 기준)
-            const popupTop = rect.bottom + window.scrollY + 8
-            const popupLeft = rect.left + window.scrollX
-
-            // 화면 밖으로 나가지 않도록 조정
-            const maxLeft = window.innerWidth - 320 // 팝업 최소 너비 고려
-            const adjustedLeft = Math.max(8, Math.min(popupLeft, maxLeft))
-
-            // 유효한 위치인지 확인
-            if (popupTop > 0 && adjustedLeft > 0) {
-              setMentionPopupPosition({
-                top: popupTop,
-                left: adjustedLeft,
-              })
-            } else {
-              // 위치가 유효하지 않으면 팝업 표시하지 않음
-              return
-            }
-
-            setMentionPopupVisible(true)
-            setMentionQuery(query)
-            searchMentions(query)
-          } else if (mentionPopupVisible) {
-            setMentionPopupVisible(false)
-            setMentionQuery('')
-            setMentionResults([])
-          }
-        } else if (
-          mentionPopupVisible &&
-          e.key !== 'ArrowDown' &&
-          e.key !== 'ArrowUp' &&
-          e.key !== 'Enter' &&
-          e.key !== 'Escape' &&
-          e.key !== 'Tab'
-        ) {
-          // @가 없으면 팝업 닫기 (탭 키는 제외)
-          setMentionPopupVisible(false)
-          setMentionQuery('')
-          setMentionResults([])
-        }
-      }
-
       // 단축키
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'b') {
@@ -1691,15 +1409,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
       }
     },
-    [
-      mentionPopupVisible,
-      mentionResults,
-      mentionSelectedIndex,
-      mentionEntities,
-      insertMention,
-      searchMentions,
-      applyFormat,
-    ],
+    [applyFormat],
   )
 
   // 이미지 업로드
@@ -1909,6 +1619,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         countries: mentionEntities.countries as never[],
         historicalCountries: mentionEntities.historicalCountries as never[],
         militaryUnits: mentionEntities.militaryUnits as never[],
+        dynasties: mentionEntities.dynasties as never[],
       })
 
       setEntityLinkResults(results.slice(0, 30))
@@ -2024,6 +1735,155 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       updateFormatState,
     ],
   )
+
+  // 용어 연결: 검색
+  const searchTermLinks = useCallback(async (query: string) => {
+    try {
+      const list = await getGlossaryTerms({ q: query || undefined })
+      setTermLinkResults(list)
+      setTermLinkSelectedIndex(0)
+    } catch {
+      setTermLinkResults([])
+    }
+  }, [])
+
+  const handleOpenTermLinkModal = useCallback(() => {
+    setContextMenuVisible(false)
+    setTermLinkModalVisible(true)
+    setTermLinkNewName(selectedText)
+    setTermLinkNewDesc('')
+    setTermLinkQuery('')
+    setTermLinkResults([])
+  }, [selectedText])
+
+  const handleCloseTermLinkModal = useCallback(() => {
+    setTermLinkModalVisible(false)
+    setTermLinkQuery('')
+    setTermLinkResults([])
+    setTermLinkNewName('')
+    setTermLinkNewDesc('')
+  }, [])
+
+  const insertTermLink = useCallback(
+    (term: GlossaryTermDto) => {
+      if (!selectedTextRange || !editorRef.current) return
+
+      const range = selectedTextRange.cloneRange()
+      const termSpan = document.createElement('span')
+      termSpan.className = 'term'
+      termSpan.setAttribute('data-term-id', term.id)
+      termSpan.setAttribute('data-term-name', term.name)
+      termSpan.setAttribute('contenteditable', 'false')
+      const fragment = range.extractContents()
+      termSpan.appendChild(fragment)
+      range.insertNode(termSpan)
+
+      const parent = termSpan.parentNode
+      if (parent) {
+        const spaceText = document.createTextNode('\u00A0')
+        parent.insertBefore(spaceText, termSpan.nextSibling)
+        const newRange = document.createRange()
+        newRange.setStart(spaceText, 1)
+        newRange.collapse(true)
+        const selection = window.getSelection()
+        if (selection) {
+          selection.removeAllRanges()
+          selection.addRange(newRange)
+        }
+      }
+
+      updateFormatState()
+      handleContentChange()
+      handleCloseTermLinkModal()
+      setSelectedText('')
+      setSelectedTextRange(null)
+    },
+    [
+      selectedTextRange,
+      handleContentChange,
+      handleCloseTermLinkModal,
+      updateFormatState,
+    ],
+  )
+
+  const handleCreateAndLinkTerm = useCallback(async () => {
+    const name = termLinkNewName.trim()
+    if (!name) return
+    if (!selectedTextRange) return
+
+    try {
+      const term = await createGlossaryTerm({
+        name,
+        description: termLinkNewDesc.trim() || null,
+      })
+      insertTermLink(term)
+    } catch (err) {
+      console.error('용어 등록 실패:', err)
+    }
+  }, [
+    termLinkNewName,
+    termLinkNewDesc,
+    selectedTextRange,
+    insertTermLink,
+  ])
+
+  // 에디터 내 .term 클릭 → 수정 모달
+  const handleEditorContentClick = useCallback(
+    (e: React.MouseEvent) => {
+      const el = (e.target as HTMLElement).closest('.term')
+      if (!el) return
+      const id = el.getAttribute('data-term-id')
+      if (!id) return
+      e.preventDefault()
+      e.stopPropagation()
+      setTermEditId(id)
+      setTermEditName(el.getAttribute('data-term-name') || el.textContent || '')
+      setTermEditDesc('')
+      setTermEditModalVisible(true)
+      setTermEditLoading(true)
+      getGlossaryTermById(id)
+        .then((t) => {
+          setTermEditName(t.name)
+          setTermEditDesc(t.description ?? '')
+        })
+        .catch(() => {
+          setTermEditModalVisible(false)
+        })
+        .finally(() => setTermEditLoading(false))
+    },
+    [],
+  )
+
+  const handleCloseTermEditModal = useCallback(() => {
+    setTermEditModalVisible(false)
+    setTermEditId(null)
+    setTermEditName('')
+    setTermEditDesc('')
+  }, [])
+
+  const handleSaveTermEdit = useCallback(async () => {
+    if (!termEditId || !termEditName.trim()) return
+    setTermEditLoading(true)
+    try {
+      await updateGlossaryTerm(termEditId, {
+        name: termEditName.trim(),
+        description: termEditDesc.trim() || null,
+      })
+      if (editorRef.current) {
+        const span = editorRef.current.querySelector(
+          `.term[data-term-id="${termEditId}"]`,
+        ) as HTMLElement | null
+        if (span) {
+          span.setAttribute('data-term-name', termEditName.trim())
+        }
+      }
+      handleCloseTermEditModal()
+    } catch (err) {
+      console.error('용어 수정 실패:', err)
+    } finally {
+      setTermEditLoading(false)
+    }
+  }, [termEditId, termEditName, termEditDesc, handleCloseTermEditModal])
 
   // 마우스 우클릭 핸들러
   const handleContextMenu = useCallback(
@@ -2374,6 +2234,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           onMouseUp={updateFormatState}
           onKeyUp={updateFormatState}
           onContextMenu={handleContextMenu}
+          onClick={handleEditorContentClick}
           $hasTitle={showTitle}
         />
       </EditorWrapper>
@@ -2478,162 +2339,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             </>
           )
         })()}
-      {mentionPopupVisible && (
-        <MentionPopup
-          $visible={mentionPopupVisible}
-          $top={mentionPopupPosition.top}
-          $left={mentionPopupPosition.left}
-        >
-          {mentionQuery.trim() === '' ? (
-            <div
-              style={{
-                padding: '24px',
-                textAlign: 'center',
-                color: '#94a3b8',
-                fontSize: '13px',
-              }}
-            >
-              검색어를 입력하세요
-              <div
-                style={{ fontSize: '11px', marginTop: '8px', color: '#cbd5e1' }}
-              >
-                예: @처칠, @영국, @2차세계대전
-              </div>
-            </div>
-          ) : mentionResults.length === 0 ? (
-            <div
-              style={{
-                padding: '24px',
-                textAlign: 'center',
-                color: '#94a3b8',
-                fontSize: '13px',
-              }}
-            >
-              검색 결과가 없습니다
-            </div>
-          ) : (
-            (() => {
-              // 타입별로 그룹화
-              const grouped: Record<string, MentionItem[]> = {}
-              mentionResults.forEach((item) => {
-                if (!grouped[item.type]) {
-                  grouped[item.type] = []
-                }
-                grouped[item.type].push(item)
-              })
-
-              let globalIndex = 0
-              return Object.entries(grouped).map(([type, items]) => {
-                const typeConfig =
-                  MENTION_TYPE_CONFIG[type as keyof typeof MENTION_TYPE_CONFIG]
-                const startIndex = globalIndex
-                globalIndex += items.length
-
-                return (
-                  <div key={type} style={{ marginBottom: '12px' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        color: '#64748b',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        background: 'rgba(79, 70, 229, 0.06)',
-                        borderRadius: '8px',
-                        marginBottom: '4px',
-                      }}
-                    >
-                      {typeConfig && typeConfig.icon && (
-                        <span style={{ color: typeConfig.color }}>
-                          {React.createElement(typeConfig.icon, { size: 14 })}
-                        </span>
-                      )}
-                      <span style={{ color: '#64748b' }}>
-                        {typeConfig?.label || type}
-                      </span>
-                      <span
-                        style={{
-                          marginLeft: 'auto',
-                          fontSize: '10px',
-                          color: '#94a3b8',
-                        }}
-                      >
-                        {items.length}
-                      </span>
-                    </div>
-                    {items.map((item, itemIndex) => {
-                      const currentIndex = startIndex + itemIndex
-                      return (
-                        <div
-                          key={`${item.type}-${item.id}`}
-                          style={{
-                            padding: '12px 14px',
-                            cursor: 'pointer',
-                            background:
-                              currentIndex === mentionSelectedIndex
-                                ? 'rgba(79, 70, 229, 0.08)'
-                                : 'transparent',
-                            borderRadius: '10px',
-                            marginBottom: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px',
-                            border:
-                              currentIndex === mentionSelectedIndex
-                                ? '1px solid rgba(79, 70, 229, 0.2)'
-                                : '1px solid transparent',
-                          }}
-                          onMouseEnter={() =>
-                            setMentionSelectedIndex(currentIndex)
-                          }
-                          onMouseDown={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                          }}
-                          onClick={() => {
-                            playClickSound()
-                            insertMention(item)
-                          }}
-                        >
-                          {item.icon && (
-                            <span style={{ color: item.color, flexShrink: 0 }}>
-                              {React.createElement(item.icon, {
-                                size: 18,
-                              })}
-                            </span>
-                          )}
-                          <span
-                            style={{
-                              flex: 1,
-                              fontWeight: 500,
-                              fontSize: '14px',
-                              color: '#0f172a',
-                            }}
-                          >
-                            {item.name}
-                          </span>
-                          {item.subtitle && (
-                            <span
-                              style={{ fontSize: '12px', color: '#64748b' }}
-                            >
-                              {item.subtitle}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })
-            })()
-          )}
-        </MentionPopup>
-      )}
-
       {/* 컨텍스트 메뉴 */}
       <ContextMenu
         $visible={contextMenuVisible}
@@ -2648,6 +2353,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         >
           <FiLink />
           엔티티 연결
+        </ContextMenuItem>
+        <ContextMenuItem
+          onClick={() => {
+            playClickSound()
+            handleOpenTermLinkModal()
+          }}
+        >
+          <FiType />
+          용어 연결
         </ContextMenuItem>
       </ContextMenu>
 
@@ -2912,6 +2626,201 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </EntityLinkModalContent>
         </EntityLinkModal>
       </EntityLinkModalOverlay>
+
+      {/* 용어 연결 모달 */}
+      <TermLinkModalOverlay
+        $visible={termLinkModalVisible}
+        onClick={handleCloseTermLinkModal}
+      >
+        <TermLinkModal onClick={(e) => e.stopPropagation()}>
+          <TermLinkModalHeader>
+            <TermLinkModalTitle>용어 연결</TermLinkModalTitle>
+            <TermLinkModalClose onClick={handleCloseTermLinkModal}>
+              <FiX size={20} />
+            </TermLinkModalClose>
+          </TermLinkModalHeader>
+          <TermLinkModalContent>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+              <strong>선택한 텍스트</strong> &quot;{selectedText}&quot;
+            </div>
+            <TermLinkSearchInput
+              type="text"
+              placeholder="용어 검색 (이름)..."
+              value={termLinkQuery}
+              onChange={(e) => {
+                const q = e.target.value
+                setTermLinkQuery(q)
+                searchTermLinks(q)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setTermLinkSelectedIndex((i) =>
+                    i < termLinkResults.length - 1 ? i + 1 : 0,
+                  )
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setTermLinkSelectedIndex((i) =>
+                    i > 0 ? i - 1 : termLinkResults.length - 1,
+                  )
+                } else if (e.key === 'Enter') {
+                  e.preventDefault()
+                  if (termLinkResults[termLinkSelectedIndex]) {
+                    insertTermLink(termLinkResults[termLinkSelectedIndex])
+                  }
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  handleCloseTermLinkModal()
+                }
+              }}
+              autoFocus
+            />
+            <TermLinkResultsList>
+              {termLinkResults.length === 0 ? (
+                <div
+                  style={{
+                    padding: 20,
+                    textAlign: 'center',
+                    color: '#94a3b8',
+                    fontSize: 13,
+                  }}
+                >
+                  {termLinkQuery.trim()
+                    ? '검색 결과가 없습니다. 아래에서 새 용어를 등록할 수 있습니다.'
+                    : '검색어를 입력하거나 아래에서 새 용어를 등록하세요.'}
+                </div>
+              ) : (
+                termLinkResults.map((term, idx) => (
+                  <div
+                    key={term.id}
+                    style={{
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      background:
+                        idx === termLinkSelectedIndex
+                          ? 'rgba(13, 148, 136, 0.08)'
+                          : 'transparent',
+                      borderRadius: 10,
+                      marginBottom: 4,
+                      border:
+                        idx === termLinkSelectedIndex
+                          ? '1px solid rgba(13, 148, 136, 0.25)'
+                          : '1px solid transparent',
+                    }}
+                    onMouseEnter={() => setTermLinkSelectedIndex(idx)}
+                    onClick={() => {
+                      playClickSound()
+                      insertTermLink(term)
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                      {term.name}
+                    </span>
+                    {term.description && (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: '#64748b',
+                          marginTop: 4,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {term.description}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </TermLinkResultsList>
+            <TermLinkNewSection>
+              <TermLinkNewLabel>새 용어로 등록 후 연결</TermLinkNewLabel>
+              <TermLinkNewInput
+                placeholder="용어명 (필수)"
+                value={termLinkNewName}
+                onChange={(e) => setTermLinkNewName(e.target.value)}
+              />
+              <TermLinkNewTextarea
+                placeholder="설명 (선택)"
+                value={termLinkNewDesc}
+                onChange={(e) => setTermLinkNewDesc(e.target.value)}
+              />
+              <TermLinkNewButton
+                $primary
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  handleCreateAndLinkTerm()
+                }}
+                disabled={!termLinkNewName.trim()}
+              >
+                등록 후 연결
+              </TermLinkNewButton>
+            </TermLinkNewSection>
+          </TermLinkModalContent>
+        </TermLinkModal>
+      </TermLinkModalOverlay>
+
+      {/* 용어 수정 모달 (에디터에서 .term 클릭 시) */}
+      <TermLinkModalOverlay
+        $visible={termEditModalVisible}
+        onClick={handleCloseTermEditModal}
+      >
+        <TermLinkModal onClick={(e) => e.stopPropagation()}>
+          <TermLinkModalHeader>
+            <TermLinkModalTitle>용어 수정</TermLinkModalTitle>
+            <TermLinkModalClose type="button" onClick={handleCloseTermEditModal}>
+              <FiX size={20} />
+            </TermLinkModalClose>
+          </TermLinkModalHeader>
+          <TermLinkModalContent>
+            {termEditLoading ? (
+              <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+                불러오는 중…
+              </div>
+            ) : (
+              <>
+                <TermLinkNewLabel>용어명</TermLinkNewLabel>
+                <TermLinkNewInput
+                  placeholder="용어명 (필수)"
+                  value={termEditName}
+                  onChange={(e) => setTermEditName(e.target.value)}
+                />
+                <TermLinkNewLabel style={{ marginTop: 12 }}>설명</TermLinkNewLabel>
+                <TermLinkNewTextarea
+                  placeholder="설명 (선택)"
+                  value={termEditDesc}
+                  onChange={(e) => setTermEditDesc(e.target.value)}
+                  style={{ minHeight: 200 }}
+                />
+                <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                  <TermLinkNewButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      handleCloseTermEditModal()
+                    }}
+                  >
+                    취소
+                  </TermLinkNewButton>
+                  <TermLinkNewButton
+                    $primary
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      handleSaveTermEdit()
+                    }}
+                    disabled={!termEditName.trim() || termEditLoading}
+                  >
+                    저장
+                  </TermLinkNewButton>
+                </div>
+              </>
+            )}
+          </TermLinkModalContent>
+        </TermLinkModal>
+      </TermLinkModalOverlay>
     </EditorContainer>
   )
 }

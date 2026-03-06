@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 
 import { getAllCountries, type CountryResponseDto } from '@/shared/api/countries'
+import { dynastyApi, type Dynasty } from '@/shared/api/dynasty'
 import { getAllEventCategories, type EventCategoryDto } from '@/shared/api/event-categories'
 import { getAllEvents, type EventResponseDto } from '@/shared/api/events'
 import { getAllHistoricalCountries, type HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -21,6 +22,7 @@ export const useFormEntities = () => {
   const [dbCategories, setDbCategories] = useState<EventCategoryDto[]>([])
   const [availableMilitaryUnits, setAvailableMilitaryUnits] = useState<MilitaryUnit[]>([])
   const [availableEvents, setAvailableEvents] = useState<EventResponseDto[]>([])
+  const [availableDynasties, setAvailableDynasties] = useState<Dynasty[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -42,6 +44,9 @@ export const useFormEntities = () => {
           getAllEvents()
             .then(setAvailableEvents)
             .catch(() => setAvailableEvents([])),
+          dynastyApi.getAll()
+            .then(setAvailableDynasties)
+            .catch(() => setAvailableDynasties([])),
         ])
       } finally {
         setIsLoading(false)
@@ -58,6 +63,7 @@ export const useFormEntities = () => {
     dbCategories,
     availableMilitaryUnits,
     availableEvents,
+    availableDynasties,
     isLoading,
   }
 }
