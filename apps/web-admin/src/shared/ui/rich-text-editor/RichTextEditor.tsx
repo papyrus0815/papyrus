@@ -978,6 +978,8 @@ interface RichTextEditorProps {
   placeholder?: string
   onImageUpload?: (file: File) => Promise<string>
   mentionEntities?: MentionExtensionProps
+  /** 엔티티 연결 모달을 열 때 호출 (부모에서 엔티티 목록을 서버에서 다시 불러올 때 사용) */
+  onEntityModalOpen?: () => void
   title?: string
   onTitleChange?: (title: string) => void
   titlePlaceholder?: string
@@ -990,6 +992,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   placeholder = '내용을 입력하세요...',
   onImageUpload,
   mentionEntities,
+  onEntityModalOpen,
   title = '',
   onTitleChange,
   titlePlaceholder = '제목 없음',
@@ -1628,13 +1631,21 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [mentionEntities],
   )
 
-  // 엔티티 링크 모달 열기
+  // 엔티티 링크 모달 열기 (열 때 부모에 알려 서버에서 엔티티 다시 불러오기)
   const handleOpenEntityLinkModal = useCallback(() => {
     setContextMenuVisible(false)
+    onEntityModalOpen?.()
     setEntityLinkModalVisible(true)
     setEntityLinkQuery('')
     searchEntityLinks('')
-  }, [searchEntityLinks])
+  }, [searchEntityLinks, onEntityModalOpen])
+
+  // 모달이 열린 상태에서 mentionEntities가 갱신되면(예: 부모 refetch 완료) 검색 결과 다시 표시
+  useEffect(() => {
+    if (entityLinkModalVisible) {
+      searchEntityLinks(entityLinkQuery)
+    }
+  }, [entityLinkModalVisible, entityLinkQuery, mentionEntities, searchEntityLinks])
 
   // 엔티티 링크 모달 닫기
   const handleCloseEntityLinkModal = useCallback(() => {

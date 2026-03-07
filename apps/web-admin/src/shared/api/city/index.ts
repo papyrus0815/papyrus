@@ -1,4 +1,6 @@
-import { apiConnection } from '../client'
+import * as citiesApi from '@api/functional/cities'
+
+import { getApiConnection } from '../client'
 
 export type City = {
   id: string
@@ -22,14 +24,21 @@ export type CreateCityInput = {
 
 export type UpdateCityInput = Partial<CreateCityInput>
 
-async function fetchCities(params?: { countryId?: string; administrativeDivisionId?: string }): Promise<City[]> {
-  const url = new URL(`${apiConnection.host}/cities`)
-  if (params?.countryId) url.searchParams.set('countryId', params.countryId)
-  if (params?.administrativeDivisionId) url.searchParams.set('administrativeDivisionId', params.administrativeDivisionId)
-  const res = await fetch(url.toString())
-  if (!res.ok) return []
-  const data = await res.json()
-  return Array.isArray(data) ? data : []
+async function fetchCities(params?: {
+  countryId?: string
+  administrativeDivisionId?: string
+}): Promise<City[]> {
+  try {
+    const conn = getApiConnection()
+    const data = await citiesApi.getCities(
+      conn,
+      params?.countryId,
+      params?.administrativeDivisionId,
+    )
+    return Array.isArray(data) ? data : []
+  } catch {
+    return []
+  }
 }
 
 export const cityApi = {

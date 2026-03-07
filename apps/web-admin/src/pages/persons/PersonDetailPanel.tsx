@@ -4,7 +4,8 @@
  */
 import React, { useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -19,6 +20,7 @@ import {
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { personApi } from '@/shared/api/person'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
@@ -56,6 +58,33 @@ function formatIsoDateKo(iso: string | null | undefined): string {
   }
 }
 
+/**
+ * 특정 시점에 몇 살이었는지 계산 (출생년월일 + 해당 날짜)
+ * 출생 정보 없으면 null
+ */
+function getAgeAtDate(
+  birthYear: number | null | undefined,
+  birthMonth?: number | null,
+  birthDay?: number | null,
+  dateIso?: string | null,
+): number | null {
+  if (birthYear == null || !dateIso) return null
+  try {
+    const d = new Date(dateIso)
+    const y = d.getFullYear()
+    const m = d.getMonth() + 1
+    const day = d.getDate()
+    let age = y - birthYear
+    if (age < 0) return null
+    if (birthMonth != null && birthDay != null) {
+      if (m < birthMonth || (m === birthMonth && day < birthDay)) age--
+    }
+    return age
+  } catch {
+    return null
+  }
+}
+
 interface PersonDetailPanelProps {
   personId: string
   onClose: () => void
@@ -77,9 +106,13 @@ export function PersonDetailPanel({
   embedInModal = false,
 }: PersonDetailPanelProps) {
   const playClickSound = useClickSound()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
+  const [editingBiography, setEditingBiography] = useState(false)
+  const [biographyDraft, setBiographyDraft] = useState('')
+  const [savingBiography, setSavingBiography] = useState(false)
 
   const {
     data: person,
@@ -250,11 +283,6 @@ export function PersonDetailPanel({
       {/* 기본정보 + 요약: 생몰·직업·국가·성별·가문·종교·배우자·저작·정부직위·사건·조직 */}
       <KpiStrip $compact={embedInModal}>
         <KpiItem>
-          <KpiLabel>생몰</KpiLabel>
-          <KpiValue>{lifespanText}</KpiValue>
-        </KpiItem>
-        <KpiDivider />
-        <KpiItem>
           <KpiLabel>직업</KpiLabel>
           <KpiValue>{person.job?.title || '—'}</KpiValue>
         </KpiItem>
@@ -414,8 +442,8 @@ export function PersonDetailPanel({
                   )}
                 </SectionLabelRow>
                 {tenuresList.length > 0 ? (
-                  <TenureCardWrap>
-                    <TenureCardGrid>
+                  <TenureListWrap>
+                    <TenureList>
                       {tenuresList.map((tenure: any) => {
                         const positionTitle =
                           tenure.positionDefinition?.title ??
@@ -439,57 +467,70 @@ export function PersonDetailPanel({
                         const endReason =
                           tenure.endReason ?? tenure.endReasonDetail
                         const notes = tenure.notes
+                        const ageAtStart = getAgeAtDate(
+                          person.birthYear,
+                          person.birthMonth,
+                          person.birthDay,
+                          tenure.startDate,
+                        )
                         return (
-                          <TenureCard key={tenure.id}>
-                            <TenureCardTitle>{positionTitle}</TenureCardTitle>
-                            <TenureCardMeta>
-                              {countryName && <span>{countryName}</span>}
-                              {countryName &&
-                                (termNum != null || period) &&
-                                ' · '}
-                              {termNum != null && <span>제{termNum}대</span>}
-                              {termNum != null && period && ' · '}
-                              <span>{period}</span>
-                            </TenureCardMeta>
-                            {(appointmentMethod || endReason || notes) && (
-                              <TenureCardSub>
-                                {appointmentMethod && (
-                                  <span>취임: {appointmentMethod}</span>
+                          <TenureRow key={tenure.id}>
+                            <TenureRowMain>
+                              <TenureRowTitle>{positionTitle}</TenureRowTitle>
+                              <TenureRowMeta>
+                                {countryName && (
+                                  <TenureRowMetaItem>{countryName}</TenureRowMetaItem>
                                 )}
-                                {endReason && <span>퇴임: {endReason}</span>}
-                                {notes && <span>{notes}</span>}
-                              </TenureCardSub>
-                            )}
+                                {termNum != null && (
+                                  <TenureRowMetaItem>제{termNum}대</TenureRowMetaItem>
+                                )}
+                                <TenureRowMetaItem>{period}</TenureRowMetaItem>
+                                {ageAtStart != null && (
+                                  <TenureRowAgeBadge>
+                                    {ageAtStart}세에 취임
+                                  </TenureRowAgeBadge>
+                                )}
+                              </TenureRowMeta>
+                              {(appointmentMethod || endReason || notes) && (
+                                <TenureRowSub>
+                                  {appointmentMethod && (
+                                    <span>취임: {appointmentMethod}</span>
+                                  )}
+                                  {endReason && (
+                                    <span>퇴임: {endReason}</span>
+                                  )}
+                                  {notes && <span>{notes}</span>}
+                                </TenureRowSub>
+                              )}
+                            </TenureRowMain>
                             {!embedInModal && (
-                              <TenureCardActions>
-                                <TenureCardEditBtn
-                                  type="button"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setEditingTenureId(tenure.id)
-                                    setTenureModalOpen(true)
-                                  }}
-                                >
-                                  <FiEdit2 size={14} />
-                                  수정
-                                </TenureCardEditBtn>
-                              </TenureCardActions>
+                              <TenureRowEditBtn
+                                type="button"
+                                onClick={() => {
+                                  playClickSound()
+                                  setEditingTenureId(tenure.id)
+                                  setTenureModalOpen(true)
+                                }}
+                              >
+                                <FiEdit2 size={12} />
+                                수정
+                              </TenureRowEditBtn>
                             )}
-                          </TenureCard>
+                          </TenureRow>
                         )
                       })}
-                    </TenureCardGrid>
-                  </TenureCardWrap>
+                    </TenureList>
+                  </TenureListWrap>
                 ) : (
                   <TenureEmpty>
-                    {embedInModal
-                      ? '등록된 재임 기록이 없습니다.'
-                      : (
-                        <>
-                          등록된 재임 기록이 없습니다. <strong>수반 등록</strong>으로
-                          직책·국가·기간을 추가하세요.
-                        </>
-                        )}
+                    {embedInModal ? (
+                      '등록된 재임 기록이 없습니다.'
+                    ) : (
+                      <>
+                        등록된 재임 기록이 없습니다. <strong>수반 등록</strong>
+                        으로 직책·국가·기간을 추가하세요.
+                      </>
+                    )}
                   </TenureEmpty>
                 )}
               </section>
@@ -508,14 +549,83 @@ export function PersonDetailPanel({
                 tenureId={editingTenureId ?? undefined}
               />
 
-              {person.biography && (
-                <section aria-label="전기">
+              <section aria-label="전기">
+                <SectionLabelRow>
                   <SectionLabel>전기</SectionLabel>
+                  {!editingBiography ? (
+                    <OutlineButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setBiographyDraft(person.biography ?? '')
+                        setEditingBiography(true)
+                      }}
+                    >
+                      <FiEdit2 size={14} />
+                      {person.biography ? '수정' : '추가'}
+                    </OutlineButton>
+                  ) : null}
+                </SectionLabelRow>
+                {editingBiography ? (
+                  <SectionCard>
+                    <BioTextarea
+                      value={biographyDraft}
+                      onChange={(e) => setBiographyDraft(e.target.value)}
+                      placeholder="전기(약력)를 입력하세요. 여러 줄 입력 가능합니다."
+                      rows={12}
+                      autoFocus
+                    />
+                    <BioEditActions>
+                      <OutlineButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setEditingBiography(false)
+                          setBiographyDraft('')
+                        }}
+                        disabled={savingBiography}
+                      >
+                        취소
+                      </OutlineButton>
+                      <PrimaryButton
+                        type="button"
+                        onClick={async () => {
+                          playClickSound()
+                          setSavingBiography(true)
+                          try {
+                            await personApi.update(person.id, {
+                              biography: biographyDraft.trim() || undefined,
+                            })
+                            await queryClient.invalidateQueries({
+                              queryKey: ['person-detail', personId],
+                            })
+                            setEditingBiography(false)
+                            setBiographyDraft('')
+                            toast.success('전기가 저장되었습니다.')
+                          } catch (err: unknown) {
+                            toast.error(
+                              err instanceof Error ? err.message : '전기 저장에 실패했습니다.',
+                            )
+                          } finally {
+                            setSavingBiography(false)
+                          }
+                        }}
+                        disabled={savingBiography}
+                      >
+                        {savingBiography ? '저장 중…' : '저장'}
+                      </PrimaryButton>
+                    </BioEditActions>
+                  </SectionCard>
+                ) : person.biography ? (
                   <SectionCard>
                     <BioText>{person.biography}</BioText>
                   </SectionCard>
-                </section>
-              )}
+                ) : (
+                  <SectionCard>
+                    <BioEmptyHint>전기(약력)가 없습니다. 수정 버튼으로 추가할 수 있습니다.</BioEmptyHint>
+                  </SectionCard>
+                )}
+              </section>
             </TabContent>
           )}
 
@@ -766,7 +876,7 @@ export function PersonDetailPanel({
 const PanelRoot = styled.div<{ $embed?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: ${(p) => (p.$embed ? 20 : 28)}px;
+  gap: ${(p) => (p.$embed ? 16 : 22)}px;
   max-height: ${(p) => (p.$embed ? 'none' : 'calc(100vh - 200px)')};
   overflow-y: ${(p) => (p.$embed ? 'visible' : 'auto')};
   overflow-x: hidden;
@@ -799,25 +909,25 @@ const HeaderRow = styled.header`
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: 18px;
   flex-wrap: wrap;
-  padding: 24px 28px;
+  padding: 18px 20px;
   background: #fff;
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `
 
 const HeaderLeft = styled.div`
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   min-width: 0;
 `
 
 const PersonAvatar = styled.div`
   width: 120px;
   height: 120px;
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
   flex-shrink: 0;
   background: #f1f5f9;
@@ -861,7 +971,7 @@ const CountryBracket = styled.span`
 
 const PageTitle = styled.h1`
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.03em;
@@ -870,7 +980,7 @@ const PageTitle = styled.h1`
   text-overflow: ellipsis;
   white-space: nowrap;
   @media (max-width: 640px) {
-    font-size: 19px;
+    font-size: 18px;
     white-space: normal;
   }
 `
@@ -1053,6 +1163,66 @@ const BioText = styled.div`
   font-size: 14px;
   line-height: 1.8;
   color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+`
+
+const BioTextarea = styled.textarea`
+  display: block;
+  width: 100%;
+  min-height: 280px;
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #374151;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  resize: vertical;
+  &::placeholder {
+    color: #94a3b8;
+  }
+  &:focus {
+    outline: none;
+    border-color: #6366f1;
+    background: #fff;
+  }
+`
+
+const BioEditActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+`
+
+const PrimaryButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #4f46e5;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  &:hover:not(:disabled) {
+    background: #4338ca;
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
+
+const BioEmptyHint = styled.p`
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.6;
 `
 
 const LoadingWrap = styled.div`
@@ -1271,75 +1441,99 @@ const ListRowMeta = styled.div`
   flex-shrink: 0;
 `
 
-/* 등록된 직책(역대 수반) */
-const TenureCardWrap = styled.div`
-  max-width: 680px;
+/* 등록된 직책(역대 수반) — 개요와 톤 맞춤 */
+const TenureListWrap = styled.div`
+  max-width: 520px;
 `
 
-const TenureCardGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 18px;
-`
-
-const TenureCard = styled.div`
-  background: #fff;
-  border-radius: 16px;
+const TenureList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 14px;
   overflow: hidden;
-  transition: box-shadow 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  &:hover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  background: #fafbfc;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e2e8f0;
+`
+
+const TenureRow = styled.li`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  min-height: 0;
+  &:last-child {
+    border-bottom: none;
   }
 `
 
-const TenureCardTitle = styled.div`
-  font-size: 15px;
+const TenureRowMain = styled.div`
+  min-width: 0;
+  flex: 1;
+`
+
+const TenureRowTitle = styled.div`
+  font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
-  padding: 18px 20px 14px;
+  color: #111827;
+  line-height: 1.4;
+  margin-bottom: 4px;
+`
+
+const TenureRowMeta = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
   line-height: 1.4;
 `
 
-const TenureCardMeta = styled.div`
-  font-size: 13px;
-  font-weight: 500;
-  color: #475569;
-  padding: 0 20px 16px;
-  line-height: 1.55;
+const TenureRowMetaItem = styled.span`
+  color: inherit;
 `
 
-const TenureCardSub = styled.div`
-  padding: 14px 20px 16px;
-  background: #f8fafc;
+const TenureRowAgeBadge = styled.span`
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+`
+
+const TenureRowSub = styled.div`
+  margin-top: 6px;
   font-size: 12px;
   color: #64748b;
   font-weight: 500;
-  line-height: 1.6;
+  line-height: 1.45;
 `
 
-const TenureCardActions = styled.div`
-  padding: 10px 18px 14px;
-  border-top: 1px solid #f1f5f9;
-  display: flex;
-  justify-content: flex-end;
-`
-
-const TenureCardEditBtn = styled.button`
+const TenureRowEditBtn = styled.button`
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #6366f1;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
   background: #fff;
-  border: 1px solid #e0e7ff;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
   &:hover {
-    background: #eef2ff;
-    border-color: #c7d2fe;
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.06);
+    color: #4f46e5;
   }
 `
 

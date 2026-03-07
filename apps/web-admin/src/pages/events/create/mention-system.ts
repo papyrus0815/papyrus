@@ -109,8 +109,8 @@ export const MENTION_TYPE_CONFIG: Record<
       const name = p.name ?? ''
       const surname = p.surname ?? ''
       const order = (p.nameDisplayOrder as string) ?? 'korean'
-      if (order === 'western') return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
-      return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
+      if (order === 'western') return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
+      return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
     },
     getSubtitle: (item: unknown) =>
       (item as PersonResponseDto).birthYear

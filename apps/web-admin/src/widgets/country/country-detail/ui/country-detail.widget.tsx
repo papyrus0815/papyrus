@@ -469,8 +469,8 @@ function CountryDetailInner({
                                     style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
-                                      gap: 8,
-                                      padding: '10px 18px',
+                                      justifyContent: 'center',
+                                      padding: '10px',
                                       borderRadius: 12,
                                       border: '1px solid #e5e7eb',
                                       background: '#fff',
@@ -481,7 +481,6 @@ function CountryDetailInner({
                                     }}
                                   >
                                     <FiPlus size={18} />
-                                    인물 등록
                                   </button>
                                 )}
                               </CountryDetailStyles.PersonTabSharedHeaderRight>

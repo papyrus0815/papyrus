@@ -2,6 +2,8 @@
  * 파일 업로드 API
  */
 
+import { getApiConnection } from './client'
+
 export const getApiHost = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL
 
@@ -88,12 +90,20 @@ export async function uploadImage(
   const formData = new FormData()
   formData.append('file', file)
 
-  const url = new URL(`${getApiHost()}/upload/image`)
+  const conn = getApiConnection()
+  const url = new URL(`${conn.host}/upload/image`)
   url.searchParams.set('category', category)
+
+  const headers: HeadersInit = {}
+  if (conn.headers?.Authorization) {
+    headers.Authorization = conn.headers.Authorization as string
+  }
 
   const response = await fetch(url.toString(), {
     method: 'POST',
+    headers,
     body: formData,
+    credentials: 'include',
   })
 
   if (!response.ok) {

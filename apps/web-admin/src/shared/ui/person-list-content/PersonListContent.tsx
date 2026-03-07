@@ -785,9 +785,9 @@ export function PersonListContent({
                       setEditingPersonId(null)
                       setShowRegisterForm(true)
                     }}
+                    aria-label="인물 등록"
                   >
                     <FiPlus size={18} />
-                    인물 등록
                   </CreateButton>
                 )}
               </ListHeaderRow>

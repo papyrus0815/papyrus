@@ -65,6 +65,13 @@ export interface CreatePersonData {
   countryId?: string
   birthCityId?: string
   deathCityId?: string
+  /** 배우자 관계 목록 (선택) */
+  spouseRelations?: Array<{
+    spouseId: string
+    marriageStartDate?: Date
+    marriageEndDate?: Date
+    note?: string
+  }>
   /** 등록 계정 ID (개인 정보 플랫폼) */
   accountId?: string
 }
@@ -104,6 +111,13 @@ export interface UpdatePersonData {
   countryId?: string
   birthCityId?: string
   deathCityId?: string
+  /** 배우자 관계 목록 (선택, 있으면 기존 삭제 후 일괄 반영) */
+  spouseRelations?: Array<{
+    spouseId: string
+    marriageStartDate?: Date
+    marriageEndDate?: Date
+    note?: string
+  }>
 }
 
 /**

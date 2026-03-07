@@ -230,7 +230,7 @@ const EditorWrap = styled.div`
 /** 본문 섹션 내용용 */
 const SectionContentControl = styled.div`
   width: 100%;
-  max-width: 960px;
+  max-width: 1060px;
   min-width: 0;
 `
 
@@ -1232,7 +1232,7 @@ export function EventCreateFormDashboard({
                       </FieldRow>
                       <FieldRow>
                         <FieldLabel>섹션 내용</FieldLabel>
-                        <FieldControl style={{ maxWidth: 960 }}>
+                        <FieldControl style={{ maxWidth: 1060 }}>
                           <SectionContentControl>
                             <p
                               style={{

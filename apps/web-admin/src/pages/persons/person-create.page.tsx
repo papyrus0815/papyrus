@@ -56,8 +56,8 @@ import {
   Required,
   TextArea,
 } from '@/pages/events/create/event-create.styles'
-import { getAllContinents } from '@/shared/api/continents'
 import { cityApi } from '@/shared/api/city'
+import { getAllContinents } from '@/shared/api/continents'
 import { getAllCountries } from '@/shared/api/countries'
 import { dynastyApi } from '@/shared/api/dynasty'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -68,6 +68,7 @@ import {
   type Era,
   personApi,
 } from '@/shared/api/person'
+import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getAllReligions } from '@/shared/api/religions'
 import { uploadImage } from '@/shared/api/upload'
@@ -273,6 +274,12 @@ interface FormData {
   // 가족 관계
   fatherId: string
   motherId: string
+  spouseRelations: Array<{
+    spouseId: string
+    marriageStartDate?: string
+    marriageEndDate?: string
+    note?: string
+  }>
 
   // 미상 플래그
   isBirthDateUnknown: boolean
@@ -343,6 +350,7 @@ export default function PersonCreatePage() {
     jobIds: [], // 빈 배열로 초기화
     fatherId: '',
     motherId: '',
+    spouseRelations: [],
     isBirthDateUnknown: false,
     isDeathDateUnknown: false,
     isAlive: false, // 생존 중 플래그 초기화
@@ -363,7 +371,9 @@ export default function PersonCreatePage() {
   const [jobs, setJobs] = useState<any[]>([])
   const [jobCategories, setJobCategories] = useState<any[]>([])
   const [persons, setPersons] = useState<any[]>([])
-  const [cities, setCities] = useState<Array<{ id: string; name: string; countryId: string }>>([])
+  const [cities, setCities] = useState<
+    Array<{ id: string; name: string; countryId: string }>
+  >([])
   const [governmentPositionDefinitions, setGovernmentPositionDefinitions] =
     useState<any[]>([])
 
@@ -396,6 +406,7 @@ export default function PersonCreatePage() {
   const [showJobCategoryModal, setShowJobCategoryModal] = useState(false)
   const [showFatherModal, setShowFatherModal] = useState(false)
   const [showMotherModal, setShowMotherModal] = useState(false)
+  const [showSpouseModal, setShowSpouseModal] = useState(false)
   const [showBirthDateModal, setShowBirthDateModal] = useState(false)
   const [showDeathDateModal, setShowDeathDateModal] = useState(false)
   const [showCareerStartDateModal, setShowCareerStartDateModal] =
@@ -414,6 +425,7 @@ export default function PersonCreatePage() {
     useState('all')
   const [fatherSearchTerm, setFatherSearchTerm] = useState('')
   const [motherSearchTerm, setMotherSearchTerm] = useState('')
+  const [spouseSearchTerm, setSpouseSearchTerm] = useState('')
   const [countryType, setCountryType] = useState<'modern' | 'historical'>(
     'modern',
   )
@@ -460,8 +472,7 @@ export default function PersonCreatePage() {
           localStorage.removeItem(STORAGE_KEY)
         }
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   }, [])
 
   // 자동 임시 저장 (30초마다)
@@ -473,8 +484,7 @@ export default function PersonCreatePage() {
             STORAGE_KEY,
             JSON.stringify({ formData, careers }),
           )
-        } catch (error) {
-        }
+        } catch (error) {}
       }
     }, 30000) // 30초
 
@@ -496,8 +506,7 @@ export default function PersonCreatePage() {
     try {
       localStorage.removeItem(STORAGE_KEY)
       toast.success('임시 저장 내용이 삭제되었습니다.')
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   useEffect(() => {
@@ -538,10 +547,10 @@ export default function PersonCreatePage() {
       setPersons(personsData || [])
       setCities(Array.isArray(citiesData) ? citiesData : [])
 
-      // 수정 모드: 기존 인물 데이터만 로드 (경력/타임라인은 연대표에서 관리)
+      // 수정 모드: 기존 인물 데이터만 로드 (경력/타임라인은 연대표에서 관리, 배우자 등 관계 포함)
       if (isEditMode && id) {
         try {
-          const personData = await personApi.getById(id)
+          const personData = await getPersonDetailById(id)
 
           // 폼 데이터 채우기 (nameDisplayOrder에 맞춰 fullName·nameFormat 복원)
           const loadedNameFormat =
@@ -596,6 +605,13 @@ export default function PersonCreatePage() {
             jobIds: personData.jobId ? [personData.jobId] : [],
             fatherId: personData.fatherId || '',
             motherId: personData.motherId || '',
+            spouseRelations:
+              (personData as { spouseRelations?: Array<{ spouse?: { id: string }; marriageStartDate?: string | null; marriageEndDate?: string | null; note?: string | null }> }).spouseRelations?.map((rel) => ({
+                spouseId: rel.spouse?.id ?? '',
+                marriageStartDate: rel.marriageStartDate ?? undefined,
+                marriageEndDate: rel.marriageEndDate ?? undefined,
+                note: rel.note ?? undefined,
+              })).filter((r) => r.spouseId) ?? [],
           }))
 
           toast.success('데이터를 불러왔습니다')
@@ -918,6 +934,21 @@ export default function PersonCreatePage() {
     return filtered
   }, [persons, motherSearchTerm])
 
+  const filteredSpouses = useMemo(() => {
+    let filtered = persons.filter(
+      (p) =>
+        p.id !== id &&
+        !(formData.spouseRelations ?? []).some((r) => r.spouseId === p.id),
+    )
+    if (spouseSearchTerm) {
+      filtered = filtered.filter((person) => {
+        const fullName = `${person.surname || ''} ${person.name}`.trim()
+        return fullName.toLowerCase().includes(spouseSearchTerm.toLowerCase())
+      })
+    }
+    return filtered
+  }, [persons, id, formData.spouseRelations, spouseSearchTerm])
+
   const handleInputChange = (field: keyof FormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
@@ -953,10 +984,7 @@ export default function PersonCreatePage() {
         handleInputChange('middleName', '')
       } else {
         handleInputChange('name', parts[0])
-        handleInputChange(
-          'middleName',
-          parts.slice(1, -1).join(' '),
-        )
+        handleInputChange('middleName', parts.slice(1, -1).join(' '))
         handleInputChange('surname', parts[parts.length - 1])
       }
     }
@@ -1147,7 +1175,9 @@ export default function PersonCreatePage() {
     }
 
     try {
-      const uploaded = await Promise.all(files.map((file) => uploadImage(file, 'persons')))
+      const uploaded = await Promise.all(
+        files.map((file) => uploadImage(file, 'persons')),
+      )
       const items = uploaded
         .map((response) => response.url)
         .filter(Boolean)
@@ -1360,7 +1390,9 @@ export default function PersonCreatePage() {
 
     setIsUploadingImage(true)
     try {
-      const uploaded = await Promise.all(files.map((file) => uploadImage(file, 'persons')))
+      const uploaded = await Promise.all(
+        files.map((file) => uploadImage(file, 'persons')),
+      )
       const urls = uploaded.map((response) => response.url).filter(Boolean)
 
       setFormData((prev) => {
@@ -1865,6 +1897,10 @@ export default function PersonCreatePage() {
         jobId: formData.jobIds.length > 0 ? formData.jobIds[0] : undefined, // 첫 번째 직업을 주 직업으로
         fatherId: formData.fatherId || undefined,
         motherId: formData.motherId || undefined,
+        spouseRelations:
+          (formData.spouseRelations ?? []).length > 0
+            ? formData.spouseRelations!
+            : undefined,
       }
 
       // 출생일이 미상이 아니고 연도가 있을 경우에만 포함
@@ -1890,7 +1926,6 @@ export default function PersonCreatePage() {
           day: formData.deathDay ? parseInt(formData.deathDay) : undefined,
         }
       }
-
 
       let personId: string
 
@@ -2187,7 +2222,9 @@ export default function PersonCreatePage() {
                   <FormLabel>
                     이름 <Required>*</Required>
                     <FormLabelHint>
-                      전체 이름을 한 칸에 입력하면 성과 이름이 자동으로 구분됩니다. 한국식은 성+이름, 서양식은 이름+성 순으로 표시됩니다.
+                      전체 이름을 한 칸에 입력하면 성과 이름이 자동으로
+                      구분됩니다. 한국식은 성+이름, 서양식은 이름+성 순으로
+                      표시됩니다.
                     </FormLabelHint>
                   </FormLabel>
                   <FormField>
@@ -2242,14 +2279,18 @@ export default function PersonCreatePage() {
                           <NameSegmentButton
                             type="button"
                             $selected={formData.nameInputMode === 'simple'}
-                            onClick={() => handleInputChange('nameInputMode', 'simple')}
+                            onClick={() =>
+                              handleInputChange('nameInputMode', 'simple')
+                            }
                           >
                             한 칸 입력
                           </NameSegmentButton>
                           <NameSegmentButton
                             type="button"
                             $selected={formData.nameInputMode === 'detailed'}
-                            onClick={() => handleInputChange('nameInputMode', 'detailed')}
+                            onClick={() =>
+                              handleInputChange('nameInputMode', 'detailed')
+                            }
                           >
                             성·이름·중간 따로
                           </NameSegmentButton>
@@ -2286,8 +2327,11 @@ export default function PersonCreatePage() {
                               })}
                             </NameParseDisplay>
                             <NameParseMeta>
-                              성 {formData.surname || '—'} · 이름 {formData.name || '—'}
-                              {formData.middleName ? ` · 중간 ${formData.middleName}` : ''}
+                              성 {formData.surname || '—'} · 이름{' '}
+                              {formData.name || '—'}
+                              {formData.middleName
+                                ? ` · 중간 ${formData.middleName}`
+                                : ''}
                             </NameParseMeta>
                           </NameParsePreview>
                         )}
@@ -2296,7 +2340,9 @@ export default function PersonCreatePage() {
                       <>
                         <NameRow style={{ marginTop: 12 }}>
                           <NameInputWrapper>
-                            <NameLabel>성 <Required>*</Required></NameLabel>
+                            <NameLabel>
+                              성 <Required>*</Required>
+                            </NameLabel>
                             <ErrorInput
                               type="text"
                               placeholder="예: 김, Bush"
@@ -2312,7 +2358,9 @@ export default function PersonCreatePage() {
                             )}
                           </NameInputWrapper>
                           <NameInputWrapper>
-                            <NameLabel>이름 <Required>*</Required></NameLabel>
+                            <NameLabel>
+                              이름 <Required>*</Required>
+                            </NameLabel>
                             <ErrorInput
                               type="text"
                               placeholder="예: 철수, George"
@@ -2332,7 +2380,10 @@ export default function PersonCreatePage() {
                                 placeholder="예: Walker"
                                 value={formData.middleName}
                                 onChange={(e) =>
-                                  handleInputChange('middleName', e.target.value)
+                                  handleInputChange(
+                                    'middleName',
+                                    e.target.value,
+                                  )
                                 }
                                 $hasError={false}
                                 $flash={false}
@@ -2420,7 +2471,10 @@ export default function PersonCreatePage() {
                             placeholder="예: Walker"
                             value={formData.middleNameMeaning}
                             onChange={(e) =>
-                              handleInputChange('middleNameMeaning', e.target.value)
+                              handleInputChange(
+                                'middleNameMeaning',
+                                e.target.value,
+                              )
                             }
                           />
                         </NameInputWrapper>
@@ -2891,21 +2945,28 @@ export default function PersonCreatePage() {
                   <FormField>
                     <ModernSelectionGrid>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <FormLabel style={{ marginBottom: 6, fontSize: 12 }}>출생지 (도시)</FormLabel>
+                        <FormLabel style={{ marginBottom: 6, fontSize: 12 }}>
+                          출생지 (도시)
+                        </FormLabel>
                         <Input
                           as="select"
                           value={formData.birthCityId}
-                          onChange={(e) => handleInputChange('birthCityId', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange('birthCityId', e.target.value)
+                          }
                           style={{ width: '100%', padding: '10px 12px' }}
                         >
                           <option value="">선택 안 함</option>
                           {(formData.birthCountryId
-                            ? cities.filter((c) => c.countryId === formData.birthCountryId)
+                            ? cities.filter(
+                                (c) => c.countryId === formData.birthCountryId,
+                              )
                             : cities
                           ).map((city) => (
                             <option key={city.id} value={city.id}>
                               {city.name}
-                              {city.countryId && countries.find((co) => co.id === city.countryId)
+                              {city.countryId &&
+                              countries.find((co) => co.id === city.countryId)
                                 ? ` (${countries.find((co) => co.id === city.countryId)?.name})`
                                 : ''}
                             </option>
@@ -2913,18 +2974,23 @@ export default function PersonCreatePage() {
                         </Input>
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <FormLabel style={{ marginBottom: 6, fontSize: 12 }}>사망지 (도시)</FormLabel>
+                        <FormLabel style={{ marginBottom: 6, fontSize: 12 }}>
+                          사망지 (도시)
+                        </FormLabel>
                         <Input
                           as="select"
                           value={formData.deathCityId}
-                          onChange={(e) => handleInputChange('deathCityId', e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange('deathCityId', e.target.value)
+                          }
                           style={{ width: '100%', padding: '10px 12px' }}
                         >
                           <option value="">선택 안 함</option>
                           {cities.map((city) => (
                             <option key={city.id} value={city.id}>
                               {city.name}
-                              {city.countryId && countries.find((co) => co.id === city.countryId)
+                              {city.countryId &&
+                              countries.find((co) => co.id === city.countryId)
                                 ? ` (${countries.find((co) => co.id === city.countryId)?.name})`
                                 : ''}
                             </option>
@@ -3150,6 +3216,61 @@ export default function PersonCreatePage() {
                           </ModernCardClear>
                         )}
                       </ModernSelectionCard>
+
+                      {/* 배우자 (다중) */}
+                      {(formData.spouseRelations ?? []).map((rel, idx) => {
+                        const spouse = persons.find(
+                          (p) => p.id === rel.spouseId,
+                        )
+                        return (
+                          <ModernSelectionCard
+                            key={`${rel.spouseId}-${idx}`}
+                            $hasValue
+                            onClick={() => setShowSpouseModal(true)}
+                            type="button"
+                          >
+                            <ModernCardIcon $color="#7c3aed">
+                              <FiUsers size={22} />
+                            </ModernCardIcon>
+                            <ModernCardContent>
+                              <ModernCardLabel>배우자</ModernCardLabel>
+                              <ModernCardValue $hasValue>
+                                {spouse
+                                  ? getPersonDisplayName(spouse)
+                                  : rel.spouseId}
+                              </ModernCardValue>
+                            </ModernCardContent>
+                            <ModernCardClear
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleInputChange(
+                                  'spouseRelations',
+                                  (formData.spouseRelations ?? []).filter(
+                                    (_, i) => i !== idx,
+                                  ),
+                                )
+                              }}
+                            >
+                              <FiX size={16} />
+                            </ModernCardClear>
+                          </ModernSelectionCard>
+                        )
+                      })}
+                      <ModernSelectionCard
+                        $hasValue={false}
+                        onClick={() => setShowSpouseModal(true)}
+                        type="button"
+                      >
+                        <ModernCardIcon $color="#7c3aed">
+                          <FiUsers size={22} />
+                        </ModernCardIcon>
+                        <ModernCardContent>
+                          <ModernCardLabel>배우자</ModernCardLabel>
+                          <ModernCardValue $hasValue={false}>
+                            + 배우자 추가
+                          </ModernCardValue>
+                        </ModernCardContent>
+                      </ModernSelectionCard>
                     </ModernSelectionGrid>
                   </FormField>
                 </FormRow>
@@ -3170,15 +3291,15 @@ export default function PersonCreatePage() {
                         handleInputChange('biography', e.target.value)
                       }
                       rows={6}
-                      maxLength={2000}
+                      maxLength={20000}
                     />
                     <CharacterCountRow>
                       <CharacterCount
-                        $warning={formData.biography.length > 1800}
+                        $warning={formData.biography.length > 18000}
                       >
-                        {formData.biography.length} / 2,000자
+                        {formData.biography.length} / 20,000자
                       </CharacterCount>
-                      {formData.biography.length > 1800 && (
+                      {formData.biography.length > 18000 && (
                         <CharacterWarning>
                           권장 길이에 도달했습니다
                         </CharacterWarning>
@@ -3335,8 +3456,8 @@ export default function PersonCreatePage() {
                       </div>
                     )}
                     <Hint>
-                      이 인물의 대표적인 직업을 선택하세요. 역대 수반(대통령·총리 등)은
-                      연대표(국가 페이지)에서 등록합니다.
+                      이 인물의 대표적인 직업을 선택하세요. 역대
+                      수반(대통령·총리 등)은 연대표(국가 페이지)에서 등록합니다.
                     </Hint>
                   </FormField>
                 </FormRow>
@@ -3508,8 +3629,8 @@ export default function PersonCreatePage() {
           continentList={continentList.map((c) => ({ id: c.id, name: c.name }))}
           selectedCountryId={
             countryModalContext === 'birth'
-              ? formData.birthCountryId ?? null
-              : activeCareer?.countryId ?? null
+              ? (formData.birthCountryId ?? null)
+              : (activeCareer?.countryId ?? null)
           }
           onSelect={({ id, isHistorical }) => {
             playClick()
@@ -4432,9 +4553,7 @@ export default function PersonCreatePage() {
                         <FiUser size={16} />
                       </ListItemIcon>
                       <PersonInfo>
-                        <PersonName>
-                          {getPersonDisplayName(person)}
-                        </PersonName>
+                        <PersonName>{getPersonDisplayName(person)}</PersonName>
                         {person.birthYear && (
                           <PersonLifespan $color="#059669">
                             {person.birthEra === 'BC' ? 'BC ' : ''}
@@ -4514,9 +4633,7 @@ export default function PersonCreatePage() {
                         <FiUser size={16} />
                       </ListItemIcon>
                       <PersonInfo>
-                        <PersonName>
-                          {getPersonDisplayName(person)}
-                        </PersonName>
+                        <PersonName>{getPersonDisplayName(person)}</PersonName>
                         {person.birthYear && (
                           <PersonLifespan $color="#db2777">
                             {person.birthEra === 'BC' ? 'BC ' : ''}
@@ -4537,6 +4654,72 @@ export default function PersonCreatePage() {
                 </ModalList>
               </MotherModalContent>
             </MotherModal>
+          )}
+
+          {/* 배우자 선택 모달 */}
+          {showSpouseModal && (
+            <SpouseModal onClick={() => setShowSpouseModal(false)}>
+              <SpouseModalContent onClick={(e) => e.stopPropagation()}>
+                <SpouseModalHeader>
+                  <ModalHeaderIcon $color="#7c3aed">
+                    <FiUsers size={20} />
+                  </ModalHeaderIcon>
+                  <ModalTitleGroup>
+                    <ModalTitle>배우자 선택</ModalTitle>
+                    <ModalSubtitle>
+                      배우자를 선택하세요 (다중 선택 가능)
+                    </ModalSubtitle>
+                  </ModalTitleGroup>
+                  <ModalCloseButton onClick={() => setShowSpouseModal(false)}>
+                    <FiX />
+                  </ModalCloseButton>
+                </SpouseModalHeader>
+
+                <SearchWrapper>
+                  <FiSearch />
+                  <SearchInput
+                    type="text"
+                    placeholder="이름 검색..."
+                    value={spouseSearchTerm}
+                    onChange={(e) => setSpouseSearchTerm(e.target.value)}
+                  />
+                </SearchWrapper>
+
+                <ModalList>
+                  {filteredSpouses.map((person) => (
+                    <ModalListItem
+                      key={person.id}
+                      $selected={false}
+                      $color="#7c3aed"
+                      onClick={() => {
+                        handleInputChange('spouseRelations', [
+                          ...(formData.spouseRelations ?? []),
+                          { spouseId: person.id },
+                        ])
+                        setShowSpouseModal(false)
+                        setSpouseSearchTerm('')
+                      }}
+                    >
+                      <ListItemIcon $color="#7c3aed">
+                        <FiUser size={16} />
+                      </ListItemIcon>
+                      <PersonInfo>
+                        <PersonName>{getPersonDisplayName(person)}</PersonName>
+                        {person.birthYear && (
+                          <PersonLifespan $color="#7c3aed">
+                            {person.birthEra === 'BC' ? 'BC ' : ''}
+                            {person.birthYear}
+                          </PersonLifespan>
+                        )}
+                      </PersonInfo>
+                    </ModalListItem>
+                  ))}
+                  {filteredSpouses.length === 0 && (
+                    <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
+                  )}
+                </ModalList>
+              </SpouseModalContent>
+            </SpouseModal>
           )}
 
           {/* 출생일 선택 모달 */}
@@ -4817,7 +5000,10 @@ const NameSegmentButton = styled.button<{ $selected?: boolean }>`
   background: ${(p) => (p.$selected ? '#fff' : 'transparent')};
   box-shadow: ${(p) => (p.$selected ? '0 1px 2px rgba(0,0,0,0.06)' : 'none')};
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    box-shadow 0.2s;
 
   &:hover {
     color: ${(p) => (p.$selected ? '#0f172a' : '#334155')};
@@ -5836,6 +6022,42 @@ const MotherModalHeader = styled.div`
   padding: 1.75rem 1.5rem;
   background: #fdf9fb;
   border-bottom: 1px solid #f8edf4;
+`
+
+// 배우자 모달 (보라 테마)
+const SpouseModal = styled(Modal)``
+
+const SpouseModalContent = styled.div`
+  background: white;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  animation: slideUp 0.2s ease;
+  overflow: hidden;
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+`
+
+const SpouseModalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.75rem 1.5rem;
+  background: #f5f3ff;
+  border-bottom: 1px solid #ede9fe;
 `
 
 const ModalHeaderIcon = styled.div<{ $color: string }>`

@@ -2,20 +2,31 @@
  * 대시보드 연대표 전용 사건 상세
  * /history/dashboard/events/:eventId (국가 목록과 함께 오른쪽 패널에서 스크롤)
  */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { useQuery } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
+
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiEdit2, FiX } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { dynastyApi } from '@/shared/api/dynasty'
-import { getEventById, type EventResponseDto } from '@/shared/api/events'
-import { getGlossaryTermById } from '@/shared/api/glossary'
-import { pathKeys } from '@/shared/router'
-import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
-
+import { useFormEntities } from '@/entities/event-form/model'
 import { mapEventResponseToHistoricalEvent } from '@/pages/events/utils/event-detail.mapper'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
+import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
+import { dynastyApi } from '@/shared/api/dynasty'
+import {
+  type EventResponseDto,
+  getEventById,
+  updateEvent,
+} from '@/shared/api/events'
+import { getGlossaryTermById } from '@/shared/api/glossary'
+import { getPersonDetailById } from '@/shared/api/persons-detail'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { pathKeys } from '@/shared/router'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
 
 const ARTICLE_MAX_WIDTH = '680px'
 
@@ -122,6 +133,69 @@ const SectionTitle = styled.h2`
   margin: 0 0 14px;
 `
 
+const SectionTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  ${SectionTitle} {
+    margin: 0;
+  }
+`
+
+/* 연대표 상단 수정 버튼과 동일한 스타일 */
+const SectionEditBtn = styled.button`
+  font-family: ${SansFamily};
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  &:hover {
+    color: #111827;
+    text-decoration: underline;
+  }
+`
+
+const SectionEditorWrap = styled.div`
+  width: 100%;
+  min-height: 240px;
+  margin-bottom: 12px;
+`
+
+const SectionEditActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`
+
+const SectionSaveBtn = styled.button`
+  font-family: ${SansFamily};
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: #4f46e5;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+  &:hover:not(:disabled) {
+    background: #4338ca;
+  }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
+
 const Prose = styled.div`
   font-family: ${SansFamily};
   font-size: 15px;
@@ -142,38 +216,48 @@ const Prose = styled.div`
   white-space: pre-wrap;
   word-break: break-word;
 
-  /* 본문 내 인물/가문 등 엔티티 — 멘션(기존) 또는 엔티티 연결 */
+  /* 본문 내 인물/가문 등 엔티티 — 글자색은 본문 유지, 흐린 배지 배경만 */
   .mention,
   .entity-link {
-    color: #121212;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: inherit;
+    font-weight: inherit;
+    text-decoration: none;
     cursor: pointer;
-    transition: color 0.15s ease;
     display: inline;
-    background: transparent;
+    padding: 1px 6px;
+    margin: 0 1px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.03);
     border: none;
-    padding: 0;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
   }
   .mention:hover,
   .entity-link:hover {
-    color: #374151;
+    color: #1d4ed8;
+    background: rgba(29, 78, 216, 0.06);
   }
 
-  /* 본문 내 용어(문구·관직 설명) */
+  /* 본문 내 용어(문구·관직 설명) — 글자색은 본문 유지, 흐린 배지 배경만 */
   .term {
-    color: #0d9488;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    cursor: help;
-    padding: 0 2px;
+    color: inherit;
+    font-weight: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline;
+    padding: 1px 6px;
+    margin: 0 1px;
     border-radius: 4px;
-    background: rgba(13, 148, 136, 0.06);
+    background: rgba(0, 0, 0, 0.03);
+    border: none;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
   }
   .term:hover {
-    background: rgba(13, 148, 136, 0.12);
+    color: #0f766e;
+    background: rgba(15, 118, 110, 0.06);
   }
 `
 
@@ -195,10 +279,10 @@ const TagRow = styled.div`
 const Tag = styled.span`
   font-family: ${SansFamily};
   font-size: 12px;
-  color: #374151;
+  color: #9ca3af;
   padding: 5px 12px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
   border-radius: 6px;
 `
 
@@ -207,9 +291,9 @@ const CountryChip = styled.span<{ $historical?: boolean }>`
   font-size: 12px;
   padding: 5px 12px;
   border-radius: 6px;
-  background: #ffffff;
-  border: 1px solid ${(p) => (p.$historical ? '#fde68a' : '#e5e7eb')};
-  color: ${(p) => (p.$historical ? '#92400e' : '#374151')};
+  background: #f9fafb;
+  border: 1px solid ${(p) => (p.$historical ? '#fef3c7' : '#f3f4f6')};
+  color: ${(p) => (p.$historical ? '#b45309' : '#9ca3af')};
 `
 
 const SideBlock = styled.div`
@@ -341,10 +425,10 @@ const MentionModalPanel = styled(motion.div)`
     0 16px 32px -16px rgba(0, 0, 0, 0.1),
     0 0 0 1px rgba(0, 0, 0, 0.04);
   width: 100%;
-  max-width: 640px;
-  height: 85vh;
-  min-height: 520px;
-  max-height: 90vh;
+  max-width: 740px;
+  height: 68vh;
+  min-height: 400px;
+  max-height: 78vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -353,10 +437,20 @@ const MentionModalHeader = styled.div`
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 16px;
   padding: 16px 20px 12px;
   background: #fafbfc;
   border-bottom: 1px solid #f1f5f9;
+`
+const MentionModalTitle = styled.span`
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 const MentionModalClose = styled.button`
   width: 40px;
@@ -370,7 +464,10 @@ const MentionModalClose = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   &:hover {
     color: #0f172a;
@@ -384,8 +481,8 @@ const MentionModalClose = styled.button`
 const MentionModalBody = styled.div`
   overflow: auto;
   flex: 1;
-  min-height: 380px;
-  padding: 24px 28px 40px;
+  min-height: 280px;
+  padding: 20px 24px 32px;
   background: #ffffff;
   &::-webkit-scrollbar {
     width: 8px;
@@ -418,7 +515,9 @@ const TermTooltipPopover = styled.div<{ $x: number; $y: number }>`
   padding: 14px 18px;
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
   z-index: 1000;
   font-family: ${SansFamily};
   font-size: 13px;
@@ -443,7 +542,9 @@ const DynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
   padding: 14px 18px;
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
   z-index: 1000;
   font-family: ${SansFamily};
   font-size: 13px;
@@ -485,6 +586,54 @@ export function DashboardEventDetailPage() {
     x: number
     y: number
   } | null>(null)
+  type EditingSection =
+    | { type: 'description' }
+    | { type: 'background' }
+    | { type: 'aftermath' }
+    | { type: 'section'; id: string }
+  const [editingSection, setEditingSection] = useState<EditingSection | null>(
+    null,
+  )
+  const [draftValue, setDraftValue] = useState('')
+  const [savingSection, setSavingSection] = useState(false)
+
+  const {
+    availablePersons,
+    availableCountries,
+    availableHistoricalCountries,
+    availableEvents,
+    availableMilitaryUnits,
+    availableDynasties,
+    refetch: refetchEntities,
+  } = useFormEntities()
+
+  const mentionEntities = useMemo(
+    () => ({
+      persons: availablePersons,
+      events: availableEvents,
+      countries: availableCountries,
+      historicalCountries: availableHistoricalCountries,
+      militaryUnits: availableMilitaryUnits ?? [],
+      dynasties: availableDynasties ?? [],
+    }),
+    [
+      availablePersons,
+      availableEvents,
+      availableCountries,
+      availableHistoricalCountries,
+      availableMilitaryUnits,
+      availableDynasties,
+    ],
+  )
+
+  const { data: mentionPerson } = useQuery({
+    queryKey: ['person-detail', mentionPersonId],
+    queryFn: () => getPersonDetailById(mentionPersonId!),
+    enabled: !!mentionPersonId,
+  })
+  const mentionPersonName = mentionPerson
+    ? getPersonDisplayName(mentionPerson)
+    : ''
 
   useEffect(() => {
     if (!eventId) {
@@ -523,7 +672,9 @@ export function DashboardEventDetailPage() {
     const target = e.target as HTMLElement
     // 인물: .mention (기존) 또는 .entity-link (엔티티 연결)
     const personMentionEl = target.closest('.mention[data-type="person"]')
-    const personLinkEl = target.closest('.entity-link[data-entity-type="person"]')
+    const personLinkEl = target.closest(
+      '.entity-link[data-entity-type="person"]',
+    )
     const personEl = personMentionEl ?? personLinkEl
     if (personEl) {
       const id =
@@ -537,7 +688,9 @@ export function DashboardEventDetailPage() {
     }
     // 가문: .mention (기존) 또는 .entity-link (엔티티 연결)
     const dynastyMentionEl = target.closest('.mention[data-type="dynasty"]')
-    const dynastyLinkEl = target.closest('.entity-link[data-entity-type="dynasty"]')
+    const dynastyLinkEl = target.closest(
+      '.entity-link[data-entity-type="dynasty"]',
+    )
     const dynastyEl = dynastyMentionEl ?? dynastyLinkEl
     if (dynastyEl) {
       const id =
@@ -556,7 +709,8 @@ export function DashboardEventDetailPage() {
           x: e.clientX,
           y: e.clientY,
         })
-        dynastyApi.getById(id)
+        dynastyApi
+          .getById(id)
           .then((d) => {
             setDynastyTooltip((prev) =>
               prev ? { ...prev, description: d.description ?? null } : null,
@@ -564,7 +718,9 @@ export function DashboardEventDetailPage() {
           })
           .catch(() => {
             setDynastyTooltip((prev) =>
-              prev ? { ...prev, description: '(정보를 불러올 수 없습니다)' } : null,
+              prev
+                ? { ...prev, description: '(정보를 불러올 수 없습니다)' }
+                : null,
             )
           })
       }
@@ -573,7 +729,8 @@ export function DashboardEventDetailPage() {
     const termEl = target.closest('.term')
     if (termEl) {
       const termId = termEl.getAttribute('data-term-id')
-      const name = termEl.getAttribute('data-term-name') || termEl.textContent || ''
+      const name =
+        termEl.getAttribute('data-term-name') || termEl.textContent || ''
       if (termId) {
         e.preventDefault()
         setTermTooltip({
@@ -591,12 +748,59 @@ export function DashboardEventDetailPage() {
           })
           .catch(() => {
             setTermTooltip((prev) =>
-              prev ? { ...prev, description: '(설명을 불러올 수 없습니다)' } : null,
+              prev
+                ? { ...prev, description: '(설명을 불러올 수 없습니다)' }
+                : null,
             )
           })
       }
     }
   }, [])
+
+  const startEditSection = useCallback(
+    (key: EditingSection, initialValue: string) => {
+      setEditingSection(key)
+      setDraftValue(initialValue ?? '')
+    },
+    [],
+  )
+  const cancelEditSection = useCallback(() => {
+    setEditingSection(null)
+    setDraftValue('')
+  }, [])
+  const saveEditSection = useCallback(async () => {
+    if (!eventId || !dto || editingSection === null) return
+    setSavingSection(true)
+    try {
+      if (editingSection.type === 'description') {
+        await updateEvent(eventId, { description: draftValue || undefined })
+      } else if (editingSection.type === 'background') {
+        await updateEvent(eventId, { background: draftValue || undefined })
+      } else if (editingSection.type === 'aftermath') {
+        await updateEvent(eventId, { aftermath: draftValue || undefined })
+      } else if (editingSection.type === 'section') {
+        const sections = (dto.eventSections ?? [])
+          .slice()
+          .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
+        const next = sections.map(
+          (sec: { id: string; title: string; content: string; order: number }) =>
+            sec.id === editingSection.id
+              ? { title: sec.title, content: draftValue, order: sec.order }
+              : { title: sec.title, content: sec.content ?? '', order: sec.order },
+        )
+        await updateEvent(eventId, { eventSections: next })
+      }
+      const updated = await getEventById(eventId)
+      setDto(updated)
+      setEditingSection(null)
+      setDraftValue('')
+      toast.success('저장되었습니다.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '저장에 실패했습니다.')
+    } finally {
+      setSavingSection(false)
+    }
+  }, [eventId, dto, editingSection, draftValue])
 
   const goToList = () => navigate(pathKeys.history.dashboardEvents())
   const goToEvent = (id: string) =>
@@ -632,9 +836,7 @@ export function DashboardEventDetailPage() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.25 }}
       >
-        <ErrorWrap>
-          {error?.message ?? '사건을 찾을 수 없습니다.'}
-        </ErrorWrap>
+        <ErrorWrap>{error?.message ?? '사건을 찾을 수 없습니다.'}</ErrorWrap>
         <BackLink type="button" onClick={goToList}>
           ← 연대표 목록으로
         </BackLink>
@@ -648,8 +850,9 @@ export function DashboardEventDetailPage() {
     dto.casualties && typeof dto.casualties === 'object'
       ? (dto.casualties as Record<string, unknown>)
       : null
-  const eventSections =
-    (dto.eventSections ?? []).slice().sort((a, b) => a.order - b.order)
+  const eventSections = (dto.eventSections ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order)
   // 상단 히어로에 이미 쓴 이미지는 갤러리에서 제외 (한 장만 있을 때 중복 표시 방지)
   const galleryWithoutHero =
     heroImage && mapped.visuals.gallery.length > 0
@@ -692,43 +895,247 @@ export function DashboardEventDetailPage() {
         </ImageWrap>
       )}
 
-      {mapped.description && (
-        <Section>
+      <Section>
+        <SectionTitleRow>
           <SectionTitle>개요</SectionTitle>
-          <div onClick={handleProseClick} role="presentation">
-            <Prose dangerouslySetInnerHTML={{ __html: stripMentionAt(mapped.description) }} />
-          </div>
-        </Section>
-      )}
+          {editingSection?.type !== 'description' && (
+              <SectionEditBtn
+                type="button"
+                onClick={() =>
+                  startEditSection(
+                    { type: 'description' },
+                    dto?.description ?? '',
+                  )
+                }
+              >
+                <FiEdit2 size={14} />
+                {mapped.description ? '수정' : '추가'}
+              </SectionEditBtn>
+            )}
+          </SectionTitleRow>
+          {editingSection?.type === 'description' ? (
+            <>
+              <SectionEditorWrap>
+                <RichTextEditor
+                  value={draftValue}
+                  onChange={setDraftValue}
+                  placeholder="개요를 입력하세요..."
+                  mentionEntities={mentionEntities}
+                  onEntityModalOpen={refetchEntities}
+                />
+              </SectionEditorWrap>
+              <SectionEditActions>
+                <SectionEditBtn
+                  type="button"
+                  onClick={cancelEditSection}
+                  disabled={savingSection}
+                >
+                  취소
+                </SectionEditBtn>
+                <SectionSaveBtn
+                  type="button"
+                  onClick={saveEditSection}
+                  disabled={savingSection}
+                >
+                  {savingSection ? '저장 중…' : '저장'}
+                </SectionSaveBtn>
+              </SectionEditActions>
+            </>
+          ) : (
+            mapped.description && (
+              <div onClick={handleProseClick} role="presentation">
+                <Prose
+                  dangerouslySetInnerHTML={{
+                    __html: stripMentionAt(mapped.description),
+                  }}
+                />
+              </div>
+            )
+          )}
+      </Section>
 
       {eventSections.length > 0 &&
         eventSections.map((sec) => (
           <Section key={sec.id}>
-            <SectionTitle>{sec.title}</SectionTitle>
-            <div onClick={handleProseClick} role="presentation">
-              <Prose dangerouslySetInnerHTML={{ __html: stripMentionAt(sec.content) }} />
-            </div>
+            <SectionTitleRow>
+              <SectionTitle>{sec.title}</SectionTitle>
+              {editingSection?.type !== 'section' ||
+              editingSection?.id !== sec.id ? (
+                <SectionEditBtn
+                  type="button"
+                  onClick={() =>
+                    startEditSection(
+                      { type: 'section', id: sec.id },
+                      sec.content ?? '',
+                    )
+                  }
+                >
+                  <FiEdit2 size={14} />
+                  수정
+                </SectionEditBtn>
+              ) : null}
+            </SectionTitleRow>
+            {editingSection?.type === 'section' && editingSection.id === sec.id ? (
+              <>
+                <SectionEditorWrap>
+                  <RichTextEditor
+                    value={draftValue}
+                    onChange={setDraftValue}
+                    placeholder="본문 내용을 입력하세요..."
+                    mentionEntities={mentionEntities}
+                    onEntityModalOpen={refetchEntities}
+                  />
+                </SectionEditorWrap>
+                <SectionEditActions>
+                  <SectionEditBtn
+                    type="button"
+                    onClick={cancelEditSection}
+                    disabled={savingSection}
+                  >
+                    취소
+                  </SectionEditBtn>
+                  <SectionSaveBtn
+                    type="button"
+                    onClick={saveEditSection}
+                    disabled={savingSection}
+                  >
+                    {savingSection ? '저장 중…' : '저장'}
+                  </SectionSaveBtn>
+                </SectionEditActions>
+              </>
+            ) : (
+              <div onClick={handleProseClick} role="presentation">
+                <Prose
+                  dangerouslySetInnerHTML={{
+                    __html: stripMentionAt(sec.content ?? ''),
+                  }}
+                />
+              </div>
+            )}
           </Section>
         ))}
 
-      {(mapped.background || mapped.aftermath) && (
+      {(mapped.background ||
+        mapped.aftermath ||
+        editingSection?.type === 'background' ||
+        editingSection?.type === 'aftermath') && (
         <TwoCol>
-          {mapped.background && (
-            <Section>
+          <Section>
+            <SectionTitleRow>
               <SectionTitle>배경</SectionTitle>
-              <div onClick={handleProseClick} role="presentation">
-                <Prose dangerouslySetInnerHTML={{ __html: stripMentionAt(mapped.background) }} />
-              </div>
-            </Section>
-          )}
-          {mapped.aftermath && (
-            <Section>
+              {editingSection?.type !== 'background' && (
+                <SectionEditBtn
+                  type="button"
+                  onClick={() =>
+                    startEditSection(
+                      { type: 'background' },
+                      dto?.background ?? '',
+                    )
+                  }
+                >
+                  <FiEdit2 size={14} />
+                  {mapped.background ? '수정' : '추가'}
+                </SectionEditBtn>
+              )}
+            </SectionTitleRow>
+            {editingSection?.type === 'background' ? (
+              <>
+                <SectionEditorWrap>
+                <RichTextEditor
+                  value={draftValue}
+                  onChange={setDraftValue}
+                  placeholder="배경을 입력하세요..."
+                  mentionEntities={mentionEntities}
+                  onEntityModalOpen={refetchEntities}
+                />
+                </SectionEditorWrap>
+                <SectionEditActions>
+                  <SectionEditBtn
+                    type="button"
+                    onClick={cancelEditSection}
+                    disabled={savingSection}
+                  >
+                    취소
+                  </SectionEditBtn>
+                  <SectionSaveBtn
+                    type="button"
+                    onClick={saveEditSection}
+                    disabled={savingSection}
+                  >
+                    {savingSection ? '저장 중…' : '저장'}
+                  </SectionSaveBtn>
+                </SectionEditActions>
+              </>
+            ) : (
+              mapped.background && (
+                <div onClick={handleProseClick} role="presentation">
+                  <Prose
+                    dangerouslySetInnerHTML={{
+                      __html: stripMentionAt(mapped.background),
+                    }}
+                  />
+                </div>
+              )
+            )}
+          </Section>
+          <Section>
+            <SectionTitleRow>
               <SectionTitle>여파</SectionTitle>
-              <div onClick={handleProseClick} role="presentation">
-                <Prose dangerouslySetInnerHTML={{ __html: stripMentionAt(mapped.aftermath) }} />
-              </div>
-            </Section>
-          )}
+              {editingSection?.type !== 'aftermath' && (
+                <SectionEditBtn
+                  type="button"
+                  onClick={() =>
+                    startEditSection(
+                      { type: 'aftermath' },
+                      dto?.aftermath ?? '',
+                    )
+                  }
+                >
+                  <FiEdit2 size={14} />
+                  {mapped.aftermath ? '수정' : '추가'}
+                </SectionEditBtn>
+              )}
+            </SectionTitleRow>
+            {editingSection?.type === 'aftermath' ? (
+              <>
+                <SectionEditorWrap>
+                <RichTextEditor
+                  value={draftValue}
+                  onChange={setDraftValue}
+                  placeholder="여파를 입력하세요..."
+                  mentionEntities={mentionEntities}
+                  onEntityModalOpen={refetchEntities}
+                />
+                </SectionEditorWrap>
+                <SectionEditActions>
+                  <SectionEditBtn
+                    type="button"
+                    onClick={cancelEditSection}
+                    disabled={savingSection}
+                  >
+                    취소
+                  </SectionEditBtn>
+                  <SectionSaveBtn
+                    type="button"
+                    onClick={saveEditSection}
+                    disabled={savingSection}
+                  >
+                    {savingSection ? '저장 중…' : '저장'}
+                  </SectionSaveBtn>
+                </SectionEditActions>
+              </>
+            ) : (
+              mapped.aftermath && (
+                <div onClick={handleProseClick} role="presentation">
+                  <Prose
+                    dangerouslySetInnerHTML={{
+                      __html: stripMentionAt(mapped.aftermath),
+                    }}
+                  />
+                </div>
+              )
+            )}
+          </Section>
         </TwoCol>
       )}
 
@@ -742,13 +1149,16 @@ export function DashboardEventDetailPage() {
                 <SideDetail>지휘: {side.commander}</SideDetail>
               )}
               {side.forces && <SideDetail>병력: {side.forces}</SideDetail>}
-              {side.description && (
-                <SideDetail>{side.description}</SideDetail>
-              )}
+              {side.description && <SideDetail>{side.description}</SideDetail>}
               {side.countries?.length > 0 && (
                 <SideDetail>
                   참여:{' '}
-                  {[].concat(side.countries).map((c: any) => (typeof c === 'object' && c?.name ? c.name : String(c))).join(', ')}
+                  {[]
+                    .concat(side.countries)
+                    .map((c: any) =>
+                      typeof c === 'object' && c?.name ? c.name : String(c),
+                    )
+                    .join(', ')}
                 </SideDetail>
               )}
             </SideBlock>
@@ -761,18 +1171,15 @@ export function DashboardEventDetailPage() {
           <SectionTitle>피해·비용</SectionTitle>
           <Prose as="div" style={{ fontSize: 15 }}>
             {casualtiesObj &&
-              Object.entries(casualtiesObj).map(
-                ([key, val]) =>
-                  val != null && String(val).trim() !== '' ? (
-                    <p key={key} style={{ marginBottom: 6 }}>
-                      <strong>
-                        {key.replace(/([A-Z])/g, ' $1').trim()}:{' '}
-                      </strong>
-                      {typeof val === 'object'
-                        ? JSON.stringify(val)
-                        : String(val)}
-                    </p>
-                  ) : null,
+              Object.entries(casualtiesObj).map(([key, val]) =>
+                val != null && String(val).trim() !== '' ? (
+                  <p key={key} style={{ marginBottom: 6 }}>
+                    <strong>{key.replace(/([A-Z])/g, ' $1').trim()}: </strong>
+                    {typeof val === 'object'
+                      ? JSON.stringify(val)
+                      : String(val)}
+                  </p>
+                ) : null,
               )}
             {dto.warCost && (
               <p style={{ marginBottom: 0 }}>
@@ -790,7 +1197,8 @@ export function DashboardEventDetailPage() {
           <TagRow>
             {mapped.relatedCountries?.map((c) => (
               <CountryChip key={c.id}>
-                {c.flagEmoji ? `${c.flagEmoji} ` : ''}{c.name}
+                {c.flagEmoji ? `${c.flagEmoji} ` : ''}
+                {c.name}
               </CountryChip>
             ))}
             {mapped.relatedHistoricalCountries?.map((c) => (
@@ -834,10 +1242,7 @@ export function DashboardEventDetailPage() {
               {child.title}
               {child.startDate && (
                 <SubEventMeta>
-                  {formatDateRange(
-                    child.startDate,
-                    child.endDate ?? undefined,
-                  )}
+                  {formatDateRange(child.startDate, child.endDate ?? undefined)}
                 </SubEventMeta>
               )}
             </SubEventBtn>
@@ -901,6 +1306,9 @@ export function DashboardEventDetailPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <MentionModalHeader>
+                <MentionModalTitle title={mentionPersonName}>
+                  {mentionPersonName || '인물'}
+                </MentionModalTitle>
                 <MentionModalClose
                   type="button"
                   onClick={() => setMentionPersonId(null)}
@@ -922,45 +1330,45 @@ export function DashboardEventDetailPage() {
           </MentionModalOverlay>
         )}
 
-      {termTooltip && (
-        <TermTooltipOverlay
-          role="presentation"
-          onClick={() => setTermTooltip(null)}
-        >
-          <TermTooltipPopover
-            $x={termTooltip.x}
-            $y={termTooltip.y}
-            onClick={(e) => e.stopPropagation()}
+        {termTooltip && (
+          <TermTooltipOverlay
+            role="presentation"
+            onClick={() => setTermTooltip(null)}
           >
-            <strong>{termTooltip.name}</strong>
-            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {termTooltip.description === null
-                ? ' 로딩…'
-                : termTooltip.description || '(설명 없음)'}
-            </span>
-          </TermTooltipPopover>
-        </TermTooltipOverlay>
-      )}
+            <TermTooltipPopover
+              $x={termTooltip.x}
+              $y={termTooltip.y}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <strong>{termTooltip.name}</strong>
+              <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {termTooltip.description === null
+                  ? ' 로딩…'
+                  : termTooltip.description || '(설명 없음)'}
+              </span>
+            </TermTooltipPopover>
+          </TermTooltipOverlay>
+        )}
 
-      {dynastyTooltip && (
-        <TermTooltipOverlay
-          role="presentation"
-          onClick={() => setDynastyTooltip(null)}
-        >
-          <DynastyTooltipPopover
-            $x={dynastyTooltip.x}
-            $y={dynastyTooltip.y}
-            onClick={(e) => e.stopPropagation()}
+        {dynastyTooltip && (
+          <TermTooltipOverlay
+            role="presentation"
+            onClick={() => setDynastyTooltip(null)}
           >
-            <strong>가문 · {dynastyTooltip.name}</strong>
-            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {dynastyTooltip.description === null
-                ? ' 로딩…'
-                : dynastyTooltip.description || '(설명 없음)'}
-            </span>
-          </DynastyTooltipPopover>
-        </TermTooltipOverlay>
-      )}
+            <DynastyTooltipPopover
+              $x={dynastyTooltip.x}
+              $y={dynastyTooltip.y}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <strong>가문 · {dynastyTooltip.name}</strong>
+              <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {dynastyTooltip.description === null
+                  ? ' 로딩…'
+                  : dynastyTooltip.description || '(설명 없음)'}
+              </span>
+            </DynastyTooltipPopover>
+          </TermTooltipOverlay>
+        )}
       </AnimatePresence>
     </Page>
   )

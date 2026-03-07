@@ -654,6 +654,24 @@ export class PersonPrismaRepository implements IPersonRepository {
             deathDate: true,
           },
         },
+        spouseRelationsAsPerson: {
+          select: {
+            id: true,
+            marriageStartDate: true,
+            marriageEndDate: true,
+            note: true,
+            spouse: {
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+                nameDisplayOrder: true,
+                birthDate: true,
+                deathDate: true,
+              },
+            },
+          },
+        },
         foundedCompanies: {
           select: {
             id: true,
@@ -840,9 +858,24 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
     }
 
+    const spouseRelations = (sanitized as CreatePersonData).spouseRelations
+    delete (sanitized as Record<string, unknown>).spouseRelations
+
     const person = await this.prisma.person.create({
       data: sanitized as Parameters<PrismaService['person']['create']>[0]['data'],
     })
+
+    if (spouseRelations?.length) {
+      await this.prisma.personSpouse.createMany({
+        data: spouseRelations.map((s) => ({
+          personId: person.id,
+          spouseId: s.spouseId,
+          marriageStartDate: s.marriageStartDate ?? null,
+          marriageEndDate: s.marriageEndDate ?? null,
+          note: s.note ?? null,
+        })),
+      })
+    }
 
     if (birthHistoricalCountryId) {
       await this.prisma.personCountryAffiliation.create({
@@ -896,6 +929,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
     }
 
+    const spouseRelations = (sanitized as UpdatePersonData).spouseRelations
+    delete (sanitized as Record<string, unknown>).spouseRelations
+
     // 출생국가를 비웠을 때( null / '' ) Person.countryId를 null로 반영
     const updateData = { ...sanitized } as Parameters<PrismaService['person']['update']>[0]['data']
     if (birthIdInput !== undefined && (birthIdInput === null || birthIdInput === '')) {
@@ -920,6 +956,21 @@ export class PersonPrismaRepository implements IPersonRepository {
             affiliationType: 'BIRTH_PLACE',
             priority: 0,
           },
+        })
+      }
+    }
+
+    if (spouseRelations !== undefined) {
+      await this.prisma.personSpouse.deleteMany({ where: { personId: id } })
+      if (spouseRelations.length) {
+        await this.prisma.personSpouse.createMany({
+          data: spouseRelations.map((s: { spouseId: string; marriageStartDate?: Date; marriageEndDate?: Date; note?: string }) => ({
+            personId: id,
+            spouseId: s.spouseId,
+            marriageStartDate: s.marriageStartDate ?? null,
+            marriageEndDate: s.marriageEndDate ?? null,
+            note: s.note ?? null,
+          })),
         })
       }
     }

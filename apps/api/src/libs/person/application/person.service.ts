@@ -44,13 +44,13 @@ import {
 /**
  * 인물 도메인 서비스
  */
-/** 인물 표시명 (한국/서양 순서) */
+/** 인물 표시명: 한국=성+이름, 서양=이름+성 */
 function personDisplayName(p: { name?: string | null; surname?: string | null; nameDisplayOrder?: string | null }): string {
   const name = p.name ?? ''
   const surname = p.surname ?? ''
   const order = (p.nameDisplayOrder as string) ?? 'korean'
-  if (order === 'western') return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
-  return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
+  if (order === 'western') return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
+  return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
 }
 
 @Injectable()

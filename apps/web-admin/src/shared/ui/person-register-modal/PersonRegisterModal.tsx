@@ -411,7 +411,9 @@ export function PersonRegisterModal({
               <TextArea
                 value={biography}
                 onChange={(e) => setBiography(e.target.value)}
-                placeholder="간단한 약력 (선택)"
+                placeholder="인물의 일생을 설명하는 글 (선택, 최대 20,000자)"
+                rows={5}
+                maxLength={20000}
               />
             </Field>
             {error && <ErrorText>{error}</ErrorText>}

@@ -9,6 +9,7 @@ import styled from 'styled-components'
 import { toast } from 'react-hot-toast'
 
 import { personApi, type CreatePersonInput, type Era } from '@/shared/api/person'
+import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl, uploadImage, validateImageFile } from '@/shared/api/upload'
 import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
 import { cityApi } from '@/shared/api/city'
@@ -32,7 +33,6 @@ import {
   FieldRow,
   FormCardWrapper,
   FormHeader,
-  FormHeaderTitle,
   FormRows,
   FormSectionInner,
   Input,
@@ -336,8 +336,7 @@ export function PersonRegisterView({
   useEffect(() => {
     if (!editPersonId) return
     let cancelled = false
-    personApi
-      .getById(editPersonId)
+    getPersonDetailById(editPersonId)
       .then((p: any) => {
         if (cancelled || !p) return
         setName(p.name ?? '')
@@ -362,7 +361,7 @@ export function PersonRegisterView({
         setJobId(p.jobId ?? '')
         setFatherId(p.fatherId ?? '')
         setMotherId(p.motherId ?? '')
-        setSpouseId(p.spouseId ?? '')
+        setSpouseId(p.spouseRelations?.[0]?.spouse?.id ?? p.spouseId ?? '')
         if (p.birthYear != null || p.birthDate) {
           if (p.birthYear != null) {
             setBirthEra((p.birthEra as Era) ?? 'AD')
@@ -581,8 +580,7 @@ export function PersonRegisterView({
       jobId: jobId || undefined,
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
-      spouseRelations:
-        spouseId ? [{ spouseId, marriageStartDate: undefined, marriageEndDate: undefined, note: undefined }] : undefined,
+      spouseRelations: spouseId ? [{ spouseId }] : undefined,
     }
 
     if (!isBirthDateUnknown && birthYear.trim()) {
@@ -644,7 +642,6 @@ export function PersonRegisterView({
           <FiArrowLeft size={18} />
           목록 보기
         </BackButton>
-        <FormHeaderTitle>{isEditMode ? '인물 수정' : '인물 등록'}</FormHeaderTitle>
         <SubmitButton
           type="submit"
           form="person-register-form"
@@ -831,6 +828,21 @@ export function PersonRegisterView({
                   </InlineFields>
                 </FieldControl>
               </FieldRowMulti>
+              <FieldRow>
+                <FieldLabel>약력</FieldLabel>
+                <FieldControl>
+                  <TextArea
+                    value={biography}
+                    onChange={(e) => setBiography(e.target.value)}
+                    placeholder="인물의 일생을 설명하는 글 (선택)"
+                    rows={6}
+                    maxLength={20000}
+                  />
+                  <span style={{ fontSize: 12, color: '#6b7280', marginTop: 4, display: 'block' }}>
+                    {biography.length} / 20,000자
+                  </span>
+                </FieldControl>
+              </FieldRow>
             </FormRows>
           )}
 

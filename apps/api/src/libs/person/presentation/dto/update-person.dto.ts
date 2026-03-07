@@ -1,6 +1,6 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray } from 'class-validator'
 import { Type } from 'class-transformer'
-import { Era, DateInfoDto } from './create-person.dto'
+import { Era, DateInfoDto, SpouseRelationDto } from './create-person.dto'
 
 /**
  * 인물 수정 DTO
@@ -243,4 +243,13 @@ export class UpdatePersonDto {
   @IsOptional()
   @IsString()
   deathCityId?: string
+
+  /**
+   * 배우자 관계 목록 (선택, 있으면 기존 삭제 후 일괄 반영)
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SpouseRelationDto)
+  spouseRelations?: SpouseRelationDto[]
 }

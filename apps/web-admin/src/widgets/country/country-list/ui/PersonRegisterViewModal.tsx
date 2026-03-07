@@ -3,15 +3,18 @@
  * 대시보드/국가목록 헤더 + 버튼 모달에서 "인물 등록" 선택 시 표시
  */
 import React from 'react'
+
 import { createPortal } from 'react-dom'
+
+import { useQueryClient } from '@tanstack/react-query'
+
+import { AnimatePresence, motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
 import styled from 'styled-components'
-import { useQueryClient } from '@tanstack/react-query'
-import { AnimatePresence, motion } from 'framer-motion'
 
-import { PersonRegisterView } from '@/shared/ui/person-register-modal'
 import { personKeys } from '@/entities/person/api'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { PersonRegisterView } from '@/shared/ui/person-register-modal'
 
 const Overlay = styled(motion.div)`
   position: fixed;
@@ -27,7 +30,8 @@ const Overlay = styled(motion.div)`
 
 const ModalBox = styled(motion.div)`
   width: min(960px, 100%);
-  max-height: calc(90vh - 48px);
+  height: min(95vh, 1060px);
+  min-height: 1060px;
   background: #ffffff;
   border-radius: 22px;
   box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);
@@ -66,7 +70,9 @@ const CloseBtn = styled.button`
   background: transparent;
   color: #6b7280;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 
   &:hover {
     background: #f3f4f6;
@@ -132,20 +138,22 @@ export function PersonRegisterViewModal({
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
           >
-        <ModalHeader>
-          <ModalTitle id="person-register-modal-title">인물 등록</ModalTitle>
-          <CloseBtn type="button" onClick={onClose} aria-label="닫기">
-            <FiX size={20} />
-          </CloseBtn>
-        </ModalHeader>
-        <FormScroll>
-          <PersonRegisterView
-            initialCountryId={initialCountryId}
-            onCancel={onClose}
-            onSuccess={handleSuccess}
-            embedInCard={false}
-          />
-        </FormScroll>
+            <ModalHeader>
+              <ModalTitle id="person-register-modal-title">
+                인물 등록
+              </ModalTitle>
+              <CloseBtn type="button" onClick={onClose} aria-label="닫기">
+                <FiX size={20} />
+              </CloseBtn>
+            </ModalHeader>
+            <FormScroll>
+              <PersonRegisterView
+                initialCountryId={initialCountryId}
+                onCancel={onClose}
+                onSuccess={handleSuccess}
+                embedInCard={false}
+              />
+            </FormScroll>
           </ModalBox>
         </Overlay>
       )}

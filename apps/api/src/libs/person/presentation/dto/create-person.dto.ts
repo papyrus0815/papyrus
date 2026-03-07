@@ -2,6 +2,26 @@ import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, Validat
 import { Type } from 'class-transformer'
 
 /**
+ * 배우자 관계 DTO (인물 생성/수정 시)
+ */
+export class SpouseRelationDto {
+  @IsString()
+  spouseId!: string
+
+  @IsOptional()
+  @IsDateString()
+  marriageStartDate?: string
+
+  @IsOptional()
+  @IsDateString()
+  marriageEndDate?: string
+
+  @IsOptional()
+  @IsString()
+  note?: string
+}
+
+/**
  * 기원 열거형
  */
 export enum Era {
@@ -331,4 +351,13 @@ export class CreatePersonDto {
   @IsOptional()
   @IsString()
   deathCityId?: string
+
+  /**
+   * 배우자 관계 목록 (선택)
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SpouseRelationDto)
+  spouseRelations?: SpouseRelationDto[]
 }

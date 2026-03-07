@@ -85,6 +85,13 @@ export type CreatePersonInput = {
   nameMeaning?: string | null
   /** 중간이름의 뜻 */
   middleNameMeaning?: string | null
+  /** 배우자 관계 목록 (선택) */
+  spouseRelations?: Array<{
+    spouseId: string
+    marriageStartDate?: string
+    marriageEndDate?: string
+    note?: string
+  }>
   // 날짜 객체 형식
   birth?: DateInfo
   death?: DateInfo

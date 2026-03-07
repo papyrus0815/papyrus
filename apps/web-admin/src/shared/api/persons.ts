@@ -2,9 +2,10 @@
  * 인물 API 서비스
  * Nestia SDK를 사용한 타입 안전한 인물 CRUD
  */
+import * as governmentPositions from '@api/functional/government_positions'
 import * as personsApi from '@api/functional/persons'
 
-import { apiConnection, getApiConnection } from './client'
+import { getApiConnection } from './client'
 
 // SDK에서 생성된 타입 사용
 export type PersonResponseDto = Awaited<
@@ -29,9 +30,7 @@ export async function getAllPersons(): Promise<PersonResponseDto[]> {
 }
 
 /**
- * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (REST)
- * GET /government-positions/countries/:countryId/persons
- * GET /government-positions/historical-countries/:historicalCountryId/persons
+ * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (SDK)
  */
 export async function getPersonsByTenureCountry(params: {
   countryId?: string
@@ -39,25 +38,17 @@ export async function getPersonsByTenureCountry(params: {
 }): Promise<PersonResponseDto[]> {
   const { countryId, historicalCountryId } = params
   if (!countryId && !historicalCountryId) return []
-  const path = countryId
-    ? `/government-positions/countries/${encodeURIComponent(countryId)}/persons`
-    : `/government-positions/historical-countries/${encodeURIComponent(historicalCountryId!)}/persons`
-  const url = `${apiConnection.host}${path}`
   const conn = getApiConnection()
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(conn.headers?.Authorization && {
-          Authorization: conn.headers.Authorization,
-        }),
-      },
-      credentials: 'include',
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const data = await response.json()
-    return data?.data ?? data ?? []
+    if (countryId) {
+      const data = await governmentPositions.countries.persons.getPersonsByCountryId(conn, countryId)
+      return Array.isArray(data) ? data : []
+    }
+    const data = await governmentPositions.historical_countries.persons.getPersonsByHistoricalCountryId(
+      conn,
+      historicalCountryId!,
+    )
+    return Array.isArray(data) ? data : []
   } catch (error) {
     throw error
   }
@@ -116,30 +107,13 @@ export async function deletePerson(id: string): Promise<void> {
 }
 
 /**
- * 모든 인물 조회 (정부 직책 포함)
+ * 모든 인물 조회 (정부 직책 포함) — SDK
  */
 export async function getAllPersonsWithGovernmentPositions(): Promise<any[]> {
   try {
     const conn = getApiConnection()
-    const response = await fetch(
-      `${apiConnection.host}/persons/with-government-positions`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(conn.headers?.Authorization && {
-            Authorization: conn.headers.Authorization,
-          }),
-        },
-      },
-    )
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const data = await response.json()
-    return data.data || data
+    const data = await personsApi.with_government_positions.getAllWithGovernmentPositions(conn)
+    return Array.isArray(data) ? data : []
   } catch (error) {
     throw error
   }

@@ -155,6 +155,8 @@ export class PersonController {
     militaryCommands: any[]
     events: any[]
     governmentPositions: any[]
+    spouseRelations: any[]
+    spouse: any
     createdAt: string
     updatedAt: string
   }> {
@@ -219,6 +221,14 @@ export class PersonController {
       militaryCommands: person.MilitaryUnitCommander || [],
       events: person.PersonEvent || [],
       governmentPositions: person.GovernmentTenures || [],
+      spouseRelations: (person.spouseRelationsAsPerson || []).map((rel: any) => ({
+        id: rel.id,
+        marriageStartDate: rel.marriageStartDate?.toISOString?.() ?? null,
+        marriageEndDate: rel.marriageEndDate?.toISOString?.() ?? null,
+        note: rel.note,
+        spouse: rel.spouse,
+      })),
+      spouse: person.spouseRelationsAsPerson?.[0]?.spouse ?? null,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
     }
@@ -285,6 +295,12 @@ export class PersonController {
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
+      spouseRelations: dto.spouseRelations?.map((s) => ({
+        spouseId: s.spouseId,
+        marriageStartDate: s.marriageStartDate ? new Date(s.marriageStartDate) : undefined,
+        marriageEndDate: s.marriageEndDate ? new Date(s.marriageEndDate) : undefined,
+        note: s.note,
+      })),
     }, accountId)
   }
 
@@ -349,6 +365,12 @@ export class PersonController {
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
+      spouseRelations: dto.spouseRelations?.map((s) => ({
+        spouseId: s.spouseId,
+        marriageStartDate: s.marriageStartDate ? new Date(s.marriageStartDate) : undefined,
+        marriageEndDate: s.marriageEndDate ? new Date(s.marriageEndDate) : undefined,
+        note: s.note,
+      })),
     }, accountId)
   }
 

@@ -1,11 +1,12 @@
 /**
  * Event Form Entities - Data Loading Hook
  * FSD: entities/event-form/model
- * 
+ *
  * 폼에 필요한 모든 엔티티 데이터를 로드합니다.
+ * refetch()로 최신 데이터를 다시 불러올 수 있음 (예: 인물 등록 모달 닫은 뒤 엔티티 연결에서 검색 시).
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { getAllCountries, type CountryResponseDto } from '@/shared/api/countries'
 import { dynastyApi, type Dynasty } from '@/shared/api/dynasty'
@@ -25,36 +26,36 @@ export const useFormEntities = () => {
   const [availableDynasties, setAvailableDynasties] = useState<Dynasty[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const loadEntities = async () => {
-      setIsLoading(true)
-      try {
-        await Promise.all([
-          getAllPersons()
-            .then(setAvailablePersons)
-            .catch(() => setAvailablePersons([])),
-          getAllCountries().then(setAvailableCountries).catch(() => {}),
-          getAllHistoricalCountries()
-            .then(setAvailableHistoricalCountries)
-            .catch(() => {}),
-          getAllEventCategories()
-            .then(setDbCategories)
-            .catch(() => setDbCategories([])),
-          militaryUnitApi.getAll().then(setAvailableMilitaryUnits).catch(() => {}),
-          getAllEvents()
-            .then(setAvailableEvents)
-            .catch(() => setAvailableEvents([])),
-          dynastyApi.getAll()
-            .then(setAvailableDynasties)
-            .catch(() => setAvailableDynasties([])),
-        ])
-      } finally {
-        setIsLoading(false)
-      }
+  const loadEntities = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      await Promise.all([
+        getAllPersons()
+          .then(setAvailablePersons)
+          .catch(() => setAvailablePersons([])),
+        getAllCountries().then(setAvailableCountries).catch(() => {}),
+        getAllHistoricalCountries()
+          .then(setAvailableHistoricalCountries)
+          .catch(() => {}),
+        getAllEventCategories()
+          .then(setDbCategories)
+          .catch(() => setDbCategories([])),
+        militaryUnitApi.getAll().then(setAvailableMilitaryUnits).catch(() => {}),
+        getAllEvents()
+          .then(setAvailableEvents)
+          .catch(() => setAvailableEvents([])),
+        dynastyApi.getAll()
+          .then(setAvailableDynasties)
+          .catch(() => setAvailableDynasties([])),
+      ])
+    } finally {
+      setIsLoading(false)
     }
-
-    loadEntities()
   }, [])
+
+  useEffect(() => {
+    loadEntities()
+  }, [loadEntities])
 
   return {
     availablePersons,
@@ -65,6 +66,7 @@ export const useFormEntities = () => {
     availableEvents,
     availableDynasties,
     isLoading,
+    refetch: loadEntities,
   }
 }
 
