@@ -714,20 +714,17 @@ const DetailProse = styled.div`
     color: #1d4ed8;
     background: rgba(29, 78, 216, 0.06);
   }
+  /* 설명이 달린 문구 — 기본은 색만, 호버 시 구분되게 */
   .term {
-    color: inherit;
+    color: #0f766e;
     cursor: pointer;
-    display: inline;
-    padding: 1px 6px;
-    margin: 0 1px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.03);
-    border: none;
-    transition: background 0.15s ease, color 0.15s ease;
+    padding: 0 2px;
+    border-radius: 3px;
+    transition: color 0.15s ease, background 0.15s ease;
   }
   .term:hover {
-    color: #0f766e;
-    background: rgba(15, 118, 110, 0.06);
+    color: #0d9488;
+    background: rgba(13, 148, 136, 0.1);
   }
 
   /* 에디터(RichTextEditor)와 동일한 수평선 */
@@ -769,6 +766,10 @@ const TermTooltipPopover = styled.div<{ $x: number; $y: number }>`
     color: #0d9488;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 `
 

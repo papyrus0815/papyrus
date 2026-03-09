@@ -155,6 +155,7 @@ export async function getTransitionsByHistoricalCountryId(
   const res = await fetch(`${conn.host}${path}`, {
     method: 'GET',
     headers: { ...conn.headers },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -172,6 +173,7 @@ export async function createHistoricalCountryTransition(
     method: 'POST',
     headers: { ...conn.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const out = (await res.json()) as any
@@ -191,6 +193,7 @@ export async function updateHistoricalCountryTransition(
     method: 'PUT',
     headers: { ...conn.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const out = (await res.json()) as any
@@ -208,6 +211,7 @@ export async function deleteHistoricalCountryTransition(
   const res = await fetch(`${conn.host}${path}`, {
     method: 'DELETE',
     headers: { ...conn.headers },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
 }
@@ -263,6 +267,7 @@ export async function getMembershipsByHistoricalCountryId(
   const res = await fetch(`${conn.host}${path}`, {
     method: 'GET',
     headers: { ...conn.headers },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -277,6 +282,7 @@ export async function createHistoricalCountryMembership(
     method: 'POST',
     headers: { ...conn.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const out = (await res.json()) as any
@@ -293,6 +299,7 @@ export async function updateHistoricalCountryMembership(
     method: 'PUT',
     headers: { ...conn.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const out = (await res.json()) as any
@@ -307,6 +314,7 @@ export async function deleteHistoricalCountryMembership(
   const res = await fetch(`${conn.host}${path}`, {
     method: 'DELETE',
     headers: { ...conn.headers },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
 }
@@ -355,6 +363,7 @@ export async function getRelationsByHistoricalCountryId(
   const res = await fetch(`${conn.host}${path}`, {
     method: 'GET',
     headers: { ...conn.headers },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -370,7 +379,7 @@ export async function getTransitionsByHistoricalCountryIds(
   const ids = historicalCountryIds.join(',')
   const res = await fetch(
     `${conn.host}/historical-countries/by-ids/transitions?ids=${encodeURIComponent(ids)}`,
-    { method: 'GET', headers: { ...conn.headers } },
+    { method: 'GET', headers: { ...conn.headers }, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -385,7 +394,7 @@ export async function getMembershipsByHistoricalCountryIds(
   const ids = historicalCountryIds.join(',')
   const res = await fetch(
     `${conn.host}/historical-countries/by-ids/memberships?ids=${encodeURIComponent(ids)}`,
-    { method: 'GET', headers: { ...conn.headers } },
+    { method: 'GET', headers: { ...conn.headers }, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -400,7 +409,7 @@ export async function getRelationsByHistoricalCountryIds(
   const ids = historicalCountryIds.join(',')
   const res = await fetch(
     `${conn.host}/historical-countries/by-ids/relations?ids=${encodeURIComponent(ids)}`,
-    { method: 'GET', headers: { ...conn.headers } },
+    { method: 'GET', headers: { ...conn.headers }, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -415,6 +424,7 @@ export async function createHistoricalCountryRelation(
     method: 'POST',
     headers: { ...conn.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const out = (await res.json()) as any
@@ -431,6 +441,7 @@ export async function updateHistoricalCountryRelation(
     method: 'PUT',
     headers: { ...conn.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   const out = (await res.json()) as any
@@ -445,6 +456,7 @@ export async function deleteHistoricalCountryRelation(
   const res = await fetch(`${conn.host}${path}`, {
     method: 'DELETE',
     headers: { ...conn.headers },
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
 }

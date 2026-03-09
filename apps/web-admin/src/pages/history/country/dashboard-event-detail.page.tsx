@@ -246,25 +246,19 @@ const Prose = styled.div`
     background: rgba(29, 78, 216, 0.06);
   }
 
-  /* 본문 내 용어(문구·관직 설명) — 글자색은 본문 유지, 흐린 배지 배경만 */
+  /* 본문 내 용어(문구·관직 설명) — 기본은 색만, 호버 시 구분되게 */
   .term {
-    color: inherit;
+    color: #0f766e;
     font-weight: inherit;
     text-decoration: none;
     cursor: pointer;
-    display: inline;
-    padding: 1px 6px;
-    margin: 0 1px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.03);
-    border: none;
-    transition:
-      background 0.15s ease,
-      color 0.15s ease;
+    padding: 0 2px;
+    border-radius: 3px;
+    transition: color 0.15s ease, background 0.15s ease;
   }
   .term:hover {
-    color: #0f766e;
-    background: rgba(15, 118, 110, 0.06);
+    color: #0d9488;
+    background: rgba(13, 148, 136, 0.1);
   }
 
   /* 에디터(RichTextEditor)와 동일한 수평선 스타일 */
@@ -546,6 +540,10 @@ const TermTooltipPopover = styled.div<{ $x: number; $y: number }>`
     color: #0d9488;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 `
 
@@ -573,6 +571,10 @@ const DynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
     color: #6d28d9;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 `
 

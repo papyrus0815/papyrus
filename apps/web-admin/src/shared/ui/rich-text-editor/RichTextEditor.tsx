@@ -3103,7 +3103,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                     fontSize: 14,
                     color: '#334155',
                     marginBottom: 12,
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
+                  title={termEditName}
                 >
                   {termEditName}
                 </div>

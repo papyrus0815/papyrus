@@ -1,19 +1,61 @@
 import { useSessionStore } from '@/entities/session/session.store'
 import { IConnection } from '@nestia/fetcher'
 
+const REFRESH_PATH = '/auth/refresh'
+
+// 401 시 refresh(쿠키) 후 한 번 재시도하는 fetch 래퍼 (토큰 만료 시 자동 복구)
+function createFetchWithRefresh(getConnection: () => IConnection): typeof fetch {
+  let refreshPromise: Promise<boolean> | null = null
+
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url
+    const isRefresh = url.includes(REFRESH_PATH)
+
+    let res = await fetch(input, init)
+
+    if (res.status === 401 && !isRefresh && typeof window !== 'undefined') {
+      if (!refreshPromise) {
+        refreshPromise = (async () => {
+          try {
+            const conn = getConnection()
+            const base = conn.host.replace(/\/$/, '')
+            const r = await fetch(`${base}${REFRESH_PATH}`, {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+            })
+            return r.ok
+          } finally {
+            refreshPromise = null
+          }
+        })()
+      }
+      const ok = await refreshPromise
+      if (ok) res = await fetch(input, init)
+    }
+
+    return res
+  }
+}
+
 // Nestia SDK를 사용한 API 서비스
 export class NestiaApiService {
   private connection: IConnection
+  private baseURL: string
 
   constructor(baseURL: string, token?: string) {
+    this.baseURL = baseURL
     this.connection = {
       host: baseURL,
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
-      // 로그인 시 백엔드가 설정한 access_token 쿠키가 함께 전송되도록 (401 방지)
       options: { credentials: 'include' as RequestCredentials },
+      fetch: createFetchWithRefresh(() => {
+        this.syncTokenFromStorage()
+        return this.connection
+      }),
     }
   }
 
@@ -43,6 +85,7 @@ export class NestiaApiService {
   // 요청 시점에 저장소의 토큰이 있으면 반영 (rehydration 지연 또는 다른 탭 로그인 대응)
   getConnection(): IConnection {
     this.syncTokenFromStorage()
+    this.connection.options = { ...this.connection.options, credentials: 'include' as RequestCredentials }
     return this.connection
   }
 

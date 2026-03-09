@@ -85,7 +85,7 @@ export async function getOrganizations(
   if (params?.historicalCountryId)
     url.searchParams.set('historicalCountryId', params.historicalCountryId)
   if (params?.type) url.searchParams.set('type', params.type)
-  const res = await fetch(url.toString(), { headers: conn.headers ?? {} })
+  const res = await fetch(url.toString(), { headers: conn.headers ?? {}, credentials: 'include' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -99,7 +99,7 @@ export async function getOrganizationsTree(
   if (params?.historicalCountryId)
     url.searchParams.set('historicalCountryId', params.historicalCountryId)
   if (params?.type) url.searchParams.set('type', params.type)
-  const res = await fetch(url.toString(), { headers: conn.headers ?? {} })
+  const res = await fetch(url.toString(), { headers: conn.headers ?? {}, credentials: 'include' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -110,6 +110,7 @@ export async function getOrganizationById(
 ): Promise<OrganizationResponseDto> {
   const res = await fetch(`${base(conn)}/organizations/${id}`, {
     headers: conn.headers ?? {},
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -123,6 +124,7 @@ export async function createOrganization(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
     body: JSON.stringify(body),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -137,6 +139,7 @@ export async function updateOrganization(
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
     body: JSON.stringify(body),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -149,6 +152,7 @@ export async function deleteOrganization(
   const res = await fetch(`${base(conn)}/organizations/${id}`, {
     method: 'DELETE',
     headers: conn.headers ?? {},
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
 }
@@ -178,6 +182,7 @@ export async function addOrganizationHierarchy(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
     body: JSON.stringify(body),
+    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -190,7 +195,7 @@ export async function removeOrganizationHierarchy(
 ): Promise<void> {
   const res = await fetch(
     `${base(conn)}/organizations/hierarchy/${parentId}/${childId}`,
-    { method: 'DELETE', headers: conn.headers ?? {} },
+    { method: 'DELETE', headers: conn.headers ?? {}, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
 }
