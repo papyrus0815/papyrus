@@ -141,7 +141,7 @@ export class UserController {
       isActive: user.isActive,
       followerCount: user.followerCount,
       followingCount: user.followingCount,
-      curationCount: user.curationCount,
+      postCount: user.postCount,
       createdAt: user.createdAt,
       lastLoginAt: user.lastLoginAt,
     }

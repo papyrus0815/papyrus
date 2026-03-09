@@ -1251,6 +1251,11 @@ export function EventCreateFormDashboard({
                                   updateSection(sec.id, { content: value })
                                 }
                                 placeholder="본문 내용을 입력하세요..."
+                                documentScope={
+                                  editEventId
+                                    ? { type: 'event', id: editEventId }
+                                    : undefined
+                                }
                                 mentionEntities={{
                                   persons: availablePersons,
                                   events: availableEvents,

@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
-import { IUserRepository } from '../domain/user.repository'
+import {
+  IUserRepository,
+  CreateUserData,
+} from '../domain/user.repository'
 import { UserEntity } from '../domain/user.entity'
 
 /**
@@ -35,10 +38,32 @@ export class UserPrismaRepository implements IUserRepository {
         isActive: data.isActive,
         followerCount: data.followerCount || 0,
         followingCount: data.followingCount || 0,
-        curationCount: data.curationCount || 0,
+        postCount: data.postCount || 0,
       },
     })
 
+    return toUserEntity(user)
+  }
+
+  async createWithId(
+    data: CreateUserData & { id: string },
+  ): Promise<UserEntity> {
+    const user = await this.prisma.user.create({
+      data: {
+        id: data.id,
+        email: data.email,
+        passwordHash: data.passwordHash,
+        displayName: data.displayName,
+        bio: data.bio,
+        profileImageUrl: data.profileImageUrl,
+        role: data.role,
+        emailVerified: data.emailVerified,
+        isActive: data.isActive,
+        followerCount: data.followerCount ?? 0,
+        followingCount: data.followingCount ?? 0,
+        postCount: data.postCount ?? 0,
+      },
+    })
     return toUserEntity(user)
   }
 
@@ -141,17 +166,17 @@ export class UserPrismaRepository implements IUserRepository {
     })
   }
 
-  async incrementCurationCount(userId: string): Promise<void> {
+  async incrementPostCount(userId: string): Promise<void> {
     await this.prisma.user.update({
       where: { id: userId },
-      data: { curationCount: { increment: 1 } },
+      data: { postCount: { increment: 1 } },
     })
   }
 
-  async decrementCurationCount(userId: string): Promise<void> {
+  async decrementPostCount(userId: string): Promise<void> {
     await this.prisma.user.update({
       where: { id: userId },
-      data: { curationCount: { decrement: 1 } },
+      data: { postCount: { decrement: 1 } },
     })
   }
 }

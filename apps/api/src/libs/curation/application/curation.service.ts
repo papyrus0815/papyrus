@@ -8,30 +8,23 @@ import { ICurationRepository } from '../domain/curation.repository'
 import { CurationEntity } from '../domain/curation.entity'
 import { UserService } from '../../../libs/user/application/user.service'
 import {
-  AggregateType,
-  CurationVisibility,
-  CurationStatus,
+  PostVisibility,
+  PostStatus,
 } from '@prisma/client'
 
 export interface CreateCurationDto {
-  itemType: AggregateType
-  itemId: string
   title: string
   content: string
-  images?: string[]
-  sources?: string[]
-  tags?: string[]
-  visibility?: CurationVisibility
+  keywords?: string
+  visibility?: PostVisibility
   publish?: boolean // true면 바로 게시, false면 임시저장
 }
 
 export interface UpdateCurationDto {
   title?: string
   content?: string
-  images?: string[]
-  sources?: string[]
-  tags?: string[]
-  visibility?: CurationVisibility
+  keywords?: string
+  visibility?: PostVisibility
 }
 
 @Injectable()
@@ -43,7 +36,7 @@ export class CurationService {
   ) {}
 
   /**
-   * 큐레이션 생성
+   * 글 생성
    */
   async create(
     userId: string,
@@ -53,46 +46,35 @@ export class CurationService {
     const user = await this.userService.findById(userId)
     if (!user.canCreateCuration()) {
       throw new ForbiddenException(
-        '큐레이션을 작성할 수 없습니다. 이메일 인증이 필요합니다.',
+        '글을 작성할 수 없습니다. 이메일 인증이 필요합니다.',
       )
     }
 
-    // 초기 상태 결정
-    const status = dto.publish
-      ? user.isVerified()
-        ? CurationStatus.PUBLISHED // 검증된 사용자는 바로 게시
-        : CurationStatus.PENDING_REVIEW // 신규 사용자는 검토 필요
-      : CurationStatus.DRAFT // 임시저장
+    const status = dto.publish ? PostStatus.PUBLISHED : PostStatus.DRAFT
 
     const curation = await this.curationRepository.create({
       userId,
-      itemType: dto.itemType,
-      itemId: dto.itemId,
       title: dto.title,
       content: dto.content,
-      images: dto.images,
-      sources: dto.sources,
-      tags: dto.tags,
-      visibility: dto.visibility || CurationVisibility.PUBLIC,
+      keywords: dto.keywords,
+      visibility: dto.visibility || PostVisibility.PUBLIC,
       status,
       viewCount: 0,
       likeCount: 0,
       commentCount: 0,
-      isVerified: false,
-      reportCount: 0,
-      publishedAt: status === CurationStatus.PUBLISHED ? new Date() : undefined,
+      publishedAt: status === PostStatus.PUBLISHED ? new Date() : undefined,
     })
 
     return curation
   }
 
   /**
-   * 큐레이션 조회 (단일)
+   * 글 조회 (단일)
    */
   async findById(id: string, viewerId?: string): Promise<CurationEntity> {
     const curation = await this.curationRepository.findById(id)
     if (!curation) {
-      throw new NotFoundException('큐레이션을 찾을 수 없습니다.')
+      throw new NotFoundException('글을 찾을 수 없습니다.')
     }
 
     // 조회수 증가 (본인이 아닐 때만)
@@ -104,23 +86,7 @@ export class CurationService {
   }
 
   /**
-   * 항목 피드 조회 (특정 항목에 대한 모든 큐레이션)
-   */
-  async getItemFeed(
-    itemType: AggregateType,
-    itemId: string,
-    page = 1,
-    pageSize = 20,
-  ) {
-    const skip = (page - 1) * pageSize
-    return await this.curationRepository.findByItem(itemType, itemId, {
-      skip,
-      take: pageSize,
-    })
-  }
-
-  /**
-   * 사용자 방의 큐레이션 목록 조회
+   * 사용자 방의 글 목록 조회
    */
   async getUserCurations(userId: string, page = 1, pageSize = 20) {
     const skip = (page - 1) * pageSize
@@ -131,12 +97,12 @@ export class CurationService {
   }
 
   /**
-   * 큐레이션 목록 조회 (필터링)
+   * 글 목록 조회 (필터링)
    */
   async findMany(params: {
     page?: number
     pageSize?: number
-    status?: CurationStatus
+    status?: PostStatus
     orderBy?: 'createdAt' | 'publishedAt' | 'viewCount' | 'likeCount'
     order?: 'asc' | 'desc'
   }) {
@@ -152,10 +118,7 @@ export class CurationService {
     return await this.curationRepository.findMany({
       skip,
       take: pageSize,
-      where: {
-        ...(status && { status }),
-        ...(!status && { status: CurationStatus.PUBLISHED }), // 기본값: 게시된 것만
-      },
+      where: status ? { status } : {}, // 미지정 시 전체 (관리자 목록용)
       orderBy: {
         [orderBy]: order,
       },
@@ -163,7 +126,7 @@ export class CurationService {
   }
 
   /**
-   * 큐레이션 업데이트
+   * 글 업데이트
    */
   async update(
     id: string,
@@ -180,7 +143,7 @@ export class CurationService {
   }
 
   /**
-   * 큐레이션 게시하기 (DRAFT → PUBLISHED)
+   * 글 게시하기 (DRAFT → PUBLISHED)
    */
   async publish(id: string, userId: string): Promise<CurationEntity> {
     const curation = await this.findById(id)
@@ -201,7 +164,7 @@ export class CurationService {
   }
 
   /**
-   * 큐레이션 삭제
+   * 글 삭제
    */
   async delete(id: string, userId: string): Promise<void> {
     const curation = await this.findById(id)
@@ -212,39 +175,5 @@ export class CurationService {
     }
 
     await this.curationRepository.delete(id)
-  }
-
-  /**
-   * 큐레이션 검증 (큐레이터 전용)
-   */
-  async verify(id: string, curatorId: string): Promise<CurationEntity> {
-    const curator = await this.userService.findById(curatorId)
-    if (!curator.isCurator()) {
-      throw new ForbiddenException('큐레이터 권한이 필요합니다.')
-    }
-
-    const curation = await this.findById(id)
-    curation.verify(curatorId)
-
-    return await this.curationRepository.update(id, {
-      isVerified: true,
-      verifiedBy: curatorId,
-      verifiedAt: curation.verifiedAt,
-    })
-  }
-
-  /**
-   * 큐레이션 신고
-   */
-  async report(id: string, userId: string, reason: string): Promise<void> {
-    const curation = await this.findById(id)
-
-    // TODO: 신고 기록 저장 로직 추가
-
-    curation.report()
-    await this.curationRepository.update(id, {
-      reportCount: curation.reportCount,
-      status: curation.status,
-    })
   }
 }

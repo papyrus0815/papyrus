@@ -14,7 +14,7 @@ export interface UserResponseDto {
   isActive: boolean
   followerCount: number
   followingCount: number
-  curationCount: number
+  postCount: number
   createdAt: Date
   lastLoginAt?: Date
 }

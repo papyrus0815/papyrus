@@ -8,13 +8,16 @@ import {
   Param,
   Query,
   Request,
+  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common'
+import { AuthGuard } from '@nestjs/passport'
 import {
   CurationService,
   CreateCurationDto,
   UpdateCurationDto,
 } from '../application/curation.service'
-import { AggregateType } from '@prisma/client'
+import { UserService } from '../../../libs/user/application/user.service'
 
 // Request 타입 정의
 export interface AuthenticatedRequest {
@@ -22,10 +25,6 @@ export interface AuthenticatedRequest {
     id: string
     [key: string]: unknown
   }
-}
-
-export interface ReportCurationDto {
-  reason: string
 }
 
 export interface MessageResponse {
@@ -43,17 +42,44 @@ export interface PaginatedCurationResponse {
   total: number
 }
 
-@Controller('curations')
+@Controller('posts')
+@UseGuards(AuthGuard('jwt'))
 export class CurationController {
-  constructor(private readonly curationService: CurationService) {}
+  constructor(
+    private readonly curationService: CurationService,
+    private readonly userService: UserService,
+  ) {}
+
+  /** 관리자용: 전체 글 목록 (페이지네이션, 상태 필터) */
+  @Get()
+  async findMany(
+    @Query('page') page: string = '1',
+    @Query('pageSize') pageSize: string = '20',
+    @Query('status') status?: string,
+    @Query('orderBy') orderBy: 'createdAt' | 'publishedAt' | 'viewCount' | 'likeCount' = 'publishedAt',
+    @Query('order') order: 'asc' | 'desc' = 'desc',
+  ): Promise<PaginatedCurationResponse> {
+    const result = await this.curationService.findMany({
+      page: parseInt(page, 10),
+      pageSize: parseInt(pageSize, 10),
+      status: status as any,
+      orderBy,
+      order,
+    })
+    return { curations: result.curations, total: result.total }
+  }
 
   @Post()
   async create(
     @Request() req: AuthenticatedRequest,
     @Body() dto: CreateCurationDto,
   ): Promise<CurationResponse> {
-    const userId = req.user?.id || 'temp_user_id'
-    return await this.curationService.create(userId, dto)
+    const accountId = req.user?.id
+    if (!accountId) {
+      throw new UnauthorizedException('로그인이 필요합니다.')
+    }
+    const user = await this.userService.getOrCreateUserForAccount(accountId)
+    return await this.curationService.create(user.id, dto)
   }
 
   @Get(':id')
@@ -63,21 +89,6 @@ export class CurationController {
   ): Promise<CurationResponse> {
     const viewerId = req.user?.id
     return await this.curationService.findById(id, viewerId)
-  }
-
-  @Get('item/:itemType/:itemId')
-  async getItemFeed(
-    @Param('itemType') itemType: AggregateType,
-    @Param('itemId') itemId: string,
-    @Query('page') page: string = '1',
-    @Query('pageSize') pageSize: string = '20',
-  ): Promise<PaginatedCurationResponse> {
-    return await this.curationService.getItemFeed(
-      itemType,
-      itemId,
-      parseInt(page),
-      parseInt(pageSize),
-    )
   }
 
   @Get('user/:userId')
@@ -99,8 +110,10 @@ export class CurationController {
     @Request() req: AuthenticatedRequest,
     @Body() dto: UpdateCurationDto,
   ): Promise<CurationResponse> {
-    const userId = req.user?.id || 'temp_user_id'
-    return await this.curationService.update(id, userId, dto)
+    const accountId = req.user?.id
+    if (!accountId) throw new UnauthorizedException('로그인이 필요합니다.')
+    const user = await this.userService.getOrCreateUserForAccount(accountId)
+    return await this.curationService.update(id, user.id, dto)
   }
 
   @Post(':id/publish')
@@ -108,8 +121,10 @@ export class CurationController {
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
   ): Promise<CurationResponse> {
-    const userId = req.user?.id || 'temp_user_id'
-    return await this.curationService.publish(id, userId)
+    const accountId = req.user?.id
+    if (!accountId) throw new UnauthorizedException('로그인이 필요합니다.')
+    const user = await this.userService.getOrCreateUserForAccount(accountId)
+    return await this.curationService.publish(id, user.id)
   }
 
   @Delete(':id')
@@ -117,28 +132,10 @@ export class CurationController {
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
   ): Promise<MessageResponse> {
-    const userId = req.user?.id || 'temp_user_id'
-    await this.curationService.delete(id, userId)
-    return { message: '큐레이션이 삭제되었습니다.' }
-  }
-
-  @Post(':id/verify')
-  async verify(
-    @Param('id') id: string,
-    @Request() req: AuthenticatedRequest,
-  ): Promise<CurationResponse> {
-    const curatorId = req.user?.id || 'temp_user_id'
-    return await this.curationService.verify(id, curatorId)
-  }
-
-  @Post(':id/report')
-  async report(
-    @Param('id') id: string,
-    @Request() req: AuthenticatedRequest,
-    @Body() dto: ReportCurationDto,
-  ): Promise<MessageResponse> {
-    const userId = req.user?.id || 'temp_user_id'
-    await this.curationService.report(id, userId, dto.reason)
-    return { message: '신고가 접수되었습니다.' }
+    const accountId = req.user?.id
+    if (!accountId) throw new UnauthorizedException('로그인이 필요합니다.')
+    const user = await this.userService.getOrCreateUserForAccount(accountId)
+    await this.curationService.delete(id, user.id)
+    return { message: '글이 삭제되었습니다.' }
   }
 }

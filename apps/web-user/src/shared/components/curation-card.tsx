@@ -26,20 +26,6 @@ export function CurationCard({ curation, onLike, isLiked }: CurationCardProps) {
     return `${Math.floor(days / 365)}년 전`
   }
 
-  const getItemTypeLabel = (itemType: string) => {
-    const typeMap: Record<string, string> = {
-      PERSON: '인물',
-      COUNTRY: '국가',
-      EVENT: '사건',
-      ORGANIZATION: '조직',
-      CITY: '도시',
-      RELIGION: '종교',
-      LAW: '법률',
-      COMPANY: '기업',
-    }
-    return typeMap[itemType] || itemType
-  }
-
   return (
     <div className="curation-card" onClick={() => navigate(`/curation/${curation.id}`)}>
       {/* 헤더: 작성자 정보 */}
@@ -53,23 +39,18 @@ export function CurationCard({ curation, onLike, isLiked }: CurationCardProps) {
             <span className="curation-time">{formatDate(curation.publishedAt || curation.createdAt)}</span>
           </div>
         </div>
-        {curation.isVerified && (
-          <div className="verified-badge-small">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            검증됨
-          </div>
-        )}
       </div>
 
       {/* 제목 영역 */}
       <div className="curation-title-section">
         <h2 className="curation-title">{curation.title}</h2>
         <div className="curation-meta">
-          <span className="item-type-badge">{getItemTypeLabel(curation.itemType)}</span>
-          <span className="meta-separator">·</span>
+          {curation.keywords?.trim() && (
+            <>
+              <span className="item-type-badge">{curation.keywords.trim().split(/[,，]/)[0].trim()}</span>
+              <span className="meta-separator">·</span>
+            </>
+          )}
           <span className="view-count">조회 {curation.viewCount.toLocaleString()}</span>
         </div>
       </div>
@@ -81,33 +62,12 @@ export function CurationCard({ curation, onLike, isLiked }: CurationCardProps) {
         </p>
       </div>
 
-      {/* 출처 정보 */}
-      {curation.sources && curation.sources.length > 0 && (
-        <div className="curation-sources">
-          <div className="sources-label">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 19.5A2.5 2.5 0 0 0 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </svg>
-            출처 {curation.sources.length}개
-          </div>
-          <div className="sources-preview">
-            {curation.sources.slice(0, 2).map((source, index) => (
-              <span key={index} className="source-item">{source}</span>
-            ))}
-            {curation.sources.length > 2 && (
-              <span className="source-more">외 {curation.sources.length - 2}개</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 태그 */}
-      {curation.tags && curation.tags.length > 0 && (
+      {/* 키워드 */}
+      {curation.keywords?.trim() && (
         <div className="curation-tags">
-          {curation.tags.map((tag, index) => (
+          {curation.keywords.trim().split(/[,，]/).slice(0, 5).map((kw, index) => (
             <span key={index} className="tag">
-              #{tag}
+              #{kw.trim()}
             </span>
           ))}
         </div>

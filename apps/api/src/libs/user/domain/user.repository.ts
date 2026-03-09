@@ -15,7 +15,7 @@ export interface CreateUserData {
   isActive: boolean
   followerCount: number
   followingCount: number
-  curationCount: number
+  postCount: number
   lastLoginAt?: Date
 }
 
@@ -27,6 +27,11 @@ export interface IUserRepository {
    * 사용자 생성
    */
   create(user: CreateUserData): Promise<UserEntity>
+
+  /**
+   * 지정한 ID로 사용자 생성 (Account 연동용)
+   */
+  createWithId(data: CreateUserData & { id: string }): Promise<UserEntity>
 
   /**
    * ID로 사용자 조회
@@ -91,13 +96,13 @@ export interface IUserRepository {
   decrementFollowingCount(userId: string): Promise<void>
 
   /**
-   * 큐레이션 수 증가
+   * 글 수 증가
    */
-  incrementCurationCount(userId: string): Promise<void>
+  incrementPostCount(userId: string): Promise<void>
 
   /**
-   * 큐레이션 수 감소
+   * 글 수 감소
    */
-  decrementCurationCount(userId: string): Promise<void>
+  decrementPostCount(userId: string): Promise<void>
 }
 

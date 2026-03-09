@@ -208,6 +208,13 @@ export const historyPageRoute: RouteObject = {
             return { Component: JobPage }
           },
         },
+        {
+          path: ROUTES.HISTORY.POST,
+          lazy: async () => {
+            const { default: PostPage } = await import('./post/post.page')
+            return { Component: PostPage }
+          },
+        },
       ],
     },
   ],

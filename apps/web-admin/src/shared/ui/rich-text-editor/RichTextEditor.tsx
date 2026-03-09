@@ -13,6 +13,7 @@ import {
   FiItalic,
   FiLink,
   FiList,
+  FiMessageSquare,
   FiMinus,
   FiMoreHorizontal,
   FiType,
@@ -26,11 +27,12 @@ import {
   searchMentionEntities,
 } from '@/pages/events/create/mention-system'
 import {
+  type GlossaryTermDto,
   createGlossaryTerm,
+  deleteGlossaryTerm,
   getGlossaryTermById,
   getGlossaryTerms,
   updateGlossaryTerm,
-  type GlossaryTermDto,
 } from '@/shared/api/glossary'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 
@@ -51,7 +53,9 @@ const EditorContainer = styled.div`
   overflow: visible;
   border: 1px solid #e5e7eb;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   background: #fff;
   width: 100%;
 
@@ -67,13 +71,18 @@ const Toolbar = styled.div`
   gap: 4px;
   padding: 12px 16px;
   background: #f1f5f9;
-  border-bottom: 1px solid #e5e7eb;
-  border-radius: 20px 20px 0 0;
+  border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 20px 20px;
   overflow: visible;
   width: 100%;
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
 `
 
-const ToolbarButton = styled.button.attrs({ type: 'button' })<{ $active?: boolean }>`
+const ToolbarButton = styled.button.attrs({ type: 'button' })<{
+  $active?: boolean
+}>`
   display: flex;
   align-items: center;
   justify-content: center;
@@ -85,13 +94,16 @@ const ToolbarButton = styled.button.attrs({ type: 'button' })<{ $active?: boolea
   background: ${({ $active }) => ($active ? '#4f46e5' : 'transparent')};
   color: ${({ $active }) => ($active ? '#fff' : '#64748b')};
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   position: relative;
   user-select: none;
 
   &:hover {
-    background: ${({ $active }) => ($active ? '#4338ca' : 'rgba(79, 70, 229, 0.1)')};
+    background: ${({ $active }) =>
+      $active ? '#4338ca' : 'rgba(79, 70, 229, 0.1)'};
     color: ${({ $active }) => ($active ? '#fff' : '#4f46e5')};
   }
 
@@ -154,7 +166,7 @@ const ToolbarDivider = styled.div`
 const EditorWrapper = styled.div`
   background: #fff;
   position: relative;
-  border-radius: 0 0 20px 20px;
+  border-radius: 20px 20px 0 0;
   overflow: visible;
 `
 
@@ -193,9 +205,9 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   outline: none;
   min-height: ${({ $hasTitle }) => ($hasTitle ? '280px' : '320px')};
   padding: ${({ $hasTitle }) =>
-    $hasTitle ? '16px 28px 24px 28px' : '24px 28px'};
+    $hasTitle ? '12px 28px 16px 28px' : '16px 28px'};
   font-size: 15px;
-  line-height: 1.75;
+  line-height: 1.6;
   color: #1e293b;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
@@ -216,7 +228,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   }
 
   p {
-    margin: 0 0 16px 0;
+    margin: 0 0 8px 0;
 
     &:last-child {
       margin-bottom: 0;
@@ -226,7 +238,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   h1,
   h2,
   h3 {
-    margin: 28px 0 16px 0;
+    margin: 18px 0 8px 0;
     font-weight: 700;
     line-height: 1.3;
     color: #0f172a;
@@ -254,20 +266,20 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
 
   ul,
   ol {
-    margin: 12px 0;
+    margin: 8px 0;
     padding-left: 28px;
   }
 
   li {
-    margin: 6px 0;
-    line-height: 1.6;
+    margin: 4px 0;
+    line-height: 1.55;
   }
 
   img {
     max-width: 100%;
     height: auto;
     border-radius: 12px;
-    margin: 16px 0;
+    margin: 10px 0;
     box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
     display: block;
     transition: opacity 0.2s ease;
@@ -287,7 +299,9 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     text-decoration: none;
     border-bottom: 1px solid rgba(79, 70, 229, 0.3);
     cursor: pointer;
-    transition: color 0.2s ease, border-color 0.2s ease;
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease;
     font-weight: 500;
 
     &:hover {
@@ -299,8 +313,8 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
 
   blockquote {
     border-left: 4px solid #4f46e5;
-    padding: 16px 24px;
-    margin: 20px 0;
+    padding: 12px 20px;
+    margin: 12px 0;
     background: rgba(79, 70, 229, 0.04);
     border-radius: 0 12px 12px 0;
     color: #475569;
@@ -333,11 +347,11 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
 
   pre {
     background: #f8fafc;
-    padding: 16px;
+    padding: 12px;
     border-radius: 12px;
     border: 1px solid #e5e7eb;
     overflow-x: auto;
-    margin: 16px 0;
+    margin: 10px 0;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 
     code {
@@ -351,13 +365,13 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   hr {
     border: none;
     border-top: 1px solid #e5e7eb;
-    margin: 24px 0;
+    margin: 14px 0;
     height: 1px;
     display: block;
   }
 
   figure {
-    margin: 16px 0;
+    margin: 10px 0;
     text-align: center;
     position: relative;
     display: inline-block;
@@ -435,32 +449,44 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     &[data-type='person'] {
       background: rgba(99, 102, 241, 0.1);
       color: #4338ca !important;
-      &:hover { background: rgba(99, 102, 241, 0.18); }
+      &:hover {
+        background: rgba(99, 102, 241, 0.18);
+      }
     }
     &[data-type='dynasty'] {
       background: rgba(124, 58, 237, 0.1);
       color: #6d28d9 !important;
-      &:hover { background: rgba(124, 58, 237, 0.18); }
+      &:hover {
+        background: rgba(124, 58, 237, 0.18);
+      }
     }
     &[data-type='event'] {
       background: rgba(217, 119, 6, 0.1);
       color: #b45309 !important;
-      &:hover { background: rgba(217, 119, 6, 0.18); }
+      &:hover {
+        background: rgba(217, 119, 6, 0.18);
+      }
     }
     &[data-type='country'] {
       background: rgba(34, 197, 94, 0.1);
       color: #15803d !important;
-      &:hover { background: rgba(34, 197, 94, 0.18); }
+      &:hover {
+        background: rgba(34, 197, 94, 0.18);
+      }
     }
     &[data-type='historicalCountry'] {
       background: rgba(139, 92, 246, 0.1);
       color: #6d28d9 !important;
-      &:hover { background: rgba(139, 92, 246, 0.18); }
+      &:hover {
+        background: rgba(139, 92, 246, 0.18);
+      }
     }
     &[data-type='militaryUnit'] {
       background: rgba(239, 68, 68, 0.1);
       color: #b91c1c !important;
-      &:hover { background: rgba(239, 68, 68, 0.18); }
+      &:hover {
+        background: rgba(239, 68, 68, 0.18);
+      }
     }
   }
 
@@ -547,7 +573,9 @@ const ImageCaptionModal = styled.div`
   background: #fff;
   border-radius: 20px;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04);
   width: 90%;
   max-width: 480px;
   overflow: hidden;
@@ -580,7 +608,9 @@ const ImageCaptionModalClose = styled.button`
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     background: #f1f5f9;
@@ -604,7 +634,9 @@ const ImageCaptionInput = styled.input`
   color: #111827;
   background: #fff;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:focus {
     border-color: #4f46e5;
@@ -632,7 +664,9 @@ const ImageCaptionButton = styled.button<{ $primary?: boolean }>`
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   ${({ $primary }) =>
     $primary
@@ -660,7 +694,9 @@ const ColorPickerDropdown = styled.div`
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04);
   padding: 14px;
   min-width: 260px;
 `
@@ -678,10 +714,15 @@ const ColorPickerItem = styled.div<{ $color: string; $selected: boolean }>`
   border-radius: 6px;
   background: ${({ $color }) => $color};
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  border: 2px solid ${({ $selected }) => ($selected ? '#4f46e5' : 'rgba(0, 0, 0, 0.1)')};
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  border: 2px solid
+    ${({ $selected }) => ($selected ? '#4f46e5' : 'rgba(0, 0, 0, 0.1)')};
   box-shadow: ${({ $selected }) =>
-    $selected ? '0 0 0 2px rgba(79, 70, 229, 0.15)' : '0 1px 3px rgba(0, 0, 0, 0.08)'};
+    $selected
+      ? '0 0 0 2px rgba(79, 70, 229, 0.15)'
+      : '0 1px 3px rgba(0, 0, 0, 0.08)'};
 
   &:hover {
     border-color: rgba(79, 70, 229, 0.5);
@@ -706,7 +747,9 @@ const ContextMenu = styled.div<{
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04);
   padding: 8px;
   z-index: 1000;
   display: ${({ $visible }) => ($visible ? 'block' : 'none')};
@@ -727,11 +770,18 @@ const ContextMenuItem = styled.button.attrs({ type: 'button' })`
   text-align: left;
   cursor: pointer;
   border-radius: 10px;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: rgba(79, 70, 229, 0.08);
     color: #4f46e5;
+  }
+
+  &:disabled {
+    color: #94a3b8;
+    cursor: not-allowed;
   }
 
   svg {
@@ -757,7 +807,9 @@ const EntityLinkModal = styled.div`
   background: #fff;
   border-radius: 20px;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.04);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
@@ -791,7 +843,9 @@ const EntityLinkModalClose = styled.button`
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     background: #f1f5f9;
@@ -817,7 +871,9 @@ const EntityLinkSearchInput = styled.input`
   color: #111827;
   background: #fff;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:focus {
     border-color: #4f46e5;
@@ -949,7 +1005,7 @@ const TermLinkNewInput = styled.input`
 `
 const TermLinkNewTextarea = styled.textarea`
   width: 100%;
-  min-height: 72px;
+  min-height: 240px;
   padding: 10px 14px;
   font-size: 13px;
   border: 1px solid #e5e7eb;
@@ -972,6 +1028,11 @@ const TermLinkNewButton = styled.button<{ $primary?: boolean }>`
   }
 `
 
+/** 포스트/사건 편집 시 해당 문서에만 쓰는 용어(문서 전용) 지원 */
+export type DocumentScope =
+  | { type: 'post'; id: string }
+  | { type: 'event'; id: string }
+
 interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
@@ -984,6 +1045,8 @@ interface RichTextEditorProps {
   onTitleChange?: (title: string) => void
   titlePlaceholder?: string
   showTitle?: boolean
+  /** 포스트/사건 편집 시 전달 시 용어 검색·등록 시 전역+문서 전용 지원, "이 문서에만 사용" 옵션 표시 */
+  documentScope?: DocumentScope
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
@@ -997,6 +1060,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   onTitleChange,
   titlePlaceholder = '제목 없음',
   showTitle = false,
+  documentScope,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -1037,6 +1101,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [termLinkSelectedIndex, setTermLinkSelectedIndex] = useState(0)
   const [termLinkNewName, setTermLinkNewName] = useState('')
   const [termLinkNewDesc, setTermLinkNewDesc] = useState('')
+  /** 새 용어 등록 시 "이 문서에만 사용" (documentScope 있을 때만 유효) */
+  const [termLinkDocumentOnly, setTermLinkDocumentOnly] = useState(true)
+  /** true면 "설명 넣기" 모드: 검색 없이 선택 문구에 문서 전용 설명만 입력 */
+  const [termLinkExplanationOnly, setTermLinkExplanationOnly] = useState(false)
 
   // 용어 수정 모달 (에디터에서 .term 클릭 시)
   const [termEditModalVisible, setTermEditModalVisible] = useState(false)
@@ -1044,6 +1112,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [termEditName, setTermEditName] = useState('')
   const [termEditDesc, setTermEditDesc] = useState('')
   const [termEditLoading, setTermEditLoading] = useState(false)
+  /** 문서 전용(설명 넣기) 용어면 true → "설명 수정" 모달로 표시 */
+  const [termEditIsDocumentScoped, setTermEditIsDocumentScoped] =
+    useState(false)
 
   // 이미지 설명 모달 관련 상태
   const [imageCaptionModalVisible, setImageCaptionModalVisible] =
@@ -1376,6 +1447,26 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [updateFormatState],
   )
 
+  // 글자 적어나가는 위치에 맞춰 스크롤 (커서가 보이는 영역 중앙 근처로)
+  const scrollCursorIntoView = useCallback(() => {
+    if (!editorRef.current) return
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+    if (!editorRef.current.contains(range.startContainer)) return
+    const node = range.startContainer
+    const el =
+      node.nodeType === Node.TEXT_NODE
+        ? (node as Text).parentElement
+        : (node as HTMLElement)
+    if (el)
+      el.scrollIntoView({
+        block: 'center',
+        inline: 'nearest',
+        behavior: 'smooth',
+      })
+  }, [])
+
   // 내용 변경 핸들러
   const handleContentChange = useCallback(() => {
     if (!editorRef.current) return
@@ -1383,7 +1474,32 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const html = editorRef.current.innerHTML
     onChange(html)
     updateFormatState()
-  }, [onChange, updateFormatState])
+    requestAnimationFrame(scrollCursorIntoView)
+  }, [onChange, updateFormatState, scrollCursorIntoView])
+
+  // 붙여넣기 시 위아래 간격 정규화 (복사한 글자 줄간격 맞추기)
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      const clipboardData = e.clipboardData
+      const html = clipboardData.getData('text/html')
+      if (html) {
+        e.preventDefault()
+        const temp = document.createElement('div')
+        temp.innerHTML = html
+        // 블록 요소에서 style 제거 → 에디터 CSS(line-height, margin)가 적용되도록
+        const blockSelectors = 'p, div, h1, h2, h3, h4, li, blockquote'
+        temp.querySelectorAll(blockSelectors).forEach((el) => {
+          const span = el as HTMLElement
+          span.removeAttribute('style')
+        })
+        const cleanedHtml = temp.innerHTML
+        document.execCommand('insertHTML', false, cleanedHtml)
+        handleContentChange()
+      }
+      // text/html 없으면 기본 동작(텍스트 붙여넣기) 유지
+    },
+    [handleContentChange],
+  )
 
   // 키 입력 핸들러
   const handleKeyDown = useCallback(
@@ -1455,8 +1571,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         setPendingImageUrl(imageUrl)
         setImageCaptionInput('')
         setImageCaptionModalVisible(true)
-      } catch {
-        alert('이미지 업로드에 실패했습니다.')
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.'
+        console.error('Image upload error:', err)
+        alert(message)
       }
     }
   }, [onImageUpload])
@@ -1471,7 +1589,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     // 이미지 컨테이너 생성
     const imageContainer = document.createElement('figure')
-    imageContainer.style.margin = '16px 0'
+    imageContainer.style.margin = '10px 0'
     imageContainer.style.textAlign = 'center'
 
     const img = document.createElement('img')
@@ -1645,7 +1763,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (entityLinkModalVisible) {
       searchEntityLinks(entityLinkQuery)
     }
-  }, [entityLinkModalVisible, entityLinkQuery, mentionEntities, searchEntityLinks])
+  }, [
+    entityLinkModalVisible,
+    entityLinkQuery,
+    mentionEntities,
+    searchEntityLinks,
+  ])
 
   // 엔티티 링크 모달 닫기
   const handleCloseEntityLinkModal = useCallback(() => {
@@ -1747,32 +1870,55 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     ],
   )
 
-  // 용어 연결: 검색
-  const searchTermLinks = useCallback(async (query: string) => {
-    try {
-      const list = await getGlossaryTerms({ q: query || undefined })
-      setTermLinkResults(list)
-      setTermLinkSelectedIndex(0)
-    } catch {
-      setTermLinkResults([])
-    }
-  }, [])
+  // 용어 연결: 검색 (documentScope 있으면 전역 + 해당 문서 전용 용어 함께 조회)
+  const searchTermLinks = useCallback(
+    async (query: string) => {
+      try {
+        const params: Parameters<typeof getGlossaryTerms>[0] = { q: query || undefined }
+        if (documentScope?.type === 'post') params.postId = documentScope.id
+        if (documentScope?.type === 'event') params.eventId = documentScope.id
+        const list = await getGlossaryTerms(params)
+        setTermLinkResults(list)
+        setTermLinkSelectedIndex(0)
+      } catch {
+        setTermLinkResults([])
+      }
+    },
+    [documentScope],
+  )
 
   const handleOpenTermLinkModal = useCallback(() => {
     setContextMenuVisible(false)
+    setTermLinkExplanationOnly(false)
     setTermLinkModalVisible(true)
     setTermLinkNewName(selectedText)
     setTermLinkNewDesc('')
+    setTermLinkDocumentOnly(true)
     setTermLinkQuery('')
     setTermLinkResults([])
   }, [selectedText])
 
+  /** 설명 넣기: 이 문서에서만 쓰는 설명만 입력 (용어 검색 없음) — documentScope 있을 때만 노출 */
+  const handleOpenExplanationModal = useCallback(() => {
+    if (!documentScope) return
+    setContextMenuVisible(false)
+    setTermLinkExplanationOnly(true)
+    setTermLinkModalVisible(true)
+    setTermLinkNewName(selectedText)
+    setTermLinkNewDesc('')
+    setTermLinkDocumentOnly(true)
+    setTermLinkQuery('')
+    setTermLinkResults([])
+  }, [selectedText, documentScope])
+
   const handleCloseTermLinkModal = useCallback(() => {
     setTermLinkModalVisible(false)
+    setTermLinkExplanationOnly(false)
     setTermLinkQuery('')
     setTermLinkResults([])
     setTermLinkNewName('')
     setTermLinkNewDesc('')
+    setTermLinkDocumentOnly(true)
   }, [])
 
   const insertTermLink = useCallback(
@@ -1823,10 +1969,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!selectedTextRange) return
 
     try {
-      const term = await createGlossaryTerm({
+      const dto: Parameters<typeof createGlossaryTerm>[0] = {
         name,
         description: termLinkNewDesc.trim() || null,
-      })
+      }
+      if (documentScope && termLinkDocumentOnly) {
+        if (documentScope.type === 'post') dto.postId = documentScope.id
+        if (documentScope.type === 'event') dto.eventId = documentScope.id
+      }
+      const term = await createGlossaryTerm(dto)
       insertTermLink(term)
     } catch (err) {
       console.error('용어 등록 실패:', err)
@@ -1834,42 +1985,43 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }, [
     termLinkNewName,
     termLinkNewDesc,
+    termLinkDocumentOnly,
+    documentScope,
     selectedTextRange,
     insertTermLink,
   ])
 
   // 에디터 내 .term 클릭 → 수정 모달
-  const handleEditorContentClick = useCallback(
-    (e: React.MouseEvent) => {
-      const el = (e.target as HTMLElement).closest('.term')
-      if (!el) return
-      const id = el.getAttribute('data-term-id')
-      if (!id) return
-      e.preventDefault()
-      e.stopPropagation()
-      setTermEditId(id)
-      setTermEditName(el.getAttribute('data-term-name') || el.textContent || '')
-      setTermEditDesc('')
-      setTermEditModalVisible(true)
-      setTermEditLoading(true)
-      getGlossaryTermById(id)
-        .then((t) => {
-          setTermEditName(t.name)
-          setTermEditDesc(t.description ?? '')
-        })
-        .catch(() => {
-          setTermEditModalVisible(false)
-        })
-        .finally(() => setTermEditLoading(false))
-    },
-    [],
-  )
+  const handleEditorContentClick = useCallback((e: React.MouseEvent) => {
+    const el = (e.target as HTMLElement).closest('.term')
+    if (!el) return
+    const id = el.getAttribute('data-term-id')
+    if (!id) return
+    e.preventDefault()
+    e.stopPropagation()
+    setTermEditId(id)
+    setTermEditName(el.getAttribute('data-term-name') || el.textContent || '')
+    setTermEditDesc('')
+    setTermEditModalVisible(true)
+    setTermEditLoading(true)
+    getGlossaryTermById(id)
+      .then((t) => {
+        setTermEditName(t.name)
+        setTermEditDesc(t.description ?? '')
+        setTermEditIsDocumentScoped(!!(t.postId || t.eventId))
+      })
+      .catch(() => {
+        setTermEditModalVisible(false)
+      })
+      .finally(() => setTermEditLoading(false))
+  }, [])
 
   const handleCloseTermEditModal = useCallback(() => {
     setTermEditModalVisible(false)
     setTermEditId(null)
     setTermEditName('')
     setTermEditDesc('')
+    setTermEditIsDocumentScoped(false)
   }, [])
 
   const handleSaveTermEdit = useCallback(async () => {
@@ -1896,20 +2048,37 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [termEditId, termEditName, termEditDesc, handleCloseTermEditModal])
 
-  // 마우스 우클릭 핸들러
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent) => {
-      if (selectedText.length > 0) {
-        e.preventDefault()
-        setContextMenuPosition({
-          top: e.clientY,
-          left: e.clientX,
-        })
-        setContextMenuVisible(true)
+  const handleDeleteTermEdit = useCallback(async () => {
+    if (!termEditId || !editorRef.current) return
+    if (!window.confirm('이 설명을 삭제할까요? 문구는 본문에 남고, 설명(툴팁)만 제거됩니다.')) return
+    setTermEditLoading(true)
+    try {
+      const span = editorRef.current.querySelector(
+        `.term[data-term-id="${termEditId}"]`,
+      ) as HTMLElement | null
+      if (span && span.parentNode) {
+        const parent = span.parentNode
+        while (span.firstChild) {
+          parent.insertBefore(span.firstChild, span)
+        }
+        parent.removeChild(span)
+        handleContentChange()
       }
-    },
-    [selectedText],
-  )
+      await deleteGlossaryTerm(termEditId)
+      handleCloseTermEditModal()
+    } catch (err) {
+      console.error('설명 삭제 실패:', err)
+    } finally {
+      setTermEditLoading(false)
+    }
+  }, [termEditId, handleCloseTermEditModal, handleContentChange])
+
+  // 마우스 우클릭 핸들러 (선택 없어도 메뉴 표시 → "문구 선택 후 사용" 안내)
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenuPosition({ top: e.clientY, left: e.clientX })
+    setContextMenuVisible(true)
+  }, [])
 
   // 이미지 설명 모달이 열릴 때 입력 필드에 포커스
   useEffect(() => {
@@ -2037,6 +2206,39 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   return (
     <EditorContainer>
+      <EditorWrapper>
+        {showTitle && (
+          <>
+            <TitleInput
+              ref={titleInputRef}
+              type="text"
+              value={internalTitle}
+              onChange={(e) => {
+                const newValue = e.target.value
+                setInternalTitle(newValue)
+                if (onTitleChange) {
+                  onTitleChange(newValue)
+                }
+              }}
+              placeholder={titlePlaceholder}
+            />
+            <TitleDivider />
+          </>
+        )}
+        <EditorContent
+          ref={editorRef}
+          contentEditable
+          data-placeholder={placeholder}
+          onInput={handleContentChange}
+          onPaste={handlePaste}
+          onKeyDown={handleKeyDown}
+          onMouseUp={updateFormatState}
+          onKeyUp={updateFormatState}
+          onContextMenu={handleContextMenu}
+          onClick={handleEditorContentClick}
+          $hasTitle={showTitle}
+        />
+      </EditorWrapper>
       <Toolbar>
         <ToolbarButton
           onMouseDown={(e) => e.preventDefault()}
@@ -2146,21 +2348,45 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
-            if (selectedText.length > 0) {
-              handleOpenEntityLinkModal()
-            } else {
-              alert('먼저 텍스트를 선택해주세요.')
-            }
+            if (selectedText.length > 0) handleOpenEntityLinkModal()
           }}
           disabled={selectedText.length === 0}
-          title="엔티티 연결 (텍스트 선택 후 클릭)"
+          title="엔티티 연결 (문구 선택 후 클릭)"
           style={{
-            background: selectedText.length > 0 ? 'rgba(245, 158, 11, 0.08)' : undefined,
-            border: selectedText.length > 0 ? '1px solid rgba(245, 158, 11, 0.25)' : undefined,
+            background:
+              selectedText.length > 0 ? 'rgba(245, 158, 11, 0.08)' : undefined,
+            border:
+              selectedText.length > 0
+                ? '1px solid rgba(245, 158, 11, 0.25)'
+                : undefined,
           }}
         >
           <FiLink style={{ transform: 'rotate(-45deg)' }} />
         </ToolbarButton>
+        <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            playClickSound()
+            if (selectedText.length > 0) handleOpenTermLinkModal()
+          }}
+          disabled={selectedText.length === 0}
+          title="용어 연결 (문구 선택 후 클릭)"
+        >
+          <FiType />
+        </ToolbarButton>
+        {documentScope ? (
+          <ToolbarButton
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              playClickSound()
+              if (selectedText.length > 0) handleOpenExplanationModal()
+            }}
+            disabled={selectedText.length === 0}
+            title="설명 넣기 (설명을 달 문구를 선택한 뒤 클릭)"
+          >
+            <FiMessageSquare />
+          </ToolbarButton>
+        ) : null}
         <ToolbarButton
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
@@ -2196,7 +2422,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             }}
             title="텍스트 색상"
             style={{
-              background: colorPickerVisible ? 'rgba(79, 70, 229, 0.1)' : undefined,
+              background: colorPickerVisible
+                ? 'rgba(79, 70, 229, 0.1)'
+                : undefined,
             }}
           >
             <FiDroplet style={{ color: currentColor }} />
@@ -2217,38 +2445,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <FiMoreHorizontal />
         </ToolbarButton>
       </Toolbar>
-      <EditorWrapper>
-        {showTitle && (
-          <>
-            <TitleInput
-              ref={titleInputRef}
-              type="text"
-              value={internalTitle}
-              onChange={(e) => {
-                const newValue = e.target.value
-                setInternalTitle(newValue)
-                if (onTitleChange) {
-                  onTitleChange(newValue)
-                }
-              }}
-              placeholder={titlePlaceholder}
-            />
-            <TitleDivider />
-          </>
-        )}
-        <EditorContent
-          ref={editorRef}
-          contentEditable
-          data-placeholder={placeholder}
-          onInput={handleContentChange}
-          onKeyDown={handleKeyDown}
-          onMouseUp={updateFormatState}
-          onKeyUp={updateFormatState}
-          onContextMenu={handleContextMenu}
-          onClick={handleEditorContentClick}
-          $hasTitle={showTitle}
-        />
-      </EditorWrapper>
       {/* 색상 선택기 - Portal로 body에 렌더링 */}
       {colorPickerVisible &&
         colorPickerButtonRef.current &&
@@ -2356,24 +2552,61 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         $top={contextMenuPosition.top}
         $left={contextMenuPosition.left}
       >
+        {selectedText.length === 0 ? (
+          <div
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              color: '#64748b',
+              borderBottom: '1px solid #e2e8f0',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            설명·용어를 달 문구를 드래그로 선택한 뒤 메뉴를 선택하세요
+          </div>
+        ) : null}
         <ContextMenuItem
           onClick={() => {
+            if (selectedText.length === 0) return
             playClickSound()
             handleOpenEntityLinkModal()
           }}
+          disabled={selectedText.length === 0}
+          title={selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined}
         >
           <FiLink />
           엔티티 연결
         </ContextMenuItem>
         <ContextMenuItem
           onClick={() => {
+            if (selectedText.length === 0) return
             playClickSound()
             handleOpenTermLinkModal()
           }}
+          disabled={selectedText.length === 0}
+          title={selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined}
         >
           <FiType />
           용어 연결
         </ContextMenuItem>
+        {documentScope ? (
+          <ContextMenuItem
+            onClick={() => {
+              if (selectedText.length === 0) return
+              playClickSound()
+              handleOpenExplanationModal()
+            }}
+            disabled={selectedText.length === 0}
+            title={
+              selectedText.length === 0
+                ? '먼저 문구를 선택하세요'
+                : '선택한 문구에 이 문서 전용 설명을 붙입니다'
+            }
+          >
+            <FiMessageSquare />
+            설명 넣기
+          </ContextMenuItem>
+        ) : null}
       </ContextMenu>
 
       {/* 이미지 설명 입력 모달 */}
@@ -2638,158 +2871,288 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </EntityLinkModal>
       </EntityLinkModalOverlay>
 
-      {/* 용어 연결 모달 */}
+      {/* 용어 연결 / 설명 넣기 모달 */}
       <TermLinkModalOverlay
         $visible={termLinkModalVisible}
         onClick={handleCloseTermLinkModal}
       >
         <TermLinkModal onClick={(e) => e.stopPropagation()}>
           <TermLinkModalHeader>
-            <TermLinkModalTitle>용어 연결</TermLinkModalTitle>
+            <TermLinkModalTitle>
+              {termLinkExplanationOnly ? '설명 넣기' : '용어 연결'}
+            </TermLinkModalTitle>
             <TermLinkModalClose onClick={handleCloseTermLinkModal}>
               <FiX size={20} />
             </TermLinkModalClose>
           </TermLinkModalHeader>
           <TermLinkModalContent>
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-              <strong>선택한 텍스트</strong> &quot;{selectedText}&quot;
+              <strong>선택한 문구</strong> &quot;{selectedText}&quot;
             </div>
-            <TermLinkSearchInput
-              type="text"
-              placeholder="용어 검색 (이름)..."
-              value={termLinkQuery}
-              onChange={(e) => {
-                const q = e.target.value
-                setTermLinkQuery(q)
-                searchTermLinks(q)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  setTermLinkSelectedIndex((i) =>
-                    i < termLinkResults.length - 1 ? i + 1 : 0,
-                  )
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  setTermLinkSelectedIndex((i) =>
-                    i > 0 ? i - 1 : termLinkResults.length - 1,
-                  )
-                } else if (e.key === 'Enter') {
-                  e.preventDefault()
-                  if (termLinkResults[termLinkSelectedIndex]) {
-                    insertTermLink(termLinkResults[termLinkSelectedIndex])
-                  }
-                } else if (e.key === 'Escape') {
-                  e.preventDefault()
-                  handleCloseTermLinkModal()
-                }
-              }}
-              autoFocus
-            />
-            <TermLinkResultsList>
-              {termLinkResults.length === 0 ? (
+
+            {termLinkExplanationOnly ? (
+              /* 설명 넣기: 이 문서에만 쓰는 설명만 입력 */
+              <TermLinkNewSection>
                 <div
                   style={{
-                    padding: 20,
-                    textAlign: 'center',
-                    color: '#94a3b8',
-                    fontSize: 13,
+                    fontSize: 12,
+                    color: '#64748b',
+                    marginBottom: 8,
                   }}
                 >
-                  {termLinkQuery.trim()
-                    ? '검색 결과가 없습니다. 아래에서 새 용어를 등록할 수 있습니다.'
-                    : '검색어를 입력하거나 아래에서 새 용어를 등록하세요.'}
+                  읽는 사람이 아래 문구에 마우스를 올리면 이 설명이 툴팁으로
+                  표시됩니다.
                 </div>
-              ) : (
-                termLinkResults.map((term, idx) => (
-                  <div
-                    key={term.id}
-                    style={{
-                      padding: '12px 14px',
-                      cursor: 'pointer',
-                      background:
-                        idx === termLinkSelectedIndex
-                          ? 'rgba(13, 148, 136, 0.08)'
-                          : 'transparent',
-                      borderRadius: 10,
-                      marginBottom: 4,
-                      border:
-                        idx === termLinkSelectedIndex
-                          ? '1px solid rgba(13, 148, 136, 0.25)'
-                          : '1px solid transparent',
-                    }}
-                    onMouseEnter={() => setTermLinkSelectedIndex(idx)}
-                    onClick={() => {
-                      playClickSound()
-                      insertTermLink(term)
-                    }}
-                  >
-                    <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                      {term.name}
-                    </span>
-                    {term.description && (
+                <TermLinkNewLabel>설명 (이 문서에서만 표시)</TermLinkNewLabel>
+                <TermLinkNewTextarea
+                  placeholder="선택한 문구에 달 설명을 입력하세요"
+                  value={termLinkNewDesc}
+                  onChange={(e) => setTermLinkNewDesc(e.target.value)}
+                  autoFocus
+                />
+                <TermLinkNewButton
+                  $primary
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    handleCreateAndLinkTerm()
+                  }}
+                  disabled={!termLinkNewDesc.trim()}
+                >
+                  설명 넣기
+                </TermLinkNewButton>
+              </TermLinkNewSection>
+            ) : (
+              <>
+                <TermLinkSearchInput
+                  type="text"
+                  placeholder="용어 검색 (이름)..."
+                  value={termLinkQuery}
+                  onChange={(e) => {
+                    const q = e.target.value
+                    setTermLinkQuery(q)
+                    searchTermLinks(q)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setTermLinkSelectedIndex((i) =>
+                        i < termLinkResults.length - 1 ? i + 1 : 0,
+                      )
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setTermLinkSelectedIndex((i) =>
+                        i > 0 ? i - 1 : termLinkResults.length - 1,
+                      )
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (termLinkResults[termLinkSelectedIndex]) {
+                        insertTermLink(termLinkResults[termLinkSelectedIndex])
+                      }
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      handleCloseTermLinkModal()
+                    }
+                  }}
+                  autoFocus
+                />
+                <TermLinkResultsList>
+                  {termLinkResults.length === 0 ? (
+                    <div
+                      style={{
+                        padding: 20,
+                        textAlign: 'center',
+                        color: '#94a3b8',
+                        fontSize: 13,
+                      }}
+                    >
+                      {termLinkQuery.trim()
+                        ? '검색 결과가 없습니다. 아래에서 새 용어를 등록할 수 있습니다.'
+                        : '검색어를 입력하거나 아래에서 새 용어를 등록하세요.'}
+                    </div>
+                  ) : (
+                    termLinkResults.map((term, idx) => (
                       <div
+                        key={term.id}
                         style={{
-                          fontSize: 12,
-                          color: '#64748b',
-                          marginTop: 4,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          padding: '12px 14px',
+                          cursor: 'pointer',
+                          background:
+                            idx === termLinkSelectedIndex
+                              ? 'rgba(13, 148, 136, 0.08)'
+                              : 'transparent',
+                          borderRadius: 10,
+                          marginBottom: 4,
+                          border:
+                            idx === termLinkSelectedIndex
+                              ? '1px solid rgba(13, 148, 136, 0.25)'
+                              : '1px solid transparent',
+                        }}
+                        onMouseEnter={() => setTermLinkSelectedIndex(idx)}
+                        onClick={() => {
+                          playClickSound()
+                          insertTermLink(term)
                         }}
                       >
-                        {term.description}
+                        <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                          {term.name}
+                        </span>
+                        {term.description && (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: '#64748b',
+                              marginTop: 4,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {term.description}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))
-              )}
-            </TermLinkResultsList>
-            <TermLinkNewSection>
-              <TermLinkNewLabel>새 용어로 등록 후 연결</TermLinkNewLabel>
-              <TermLinkNewInput
-                placeholder="용어명 (필수)"
-                value={termLinkNewName}
-                onChange={(e) => setTermLinkNewName(e.target.value)}
-              />
-              <TermLinkNewTextarea
-                placeholder="설명 (선택)"
-                value={termLinkNewDesc}
-                onChange={(e) => setTermLinkNewDesc(e.target.value)}
-              />
-              <TermLinkNewButton
-                $primary
-                type="button"
-                onClick={() => {
-                  playClickSound()
-                  handleCreateAndLinkTerm()
-                }}
-                disabled={!termLinkNewName.trim()}
-              >
-                등록 후 연결
-              </TermLinkNewButton>
-            </TermLinkNewSection>
+                    ))
+                  )}
+                </TermLinkResultsList>
+                <TermLinkNewSection>
+                  <TermLinkNewLabel>새 용어로 등록 후 연결</TermLinkNewLabel>
+                  {documentScope ? (
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginBottom: 10,
+                        fontSize: 13,
+                        color: '#475569',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={termLinkDocumentOnly}
+                        onChange={(e) =>
+                          setTermLinkDocumentOnly(e.target.checked)
+                        }
+                      />
+                      이 문서에만 사용 (문서 전용 용어)
+                    </label>
+                  ) : null}
+                  <TermLinkNewInput
+                    placeholder="용어명 (필수)"
+                    value={termLinkNewName}
+                    onChange={(e) => setTermLinkNewName(e.target.value)}
+                  />
+                  <TermLinkNewTextarea
+                    placeholder="설명 (선택)"
+                    value={termLinkNewDesc}
+                    onChange={(e) => setTermLinkNewDesc(e.target.value)}
+                  />
+                  <TermLinkNewButton
+                    $primary
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      handleCreateAndLinkTerm()
+                    }}
+                    disabled={!termLinkNewName.trim()}
+                  >
+                    등록 후 연결
+                  </TermLinkNewButton>
+                </TermLinkNewSection>
+              </>
+            )}
           </TermLinkModalContent>
         </TermLinkModal>
       </TermLinkModalOverlay>
 
-      {/* 용어 수정 모달 (에디터에서 .term 클릭 시) */}
+      {/* 용어 수정 / 설명 수정 모달 (에디터에서 .term 클릭 시) */}
       <TermLinkModalOverlay
         $visible={termEditModalVisible}
         onClick={handleCloseTermEditModal}
       >
         <TermLinkModal onClick={(e) => e.stopPropagation()}>
           <TermLinkModalHeader>
-            <TermLinkModalTitle>용어 수정</TermLinkModalTitle>
-            <TermLinkModalClose type="button" onClick={handleCloseTermEditModal}>
+            <TermLinkModalTitle>
+              {termEditIsDocumentScoped ? '설명 수정' : '용어 수정'}
+            </TermLinkModalTitle>
+            <TermLinkModalClose
+              type="button"
+              onClick={handleCloseTermEditModal}
+            >
               <FiX size={20} />
             </TermLinkModalClose>
           </TermLinkModalHeader>
           <TermLinkModalContent>
             {termEditLoading ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+              <div
+                style={{ padding: 24, textAlign: 'center', color: '#64748b' }}
+              >
                 불러오는 중…
               </div>
+            ) : termEditIsDocumentScoped ? (
+              /* 문서 전용(설명 넣기) → 문구는 읽기 전용, 설명만 수정 */
+              <>
+                <TermLinkNewLabel>문구</TermLinkNewLabel>
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    background: '#f1f5f9',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    color: '#334155',
+                    marginBottom: 12,
+                  }}
+                >
+                  {termEditName}
+                </div>
+                <TermLinkNewLabel>설명 (이 문서에서만 표시)</TermLinkNewLabel>
+                <TermLinkNewTextarea
+                  placeholder="설명을 입력하세요"
+                  value={termEditDesc}
+                  onChange={(e) => setTermEditDesc(e.target.value)}
+                  style={{ minHeight: 120 }}
+                />
+                <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+                  <TermLinkNewButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      handleCloseTermEditModal()
+                    }}
+                  >
+                    취소
+                  </TermLinkNewButton>
+                  <TermLinkNewButton
+                    $primary
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      handleSaveTermEdit()
+                    }}
+                    disabled={termEditLoading}
+                  >
+                    저장
+                  </TermLinkNewButton>
+                  <TermLinkNewButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      handleDeleteTermEdit()
+                    }}
+                    disabled={termEditLoading}
+                    style={{
+                      marginLeft: 'auto',
+                      color: '#dc2626',
+                      borderColor: '#fecaca',
+                      background: '#fef2f2',
+                    }}
+                  >
+                    설명 삭제
+                  </TermLinkNewButton>
+                </div>
+              </>
             ) : (
               <>
                 <TermLinkNewLabel>용어명</TermLinkNewLabel>
@@ -2798,7 +3161,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   value={termEditName}
                   onChange={(e) => setTermEditName(e.target.value)}
                 />
-                <TermLinkNewLabel style={{ marginTop: 12 }}>설명</TermLinkNewLabel>
+                <TermLinkNewLabel style={{ marginTop: 12 }}>
+                  설명
+                </TermLinkNewLabel>
                 <TermLinkNewTextarea
                   placeholder="설명 (선택)"
                   value={termEditDesc}

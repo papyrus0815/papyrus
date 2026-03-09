@@ -111,7 +111,6 @@ export function CurationDetailPage() {
               <span className="meta-item">조회 {curation.viewCount}</span>
               <span className="meta-item">·</span>
               <span className="meta-item">{new Date(curation.publishedAt || curation.createdAt).toLocaleDateString('ko-KR')}</span>
-              {curation.isVerified && <span className="verified-badge">✓ 검증됨</span>}
             </div>
           </div>
 
@@ -119,24 +118,13 @@ export function CurationDetailPage() {
             <p className="content-text">{curation.content}</p>
           </div>
 
-          {curation.tags && curation.tags.length > 0 && (
+          {curation.keywords?.trim() && (
             <div className="article-tags">
-              {curation.tags.map((tag, index) => (
+              {curation.keywords.trim().split(/[,，]/).map((kw, index) => (
                 <span key={index} className="tag">
-                  #{tag}
+                  #{kw.trim()}
                 </span>
               ))}
-            </div>
-          )}
-
-          {curation.sources && curation.sources.length > 0 && (
-            <div className="article-sources">
-              <h3 className="sources-title">📚 출처</h3>
-              <ul className="sources-list">
-                {curation.sources.map((source, index) => (
-                  <li key={index}>{source}</li>
-                ))}
-              </ul>
             </div>
           )}
 

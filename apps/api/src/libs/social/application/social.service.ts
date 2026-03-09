@@ -75,9 +75,9 @@ export class SocialService {
   }
 
   // ==================== LIKE ====================
-  async like(userId: string, curationId: string) {
+  async like(userId: string, postId: string) {
     const existing = await this.prisma.like.findFirst({
-      where: { userId, curationId },
+      where: { userId, postId },
     })
 
     if (existing) {
@@ -86,10 +86,10 @@ export class SocialService {
 
     await this.prisma.$transaction([
       this.prisma.like.create({
-        data: { userId, curationId },
+        data: { userId, postId },
       }),
-      this.prisma.curation.update({
-        where: { id: curationId },
+      this.prisma.post.update({
+        where: { id: postId },
         data: { likeCount: { increment: 1 } },
       }),
     ])
@@ -97,9 +97,9 @@ export class SocialService {
     return { message: '좋아요를 눌렀습니다.' }
   }
 
-  async unlike(userId: string, curationId: string) {
+  async unlike(userId: string, postId: string) {
     const like = await this.prisma.like.findFirst({
-      where: { userId, curationId },
+      where: { userId, postId },
     })
 
     if (!like) {
@@ -110,8 +110,8 @@ export class SocialService {
       this.prisma.like.delete({
         where: { id: like.id },
       }),
-      this.prisma.curation.update({
-        where: { id: curationId },
+      this.prisma.post.update({
+        where: { id: postId },
         data: { likeCount: { decrement: 1 } },
       }),
     ])
@@ -119,9 +119,9 @@ export class SocialService {
     return { message: '좋아요를 취소했습니다.' }
   }
 
-  async isLiked(userId: string, curationId: string): Promise<boolean> {
+  async isLiked(userId: string, postId: string): Promise<boolean> {
     const like = await this.prisma.like.findFirst({
-      where: { userId, curationId },
+      where: { userId, postId },
     })
     return !!like
   }
@@ -129,7 +129,7 @@ export class SocialService {
   // ==================== COMMENT ====================
   async createComment(
     userId: string,
-    curationId: string,
+    postId: string,
     content: string,
     parentId?: string,
   ) {
@@ -137,14 +137,14 @@ export class SocialService {
       const comment = await tx.comment.create({
         data: {
           userId,
-          curationId,
+          postId,
           content,
           parentId,
         },
       })
 
-      await tx.curation.update({
-        where: { id: curationId },
+      await tx.post.update({
+        where: { id: postId },
         data: { commentCount: { increment: 1 } },
       })
 
@@ -191,8 +191,8 @@ export class SocialService {
         where: { id: commentId },
         data: { isDeleted: true },
       }),
-      this.prisma.curation.update({
-        where: { id: comment.curationId },
+      this.prisma.post.update({
+        where: { id: comment.postId },
         data: { commentCount: { decrement: 1 } },
       }),
     ])
@@ -200,13 +200,13 @@ export class SocialService {
     return { message: '댓글이 삭제되었습니다.' }
   }
 
-  async getComments(curationId: string, page = 1, pageSize = 20) {
+  async getComments(postId: string, page = 1, pageSize = 20) {
     const skip = (page - 1) * pageSize
 
     const [comments, total] = await Promise.all([
       this.prisma.comment.findMany({
         where: {
-          curationId,
+          postId,
           parentId: null, // 최상위 댓글만
           isDeleted: false,
         },
@@ -237,7 +237,7 @@ export class SocialService {
       }),
       this.prisma.comment.count({
         where: {
-          curationId,
+          postId,
           parentId: null,
           isDeleted: false,
         },

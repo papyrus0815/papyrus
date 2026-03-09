@@ -212,6 +212,13 @@ const Prose = styled.div`
     font-weight: 700;
   }
 
+  /* 에디터와 동일: 순서 없음/있음 목록 들여쓰기 */
+  ul,
+  ol {
+    margin: 12px 0;
+    padding-left: 28px;
+  }
+
   /* 개행 유지 (textarea/본문에서 입력한 줄바꿈) */
   white-space: pre-wrap;
   word-break: break-word;
@@ -258,6 +265,15 @@ const Prose = styled.div`
   .term:hover {
     color: #0f766e;
     background: rgba(15, 118, 110, 0.06);
+  }
+
+  /* 에디터(RichTextEditor)와 동일한 수평선 스타일 */
+  hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 24px 0;
+    height: 1px;
+    display: block;
   }
 `
 
@@ -591,10 +607,12 @@ export function DashboardEventDetailPage() {
     | { type: 'background' }
     | { type: 'aftermath' }
     | { type: 'section'; id: string }
+    | { type: 'section-new' }
   const [editingSection, setEditingSection] = useState<EditingSection | null>(
     null,
   )
   const [draftValue, setDraftValue] = useState('')
+  const [draftSectionTitle, setDraftSectionTitle] = useState('')
   const [savingSection, setSavingSection] = useState(false)
 
   const {
@@ -758,15 +776,17 @@ export function DashboardEventDetailPage() {
   }, [])
 
   const startEditSection = useCallback(
-    (key: EditingSection, initialValue: string) => {
+    (key: EditingSection, initialValue: string, initialTitle?: string) => {
       setEditingSection(key)
       setDraftValue(initialValue ?? '')
+      setDraftSectionTitle(initialTitle ?? (key.type === 'section-new' ? 'Part 1' : ''))
     },
     [],
   )
   const cancelEditSection = useCallback(() => {
     setEditingSection(null)
     setDraftValue('')
+    setDraftSectionTitle('')
   }, [])
   const saveEditSection = useCallback(async () => {
     if (!eventId || !dto || editingSection === null) return
@@ -789,11 +809,31 @@ export function DashboardEventDetailPage() {
               : { title: sec.title, content: sec.content ?? '', order: sec.order },
         )
         await updateEvent(eventId, { eventSections: next })
+      } else if (editingSection.type === 'section-new') {
+        const sections = (dto.eventSections ?? [])
+          .slice()
+          .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
+        const next = sections.map(
+          (s: { title: string; content: string; order: number; sectionType?: string }) => ({
+            title: s.title,
+            content: s.content ?? '',
+            order: s.order,
+            sectionType: s.sectionType ?? 'content',
+          }),
+        )
+        next.push({
+          title: draftSectionTitle.trim() || 'Part 1',
+          content: draftValue,
+          order: sections.length,
+          sectionType: 'content',
+        })
+        await updateEvent(eventId, { eventSections: next })
       }
       const updated = await getEventById(eventId)
       setDto(updated)
       setEditingSection(null)
       setDraftValue('')
+      setDraftSectionTitle('')
       toast.success('저장되었습니다.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '저장에 실패했습니다.')
@@ -922,6 +962,7 @@ export function DashboardEventDetailPage() {
                   placeholder="개요를 입력하세요..."
                   mentionEntities={mentionEntities}
                   onEntityModalOpen={refetchEntities}
+                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
                 />
               </SectionEditorWrap>
               <SectionEditActions>
@@ -954,6 +995,85 @@ export function DashboardEventDetailPage() {
           )}
       </Section>
 
+      {/* 본문: 없을 때 추가 블록, 있을 때 목록 + 수정 */}
+      {(eventSections.length === 0 || editingSection?.type === 'section-new') && (
+        <Section>
+          <SectionTitleRow>
+            <SectionTitle>본문</SectionTitle>
+            {editingSection?.type !== 'section-new' && (
+              <SectionEditBtn
+                type="button"
+                onClick={() => startEditSection({ type: 'section-new' }, '', 'Part 1')}
+              >
+                <FiEdit2 size={14} />
+                본문 (제목과 내용) 추가
+              </SectionEditBtn>
+            )}
+          </SectionTitleRow>
+          {editingSection?.type === 'section-new' ? (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#374151',
+                    marginBottom: 6,
+                  }}
+                >
+                  제목
+                </label>
+                <input
+                  type="text"
+                  value={draftSectionTitle}
+                  onChange={(e) => setDraftSectionTitle(e.target.value)}
+                  placeholder="예: Part 1"
+                  style={{
+                    width: '100%',
+                    maxWidth: 400,
+                    padding: '10px 12px',
+                    fontSize: 14,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                  }}
+                />
+              </div>
+              <SectionEditorWrap>
+                <RichTextEditor
+                  value={draftValue}
+                  onChange={setDraftValue}
+                  placeholder="본문 내용을 입력하세요..."
+                  mentionEntities={mentionEntities}
+                  onEntityModalOpen={refetchEntities}
+                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
+                />
+              </SectionEditorWrap>
+              <SectionEditActions>
+                <SectionEditBtn
+                  type="button"
+                  onClick={cancelEditSection}
+                  disabled={savingSection}
+                >
+                  취소
+                </SectionEditBtn>
+                <SectionSaveBtn
+                  type="button"
+                  onClick={saveEditSection}
+                  disabled={savingSection}
+                >
+                  {savingSection ? '저장 중…' : '저장'}
+                </SectionSaveBtn>
+              </SectionEditActions>
+            </>
+          ) : eventSections.length === 0 ? (
+            <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
+              본문이 없습니다. 위 버튼으로 제목과 내용을 추가하세요.
+            </p>
+          ) : null}
+        </Section>
+      )}
+
       {eventSections.length > 0 &&
         eventSections.map((sec) => (
           <Section key={sec.id}>
@@ -984,6 +1104,7 @@ export function DashboardEventDetailPage() {
                     placeholder="본문 내용을 입력하세요..."
                     mentionEntities={mentionEntities}
                     onEntityModalOpen={refetchEntities}
+                    documentScope={eventId ? { type: 'event', id: eventId } : undefined}
                   />
                 </SectionEditorWrap>
                 <SectionEditActions>
@@ -1047,6 +1168,7 @@ export function DashboardEventDetailPage() {
                   placeholder="배경을 입력하세요..."
                   mentionEntities={mentionEntities}
                   onEntityModalOpen={refetchEntities}
+                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
                 />
                 </SectionEditorWrap>
                 <SectionEditActions>
@@ -1105,6 +1227,7 @@ export function DashboardEventDetailPage() {
                   placeholder="여파를 입력하세요..."
                   mentionEntities={mentionEntities}
                   onEntityModalOpen={refetchEntities}
+                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
                 />
                 </SectionEditorWrap>
                 <SectionEditActions>

@@ -4,7 +4,7 @@
 /// 
 /// 이 도메인은 사용자 앱(web-user)의 핵심 기능을 지원합니다:
 /// - User: 일반 사용자 계정 (관리자 Account와 분리)
-/// - Curation: 항목 큐레이션 (사용자가 역사 항목에 대해 작성한 포스트)
+/// - Post: 항목 글 (사용자가 역사 항목에 대해 작성한 포스트)
 /// - Follow: 팔로우 관계
 /// - Like: 좋아요
 /// - Comment: 댓글
@@ -12,11 +12,11 @@
 /// 
 /// 설계 원칙:
 /// - 기존 Person, Country 등의 마스터 데이터는 그대로 유지
-/// - Curation이 이들을 참조하는 구조
+/// - Post가 이들을 참조하는 구조
 /// - 다형성 관계를 활용하여 확장 가능하게 설계
 
-/// 큐레이션 가시성
-enum CurationVisibility {
+/// 글 가시성
+enum PostVisibility {
   /// 공개 (모두 볼 수 있음)
   PUBLIC
   /// 팔로워만
@@ -25,8 +25,8 @@ enum CurationVisibility {
   PRIVATE
 }
 
-/// 큐레이션 상태
-enum CurationStatus {
+/// 글 상태
+enum PostStatus {
   /// 작성 중 (임시 저장)
   DRAFT
   /// 게시됨
@@ -89,8 +89,8 @@ model User {
   /// 팔로잉 수
   followingCount Int @default(0) @map("following_count")
 
-  /// 큐레이션 수
-  curationCount Int @default(0) @map("curation_count")
+  /// 글 수
+  postCount Int @default(0) @map("post_count")
 
   //--- 관계 필드
   /// 이 사용자를 팔로우하는 사람들
@@ -99,8 +99,8 @@ model User {
   /// 이 사용자가 팔로우하는 사람들
   following Follow[] @relation("FollowerUser")
 
-  /// 작성한 큐레이션
-  curations Curation[]
+  /// 작성한 글
+  posts Post[]
 
   /// 좋아요
   likes Like[]
@@ -151,21 +151,18 @@ model Follow {
 }
 
 // ========================
-// Curation (항목 큐레이션)
+// Post (항목 글)
 // ========================
-/// 사용자가 역사 항목(Person, Country 등)에 대해 작성한 포스트
-model Curation {
+/// 사용자가 역사 항목(Person, Country 등)에 대해 작성한 글
+model Post {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
   /// 작성자 ID
   userId String @map("user_id") @db.Char(36)
 
-  /// 항목 타입 (기존 AggregateType enum 재사용)
-  itemType AggregateType @map("item_type")
-
-  /// 항목 ID (Person.id, Country.id 등을 참조)
-  itemId String @map("item_id") @db.Char(36)
+  /// 키워드 (쉼표 구분 또는 단일, 검색·분류용)
+  keywords String? @db.VarChar(500)
 
   /// 제목
   title String @db.VarChar(200)
@@ -173,20 +170,11 @@ model Curation {
   /// 본문 내용 (마크다운)
   content String @db.Text
 
-  /// 이미지 URL 리스트 (JSON)
-  images Json?
-
-  /// 출처 리스트 (JSON)
-  sources Json?
-
-  /// 태그 리스트 (JSON)
-  tags Json?
-
   /// 가시성
-  visibility CurationVisibility @default(PUBLIC)
+  visibility PostVisibility @default(PUBLIC)
 
   /// 상태
-  status CurationStatus @default(PUBLISHED)
+  status PostStatus @default(PUBLISHED)
 
   //--- 통계 필드 (비정규화)
   /// 조회 수
@@ -198,24 +186,12 @@ model Curation {
   /// 댓글 수
   commentCount Int @default(0) @map("comment_count")
 
-  //--- 품질 관리
-  /// 검증 여부 (큐레이터가 검토한 양질의 콘텐츠)
-  isVerified Boolean @default(false) @map("is_verified")
-
-  /// 검증한 큐레이터 ID
-  verifiedBy String? @map("verified_by") @db.Char(36)
-
-  /// 검증 일시
-  verifiedAt DateTime? @map("verified_at")
-
-  /// 신고 횟수
-  reportCount Int @default(0) @map("report_count")
-
   //--- 관계 필드
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  likes    Like[]
-  comments Comment[]
+  likes         Like[]
+  comments      Comment[]
+  glossaryTerms GlossaryTerm[] @relation("GlossaryTermPost")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -224,13 +200,11 @@ model Curation {
   /// 게시 일시 (DRAFT → PUBLISHED 전환 시점)
   publishedAt DateTime? @map("published_at")
 
-  @@index([userId], name: "idx_curation_user")
-  @@index([itemType, itemId], name: "idx_curation_item")
-  @@index([status], name: "idx_curation_status")
-  @@index([visibility], name: "idx_curation_visibility")
-  @@index([publishedAt], name: "idx_curation_published")
-  @@index([isVerified], name: "idx_curation_verified")
-  @@map("curation")
+  @@index([userId], name: "idx_post_user")
+  @@index([status], name: "idx_post_status")
+  @@index([visibility], name: "idx_post_visibility")
+  @@index([publishedAt], name: "idx_post_published")
+  @@map("post")
 }
 
 // ========================
@@ -243,19 +217,19 @@ model Like {
   /// 사용자 ID
   userId String @map("user_id") @db.Char(36)
 
-  /// 큐레이션 ID
-  curationId String @map("curation_id") @db.Char(36)
+  /// 글 ID
+  postId String @map("post_id") @db.Char(36)
 
   //--- 관계 필드
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  curation Curation @relation(fields: [curationId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@unique([userId, curationId], name: "uniq_like")
+  @@unique([userId, postId], name: "uniq_like")
   @@index([userId], name: "idx_like_user")
-  @@index([curationId], name: "idx_like_curation")
+  @@index([postId], name: "idx_like_post")
   @@map("like")
 }
 
@@ -266,8 +240,8 @@ model Comment {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 큐레이션 ID
-  curationId String @map("curation_id") @db.Char(36)
+  /// 글 ID
+  postId String @map("post_id") @db.Char(36)
 
   /// 작성자 ID
   userId String @map("user_id") @db.Char(36)
@@ -282,8 +256,8 @@ model Comment {
   isDeleted Boolean @default(false) @map("is_deleted")
 
   //--- 관계 필드
-  curation Curation @relation(fields: [curationId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
   replies Comment[] @relation("CommentReplies")
@@ -292,7 +266,7 @@ model Comment {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([curationId], name: "idx_comment_curation")
+  @@index([postId], name: "idx_comment_post")
   @@index([userId], name: "idx_comment_user")
   @@index([parentId], name: "idx_comment_parent")
   @@map("comment")

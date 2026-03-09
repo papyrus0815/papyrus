@@ -14,24 +14,7 @@ export function CurationThumbnailCard({
 }: CurationThumbnailCardProps) {
   const navigate = useNavigate()
 
-  const getItemTypeLabel = (itemType: string) => {
-    const typeMap: Record<string, string> = {
-      PERSON: '인물',
-      COUNTRY: '국가',
-      EVENT: '사건',
-      ORGANIZATION: '조직',
-      CITY: '도시',
-      RELIGION: '종교',
-      LAW: '법률',
-      COMPANY: '기업',
-    }
-    return typeMap[itemType] || itemType
-  }
-
-  // 이미지가 있으면 첫 번째 이미지 사용, 없으면 플레이스홀더
-  const thumbnailImage = curation.images && curation.images.length > 0 
-    ? curation.images[0] 
-    : null
+  const thumbnailImage = null
 
   return (
     <div
@@ -85,42 +68,25 @@ export function CurationThumbnailCard({
                 {curation.commentCount}
               </span>
             </div>
-            {curation.isVerified && (
-              <div className="verified-overlay">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M9 12l2 2 4-4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-            )}
           </div>
         </div>
       </div>
 
       {/* 카드 정보 */}
       <div className="thumbnail-info">
-        <div className="thumbnail-header">
-          <span className="item-type-label">{getItemTypeLabel(curation.itemType)}</span>
-          {curation.isVerified && (
-            <span className="verified-mini">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 12l2 2 4-4"/>
-                <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
-              </svg>
-            </span>
-          )}
-        </div>
+        {curation.keywords?.trim() && (
+          <div className="thumbnail-header">
+            <span className="item-type-label">{curation.keywords.trim().split(/[,，]/)[0].trim()}</span>
+          </div>
+        )}
         
         <h3 className="thumbnail-title">{curation.title}</h3>
         
-        {curation.tags && curation.tags.length > 0 && (
+        {curation.keywords?.trim() && (
           <div className="thumbnail-tags">
-            {curation.tags.slice(0, 2).map((tag, index) => (
-              <span key={index} className="tag-mini">#{tag}</span>
+            {curation.keywords.trim().split(/[,，]/).slice(0, 2).map((kw, index) => (
+              <span key={index} className="tag-mini">#{kw.trim()}</span>
             ))}
-            {curation.tags.length > 2 && (
-              <span className="tag-more">+{curation.tags.length - 2}</span>
-            )}
           </div>
         )}
       </div>

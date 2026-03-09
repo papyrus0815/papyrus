@@ -1,32 +1,23 @@
 import {
-  AggregateType,
-  CurationStatus,
-  CurationVisibility,
+  PostStatus,
+  PostVisibility,
 } from '@prisma/client'
 
 import { CurationEntity } from './curation.entity'
 
 /**
- * Curation 생성 시 필요한 데이터 타입 (메서드 제외)
+ * 글 생성 시 필요한 데이터 타입 (메서드 제외)
  */
 export interface CreateCurationData {
   userId: string
-  itemType: AggregateType
-  itemId: string
+  keywords?: string
   title: string
   content: string
-  images?: string[]
-  sources?: string[]
-  tags?: string[]
-  visibility: CurationVisibility
-  status: CurationStatus
+  visibility: PostVisibility
+  status: PostStatus
   viewCount: number
   likeCount: number
   commentCount: number
-  isVerified: boolean
-  verifiedBy?: string
-  verifiedAt?: Date
-  reportCount: number
   publishedAt?: Date
 }
 
@@ -35,11 +26,8 @@ export interface CurationFindManyParams {
   take?: number
   where?: {
     userId?: string
-    itemType?: AggregateType
-    itemId?: string
-    status?: CurationStatus
-    visibility?: CurationVisibility
-    isVerified?: boolean
+    status?: PostStatus
+    visibility?: PostVisibility
   }
   orderBy?: {
     createdAt?: 'asc' | 'desc'
@@ -50,37 +38,28 @@ export interface CurationFindManyParams {
 }
 
 /**
- * Curation Repository Interface
+ * 글(Curation) Repository Interface
  */
 export interface ICurationRepository {
   /**
-   * 큐레이션 생성
+   * 글 생성
    */
   create(data: CreateCurationData): Promise<CurationEntity>
 
   /**
-   * ID로 큐레이션 조회
+   * ID로 글 조회
    */
   findById(id: string): Promise<CurationEntity | null>
 
   /**
-   * 큐레이션 목록 조회
+   * 글 목록 조회
    */
   findMany(
     params: CurationFindManyParams,
   ): Promise<{ curations: CurationEntity[]; total: number }>
 
   /**
-   * 특정 항목의 큐레이션 목록 조회 (항목 피드)
-   */
-  findByItem(
-    itemType: AggregateType,
-    itemId: string,
-    params: { skip?: number; take?: number },
-  ): Promise<{ curations: CurationEntity[]; total: number }>
-
-  /**
-   * 사용자의 큐레이션 목록 조회
+   * 사용자의 글 목록 조회
    */
   findByUser(
     userId: string,
@@ -88,12 +67,12 @@ export interface ICurationRepository {
   ): Promise<{ curations: CurationEntity[]; total: number }>
 
   /**
-   * 큐레이션 업데이트
+   * 글 업데이트
    */
   update(id: string, data: Partial<CurationEntity>): Promise<CurationEntity>
 
   /**
-   * 큐레이션 삭제 (소프트 삭제)
+   * 글 삭제 (소프트 삭제)
    */
   delete(id: string): Promise<void>
 
@@ -121,9 +100,4 @@ export interface ICurationRepository {
    * 댓글 수 감소
    */
   decrementCommentCount(id: string): Promise<void>
-
-  /**
-   * 신고 횟수 증가
-   */
-  incrementReportCount(id: string): Promise<void>
 }

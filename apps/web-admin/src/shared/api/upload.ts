@@ -94,6 +94,7 @@ export async function uploadImage(
   const url = new URL(`${conn.host}/upload/image`)
   url.searchParams.set('category', category)
 
+  // Authorization만 전달. Content-Type은 설정하지 않아 브라우저가 FormData에 맞게 boundary 포함해 설정하게 함.
   const headers: HeadersInit = {}
   if (conn.headers?.Authorization) {
     headers.Authorization = conn.headers.Authorization as string
@@ -107,8 +108,15 @@ export async function uploadImage(
   })
 
   if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`이미지 업로드 실패: ${error}`)
+    const text = await response.text()
+    let msg = text
+    try {
+      const json = JSON.parse(text)
+      msg = json.message ?? json.error ?? text
+    } catch {
+      if (!text || text.length > 200) msg = `${response.status} ${response.statusText}`
+    }
+    throw new Error(`이미지 업로드 실패: ${response.status} ${response.statusText} - ${msg}`)
   }
 
   return response.json()

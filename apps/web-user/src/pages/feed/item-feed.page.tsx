@@ -6,7 +6,7 @@ import { CurationCard } from '@/shared/components/curation-card'
 import './item-feed.css'
 
 export function ItemFeedPage() {
-  const { itemType, itemId } = useParams<{ itemType: string; itemId: string }>()
+  const { itemType, itemId } = useParams<{ itemType?: string; itemId?: string }>()
   const [curations, setCurations] = useState<CurationResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [likedMap, setLikedMap] = useState<Record<string, boolean>>({})
@@ -15,16 +15,15 @@ export function ItemFeedPage() {
 
   useEffect(() => {
     loadCurations()
-  }, [itemType, itemId, page])
+  }, [page])
 
   const loadCurations = async () => {
-    if (!itemType || !itemId) return
-
     try {
       setLoading(true)
-      const data = await curationApi.getItemFeed(itemType, itemId, page)
-      setCurations(data.curations)
-      setTotal(data.total)
+      // 항목별 피드 API 제거됨 — 전체 글 목록 사용
+      const data = await curationApi.getCurations(page, 20)
+      setCurations(data.curations ?? [])
+      setTotal(data.total ?? 0)
 
       // 좋아요 상태 확인
       const likedStatus: Record<string, boolean> = {}
@@ -78,17 +77,17 @@ export function ItemFeedPage() {
     <div className="item-feed-page">
       <div className="container">
         <div className="item-feed-header">
-          <h1 className="item-title">항목 피드</h1>
+          <h1 className="item-title">글 목록</h1>
           <p className="item-subtitle">
-            {itemType} #{itemId.substring(0, 8)}에 대한 {total}개의 큐레이션
+            {itemType && itemId ? `${itemType} #${itemId.slice(0, 8)}… 관련 ` : ''}총 {total}개의 글
           </p>
         </div>
 
         {curations.length === 0 ? (
           <div className="empty-state">
             <p className="empty-icon">📚</p>
-            <p className="empty-text">아직 큐레이션이 없습니다.</p>
-            <p className="empty-subtext">첫 번째 큐레이션을 작성해보세요!</p>
+            <p className="empty-text">아직 글이 없습니다.</p>
+            <p className="empty-subtext">첫 글을 작성해보세요!</p>
           </div>
         ) : (
           <div className="curations-grid">

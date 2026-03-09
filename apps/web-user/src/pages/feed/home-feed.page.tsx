@@ -77,19 +77,14 @@ const generateMockCurations = (count: number = 10): CurationResponse[] => {
     curations.push({
       id: `mock-curation-${i + 1}`,
       userId: user.id,
-      itemType: ['PERSON', 'COUNTRY', 'EVENT', 'ORGANIZATION'][i % 4],
-      itemId: `item-${i + 1}`,
+      keywords: mockTags[i % mockTags.length].join(', '),
       title: mockTitles[i % mockTitles.length],
       content: mockContents[i % mockContents.length],
-      images: [],
-      sources: mockSources[i % mockSources.length],
-      tags: mockTags[i % mockTags.length],
       visibility: 'PUBLIC',
       status: 'PUBLISHED',
       viewCount: Math.floor(Math.random() * 1000) + 10,
       likeCount: Math.floor(Math.random() * 500) + 5,
       commentCount: Math.floor(Math.random() * 100),
-      isVerified: Math.random() > 0.6,
       createdAt: createdAt.toISOString(),
       publishedAt: publishedAt.toISOString(),
     })
@@ -375,7 +370,7 @@ export function HomeFeedPage() {
               </div>
               <h3 className="empty-title">게시물 없음</h3>
               <p className="empty-description">
-                아직 아무도 큐레이션을 공유하지 않았습니다.
+                아직 아무도 글을 공유하지 않았습니다.
               </p>
             </div>
           ) : (

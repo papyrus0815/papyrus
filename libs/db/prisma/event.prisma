@@ -261,6 +261,9 @@ model Event {
   // 🆕 이미지 (썸네일 포함)
   eventImages EventImage[]
 
+  /// 문서 전용 용어 (이 사건에만 쓰는 설명용 용어)
+  glossaryTerms GlossaryTerm[] @relation("GlossaryTermEvent")
+
   /// 등록자 
   createdById String @map("created_by") @db.Char(36)
 
@@ -313,11 +316,12 @@ model EventSection {
 // GlossaryTerm (용어 사전 — 본문 문구·관직 설명)
 // ========================
 /// 사건 본문에서 문구·관직 등에 설명을 붙이기 위한 용어. 본문에서 선택 후 연결하면 상세 보기에서 설명 표시.
+/// postId 또는 eventId가 있으면 해당 문서 전용 용어(이 문서에만 사용), 없으면 전역 용어.
 model GlossaryTerm {
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 표시명 (본문에 노출되는 단어/문구)
-  name String @db.VarChar(200)
+  /// 표시명 (본문에 노출되는 단어/문구. 설명 넣기 시 문장 전체 가능)
+  name String @db.VarChar(1000)
 
   /// 설명 (툴팁/팝오버로 표시)
   description String? @db.Text
@@ -330,12 +334,21 @@ model GlossaryTerm {
   historicalCountryId String?            @map("historical_country_id") @db.Char(36)
   historicalCountry   HistoricalCountry? @relation("GlossaryTermHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
+  /// 문서 전용: 이 포스트에만 사용 (null이면 전역)
+  postId String? @map("post_id") @db.Char(36)
+  post   Post?   @relation("GlossaryTermPost", fields: [postId], references: [id], onDelete: Cascade)
+
+  /// 문서 전용: 이 사건에만 사용 (null이면 전역)
+  eventId String? @map("event_id") @db.Char(36)
+  event   Event?  @relation("GlossaryTermEvent", fields: [eventId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId], name: "idx_glossary_term_countryId")
   @@index([historicalCountryId], name: "idx_glossary_term_historicalCountryId")
-  @@index([name], name: "idx_glossary_term_name")
+  @@index([postId], name: "idx_glossary_term_postId")
+  @@index([eventId], name: "idx_glossary_term_eventId")
   @@map("glossary_term")
 }
 

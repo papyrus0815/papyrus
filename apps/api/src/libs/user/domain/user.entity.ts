@@ -1,4 +1,4 @@
-import { CurationStatus, CurationVisibility, UserRole } from '@prisma/client'
+import { PostVisibility, UserRole } from '@prisma/client'
 
 /**
  * User Entity
@@ -18,7 +18,7 @@ export class UserEntity {
   // 통계
   followerCount!: number
   followingCount!: number
-  curationCount!: number
+  postCount!: number
 
   // 메타데이터
   createdAt!: Date
@@ -30,7 +30,7 @@ export class UserEntity {
   }
 
   /**
-   * 사용자가 큐레이션을 작성할 수 있는지 확인
+   * 사용자가 글을 작성할 수 있는지 확인
    */
   canCreateCuration(): boolean {
     return this.isActive && this.emailVerified
@@ -65,22 +65,22 @@ export class UserEntity {
    * 다른 사용자의 콘텐츠를 볼 수 있는지 확인
    */
   canViewCuration(
-    curation: { visibility: CurationVisibility; userId: string },
+    curation: { visibility: PostVisibility; userId: string },
     isFollowing: boolean,
   ): boolean {
-    // 본인의 큐레이션
+    // 본인의 글
     if (curation.userId === this.id) {
       return true
     }
 
-    // 공개 큐레이션
-    if (curation.visibility === CurationVisibility.PUBLIC) {
+    // 공개 글
+    if (curation.visibility === PostVisibility.PUBLIC) {
       return true
     }
 
-    // 팔로워 전용 큐레이션
+    // 팔로워 전용 글
     if (
-      curation.visibility === CurationVisibility.FOLLOWERS_ONLY &&
+      curation.visibility === PostVisibility.FOLLOWERS_ONLY &&
       isFollowing
     ) {
       return true

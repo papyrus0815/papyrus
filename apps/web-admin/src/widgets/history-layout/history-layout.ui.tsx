@@ -123,6 +123,23 @@ export default function HistoryLayout() {
                     <Badge>0</Badge>
                   </SidebarItem>
 
+                  <SidebarItem
+                    as={Link}
+                    to="/history/post"
+                    $active={isActive('/history/post')}
+                  >
+                    <SidebarIcon>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                      </svg>
+                    </SidebarIcon>
+                    <SidebarLabel>글</SidebarLabel>
+                  </SidebarItem>
+
                   {/* 역사적 국가는 국가 탭에 통합됨 */}
                   {/* <SidebarItem
             as={Link}
@@ -183,6 +200,23 @@ export default function HistoryLayout() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                   <path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8z" />
                   <path d="M2 8h20M16 8V6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+                </svg>
+              </CollapsedIconItem>
+
+              <CollapsedIconItem
+                as={motion.button}
+                onClick={() => navigate('/history/post')}
+                $active={isActive('/history/post')}
+                title="글"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
                 </svg>
               </CollapsedIconItem>
             </CollapsedIcons>
@@ -252,6 +286,26 @@ export default function HistoryLayout() {
           </TabBarIcon>
           <TabBarLabel $active={isActive('/history/jobs')}>직업</TabBarLabel>
           {isActive('/history/jobs') && <ActiveIndicator />}
+        </TabBarItem>
+
+        {/* 글 탭 버튼 */}
+        <TabBarItem
+          whileTap={{ scale: 0.95 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          onClick={() => navigate('/history/post')}
+          $active={isActive('/history/post')}
+        >
+          <TabBarIcon $active={isActive('/history/post')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          </TabBarIcon>
+          <TabBarLabel $active={isActive('/history/post')}>글</TabBarLabel>
+          {isActive('/history/post') && <ActiveIndicator />}
         </TabBarItem>
 
         {/* 가운데 FAB 버튼 (국가 페이지에서만 표시) */}

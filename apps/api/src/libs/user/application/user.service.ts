@@ -59,7 +59,7 @@ export class UserService {
       isActive: true,
       followerCount: 0,
       followingCount: 0,
-      curationCount: 0,
+      postCount: 0,
     })
 
     return user
@@ -100,6 +100,29 @@ export class UserService {
       throw new NotFoundException('사용자를 찾을 수 없습니다.')
     }
     return user
+  }
+
+  /**
+   * Account(관리자) id에 대응하는 User를 반환. 없으면 생성.
+   * 웹 관리자(Account) 로그인으로 글 작성 시 Post.userId에 넣을 User를 위해 사용.
+   */
+  async getOrCreateUserForAccount(accountId: string): Promise<UserEntity> {
+    const existing = await this.userRepository.findById(accountId)
+    if (existing) return existing
+
+    const placeholderHash = await argon2.hash('account-linked')
+    return this.userRepository.createWithId({
+      id: accountId,
+      email: `${accountId}@admin.local`,
+      passwordHash: placeholderHash,
+      displayName: `admin-${accountId.slice(0, 8)}`,
+      role: UserRole.ADMIN,
+      emailVerified: true,
+      isActive: true,
+      followerCount: 0,
+      followingCount: 0,
+      postCount: 0,
+    })
   }
 
   /**

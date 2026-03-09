@@ -77,7 +77,7 @@ export function UserRoomPage() {
       // 목업 방 설정
       const mockRoom: UserRoom = {
         title: '역사의 길을 걷다',
-        description: '한국사를 큐레이션하는 개인 갤러리입니다.',
+        description: '한국사에 대한 글을 모아두는 개인 갤러리입니다.',
         themeColor: '#3b82f6',
         layout: 'grid',
         showVisitorCount: true,
@@ -116,25 +116,17 @@ export function UserRoomPage() {
         createdAt.setDate(createdAt.getDate() - daysAgo)
         const publishedAt = new Date(createdAt.getTime() + Math.random() * 3600000)
 
-        // 일부 큐레이션에 이미지 추가 (목업)
-        const hasImage = Math.random() > 0.4
-
         mockCurations.push({
           id: `room-curation-${i + 1}`,
           userId: id || 'user001',
-          itemType: ['PERSON', 'COUNTRY', 'EVENT', 'ORGANIZATION'][i % 4],
-          itemId: `item-${i + 1}`,
+          keywords: '조선, 역사, 정치, 문화',
           title: mockTitles[i % mockTitles.length],
           content: `${mockTitles[i % mockTitles.length]}에 대한 상세한 설명입니다. 역사적 맥락과 의미를 깊이 있게 다룹니다.`,
-          images: hasImage ? [`https://picsum.photos/400/300?random=${i + 1}`] : [],
-          sources: ['한국사 데이터베이스', '한국민족문화대백과사전'],
-          tags: ['조선', '역사', '정치', '문화'],
           visibility: 'PUBLIC',
           status: 'PUBLISHED',
           viewCount: Math.floor(Math.random() * 1000) + 10,
           likeCount: Math.floor(Math.random() * 500) + 5,
           commentCount: Math.floor(Math.random() * 100),
-          isVerified: Math.random() > 0.7,
           createdAt: createdAt.toISOString(),
           publishedAt: publishedAt.toISOString(),
         })
@@ -286,7 +278,7 @@ export function UserRoomPage() {
               <div className="profile-stats-large">
                 <div className="stat-item-large">
                   <span className="stat-value-large">{user.curationCount}</span>
-                  <span className="stat-label-large">큐레이션</span>
+                  <span className="stat-label-large">글</span>
                 </div>
                 <div className="stat-divider">·</div>
                 <div className="stat-item-large">
@@ -313,7 +305,7 @@ export function UserRoomPage() {
         </div>
       </div>
 
-      {/* 큐레이션 갤러리 */}
+      {/* 글 갤러리 */}
       <div className="container gallery-section">
         <div className="gallery-controls">
           <div className="gallery-info">
@@ -357,10 +349,10 @@ export function UserRoomPage() {
                 <path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" strokeWidth="1.5"/>
               </svg>
             </div>
-            <p className="empty-text">아직 큐레이션이 없습니다.</p>
+            <p className="empty-text">아직 글이 없습니다.</p>
             {isOwnRoom && (
               <button className="btn-create-first" onClick={() => navigate('/curation/create')}>
-                첫 번째 큐레이션 만들기
+                첫 글 쓰기
               </button>
             )}
           </div>
