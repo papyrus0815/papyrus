@@ -850,8 +850,8 @@ export function DashboardEventDetailPage() {
   const dateLabel =
     mapped?.startDate &&
     (mapped.endDate
-      ? formatDateRange(mapped.startDate, mapped.endDate)
-      : formatDateRange(mapped.startDate))
+      ? formatDateRange(mapped.startDate, mapped.endDate, mapped.startDatePrecision, mapped.endDatePrecision)
+      : formatDateRange(mapped.startDate, undefined, mapped.startDatePrecision))
   const heroImage =
     dto?.eventImages?.find((i) => i.isPrimary)?.imageUrl ??
     dto?.thumbnail ??
@@ -1346,6 +1346,8 @@ export function DashboardEventDetailPage() {
                 {formatDateRange(
                   dto.parentEvent.startDate,
                   dto.parentEvent.endDate ?? undefined,
+                  dto.parentEvent.startDatePrecision,
+                  dto.parentEvent.endDatePrecision,
                 )}
               </SubEventMeta>
             )}
@@ -1365,7 +1367,12 @@ export function DashboardEventDetailPage() {
               {child.title}
               {child.startDate && (
                 <SubEventMeta>
-                  {formatDateRange(child.startDate, child.endDate ?? undefined)}
+                  {formatDateRange(
+                    child.startDate,
+                    child.endDate ?? undefined,
+                    child.startDatePrecision,
+                    child.endDatePrecision,
+                  )}
                 </SubEventMeta>
               )}
             </SubEventBtn>

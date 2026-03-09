@@ -34,18 +34,39 @@ export function formatCenturyRange(century: number): string {
   return `${startYear}~${endYear}`
 }
 
+/** 날짜 정밀도: year(년만), month(년·월), day(년·월·일) */
+export type DatePrecision = 'year' | 'month' | 'day'
+
 /**
- * 날짜 범위 포맷
+ * 단일 날짜를 정밀도에 맞게 포맷 (년만 알 때, 년·월만 알 때 등)
  */
-export function formatDateRange(start: string, end?: string): string {
-  const startDate = new Date(start)
-  const startStr = `${startDate.getFullYear()}년 ${startDate.getMonth() + 1}월 ${startDate.getDate()}일`
+export function formatDateWithPrecision(
+  dateStr: string,
+  precision?: string | null,
+): string {
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return dateStr
+  const y = date.getFullYear()
+  const m = date.getMonth() + 1
+  const d = date.getDate()
+  const prec = precision === 'year' || precision === 'month' ? precision : 'day'
+  if (prec === 'year') return `${y}년`
+  if (prec === 'month') return `${y}년 ${m}월`
+  return `${y}년 ${m}월 ${d}일`
+}
 
+/**
+ * 날짜 범위 포맷 (정밀도 지원: 년만/년·월/년·월·일)
+ */
+export function formatDateRange(
+  start: string,
+  end?: string,
+  startPrecision?: string | null,
+  endPrecision?: string | null,
+): string {
+  const startStr = formatDateWithPrecision(start, startPrecision)
   if (!end) return startStr
-
-  const endDate = new Date(end)
-  const endStr = `${endDate.getFullYear()}년 ${endDate.getMonth() + 1}월 ${endDate.getDate()}일`
-
+  const endStr = formatDateWithPrecision(end, endPrecision)
   return `${startStr} ~ ${endStr}`
 }
 

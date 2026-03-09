@@ -8,6 +8,7 @@ import {
   IsObject,
   ValidateNested,
   IsArray,
+  IsIn,
 } from 'class-validator'
 import { MilitaryEventDto } from './military-event.dto'
 
@@ -27,10 +28,22 @@ export class CreateEventDto {
   @IsOptional()
   startDate?: string
 
+  @ApiProperty({ description: '시작일 정밀도: year(년만), month(년·월), day(년·월·일)', required: false, enum: ['year', 'month', 'day'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['year', 'month', 'day'])
+  startDatePrecision?: string
+
   @ApiProperty({ description: '종료일', required: false })
   @IsDateString()
   @IsOptional()
   endDate?: string
+
+  @ApiProperty({ description: '종료일 정밀도: year(년만), month(년·월), day(년·월·일)', required: false, enum: ['year', 'month', 'day'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['year', 'month', 'day'])
+  endDatePrecision?: string
 
   @ApiProperty({ description: '위치 (자유 텍스트)', required: false })
   @IsString()

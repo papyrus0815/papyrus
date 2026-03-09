@@ -256,8 +256,10 @@ export const buildEventSubmitData = (params: {
   description: string
   startDate: string
   startTime: string
+  startDatePrecision?: 'year' | 'month' | 'day'
   endDate: string
   endTime: string
+  endDatePrecision?: 'year' | 'month' | 'day'
   category: string
   location: string
   thumbnail: string
@@ -315,11 +317,13 @@ export const buildEventSubmitData = (params: {
     startDate: params.startTime
       ? `${params.startDate}T${params.startTime}:00.000Z`
       : `${params.startDate}T00:00:00.000Z`,
+    startDatePrecision: params.startDatePrecision ?? undefined,
     endDate: params.endDate
       ? params.endTime
         ? `${params.endDate}T${params.endTime}:00.000Z`
         : `${params.endDate}T00:00:00.000Z`
       : undefined,
+    endDatePrecision: params.endDatePrecision ?? undefined,
     // 🔧 FIX: category는 이미 categoryId (cat-military-001)이므로 직접 전달
     categoryId: params.category || undefined,
     location: params.location.trim() || undefined,

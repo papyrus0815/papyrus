@@ -485,10 +485,14 @@ export function EventCreateFormDashboard({
     setStartDate,
     startTime,
     setStartTime,
+    startDatePrecision,
+    setStartDatePrecision,
     endDate,
     setEndDate,
     endTime,
     setEndTime,
+    endDatePrecision,
+    setEndDatePrecision,
     category,
     setCategory,
     thumbnail,
@@ -566,6 +570,11 @@ export function EventCreateFormDashboard({
           setCategory(String(categoryId))
 
         if (event.keywords?.length) setKeywords(event.keywords)
+        const prec = event as { startDatePrecision?: string; endDatePrecision?: string }
+        if (prec.startDatePrecision === 'year' || prec.startDatePrecision === 'month' || prec.startDatePrecision === 'day')
+          setStartDatePrecision(prec.startDatePrecision)
+        if (prec.endDatePrecision === 'year' || prec.endDatePrecision === 'month' || prec.endDatePrecision === 'day')
+          setEndDatePrecision(prec.endDatePrecision)
 
         let modernIds: string[] = Array.isArray(event.relatedCountryIds)
           ? event.relatedCountryIds.map(String)
@@ -739,8 +748,10 @@ export function EventCreateFormDashboard({
         description: description.trim(),
         startDate,
         startTime: startTime ?? '',
+        startDatePrecision,
         endDate,
         endTime: endTime ?? '',
+        endDatePrecision,
         category,
         location,
         thumbnail: eventImages.length > 0 ? eventImages[0].imageUrl : thumbnail,
@@ -1085,6 +1096,33 @@ export function EventCreateFormDashboard({
                         <FiChevronDown size={16} />
                       </DateFieldBtn>
                     </DateFieldsRowWide>
+                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, color: '#64748b' }}>알고 있는 범위:</span>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <span style={{ color: '#475569' }}>시작일</span>
+                        <select
+                          value={startDatePrecision}
+                          onChange={(e) => setStartDatePrecision(e.target.value as 'year' | 'month' | 'day')}
+                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}
+                        >
+                          <option value="day">년·월·일</option>
+                          <option value="month">년·월</option>
+                          <option value="year">년만</option>
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <span style={{ color: '#475569' }}>종료일</span>
+                        <select
+                          value={endDatePrecision}
+                          onChange={(e) => setEndDatePrecision(e.target.value as 'year' | 'month' | 'day')}
+                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}
+                        >
+                          <option value="day">년·월·일</option>
+                          <option value="month">년·월</option>
+                          <option value="year">년만</option>
+                        </select>
+                      </label>
+                    </div>
                   </FieldControl>
                 </FieldRow>
                 <FieldRow>

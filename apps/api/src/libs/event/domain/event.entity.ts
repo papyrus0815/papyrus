@@ -3,7 +3,10 @@ export class Event {
   title!: string
   description?: string | null
   startDate?: Date | null
+  /** year | month | day. null이면 day로 간주 */
+  startDatePrecision?: string | null
   endDate?: Date | null
+  endDatePrecision?: string | null
   location?: string | null
   categoryId?: string | null
   background?: string | null

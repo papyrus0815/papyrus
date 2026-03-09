@@ -13,8 +13,14 @@ export class EventResponseDto {
   @ApiProperty({ description: '시작일', required: false })
   startDate?: string | null
 
+  @ApiProperty({ description: '시작일 정밀도: year(년만), month(년·월), day(년·월·일)', required: false })
+  startDatePrecision?: string | null
+
   @ApiProperty({ description: '종료일', required: false })
   endDate?: string | null
+
+  @ApiProperty({ description: '종료일 정밀도: year(년만), month(년·월), day(년·월·일)', required: false })
+  endDatePrecision?: string | null
 
   @ApiProperty({ description: '위치 (자유 텍스트)', required: false })
   location?: string | null

@@ -131,7 +131,10 @@ export interface HistoricalEvent {
   category: HistoricalEventCategory
   description: string
   startDate: string
+  /** year | month | day. 표시 시 년만/년·월/년·월·일 구분 */
+  startDatePrecision?: string | null
   endDate?: string
+  endDatePrecision?: string | null
   location?: string
   tags: string[]
   background: string

@@ -12,6 +12,8 @@ export class NestiaApiService {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
       },
+      // 로그인 시 백엔드가 설정한 access_token 쿠키가 함께 전송되도록 (401 방지)
+      options: { credentials: 'include' as RequestCredentials },
     }
   }
 
@@ -45,18 +47,16 @@ export class NestiaApiService {
   }
 
   /**
-   * store 또는 localStorage에 토큰이 있으면 connection에 반영 (Authorization 없을 때만)
+   * 매 요청 시점에 store/localStorage의 최신 토큰을 connection에 반영.
+   * (한 번 설정 후 스킵하던 기존 로직은 재로그인·다른 탭 로그인·토큰 갱신 후에도
+   * 이전 토큰이 쓰여 401이 나는 원인이 됨 → 항상 최신 토큰으로 덮어씀)
    */
   private syncTokenFromStorage(): void {
     if (typeof window === 'undefined') return
-    if (this.connection.headers?.Authorization) return
 
     let token: string | null = null
-
     try {
-      // 1) Zustand store에서 먼저 확인 (로그인 직후 persist 지연 대응)
       token = useSessionStore.getState().token ?? null
-      // 2) localStorage (reload 후 복원)
       if (!token) {
         const persisted = localStorage.getItem('session-storage')
         if (persisted) {
@@ -65,12 +65,11 @@ export class NestiaApiService {
         }
       }
       if (!token) token = localStorage.getItem('token')
-      if (token) {
-        this.connection.headers = {
-          ...this.connection.headers,
-          Authorization: `Bearer ${token}`,
-        }
-      }
+      const prev = this.connection.headers ?? {}
+      const next = { ...prev } as Record<string, IConnection.HeaderValue>
+      if (token) next['Authorization'] = `Bearer ${token}`
+      else delete next['Authorization']
+      this.connection.headers = next
     } catch {
       // ignore
     }

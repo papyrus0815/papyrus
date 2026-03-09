@@ -11,8 +11,10 @@ export const useBasicInfoForm = () => {
   const [description, setDescription] = useState('')
   const [startDate, setStartDate] = useState('')
   const [startTime, setStartTime] = useState('')
+  const [startDatePrecision, setStartDatePrecision] = useState<'year' | 'month' | 'day'>('day')
   const [endDate, setEndDate] = useState('')
   const [endTime, setEndTime] = useState('')
+  const [endDatePrecision, setEndDatePrecision] = useState<'year' | 'month' | 'day'>('day')
   const [category, setCategory] = useState<HistoricalEventCategory | ''>('')
   const [thumbnail, setThumbnail] = useState<string>('')
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
@@ -57,8 +59,10 @@ export const useBasicInfoForm = () => {
     description,
     startDate,
     startTime,
+    startDatePrecision,
     endDate,
     endTime,
+    endDatePrecision,
     category,
     thumbnail,
     thumbnailFile,
@@ -75,8 +79,10 @@ export const useBasicInfoForm = () => {
     setDescription,
     setStartDate,
     setStartTime,
+    setStartDatePrecision,
     setEndDate,
     setEndTime,
+    setEndDatePrecision,
     setCategory,
     setThumbnail,
     setThumbnailFile,
