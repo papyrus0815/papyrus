@@ -21,6 +21,7 @@ import type {
   CreateGovernmentPositionDefinitionDto,
   UpdateGovernmentPositionDefinitionDto,
 } from '@/shared/api/person-career'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -289,6 +290,7 @@ const defaultForm: CreateGovernmentPositionDefinitionDto = {
   rank: null,
   departmentName: null,
   organizationId: null,
+  administrationDepartmentId: null,
   establishedDate: null,
   abolishedDate: null,
 }
@@ -301,12 +303,19 @@ export function PositionCategoryCrudModal({
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [positionTypeModalOpen, setPositionTypeModalOpen] = useState(false)
+  const [departmentModalOpen, setDepartmentModalOpen] = useState(false)
   const [form, setForm] = useState<CreateGovernmentPositionDefinitionDto>(defaultForm)
 
   const { data: definitions = [], isLoading } = useQuery({
     queryKey: ['position-definitions'],
     queryFn: () => personCareerApi.getPositionDefinitions(),
     enabled: isOpen,
+  })
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['administration-departments-all'],
+    queryFn: () => administrationDepartmentApi.getAll(),
+    enabled: isOpen && view === 'form',
   })
 
   const list = definitions as GovernmentPositionDefinition[]
@@ -338,6 +347,7 @@ export function PositionCategoryCrudModal({
         rank: def.rank ?? null,
         departmentName: def.departmentName ?? null,
         organizationId: def.organizationId ?? null,
+        administrationDepartmentId: def.administrationDepartmentId ?? def.administrationDepartment?.id ?? null,
         establishedDate: def.establishedDate ?? null,
         abolishedDate: def.abolishedDate ?? null,
       })
@@ -503,6 +513,38 @@ export function PositionCategoryCrudModal({
                       }))
                     }
                     placeholder="0"
+                  />
+                </Field>
+                <Field>
+                  <Label>중앙부처 (역대 장관 연결)</Label>
+                  <SelectBtn
+                    type="button"
+                    $hasValue={!!form.administrationDepartmentId}
+                    onClick={() => setDepartmentModalOpen(true)}
+                  >
+                    <span>
+                      {form.administrationDepartmentId
+                        ? departments.find((d) => d.id === form.administrationDepartmentId)?.name ?? '선택됨'
+                        : '선택 안 함'}
+                    </span>
+                    <FiChevronDown size={18} />
+                  </SelectBtn>
+                  <SelectModal
+                    isOpen={departmentModalOpen}
+                    onClose={() => setDepartmentModalOpen(false)}
+                    options={[
+                      { value: '', label: '선택 안 함' },
+                      ...departments.map((d) => ({ value: d.id, label: d.name })),
+                    ]}
+                    selectedValue={form.administrationDepartmentId ?? ''}
+                    onSelect={(value) => {
+                      setForm((f) => ({
+                        ...f,
+                        administrationDepartmentId: value || null,
+                      }))
+                      setDepartmentModalOpen(false)
+                    }}
+                    title="중앙부처 선택"
                   />
                 </Field>
                 <FormActions>

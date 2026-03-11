@@ -39,6 +39,25 @@ export type UpdateAdministrationDepartmentInput = Partial<
   Omit<CreateAdministrationDepartmentInput, 'countryId'>
 >
 
+/** 부처별 역대 장관(재임) 한 건 */
+export type AdministrationDepartmentTenureItem = {
+  id: string
+  termNumber?: number | null
+  startDate: string | null
+  endDate: string | null
+  title?: string | null
+  positionDefinition?: { id: string; title: string; positionType?: string } | null
+  person?: {
+    id: string
+    name: string
+    surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
+  } | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
+}
+
 /** 기관 계획·조율·변경 (사건처럼 시간순). 첨부는 Attachment(ownerType=ADMINISTRATION_DEPARTMENT_EVENT)로. */
 export type AdministrationDepartmentEventType =
   | 'PLAN'
@@ -162,6 +181,16 @@ export const administrationDepartmentApi = {
       `/administration-departments/${encodeURIComponent(id)}`,
     )
     return item ?? null
+  },
+
+  /** 부처에 연결된 직위의 역대 재임(역대 장관) 목록 */
+  getTenuresByDepartmentId: async (
+    departmentId: string,
+  ): Promise<AdministrationDepartmentTenureItem[]> => {
+    const list = await request<AdministrationDepartmentTenureItem[]>(
+      `/administration-departments/${encodeURIComponent(departmentId)}/tenures`,
+    )
+    return Array.isArray(list) ? list : []
   },
 
   create: async (

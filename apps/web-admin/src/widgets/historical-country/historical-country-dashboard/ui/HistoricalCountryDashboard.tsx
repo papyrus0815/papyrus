@@ -5,6 +5,10 @@ import {
   STATE_TYPE_LABELS,
   STATE_TYPE_COLORS,
   STATE_TYPE_EMOJIS,
+  ENTITY_KIND_LABELS,
+  ENTITY_KIND_COLORS,
+  ENTITY_KIND_EMOJIS,
+  type HistoricalEntityKind,
 } from '@/entities/historical-country/model/constants'
 import styled from 'styled-components'
 
@@ -21,11 +25,15 @@ export function HistoricalCountryDashboard({
 
     // 국가 형태별 통계
     const byStateType: Record<string, number> = {}
+    // 정치체 성격별 통계 (국가/정권/시대)
+    const byEntityKind: Record<string, number> = { _null: 0 }
     let withDuration = 0
     let totalDuration = 0
 
     countries.forEach((country) => {
       byStateType[country.stateType] = (byStateType[country.stateType] || 0) + 1
+      const ek = (country as { entityKind?: HistoricalEntityKind | null }).entityKind ?? '_null'
+      byEntityKind[ek] = (byEntityKind[ek] || 0) + 1
 
       // Era 기반 날짜로 존속 기간 계산
       if (
@@ -56,6 +64,7 @@ export function HistoricalCountryDashboard({
     return {
       total,
       byStateType,
+      byEntityKind,
       avgDuration,
       mostCommonType: mostCommonType
         ? {
@@ -115,6 +124,47 @@ export function HistoricalCountryDashboard({
           <MetricLabel>평균 존속 기간 (년)</MetricLabel>
         </MetricCard>
       </MetricsGrid>
+
+      {/* 정치체 성격별 분포 (국가/정권/시대) */}
+      {(stats.byEntityKind['STATE'] || stats.byEntityKind['REGIME'] || stats.byEntityKind['PERIOD'] || stats.byEntityKind['_null']) && (
+        <Section>
+          <SectionTitle>정치체 성격별 분포</SectionTitle>
+          <StateTypeGrid>
+            {(['STATE', 'REGIME', 'PERIOD'] as const).map((kind) => {
+              const count = stats.byEntityKind[kind] || 0
+              if (count === 0) return null
+              const label = ENTITY_KIND_LABELS[kind]
+              const color = ENTITY_KIND_COLORS[kind]
+              const emoji = ENTITY_KIND_EMOJIS[kind]
+              const percentage = ((count / stats.total) * 100).toFixed(1)
+              return (
+                <StateTypeCard key={kind} whileHover={{ scale: 1.03, y: -2 }} style={{ borderLeftColor: color }}>
+                  <StateTypeEmoji>{emoji}</StateTypeEmoji>
+                  <StateTypeInfo>
+                    <StateTypeLabel>{label}</StateTypeLabel>
+                    <StateTypeStats>
+                      <StateTypeCount style={{ color }}>{count}개</StateTypeCount>
+                      <StateTypePercentage>({percentage}%)</StateTypePercentage>
+                    </StateTypeStats>
+                  </StateTypeInfo>
+                </StateTypeCard>
+              )
+            })}
+            {(stats.byEntityKind['_null'] ?? 0) > 0 && (
+              <StateTypeCard whileHover={{ scale: 1.03, y: -2 }} style={{ borderLeftColor: '#6b7280' }}>
+                <StateTypeEmoji>🏛️</StateTypeEmoji>
+                <StateTypeInfo>
+                  <StateTypeLabel>미지정 (과거 주권 국가)</StateTypeLabel>
+                  <StateTypeStats>
+                    <StateTypeCount style={{ color: '#6b7280' }}>{stats.byEntityKind['_null']}개</StateTypeCount>
+                    <StateTypePercentage>({((stats.byEntityKind['_null'] / stats.total) * 100).toFixed(1)}%)</StateTypePercentage>
+                  </StateTypeStats>
+                </StateTypeInfo>
+              </StateTypeCard>
+            )}
+          </StateTypeGrid>
+        </Section>
+      )}
 
       {/* 국가 형태별 분포 */}
       <Section>

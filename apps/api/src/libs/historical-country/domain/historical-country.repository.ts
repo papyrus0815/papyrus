@@ -1,5 +1,13 @@
 import { HistoricalCountry } from './historical-country.entity'
-import { HistoricalStateType, Era, TransitionEventType } from '@prisma/client'
+import { HistoricalStateType, Era, TransitionEventType, HistoricalEntityKind, TransitionScope } from '@prisma/client'
+
+/**
+ * 역사적 국가 목록 조회 필터
+ */
+export interface HistoricalCountryListFilter {
+  entityKind?: HistoricalEntityKind | null
+  stateType?: HistoricalStateType | null
+}
 
 /**
  * 역사적 국가 생성 데이터
@@ -19,11 +27,14 @@ export interface CreateHistoricalCountryData {
   endMonth?: number
   endDay?: number
   stateType: HistoricalStateType
+  entityKind?: HistoricalEntityKind | null
   parentModernCountryIds?: string[] // 현대 국가 ID 배열
   /** 상위 역사적 국가 = 후임 (이 국가가 이어간 국가). 예: 고려 → 조선 시 고려가 조선을 상위로 설정 */
   parentHistoricalCountryIds?: string[]
   /** 상위(후임) 설정 시 변천 유형 (날짜는 후임 국가의 존속 시작 시점 참조) */
   transitionEventType?: TransitionEventType
+  /** 상위(후임) 설정 시 전환 성격: 국가 교체 vs 정권 교체 */
+  transitionScope?: TransitionScope | null
   accountId?: string // 등록 계정 (개인 정보 플랫폼)
 }
 
@@ -45,9 +56,11 @@ export interface UpdateHistoricalCountryData {
   endMonth?: number | null
   endDay?: number | null
   stateType?: HistoricalStateType
+  entityKind?: HistoricalEntityKind | null
   parentModernCountryIds?: string[] // 현대 국가 ID 배열
   parentHistoricalCountryIds?: string[] // 상위(후임) ID 배열
   transitionEventType?: TransitionEventType
+  transitionScope?: TransitionScope | null
 }
 
 /**
@@ -55,9 +68,9 @@ export interface UpdateHistoricalCountryData {
  */
 export interface IHistoricalCountryRepository {
   /**
-   * 역사적 국가 목록 조회 (accountId 있으면 해당 계정 소유만)
+   * 역사적 국가 목록 조회 (accountId 있으면 해당 계정 소유만, filter로 entityKind/stateType 필터 가능)
    */
-  findAll(accountId?: string): Promise<HistoricalCountry[]>
+  findAll(accountId?: string, filter?: HistoricalCountryListFilter): Promise<HistoricalCountry[]>
 
   /**
    * ID로 역사적 국가 조회 (accountId 있으면 해당 계정 소유만)

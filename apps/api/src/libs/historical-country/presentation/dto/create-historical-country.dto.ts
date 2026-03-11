@@ -7,7 +7,7 @@ import {
   Max,
   IsArray,
 } from 'class-validator'
-import { HistoricalStateType, Era, TransitionEventType } from '@prisma/client'
+import { HistoricalStateType, Era, TransitionEventType, HistoricalEntityKind, TransitionScope } from '@prisma/client'
 
 /**
  * 역사적 국가 생성 DTO
@@ -134,6 +134,14 @@ export class CreateHistoricalCountryDto {
   stateType!: HistoricalStateType
 
   /**
+   * 정치체 성격: 주권 국가(STATE) / 정권(REGIME) / 시대(PERIOD). 선택 시 필터·라벨에 사용
+   * @example "STATE"
+   */
+  @IsOptional()
+  @IsEnum(HistoricalEntityKind)
+  entityKind?: HistoricalEntityKind | null
+
+  /**
    * 연결할 현대 국가 ID 목록 (선택, 여러 개 가능)
    * @example ["country-uuid-1", "country-uuid-2"]
    */
@@ -157,4 +165,11 @@ export class CreateHistoricalCountryDto {
   @IsOptional()
   @IsEnum(TransitionEventType)
   transitionEventType?: TransitionEventType
+
+  /**
+   * 상위(후임) 설정 시 전환 성격: 국가 교체(STATE_SUCCESSION) vs 정권 교체(REGIME_CHANGE)
+   */
+  @IsOptional()
+  @IsEnum(TransitionScope)
+  transitionScope?: TransitionScope | null
 }

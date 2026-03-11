@@ -53,10 +53,13 @@ export class HistoricalCountryService {
   }
 
   /**
-   * 역사적 국가 목록 조회 (accountId 있으면 해당 계정 소유만)
+   * 역사적 국가 목록 조회 (accountId 있으면 해당 계정 소유만, filter로 entityKind/stateType 필터 가능)
    */
-  async getAllHistoricalCountries(accountId?: string): Promise<HistoricalCountry[]> {
-    return await this.repository.findAll(accountId)
+  async getAllHistoricalCountries(
+    accountId?: string,
+    filter?: { entityKind?: string; stateType?: string },
+  ): Promise<HistoricalCountry[]> {
+    return await this.repository.findAll(accountId, filter as any)
   }
 
   /**
@@ -102,7 +105,7 @@ export class HistoricalCountryService {
   }
 
   /**
-   * 역사적 국가 생성 (accountId 있으면 소유자로 저장)
+   * 역사적 국가 생성 (accountId 있으면 소유자로 저장). entityKind 선택 시 정권/시대 구분 가능.
    */
   async createHistoricalCountry(
     data: CreateHistoricalCountryData,
@@ -110,7 +113,7 @@ export class HistoricalCountryService {
   ): Promise<HistoricalCountry> {
     const createData = accountId != null
       ? { ...data, accountId }
-      : data
+      : { ...data }
     const country = await this.repository.create(createData)
     await this.notificationService.notifyHistoricalCountry(
       country.name,

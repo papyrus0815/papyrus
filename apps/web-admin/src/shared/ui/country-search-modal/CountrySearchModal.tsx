@@ -8,6 +8,8 @@ import { createPortal } from 'react-dom'
 import { FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { Z_INDEX } from '@/shared/styles/z-index'
+
 export interface CountryOption {
   id: string
   name: string
@@ -311,7 +313,7 @@ const Modal = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: ${Z_INDEX.MODAL_OVERLAY + 2};
   padding: 1rem;
   animation: fadeIn 0.15s ease-out;
   @keyframes fadeIn {
@@ -330,6 +332,7 @@ const ModalContent = styled.div`
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  z-index: ${Z_INDEX.MODAL_CONTENT + 2};
   animation: slideUp 0.25s ease-out;
   @keyframes slideUp {
     from { transform: translateY(30px); opacity: 0; }

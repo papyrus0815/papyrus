@@ -5,7 +5,11 @@ import {
   getStateTypeLabel,
   getStateTypeColor,
   getStateTypeEmoji,
+  getEntityKindLabel,
+  getEntityKindColor,
+  getEntityKindEmoji,
 } from '@/entities/historical-country/lib/utils'
+import type { HistoricalEntityKind } from '@/entities/historical-country/api'
 import styled from 'styled-components'
 
 interface HistoricalCountryListProps {
@@ -54,8 +58,8 @@ export function HistoricalCountryList({
     return (
       <EmptyState>
         <EmptyIcon>🏛️</EmptyIcon>
-        <EmptyText>역사적 국가가 없습니다</EmptyText>
-        <EmptySubtext>새로운 국가를 추가해보세요</EmptySubtext>
+        <EmptyText>과거 정치체가 없습니다</EmptyText>
+        <EmptySubtext>국가·정권·시대를 추가해보세요</EmptySubtext>
       </EmptyState>
     )
   }
@@ -78,10 +82,18 @@ export function HistoricalCountryList({
             whileHover={{ scale: 1.02, y: -2 }}
           >
             <CardHeader>
-              <StateTypeBadge $color={stateTypeColor}>
-                <span>{getStateTypeEmoji(country.stateType)}</span>
-                <span>{getStateTypeLabel(country.stateType)}</span>
-              </StateTypeBadge>
+              <BadgeRow>
+                {(country as { entityKind?: HistoricalEntityKind | null }).entityKind != null && (
+                  <EntityKindBadge $color={getEntityKindColor((country as { entityKind?: HistoricalEntityKind | null }).entityKind)}>
+                    <span>{getEntityKindEmoji((country as { entityKind?: HistoricalEntityKind | null }).entityKind)}</span>
+                    <span>{getEntityKindLabel((country as { entityKind?: HistoricalEntityKind | null }).entityKind)}</span>
+                  </EntityKindBadge>
+                )}
+                <StateTypeBadge $color={stateTypeColor}>
+                  <span>{getStateTypeEmoji(country.stateType)}</span>
+                  <span>{getStateTypeLabel(country.stateType)}</span>
+                </StateTypeBadge>
+              </BadgeRow>
             </CardHeader>
 
             <CardBody>
@@ -162,6 +174,25 @@ const CountryCard = styled(motion.div)<{
 
 const CardHeader = styled.div`
   margin-bottom: 16px;
+`
+
+const BadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+`
+
+const EntityKindBadge = styled.div<{ $color: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: ${(props) => `${props.$color}18`};
+  color: ${(props) => props.$color};
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
 `
 
 const StateTypeBadge = styled.div<{ $color: string }>`

@@ -30,6 +30,7 @@ import { useState, useMemo } from 'react'
 import type {
   HistoricalCountry,
   HistoricalStateType,
+  HistoricalEntityKind,
 } from '@/entities/historical-country/api'
 
 export type SortBy = 'name' | 'startDate' | 'duration'
@@ -70,8 +71,12 @@ export function useHistoricalCountryFilters({
   const [stateTypeFilter, setStateTypeFilter] = useState<
     HistoricalStateType | 'ALL'
   >('ALL')
+  const [entityKindFilter, setEntityKindFilter] = useState<
+    HistoricalEntityKind | 'ALL'
+  >('ALL')
   const [sortBy, setSortBy] = useState<SortBy>('startDate')
   const [showStateTypeModal, setShowStateTypeModal] = useState(false)
+  const [showEntityKindModal, setShowEntityKindModal] = useState(false)
   const [showSortModal, setShowSortModal] = useState(false)
 
   /**
@@ -95,7 +100,11 @@ export function useHistoricalCountryFilters({
       const matchStateType =
         stateTypeFilter === 'ALL' || country.stateType === stateTypeFilter
 
-      return matchSearch && matchStateType
+      const entityKind = (country as { entityKind?: HistoricalEntityKind | null }).entityKind
+      const matchEntityKind =
+        entityKindFilter === 'ALL' || entityKind === entityKindFilter
+
+      return matchSearch && matchStateType && matchEntityKind
     })
 
     // 정렬
@@ -117,7 +126,7 @@ export function useHistoricalCountryFilters({
       }
       return 0
     })
-  }, [countries, query, stateTypeFilter, sortBy])
+  }, [countries, query, stateTypeFilter, entityKindFilter, sortBy])
 
   /**
    * 국가 형태별 통계
@@ -135,7 +144,15 @@ export function useHistoricalCountryFilters({
     countries.forEach((country) => {
       counts[country.stateType] = (counts[country.stateType] || 0) + 1
     })
+    return counts
+  }, [countries])
 
+  const countByEntityKind = useMemo(() => {
+    const counts: Record<string, number> = { _null: 0 }
+    countries.forEach((country) => {
+      const k = (country as { entityKind?: HistoricalEntityKind | null }).entityKind ?? '_null'
+      counts[k] = (counts[k] || 0) + 1
+    })
     return counts
   }, [countries])
 
@@ -145,15 +162,20 @@ export function useHistoricalCountryFilters({
     setQuery,
     stateTypeFilter,
     setStateTypeFilter,
+    entityKindFilter,
+    setEntityKindFilter,
     sortBy,
     setSortBy,
     showStateTypeModal,
     setShowStateTypeModal,
+    showEntityKindModal,
+    setShowEntityKindModal,
     showSortModal,
     setShowSortModal,
 
     // Computed
     filtered,
     countByStateType,
+    countByEntityKind,
   }
 }

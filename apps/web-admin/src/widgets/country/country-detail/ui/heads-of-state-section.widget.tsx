@@ -101,6 +101,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     null,
   )
   const [affinityCountryModalOpen, setAffinityCountryModalOpen] = useState(false)
+  /** 목록에서 "이 행정부 각료" 펼친 재임 ID */
+  const [expandedCabinetTenureId, setExpandedCabinetTenureId] = useState<string | null>(null)
 
   /** 업적: 컨텐츠 영역 인라인 폼용 (모달 없음) */
   const [achievementTenureId, setAchievementTenureId] = useState<string | null>(null)
@@ -116,6 +118,8 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
   const [editingAchievementId, setEditingAchievementId] = useState<string | null>(null)
   /** 수정 폼 탭: 기본정보 | 업적 */
   const [tenureFormTab, setTenureFormTab] = useState<'basic' | 'achievement'>('basic')
+  /** 수반 등록 시 이 재임으로 행정부도 함께 만들기 (국가원수·정부수반만 표시) */
+  const [createCabinetWithTenure, setCreateCabinetWithTenure] = useState(false)
 
   /** 현대 국가일 때 하위 역사적 국가 목록 (이 현대 국가에 연결된 역사적 국가) */
   const { data: subordinateHistoricalFromApi = [] } = useHistoricalCountriesByModernCountry(
@@ -190,6 +194,14 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
     enabled: personSelectModalOpen,
+  })
+
+  /** 펼친 수반 재임의 하위 각료 목록 (이 행정부 각료) */
+  const { data: subordinateTenures = [] } = useQuery({
+    queryKey: ['subordinate-tenures', expandedCabinetTenureId],
+    queryFn: () =>
+      personCareerApi.getSubordinateTenures(expandedCabinetTenureId!),
+    enabled: !!expandedCabinetTenureId,
   })
 
   /** 해당 국가의 관직 정의(DB) — 직책명 선택 목록으로 사용 */
@@ -353,8 +365,20 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
         await personCareerApi.updateGovernmentPositionTenure(editingTenureId, payload)
         toast.success('재임 기록이 수정되었습니다.')
       } else {
-        await personCareerApi.addGovernmentPositionTenure(payload)
-        toast.success('재임 기록이 추가되었습니다.')
+        const created = await personCareerApi.addGovernmentPositionTenure(payload) as { id: string; countryId?: string | null; historicalCountryId?: string | null }
+        const isHeadType = resolvedPositionType === 'HEAD_OF_STATE' || resolvedPositionType === 'HEAD_OF_GOVERNMENT'
+        if (createCabinetWithTenure && isHeadType && created?.id) {
+          try {
+            await personCareerApi.createCabinet({ headTenureId: created.id })
+            toast.success('재임 기록과 행정부가 등록되었습니다.')
+          } catch (cabinetErr: any) {
+            toast.success('재임 기록이 추가되었습니다.')
+            toast.error(cabinetErr?.message ?? '행정부 생성에 실패했습니다.')
+          }
+        } else {
+          toast.success('재임 기록이 추가되었습니다.')
+        }
+        queryClient.invalidateQueries({ queryKey: ['cabinets-by-country', countryId, historicalCountryId] })
       }
       resetForm()
       setEditingTenureId(null)
@@ -379,6 +403,7 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
     setRegnalNumber('')
     setRegnalName('')
     setShowOnEventsPage(true)
+    setCreateCabinetWithTenure(false)
   }
 
   const handleDeleteTenure = async () => {
@@ -1100,6 +1125,9 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                       </EmptyIconWrap>
                       <EmptyTitle>등록된 재임 기록이 없습니다</EmptyTitle>
                       <EmptyDesc>수반 등록 버튼을 눌러 재임 기록을 추가해 보세요.</EmptyDesc>
+                      <EmptyDesc style={{ marginTop: 8, fontSize: 13, color: '#94a3b8' }}>
+                        행정부·각료는 <strong>행정조직 → 행정부</strong> 탭에서 새 수반과 함께 한 번에 등록할 수 있습니다.
+                      </EmptyDesc>
                     </EmptyState>
                   ) : listViewMode === 'lineage' &&
                     (selectedPositionFilter == null
@@ -1160,9 +1188,13 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                 (t.country?.name || t.historicalCountry?.name)
                                   ? t.country?.name || t.historicalCountry?.name
                                   : null
+                              const isHead =
+                                t.positionType === 'HEAD_OF_STATE' ||
+                                t.positionType === 'HEAD_OF_GOVERNMENT'
+                              const isCabinetExpanded = expandedCabinetTenureId === t.id
                               return (
+                                <React.Fragment key={t.id}>
                                 <ListItem
-                                  key={t.id}
                                   onClick={() => {
                                     setEditingTenureId(t.id)
                                     setView('register')
@@ -1239,6 +1271,77 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                                     </ItemAction>
                                   </ItemActions>
                                 </ListItem>
+                                {isHead && (
+                                  <div style={{ marginLeft: 48, marginBottom: 12 }}>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setExpandedCabinetTenureId(isCabinetExpanded ? null : t.id)
+                                      }}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        padding: '6px 12px',
+                                        fontSize: 13,
+                                        color: '#6366f1',
+                                        background: 'rgba(99, 102, 241, 0.08)',
+                                        border: '1px solid rgba(99, 102, 241, 0.2)',
+                                        borderRadius: 8,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <FiChevronDown
+                                        size={16}
+                                        style={{
+                                          transform: isCabinetExpanded ? 'rotate(180deg)' : 'none',
+                                        }}
+                                      />
+                                      이 행정부 각료
+                                    </button>
+                                    {isCabinetExpanded && (
+                                      <div
+                                        style={{
+                                          marginTop: 10,
+                                          padding: '12px 16px',
+                                          background: '#f8fafc',
+                                          borderRadius: 12,
+                                          border: '1px solid #e2e8f0',
+                                        }}
+                                      >
+                                        {(subordinateTenures as any[]).length === 0 ? (
+                                          <span style={{ fontSize: 13, color: '#64748b' }}>
+                                            등록된 각료가 없습니다. 인물 재임 등록 시 소속 행정부를 선택하면 여기에서 확인할 수 있습니다.
+                                          </span>
+                                        ) : (
+                                          <ul style={{ margin: 0, paddingLeft: 20 }}>
+                                            {(subordinateTenures as any[]).map((sub: any) => (
+                                              <li
+                                                key={sub.id}
+                                                style={{
+                                                  marginBottom: 6,
+                                                  fontSize: 13,
+                                                  listStyle: 'disc',
+                                                }}
+                                              >
+                                                <strong>
+                                                  {sub.positionDefinition?.title ?? sub.title ?? '—'}
+                                                </strong>
+                                                {' · '}
+                                                {getPersonName(sub.person)}
+                                                {' · '}
+                                                {formatDate(sub.startDate)}
+                                                ~{sub.endDate ? formatDate(sub.endDate) : '현재'}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                </React.Fragment>
                               )
                             })}
                           </List>
@@ -1721,6 +1824,25 @@ export function HeadsOfStateSection({ country, embedded }: HeadsOfStateSectionPr
                           </EventsPageCheckWrap>
                         </FieldControl>
                       </FieldRow>
+                      {(selectedPositionDefinition?.positionType === 'HEAD_OF_STATE' || selectedPositionDefinition?.positionType === 'HEAD_OF_GOVERNMENT') && (
+                        <FieldRow>
+                          <FieldLabel>행정부</FieldLabel>
+                          <FieldControl>
+                            <EventsPageCheckWrap>
+                              <CheckboxLabelRow>
+                                <input
+                                  type="checkbox"
+                                  id="heads-create-cabinet-with-tenure"
+                                  checked={createCabinetWithTenure}
+                                  onChange={(e) => setCreateCabinetWithTenure(e.target.checked)}
+                                />
+                                <label htmlFor="heads-create-cabinet-with-tenure">이 재임으로 행정부도 만들기</label>
+                              </CheckboxLabelRow>
+                              <FieldHint>체크하면 행정조직 탭에서 이 수반의 내각에 각료를 바로 추가할 수 있습니다.</FieldHint>
+                            </EventsPageCheckWrap>
+                          </FieldControl>
+                        </FieldRow>
+                      )}
                     </FormRows>
                     <FormActions>
                       <ResetButton type="button" onClick={resetForm} disabled={isSubmitting}>

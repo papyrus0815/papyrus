@@ -25,6 +25,7 @@ import {
   FieldRow,
   FieldLabel,
   FieldControl,
+  FieldHint,
   DateFieldsRow,
   Required,
   Input,
@@ -234,6 +235,10 @@ export interface TenureRegisterPanelProps {
   onClose: () => void
   onSuccess?: () => void
   tenureId?: string | null
+  /** 행정부 탭 등에서 열 때 국가·행정부 미리 채우기 */
+  initialCountryId?: string
+  initialHistoricalCountryId?: string | null
+  initialCabinetId?: string | null
 }
 
 const FORM_ID = 'tenure-register-form'
@@ -244,6 +249,9 @@ export function TenureRegisterPanel({
   onClose,
   onSuccess,
   tenureId,
+  initialCountryId,
+  initialHistoricalCountryId,
+  initialCabinetId,
 }: TenureRegisterPanelProps) {
   const queryClient = useQueryClient()
   const isEdit = !!tenureId
@@ -257,10 +265,12 @@ export function TenureRegisterPanel({
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
+  const [cabinetId, setCabinetId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
   const [historicalCountryModalOpen, setHistoricalCountryModalOpen] = useState(false)
   const [positionModalOpen, setPositionModalOpen] = useState(false)
+  const [cabinetModalOpen, setCabinetModalOpen] = useState(false)
   const [personImageError, setPersonImageError] = useState(false)
 
   const { data: countries = [] } = useCountries()
@@ -276,6 +286,31 @@ export function TenureRegisterPanel({
       }),
     enabled: open,
   })
+
+  const { data: cabinets = [] } = useQuery({
+    queryKey: ['cabinets-by-country', countryId, historicalCountryId],
+    queryFn: () =>
+      personCareerApi.getCabinets({
+        countryId: countryId || undefined,
+        historicalCountryId: historicalCountryId || undefined,
+      }),
+    enabled: open && (!!countryId || !!historicalCountryId),
+  })
+
+  const cabinetOptions: SelectOption<string>[] = useMemo(() => {
+    return (cabinets as any[]).map((c: any) => {
+      const head = c.headTenure
+      const personName = head?.person?.name ?? head?.person?.surname ?? '이름 없음'
+      const posTitle = head?.positionDefinition?.title ?? head?.title ?? c.name ?? '행정부'
+      const start = head?.startDate ? new Date(head.startDate).getFullYear() : ''
+      const end = head?.endDate ? new Date(head.endDate).getFullYear() : '현재'
+      const range = start && end ? ` (${start}~${end})` : ''
+      return {
+        value: c.id,
+        label: `${personName} - ${posTitle}${range}`,
+      }
+    })
+  }, [cabinets])
 
   const { data: personDetail } = useQuery({
     queryKey: ['person-detail', personId],
@@ -341,6 +376,7 @@ export function TenureRegisterPanel({
     setEndDate('')
     setRegnalNumber('')
     setShowOnEvents(true)
+    setCabinetId(null)
   }
 
   useEffect(() => {
@@ -349,6 +385,15 @@ export function TenureRegisterPanel({
       setPersonImageError(false)
     }
   }, [open])
+
+  /** 행정부 탭 등에서 열 때 국가·행정부 미리 채우기 */
+  useEffect(() => {
+    if (open && (initialCountryId != null || initialHistoricalCountryId != null || initialCabinetId != null)) {
+      if (initialCountryId != null) setCountryId(initialCountryId)
+      if (initialHistoricalCountryId !== undefined) setHistoricalCountryId(initialHistoricalCountryId ?? null)
+      if (initialCabinetId !== undefined) setCabinetId(initialCabinetId ?? null)
+    }
+  }, [open, initialCountryId, initialHistoricalCountryId, initialCabinetId])
 
   useEffect(() => {
     setPersonImageError(false)
@@ -367,6 +412,7 @@ export function TenureRegisterPanel({
     const num = t.regnalNumber ?? t.termNumber
     setRegnalNumber(num != null ? String(num) : '')
     setShowOnEvents(t.showPositionInfo !== false)
+    setCabinetId(t.cabinetId ?? t.cabinet?.id ?? null)
   }, [open, editingTenure])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -393,6 +439,7 @@ export function TenureRegisterPanel({
       termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
       regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
       showPositionInfo: showOnEvents,
+      cabinetId: cabinetId || undefined,
     }
     setSubmitting(true)
     try {
@@ -577,8 +624,33 @@ export function TenureRegisterPanel({
                   <span>{positionTitleLabel}</span>
                   <FiChevronDown size={20} />
                 </SelectTriggerButton>
+                {(cabinetId || initialCabinetId) && (
+                  <FieldHint style={{ marginTop: 6 }}>
+                    부처를 미리 등록하지 않아도 <strong>기타 (직접 입력)</strong>으로 직위명(예: 국방장관, 외무대신)을 넣을 수 있습니다.
+                  </FieldHint>
+                )}
               </FieldControl>
             </FieldRow>
+
+            {(countryId || historicalCountryId) && cabinetOptions.length > 0 && (
+              <FieldRow>
+                <FieldLabel>소속 행정부 (선택)</FieldLabel>
+                <FieldControl>
+                  <SelectTriggerButton
+                    type="button"
+                    onClick={() => setCabinetModalOpen(true)}
+                    $hasValue={!!cabinetId}
+                  >
+                    <span>
+                      {cabinetId
+                        ? cabinetOptions.find((o) => o.value === cabinetId)?.label ?? '선택됨'
+                        : '행정부 선택 (각료인 경우)'}
+                    </span>
+                    <FiChevronDown size={20} />
+                  </SelectTriggerButton>
+                </FieldControl>
+              </FieldRow>
+            )}
 
             {(!positionDefinitionId || (positionDefinitions as any[]).length === 0) && (
               <>
@@ -711,6 +783,18 @@ export function TenureRegisterPanel({
         options={positionTitleOptions}
         selectedValue={positionDefinitionId ?? OTHER_POSITION_VALUE}
         onSelect={handlePositionSelect}
+      />
+
+      <SelectModal
+        isOpen={cabinetModalOpen}
+        onClose={() => setCabinetModalOpen(false)}
+        title="소속 행정부"
+        options={[{ value: '', label: '없음' }, ...cabinetOptions]}
+        selectedValue={cabinetId ?? ''}
+        onSelect={(value) => {
+          setCabinetModalOpen(false)
+          setCabinetId(value || null)
+        }}
       />
     </FormSidePanel>
   )

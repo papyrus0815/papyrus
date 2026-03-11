@@ -22,7 +22,8 @@ import styled from 'styled-components'
 
 import { personApi } from '@/shared/api/person'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
-import { getUploadImageUrl } from '@/shared/api/upload'
+import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel'
@@ -56,6 +57,17 @@ function formatIsoDateKo(iso: string | null | undefined): string {
   } catch {
     return ''
   }
+}
+
+/**
+ * 전기 편집 시 에디터에 넣을 값: 일반 텍스트면 \n → <br> 변환, 이미 HTML이면 그대로.
+ * (RichTextEditor는 HTML을 다루므로 평문 개행이 보이지 않음)
+ */
+function biographyToEditorValue(raw: string | null | undefined): string {
+  if (raw == null || raw === '') return ''
+  const trimmed = raw.trimStart()
+  if (trimmed.startsWith('<')) return raw
+  return raw.replace(/\n/g, '<br>')
 }
 
 /**
@@ -255,17 +267,7 @@ export function PersonDetailPanel({
           </HeaderTitleBlock>
         </HeaderLeft>
         {!hideHeaderActions && (
-          <HeaderActions>
-            <OutlineButton
-              type="button"
-              onClick={() => {
-                playClickSound()
-                onEdit(person.id)
-              }}
-            >
-              <FiEdit2 size={16} />
-              수정
-            </OutlineButton>
+          <>
             <BackToListButton
               type="button"
               onClick={() => {
@@ -276,7 +278,19 @@ export function PersonDetailPanel({
               <FiArrowLeft size={16} />
               {backLabel}
             </BackToListButton>
-          </HeaderActions>
+            <HeaderActions>
+              <OutlineButton
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  onEdit(person.id)
+                }}
+              >
+                <FiEdit2 size={16} />
+                수정
+              </OutlineButton>
+            </HeaderActions>
+          </>
         )}
       </HeaderRow>
 
@@ -550,14 +564,14 @@ export function PersonDetailPanel({
               />
 
               <section aria-label="전기">
-                <SectionLabelRow>
-                  <SectionLabel>전기</SectionLabel>
+                <BioSectionLabelRow>
+                  <BioSectionLabel>전기</BioSectionLabel>
                   {!editingBiography ? (
                     <OutlineButton
                       type="button"
                       onClick={() => {
                         playClickSound()
-                        setBiographyDraft(person.biography ?? '')
+                        setBiographyDraft(biographyToEditorValue(person.biography))
                         setEditingBiography(true)
                       }}
                     >
@@ -565,65 +579,81 @@ export function PersonDetailPanel({
                       {person.biography ? '수정' : '추가'}
                     </OutlineButton>
                   ) : null}
-                </SectionLabelRow>
+                </BioSectionLabelRow>
                 {editingBiography ? (
-                  <SectionCard>
-                    <BioTextarea
-                      value={biographyDraft}
-                      onChange={(e) => setBiographyDraft(e.target.value)}
-                      placeholder="전기(약력)를 입력하세요. 여러 줄 입력 가능합니다."
-                      rows={12}
-                      autoFocus
-                    />
-                    <BioEditActions>
-                      <OutlineButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setEditingBiography(false)
-                          setBiographyDraft('')
+                  <SectionCardBio>
+                    <BioEditorWrap>
+                      <RichTextEditor
+                        value={biographyDraft}
+                        onChange={setBiographyDraft}
+                        showTitle={false}
+                        placeholder="전기(약력)를 입력하세요. 서식·이미지를 넣을 수 있습니다."
+                        onImageUpload={async (file) => {
+                          const result = await uploadImage(file, 'persons')
+                          return result.url
                         }}
-                        disabled={savingBiography}
-                      >
-                        취소
-                      </OutlineButton>
-                      <PrimaryButton
-                        type="button"
-                        onClick={async () => {
-                          playClickSound()
-                          setSavingBiography(true)
-                          try {
-                            await personApi.update(person.id, {
-                              biography: biographyDraft.trim() || undefined,
-                            })
-                            await queryClient.invalidateQueries({
-                              queryKey: ['person-detail', personId],
-                            })
+                      />
+                      <BioEditActions>
+                        <OutlineButton
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
                             setEditingBiography(false)
                             setBiographyDraft('')
-                            toast.success('전기가 저장되었습니다.')
-                          } catch (err: unknown) {
-                            toast.error(
-                              err instanceof Error ? err.message : '전기 저장에 실패했습니다.',
-                            )
-                          } finally {
-                            setSavingBiography(false)
-                          }
-                        }}
-                        disabled={savingBiography}
-                      >
-                        {savingBiography ? '저장 중…' : '저장'}
-                      </PrimaryButton>
-                    </BioEditActions>
-                  </SectionCard>
+                          }}
+                          disabled={savingBiography}
+                        >
+                          취소
+                        </OutlineButton>
+                        <PrimaryButton
+                          type="button"
+                          onClick={async () => {
+                            playClickSound()
+                            setSavingBiography(true)
+                            try {
+                              await personApi.update(person.id, {
+                                biography: biographyDraft?.trim() || undefined,
+                              })
+                              await queryClient.invalidateQueries({
+                                queryKey: ['person-detail', personId],
+                              })
+                              setEditingBiography(false)
+                              setBiographyDraft('')
+                              toast.success('전기가 저장되었습니다.')
+                            } catch (err: unknown) {
+                              toast.error(
+                                err instanceof Error ? err.message : '전기 저장에 실패했습니다.',
+                              )
+                            } finally {
+                              setSavingBiography(false)
+                            }
+                          }}
+                          disabled={savingBiography}
+                        >
+                          {savingBiography ? '저장 중…' : '저장'}
+                        </PrimaryButton>
+                      </BioEditActions>
+                    </BioEditorWrap>
+                  </SectionCardBio>
                 ) : person.biography ? (
-                  <SectionCard>
-                    <BioText>{person.biography}</BioText>
-                  </SectionCard>
+                  <SectionCardBio>
+                    <BioProse>
+                      {person.biography.trimStart().startsWith('<') ||
+                      /<br\s*\/?>/i.test(person.biography) ? (
+                        <BioContent
+                          dangerouslySetInnerHTML={{
+                            __html: person.biography,
+                          }}
+                        />
+                      ) : (
+                        <BioText>{person.biography}</BioText>
+                      )}
+                    </BioProse>
+                  </SectionCardBio>
                 ) : (
-                  <SectionCard>
+                  <SectionCardBio>
                     <BioEmptyHint>전기(약력)가 없습니다. 수정 버튼으로 추가할 수 있습니다.</BioEmptyHint>
-                  </SectionCard>
+                  </SectionCardBio>
                 )}
               </section>
             </TabContent>
@@ -877,37 +907,19 @@ const PanelRoot = styled.div<{ $embed?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: ${(p) => (p.$embed ? 16 : 22)}px;
-  max-height: ${(p) => (p.$embed ? 'none' : 'calc(100vh - 200px)')};
-  overflow-y: ${(p) => (p.$embed ? 'visible' : 'auto')};
-  overflow-x: hidden;
   min-width: 0;
   background: transparent;
-
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-  }
+  padding-bottom: ${(p) => (p.$embed ? 0 : '56px')};
 
   @media (max-width: 968px) {
-    max-height: none;
-    padding: ${(p) => (p.$embed ? '0' : '24px 20px 32px')};
+    padding: ${(p) => (p.$embed ? '0' : '24px 20px 48px')};
     gap: ${(p) => (p.$embed ? 18 : 24)}px;
   }
 `
 
 const HeaderRow = styled.header`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
   flex-wrap: wrap;
@@ -1159,33 +1171,74 @@ const SectionCard = styled.div`
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 `
 
+/** 전기 전용 카드 — 맨밑 border 없음 */
+const SectionCardBio = styled.div`
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 28px 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: none;
+`
+
+/** 전기 섹션 라벨 행 — 눈에 잘 들어오도록 */
+const BioSectionLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+`
+
+const BioSectionLabel = styled.div`
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: -0.02em;
+`
+
 const BioText = styled.div`
-  font-size: 14px;
-  line-height: 1.8;
-  color: #374151;
+  font-size: 15px;
+  line-height: 1.75;
+  color: #1e293b;
   white-space: pre-wrap;
   word-break: break-word;
 `
 
-const BioTextarea = styled.textarea`
-  display: block;
+/** 전기 편집 시 에디터 감싸기 — 표시 본문(BioProse)과 동일 너비 */
+const BioEditorWrap = styled.div`
+  max-width: 680px;
+  margin: 0 auto;
   width: 100%;
-  min-height: 280px;
-  padding: 16px 20px;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #374151;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  resize: vertical;
-  &::placeholder {
-    color: #94a3b8;
+`
+
+/** 전기 본문 감싸기 — 포스트 상세처럼 좌우 여백 + 수평선 스타일 */
+const BioProse = styled.div`
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 40px;
+  hr,
+  .prose-hr {
+    border: none !important;
+    border-top: 1px solid #e5e7eb !important;
+    margin: 24px 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    background: none !important;
+    display: block !important;
   }
-  &:focus {
-    outline: none;
-    border-color: #6366f1;
-    background: #fff;
+`
+
+/** 전기 표시용 (RichTextEditor 저장 HTML 또는 기존 일반 텍스트) */
+const BioContent = styled.div`
+  font-size: 15px;
+  line-height: 1.75;
+  color: #1e293b;
+  word-break: break-word;
+  & p {
+    margin: 0 0 0.75em;
+  }
+  & p:last-child {
+    margin-bottom: 0;
   }
 `
 
@@ -1193,7 +1246,7 @@ const BioEditActions = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 20px;
 `
 
 const PrimaryButton = styled.button`
@@ -1221,7 +1274,7 @@ const PrimaryButton = styled.button`
 const BioEmptyHint = styled.p`
   margin: 0;
   font-size: 14px;
-  color: #94a3b8;
+  color: #64748b;
   line-height: 1.6;
 `
 
@@ -1381,7 +1434,7 @@ const TabContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 28px;
-  padding-bottom: 32px;
+  padding-bottom: 56px;
 `
 
 const ListBlock = styled.div`

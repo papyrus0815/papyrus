@@ -3238,6 +3238,41 @@ export const FormField = styled.div`
   gap: 8px;
 `
 
+/** 모달에 넣을 때 폼 하단 취소/제출 버튼 행 */
+export const ModalFormActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+`
+
+/** 존속 기간 상세 입력 행 (시작/종료 시점: 기원 + 년/월/일) */
+export const DateDetailRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+  flex-wrap: wrap;
+
+  .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    width: 72px;
+    flex-shrink: 0;
+  }
+  input[type='number'] {
+    width: 70px;
+    text-align: center;
+  }
+  button {
+    min-width: 100px;
+  }
+`
+
 export const FormLabel = styled.label`
   font-size: 13px;
   font-weight: 600;

@@ -22,6 +22,7 @@ import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal'
 import {
@@ -158,23 +159,6 @@ const SelectBtn = styled.button<{ $hasValue?: boolean }>`
   }
   span {
     flex: 1;
-  }
-`
-
-const TextArea = styled.textarea`
-  width: 100%;
-  max-width: 380px;
-  min-height: 80px;
-  padding: 12px 16px;
-  font-size: 14px;
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 12px;
-  box-sizing: border-box;
-  resize: vertical;
-  &:focus {
-    outline: none;
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
 
@@ -831,16 +815,16 @@ export function PersonRegisterView({
               <FieldRow>
                 <FieldLabel>약력</FieldLabel>
                 <FieldControl>
-                  <TextArea
+                  <RichTextEditor
                     value={biography}
-                    onChange={(e) => setBiography(e.target.value)}
-                    placeholder="인물의 일생을 설명하는 글 (선택)"
-                    rows={6}
-                    maxLength={20000}
+                    onChange={setBiography}
+                    showTitle={false}
+                    placeholder="인물의 일생을 설명하는 글 (선택). 서식·이미지를 넣을 수 있습니다."
+                    onImageUpload={async (file) => {
+                      const result = await uploadImage(file, 'persons')
+                      return result.url
+                    }}
                   />
-                  <span style={{ fontSize: 12, color: '#6b7280', marginTop: 4, display: 'block' }}>
-                    {biography.length} / 20,000자
-                  </span>
                 </FieldControl>
               </FieldRow>
             </FormRows>

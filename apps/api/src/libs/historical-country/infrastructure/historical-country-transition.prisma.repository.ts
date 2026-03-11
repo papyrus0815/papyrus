@@ -35,6 +35,7 @@ function toRecord(row: {
   predecessorId: string
   successorId: string
   eventType: string
+  transitionScope: string | null
   predecessor: { name: string }
   successor: { name: string; startEra: Era | null; startYear: number | null; startMonth: number | null; startDay: number | null }
   createdAt: Date
@@ -45,6 +46,7 @@ function toRecord(row: {
     predecessorId: row.predecessorId,
     successorId: row.successorId,
     eventType: row.eventType as HistoricalCountryTransitionRecord['eventType'],
+    transitionScope: row.transitionScope as HistoricalCountryTransitionRecord['transitionScope'],
     successorStartDate: formatSuccessorStartDate(
       row.successor.startEra,
       row.successor.startYear,
@@ -108,6 +110,7 @@ export class HistoricalCountryTransitionPrismaRepository
         predecessorId: data.predecessorId,
         successorId: data.successorId,
         eventType: data.eventType,
+        transitionScope: data.transitionScope ?? undefined,
       },
       include: {
         predecessor: { select: { id: true, name: true } },
@@ -125,6 +128,7 @@ export class HistoricalCountryTransitionPrismaRepository
       where: { id },
       data: {
         ...(data.eventType !== undefined && { eventType: data.eventType }),
+        ...(data.transitionScope !== undefined && { transitionScope: data.transitionScope }),
       },
       include: {
         predecessor: { select: { id: true, name: true } },

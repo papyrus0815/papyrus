@@ -40,6 +40,10 @@ export class CreateGovernmentPositionDefinitionDto {
   organizationId?: string | null
 
   @IsOptional()
+  @IsUUID()
+  administrationDepartmentId?: string | null
+
+  @IsOptional()
   @IsDateString()
   establishedDate?: string | null
 
@@ -81,6 +85,10 @@ export class UpdateGovernmentPositionDefinitionDto {
   @IsOptional()
   @IsUUID()
   organizationId?: string | null
+
+  @IsOptional()
+  @IsUUID()
+  administrationDepartmentId?: string | null
 
   @IsOptional()
   @IsDateString()

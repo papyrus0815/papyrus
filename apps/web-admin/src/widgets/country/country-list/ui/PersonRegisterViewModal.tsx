@@ -29,9 +29,9 @@ const Overlay = styled(motion.div)`
 `
 
 const ModalBox = styled(motion.div)`
-  width: min(960px, 100%);
-  height: min(95vh, 1060px);
-  min-height: 1060px;
+  width: min(1120px, 96vw);
+  max-height: min(92vh, 1200px);
+  min-height: 560px;
   background: #ffffff;
   border-radius: 22px;
   box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);

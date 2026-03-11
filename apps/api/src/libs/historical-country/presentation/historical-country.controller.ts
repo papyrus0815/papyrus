@@ -46,7 +46,8 @@ export class HistoricalCountryController {
   ) {}
 
   /**
-   * 역사적 국가 목록 조회 (본인 등록분만)
+   * 역사적 국가 목록 조회 (본인 등록분만).
+   * 쿼리: entityKind (STATE|REGIME|PERIOD), stateType (예: SHOGUNATE) 로 필터 가능.
    *
    * @returns 역사적 국가 목록
    * @tag historical-countries
@@ -54,10 +55,16 @@ export class HistoricalCountryController {
   @Get()
   async getAllHistoricalCountries(
     @Request() req: any,
+    @Query('entityKind') entityKind?: string,
+    @Query('stateType') stateType?: string,
   ): Promise<HistoricalCountryResponseDto[]> {
     const accountId = req.user?.id ?? req.user?.sub
+    const filter =
+      entityKind || stateType
+        ? { entityKind: entityKind || undefined, stateType: stateType || undefined }
+        : undefined
     const countries =
-      await this.historicalCountryService.getAllHistoricalCountries(accountId)
+      await this.historicalCountryService.getAllHistoricalCountries(accountId, filter)
     return countries.map((country) => this.toResponseDto(country))
   }
 
@@ -235,6 +242,7 @@ export class HistoricalCountryController {
         predecessorId: dto.predecessorId,
         successorId: dto.successorId,
         eventType: dto.eventType,
+        transitionScope: dto.transitionScope ?? undefined,
       },
       accountId,
     )
@@ -270,9 +278,11 @@ export class HistoricalCountryController {
         endMonth: dto.endMonth,
         endDay: dto.endDay,
         stateType: dto.stateType,
+        entityKind: dto.entityKind ?? undefined,
         parentModernCountryIds: dto.parentModernCountryIds,
         parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
         transitionEventType: dto.transitionEventType,
+        transitionScope: dto.transitionScope ?? undefined,
       },
       accountId,
     )
@@ -369,9 +379,11 @@ export class HistoricalCountryController {
         endMonth: dto.endMonth,
         endDay: dto.endDay,
         stateType: dto.stateType,
+        entityKind: dto.entityKind,
         parentModernCountryIds: dto.parentModernCountryIds,
         parentHistoricalCountryIds: dto.parentHistoricalCountryIds,
         transitionEventType: dto.transitionEventType,
+        transitionScope: dto.transitionScope,
       },
       accountId,
     )
@@ -457,6 +469,7 @@ export class HistoricalCountryController {
       endDay: country.endDay,
 
       stateType: country.stateType,
+      entityKind: country.entityKind,
       parentModernCountryIds,
       parentHistoricalCountryIds,
       transitionEventType: transitionEventType as HistoricalCountryResponseDto['transitionEventType'],
@@ -471,6 +484,7 @@ export class HistoricalCountryController {
       predecessorId: t.predecessorId,
       successorId: t.successorId,
       eventType: t.eventType as HistoricalCountryTransitionResponseDto['eventType'],
+      transitionScope: t.transitionScope,
       successorStartDate: t.successorStartDate,
       predecessorName: t.predecessorName,
       successorName: t.successorName,

@@ -1,4 +1,4 @@
-import { TransitionEventType } from '@prisma/client'
+import { TransitionEventType, TransitionScope } from '@prisma/client'
 import { IsEnum, IsOptional } from 'class-validator'
 
 /**
@@ -8,4 +8,8 @@ export class UpdateHistoricalCountryTransitionDto {
   @IsOptional()
   @IsEnum(TransitionEventType)
   eventType?: TransitionEventType
+
+  @IsOptional()
+  @IsEnum(TransitionScope)
+  transitionScope?: TransitionScope | null
 }

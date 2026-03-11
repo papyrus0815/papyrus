@@ -245,6 +245,38 @@ export class AdministrationDepartmentController {
   }
 
   /**
+   * 부처별 역대 장관(재임) — 이 부처에 연결된 직위 정의의 재임 목록
+   */
+  @Get(':id/tenures')
+  async getTenuresByDepartmentId(
+    @Param('id') id: string,
+  ): Promise<any[]> {
+    const list = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        positionDefinition: { administrationDepartmentId: id },
+      },
+      orderBy: { startDate: 'desc' },
+      include: {
+        person: { select: { id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true } },
+        positionDefinition: { select: { id: true, title: true, positionType: true } },
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+      },
+    })
+    return list.map((row) => ({
+      id: row.id,
+      termNumber: row.termNumber,
+      startDate: row.startDate?.toISOString() ?? null,
+      endDate: row.endDate?.toISOString() ?? null,
+      title: row.title,
+      positionDefinition: row.positionDefinition,
+      person: row.person,
+      country: row.country,
+      historicalCountry: row.historicalCountry,
+    }))
+  }
+
+  /**
    * 단건 조회
    */
   @Get(':id')
@@ -345,20 +377,12 @@ export class AdministrationDepartmentController {
   }
 
   /**
-   * 행정부처 생성 (동일 국가·동일 카테고리 중복 불가)
+   * 행정부처 생성 (동일 카테고리에 여러 부처 허용)
    */
   @Post()
   async create(
     @Body() body: CreateAdministrationDepartmentDto,
   ): Promise<AdministrationDepartmentResponseDto> {
-    if (body.categoryId) {
-      const existing = await this.prisma.administrationDepartment.findFirst({
-        where: { countryId: body.countryId, categoryId: body.categoryId },
-      })
-      if (existing) {
-        throw new ConflictException('이미 해당 카테고리에 부처가 등록되어 있습니다. 카테고리당 한 부처만 등록할 수 있습니다.')
-      }
-    }
     const row = await this.prisma.administrationDepartment.create({
       data: {
         name: body.name,
@@ -383,7 +407,7 @@ export class AdministrationDepartmentController {
   }
 
   /**
-   * 행정부처 수정 (동일 국가·동일 카테고리 중복 불가)
+   * 행정부처 수정 (동일 카테고리에 여러 부처 허용)
    */
   @Patch(':id')
   async update(
@@ -393,14 +417,6 @@ export class AdministrationDepartmentController {
     const current = await this.prisma.administrationDepartment.findUnique({ where: { id } })
     if (!current) {
       throw new NotFoundException('부처를 찾을 수 없습니다.')
-    }
-    if (body.categoryId !== undefined && body.categoryId !== current.categoryId) {
-      const existing = await this.prisma.administrationDepartment.findFirst({
-        where: { countryId: current.countryId, categoryId: body.categoryId },
-      })
-      if (existing) {
-        throw new ConflictException('이미 해당 카테고리에 부처가 등록되어 있습니다. 카테고리당 한 부처만 등록할 수 있습니다.')
-      }
     }
     const row = await this.prisma.administrationDepartment.update({
       where: { id },

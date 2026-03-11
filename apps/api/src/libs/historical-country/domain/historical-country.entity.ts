@@ -1,8 +1,8 @@
-import { HistoricalStateType, Era } from '@prisma/client'
+import { HistoricalStateType, Era, HistoricalEntityKind } from '@prisma/client'
 
 /**
  * 역사적 국가 엔티티
- * 과거에 존재했던 국가들의 정보를 표현합니다.
+ * 과거에 존재했던 국가·정권·시대를 표현합니다.
  */
 export class HistoricalCountry {
   id: string
@@ -25,6 +25,8 @@ export class HistoricalCountry {
   endDay: number | null
 
   stateType: HistoricalStateType
+  /** 정치체 성격: 주권 국가 / 정권 / 시대. null이면 과거 주권 국가로 간주 */
+  entityKind: HistoricalEntityKind | null
   createdAt: Date
   updatedAt: Date
 
@@ -44,6 +46,7 @@ export class HistoricalCountry {
     endMonth?: number | null
     endDay?: number | null
     stateType: HistoricalStateType
+    entityKind?: HistoricalEntityKind | null
     createdAt: Date
     updatedAt: Date
   }) {
@@ -62,6 +65,7 @@ export class HistoricalCountry {
     this.endMonth = data.endMonth ?? null
     this.endDay = data.endDay ?? null
     this.stateType = data.stateType
+    this.entityKind = data.entityKind ?? null
     this.createdAt = data.createdAt
     this.updatedAt = data.updatedAt
   }

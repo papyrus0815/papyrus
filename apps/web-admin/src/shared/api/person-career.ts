@@ -211,6 +211,8 @@ export interface CreateGovernmentPositionTenureDto {
   regnalNumber?: number // 재위번호 (서양 군주)
   startDate: string // 취임일 (필수)
   endDate?: string // 퇴임일
+  /** 소속 행정부(Cabinet) ID — 이 각료/총독 재임이 속한 행정부 */
+  cabinetId?: string | null
   appointmentMethod?:
     | 'DIRECT_ELECTION'
     | 'INDIRECT_ELECTION'
@@ -248,6 +250,7 @@ export interface CreateGovernmentPositionDefinitionDto {
   rank?: number | null
   departmentName?: string | null
   organizationId?: string | null
+  administrationDepartmentId?: string | null
   establishedDate?: string | null
   abolishedDate?: string | null
 }
@@ -264,6 +267,7 @@ export interface UpdateGovernmentPositionDefinitionDto {
   rank?: number | null
   departmentName?: string | null
   organizationId?: string | null
+  administrationDepartmentId?: string | null
   establishedDate?: string | null
   abolishedDate?: string | null
 }
@@ -495,6 +499,86 @@ export const personCareerApi = {
       : raw && typeof raw === 'object' && 'data' in raw && Array.isArray((raw as any).data)
         ? (raw as any).data
         : []
+  },
+
+  /**
+   * 특정 수반 재임 하의 각료 목록 (행정부 한눈에 보기) — headTenureId로 Cabinet 조회 후 멤버 반환
+   * GET /government-positions/tenures/by-parent/:parentTenureId
+   */
+  getSubordinateTenures: async (headTenureId: string) => {
+    const response = await apiClient.get(
+      `/government-positions/tenures/by-parent/${encodeURIComponent(headTenureId)}`,
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 행정부(Cabinet) 목록 — 국가/역사적 국가별
+   * GET /government-positions/cabinets?countryId=&historicalCountryId=
+   */
+  getCabinets: async (params: {
+    countryId?: string
+    historicalCountryId?: string
+  }) => {
+    const search = new URLSearchParams()
+    if (params.countryId) search.set('countryId', params.countryId)
+    if (params.historicalCountryId) search.set('historicalCountryId', params.historicalCountryId)
+    const response = await apiClient.get(
+      `/government-positions/cabinets?${search.toString()}`,
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 수반 재임 ID로 행정부 1건 조회
+   * GET /government-positions/cabinets/by-head-tenure/:headTenureId
+   */
+  getCabinetByHeadTenureId: async (headTenureId: string) => {
+    const response = await apiClient.get(
+      `/government-positions/cabinets/by-head-tenure/${encodeURIComponent(headTenureId)}`,
+    )
+    return response.data ?? null
+  },
+
+  /**
+   * 행정부 등록
+   * POST /government-positions/cabinets
+   */
+  createCabinet: async (dto: { headTenureId: string; name?: string | null }) => {
+    const response = await apiClient.post('/government-positions/cabinets', dto)
+    return response.data
+  },
+
+  /**
+   * 행정부 삭제 (소속 각료·수반 재임 포함 관련 데이터 모두)
+   * DELETE /government-positions/cabinets/:cabinetId
+   */
+  deleteCabinet: async (cabinetId: string) => {
+    await apiClient.delete(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}`,
+    )
+  },
+
+  /**
+   * 행정부 ID로 소속 각료(재임) 목록
+   * GET /government-positions/cabinets/:cabinetId/tenures
+   */
+  getTenuresByCabinetId: async (cabinetId: string) => {
+    const response = await apiClient.get(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/tenures`,
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 조직(만철, 관동군, 대만총독부 등) 역대 수장
+   * GET /government-positions/organizations/:organizationId/heads
+   */
+  getOrganizationHeads: async (organizationId: string) => {
+    const response = await apiClient.get(
+      `/government-positions/organizations/${encodeURIComponent(organizationId)}/heads`,
+    )
+    return Array.isArray(response.data) ? response.data : []
   },
 
   /**

@@ -7,7 +7,6 @@ import {
   FiBook,
   FiBriefcase,
   FiChevronDown,
-  FiGlobe,
   FiHome,
   FiLayers,
   FiLogOut,
@@ -304,16 +303,6 @@ const Header: React.FC = () => {
         navigate('/persons')
       },
       active: location.pathname.startsWith('/persons'),
-    },
-    {
-      key: 'organizations',
-      label: '행정기구',
-      icon: <FiGlobe size={16} />,
-      onClick: () => {
-        playClickSound()
-        navigate('/organizations')
-      },
-      active: location.pathname.startsWith('/organizations'),
     },
     {
       key: 'dynasties',

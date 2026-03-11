@@ -19,6 +19,7 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateGovernmentPositionDefinitionDto } from '@/shared/api/person-career'
 import { getOrganizations } from '@/shared/api/organizations'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { apiConnection } from '@/shared/api/client'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
@@ -269,9 +270,11 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
     rank: null,
     departmentName: null,
     organizationId: null,
+    administrationDepartmentId: null,
     establishedDate: null,
     abolishedDate: null,
   })
+  const [departmentModalOpen, setDepartmentModalOpen] = useState(false)
 
   const { data: definitions = [], isLoading } = useQuery({
     queryKey: ['position-definitions', countryId, historicalCountryId],
@@ -298,6 +301,15 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
     enabled: (!!countryId || !!historicalCountryId) && (view === 'form'),
   })
 
+  const { data: departments = [] } = useQuery({
+    queryKey: ['administration-departments-for-definition', countryId],
+    queryFn: () =>
+      countryId
+        ? administrationDepartmentApi.getByCountryId(countryId)
+        : Promise.resolve([]),
+    enabled: !!countryId && view === 'form',
+  })
+
   const refetch = () => {
     queryClient.invalidateQueries({
       queryKey: ['position-definitions', countryId, historicalCountryId],
@@ -316,6 +328,7 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
         rank: def.rank ?? null,
         departmentName: def.departmentName ?? null,
         organizationId: def.organizationId ?? null,
+        administrationDepartmentId: def.administrationDepartmentId ?? def.administrationDepartment?.id ?? null,
         establishedDate: def.establishedDate ?? null,
         abolishedDate: def.abolishedDate ?? null,
       })
@@ -330,6 +343,7 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
         rank: null,
         departmentName: null,
         organizationId: null,
+        administrationDepartmentId: null,
         establishedDate: null,
         abolishedDate: null,
       })
@@ -373,6 +387,7 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
     POSITION_TYPE_OPTIONS.find((o) => o.value === form.positionType)?.label ??
     form.positionType
   const selectedOrg = organizations.find((o) => o.id === form.organizationId)
+  const selectedDept = departments.find((d) => d.id === form.administrationDepartmentId)
 
   return (
     <Section>
@@ -412,8 +427,9 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
                     <div className="meta">
                       {POSITION_TYPE_OPTIONS.find((o) => o.value === def.positionType)
                         ?.label ?? def.positionType}
-                      {def.organization?.name && ` · ${def.organization.name}`}
-                      {def.departmentName && !def.organization && ` · ${def.departmentName}`}
+                      {def.administrationDepartment?.name && ` · ${def.administrationDepartment.name}`}
+                      {def.organization?.name && !def.administrationDepartment && ` · ${def.organization.name}`}
+                      {def.departmentName && !def.organization && !def.administrationDepartment && ` · ${def.departmentName}`}
                     </div>
                   </ListItemMain>
                   <ListItemActions>
@@ -522,6 +538,36 @@ export function PositionDefinitionsSection({ country }: PositionDefinitionsSecti
                 title="소속 조직 선택"
               />
             </Field>
+            {countryId && (
+              <Field>
+                <Label>중앙부처 (역대 장관 연결)</Label>
+                <SelectBtn
+                  type="button"
+                  $hasValue={!!selectedDept}
+                  onClick={() => setDepartmentModalOpen(true)}
+                >
+                  <span>{selectedDept ? selectedDept.name : '선택 안 함'}</span>
+                  <FiChevronDown size={18} />
+                </SelectBtn>
+                <SelectModal
+                  isOpen={departmentModalOpen}
+                  onClose={() => setDepartmentModalOpen(false)}
+                  options={[
+                    { value: '', label: '선택 안 함' },
+                    ...departments.map((d) => ({ value: d.id, label: d.name })),
+                  ]}
+                  selectedValue={form.administrationDepartmentId ?? ''}
+                  onSelect={(value) => {
+                    setForm((f) => ({
+                      ...f,
+                      administrationDepartmentId: value || null,
+                    }))
+                    setDepartmentModalOpen(false)
+                  }}
+                  title="중앙부처 선택 (역대 장관 표시용)"
+                />
+              </Field>
+            )}
             <Field>
               <Label>부서/부처명 (표시용, 조직 미선택 시)</Label>
               <Input

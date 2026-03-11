@@ -722,4 +722,9 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsNumber()
   priority?: number
+
+  /** 소속 행정부(Cabinet) ID — 이 각료/총독 재임이 속한 행정부 */
+  @IsOptional()
+  @IsString()
+  cabinetId?: string | null
 }

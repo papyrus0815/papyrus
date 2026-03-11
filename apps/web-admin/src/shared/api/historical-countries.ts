@@ -121,11 +121,15 @@ export type TransitionEventType =
   | 'SPLIT'
   | 'OTHER'
 
+export type TransitionScope = 'STATE_SUCCESSION' | 'REGIME_CHANGE'
+
 export interface HistoricalCountryTransitionDto {
   id: string
   predecessorId: string
   successorId: string
   eventType: TransitionEventType
+  /** 전환 성격: 국가 교체 vs 정권 교체. null이면 미구분 */
+  transitionScope?: TransitionScope | null
   /** 후임 국가의 존속 시작 시점 (표시용) */
   successorStartDate: string | null
   predecessorName?: string
@@ -138,10 +142,12 @@ export interface CreateHistoricalCountryTransitionDto {
   predecessorId: string
   successorId: string
   eventType: TransitionEventType
+  transitionScope?: TransitionScope | null
 }
 
 export interface UpdateHistoricalCountryTransitionDto {
   eventType?: TransitionEventType
+  transitionScope?: TransitionScope | null
 }
 
 /**

@@ -77,10 +77,30 @@ enum HistoricalStateType {
   DYNASTY
   /// 세습 (세습적 통치가 이어지는 정치체)
   HEREDITARY
+  /// 막부 (쇼군이 실권을 가진 군정, 예: 무로마치·에도 막부)
+  SHOGUNATE
   /// 동군연합 (같은 군주 아래 여러 정치체가 연합)
   PERSONAL_UNION
   /// 기타
   OTHER
+}
+
+/// 역사적 정치체의 성격 구분 (주권 국가 vs 정권 vs 시대)
+enum HistoricalEntityKind {
+  /// 주권 국가 (신성로마, 프로이센, 고려 등)
+  STATE
+  /// 정권·군정 (무로마치 막부, 에도 막부 등)
+  REGIME
+  /// 시대·기간 (메이지 시대, 다이쇼 시대 등)
+  PERIOD
+}
+
+/// 전환의 성격: 국가 단위 교체 vs 같은 공간 내 정권/시대 교체
+enum TransitionScope {
+  /// 국가 계승 (신라→고려, 멸망·건국 등 주권 단위 변경)
+  STATE_SUCCESSION
+  /// 정권/시대 교체 (무로마치→에도 등 동일 국가 내 정권 변경)
+  REGIME_CHANGE
 }
 
 /// 국가 계승/변천 이벤트의 종류를 정의합니다.
@@ -187,6 +207,9 @@ model HistoricalCountry {
   /// 국가 형태 (HistoricalStateType Enum 참조)
   stateType HistoricalStateType @map("state_type")
 
+  /// 정치체 성격: 주권 국가(STATE) / 정권(REGIME) / 시대(PERIOD). null이면 기존 데이터 호환상 과거 주권 국가로 간주.
+  entityKind HistoricalEntityKind? @map("entity_kind")
+
   /// 위도 (수도 또는 중심부)
   latitude Decimal? @db.Decimal(10, 7)
 
@@ -221,6 +244,8 @@ model HistoricalCountry {
   organizationMemberships OrganizationCountryMembership[] @relation("OrgMembershipHistoricalCountry")
   PoliticalParty          PoliticalParty[]                @relation("PoliticalPartyHistoricalCountry")
   governmentTenures       GovernmentPositionTenure[]      @relation("TenureHistoricalCountry")
+  /// 이 역사적 국가 소속 행정 부처 (조선 6조, 일본 제국 시기 부처 등)
+  administrationDepartments AdministrationDepartment[]    @relation("DeptHistoricalCountry")
   eventCountryRelations   EventCountryRelation[]
 
   // 🆕 정규화된 군사 사건 관계
@@ -266,6 +291,8 @@ model HistoricalCountryTransition {
 
   /// 전환 이벤트 유형 (TransitionEventType Enum 참조)
   eventType TransitionEventType @map("event_type")
+  /// 전환 성격: 국가 교체 vs 정권 교체. null이면 기존 데이터 호환.
+  transitionScope TransitionScope? @map("transition_scope")
 
   // --- 관계 필드
   predecessor HistoricalCountry @relation("PredecessorTransitions", fields: [predecessorId], references: [id], onDelete: Cascade)

@@ -1,4 +1,4 @@
-import { HistoricalStateType, Era, TransitionEventType } from '@prisma/client'
+import { HistoricalStateType, Era, TransitionEventType, HistoricalEntityKind } from '@prisma/client'
 
 /**
  * 역사적 국가 응답 DTO
@@ -24,6 +24,8 @@ export interface HistoricalCountryResponseDto {
   endDay: number | null
 
   stateType: HistoricalStateType
+  /** 정치체 성격: 주권 국가 / 정권 / 시대. null이면 과거 주권 국가로 간주 */
+  entityKind: HistoricalEntityKind | null
   /** 연결된 현대 국가 ID 목록 (상위 현대 국가) */
   parentModernCountryIds?: string[]
   parentHistoricalCountryIds?: string[]

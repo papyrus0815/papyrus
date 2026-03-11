@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react'
-
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
 
-import type { HistoricalCountry } from '@/entities/historical-country/api'
+import type { HistoricalCountry, HistoricalEntityKind } from '@/entities/historical-country/api'
 import { useCountries } from '@/features/country/api'
 import {
   useCreateHistoricalCountry,
@@ -16,7 +16,7 @@ import {
 } from '@/features/historical-country'
 import { HistoricalCountryDashboard } from '@/widgets/historical-country/historical-country-dashboard'
 import { HistoricalCountryDetail } from '@/widgets/historical-country/historical-country-detail'
-import { HistoricalCountryForm } from '@/widgets/historical-country/historical-country-form'
+import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form'
 import { HistoricalCountryList } from '@/widgets/historical-country/historical-country-list'
 
 export default function HistoricalCountryPage() {
@@ -75,6 +75,7 @@ export default function HistoricalCountryPage() {
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
       transitionEventType?: string
+      transitionScope?: string | null
     },
   ) => {
     const loadingToast = toast.loading(
@@ -98,9 +99,11 @@ export default function HistoricalCountryPage() {
             endMonth: data.endMonth ?? null,
             endDay: data.endDay ?? null,
             stateType: data.stateType,
+            entityKind: (data as { entityKind?: string | null }).entityKind ?? null,
             parentModernCountryIds: data.parentModernCountryIds,
             parentHistoricalCountryIds: data.parentHistoricalCountryIds,
             transitionEventType: data.transitionEventType,
+            transitionScope: (data as { transitionScope?: string | null }).transitionScope ?? null,
           },
         })
         toast.success('수정되었습니다', { id: loadingToast })
@@ -119,9 +122,11 @@ export default function HistoricalCountryPage() {
           endMonth: data.endMonth ?? undefined,
           endDay: data.endDay ?? undefined,
           stateType: data.stateType,
+          entityKind: (data as { entityKind?: string | null }).entityKind ?? undefined,
           parentModernCountryIds: data.parentModernCountryIds,
           parentHistoricalCountryIds: data.parentHistoricalCountryIds,
           transitionEventType: data.transitionEventType,
+          transitionScope: (data as { transitionScope?: string | null }).transitionScope ?? undefined,
         })
         toast.success('등록되었습니다', { id: loadingToast })
       }
@@ -190,6 +195,11 @@ export default function HistoricalCountryPage() {
             value={filters.query}
             onChange={(e) => filters.setQuery(e.target.value)}
           />
+          <FilterButton onClick={() => filters.setShowEntityKindModal(true)}>
+            {filters.entityKindFilter === 'ALL'
+              ? '📌 성격: 전체'
+              : `📌 ${filters.entityKindFilter === 'STATE' ? '국가' : filters.entityKindFilter === 'REGIME' ? '정권' : '시대'}`}
+          </FilterButton>
           <FilterButton onClick={() => filters.setShowStateTypeModal(true)}>
             {filters.stateTypeFilter === 'ALL'
               ? '🏛️ 모든 형태'
@@ -230,12 +240,16 @@ export default function HistoricalCountryPage() {
         )}
       </Content>
 
-      {/* 역사적 국가 등록/수정 폼 */}
-      <HistoricalCountryForm
+      {/* 역사적 국가 등록/수정 모달 (인물 등록 모달과 동일 디자인) */}
+      <HistoricalCountryFormModal
+        isOpen={editingCountry !== null}
+        onClose={() => setEditingCountry(null)}
         editing={
-          editingCountry && editingId
-            ? (editingDetail ?? (editingCountry as HistoricalCountry))
-            : (editingCountry as HistoricalCountry | null)
+          editingCountry === null
+            ? null
+            : editingCountry && editingId
+              ? (editingDetail ?? (editingCountry as HistoricalCountry))
+              : (editingCountry as HistoricalCountry | Record<string, never>)
         }
         modernCountries={modernCountries.map((c) => ({
           id: c.id,
@@ -244,9 +258,47 @@ export default function HistoricalCountryPage() {
         historicalCountries={(countries ?? [])
           .filter((hc) => hc.id !== (editingCountry && 'id' in editingCountry ? editingCountry.id : undefined))
           .map((hc) => ({ id: hc.id, name: hc.name }))}
-        onClose={() => setEditingCountry(null)}
         onSave={handleSaveHistorical}
       />
+
+      {/* 정치체 성격 필터 모달 */}
+      {filters.showEntityKindModal &&
+        createPortal(
+          <ModalOverlay onClick={() => filters.setShowEntityKindModal(false)}>
+            <ModalContent onClick={(e) => e.stopPropagation()}>
+              <ModalTitle>정치체 성격 필터</ModalTitle>
+              <ModalOption
+                $active={filters.entityKindFilter === 'ALL'}
+                onClick={() => {
+                  filters.setEntityKindFilter('ALL')
+                  filters.setShowEntityKindModal(false)
+                }}
+              >
+                전체
+              </ModalOption>
+              {(
+                [
+                  { value: 'STATE' as const, label: '주권 국가' },
+                  { value: 'REGIME' as const, label: '정권·군정' },
+                  { value: 'PERIOD' as const, label: '시대' },
+                ] as { value: HistoricalEntityKind; label: string }[]
+              ).map((opt) => (
+                <ModalOption
+                  key={opt.value}
+                  $active={filters.entityKindFilter === opt.value}
+                  onClick={() => {
+                    filters.setEntityKindFilter(opt.value)
+                    filters.setShowEntityKindModal(false)
+                  }}
+                >
+                  {opt.label}
+                </ModalOption>
+              ))}
+              <ModalClose onClick={() => filters.setShowEntityKindModal(false)}>닫기</ModalClose>
+            </ModalContent>
+          </ModalOverlay>,
+          document.body,
+        )}
     </Container>
   )
 }
@@ -426,4 +478,56 @@ const LoadingText = styled.div`
   margin-top: 16px;
   font-size: 16px;
   color: #6b7280;
+`
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`
+const ModalContent = styled(motion.div)`
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 240px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+`
+const ModalTitle = styled.div`
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #111827;
+`
+const ModalOption = styled.button<{ $active?: boolean }>`
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  border: none;
+  background: ${(p) => (p.$active ? '#6366f1' : 'transparent')};
+  color: ${(p) => (p.$active ? 'white' : '#374151')};
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  &:hover {
+    background: ${(p) => (p.$active ? '#5558e3' : '#f3f4f6')};
+  }
+`
+const ModalClose = styled.button`
+  margin-top: 12px;
+  padding: 8px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  &:hover {
+    background: #f9fafb;
+  }
 `

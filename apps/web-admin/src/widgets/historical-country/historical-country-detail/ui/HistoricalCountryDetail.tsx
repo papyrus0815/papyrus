@@ -2,7 +2,13 @@ import React from 'react'
 
 import styled from 'styled-components'
 
-import type { HistoricalCountry } from '@/entities/historical-country/api'
+import type { HistoricalCountry, HistoricalEntityKind } from '@/entities/historical-country/api'
+import {
+  getEntityKindLabel,
+  getEntityKindColor,
+  getEntityKindEmoji,
+  getStateTypeLabel as getStateTypeLabelUtil,
+} from '@/entities/historical-country/lib/utils'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { Spinner } from '@/shared/ui/spinner'
 
@@ -70,32 +76,8 @@ export function HistoricalCountryDetail({
     return `${eraText} ${yearText}${monthText}${dayText}`
   }
 
-  /**
-   * 국가 형태 한글 표시
-   */
-  const getStateTypeLabel = (stateType: string): string => {
-    const labels: Record<string, string> = {
-      EMPIRE: '제국',
-      KINGDOM: '왕국',
-      PRINCIPALITY: '공국',
-      ELECTORATE: '선제후국',
-      MARGRAVIATE: '변경백령',
-      REPUBLIC: '공화국',
-      FEDERATION: '연방',
-      CONFEDERATION: '연합',
-      CITY_STATE: '도시 국가',
-      CALIPHATE: '칼리프국',
-      SULTANATE: '술탄국',
-      KHANATE: '칸국',
-      THEOCRACY: '신정 국가',
-      TRIBAL_STATE: '부족 국가',
-      NOMADIC_EMPIRE: '유목 제국',
-      DYNASTY: '왕조',
-      PERSONAL_UNION: '동군연합',
-      OTHER: '기타',
-    }
-    return labels[stateType] || stateType
-  }
+  const stateTypeLabel = country ? getStateTypeLabelUtil(country.stateType) : ''
+  const entityKind = country ? (country as { entityKind?: HistoricalEntityKind | null }).entityKind : null
 
   // 로딩 중 (country 변경 중이거나 외부 loading이 true일 때)
   if (isLoading || internalLoading || isCountryChanging) {
@@ -139,9 +121,16 @@ export function HistoricalCountryDetail({
           <HeaderInfo>
             <CountryName>{country.name}</CountryName>
             {country.enName && <CountryEnName>{country.enName}</CountryEnName>}
-            <StateTypeBadge>
-              {getStateTypeLabel(country.stateType)}
-            </StateTypeBadge>
+            <BadgeRow>
+              {entityKind != null && (
+                <EntityKindBadge $color={getEntityKindColor(entityKind)}>
+                  {getEntityKindEmoji(entityKind)} {getEntityKindLabel(entityKind)}
+                </EntityKindBadge>
+              )}
+              <StateTypeBadge>
+                {stateTypeLabel}
+              </StateTypeBadge>
+            </BadgeRow>
           </HeaderInfo>
         </Header>
 
@@ -203,10 +192,20 @@ export function HistoricalCountryDetail({
               <InfoLabel>국가 형태</InfoLabel>
               <InfoValue>
                 <StateTypeBadge>
-                  {getStateTypeLabel(country.stateType)}
+                  {stateTypeLabel}
                 </StateTypeBadge>
               </InfoValue>
             </InfoItem>
+            {entityKind != null && (
+              <InfoItem>
+                <InfoLabel>정치체 성격</InfoLabel>
+                <InfoValue>
+                  <EntityKindBadge $color={getEntityKindColor(entityKind)}>
+                    {getEntityKindEmoji(entityKind)} {getEntityKindLabel(entityKind)}
+                  </EntityKindBadge>
+                </InfoValue>
+              </InfoItem>
+            )}
           </InfoGrid>
         </Section>
 
@@ -380,6 +379,25 @@ const CountryEnName = styled.p`
   font-size: 16px;
   opacity: 0.9;
   margin-bottom: 12px;
+`
+
+const BadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+`
+
+const EntityKindBadge = styled.span<{ $color: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: ${(p) => `${p.$color}22`};
+  color: ${(p) => p.$color};
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
 `
 
 const StateTypeBadge = styled.span`

@@ -131,6 +131,36 @@ enum OrganizationAliasType {
   LOCAL_NAME
 }
 
+/// 조직의 상태 (활성/해산/통합 등)
+enum OrganizationStatus {
+  /// 활동 중
+  ACTIVE
+  /// 해산·폐지됨
+  DISSOLVED
+  /// 다른 조직에 흡수·통합됨
+  MERGED
+  /// 활동 중단/자격정지
+  SUSPENDED
+  /// 기타
+  OTHER
+}
+
+/// 조직 연혁 사건 유형 (AdministrationDepartmentEventType와 유사)
+enum OrganizationEventType {
+  /// 설립
+  FOUNDED
+  /// 해산·폐지
+  DISSOLVED
+  /// 개편·재구성
+  RESTRUCTURE
+  /// 정책/권한 변경
+  POLICY
+  /// 합병·통합
+  MERGER
+  /// 기타
+  OTHER
+}
+
 // ========================
 // Organization
 // ========================
@@ -154,6 +184,9 @@ model Organization {
 
   /// 활동 범위
   scope OrganizationScope?
+
+  /// 상태 (활성/해산/통합 등). null이면 dissolvedDate 존재 여부로 판단 가능
+  status OrganizationStatus? @default(ACTIVE)
 
   /// 설명
   description String? @db.Text
@@ -193,6 +226,7 @@ model Organization {
   memberships       OrganizationCountryMembership[]
   roles             OrganizationPersonRole[]
   aliases           OrganizationAlias[]
+  events            OrganizationEvent[]
   partyAffiliations PoliticalPartyOrganization[]
   parents           OrganizationHierarchy[]   @relation("OrgHierarchyParent")
   children          OrganizationHierarchy[]   @relation("OrgHierarchyChild")
@@ -220,10 +254,45 @@ model Organization {
 
   @@index([type], name: "idx_organization_type")
   @@index([scope], name: "idx_organization_scope")
+  @@index([status], name: "idx_organization_status")
   @@index([countryId], name: "idx_organization_countryId")
   @@index([historicalCountryId], name: "idx_organization_historicalCountryId")
   @@index([headquartersCityId], name: "idx_organization_hqCityId")
   @@map("organization")
+}
+
+// ========================
+// OrganizationEvent (조직 연혁용 사건 — AdministrationDepartmentEvent와 동일한 개념)
+// ========================
+/// 조직별 설립·해산·개편 등 연혁을 사건 단위로 기록
+model OrganizationEvent {
+  id String @id @default(uuid()) @db.Char(36)
+
+  organizationId String @map("organization_id") @db.Char(36)
+
+  title       String  @db.VarChar(200)
+  description String? @db.Text
+
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  /// 날짜 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주
+  startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
+  endDatePrecision   String? @map("end_date_precision") @db.VarChar(10)
+
+  eventType OrganizationEventType @default(OTHER) @map("event_type")
+
+  background String? @db.Text
+  aftermath  String? @db.Text
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId], name: "idx_organization_event_organizationId")
+  @@index([startDate], name: "idx_organization_event_startDate")
+  @@map("organization_event")
 }
 
 // ========================

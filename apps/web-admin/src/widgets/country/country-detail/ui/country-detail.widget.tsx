@@ -8,7 +8,6 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import * as CountryStyles from '@/pages/history/country/country.styles'
 
 import * as CountryDetailStyles from './CountryDetail.styles'
-import { type CountryDetailTab, CountryDetailTabs } from './CountryDetailTabs'
 import { LoadingOverlay } from './LoadingOverlay'
 import { type OverviewSubTab, OverviewSubTabs } from './OverviewSubTabs'
 import { PersonTabContent } from './PersonTabContent'
@@ -89,8 +88,8 @@ export interface CountryDetailProps {
       | 'government'
       | null,
   ) => void
-  /** 인물 탭 내 하위 탭(통계/리스트/역대 수반) 클릭 시 URL 갱신 (?tab=) */
-  onPersonInnerTabChange?: (tab: 'stats' | 'list' | 'heads') => void
+  /** 인물 탭 내 하위 탭(통계/리스트) 클릭 시 URL 갱신 (?tab=). 역대 수반은 행정조직 탭에서. */
+  onPersonInnerTabChange?: (tab: 'stats' | 'list') => void
   /** 대시보드(overview + statistics) 뷰로 전환 시 URL 갱신용 */
   onDashboardView?: () => void
 }
@@ -109,12 +108,11 @@ function CountryDetailInner({
   onPersonInnerTabChange,
   onDashboardView,
 }: CountryDetailProps) {
-  const [activeTab, setActiveTab] = useState<CountryDetailTab>('overview')
   const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>('statistics')
-  /** 인물 탭 내 전환: 통계·최근 인물 | 역대 수반 | 인물 리스트 */
-  const [personInnerTab, setPersonInnerTab] = useState<
-    'stats' | 'heads' | 'list'
-  >('stats')
+  /** 인물 탭 내 전환: 통계·최근 인물 | 인물 리스트 (역대 수반·행정부는 행정조직 탭에서) */
+  const [personInnerTab, setPersonInnerTab] = useState<'stats' | 'list'>(
+    'stats',
+  )
   /** 인물 리스트 탭에서 인물 상세 보기 중일 때 true → 헤더 문구를 "인물 상세"로 표시 */
   const [listShowingDetail, setListShowingDetail] = useState(false)
   /** 인물 통계 탭에서 관직 카테고리 모달 (헤더 버튼과 동일 위치 유지) */
@@ -154,28 +152,20 @@ function CountryDetailInner({
   // URL 등으로 인물 / 역대 수반 / 인물 리스트 / 대시보드 / 역사적 국가 / 행정구역 / 행정조직 진입 시 → 해당 탭으로 열기
   React.useEffect(() => {
     if (initialDetailTab === 'dashboard') {
-      setActiveTab('overview')
       setActiveSubTab('statistics')
     } else if (initialDetailTab === 'person') {
-      setActiveTab('overview')
       setActiveSubTab('person')
       setPersonInnerTab('stats')
     } else if (initialDetailTab === 'heads') {
-      setActiveTab('overview')
-      setActiveSubTab('person')
-      setPersonInnerTab('heads')
+      setActiveSubTab('government')
     } else if (initialDetailTab === 'persons-list') {
-      setActiveTab('overview')
       setActiveSubTab('person')
       setPersonInnerTab('list')
     } else if (initialDetailTab === 'linked-historical') {
-      setActiveTab('overview')
       setActiveSubTab('linkedHistorical')
     } else if (initialDetailTab === 'regions') {
-      setActiveTab('overview')
       setActiveSubTab('map')
     } else if (initialDetailTab === 'government') {
-      setActiveTab('overview')
       setActiveSubTab('government')
     }
   }, [initialDetailTab])
@@ -191,15 +181,6 @@ function CountryDetailInner({
       else if (tab === 'government') onDetailTabChange?.('government')
     },
     [onDashboardView, onDetailTabChange],
-  )
-
-  const handleMainTabChange = React.useCallback(
-    (tab: CountryDetailTab) => {
-      setActiveTab(tab)
-      if (tab === 'overview' && activeSubTab === 'statistics')
-        onDashboardView?.()
-    },
-    [activeSubTab, onDashboardView],
   )
 
   if (!country) {
@@ -286,20 +267,6 @@ function CountryDetailInner({
               flexDirection: 'column',
             }}
           >
-            {/* 우측 사이드바 메뉴: 대시보드, 인물, 군대, 주요 사건 */}
-            <CountryDetailTabs
-              activeTab={activeTab}
-              onTabChange={handleMainTabChange}
-            />
-
-            {/* 상단 헤더 메뉴: 대시보드, 역사적 국가, 행정구역, 행정조직 등 (overview 탭에서만) */}
-            {activeTab === 'overview' && (
-              <OverviewSubTabs
-                activeSubTab={activeSubTab}
-                onSubTabChange={handleOverviewSubTabChange}
-              />
-            )}
-
             <CountryStyles.AnalyticsDashboard
               as={motion.div}
               initial={{ opacity: 0 }}
@@ -312,7 +279,7 @@ function CountryDetailInner({
                 flexDirection: 'column',
               }}
             >
-              {/* 스크롤 영역: 국기 이미지 영역은 스크롤 시 함께 올라가고, 헤더·탭메뉴만 상단 고정 */}
+              {/* 스크롤 영역: 탭 메뉴(위) → 국가명 컨테이너 → 콘텐츠 */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -324,6 +291,14 @@ function CountryDetailInner({
                   overflow: 'auto',
                 }}
               >
+                {/* 대시보드, 역사적 국가, 행정구역, 행정조직 등 — 국가명 컨테이너 위 */}
+                <div style={{ flexShrink: 0 }}>
+                  <OverviewSubTabs
+                    activeSubTab={activeSubTab}
+                    onSubTabChange={handleOverviewSubTabChange}
+                  />
+                </div>
+
                 <CountryDetailHeader
                   country={country}
                   continentName={continent?.name}
@@ -331,8 +306,7 @@ function CountryDetailInner({
                   onDelete={onDelete}
                 />
 
-                {activeTab === 'overview' && (
-                  <motion.div
+                <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
@@ -381,16 +355,34 @@ function CountryDetailInner({
                         )}
 
                         {activeSubTab === 'government' && (
-                          <GovernmentInfoSection
-                            countryId={country.id}
-                            categoryModalOpen={categoryModalOpen}
-                            onCloseCategoryModal={() =>
-                              setCategoryModalOpen(false)
-                            }
-                            onOpenCategoryModal={() =>
-                              setCategoryModalOpen(true)
-                            }
-                          />
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 32,
+                              padding: '36px 32px 48px',
+                              background: '#fff',
+                              flex: 1,
+                              minHeight: 0,
+                            }}
+                          >
+                            <GovernmentInfoSection
+                              country={country}
+                              countryId={country.id}
+                              categoryModalOpen={categoryModalOpen}
+                              onCloseCategoryModal={() =>
+                                setCategoryModalOpen(false)
+                              }
+                              onOpenCategoryModal={() =>
+                                setCategoryModalOpen(true)
+                              }
+                              initialContentTab={
+                                initialDetailTab === 'heads'
+                                  ? 'heads'
+                                  : undefined
+                              }
+                            />
+                          </div>
                         )}
 
                         {activeSubTab === 'ethnicity' && (
@@ -417,9 +409,7 @@ function CountryDetailInner({
                                     : personInnerTab === 'list' &&
                                         listShowingDetail
                                       ? '인물 상세'
-                                      : personInnerTab === 'list'
-                                        ? '인물 리스트'
-                                        : '역대 수반'}
+                                      : '인물 리스트'}
                                 </CountryDetailStyles.PersonTabSharedTitle>
                                 <CountryDetailStyles.PersonTabSharedDesc>
                                   {personInnerTab === 'stats'
@@ -427,9 +417,7 @@ function CountryDetailInner({
                                     : personInnerTab === 'list' &&
                                         listShowingDetail
                                       ? '기본 정보, 가계도, 활동, 저작을 확인할 수 있습니다.'
-                                      : personInnerTab === 'list'
-                                        ? '이름·약력·가문 검색, 필터로 찾을 수 있습니다.'
-                                        : '국가원수·정부수반·군주 등 역대 수반 계보와 재임 목록을 확인할 수 있습니다.'}
+                                      : '이름·약력·가문 검색, 필터로 찾을 수 있습니다.'}
                                 </CountryDetailStyles.PersonTabSharedDesc>
                               </CountryDetailStyles.PersonTabSharedHeaderLeft>
                               <CountryDetailStyles.PersonTabSharedHeaderRight>
@@ -515,19 +503,45 @@ function CountryDetailInner({
                               >
                                 인물 리스트
                               </CountryDetailStyles.PersonInnerPillBtn>
-                              <CountryDetailStyles.PersonInnerPillBtn
+                            </CountryDetailStyles.PersonInnerPillNav>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12,
+                                padding: '12px 16px',
+                                background: '#f8fafc',
+                                borderRadius: 12,
+                                border: '1px solid #e2e8f0',
+                                marginBottom: 8,
+                              }}
+                            >
+                              <span style={{ fontSize: 13, color: '#475569' }}>
+                                역대 수반·행정부·각료는{' '}
+                                <strong>행정조직</strong> 탭에서 한 번에
+                                관리할 수 있습니다.
+                              </span>
+                              <button
                                 type="button"
-                                role="tab"
-                                aria-selected={personInnerTab === 'heads'}
-                                $active={personInnerTab === 'heads'}
                                 onClick={() => {
-                                  setPersonInnerTab('heads')
-                                  onPersonInnerTabChange?.('heads')
+                                  setActiveSubTab('government')
+                                  onDetailTabChange?.('government')
+                                }}
+                                style={{
+                                  flexShrink: 0,
+                                  padding: '6px 14px',
+                                  borderRadius: 8,
+                                  border: '1px solid #6366f1',
+                                  background: '#fff',
+                                  color: '#6366f1',
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
                                 }}
                               >
-                                역대 수반
-                              </CountryDetailStyles.PersonInnerPillBtn>
-                            </CountryDetailStyles.PersonInnerPillNav>
+                                행정조직으로 이동
+                              </button>
+                            </div>
                             {personInnerTab === 'stats' && (
                               <PersonStatsSection
                                 countryId={country.id}
@@ -538,9 +552,6 @@ function CountryDetailInner({
                                   setCategoryCrudModalOpen
                                 }
                               />
-                            )}
-                            {personInnerTab === 'heads' && (
-                              <HeadsOfStateSection country={country} />
                             )}
                             {personInnerTab === 'list' && (
                               <PersonListSection
@@ -562,17 +573,6 @@ function CountryDetailInner({
                       </motion.div>
                     </AnimatePresence>
                   </motion.div>
-                )}
-
-                {activeTab === 'people' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <PersonTabContent countryId={country.id} />
-                  </motion.div>
-                )}
               </motion.div>
             </CountryStyles.AnalyticsDashboard>
 

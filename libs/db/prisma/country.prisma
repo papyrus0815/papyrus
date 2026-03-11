@@ -321,12 +321,16 @@ model AdministrationDepartmentCategory {
 // ========================
 /// 국가별 행정 부처/기관 (국방부, 외교부, 국정원 등).
 /// 카테고리로 전세계 비교. 설립/폐지일·후신(successor)으로 개편 이력(안기부→국정원 등) 표현.
+/// 현대 국가(countryId) 또는 역사적 국가(historicalCountryId) 소속. 역사적 국가 부처(예: 조선 6조)는 historicalCountryId 설정.
 model AdministrationDepartment {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가 ID
-  countryId String @map("country_id") @db.Char(36)
+  /// 현대 국가 ID (표시/그룹핑용. 역사적 국가 부처도 연결된 현대 국가를 넣을 수 있음)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (조선의 6조, 일본 제국 시기 부처 등). null이면 현대 국가 부처만 해당
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   /// 상위 부처 ID
   parentId String? @map("parent_id") @db.Char(36)
@@ -353,19 +357,23 @@ model AdministrationDepartment {
   successorId String? @map("successor_id") @db.Char(36)
 
   //--- 관계 필드
-  country    Country                              @relation("Country_Department", fields: [countryId], references: [id], onDelete: Cascade)
-  parent     AdministrationDepartment?            @relation("DeptHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children  AdministrationDepartment[]            @relation("DeptHierarchy")
-  category   AdministrationDepartmentCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  successor   AdministrationDepartment?             @relation("DeptSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
-  predecessors AdministrationDepartment[]          @relation("DeptSuccessor")
-  events     AdministrationDepartmentEvent[]      @relation("DeptEvents")
+  country            Country?                       @relation("Country_Department", fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry  HistoricalCountry?             @relation("DeptHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  parent             AdministrationDepartment?      @relation("DeptHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children           AdministrationDepartment[]     @relation("DeptHierarchy")
+  category           AdministrationDepartmentCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  successor          AdministrationDepartment?      @relation("DeptSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
+  predecessors       AdministrationDepartment[]     @relation("DeptSuccessor")
+  events             AdministrationDepartmentEvent[] @relation("DeptEvents")
+  /// 이 부처에 연결된 직위 정의(장관 등). 해당 직위의 재임(Tenure)이 "역대 장관"으로 조회됨.
+  positionDefinitions GovernmentPositionDefinition[] @relation("PositionDefinitionDepartment")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId], name: "idx_admin_dept_countryId")
+  @@index([historicalCountryId], name: "idx_admin_dept_historicalCountryId")
   @@index([parentId], name: "idx_admin_dept_parentId")
   @@index([categoryId], name: "idx_admin_dept_categoryId")
   @@index([establishedDate], name: "idx_admin_dept_establishedDate")
@@ -404,9 +412,13 @@ model AdministrationDepartmentEvent {
 
   /// 기간(시작)
   startDate DateTime? @map("start_date")
+  /// 시작일 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주
+  startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
 
   /// 기간(종료)
   endDate DateTime? @map("end_date")
+  /// 종료일 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주
+  endDatePrecision String? @map("end_date_precision") @db.VarChar(10)
 
   /// 유형 (계획, 조율, 정책, 개편 등)
   eventType AdministrationDepartmentEventType @default(OTHER) @map("event_type")

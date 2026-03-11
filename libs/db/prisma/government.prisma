@@ -141,10 +141,14 @@ model GovernmentPositionDefinition {
   departmentName String? @map("department_name") @db.VarChar(100)
   organizationId String? @map("organization_id") @db.Char(36)
 
+  /// 행정 부처(AdministrationDepartment) 연결 — 이 직위가 해당 부처의 장관 등일 때. 부처별 역대 장관 조회에 사용.
+  administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
+
   establishedDate DateTime? @map("established_date")
   abolishedDate   DateTime? @map("abolished_date")
 
-  organization Organization? @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  organization             Organization?             @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  administrationDepartment AdministrationDepartment? @relation("PositionDefinitionDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
 
   tenures GovernmentPositionTenure[]
 
@@ -152,9 +156,39 @@ model GovernmentPositionDefinition {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([organizationId], name: "idx_gov_pos_def_organizationId")
+  @@index([administrationDepartmentId], name: "idx_gov_pos_def_administrationDepartmentId")
   @@index([positionType], name: "idx_gov_pos_def_positionType")
   @@index([rank], name: "idx_gov_pos_def_rank")
   @@map("government_position_definition")
+}
+
+// ========================
+// Cabinet (행정부) — 정규화된 행정부 단위
+// ========================
+/// 한 수반(대통령·수상) 재임을 중심으로 한 행정부. 각료 재임은 cabinetId로 소속.
+/// - 기간·국가는 headTenure 조인으로 조회 (이중 저장 제거, 정규화)
+/// - "이 행정부 각료" = GovernmentPositionTenure where cabinetId = id
+model Cabinet {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 이 행정부의 수반 재임 (대통령·수상 등 1건)
+  headTenureId String @unique @map("head_tenure_id") @db.Char(36)
+
+  /// 행정부 명칭 (선택, 예: "루즈벨트 제1기")
+  name String? @db.VarChar(120)
+
+  /// 등록한 계정 (계정별 행정부 구분)
+  accountId String? @map("account_id") @db.Char(36)
+
+  headTenure    GovernmentPositionTenure  @relation("CabinetHead", fields: [headTenureId], references: [id], onDelete: Cascade)
+  memberTenures GovernmentPositionTenure[] @relation("CabinetMembers")
+  account       Account?                  @relation("AccountCabinets", fields: [accountId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([accountId], name: "idx_cabinet_accountId")
+  @@map("cabinet")
 }
 
 // ========================
@@ -228,11 +262,20 @@ model GovernmentPositionTenure {
   /// 우선순위 (같은 직위를 여러 번 역임한 경우 순서 구분, 낮을수록 우선)
   priority Int? @default(0)
 
+  /// 소속 행정부 ID — 이 각료/총독 재임이 속한 행정부(Cabinet)
+  cabinetId String? @map("cabinet_id") @db.Char(36)
+
+  /// 등록한 계정 (계정별 각료/재임 구분)
+  accountId String? @map("account_id") @db.Char(36)
+
   //--- 관계 필드
   positionDefinition GovernmentPositionDefinition? @relation(fields: [positionDefinitionId], references: [id], onDelete: SetNull)
   country            Country?                      @relation("TenureCountry", fields: [countryId], references: [id], onDelete: SetNull)
   historicalCountry  HistoricalCountry?            @relation("TenureHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
   person             Person                        @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
+  cabinet            Cabinet?                      @relation("CabinetMembers", fields: [cabinetId], references: [id], onDelete: SetNull)
+  headOfCabinet      Cabinet?                      @relation("CabinetHead")
+  account            Account?                      @relation("AccountGovernmentTenures", fields: [accountId], references: [id], onDelete: SetNull)
   regnalEras         RegnalEra[]                   @relation("TenureRegnalEras")
   /// 재임 기간 중 업적·한일 (사건과 별도 개념)
   achievements       TenureAchievement[]           @relation("TenureAchievements")
@@ -248,6 +291,8 @@ model GovernmentPositionTenure {
   @@index([positionType], name: "idx_gov_tenure_posType")
   @@index([termNumber], name: "idx_gov_tenure_termNum")
   @@index([startDate], name: "idx_gov_tenure_startDate")
+  @@index([cabinetId], name: "idx_gov_tenure_cabinetId")
+  @@index([accountId], name: "idx_gov_tenure_accountId")
   @@map("government_position_tenure")
 }
 

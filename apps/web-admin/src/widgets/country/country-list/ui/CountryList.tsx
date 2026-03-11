@@ -89,7 +89,8 @@ interface CountryListProps {
   activeTab: ActiveTab
   onTabChange: (tab: ActiveTab) => void
   onAdd: () => void
-  onAddHistorical?: () => void
+  /** 역사적 국가 폼 열기. preset이 있으면 막부 등 미리 채움 */
+  onAddHistorical?: (preset?: { stateType: 'SHOGUNATE'; entityKind: 'REGIME' }) => void
   onEditHistorical?: (country: UnifiedCountry) => void
   inHistory?: boolean
   showContinentModal: boolean
@@ -975,7 +976,7 @@ function CountryListInner({
                     >
                       <span style={{ fontWeight: 600 }}>역사적 국가</span>
                       <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                        과거에 존재했던 국가 (왕조, 제국, 존속 기간 등)
+                        과거 국가·정권·시대 (제국, 왕국, 막부, 연호 시대 등 — 폼에서 형태 선택)
                       </span>
                     </div>
                   </S.SelectOption>

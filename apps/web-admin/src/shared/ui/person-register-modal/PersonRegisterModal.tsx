@@ -10,11 +10,13 @@ import styled from 'styled-components'
 import { toast } from 'react-hot-toast'
 
 import { personApi, type CreatePersonInput } from '@/shared/api/person'
+import { uploadImage } from '@/shared/api/upload'
 import { getAllCountries } from '@/shared/api/countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
 
 const OVERLAY_Z = 9000
@@ -118,21 +120,6 @@ const SelectBtn = styled.button<{ $hasValue?: boolean }>`
   color: ${(p) => (p.$hasValue ? '#111' : '#888')};
   cursor: pointer;
   text-align: left;
-  &:focus {
-    outline: none;
-    border-color: #6366f1;
-  }
-`
-
-const TextArea = styled.textarea`
-  width: 100%;
-  min-height: 80px;
-  padding: 12px 14px;
-  font-size: 15px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-sizing: border-box;
-  resize: vertical;
   &:focus {
     outline: none;
     border-color: #6366f1;
@@ -408,12 +395,15 @@ export function PersonRegisterModal({
             </Field>
             <Field>
               <Label>약력</Label>
-              <TextArea
+              <RichTextEditor
                 value={biography}
-                onChange={(e) => setBiography(e.target.value)}
-                placeholder="인물의 일생을 설명하는 글 (선택, 최대 20,000자)"
-                rows={5}
-                maxLength={20000}
+                onChange={setBiography}
+                showTitle={false}
+                placeholder="인물의 일생을 설명하는 글 (선택). 서식·이미지를 넣을 수 있습니다."
+                onImageUpload={async (file) => {
+                  const result = await uploadImage(file, 'persons')
+                  return result.url
+                }}
               />
             </Field>
             {error && <ErrorText>{error}</ErrorText>}

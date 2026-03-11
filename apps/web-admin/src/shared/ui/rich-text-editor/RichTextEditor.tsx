@@ -21,6 +21,7 @@ import {
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { proseHrStyles, PROSE_HR_HTML } from '@/shared/styles/prose-hr'
 import type { MentionItem } from '@/pages/events/create/mention-system'
 import {
   MENTION_TYPE_CONFIG,
@@ -362,12 +363,10 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     }
   }
 
-  hr {
-    border: none;
-    border-top: 1px solid #e5e7eb;
-    margin: 14px 0;
-    height: 1px;
-    display: block;
+  /* 포스트 상세와 동일 (공통 proseHrStyles) */
+  hr,
+  .prose-hr {
+    ${proseHrStyles}
   }
 
   figure {
@@ -1501,9 +1500,135 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [handleContentChange],
   )
 
-  // 키 입력 핸들러
+  const handleContentChangeRef = useRef(handleContentChange)
+  const updateFormatStateRef = useRef(updateFormatState)
+  useEffect(() => {
+    handleContentChangeRef.current = handleContentChange
+    updateFormatStateRef.current = updateFormatState
+  }, [handleContentChange, updateFormatState])
+
+  // * / - + 스페이스 → 순서 없는 목록. 캡처 단계에서 먼저 처리해 다른 핸들러에 가로채이지 않도록
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== ' ' || e.ctrlKey || e.metaKey) return
+      const el = editorRef.current
+      if (!el || !el.contains(document.activeElement)) return
+
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0) return
+      const range = sel.getRangeAt(0)
+      if (!range.collapsed || !el.contains(range.startContainer)) return
+
+      try {
+        const r = range.cloneRange()
+        r.setStart(el, 0)
+        r.setEnd(range.startContainer, range.startOffset)
+        const full = r.toString()
+        const lastLine = full.split(/\r?\n/).pop() ?? ''
+        const trimmed = lastLine.trim()
+
+        if (trimmed === '*' || trimmed === '-') {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          const delR = range.cloneRange()
+          delR.collapse(true)
+          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -1)
+          sel.removeAllRanges()
+          sel.addRange(delR)
+          document.execCommand('delete', false)
+          document.execCommand('insertUnorderedList', false)
+          handleContentChangeRef.current()
+          updateFormatStateRef.current()
+          return
+        }
+        if (/^\d+\.\s*$/.test(trimmed) || /^\d+\.$/.test(trimmed)) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          const delR = range.cloneRange()
+          delR.collapse(true)
+          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -trimmed.length)
+          sel.removeAllRanges()
+          sel.addRange(delR)
+          document.execCommand('delete', false)
+          document.execCommand('insertOrderedList', false)
+          handleContentChangeRef.current()
+          updateFormatStateRef.current()
+        }
+      } catch {
+        /* noop */
+      }
+    }
+    document.addEventListener('keydown', handler, true)
+    return () => document.removeEventListener('keydown', handler, true)
+  }, [])
+
+  const tryConvertListOnSpace = useCallback(
+    (e: React.SyntheticEvent) => {
+      const el = editorRef.current
+      if (!el) return false
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0) return false
+      const range = sel.getRangeAt(0)
+      if (!range.collapsed || !el.contains(range.startContainer)) return false
+
+      try {
+        const r = range.cloneRange()
+        r.setStart(el, 0)
+        r.setEnd(range.startContainer, range.startOffset)
+        const full = r.toString()
+        const lastLine = full.split(/\r?\n/).pop() ?? ''
+        const trimmed = lastLine.trim()
+
+        if (trimmed === '*' || trimmed === '-') {
+          e.preventDefault()
+          const delR = range.cloneRange()
+          delR.collapse(true)
+          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -1)
+          sel.removeAllRanges()
+          sel.addRange(delR)
+          document.execCommand('delete', false)
+          document.execCommand('insertUnorderedList', false)
+          handleContentChange()
+          updateFormatState()
+          return true
+        }
+        if (/^\d+\.\s*$/.test(trimmed) || /^\d+\.$/.test(trimmed)) {
+          e.preventDefault()
+          const delR = range.cloneRange()
+          delR.collapse(true)
+          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -trimmed.length)
+          sel.removeAllRanges()
+          sel.addRange(delR)
+          document.execCommand('delete', false)
+          document.execCommand('insertOrderedList', false)
+          handleContentChange()
+          updateFormatState()
+          return true
+        }
+      } catch {
+        /* noop */
+      }
+      return false
+    },
+    [handleContentChange, updateFormatState],
+  )
+
+  const handleBeforeInput = useCallback(
+    (e: React.FormEvent<HTMLDivElement>) => {
+      const ev = e.nativeEvent as InputEvent
+      if (ev.inputType !== 'insertText' || ev.data !== ' ') return
+      tryConvertListOnSpace(e)
+    },
+    [tryConvertListOnSpace],
+  )
+
+  // 키 입력 핸들러 (스페이스 */- 목록 변환 + Ctrl+B 등)
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
+        if (tryConvertListOnSpace(e)) return
+      }
+
       // 단축키
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'b') {
@@ -1528,7 +1653,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
       }
     },
-    [applyFormat],
+    [applyFormat, tryConvertListOnSpace],
   )
 
   // 이미지 업로드
@@ -2229,6 +2354,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           ref={editorRef}
           contentEditable
           data-placeholder={placeholder}
+          onBeforeInput={handleBeforeInput}
           onInput={handleContentChange}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
@@ -2437,7 +2563,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             playClickSound()
             if (!editorRef.current) return
             editorRef.current.focus()
-            document.execCommand('insertHorizontalRule', false)
+            document.execCommand('insertHTML', false, PROSE_HR_HTML)
             handleContentChange()
           }}
           title="수평선 삽입"

@@ -1,10 +1,12 @@
-import { TransitionEventType } from '@prisma/client'
+import { TransitionEventType, TransitionScope } from '@prisma/client'
 
 export interface HistoricalCountryTransitionRecord {
   id: string
   predecessorId: string
   successorId: string
   eventType: TransitionEventType
+  /** 전환 성격: 국가 교체 vs 정권 교체. null이면 미구분 */
+  transitionScope: TransitionScope | null
   /** 후임 국가의 존속 시작 시점 (표시용, 후임 startEra/Year/Month/Day 기반) */
   successorStartDate: string | null
   predecessorName?: string
@@ -17,10 +19,12 @@ export interface CreateTransitionData {
   predecessorId: string
   successorId: string
   eventType: TransitionEventType
+  transitionScope?: TransitionScope | null
 }
 
 export interface UpdateTransitionData {
   eventType?: TransitionEventType
+  transitionScope?: TransitionScope | null
 }
 
 export interface IHistoricalCountryTransitionRepository {

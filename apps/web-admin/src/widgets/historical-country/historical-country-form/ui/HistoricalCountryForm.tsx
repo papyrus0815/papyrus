@@ -1,17 +1,308 @@
 import React, { useMemo, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { FiSearch } from 'react-icons/fi'
+import { FiCalendar, FiChevronDown, FiGlobe, FiInfo, FiSearch } from 'react-icons/fi'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import styled from 'styled-components'
 import { FormSidePanel } from '@/shared/ui/form-side-panel'
+import {
+  DateFieldBtn,
+  DateFieldsRow,
+  FieldControl,
+  FieldLabel,
+  FieldRow,
+  FormHeader,
+  FormRows,
+  FormSectionInner,
+  SubmitButton,
+  TabButton,
+  TabNavigation,
+} from '@/shared/ui/register-form-layout'
 import type { HistoricalCountry, Era } from '@/entities/historical-country/api'
 import { useHistoricalCountry } from '@/features/historical-country/use-historical-countries.hook'
 import { uploadImage } from '@/shared/api/upload'
 import type { TransitionEventType } from '@/shared/api/historical-countries'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal'
 import * as S from '../../../../pages/history/country/country.styles'
+
+/** 모달: FormScroll이 이미 24px 패딩을 주므로 FormSectionInner 패딩 제거해 간격 통일 */
+const ModalFormLayoutWrap = styled.div`
+  padding: 0;
+  &[data-inner] {
+    padding: 0;
+  }
+  ${FormSectionInner} {
+    padding: 0;
+  }
+  ${FormHeader} {
+    padding: 0 0 16px 0;
+    border-bottom: none;
+  }
+  ${TabNavigation} {
+    margin-bottom: 20px;
+  }
+  /* 섹션: 상단 보더 있는 경우(2번째 이후) — 간격 통일 */
+  ${S.FormSection} {
+    margin-top: 0;
+    padding: 0;
+    border: none;
+    gap: 0;
+  }
+  ${S.FormSection}:first-of-type {
+    margin-top: 0;
+  }
+  ${S.FormSection}:not(:first-of-type) {
+    margin-top: 28px;
+    padding-top: 32px;
+    border-top: 1px solid #e5e7eb;
+  }
+  /* 모든 섹션 헤더(타이틀+설명) 동일 스타일·간격 */
+  ${S.FormSectionHeader} {
+    margin-bottom: 16px;
+  }
+  ${S.FormSectionIcon} {
+    display: none;
+  }
+  ${S.FormSectionTitle} {
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 4px 0;
+  }
+  ${S.FormSectionDescription} {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0;
+  }
+  ${S.FormRow} {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border: none;
+  }
+  /* 인물 등록 FieldRow와 동일: 360px 1fr, 20px 0, border #f3f4f6 */
+  ${S.FormField} {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 24px;
+    align-items: start;
+    padding: 20px 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  @media (max-width: 768px) {
+    ${S.FormField} {
+      grid-template-columns: 1fr;
+    }
+  }
+  ${S.FormLabel} {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    padding-top: 10px;
+    margin: 0;
+    grid-column: 1;
+    grid-row: 1;
+  }
+  ${S.FormField} input:not([type='hidden']),
+  ${S.FormField} button[type='button'],
+  ${S.FormField} select,
+  ${S.FormField} textarea {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+  }
+  ${S.FormField} ${S.ErrorMessage} {
+    grid-column: 2;
+    grid-row: 2;
+    font-size: 12px;
+    color: #dc2626;
+    margin-top: 4px;
+  }
+  ${S.FormField} > div {
+    grid-column: 2;
+  }
+  /* 국가명(한글)·(영문)·유래: 같은 성격 필드끼리는 행 사이 보더 없음, 그룹 하단에만 */
+  ${S.FormField}.name-group-field {
+    border-bottom: none;
+  }
+  .name-group {
+    border-bottom: 1px solid #f3f4f6;
+  }
+  /* 국가 형태·정치체 성격: 같은 성격 필드끼리 그룹, 행 사이 보더 없음 */
+  .state-type-group ${S.FormField} {
+    border-bottom: none;
+  }
+  .state-type-group {
+    border-bottom: 1px solid #f3f4f6;
+  }
+  /* 단일 컬럼 필드(국가명 유래, 설명 등)는 전체 너비 */
+  ${S.FormField}[style*='marginTop'] {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    grid-template-columns: 1fr;
+  }
+  ${S.FormField}[style*='marginTop'] ${S.ErrorMessage} {
+    grid-column: unset;
+    grid-row: unset;
+  }
+  ${S.FormField}[data-field='thumbnail'] {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 24px;
+    align-items: start;
+    padding: 20px 0;
+    border-bottom: 1px solid #f3f4f6;
+    min-width: 0;
+  }
+  ${S.FormField}[data-field='thumbnail'] ${S.FormLabel} {
+    padding-top: 8px;
+    grid-column: 1;
+    grid-row: 1;
+  }
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-right {
+    grid-column: 2;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  /* 88px 원형 하나: 미리보기일 때 이미지, 없을 때 업로드 프롬프트 (인물 썸네일과 동일) */
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle {
+    width: 88px;
+    height: 88px;
+    min-width: 88px;
+    min-height: 88px;
+    max-width: 88px;
+    max-height: 88px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(226, 232, 240, 0.6);
+    border: 2px dashed rgba(99, 102, 241, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle:hover {
+    border-color: rgba(99, 102, 241, 0.6);
+    background: rgba(226, 232, 240, 0.9);
+  }
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle[data-has-image] {
+    background: transparent;
+    border-color: transparent;
+  }
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle svg {
+    color: #94a3b8;
+    width: 32px;
+    height: 32px;
+  }
+  ${S.FormField}[data-field='thumbnail'] ${S.ErrorMessage} {
+    grid-column: 2;
+    width: 100%;
+  }
+  @media (max-width: 768px) {
+    ${S.FormField}[data-field='thumbnail'] {
+      grid-template-columns: 1fr;
+    }
+    ${S.FormField}[data-field='thumbnail'] .thumbnail-right {
+      grid-column: unset;
+    }
+  }
+  /* 존속 기간 DateDetailRow: RFL Input과 동일 스타일 */
+  ${S.DateDetailRow} input[type='number'],
+  ${S.DateDetailRow} ${S.Input} {
+    padding: 12px 16px;
+    font-size: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    width: 72px;
+    min-width: 72px;
+    text-align: center;
+    box-sizing: border-box;
+  }
+  ${S.DateDetailRow} input[type='number']:focus,
+  ${S.DateDetailRow} ${S.Input}:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  }
+  ${S.DateDetailRow} ${S.SelectButton} {
+    min-width: 100px;
+    padding: 10px 14px;
+  }
+  /* 존속 기간 달력 버튼(기원 선택): RFL DateFieldBtn과 동일 */
+  ${DateFieldsRow} {
+    max-width: 480px;
+  }
+  ${DateFieldBtn} {
+    padding: 12px 16px;
+    font-size: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    color: #111827;
+  }
+  ${DateFieldBtn}:hover {
+    border-color: #4f46e5;
+    background: #faf5ff;
+  }
+  ${DateFieldBtn}:focus-visible {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  }
+  /* 인물 등록 RFL Input과 동일: #e5e7eb 테두리, 12px radius, 포커스 인디고 */
+  ${S.Input} {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: #111827;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease;
+  }
+  ${S.Input}::placeholder {
+    color: #9ca3af;
+  }
+  ${S.Input}:hover:not(:focus) {
+    border-color: #d1d5db;
+  }
+  ${S.Input}:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  }
+  /* 인물 등록 SelectBtn과 동일: 10px 14px, max-width 380px */
+  ${S.SelectButton} {
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #111827;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    max-width: 380px;
+  }
+  ${S.SelectButton}:hover {
+    border-color: #d1d5db;
+  }
+  ${S.SelectButton}:focus-visible {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  }
+`
 
 const TRANSITION_EVENT_LABELS: Record<TransitionEventType, string> = {
   FOUNDED: '건국',
@@ -81,6 +372,7 @@ const historicalCountrySchema = z.object({
     .optional()
     .or(z.literal(undefined)),
   stateType: z.string().min(1, '국가 형태를 입력해주세요'),
+  entityKind: z.enum(['STATE', 'REGIME', 'PERIOD']).optional().nullable(),
   parentModernCountryIds: z.array(z.string()).optional(), // 여러 현대 국가 지원
   parentHistoricalCountryIds: z.array(z.string()).optional(), // 후임 국가 ID 배열
 })
@@ -99,6 +391,10 @@ interface HistoricalCountryOption {
 
 interface HistoricalCountryFormProps {
   editing: HistoricalCountry | null
+  /** 'panel' = 우측 FormSidePanel(기본), 'modal' = 모달 래퍼용(폼 본문만 렌더) */
+  embedIn?: 'panel' | 'modal'
+  /** 등록 모달에서 "막부" 선택 시 폼에 미리 채울 값 */
+  initialPreset?: { stateType: 'SHOGUNATE'; entityKind: 'REGIME' }
   modernCountries: ModernCountryOption[]
   /** 후임으로 선택 가능한 역사적 국가 목록 (편집 중인 자신 제외해 전달) */
   historicalCountries?: HistoricalCountryOption[]
@@ -131,6 +427,12 @@ const STATE_TYPE_OPTIONS = [
     label: '왕조',
     icon: '🎭',
     desc: '세습적 왕가가 통치하는 국가',
+  },
+  {
+    value: 'SHOGUNATE',
+    label: '막부',
+    icon: '⚔️',
+    desc: '쇼군이 실권을 가진 군정 (무로마치·에도 막부 등)',
   },
   {
     value: 'HEREDITARY',
@@ -219,8 +521,16 @@ const STATE_TYPE_OPTIONS = [
   { value: 'OTHER', label: '기타', icon: '📋', desc: '기타 국가 형태' },
 ]
 
+const ENTITY_KIND_OPTIONS: { value: 'STATE' | 'REGIME' | 'PERIOD'; label: string }[] = [
+  { value: 'STATE', label: '주권 국가 (신성로마, 프로이센 등)' },
+  { value: 'REGIME', label: '정권·군정 (무로마치·에도 막부 등)' },
+  { value: 'PERIOD', label: '시대 (메이지·다이쇼 시대 등)' },
+]
+
 export function HistoricalCountryForm({
   editing,
+  embedIn = 'panel',
+  initialPreset,
   modernCountries,
   historicalCountries = [],
   onClose,
@@ -251,9 +561,13 @@ export function HistoricalCountryForm({
 
   /** 시작 기원 선택 모달 표시 여부 */
   const [showStartEraModal, setShowStartEraModal] = useState(false)
+  /** 시작 시점 모달 내 년/월/일 (모달 열릴 때 폼 값으로 초기화) */
+  const [startModalYMD, setStartModalYMD] = useState({ y: '', m: '', d: '' })
 
   /** 종료 기원 선택 모달 표시 여부 */
   const [showEndEraModal, setShowEndEraModal] = useState(false)
+  /** 종료 시점 모달 내 년/월/일 */
+  const [endModalYMD, setEndModalYMD] = useState({ y: '', m: '', d: '' })
 
   /** 선택된 현대 국가 ID 배열 (신성로마제국 같은 다중 국가 지원) */
   const [selectedModernCountries, setSelectedModernCountries] = useState<
@@ -267,6 +581,8 @@ export function HistoricalCountryForm({
   /** 후임 설정 시 변천 유형 (날짜는 후임 국가의 존속 시작 시점 참조) */
   const [transitionEventType, setTransitionEventType] =
     useState<TransitionEventType>('SUCCESSION')
+  /** 후임 설정 시 전환 성격: 국가 교체 vs 정권 교체 */
+  const [transitionScope, setTransitionScope] = useState<'STATE_SUCCESSION' | 'REGIME_CHANGE' | ''>('')
 
   /** 수정 시 상세 API로 시작/종료 시점 등 전체 필드 확실히 로드 */
   const { data: editingDetail } = useHistoricalCountry(editing?.id)
@@ -289,6 +605,7 @@ export function HistoricalCountryForm({
     reset,
     setValue,
     watch,
+    getValues,
   } = useForm<HistoricalCountryFormData>({
     resolver: zodResolver(historicalCountrySchema),
     mode: 'all', // 모든 이벤트에서 검증
@@ -311,6 +628,7 @@ export function HistoricalCountryForm({
           parentModernCountryIds?: string[]
           parentHistoricalCountryIds?: string[]
           transitionEventType?: TransitionEventType
+          entityKind?: 'STATE' | 'REGIME' | 'PERIOD' | null
           start_era?: string
           start_year?: number
           start_month?: number
@@ -325,21 +643,24 @@ export function HistoricalCountryForm({
         const num = (v: number | null | undefined) =>
           v !== null && v !== undefined ? v : undefined
         const str = (v: string | null | undefined) => v || undefined
+        const era = (v: string | null | undefined): 'BC' | 'AD' | undefined =>
+          v === 'BC' || v === 'AD' ? v : undefined
         reset({
           name: (raw?.name ?? editing.name) || '',
           enName: (raw?.enName ?? editing.enName) || '',
           nameOrigin: (raw?.nameOrigin ?? (editing as any).nameOrigin) || '',
           description: (raw?.description ?? editing.description) || '',
           thumbnailUrl: (raw?.thumbnailUrl ?? editing.thumbnailUrl) || '',
-          startEra: str(raw?.startEra ?? raw?.start_era),
+          startEra: era(raw?.startEra ?? raw?.start_era),
           startYear: num(raw?.startYear ?? raw?.start_year),
           startMonth: num(raw?.startMonth ?? raw?.start_month),
           startDay: num(raw?.startDay ?? raw?.start_day),
-          endEra: str(raw?.endEra ?? raw?.end_era),
+          endEra: era(raw?.endEra ?? raw?.end_era),
           endYear: num(raw?.endYear ?? raw?.end_year),
           endMonth: num(raw?.endMonth ?? raw?.end_month),
           endDay: num(raw?.endDay ?? raw?.end_day),
           stateType: (raw?.stateType ?? editing.stateType) || '',
+          entityKind: (raw?.entityKind ?? (editing as any).entityKind) ?? undefined,
           parentModernCountryIds: parentIds,
           parentHistoricalCountryIds: parentHistIds,
         })
@@ -349,8 +670,11 @@ export function HistoricalCountryForm({
         setTransitionEventType(
           (raw?.transitionEventType as TransitionEventType) ?? 'SUCCESSION',
         )
+        setTransitionScope(
+          (raw as { transitionScope?: 'STATE_SUCCESSION' | 'REGIME_CHANGE' | null })?.transitionScope ?? '',
+        )
       } else {
-        // 생성 모드: 빈 값으로 초기화
+        // 생성 모드: 빈 값으로 초기화 (막부 등록 시 initialPreset으로 국가 형태·정치체 성격 미리 채움)
         reset({
           name: '',
           enName: '',
@@ -365,7 +689,8 @@ export function HistoricalCountryForm({
           endYear: undefined,
           endMonth: undefined,
           endDay: undefined,
-          stateType: '',
+          stateType: initialPreset?.stateType ?? '',
+          entityKind: initialPreset?.entityKind ?? undefined,
           parentModernCountryIds: [],
           parentHistoricalCountryIds: [],
         })
@@ -373,10 +698,35 @@ export function HistoricalCountryForm({
         setSelectedModernCountries([])
         setSelectedParentHistoricalIds([])
         setTransitionEventType('SUCCESSION')
+        setTransitionScope('')
       }
       setThumbnailFile(null)
     }
-  }, [editing, formSource, reset])
+  }, [editing, formSource, reset, initialPreset])
+
+  /** 시작 시점 모달 열릴 때 폼 값으로 년/월/일 초기화 */
+  useEffect(() => {
+    if (showStartEraModal) {
+      const v = getValues()
+      setStartModalYMD({
+        y: v.startYear != null ? String(v.startYear) : '',
+        m: v.startMonth != null ? String(v.startMonth) : '',
+        d: v.startDay != null ? String(v.startDay) : '',
+      })
+    }
+  }, [showStartEraModal, getValues])
+
+  /** 종료 시점 모달 열릴 때 폼 값으로 년/월/일 초기화 */
+  useEffect(() => {
+    if (showEndEraModal) {
+      const v = getValues()
+      setEndModalYMD({
+        y: v.endYear != null ? String(v.endYear) : '',
+        m: v.endMonth != null ? String(v.endMonth) : '',
+        d: v.endDay != null ? String(v.endDay) : '',
+      })
+    }
+  }, [showEndEraModal, getValues])
 
   // ==================== 이벤트 핸들러 ====================
 
@@ -432,6 +782,7 @@ export function HistoricalCountryForm({
       endMonth: data.endMonth || null,
       endDay: data.endDay || null,
       stateType: data.stateType as any, // STATE_TYPE_OPTIONS의 value를 HistoricalStateType으로 변환
+      entityKind: data.entityKind ?? null,
     }
 
     // 수정 모드인 경우 id 추가
@@ -443,10 +794,11 @@ export function HistoricalCountryForm({
     if (selectedModernCountries.length > 0) {
       payload.parentModernCountryIds = selectedModernCountries
     }
-    // 후임 선택 시 추가 + 변천 유형 (날짜는 후임 국가 시작 시점 참조)
+    // 후임 선택 시 추가 + 변천 유형·전환 성격 (날짜는 후임 국가 시작 시점 참조)
     if (selectedParentHistoricalIds.length > 0) {
       payload.parentHistoricalCountryIds = selectedParentHistoricalIds
       payload.transitionEventType = transitionEventType
+      payload.transitionScope = transitionScope || undefined
     }
 
     // 저장 및 폼 초기화
@@ -485,19 +837,35 @@ export function HistoricalCountryForm({
     setShowStateTypeModal(false)
   }
 
-  /**
-   * 시작 기원 선택 핸들러
-   */
+  /** 시작 기원 선택 (모달 내에서만, 적용 버튼으로 닫음) */
   const handleStartEraSelect = (era: 'BC' | 'AD') => {
     setValue('startEra', era, { shouldValidate: true })
+  }
+
+  /** 시작 시점 모달 적용: 년/월/일 반영 후 닫기 */
+  const handleStartDateApply = () => {
+    const y = startModalYMD.y === '' ? undefined : Number(startModalYMD.y)
+    const m = startModalYMD.m === '' ? undefined : Number(startModalYMD.m)
+    const d = startModalYMD.d === '' ? undefined : Number(startModalYMD.d)
+    if (y !== undefined) setValue('startYear', y, { shouldValidate: true })
+    if (m !== undefined) setValue('startMonth', m, { shouldValidate: true })
+    if (d !== undefined) setValue('startDay', d, { shouldValidate: true })
     setShowStartEraModal(false)
   }
 
-  /**
-   * 종료 기원 선택 핸들러
-   */
+  /** 종료 기원 선택 (모달 내에서만) */
   const handleEndEraSelect = (era: 'BC' | 'AD') => {
     setValue('endEra', era, { shouldValidate: true })
+  }
+
+  /** 종료 시점 모달 적용 */
+  const handleEndDateApply = () => {
+    const y = endModalYMD.y === '' ? undefined : Number(endModalYMD.y)
+    const m = endModalYMD.m === '' ? undefined : Number(endModalYMD.m)
+    const d = endModalYMD.d === '' ? undefined : Number(endModalYMD.d)
+    if (y !== undefined) setValue('endYear', y, { shouldValidate: true })
+    if (m !== undefined) setValue('endMonth', m, { shouldValidate: true })
+    if (d !== undefined) setValue('endDay', d, { shouldValidate: true })
     setShowEndEraModal(false)
   }
 
@@ -543,12 +911,17 @@ export function HistoricalCountryForm({
 
   /** 선택된 국가 형태 값 */
   const selectedStateType = watch('stateType')
+  /** 선택된 정치체 성격 (REGIME일 때 국가 형태 막부 권장 힌트 표시) */
+  const selectedEntityKind = watch('entityKind')
 
   /** 선택된 시작 기원 */
   const selectedStartEra = watch('startEra')
 
   /** 선택된 종료 기원 */
   const selectedEndEra = watch('endEra')
+
+  /** 모달일 때 탭 (기본 정보 / 연결·후임) */
+  const [modalTab, setModalTab] = useState<'basic' | 'connection'>('basic')
 
   /**
    * 국가 형태 선택 버튼 라벨 생성
@@ -577,6 +950,32 @@ export function HistoricalCountryForm({
     if (selectedEndEra === 'BC') return '기원전'
     if (selectedEndEra === 'AD') return '기원후'
     return '선택'
+  }
+
+  /** 출생일·사망일 스타일용: 시작 시점 표시 문자열 */
+  const formatStartDateDisplay = () => {
+    const era = watch('startEra')
+    const y = watch('startYear')
+    const m = watch('startMonth')
+    const d = watch('startDay')
+    if (!era || y == null) return '선택'
+    const parts = [era === 'BC' ? 'BC' : 'AD', String(y)]
+    if (m != null) parts.push(String(m))
+    if (d != null) parts.push(String(d))
+    return parts.join('.')
+  }
+
+  /** 출생일·사망일 스타일용: 종료 시점 표시 문자열 */
+  const formatEndDateDisplay = () => {
+    const era = watch('endEra')
+    const y = watch('endYear')
+    const m = watch('endMonth')
+    const d = watch('endDay')
+    if (!era || y == null) return '선택'
+    const parts = [era === 'BC' ? 'BC' : 'AD', String(y)]
+    if (m != null) parts.push(String(m))
+    if (d != null) parts.push(String(d))
+    return parts.join('.')
   }
 
   /**
@@ -624,42 +1023,12 @@ export function HistoricalCountryForm({
 
   // ==================== JSX 렌더링 ====================
 
-  return (
+  const formBody = (
     <>
-      <FormSidePanel
-        isOpen={!!editing}
-        title={editing.id ? '역사적 국가 수정' : '역사적 국가 등록'}
-        onClose={handleClose}
-        submitLabel={
-          isSubmitting ? '처리중...' : editing.id ? '수정 완료' : '국가 등록'
-        }
-        formId="historical-country-form"
-        submitDisabled={!isValid || isSubmitting}
-        headerExtra={
-          <S.RequiredFieldsNotice>
-            <S.RequiredFieldsIcon>⚠️</S.RequiredFieldsIcon>
-            <S.RequiredFieldsText>
-              <S.RequiredFieldsTitle>필수 항목:</S.RequiredFieldsTitle>
-              <S.RequiredFieldsList>
-                <S.RequiredFieldItem $completed={!!watch('name')}>
-                  국가명(한글)
-                </S.RequiredFieldItem>
-                ,{' '}
-                <S.RequiredFieldItem $completed={!!watch('enName')}>
-                  국가명(영문)
-                </S.RequiredFieldItem>
-                ,{' '}
-                <S.RequiredFieldItem $completed={!!watch('stateType')}>
-                  국가 형태
-                </S.RequiredFieldItem>
-              </S.RequiredFieldsList>
-            </S.RequiredFieldsText>
-          </S.RequiredFieldsNotice>
-        }
-      >
-        <S.Form id="historical-country-form" onSubmit={handleSubmit(onSubmit)}>
           {/* 기본 정보 */}
           <S.FormSection>
+            {/* 모달 기본 탭에서만: 기본 정보 헤더·썸네일·이름·국가형태·존속기간 표시 */}
+            <div style={{ display: embedIn === 'modal' && modalTab === 'connection' ? 'none' : 'block' }}>
             <S.FormSectionHeader>
               <S.FormSectionIcon>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -677,38 +1046,26 @@ export function HistoricalCountryForm({
               </div>
             </S.FormSectionHeader>
 
-            {/* 썸네일 (국가명 위, 파일 업로드만) */}
-            <S.FormField style={{ marginBottom: '16px' }}>
-              <S.FormLabel htmlFor="thumbnail-upload">썸네일</S.FormLabel>
-              {thumbnailPreview && (
-                <S.ThumbnailPreview
-                  style={{ maxWidth: '100%', overflow: 'hidden', marginBottom: '12px' }}
+            {/* 대표 이미지 (국기·상징 등) — 인물 등록 썸네일과 동일: 88px 원형 하나 */}
+            <S.FormField data-field="thumbnail">
+              <S.FormLabel htmlFor="thumbnail-upload">대표 이미지</S.FormLabel>
+              <div className="thumbnail-right">
+                <label
+                  className="thumbnail-circle"
+                  htmlFor="thumbnail-upload"
+                  data-has-image={!!thumbnailPreview}
                 >
-                  <S.ThumbnailImage
-                    src={thumbnailPreview}
-                    alt="썸네일 미리보기"
-                    style={{ maxWidth: '100%', maxHeight: '160px', objectFit: 'contain' }}
-                  />
-                </S.ThumbnailPreview>
-              )}
-              <S.FileUploadWrapper>
-                <S.FileUploadLabel htmlFor="thumbnail-upload">
-                  <S.FileUploadIcon>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
-                        fill="currentColor"
-                      />
+                  {thumbnailPreview ? (
+                    <img src={thumbnailPreview} alt="대표 이미지 미리보기" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
                     </svg>
-                  </S.FileUploadIcon>
-                  <S.FileUploadText>
-                    {thumbnailUploading
-                      ? '업로드 중...'
-                      : thumbnailFile
-                        ? thumbnailFile.name
-                        : '이미지 파일 선택'}
-                  </S.FileUploadText>
-                </S.FileUploadLabel>
+                  )}
+                </label>
+                {thumbnailUploading && (
+                  <span style={{ fontSize: 13, color: '#64748b' }}>업로드 중…</span>
+                )}
                 <S.FileInput
                   id="thumbnail-upload"
                   type="file"
@@ -716,7 +1073,7 @@ export function HistoricalCountryForm({
                   onChange={handleThumbnailChange}
                   disabled={thumbnailUploading}
                 />
-              </S.FileUploadWrapper>
+              </div>
               {thumbnailUploadError && (
                 <S.ErrorMessage style={{ marginTop: '8px' }}>
                   {thumbnailUploadError}
@@ -725,80 +1082,124 @@ export function HistoricalCountryForm({
               <input type="hidden" {...register('thumbnailUrl')} />
             </S.FormField>
 
-            <S.FormRow>
-              {/* 국가명 (한글) */}
-              <S.FormField>
-                <S.FormLabel htmlFor="name">
-                  국가명 (한글) <S.RequiredStar>*</S.RequiredStar>
-                </S.FormLabel>
+            <div className="name-group">
+              <S.FormRow>
+                <S.FormField className="name-group-field">
+                  <S.FormLabel htmlFor="name">
+                    국가명 (한글) <S.RequiredStar>*</S.RequiredStar>
+                  </S.FormLabel>
+                  <S.Input
+                    id="name"
+                    type="text"
+                    placeholder="예: 조선"
+                    {...register('name')}
+                    $error={!!errors.name}
+                  />
+                  {errors.name && (
+                    <S.ErrorMessage>{errors.name.message}</S.ErrorMessage>
+                  )}
+                </S.FormField>
+
+                <S.FormField className="name-group-field">
+                  <S.FormLabel htmlFor="enName">국가명 (영문)</S.FormLabel>
+                  <S.Input
+                    id="enName"
+                    type="text"
+                    placeholder="예: Joseon Dynasty"
+                    {...register('enName')}
+                    $error={!!errors.enName}
+                  />
+                  {errors.enName && (
+                    <S.ErrorMessage>{errors.enName.message}</S.ErrorMessage>
+                  )}
+                </S.FormField>
+              </S.FormRow>
+
+              {/* 국가명 유래 */}
+              <S.FormField className="name-group-field">
+                <S.FormLabel htmlFor="nameOrigin">국가명 유래</S.FormLabel>
                 <S.Input
-                  id="name"
-                  type="text"
-                  placeholder="예: 조선"
-                  {...register('name')}
-                  $error={!!errors.name}
+                  as="textarea"
+                  id="nameOrigin"
+                  rows={3}
+                  placeholder="국가명의 어원·명칭 유래를 입력해주세요"
+                  {...register('nameOrigin')}
+                  $error={!!errors.nameOrigin}
+                  style={{ minHeight: '80px', resize: 'vertical' }}
                 />
-                {errors.name && (
-                  <S.ErrorMessage>{errors.name.message}</S.ErrorMessage>
+                {errors.nameOrigin && (
+                  <S.ErrorMessage>{errors.nameOrigin.message}</S.ErrorMessage>
                 )}
               </S.FormField>
+            </div>
+            </div>
 
-              {/* 국가명 (영문) */}
-              <S.FormField>
-                <S.FormLabel htmlFor="enName">국가명 (영문)</S.FormLabel>
-                <S.Input
-                  id="enName"
-                  type="text"
-                  placeholder="예: Joseon Dynasty"
-                  {...register('enName')}
-                  $error={!!errors.enName}
-                />
-                {errors.enName && (
-                  <S.ErrorMessage>{errors.enName.message}</S.ErrorMessage>
-                )}
-              </S.FormField>
-            </S.FormRow>
-
-            {/* 국가명 유래 */}
-            <S.FormField>
-              <S.FormLabel htmlFor="nameOrigin">국가명 유래</S.FormLabel>
-              <S.Input
-                as="textarea"
-                id="nameOrigin"
-                rows={3}
-                placeholder="국가명의 어원·명칭 유래를 입력해주세요"
-                {...register('nameOrigin')}
-                $error={!!errors.nameOrigin}
-                style={{ minHeight: '80px', resize: 'vertical' }}
-              />
-              {errors.nameOrigin && (
-                <S.ErrorMessage>{errors.nameOrigin.message}</S.ErrorMessage>
-              )}
-            </S.FormField>
+            {/* 모달 연결·후임 탭에서만: 섹션 헤더 표시 */}
+            {embedIn === 'modal' && modalTab === 'connection' && (
+              <S.FormSectionHeader>
+                <S.FormSectionIcon>
+                  <FiGlobe size={20} />
+                </S.FormSectionIcon>
+                <div>
+                  <S.FormSectionTitle>연결 · 후임</S.FormSectionTitle>
+                  <S.FormSectionDescription>
+                    현대 국가 연결, 후임 국가, 변천 유형을 입력하세요
+                  </S.FormSectionDescription>
+                </div>
+              </S.FormSectionHeader>
+            )}
 
             <S.FormRow>
-              {/* 국가 형태 */}
-              <S.FormField>
-                <S.FormLabel htmlFor="stateType">
-                  국가 형태 <S.RequiredStar>*</S.RequiredStar>
-                </S.FormLabel>
-                <S.SelectButton
-                  type="button"
-                  onClick={() => setShowStateTypeModal(true)}
-                  $error={!!errors.stateType}
-                  $hasValue={!!selectedStateType}
-                >
-                  <span>{getStateTypeLabel()}</span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
-                  </svg>
-                </S.SelectButton>
-                <input type="hidden" {...register('stateType')} />
-                {errors.stateType && (
-                  <S.ErrorMessage>{errors.stateType.message}</S.ErrorMessage>
-                )}
-              </S.FormField>
-
+              {/* 기본 탭: 국가 형태·정치체 성격 (같은 성격) / 연결 탭: 연결 현대국가, 후임, 변천 */}
+              <div
+                className="state-type-group"
+                style={{ display: embedIn === 'modal' && modalTab === 'connection' ? 'none' : 'block', width: '100%' }}
+              >
+                <S.FormField>
+                  <S.FormLabel htmlFor="stateType">
+                    국가 형태 <S.RequiredStar>*</S.RequiredStar>
+                  </S.FormLabel>
+                    <S.SelectButton
+                      type="button"
+                      onClick={() => setShowStateTypeModal(true)}
+                      $error={!!errors.stateType}
+                      $hasValue={!!selectedStateType}
+                    >
+                      <span>{getStateTypeLabel()}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
+                      </svg>
+                    </S.SelectButton>
+                    <input type="hidden" {...register('stateType')} />
+                    {selectedEntityKind === 'REGIME' && (
+                      <div style={{ fontSize: '12px', color: '#7c2d12', marginTop: '6px', background: '#fef3c7', padding: '8px 10px', borderRadius: 8 }}>
+                        💡 정권·군정인 경우 국가 형태에 <strong>막부</strong>를 선택하는 것을 권장합니다.
+                      </div>
+                    )}
+                    {errors.stateType && (
+                      <S.ErrorMessage>{errors.stateType.message}</S.ErrorMessage>
+                    )}
+                  </S.FormField>
+                  <S.FormField>
+                    <S.FormLabel htmlFor="entityKind">정치체 성격 (선택)</S.FormLabel>
+                    <S.Select
+                      id="entityKind"
+                      {...register('entityKind')}
+                      $error={!!errors.entityKind}
+                    >
+                      <option value="">미지정 (과거 주권 국가로 간주)</option>
+                      {ENTITY_KIND_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </S.Select>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                      막부·메이지 시대 등은 정권/시대를 선택하세요
+                    </div>
+                  </S.FormField>
+                </div>
+              <div style={{ display: embedIn === 'modal' && modalTab === 'basic' ? 'none' : 'contents' }}>
               {/* 연결된 현대 국가 (다중 선택 지원) */}
               <S.FormField>
                 <S.FormLabel htmlFor="parentModernCountryIds">
@@ -891,31 +1292,43 @@ export function HistoricalCountryForm({
                           )
                         )}
                       </select>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: '#6b7280',
-                          marginTop: '6px',
-                        }}
-                      >
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
                         변천 날짜는 후임 국가의 존속 시작 시점을 참조합니다.
                       </div>
+                      <S.FormLabel style={{ marginTop: 12 }}>전환 성격 (선택)</S.FormLabel>
+                      <select
+                        value={transitionScope}
+                        onChange={(e) =>
+                          setTransitionScope(e.target.value as 'STATE_SUCCESSION' | 'REGIME_CHANGE' | '')
+                        }
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: 12,
+                          fontSize: 14,
+                          color: '#111827',
+                          background: '#fff',
+                          marginTop: 6,
+                        }}
+                      >
+                        <option value="">미지정</option>
+                        <option value="STATE_SUCCESSION">국가 계승 (신라→고려 등 주권 단위 변경)</option>
+                        <option value="REGIME_CHANGE">정권 교체 (무로마치→에도 등 같은 나라 안 정권 변경)</option>
+                      </select>
                     </S.FormField>
                   )}
                 </>
               )}
+              </div>
             </S.FormRow>
 
-            {/* 존속 기간 */}
-            <S.FormSection style={{ marginTop: '24px' }}>
+            {/* 존속 기간 — 기본 탭에서만, 기본 정보·추가 정보와 동일한 섹션 구조 */}
+            <div style={{ display: embedIn === 'modal' && modalTab === 'connection' ? 'none' : 'block' }}>
+            <S.FormSection>
               <S.FormSectionHeader>
                 <S.FormSectionIcon>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V6c0-1.1-.89-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z"
-                      fill="currentColor"
-                    />
-                  </svg>
+                  <FiCalendar size={20} />
                 </S.FormSectionIcon>
                 <div>
                   <S.FormSectionTitle>존속 기간</S.FormSectionTitle>
@@ -924,484 +1337,36 @@ export function HistoricalCountryForm({
                   </S.FormSectionDescription>
                 </div>
               </S.FormSectionHeader>
-
-              {/* 존속 시작 */}
-              <div
-                style={{
-                  background: '#f9fafb',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginBottom: '16px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '16px',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: '16px',
-                      fontWeight: '600',
-                      color: '#111827',
-                    }}
-                  >
-                    📅 시작 시점
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '13px',
-                      color: '#6b7280',
-                      fontWeight: '400',
-                    }}
-                  >
-                    (선택)
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '100px 1fr',
-                    gap: '12px',
-                  }}
-                >
-                  {/* 기원 선택 */}
-                  <div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        color: '#6b7280',
-                        marginBottom: '6px',
-                        height: '18px',
-                      }}
-                    >
-                      기원
-                    </div>
-                    <S.SelectButton
+              <FieldRow>
+                <FieldLabel>시작 · 종료</FieldLabel>
+                <FieldControl $variant="datePair">
+                  <DateFieldsRow>
+                    <DateFieldBtn
                       type="button"
+                      $hasValue={formatStartDateDisplay() !== '선택'}
                       onClick={() => setShowStartEraModal(true)}
-                      $error={!!errors.startEra}
-                      $hasValue={!!selectedStartEra}
-                      style={{
-                        width: '100%',
-                        fontSize: '15px',
-                        fontWeight: '600',
-                        height: '44px',
-                      }}
                     >
-                      <span>{getStartEraLabel()}</span>
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
-                      </svg>
-                    </S.SelectButton>
-                    <input type="hidden" {...register('startEra')} />
-                    {errors.startEra && (
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: '#dc2626',
-                          marginTop: '6px',
-                          fontWeight: '500',
-                        }}
-                      >
-                        {errors.startEra.message}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 년월일 입력 */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 80px 80px',
-                      gap: '8px',
-                    }}
-                  >
-                    {/* 년 */}
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: '#6b7280',
-                          marginBottom: '6px',
-                          height: '18px',
-                        }}
-                      >
-                        년 *
-                      </div>
-                      <S.Input
-                        type="number"
-                        placeholder="1392"
-                        {...register('startYear', {
-                          setValueAs: (value) =>
-                            value === '' ? undefined : Number(value),
-                        })}
-                        $error={!!errors.startYear}
-                        style={{
-                          width: '100%',
-                          fontSize: '15px',
-                          height: '44px',
-                          borderRadius: '8px',
-                          fontWeight: '500',
-                        }}
-                      />
-                      {errors.startYear && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#dc2626',
-                            marginTop: '4px',
-                          }}
-                        >
-                          {errors.startYear.message}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 월 */}
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: '#6b7280',
-                          marginBottom: '6px',
-                          height: '18px',
-                        }}
-                      >
-                        월
-                      </div>
-                      <S.Input
-                        type="number"
-                        placeholder="7"
-                        min="1"
-                        max="12"
-                        {...register('startMonth', {
-                          setValueAs: (value) =>
-                            value === '' ? undefined : Number(value),
-                        })}
-                        $error={!!errors.startMonth}
-                        style={{
-                          width: '100%',
-                          fontSize: '15px',
-                          height: '44px',
-                          borderRadius: '8px',
-                          textAlign: 'center',
-                          fontWeight: '500',
-                        }}
-                      />
-                      {errors.startMonth && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#dc2626',
-                            marginTop: '4px',
-                          }}
-                        >
-                          {errors.startMonth.message}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 일 */}
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: '#6b7280',
-                          marginBottom: '6px',
-                          height: '18px',
-                        }}
-                      >
-                        일
-                      </div>
-                      <S.Input
-                        type="number"
-                        placeholder="17"
-                        min="1"
-                        max="31"
-                        {...register('startDay', {
-                          setValueAs: (value) =>
-                            value === '' ? undefined : Number(value),
-                        })}
-                        $error={!!errors.startDay}
-                        style={{
-                          width: '100%',
-                          fontSize: '15px',
-                          height: '44px',
-                          borderRadius: '8px',
-                          textAlign: 'center',
-                          fontWeight: '500',
-                        }}
-                      />
-                      {errors.startDay && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#dc2626',
-                            marginTop: '4px',
-                          }}
-                        >
-                          {errors.startDay.message}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 존속 종료 */}
-              <div
-                style={{
-                  background: '#f9fafb',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  padding: '20px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '16px',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: '16px',
-                      fontWeight: '600',
-                      color: '#111827',
-                    }}
-                  >
-                    🏁 종료 시점
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '13px',
-                      color: '#6b7280',
-                      fontWeight: '400',
-                    }}
-                  >
-                    (선택)
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '100px 1fr',
-                    gap: '12px',
-                  }}
-                >
-                  {/* 기원 선택 */}
-                  <div>
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        color: '#6b7280',
-                        marginBottom: '6px',
-                        height: '18px',
-                      }}
-                    >
-                      기원
-                    </div>
-                    <S.SelectButton
+                      <FiCalendar size={18} />
+                      <span>{formatStartDateDisplay()}</span>
+                      <FiChevronDown size={16} />
+                    </DateFieldBtn>
+                    <DateFieldBtn
                       type="button"
+                      $hasValue={formatEndDateDisplay() !== '선택'}
                       onClick={() => setShowEndEraModal(true)}
-                      $error={!!errors.endEra}
-                      $hasValue={!!selectedEndEra}
-                      style={{
-                        width: '100%',
-                        fontSize: '15px',
-                        fontWeight: '600',
-                        height: '44px',
-                      }}
                     >
-                      <span>{getEndEraLabel()}</span>
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
-                      </svg>
-                    </S.SelectButton>
-                    <input type="hidden" {...register('endEra')} />
-                    {errors.endEra && (
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: '#dc2626',
-                          marginTop: '6px',
-                          fontWeight: '500',
-                        }}
-                      >
-                        {errors.endEra.message}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 년월일 입력 */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 80px 80px',
-                      gap: '8px',
-                    }}
-                  >
-                    {/* 년 */}
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: '#6b7280',
-                          marginBottom: '6px',
-                          height: '18px',
-                        }}
-                      >
-                        년 *
-                      </div>
-                      <S.Input
-                        type="number"
-                        placeholder="1897"
-                        {...register('endYear', {
-                          setValueAs: (value) =>
-                            value === '' ? undefined : Number(value),
-                        })}
-                        $error={!!errors.endYear}
-                        style={{
-                          width: '100%',
-                          fontSize: '15px',
-                          height: '44px',
-                          borderRadius: '8px',
-                          fontWeight: '500',
-                        }}
-                      />
-                      {errors.endYear && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#dc2626',
-                            marginTop: '4px',
-                          }}
-                        >
-                          {errors.endYear.message}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 월 */}
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: '#6b7280',
-                          marginBottom: '6px',
-                          height: '18px',
-                        }}
-                      >
-                        월
-                      </div>
-                      <S.Input
-                        type="number"
-                        placeholder="10"
-                        min="1"
-                        max="12"
-                        {...register('endMonth', {
-                          setValueAs: (value) =>
-                            value === '' ? undefined : Number(value),
-                        })}
-                        $error={!!errors.endMonth}
-                        style={{
-                          width: '100%',
-                          fontSize: '15px',
-                          height: '44px',
-                          borderRadius: '8px',
-                          textAlign: 'center',
-                          fontWeight: '500',
-                        }}
-                      />
-                      {errors.endMonth && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#dc2626',
-                            marginTop: '4px',
-                          }}
-                        >
-                          {errors.endMonth.message}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 일 */}
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          color: '#6b7280',
-                          marginBottom: '6px',
-                          height: '18px',
-                        }}
-                      >
-                        일
-                      </div>
-                      <S.Input
-                        type="number"
-                        placeholder="12"
-                        min="1"
-                        max="31"
-                        {...register('endDay', {
-                          setValueAs: (value) =>
-                            value === '' ? undefined : Number(value),
-                        })}
-                        $error={!!errors.endDay}
-                        style={{
-                          width: '100%',
-                          fontSize: '15px',
-                          height: '44px',
-                          borderRadius: '8px',
-                          textAlign: 'center',
-                          fontWeight: '500',
-                        }}
-                      />
-                      {errors.endDay && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#dc2626',
-                            marginTop: '4px',
-                          }}
-                        >
-                          {errors.endDay.message}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                      <FiCalendar size={18} />
+                      <span>{formatEndDateDisplay()}</span>
+                      <FiChevronDown size={16} />
+                    </DateFieldBtn>
+                  </DateFieldsRow>
+                </FieldControl>
+              </FieldRow>
             </S.FormSection>
-          </S.FormSection>
+            </div>
 
+          {/* 추가 정보 — 연결·후임 탭에서만 표시 */}
+          <div style={{ display: embedIn === 'modal' && modalTab === 'basic' ? 'none' : 'block' }}>
           {/* 추가 정보 */}
           <S.FormSection>
             <S.FormSectionHeader>
@@ -1438,8 +1403,99 @@ export function HistoricalCountryForm({
               )}
             </S.FormField>
           </S.FormSection>
-        </S.Form>
+          </div>
+
+          </S.FormSection>
+    </>
+  )
+
+  const formContent =
+    embedIn === 'modal' ? (
+      <S.Form id="historical-country-form" onSubmit={handleSubmit(onSubmit)}>
+        <FormSectionInner>
+          <TabNavigation>
+            <TabButton
+              type="button"
+              $active={modalTab === 'basic'}
+              onClick={() => setModalTab('basic')}
+            >
+              <FiInfo size={16} />
+              기본 정보
+            </TabButton>
+            <TabButton
+              type="button"
+              $active={modalTab === 'connection'}
+              onClick={() => setModalTab('connection')}
+            >
+              <FiGlobe size={16} />
+              연결 · 후임
+            </TabButton>
+          </TabNavigation>
+          <ModalFormLayoutWrap data-inner>
+            {formBody}
+          </ModalFormLayoutWrap>
+        </FormSectionInner>
+      </S.Form>
+    ) : (
+      <S.Form id="historical-country-form" onSubmit={handleSubmit(onSubmit)}>
+        {formBody}
+      </S.Form>
+    )
+
+  return (
+    <>
+      {embedIn === 'modal' ? (
+        <ModalFormLayoutWrap>
+          <FormHeader style={{ justifyContent: 'flex-end' }}>
+            <SubmitButton
+              type="submit"
+              form="historical-country-form"
+              disabled={!isValid || isSubmitting}
+            >
+              {isSubmitting
+                ? '처리중...'
+                : editing.id
+                  ? '수정 완료'
+                  : '국가 등록'}
+            </SubmitButton>
+          </FormHeader>
+          {formContent}
+        </ModalFormLayoutWrap>
+      ) : (
+        <FormSidePanel
+        isOpen={!!editing}
+        title={editing.id ? '역사적 국가 수정' : '역사적 국가 등록'}
+        onClose={handleClose}
+        submitLabel={
+          isSubmitting ? '처리중...' : editing.id ? '수정 완료' : '국가 등록'
+        }
+        formId="historical-country-form"
+        submitDisabled={!isValid || isSubmitting}
+        headerExtra={
+          <S.RequiredFieldsNotice>
+            <S.RequiredFieldsIcon>⚠️</S.RequiredFieldsIcon>
+            <S.RequiredFieldsText>
+              <S.RequiredFieldsTitle>필수 항목:</S.RequiredFieldsTitle>
+              <S.RequiredFieldsList>
+                <S.RequiredFieldItem $completed={!!watch('name')}>
+                  국가명(한글)
+                </S.RequiredFieldItem>
+                ,{' '}
+                <S.RequiredFieldItem $completed={!!watch('enName')}>
+                  국가명(영문)
+                </S.RequiredFieldItem>
+                ,{' '}
+                <S.RequiredFieldItem $completed={!!watch('stateType')}>
+                  국가 형태
+                </S.RequiredFieldItem>
+              </S.RequiredFieldsList>
+            </S.RequiredFieldsText>
+          </S.RequiredFieldsNotice>
+        }
+      >
+        {formContent}
       </FormSidePanel>
+      )}
 
       {/* ==================== 국가 형태 선택 모달 ==================== */}
       {showStateTypeModal
@@ -1677,6 +1733,38 @@ export function HistoricalCountryForm({
                     )}
                   </S.SelectOption>
                 </S.SelectModalContent>
+                <S.SelectModalFooter style={{ flexDirection: 'column', gap: 12, alignItems: 'stretch' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      type="number"
+                      placeholder="년"
+                      value={startModalYMD.y}
+                      onChange={(e) => setStartModalYMD((prev) => ({ ...prev, y: e.target.value }))}
+                      style={{ width: 72, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="월"
+                      min={1}
+                      max={12}
+                      value={startModalYMD.m}
+                      onChange={(e) => setStartModalYMD((prev) => ({ ...prev, m: e.target.value }))}
+                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="일"
+                      min={1}
+                      max={31}
+                      value={startModalYMD.d}
+                      onChange={(e) => setStartModalYMD((prev) => ({ ...prev, d: e.target.value }))}
+                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                    />
+                  </div>
+                  <S.SelectModalFooterButton type="button" onClick={handleStartDateApply}>
+                    적용
+                  </S.SelectModalFooterButton>
+                </S.SelectModalFooter>
               </S.SelectModal>
             </>,
             document.body,
@@ -1781,6 +1869,38 @@ export function HistoricalCountryForm({
                     )}
                   </S.SelectOption>
                 </S.SelectModalContent>
+                <S.SelectModalFooter style={{ flexDirection: 'column', gap: 12, alignItems: 'stretch' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      type="number"
+                      placeholder="년"
+                      value={endModalYMD.y}
+                      onChange={(e) => setEndModalYMD((prev) => ({ ...prev, y: e.target.value }))}
+                      style={{ width: 72, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="월"
+                      min={1}
+                      max={12}
+                      value={endModalYMD.m}
+                      onChange={(e) => setEndModalYMD((prev) => ({ ...prev, m: e.target.value }))}
+                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="일"
+                      min={1}
+                      max={31}
+                      value={endModalYMD.d}
+                      onChange={(e) => setEndModalYMD((prev) => ({ ...prev, d: e.target.value }))}
+                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                    />
+                  </div>
+                  <S.SelectModalFooterButton type="button" onClick={handleEndDateApply}>
+                    적용
+                  </S.SelectModalFooterButton>
+                </S.SelectModalFooter>
               </S.SelectModal>
             </>,
             document.body,

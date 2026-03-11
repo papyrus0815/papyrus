@@ -49,6 +49,11 @@ const TRANSITION_EVENT_LABELS: Record<string, string> = {
   OTHER: '기타',
 }
 
+const TRANSITION_SCOPE_LABELS: Record<string, string> = {
+  STATE_SUCCESSION: '국가 계승',
+  REGIME_CHANGE: '정권 교체',
+}
+
 const RELATION_TYPE_LABELS: Record<HistoricalRelationType, string> = {
   ALLIANCE: '동맹',
   WAR: '전쟁',
@@ -2518,6 +2523,9 @@ function FlowCardRelations({
                   {TRANSITION_EVENT_LABELS[
                     t.eventType as TransitionEventType
                   ] ?? t.eventType}
+                  {(t as { transitionScope?: string | null }).transitionScope
+                    ? ` · ${TRANSITION_SCOPE_LABELS[(t as { transitionScope: string }).transitionScope] ?? (t as { transitionScope: string }).transitionScope}`
+                    : ''}
                   )
                 </span>
               </div>

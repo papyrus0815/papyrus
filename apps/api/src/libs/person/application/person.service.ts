@@ -300,13 +300,20 @@ export class PersonService {
   }
 
   /**
-   * 국가원수/왕위 재임 기록 추가
+   * 국가원수/왕위 재임 기록 추가. 수반(HEAD_OF_STATE/HEAD_OF_GOVERNMENT) 재임 시 행정부(Cabinet) 자동 생성.
+   * @param accountId 로그인 계정 ID — 계정별 행정부·각료 구분용
    */
-  async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto): Promise<any> {
-    const tenure = await this.personRepository.addGovernmentPositionTenure(dto)
+  async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
+    const tenure = await this.personRepository.addGovernmentPositionTenure(dto, accountId)
     const person = tenure?.person
     const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
     await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenure?.startDate ? String(tenure.startDate) : undefined)
+    if (tenure && (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')) {
+      const existing = await this.personRepository.findCabinetByHeadTenureId(tenure.id)
+      if (!existing) {
+        await this.personRepository.createCabinet({ headTenureId: tenure.id }, accountId)
+      }
+    }
     return tenure
   }
 
@@ -354,6 +361,43 @@ export class PersonService {
    */
   async findGlobalTenures(): Promise<any[]> {
     return this.personRepository.findGlobalTenures()
+  }
+
+  /**
+   * 특정 수반 재임 하의 각료 목록 (행정부 한눈에 보기) — headTenureId로 Cabinet 조회 후 멤버 반환
+   */
+  async findSubordinateTenures(headTenureId: string): Promise<any[]> {
+    return this.personRepository.findSubordinateTenures(headTenureId)
+  }
+
+  async findCabinetByHeadTenureId(headTenureId: string): Promise<any | null> {
+    return this.personRepository.findCabinetByHeadTenureId(headTenureId)
+  }
+
+  async findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]> {
+    return this.personRepository.findTenuresByCabinetId(cabinetId, accountId)
+  }
+
+  async findCabinets(params: { countryId?: string; historicalCountryId?: string; accountId?: string }): Promise<any[]> {
+    return this.personRepository.findCabinets(params)
+  }
+
+  async createCabinet(dto: {
+    headTenureId: string
+    name?: string | null
+  }, accountId?: string): Promise<any> {
+    return this.personRepository.createCabinet(dto, accountId)
+  }
+
+  async deleteCabinet(cabinetId: string, accountId?: string): Promise<void> {
+    return this.personRepository.deleteCabinet(cabinetId, accountId)
+  }
+
+  /**
+   * 조직(만철, 관동군, 대만총독부 등) 역대 수장
+   */
+  async findTenuresByOrganizationId(organizationId: string): Promise<any[]> {
+    return this.personRepository.findTenuresByOrganizationId(organizationId)
   }
 
   /**

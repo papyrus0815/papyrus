@@ -184,6 +184,7 @@ export interface IPersonRepository {
   ): Promise<MedicalCareerResponseDto>
   addGovernmentPositionTenure(
     dto: CreateGovernmentPositionTenureDto,
+    accountId?: string,
   ): Promise<any>
   updateGovernmentPositionTenure(
     id: string,
@@ -197,6 +198,16 @@ export interface IPersonRepository {
     historicalCountryId?: string
   }): Promise<any[]>
   findGlobalTenures(): Promise<any[]>
+  /** 특정 수반 재임(행정부 수반) 하의 각료 목록 — headTenureId로 Cabinet 조회 후 memberTenures */
+  findSubordinateTenures(headTenureId: string): Promise<any[]>
+  findCabinetByHeadTenureId(headTenureId: string): Promise<any | null>
+  findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]>
+  findCabinets(params: { countryId?: string; historicalCountryId?: string; accountId?: string }): Promise<any[]>
+  createCabinet(dto: { headTenureId: string; name?: string | null }, accountId?: string): Promise<any>
+  /** 행정부 삭제 — 소속 각료 재임 삭제 후 행정부·수반 재임 삭제 (관련 데이터 모두) */
+  deleteCabinet(cabinetId: string, accountId?: string): Promise<void>
+  /** 조직(만철, 관동군 등) 역대 수장 — positionDefinition.organizationId 기준 */
+  findTenuresByOrganizationId(organizationId: string): Promise<any[]>
   /**
    * 재임 업적·한일 추가 (사건과 별도)
    */

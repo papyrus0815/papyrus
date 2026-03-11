@@ -37,6 +37,8 @@ export interface GovernmentPositionDefinition {
     name: string
     shortName?: string | null
   } | null
+  administrationDepartmentId?: string | null
+  administrationDepartment?: { id: string; name: string } | null
   countryId?: string
   historicalCountryId?: string
   country?: {

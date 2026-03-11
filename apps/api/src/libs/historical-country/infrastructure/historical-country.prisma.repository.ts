@@ -5,6 +5,7 @@ import {
   IHistoricalCountryRepository,
   CreateHistoricalCountryData,
   UpdateHistoricalCountryData,
+  HistoricalCountryListFilter,
 } from '../domain/historical-country.repository'
 import { HistoricalCountry } from '../domain/historical-country.entity'
 
@@ -14,9 +15,21 @@ export class HistoricalCountryPrismaRepository
 {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(accountId?: string): Promise<HistoricalCountry[]> {
+  async findAll(
+    accountId?: string,
+    filter?: HistoricalCountryListFilter,
+  ): Promise<HistoricalCountry[]> {
+    const where: any = accountId != null ? { accountId } : {}
+    if (filter?.entityKind !== undefined && filter?.entityKind !== null) {
+      where.entityKind = filter.entityKind
+    } else if (filter?.entityKind === null) {
+      where.entityKind = null
+    }
+    if (filter?.stateType !== undefined && filter?.stateType !== null) {
+      where.stateType = filter.stateType
+    }
     const countries = await this.prisma.historicalCountry.findMany({
-      where: accountId != null ? { accountId } : undefined,
+      where: Object.keys(where).length ? where : undefined,
       orderBy: [
         { startYear: 'desc' },
         { startMonth: 'desc' },
@@ -103,6 +116,7 @@ export class HistoricalCountryPrismaRepository
         endMonth: data.endMonth,
         endDay: data.endDay,
         stateType: data.stateType,
+        entityKind: data.entityKind ?? undefined,
         accountId: data.accountId ?? undefined,
         // 현대 국가 연결 생성 (다대다)
         modernConnections: data.parentModernCountryIds
@@ -126,6 +140,7 @@ export class HistoricalCountryPrismaRepository
           predecessorId: country.id,
           successorId,
           eventType: data.transitionEventType!,
+          transitionScope: data.transitionScope ?? undefined,
         })),
       })
     }
@@ -175,6 +190,7 @@ export class HistoricalCountryPrismaRepository
             predecessorId: id,
             successorId,
             eventType: data.transitionEventType!,
+            transitionScope: data.transitionScope ?? undefined,
           })),
         })
       }
@@ -198,6 +214,7 @@ export class HistoricalCountryPrismaRepository
         endMonth: data.endMonth,
         endDay: data.endDay,
         stateType: data.stateType,
+        ...(data.entityKind !== undefined && { entityKind: data.entityKind }),
       },
     })
 
@@ -227,6 +244,7 @@ export class HistoricalCountryPrismaRepository
       endMonth: data.endMonth,
       endDay: data.endDay,
       stateType: data.stateType,
+      entityKind: data.entityKind ?? null,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     })

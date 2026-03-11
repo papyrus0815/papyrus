@@ -8,7 +8,9 @@ import {
   Body,
   Param,
   Query,
+  Req,
 } from '@nestjs/common'
+import { Request } from 'express'
 import { ApiTags } from '@nestjs/swagger'
 import { PersonService } from '../application/person.service'
 import {
@@ -147,11 +149,99 @@ export class GovernmentPositionController {
   }
 
   /**
-   * 국가원수/왕위 재임 기록 추가
+   * 특정 수반 재임 하의 각료 목록 (행정부 한눈에 보기) — headTenureId로 Cabinet 조회 후 멤버 반환
+   */
+  @Get('tenures/by-parent/:parentTenureId')
+  async getSubordinateTenures(@Param('parentTenureId') parentTenureId: string): Promise<any[]> {
+    const list = await this.personService.findSubordinateTenures(parentTenureId)
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 행정부(Cabinet) 목록 — 국가/역사적 국가별. 로그인 시 해당 계정이 등록한 행정부만 반환.
+   */
+  @Get('cabinets')
+  async getCabinets(
+    @Req() req: Request,
+    @Query('countryId') countryId?: string,
+    @Query('historicalCountryId') historicalCountryId?: string,
+  ): Promise<any[]> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const list = await this.personService.findCabinets({
+      countryId,
+      historicalCountryId,
+      accountId,
+    })
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 행정부 등록 — 수반 재임을 지정해 행정부 생성. 로그인 시 현재 계정 소유로 저장.
+   */
+  @Post('cabinets')
+  async createCabinet(
+    @Req() req: Request,
+    @Body()
+    body: {
+      headTenureId: string
+      name?: string | null
+    },
+  ): Promise<any> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const cabinet = await this.personService.createCabinet(body, accountId)
+    return serializeBigInt(cabinet)
+  }
+
+  /**
+   * 수반 재임 ID로 행정부 1건 조회 (해당 수반이 수장인 행정부)
+   */
+  @Get('cabinets/by-head-tenure/:headTenureId')
+  async getCabinetByHeadTenure(@Param('headTenureId') headTenureId: string): Promise<any | null> {
+    const cabinet = await this.personService.findCabinetByHeadTenureId(headTenureId)
+    return cabinet ? serializeBigInt(cabinet) : null
+  }
+
+  /**
+   * 행정부 삭제 — 소속 각료·수반 재임 포함 관련 데이터 모두 삭제.
+   */
+  @Delete('cabinets/:cabinetId')
+  async deleteCabinet(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+  ): Promise<void> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.deleteCabinet(cabinetId, accountId)
+  }
+
+  /**
+   * 행정부 ID로 소속 각료(재임) 목록. 로그인 시 해당 계정 소유 행정부만 접근 가능.
+   */
+  @Get('cabinets/:cabinetId/tenures')
+  async getTenuresByCabinetId(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+  ): Promise<any[]> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const list = await this.personService.findTenuresByCabinetId(cabinetId, accountId)
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 조직(만철, 관동군, 대만총독부 등) 역대 수장
+   */
+  @Get('organizations/:organizationId/heads')
+  async getOrganizationHeads(@Param('organizationId') organizationId: string): Promise<any[]> {
+    const list = await this.personService.findTenuresByOrganizationId(organizationId)
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 국가원수/왕위 재임 기록 추가. 로그인 시 현재 계정 소유로 저장.
    */
   @Post('tenures')
-  async addTenure(@Body() dto: CreateGovernmentPositionTenureDto): Promise<any> {
-    const result = await this.personService.addGovernmentPositionTenure(dto)
+  async addTenure(@Req() req: Request, @Body() dto: CreateGovernmentPositionTenureDto): Promise<any> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.addGovernmentPositionTenure(dto, accountId)
     return serializeBigInt(result)
   }
 

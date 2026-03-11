@@ -51,7 +51,7 @@ import {
   type DashboardContentView,
 } from '@/widgets/country/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui'
-import { HistoricalCountryForm } from '@/widgets/historical-country/historical-country-form'
+import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import * as S from './country.styles'
@@ -408,6 +408,10 @@ export default function CountryPage() {
   const [editing, setEditing] = useState<Country | null>(null)
   const [editingHistorical, setEditingHistorical] =
     useState<HistoricalCountry | null>(null)
+  /** 막부 등록 시 폼에 미리 채울 값 (등록 모달에서 "막부" 선택 시) */
+  const [historicalPreset, setHistoricalPreset] = useState<
+    { stateType: 'SHOGUNATE'; entityKind: 'REGIME' } | undefined
+  >(undefined)
   /** 수정 시 상세 API로 상위 현대 국가(parentModernCountryIds) 포함해 조회 */
   const { data: editingHistoricalDetail } = useHistoricalCountry(
     editingHistorical?.id,
@@ -439,6 +443,19 @@ export default function CountryPage() {
     else if (isDashboardEventsUrl) setDashboardContentView('events')
     else if (isDashboardStatsUrl) setDashboardContentView('stats')
   }, [isDashboardPersonsUrl, isDashboardEventsUrl, isDashboardStatsUrl])
+
+  // 역대 수반은 행정조직 탭으로 통합: /persons?tab=heads → /government (URL 정리)
+  useEffect(() => {
+    if (
+      selectedId &&
+      isPersonsUrl &&
+      searchParams.get('tab') === 'heads'
+    ) {
+      navigate(pathKeys.history.countryGovernment(selectedId), {
+        replace: true,
+      })
+    }
+  }, [selectedId, isPersonsUrl, searchParams, navigate])
 
   /** 상세 전환 시 별도 로딩 없음(데이터 이미 있음) */
   const isLoading = false
@@ -644,7 +661,7 @@ export default function CountryPage() {
     (tab: 'person' | 'heads' | 'persons-list' | 'linked-historical' | 'regions' | 'government' | null) => {
       if (!selectedId) return
       if (tab === 'person') navigate(pathKeys.history.countryPersons(selectedId))
-      else if (tab === 'heads') navigate(pathKeys.history.countryPersons(selectedId, 'heads'))
+      else if (tab === 'heads') navigate(pathKeys.history.countryGovernment(selectedId))
       else if (tab === 'persons-list') navigate(pathKeys.history.countryPersons(selectedId, 'list'))
       else if (tab === 'linked-historical') navigate(pathKeys.history.countryHistorical(selectedId))
       else if (tab === 'regions') navigate(pathKeys.history.countryRegions(selectedId))
@@ -654,9 +671,9 @@ export default function CountryPage() {
     [navigate, selectedId],
   )
 
-  /** 인물 하위 탭 변경 시 URL만 갱신 (?tab=stats|list|heads) */
+  /** 인물 하위 탭 변경 시 URL만 갱신 (?tab=stats|list). 역대 수반은 행정조직 탭에서. */
   const handlePersonInnerTabChange = useCallback(
-    (tab: 'stats' | 'list' | 'heads') => {
+    (tab: 'stats' | 'list') => {
       if (!selectedId) return
       navigate(pathKeys.history.countryPersons(selectedId, tab))
     },
@@ -1004,7 +1021,10 @@ export default function CountryPage() {
             activeTab={activeTab}
             onTabChange={handleTabChange}
             onAdd={() => setEditing({} as Country)}
-            onAddHistorical={() => setEditingHistorical({} as HistoricalCountry)}
+            onAddHistorical={(preset) => {
+              setEditingHistorical({} as HistoricalCountry)
+              setHistoricalPreset(preset)
+            }}
             onEditHistorical={handleEditHistoricalFromList}
             inHistory={inHistory}
             showContinentModal={showContinentModal}
@@ -1105,7 +1125,7 @@ export default function CountryPage() {
                         ? 'dashboard'
                         : isHeadsOfStateUrl
                           ? 'heads'
-                          : isPersonsUrl
+                            : isPersonsUrl
                             ? (() => {
                                 const tab = searchParams.get('tab')
                                 if (tab === 'list') return 'persons-list'
@@ -1180,8 +1200,13 @@ export default function CountryPage() {
         onSave={handleSave}
       />
 
-      {/* 역사적 국가 Form (수정 시 상세 조회 데이터로 연결된 현대 국가·후임 국가 표시) */}
-      <HistoricalCountryForm
+      {/* 역사적 국가 등록/수정 모달 (인물 등록 모달과 동일 디자인) */}
+      <HistoricalCountryFormModal
+        isOpen={editingHistorical !== null}
+        onClose={() => {
+          setEditingHistorical(null)
+          setHistoricalPreset(undefined)
+        }}
         editing={
           editingHistorical === null
             ? null
@@ -1189,6 +1214,7 @@ export default function CountryPage() {
               ? (editingHistoricalDetail ?? editingHistorical)
               : editingHistorical
         }
+        initialPreset={historicalPreset}
         modernCountries={countries.map((countryItem) => ({
           id: countryItem.id,
           name: countryItem.name,
@@ -1196,7 +1222,6 @@ export default function CountryPage() {
         historicalCountries={(apiHistoricalCountries ?? [])
           .filter((hc) => hc.id !== editingHistorical?.id)
           .map((hc) => ({ id: hc.id, name: hc.name }))}
-        onClose={() => setEditingHistorical(null)}
         onSave={handleSaveHistorical}
       />
     </S.Wrap>
