@@ -204,6 +204,8 @@ export interface IPersonRepository {
   findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]>
   findCabinets(params: { countryId?: string; historicalCountryId?: string; accountId?: string }): Promise<any[]>
   createCabinet(dto: { headTenureId: string; name?: string | null }, accountId?: string): Promise<any>
+  /** 행정부 수정 — name 등 */
+  updateCabinet(cabinetId: string, dto: { name?: string | null }, accountId?: string): Promise<any>
   /** 행정부 삭제 — 소속 각료 재임 삭제 후 행정부·수반 재임 삭제 (관련 데이터 모두) */
   deleteCabinet(cabinetId: string, accountId?: string): Promise<void>
   /** 조직(만철, 관동군 등) 역대 수장 — positionDefinition.organizationId 기준 */

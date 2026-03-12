@@ -112,6 +112,13 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
 
 const OTHER_POSITION_VALUE = 'OTHER'
 
+/** 각료 등록 플로우에서 선택 가능한 직위 타입 (수반·의원·군인 등 제외) */
+const MINISTER_POSITION_TYPES = new Set([
+  'CABINET_MINISTER',
+  'VICE_MINISTER',
+  'OTHER',
+])
+
 /** 필수 항목 안내 래퍼 — 깔끔한 톤 */
 const RequiredNoticeWrap = styled.div`
   margin: 0 26px 0;
@@ -336,14 +343,21 @@ export function TenureRegisterPanel({
     : null
   const positionType = selectedDef?.positionType ?? editingTenure?.positionType ?? 'OTHER'
 
+  /** 각료 추가로 열렸을 때는 각료/차관/기타만 표시 (수반·의원·군인 등 제외) */
+  const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
   const positionTitleOptions: SelectOption<string>[] = useMemo(() => {
-    const defs = positionDefinitions as any[]
+    let defs = positionDefinitions as any[]
+    if (isMinisterFlowForFilter) {
+      defs = defs.filter(
+        (d: any) => d.positionType && MINISTER_POSITION_TYPES.has(d.positionType),
+      )
+    }
     const byDef = defs.map((d: any) => ({
       value: d.id,
       label: d.title ?? d.name ?? d.id ?? '직책',
     }))
     return [...byDef, { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' }]
-  }, [positionDefinitions])
+  }, [positionDefinitions, isMinisterFlowForFilter])
 
   const positionTitleLabel =
     positionDefinitionId == null
@@ -494,13 +508,28 @@ export function TenureRegisterPanel({
   const hasPosition = !!(selectedDef as any)?.title || !!title.trim()
   const hasStartDate = !!startDate.trim()
 
+  /** 행정부 탭에서 "각료 추가"로 열렸을 때 → 각료 등록 문구 사용 (수반 아님) */
+  const isMinisterFlow = !isEdit && initialCabinetId != null
+  const panelTitle = isEdit
+    ? isMinisterFlow
+      ? '각료 수정'
+      : '수반 수정'
+    : isMinisterFlow
+      ? '각료 등록'
+      : '수반 등록'
+  const submitLabelText = isEdit
+    ? '수정 완료'
+    : isMinisterFlow
+      ? '각료 등록'
+      : '수반 등록'
+
   return (
     <FormSidePanel
       isOpen={open}
-      title={isEdit ? '수반 수정' : '수반 등록'}
+      title={panelTitle}
       onClose={onClose}
       panelWidth={640}
-      submitLabel={submitting ? '처리 중…' : isEdit ? '수정 완료' : '수반 등록'}
+      submitLabel={submitting ? '처리 중…' : submitLabelText}
       formId={FORM_ID}
       submitDisabled={submitDisabled}
       headerExtra={
@@ -562,7 +591,9 @@ export function TenureRegisterPanel({
             <div>
               <S.FormSectionTitle>기본 정보</S.FormSectionTitle>
               <S.FormSectionDescription>
-                재임한 국가, 직책, 취임·퇴임일을 입력하세요
+                {isMinisterFlow
+                  ? '해당 행정부에서의 직위와 취임·퇴임일을 입력하세요. 국가·행정부는 이미 선택된 상태입니다.'
+                  : '재임한 국가, 직책, 취임·퇴임일을 입력하세요'}
               </S.FormSectionDescription>
             </div>
           </S.FormSectionHeader>

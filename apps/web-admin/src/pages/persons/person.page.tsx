@@ -1971,7 +1971,7 @@ const Container = styled.div`
   padding: 20px 24px 32px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   position: relative;
   z-index: 1;
   box-sizing: border-box;
@@ -1980,7 +1980,7 @@ const Container = styled.div`
 
   @media (max-width: 768px) {
     padding: 16px;
-    gap: 20px;
+    gap: 14px;
   }
 `
 
@@ -2123,13 +2123,11 @@ const FloatingButton = styled.button`
 const DashboardGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 10px;
 
   @media (max-width: 768px) {
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin-bottom: 8px;
+    gap: 8px;
   }
 `
 
@@ -2232,14 +2230,12 @@ const FilterSection = styled(motion.div)`
   background: #ffffff;
   border: 1px solid rgba(203, 213, 225, 0.6);
   border-radius: 12px;
-  margin-bottom: 10px;
   flex-wrap: wrap;
   align-items: center;
 
   @media (max-width: 768px) {
     padding: 10px 14px;
     gap: 10px;
-    margin-bottom: 8px;
   }
 `
 
@@ -2457,7 +2453,7 @@ const ListArea = styled.div<{ $hasDetail?: boolean }>`
   box-sizing: border-box;
   display: flex;
   flex-direction: row;
-  gap: 24px;
+  gap: 20px;
   align-items: stretch;
   flex: 1;
   min-height: 0;
@@ -2465,7 +2461,7 @@ const ListArea = styled.div<{ $hasDetail?: boolean }>`
   @media (min-width: 1200px) {
     max-width: ${({ $hasDetail }) => ($hasDetail ? '100%' : '1400px')};
     margin: 0 auto;
-    padding: 0 32px;
+    padding: 0 24px;
   }
 
   @media (max-width: 768px) {
@@ -2479,43 +2475,44 @@ const DetailPanel = styled.div`
   flex: 1;
   min-width: 0;
   min-height: 0;
-  padding: 24px 28px 28px 0;
-  margin-right: 24px;
+  padding: 24px 20px 40px 0;
+  margin-right: 4px;
   position: relative;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: transparent;
-  border-right: 1px solid rgba(203, 213, 225, 0.4);
+  border-right: 1px solid rgba(226, 232, 240, 0.45);
   border-radius: 0;
 
   @media (max-width: 768px) {
     margin-right: 0;
-    padding: 20px 0;
+    padding: 16px 0;
     border-right: none;
   }
 `
 
 const DetailCloseButton = styled.button`
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 42px;
-  height: 42px;
-  border: none;
-  background: rgba(255, 240, 245, 0.9);
-  color: #c08497;
-  border-radius: 14px;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: rgba(248, 250, 252, 0.9);
+  color: #94a3b8;
+  border-radius: 9px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.25s ease;
+  transition: all 0.15s ease;
+  z-index: 2;
 
   &:hover {
-    background: rgba(252, 231, 243, 0.95);
-    color: #be185d;
-    transform: scale(1.05);
+    background: #f1f5f9;
+    color: #475569;
+    border-color: rgba(203, 213, 225, 0.9);
   }
 `
 
@@ -2594,17 +2591,24 @@ const DetailSkeletonLine = styled.div<{ $w?: string }>`
 const DetailContentWrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04), 0 4px 20px rgba(0, 0, 0, 0.03);
 `
 
 const DetailHeader = styled.div`
   display: flex;
   flex-direction: row;
-  gap: 24px;
+  gap: 20px;
   align-items: flex-start;
+  padding: 20px 20px 16px;
 
   @media (max-width: 600px) {
     flex-direction: column;
+    padding: 16px;
   }
 `
 
@@ -2616,32 +2620,28 @@ const DetailThumbCol = styled.div`
 `
 
 const DetailImageWrap = styled.div`
-  width: 200px;
-  aspect-ratio: 3/4;
-  min-height: 200px;
-  border-radius: 12px;
+  width: 88px;
+  height: 88px;
+  border-radius: 14px;
   overflow: hidden;
-  background: #f1f5f9;
+  background: #f8fafc;
   display: flex;
   align-items: center;
   justify-content: center;
-
-  @media (min-width: 700px) {
-    width: 240px;
-    min-height: 260px;
-  }
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  color: #94a3b8;
 `
 
 const DetailThumbActions = styled.div`
   display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 6px;
+  margin-top: 8px;
 `
 
 const DetailImage = styled.img`
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: top center;
 `
 
@@ -2650,7 +2650,7 @@ const DetailHeaderRight = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 6px;
 `
 
 const DetailImagePlaceholder = styled.div`
@@ -2659,153 +2659,158 @@ const DetailImagePlaceholder = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: #cbd5e1;
 `
 
 const DetailTitleBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 3px;
+  margin-bottom: 6px;
 `
 
 const DetailName = styled.h2`
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
   color: #0f172a;
-  letter-spacing: -0.03em;
-  line-height: 1.3;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
 `
 
 const DetailOriginalName = styled.span`
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
+  font-size: 13px;
+  font-weight: 400;
+  color: #94a3b8;
   font-style: italic;
 `
 
 const DetailNameMeaning = styled.span`
-  font-size: 13px;
-  font-weight: 500;
-  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 400;
+  color: #b0bac7;
 `
 
 const DetailField = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
 `
 
 const DetailFieldLabel = styled.span`
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  color: #64748b;
-  letter-spacing: 0.06em;
+  color: #94a3b8;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+  flex-shrink: 0;
+  min-width: 52px;
 `
 
 const DetailFieldValue = styled.div`
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #334155;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  line-height: 1.45;
 `
 
 const DetailHyangnyeon = styled.span`
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  color: #64748b;
-  padding: 2px 8px;
-  background: #f1f5f9;
-  border-radius: 6px;
+  color: #7c3aed;
+  padding: 1.5px 6px;
+  background: rgba(124, 58, 237, 0.07);
+  border-radius: 5px;
 `
 
 const DetailUnregistered = styled.span`
-  font-size: 13px;
-  color: #94a3b8;
-  font-weight: 500;
-  font-style: italic;
+  font-size: 12px;
+  color: #cbd5e1;
+  font-weight: 400;
 `
 
 const DetailMetaRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 5px;
   align-items: center;
 `
 
 const DetailMetaChip = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: 3px 9px;
+  font-size: 11.5px;
   font-weight: 600;
-  color: #475569;
-  background: #f1f5f9;
-  border: 1px solid rgba(203, 213, 225, 0.6);
-  border-radius: 8px;
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.07);
+  border-radius: 20px;
 `
 
 const DetailBioSection = styled.section`
-  padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  padding: 14px 20px 18px;
+  border-top: 1px solid rgba(226, 232, 240, 0.6);
+  margin-top: 0;
 `
 
 const DetailBioLabel = styled.div`
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  color: #64748b;
-  letter-spacing: 0.06em;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 `
 
 const DetailBio = styled.div`
-  font-size: 14px;
-  color: #334155;
-  line-height: 1.7;
+  font-size: 13.5px;
+  color: #475569;
+  line-height: 1.75;
   white-space: pre-wrap;
-  max-height: 220px;
+  max-height: 160px;
   overflow-y: auto;
 `
 
 /* 수정 / 상세 이동 — 작은 버튼 */
 const DetailActionBtn = styled.button<{ $edit?: boolean; $detail?: boolean }>`
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 7px;
+  border: 1px solid rgba(203, 213, 225, 0.7);
+  background: rgba(248, 250, 252, 0.8);
+  color: #475569;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   flex: 1;
 
   ${({ $edit }) =>
     $edit &&
     `
     &:hover {
-      border-color: #9ca3af;
-      background: #f9fafb;
+      border-color: rgba(100, 116, 139, 0.4);
+      background: #f1f5f9;
+      color: #334155;
     }
   `}
 
   ${({ $detail }) =>
     $detail &&
     `
-    border-color: #0f172a;
-    background: #0f172a;
-    color: #fff;
+    border-color: rgba(99, 102, 241, 0.25);
+    background: rgba(99, 102, 241, 0.07);
+    color: #4f46e5;
     &:hover {
-      background: #1e293b;
-      border-color: #1e293b;
+      background: rgba(99, 102, 241, 0.13);
+      border-color: rgba(99, 102, 241, 0.35);
     }
   `}
 `

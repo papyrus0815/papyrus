@@ -26,9 +26,9 @@ const Overlay = styled(motion.div)`
 `
 
 const ModalBox = styled(motion.div)`
-  width: min(1120px, 96vw);
-  max-height: min(92vh, 1200px);
-  min-height: 560px;
+  width: min(1200px, 96vw);
+  height: 90vh;
+  max-height: 1200px;
   background: #ffffff;
   border-radius: 22px;
   box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);
@@ -79,9 +79,9 @@ const CloseBtn = styled.button`
 
 const FormScroll = styled.div`
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 24px;
-  min-height: 200px;
 
   &::-webkit-scrollbar {
     width: 6px;

@@ -271,11 +271,13 @@ const ModalOverlay = styled.div`
 const ModalContainer = styled.div`
   position: relative;
   width: 95%;
-  max-width: 1400px;
-  height: 90vh;
-  background: #fff;
-  border-radius: 24px;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+  max-width: 820px;
+  max-height: 88vh;
+  background: #f8fafc;
+  border-radius: 18px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.06);
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -283,7 +285,7 @@ const ModalContainer = styled.div`
 
   @media (max-width: 768px) {
     width: 100%;
-    height: 100vh;
+    max-height: 100vh;
     border-radius: 0;
   }
 `
@@ -292,50 +294,55 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28px 36px;
-  border-bottom: 2px solid #f1f5f9;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
   background: #fff;
   flex-shrink: 0;
 `
 
 const ModalTitle = styled.h2`
-  font-size: 22px;
-  font-weight: 800;
-  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  color: #64748b;
   margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 `
 
 const CloseButton = styled.button`
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: none;
-  border-radius: 12px;
-  color: #64748b;
+  border: 1px solid rgba(226, 232, 240, 0.7);
+  border-radius: 8px;
+  color: #94a3b8;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.12s;
 
   &:hover {
     background: #f1f5f9;
-    color: #0f172a;
+    color: #334155;
+    border-color: rgba(203, 213, 225, 0.8);
   }
 
   svg {
     stroke: currentColor;
+    width: 16px;
+    height: 16px;
   }
 `
 
 const ModalContent = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 36px;
-  background: #fafafa;
+  padding: 20px 24px 28px;
+  background: #f8fafc;
 
   @media (max-width: 768px) {
-    padding: 24px;
+    padding: 16px;
   }
 `
 

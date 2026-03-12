@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'react-hot-toast'
-import { FiEdit2, FiTrash2 } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiX } from 'react-icons/fi'
 import {
   usePostList,
   useDeletePost,
@@ -12,6 +13,9 @@ import { PostForm } from './components/PostForm'
 import type { PostItem } from '@/shared/api/post'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { getGlossaryTermById } from '@/shared/api/glossary'
+import { getPersonDetailById } from '@/shared/api/persons-detail'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
 import { useFormEntities } from '@/entities/event-form/model'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
 
@@ -31,6 +35,7 @@ export default function PostPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [editingContent, setEditingContent] = useState(false)
   const [draftContent, setDraftContent] = useState('')
+  const [mentionPersonId, setMentionPersonId] = useState<string | null>(null)
   const [termTooltip, setTermTooltip] = useState<{
     termId: string
     name: string
@@ -47,6 +52,15 @@ export default function PostPage() {
     availableDynasties,
     refetch: refetchEntities,
   } = useFormEntities()
+  const { data: mentionPerson } = useQuery({
+    queryKey: ['person-detail', mentionPersonId],
+    queryFn: () => getPersonDetailById(mentionPersonId!),
+    enabled: !!mentionPersonId,
+  })
+  const mentionPersonName = mentionPerson
+    ? getPersonDisplayName(mentionPerson)
+    : ''
+
   const mentionEntities = useMemo(
     () => ({
       persons: availablePersons,
@@ -172,11 +186,26 @@ export default function PostPage() {
   }, [termTooltip])
 
   const handleDetailProseClick = useCallback((e: React.MouseEvent) => {
-    const target = (e.target as HTMLElement).closest('.term')
-    if (!target) return
-    const termId = target.getAttribute('data-term-id')
+    const target = e.target as HTMLElement
+    // 인물: .mention (기존) 또는 .entity-link (엔티티 연결)
+    const personMentionEl = target.closest('.mention[data-type="person"]')
+    const personLinkEl = target.closest('.entity-link[data-entity-type="person"]')
+    const personEl = personMentionEl ?? personLinkEl
+    if (personEl) {
+      const id =
+        personEl.getAttribute('data-id') ??
+        personEl.getAttribute('data-entity-id')
+      if (id) {
+        e.preventDefault()
+        setMentionPersonId(id)
+      }
+      return
+    }
+    const termEl = target.closest('.term')
+    if (!termEl) return
+    const termId = termEl.getAttribute('data-term-id')
     const name =
-      target.getAttribute('data-term-name') || target.textContent || ''
+      termEl.getAttribute('data-term-name') || termEl.textContent || ''
     if (termId) {
       e.preventDefault()
       setTermTooltip({
@@ -309,6 +338,50 @@ export default function PostPage() {
             </div>
           )}
         </DetailSection>
+        <AnimatePresence>
+          {mentionPersonId && (
+            <MentionModalOverlay
+              key="mention-modal-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              onClick={() => setMentionPersonId(null)}
+              role="presentation"
+            >
+              <MentionModalPanel
+                key="mention-modal-panel"
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MentionModalHeader>
+                  <MentionModalTitle title={mentionPersonName}>
+                    {mentionPersonName || '인물'}
+                  </MentionModalTitle>
+                  <MentionModalClose
+                    type="button"
+                    onClick={() => setMentionPersonId(null)}
+                    aria-label="닫기"
+                  >
+                    <FiX size={20} strokeWidth={2.5} />
+                  </MentionModalClose>
+                </MentionModalHeader>
+                <MentionModalBody>
+                  <PersonDetailPanel
+                    personId={mentionPersonId}
+                    onClose={() => setMentionPersonId(null)}
+                    onEdit={() => setMentionPersonId(null)}
+                    hideHeaderActions
+                    embedInModal
+                  />
+                </MentionModalBody>
+              </MentionModalPanel>
+            </MentionModalOverlay>
+          )}
+        </AnimatePresence>
         {termTooltip && (
           <TermTooltipOverlay
             role="presentation"
@@ -695,24 +768,20 @@ const DetailProse = styled.div`
     margin: 12px 0;
     padding-left: 28px;
   }
+  /* 엔티티 연결: 색만으로 구분, 심플하게 */
   .mention,
   .entity-link {
-    color: inherit;
-    font-weight: inherit;
+    color: #2563eb;
     text-decoration: none;
     cursor: pointer;
-    display: inline;
-    padding: 1px 6px;
-    margin: 0 1px;
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.03);
-    border: none;
-    transition: background 0.15s ease, color 0.15s ease;
+    border-radius: 2px;
+    transition: color 0.15s ease;
   }
   .mention:hover,
   .entity-link:hover {
     color: #1d4ed8;
-    background: rgba(29, 78, 216, 0.06);
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   /* 설명이 달린 문구 — 기본은 색만, 호버 시 구분되게 */
   .term {
@@ -770,6 +839,100 @@ const TermTooltipPopover = styled.div<{ $x: number; $y: number }>`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+`
+
+const MentionModalOverlay = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  box-sizing: border-box;
+`
+const MentionModalPanel = styled(motion.div)`
+  position: relative;
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow:
+    0 32px 64px -16px rgba(0, 0, 0, 0.2),
+    0 16px 32px -16px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 740px;
+  height: 68vh;
+  min-height: 400px;
+  max-height: 78vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+`
+const MentionModalHeader = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px 12px;
+  background: #fafbfc;
+  border-bottom: 1px solid #f1f5f9;
+`
+const MentionModalTitle = styled.span`
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+const MentionModalClose = styled.button`
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  &:hover {
+    color: #0f172a;
+    background: #f1f5f9;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+  }
+  &:active {
+    transform: scale(0.97);
+  }
+`
+const MentionModalBody = styled.div`
+  overflow: auto;
+  flex: 1;
+  min-height: 280px;
+  padding: 20px 24px 32px;
+  background: #ffffff;
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
   }
 `
 

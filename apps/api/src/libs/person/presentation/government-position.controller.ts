@@ -2,6 +2,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Patch,
   Post,
   Put,
@@ -199,6 +200,21 @@ export class GovernmentPositionController {
   async getCabinetByHeadTenure(@Param('headTenureId') headTenureId: string): Promise<any | null> {
     const cabinet = await this.personService.findCabinetByHeadTenureId(headTenureId)
     return cabinet ? serializeBigInt(cabinet) : null
+  }
+
+  /**
+   * 행정부 수정 (이름 등)
+   */
+  @Patch('cabinets/:cabinetId')
+  async updateCabinet(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+    @Body() body: { name?: string | null },
+  ): Promise<any> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const cabinet = await this.personService.updateCabinet(cabinetId, body, accountId)
+    if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없거나 수정 권한이 없습니다.')
+    return serializeBigInt(cabinet)
   }
 
   /**

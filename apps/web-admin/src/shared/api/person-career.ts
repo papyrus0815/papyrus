@@ -550,6 +550,18 @@ export const personCareerApi = {
   },
 
   /**
+   * 행정부 수정 (이름 등)
+   * PATCH /government-positions/cabinets/:cabinetId
+   */
+  updateCabinet: async (cabinetId: string, dto: { name?: string | null }) => {
+    const response = await apiClient.patch(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}`,
+      dto,
+    )
+    return response.data
+  },
+
+  /**
    * 행정부 삭제 (소속 각료·수반 재임 포함 관련 데이터 모두)
    * DELETE /government-positions/cabinets/:cabinetId
    */

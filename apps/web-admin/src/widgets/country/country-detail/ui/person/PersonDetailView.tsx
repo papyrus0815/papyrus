@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import styled from 'styled-components'
+
+import { AnimatePresence, motion } from 'framer-motion'
 import { FiEdit2, FiPlus } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel'
 
@@ -13,41 +14,10 @@ interface PersonDetailViewProps {
 
 type TabType = 'overview' | 'genealogy' | 'activities' | 'works'
 
-// Error styled components (선언을 먼저)
-const ErrorContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 100px 40px;
-  text-align: center;
-  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
-  border-radius: 20px;
-  border: 2px dashed #e5e7eb;
-  min-height: 400px;
-`
-
-const ErrorIcon = styled.div`
-  font-size: 64px;
-  margin-bottom: 20px;
-  opacity: 0.6;
-`
-
-const ErrorTitle = styled.h3`
-  font-size: 20px;
-  font-weight: 700;
-  color: #374151;
-  margin: 0 0 12px 0;
-`
-
-const ErrorDesc = styled.p`
-  font-size: 14px;
-  color: #6b7280;
-  line-height: 1.6;
-  margin: 0;
-`
-
-export function PersonDetailView({ person, onTenureAdded }: PersonDetailViewProps) {
+export function PersonDetailView({
+  person,
+  onTenureAdded,
+}: PersonDetailViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
@@ -81,28 +51,13 @@ export function PersonDetailView({ person, onTenureAdded }: PersonDetailViewProp
 
   return (
     <Container>
-      {/* 인물 상세 헤더 (통계·리스트 헤더와 동일 구조) */}
-      <DetailPageHeader>
-        <div>
-          <DetailPageTitle>인물 상세</DetailPageTitle>
-          <DetailPageDesc>
-            기본 정보, 가계도, 활동, 저작을 확인할 수 있습니다.
-          </DetailPageDesc>
-        </div>
-      </DetailPageHeader>
-
-      {/* 히어로 이미지 */}
+      {/* 히어로: 썸네일 + 이름 */}
       <Hero>
         {person.profileImageUrl ? (
           <HeroImage src={person.profileImageUrl} alt={fullName} />
         ) : (
           <HeroPlaceholder>
-            <svg
-              width="120"
-              height="120"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
             </svg>
           </HeroPlaceholder>
@@ -171,7 +126,14 @@ export function PersonDetailView({ person, onTenureAdded }: PersonDetailViewProp
               <StatCard>
                 <StatLabel>정부 직위</StatLabel>
                 <StatValue>
-                  {(person.governmentPositions ?? person.governmentTenures ?? []).length}건
+                  {
+                    (
+                      person.governmentPositions ??
+                      person.governmentTenures ??
+                      []
+                    ).length
+                  }
+                  건
                 </StatValue>
                 <StatSubtext>역임 직위</StatSubtext>
               </StatCard>
@@ -298,212 +260,234 @@ export function PersonDetailView({ person, onTenureAdded }: PersonDetailViewProp
             transition={{ duration: 0.3 }}
           >
             <ActivitiesGrid>
-                {person.militaryCommands &&
-                  person.militaryCommands.length > 0 && (
-                    <ActivityCard>
-                      <ActivityCardTitle>군 경력</ActivityCardTitle>
-                      <ActivityList>
-                        {person.militaryCommands.map((cmd: any) => (
-                          <ActivityItem key={cmd.id}>
-                            <ActivityName>{cmd.unit.name}</ActivityName>
-                            <ActivityMeta>
-                              {cmd.rank} · {cmd.role}
-                            </ActivityMeta>
-                          </ActivityItem>
-                        ))}
-                      </ActivityList>
-                    </ActivityCard>
-                  )}
-                {person.organizationRoles &&
-                  person.organizationRoles.length > 0 && (
-                    <ActivityCard>
-                      <ActivityCardTitle>조직 활동</ActivityCardTitle>
-                      <ActivityList>
-                        {person.organizationRoles.map((role: any) => (
-                          <ActivityItem key={role.id}>
-                            <ActivityName>
-                              {role.organization.name}
-                            </ActivityName>
-                            <ActivityMeta>{role.roleTitle}</ActivityMeta>
-                          </ActivityItem>
-                        ))}
-                      </ActivityList>
-                    </ActivityCard>
-                  )}
-                <ActivityCard>
-                  <ActivityCardTitleRow>
-                    <ActivityCardTitle>
-                      정부 직위 ({(person.governmentPositions ?? person.governmentTenures ?? []).length}건)
-                    </ActivityCardTitle>
-                    <TenureAddBtn
-                      type="button"
-                      onClick={() => {
-                        setEditingTenureId(null)
-                        setTenureModalOpen(true)
-                      }}
-                    >
-                      <FiPlus size={14} />
-                      수반 등록
-                    </TenureAddBtn>
-                  </ActivityCardTitleRow>
-                  {(person.governmentPositions ?? person.governmentTenures ?? []).length > 0 ? (
-                    <ActivityList>
-                      {(person.governmentPositions ?? person.governmentTenures ?? []).map((tenure: any) => (
-                          <EventItem key={tenure.id}>
-                            <EventHeader>
-                              <EventName>
-                                {tenure.positionDefinition?.title ??
-                                  tenure.position?.title ??
-                                  tenure.title ??
-                                  '직책'}
-                              </EventName>
-                              {tenure.startDate && (
-                                <EventDate>
-                                  {new Date(
-                                    tenure.startDate,
-                                  ).toLocaleDateString('ko-KR', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                  })}
-                                  {tenure.endDate &&
-                                    ` ~ ${new Date(tenure.endDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}`}
-                                </EventDate>
-                              )}
-                            </EventHeader>
-                            {(tenure.country ?? tenure.position?.country) && (
-                              <EventDescription>
-                                🏛️ {(tenure.country ?? tenure.position?.country)?.name}
-                                {(tenure.position?.rank != null) &&
-                                  ` • 서열 ${tenure.position.rank}`}
-                              </EventDescription>
-                            )}
-                            {(tenure.historicalCountry ?? tenure.position?.historicalCountry) && (
-                              <EventDescription>
-                                🏛️ {(tenure.historicalCountry ?? tenure.position?.historicalCountry)?.name}
-                                {(tenure.position?.rank != null) &&
-                                  ` • 서열 ${tenure.position.rank}`}
-                              </EventDescription>
-                            )}
-                            {tenure.notes && (
-                              <EventNote>
-                                <EventNoteLabel>참고:</EventNoteLabel>
-                                {tenure.notes}
-                              </EventNote>
-                            )}
-                            <TenureRowEditBtn
-                              type="button"
-                              onClick={() => {
-                                setEditingTenureId(tenure.id)
-                                setTenureModalOpen(true)
-                              }}
-                            >
-                              <FiEdit2 size={12} />
-                              수정
-                            </TenureRowEditBtn>
-                          </EventItem>
-                        ))}
-                    </ActivityList>
-                  ) : (
-                    <TenureEmptyText>
-                      등록된 재임 기록이 없습니다. <strong>수반 등록</strong>으로 추가하세요.
-                    </TenureEmptyText>
-                  )}
-                </ActivityCard>
-                <TenureRegisterPanel
-                  personId={person.id}
-                  open={tenureModalOpen}
-                  onClose={() => {
-                    setTenureModalOpen(false)
-                    setEditingTenureId(null)
-                  }}
-                  onSuccess={() => {
-                    setTenureModalOpen(false)
-                    setEditingTenureId(null)
-                    onTenureAdded?.()
-                  }}
-                  tenureId={editingTenureId ?? undefined}
-                />
-                {person.events && person.events.length > 0 ? (
+              {person.militaryCommands &&
+                person.militaryCommands.length > 0 && (
                   <ActivityCard>
-                    <ActivityCardTitle>
-                      주요 사건 ({person.events.length}건)
-                    </ActivityCardTitle>
+                    <ActivityCardTitle>군 경력</ActivityCardTitle>
                     <ActivityList>
-                      {person.events.map((evt: any) => (
-                        <EventItem key={evt.id}>
-                          <EventHeader>
-                            <EventName>{evt.event.title}</EventName>
-                            {evt.event.startDate && (
-                              <EventDate>
-                                {new Date(
-                                  evt.event.startDate,
-                                ).toLocaleDateString('ko-KR', {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                })}
-                              </EventDate>
-                            )}
-                          </EventHeader>
-                          {evt.event.category && (
-                            <EventDescription>
-                              📂 카테고리:{' '}
-                              {typeof evt.event.category === 'string'
-                                ? evt.event.category
-                                : evt.event.category.name}
-                            </EventDescription>
-                          )}
-                          {evt.role && (
-                            <EventRole>
-                              <RoleBadge>{evt.role}</RoleBadge>
-                            </EventRole>
-                          )}
-                          {evt.event.description && (
-                            <EventDescription>
-                              {evt.event.description}
-                            </EventDescription>
-                          )}
-                          {evt.note && (
-                            <EventNote>
-                              <EventNoteLabel>참고사항:</EventNoteLabel>
-                              {evt.note}
-                            </EventNote>
-                          )}
-                          {evt.event.countryRelations &&
-                            evt.event.countryRelations.length > 0 && (
-                              <TimelineSection>
-                                <TimelineTitle>관련 국가</TimelineTitle>
-                                {evt.event.countryRelations.map((rel: any) => (
-                                  <TimelineItem key={rel.id}>
-                                    <TimelineLocation>
-                                      {rel.country
-                                        ? `🌐 ${rel.country.name}`
-                                        : rel.historicalCountry
-                                          ? `🏛️ ${rel.historicalCountry.name}`
-                                          : '알 수 없음'}
-                                    </TimelineLocation>
-                                    <TimelineRole>
-                                      <RoleBadge>{rel.role}</RoleBadge>
-                                      {rel.roleDescription && (
-                                        <TimelineDesc>
-                                          {rel.roleDescription}
-                                        </TimelineDesc>
-                                      )}
-                                    </TimelineRole>
-                                    {rel.note && (
-                                      <TimelineDesc>{rel.note}</TimelineDesc>
-                                    )}
-                                  </TimelineItem>
-                                ))}
-                              </TimelineSection>
-                            )}
-                        </EventItem>
+                      {person.militaryCommands.map((cmd: any) => (
+                        <ActivityItem key={cmd.id}>
+                          <ActivityName>{cmd.unit.name}</ActivityName>
+                          <ActivityMeta>
+                            {cmd.rank} · {cmd.role}
+                          </ActivityMeta>
+                        </ActivityItem>
                       ))}
                     </ActivityList>
                   </ActivityCard>
-                ) : null}
-              </ActivitiesGrid>
+                )}
+              {person.organizationRoles &&
+                person.organizationRoles.length > 0 && (
+                  <ActivityCard>
+                    <ActivityCardTitle>조직 활동</ActivityCardTitle>
+                    <ActivityList>
+                      {person.organizationRoles.map((role: any) => (
+                        <ActivityItem key={role.id}>
+                          <ActivityName>{role.organization.name}</ActivityName>
+                          <ActivityMeta>{role.roleTitle}</ActivityMeta>
+                        </ActivityItem>
+                      ))}
+                    </ActivityList>
+                  </ActivityCard>
+                )}
+              <ActivityCard>
+                <ActivityCardTitleRow>
+                  <ActivityCardTitle>
+                    정부 직위 (
+                    {
+                      (
+                        person.governmentPositions ??
+                        person.governmentTenures ??
+                        []
+                      ).length
+                    }
+                    건)
+                  </ActivityCardTitle>
+                  <TenureAddBtn
+                    type="button"
+                    onClick={() => {
+                      setEditingTenureId(null)
+                      setTenureModalOpen(true)
+                    }}
+                  >
+                    <FiPlus size={14} />
+                    수반 등록
+                  </TenureAddBtn>
+                </ActivityCardTitleRow>
+                {(person.governmentPositions ?? person.governmentTenures ?? [])
+                  .length > 0 ? (
+                  <ActivityList>
+                    {(
+                      person.governmentPositions ??
+                      person.governmentTenures ??
+                      []
+                    ).map((tenure: any) => (
+                      <EventItem key={tenure.id}>
+                        <EventHeader>
+                          <EventName>
+                            {tenure.positionDefinition?.title ??
+                              tenure.position?.title ??
+                              tenure.title ??
+                              '직책'}
+                          </EventName>
+                          {tenure.startDate && (
+                            <EventDate>
+                              {new Date(tenure.startDate).toLocaleDateString(
+                                'ko-KR',
+                                {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                },
+                              )}
+                              {tenure.endDate &&
+                                ` ~ ${new Date(tenure.endDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}`}
+                            </EventDate>
+                          )}
+                        </EventHeader>
+                        {(tenure.country ?? tenure.position?.country) && (
+                          <EventDescription>
+                            🏛️{' '}
+                            {(tenure.country ?? tenure.position?.country)?.name}
+                            {tenure.position?.rank != null &&
+                              ` • 서열 ${tenure.position.rank}`}
+                          </EventDescription>
+                        )}
+                        {(tenure.historicalCountry ??
+                          tenure.position?.historicalCountry) && (
+                          <EventDescription>
+                            🏛️{' '}
+                            {
+                              (
+                                tenure.historicalCountry ??
+                                tenure.position?.historicalCountry
+                              )?.name
+                            }
+                            {tenure.position?.rank != null &&
+                              ` • 서열 ${tenure.position.rank}`}
+                          </EventDescription>
+                        )}
+                        {tenure.notes && (
+                          <EventNote>
+                            <EventNoteLabel>참고:</EventNoteLabel>
+                            {tenure.notes}
+                          </EventNote>
+                        )}
+                        <TenureRowEditBtn
+                          type="button"
+                          onClick={() => {
+                            setEditingTenureId(tenure.id)
+                            setTenureModalOpen(true)
+                          }}
+                        >
+                          <FiEdit2 size={12} />
+                          수정
+                        </TenureRowEditBtn>
+                      </EventItem>
+                    ))}
+                  </ActivityList>
+                ) : (
+                  <TenureEmptyText>
+                    등록된 재임 기록이 없습니다. <strong>수반 등록</strong>으로
+                    추가하세요.
+                  </TenureEmptyText>
+                )}
+              </ActivityCard>
+              <TenureRegisterPanel
+                personId={person.id}
+                open={tenureModalOpen}
+                onClose={() => {
+                  setTenureModalOpen(false)
+                  setEditingTenureId(null)
+                }}
+                onSuccess={() => {
+                  setTenureModalOpen(false)
+                  setEditingTenureId(null)
+                  onTenureAdded?.()
+                }}
+                tenureId={editingTenureId ?? undefined}
+              />
+              {person.events && person.events.length > 0 ? (
+                <ActivityCard>
+                  <ActivityCardTitle>
+                    주요 사건 ({person.events.length}건)
+                  </ActivityCardTitle>
+                  <ActivityList>
+                    {person.events.map((evt: any) => (
+                      <EventItem key={evt.id}>
+                        <EventHeader>
+                          <EventName>{evt.event.title}</EventName>
+                          {evt.event.startDate && (
+                            <EventDate>
+                              {new Date(evt.event.startDate).toLocaleDateString(
+                                'ko-KR',
+                                {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                },
+                              )}
+                            </EventDate>
+                          )}
+                        </EventHeader>
+                        {evt.event.category && (
+                          <EventDescription>
+                            📂 카테고리:{' '}
+                            {typeof evt.event.category === 'string'
+                              ? evt.event.category
+                              : evt.event.category.name}
+                          </EventDescription>
+                        )}
+                        {evt.role && (
+                          <EventRole>
+                            <RoleBadge>{evt.role}</RoleBadge>
+                          </EventRole>
+                        )}
+                        {evt.event.description && (
+                          <EventDescription>
+                            {evt.event.description}
+                          </EventDescription>
+                        )}
+                        {evt.note && (
+                          <EventNote>
+                            <EventNoteLabel>참고사항:</EventNoteLabel>
+                            {evt.note}
+                          </EventNote>
+                        )}
+                        {evt.event.countryRelations &&
+                          evt.event.countryRelations.length > 0 && (
+                            <TimelineSection>
+                              <TimelineTitle>관련 국가</TimelineTitle>
+                              {evt.event.countryRelations.map((rel: any) => (
+                                <TimelineItem key={rel.id}>
+                                  <TimelineLocation>
+                                    {rel.country
+                                      ? `🌐 ${rel.country.name}`
+                                      : rel.historicalCountry
+                                        ? `🏛️ ${rel.historicalCountry.name}`
+                                        : '알 수 없음'}
+                                  </TimelineLocation>
+                                  <TimelineRole>
+                                    <RoleBadge>{rel.role}</RoleBadge>
+                                    {rel.roleDescription && (
+                                      <TimelineDesc>
+                                        {rel.roleDescription}
+                                      </TimelineDesc>
+                                    )}
+                                  </TimelineRole>
+                                  {rel.note && (
+                                    <TimelineDesc>{rel.note}</TimelineDesc>
+                                  )}
+                                </TimelineItem>
+                              ))}
+                            </TimelineSection>
+                          )}
+                      </EventItem>
+                    ))}
+                  </ActivityList>
+                </ActivityCard>
+              ) : null}
+            </ActivitiesGrid>
           </TabContent>
         )}
 
@@ -537,316 +521,350 @@ export function PersonDetailView({ person, onTenureAdded }: PersonDetailViewProp
   )
 }
 
-// Styled Components
+/* 인물 등록 모달 폼(PersonRegisterModal·PersonRegisterView·register-form-layout)과 동일한 디자인 토큰 */
+const BORDER = '#e5e7eb'
+const BORDER_LIGHT = '#f3f4f6'
+const TEXT = '#111827'
+const TEXT_SECONDARY = '#374151'
+const TEXT_MUTED = '#6b7280'
+const TEXT_SUBTLE = '#9ca3af'
+const ACCENT = '#6366f1'
+const ACCENT_HOVER = '#4f46e5'
+const BG_MUTED = '#f8fafc'
+const TAB_BG = '#f1f5f9'
+const RADIUS_CARD = 12
+const RADIUS_BTN = 8
+const RADIUS_TAB = 14
+const FORM_PADDING_X = 28
+const FORM_PADDING_Y = 24
+
 const Container = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding: 0 4px;
+  gap: 12px;
 `
 
 const DetailPageHeader = styled.header`
-  padding-bottom: 24px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
   flex-wrap: wrap;
 `
 
 const DetailPageTitle = styled.h2`
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.04em;
+  font-size: 18px;
+  font-weight: 600;
+  color: ${TEXT};
+  letter-spacing: -0.02em;
   line-height: 1.25;
 `
 
 const DetailPageDesc = styled.p`
-  margin: 10px 0 0 0;
-  font-size: 15px;
-  color: #64748b;
-  line-height: 1.55;
-  max-width: 540px;
-  font-weight: 500;
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: ${TEXT_MUTED};
+  line-height: 1.5;
 `
 
+/* ── 히어로 (인물 등록 폼 FormHeader 톤: padding 24px 28px, border-bottom) ── */
 const Hero = styled.div`
-  position: relative;
-  width: 100%;
-  height: 280px;
-  border-radius: 14px;
-  overflow: hidden;
-  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: ${FORM_PADDING_Y}px ${FORM_PADDING_X}px;
+  background: #fff;
+  border-radius: ${RADIUS_CARD}px;
+  border: 1px solid ${BORDER};
+  border-bottom: 1px solid ${BORDER_LIGHT};
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const HeroImage = styled.img`
-  width: 100%;
-  height: 100%;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
   object-fit: cover;
+  object-position: top center;
+  flex-shrink: 0;
+  border: 1px solid ${BORDER};
 `
 
 const HeroPlaceholder = styled.div`
-  width: 100%;
-  height: 100%;
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  background: ${BG_MUTED};
+  border: 1px solid ${BORDER};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+  color: ${TEXT_SUBTLE};
 `
 
 const HeroOverlay = styled.div`
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 32px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 `
 
 const HeroTitle = styled.h1`
   margin: 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  color: ${TEXT};
   letter-spacing: -0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 const HeroSubtitle = styled.p`
-  margin: 6px 0 0 0;
+  margin: 0;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.85);
-  font-weight: 500;
+  color: ${TEXT_MUTED};
+  font-weight: 400;
 `
 
+/* ── 탭 (인물 등록 폼 TabNavigation·TabButton: register-form-layout 동일) ── */
 const TabMenu = styled.nav`
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   padding: 6px;
-  background: #f1f5f9;
-  border-radius: 12px;
   width: fit-content;
-`
-
-const TabButton = styled.button<{ $active?: boolean }>`
-  padding: 10px 18px;
-  border: none;
-  border-radius: 8px;
-  background: ${({ $active }) => ($active ? '#fff' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#0f172a' : '#64748b')};
-  font-size: 14px;
-  font-weight: ${({ $active }) => ($active ? 600 : 500)};
-  cursor: pointer;
-  box-shadow: ${({ $active }) => ($active ? '0 1px 3px rgba(0,0,0,0.06)' : 'none')};
-  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-
-  &:hover {
-    color: #0f172a;
-    background: ${({ $active }) => ($active ? '#fff' : 'rgba(255,255,255,0.7)')};
+  background: ${TAB_BG};
+  border-radius: 20px;
+  overflow-x: auto;
+  &::-webkit-scrollbar {
+    display: none;
   }
 `
 
+const TabButton = styled.button<{ $active?: boolean }>`
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  border: none;
+  border-radius: ${RADIUS_TAB}px;
+  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
+  color: ${({ $active }) => ($active ? ACCENT_HOVER : TEXT_MUTED)};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  cursor: pointer;
+  box-shadow: ${({ $active }) =>
+    $active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.2s ease;
+  white-space: nowrap;
+  &:hover {
+    color: ${({ $active }) => ($active ? ACCENT_HOVER : '#475569')};
+    background: ${({ $active }) =>
+      $active ? '#ffffff' : 'rgba(255,255,255,0.6)'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+  }
+`
+
+/* 탭 콘텐츠 (인물 등록 폼 FormSectionInner·FieldRow: padding 20px 0, border-bottom) ── */
 const TabContent = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 20px;
+  padding: ${FORM_PADDING_Y}px ${FORM_PADDING_X}px ${FORM_PADDING_X}px;
 `
 
+/* ── 통계 카드 (인물 등록 폼 FieldRow·FieldLabel 톤) ── */
 const StatsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
 `
 
 const StatCard = styled.div`
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
+  border: 1px solid ${BORDER};
+  border-radius: ${RADIUS_CARD}px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: border-color 0.2s, box-shadow 0.2s;
-  &:hover {
-    border-color: #e2e8f0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  }
 `
 
 const StatLabel = styled.div`
-  font-size: 12px;
-  color: #64748b;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  color: ${TEXT_SECONDARY};
 `
 
 const StatValue = styled.div`
-  font-size: 24px;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: 18px;
+  font-weight: 600;
+  color: ${TEXT};
   letter-spacing: -0.02em;
+  line-height: 1.25;
 `
 
 const StatSubtext = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${TEXT_SUBTLE};
+  font-weight: 400;
 `
 
+/* ── 기본정보 그리드 ── */
 const InfoGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
 `
 
 const InfoCard = styled.div`
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
+  border: 1px solid ${BORDER};
+  border-radius: ${RADIUS_CARD}px;
+  padding: 14px 18px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const InfoCardLabel = styled.div`
-  font-size: 12px;
-  color: #999;
-  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${TEXT_SECONDARY};
+  margin-bottom: 6px;
 `
 
 const InfoCardValue = styled.div`
-  font-size: 16px;
-  font-weight: 600;
-  color: #111;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${TEXT};
+  line-height: 1.45;
 `
 
+/* ── 전기 ── */
 const BiographyCard = styled.div`
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 24px;
+  border: 1px solid ${BORDER};
+  border-radius: ${RADIUS_CARD}px;
+  padding: 20px 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const BiographyTitle = styled.h3`
-  margin: 0 0 16px 0;
-  font-size: 18px;
+  margin: 0 0 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: #111;
+  color: ${TEXT_SECONDARY};
 `
 
 const BiographyText = styled.p`
   margin: 0;
   font-size: 14px;
-  line-height: 1.8;
-  color: #666;
+  line-height: 1.7;
+  color: ${TEXT_SECONDARY};
+  white-space: pre-wrap;
 `
 
+/* ── 빈 상태 (인물 등록 모달 Empty 톤) ── */
 const EmptyState = styled.div`
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 80px 40px;
-  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
-  border-radius: 16px;
-  border: 2px dashed #e5e7eb;
-
-  &::before {
-    content: '';
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #fff 0%, #fafafa 100%);
-    border: 2px solid #e5e7eb;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 16px;
-    background-image: url("data:image/svg+xml,%3Csvg width='28' height='28' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: center;
-  }
-
-  color: #6b7280;
+  padding: 40px 24px;
+  background: ${BG_MUTED};
+  border-radius: ${RADIUS_CARD}px;
+  border: 1px dashed ${BORDER};
+  color: ${TEXT_MUTED};
   font-size: 14px;
   font-weight: 500;
 `
 
+/* ── 가계도 ── */
 const GenealogySection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
 `
 
 const SectionTitle = styled.h3`
-  margin: 0;
-  font-size: 20px;
+  margin: 0 0 4px;
+  font-size: 11px;
   font-weight: 600;
-  color: #111;
+  color: ${TEXT_MUTED};
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 `
 
 const FamilyGroup = styled.div`
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 24px;
+  border: 1px solid ${BORDER};
+  border-radius: ${RADIUS_CARD}px;
+  padding: 18px 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const FamilyGroupTitle = styled.h4`
-  margin: 0 0 16px 0;
-  font-size: 16px;
+  margin: 0 0 12px;
+  font-size: 13px;
   font-weight: 600;
+  color: ${TEXT_SECONDARY};
 `
 
 const FamilyGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
 `
 
 const FamilyCard = styled.div`
-  background: #f8fafc;
-  padding: 16px;
-  border-radius: 10px;
-  border: 1px solid #f1f5f9;
+  background: ${BG_MUTED};
+  padding: 12px 14px;
+  border-radius: ${RADIUS_BTN}px;
+  border: 1px solid ${BORDER};
 `
 
 const FamilyName = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #111;
+  color: ${TEXT};
   margin-bottom: 4px;
 `
 
 const FamilyMeta = styled.div`
   font-size: 12px;
-  color: #999;
+  color: ${TEXT_MUTED};
+  font-weight: 400;
 `
 
+/* ── 활동 탭 (인물 등록 모달 Field·버튼 톤) ── */
 const ActivitiesGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 `
 
 const ActivityCard = styled.div`
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 22px;
+  border: 1px solid ${BORDER};
+  border-radius: ${RADIUS_CARD}px;
+  padding: 18px 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const ActivityCardTitle = styled.h4`
-  margin: 0 0 16px 0;
-  font-size: 15px;
+  margin: 0 0 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${TEXT_SECONDARY};
 `
 
 const ActivityCardTitleRow = styled.div`
@@ -854,34 +872,45 @@ const ActivityCardTitleRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
-  ${ActivityCardTitle} { margin: 0; }
+  margin-bottom: 12px;
+  ${ActivityCardTitle} {
+    margin: 0;
+  }
 `
 
 const TenureAddBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #475569;
-  font-size: 12px;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
   font-weight: 600;
+  color: #fff;
+  background: ${ACCENT};
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
+  transition: background 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
   &:hover {
-    border-color: #6366f1;
-    background: rgba(99, 102, 241, 0.06);
-    color: #4f46e5;
+    background: ${ACCENT_HOVER};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
 
 const TenureEmptyText = styled.p`
   margin: 0;
-  font-size: 13px;
-  color: #64748b;
-  strong { color: #475569; font-weight: 600; }
+  font-size: 14px;
+  color: ${TEXT_MUTED};
+  text-align: center;
+  padding: 12px 0 4px;
+  strong {
+    color: ${TEXT_SECONDARY};
+    font-weight: 600;
+  }
 `
 
 const TenureRowEditBtn = styled.button`
@@ -889,84 +918,95 @@ const TenureRowEditBtn = styled.button`
   align-items: center;
   gap: 4px;
   margin-top: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #6366f1;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${ACCENT};
   background: #fff;
-  border: 1px solid #e0e7ff;
-  border-radius: 6px;
+  border: 1px solid ${BORDER};
+  border-radius: 12px;
   cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
   &:hover {
-    background: #eef2ff;
-    border-color: #c7d2fe;
+    border-color: ${ACCENT};
+    background: #faf5ff;
+  }
+  &:focus-visible {
+    outline: none;
+    border-color: ${ACCENT_HOVER};
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
 
 const ActivityList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 `
 
 const ActivityItem = styled.div`
-  padding: 14px;
-  background: #f8fafc;
-  border-radius: 10px;
-  border: 1px solid #f1f5f9;
+  padding: 12px 14px;
+  background: ${BG_MUTED};
+  border-radius: ${RADIUS_BTN}px;
+  border: 1px solid ${BORDER};
 `
 
 const ActivityName = styled.div`
   font-size: 14px;
-  color: #334155;
+  color: ${TEXT};
   font-weight: 600;
   margin-bottom: 4px;
 `
 
 const ActivityMeta = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${TEXT_MUTED};
+  font-weight: 400;
 `
 
+/* ── 저작 ── */
 const WorksGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
 `
 
 const WorkCard = styled.div`
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 20px;
+  border: 1px solid ${BORDER};
+  border-radius: ${RADIUS_CARD}px;
+  padding: 16px 18px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
 
 const WorkTitle = styled.h4`
-  margin: 0 0 8px 0;
-  font-size: 16px;
+  margin: 0 0 6px;
+  font-size: 14px;
   font-weight: 600;
+  color: ${TEXT};
+  line-height: 1.35;
 `
 
 const WorkYear = styled.div`
   font-size: 12px;
-  color: #999;
+  color: ${TEXT_MUTED};
+  font-weight: 400;
 `
 
+/* ── 이벤트 아이템 ── */
 const EventItem = styled.div`
-  padding: 16px;
-  background: linear-gradient(135deg, #fafafa 0%, #f8f9fa 100%);
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
+  padding: 14px 16px;
+  background: ${BG_MUTED};
+  border-radius: ${RADIUS_CARD}px;
+  border: 1px solid ${BORDER};
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  transition: all 0.2s ease;
-
+  gap: 8px;
+  transition: border-color 0.15s;
   &:hover {
-    border-color: #ad46ff;
-    box-shadow: 0 2px 8px rgba(173, 70, 255, 0.1);
-    transform: translateY(-2px);
+    border-color: #cbd5e1;
   }
 `
 
@@ -974,101 +1014,107 @@ const EventHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
 `
 
 const EventName = styled.div`
-  font-size: 15px;
-  color: #111;
+  font-size: 14px;
+  color: ${TEXT};
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.35;
   flex: 1;
 `
 
 const EventDate = styled.div`
   font-size: 12px;
-  color: #666;
+  color: ${TEXT_MUTED};
   font-weight: 500;
   white-space: nowrap;
   background: #fff;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
+  padding: 4px 8px;
+  border-radius: ${RADIUS_BTN}px;
+  border: 1px solid ${BORDER};
+  flex-shrink: 0;
 `
 
 const EventRole = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 `
 
 const RoleBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 4px 12px;
-  background: linear-gradient(135deg, #ad46ff 0%, #9146ff 100%);
-  color: white;
+  padding: 3px 10px;
+  background: rgba(99, 102, 241, 0.08);
+  color: ${ACCENT_HOVER};
   font-size: 11px;
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
   width: fit-content;
 `
 
 const EventRoleDesc = styled.div`
   font-size: 13px;
-  color: #666;
+  color: ${TEXT_MUTED};
   line-height: 1.5;
 `
 
 const EventDescription = styled.div`
   font-size: 13px;
-  color: #555;
+  color: ${TEXT_MUTED};
   line-height: 1.6;
   padding-top: 8px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid ${BORDER};
 `
 
 const EventNote = styled.div`
   font-size: 12px;
-  color: #666;
+  color: ${TEXT_MUTED};
   line-height: 1.5;
-  padding: 10px 12px;
+  padding: 8px 12px;
   background: #fff;
-  border-left: 3px solid #ad46ff;
-  border-radius: 6px;
+  border-left: 3px solid ${ACCENT};
+  border-radius: 4px;
+  border: 1px solid ${BORDER};
+  border-left-width: 3px;
 `
 
 const EventNoteLabel = styled.span`
   font-weight: 600;
-  color: #ad46ff;
+  color: ${ACCENT_HOVER};
   margin-right: 6px;
 `
 
+/* ── 타임라인 (관련 국가) ── */
 const TimelineSection = styled.div`
-  margin-top: 16px;
-  padding: 16px;
+  margin-top: 8px;
+  padding: 12px 14px;
   background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  border: 1px solid rgba(226, 232, 240, 0.6);
 `
 
 const TimelineTitle = styled.div`
-  font-size: 14px;
-  font-weight: 600;
-  color: #111;
-  margin-bottom: 12px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
 `
 
 const TimelineItem = styled.div`
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 6px;
-  margin-bottom: 8px;
+  padding: 9px 11px;
+  background: #f8fafc;
+  border-radius: 7px;
+  margin-bottom: 6px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 
   &:last-child {
     margin-bottom: 0;
@@ -1083,39 +1129,73 @@ const TimelineHeader = styled.div`
 `
 
 const TimelineLocation = styled.div`
-  font-size: 13px;
-  color: #374151;
+  font-size: 12.5px;
+  color: #334155;
   font-weight: 600;
 `
 
 const TimelineDate = styled.div`
   font-size: 11px;
-  color: #6b7280;
+  color: #94a3b8;
   white-space: nowrap;
 `
 
 const TimelineRole = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex-wrap: wrap;
 `
 
 const TimelineDesc = styled.div`
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 11.5px;
+  color: #94a3b8;
   line-height: 1.5;
 `
 
 const TimelinePersons = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 8px;
-  border-top: 1px solid #e5e7eb;
+  gap: 3px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(226, 232, 240, 0.5);
 `
 
 const TimelinePerson = styled.div`
-  font-size: 12px;
-  color: #374151;
+  font-size: 11.5px;
+  color: #475569;
+`
+
+/* ── 에러 (인물 등록 모달 톤) ── */
+const ErrorContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 32px;
+  text-align: center;
+  background: #fff;
+  border-radius: ${RADIUS_CARD}px;
+  border: 1px dashed ${BORDER};
+  min-height: 300px;
+`
+
+const ErrorIcon = styled.div`
+  font-size: 40px;
+  margin-bottom: 14px;
+  opacity: 0.5;
+`
+
+const ErrorTitle = styled.h3`
+  font-size: 16px;
+  font-weight: 600;
+  color: ${TEXT};
+  margin: 0 0 8px;
+`
+
+const ErrorDesc = styled.p`
+  font-size: 14px;
+  color: ${TEXT_MUTED};
+  line-height: 1.6;
+  margin: 0;
 `

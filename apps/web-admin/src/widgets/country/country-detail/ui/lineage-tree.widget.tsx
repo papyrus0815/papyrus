@@ -6,9 +6,11 @@ import React, { useMemo } from 'react'
 import { FiUser } from 'react-icons/fi'
 import styled from 'styled-components'
 
-const TIMELINE_WIDTH = 72
+const TIMELINE_WIDTH = 88
 /** 타임라인 막대와 카드 영역 사이 여백(px) */
 const TIMELINE_TO_CARD_GAP = 40
+/** 타임라인 라벨 최소 세로 간격(px). 라벨 과밀 시 자동 축약 */
+const TIMELINE_LABEL_MIN_GAP_PX = 28
 const CARD_WIDTH = 320
 const CARD_HEIGHT = 240
 const CONNECTOR_GAP = 20
@@ -34,9 +36,15 @@ const SEGMENT_GAP_PX = 32
 const TIMELINE_LABEL_MIN_HEIGHT_PX = 24
 /** 연도 기준 시 카드 높이: 재임 연수당 px. 세기 구간을 넓게 */
 const CARD_HEIGHT_PX_PER_YEAR = 14
-const CARD_HEIGHT_MIN_YEAR_BASED = 200
+const CARD_HEIGHT_MIN_YEAR_BASED = 72
 /** 긴 재임(예: 쇼와 63년)이 짧은 재임(예: 3년)보다 확실히 길어 보이도록 상한 확대 */
 const CARD_HEIGHT_MAX_YEAR_BASED = 720
+const yearSpan = (start: number, end: number) => Math.max(1, end - start + 1)
+/** 연표 정합성 우선 모드: 같은 종료연도면 카드 하단 정렬을 강제 */
+const STRICT_YEAR_ALIGNMENT = true
+const STRICT_MIN_CARD_HEIGHT_PX = 1
+/** 연도 정합성 우선 모드에서는 짧은 재임 최소 높이를 강제하지 않음 */
+const YEAR_SHORT_MIN_VISUAL_HEIGHT_PX = 1
 
 interface LineageTreeProps {
   /** 세대별 재임 배열 (row 0 = 루트, row 1 = 그 자식들, ...) */
@@ -80,12 +88,80 @@ export function LineageTree({
 }: LineageTreeProps) {
   const resolveDynastyName = (t: any): string | null => {
     if (getDynastyNameForTenure) return getDynastyNameForTenure(t)
-    return (t.person as { dynasty?: { name: string } } | undefined)?.dynasty?.name ?? null
+    return (
+      (t.person as { dynasty?: { name: string } } | undefined)?.dynasty?.name ??
+      null
+    )
   }
+  /**
+   * 실제 렌더 카드 기준으로 컬럼을 재인덱싱해
+   * 빈 컬럼 때문에 가로 폭이 과도하게 커지는 문제를 방지.
+   */
+  const { effectivePlacement, colRemap } = useMemo(() => {
+    const usedCols = new Set<number>()
+    rows.forEach((row, rowIdx) => {
+      row.forEach((t: any, colIdx: number) => {
+        const p = placement.get(t.id)
+        usedCols.add(p?.col ?? colIdx)
+      })
+    })
+    const sortedCols = Array.from(usedCols).sort((a, b) => a - b)
+    const remap = new Map<number, number>()
+    sortedCols.forEach((col, idx) => remap.set(col, idx))
+
+    const mapped = new Map<string, { row: number; col: number }>()
+    rows.forEach((row, rowIdx) => {
+      row.forEach((t: any, colIdx: number) => {
+        const p = placement.get(t.id)
+        const sourceCol = p?.col ?? colIdx
+        mapped.set(t.id, {
+          row: p?.row ?? rowIdx,
+          col: remap.get(sourceCol) ?? colIdx,
+        })
+      })
+    })
+    return { effectivePlacement: mapped, colRemap: remap }
+  }, [rows, placement])
+
+  const effectiveSeparatorBeforeCols = useMemo(
+    () =>
+      separatorBeforeCols
+        .map((c) => colRemap.get(c))
+        .filter((c): c is number => c != null)
+        .sort((a, b) => a - b),
+    [separatorBeforeCols, colRemap],
+  )
+
+  const effectivePositionHeaders = useMemo(() => {
+    return positionHeaders
+      .map((h) => {
+        const mappedCols: number[] = []
+        const start = h.startCol
+        const end = h.startCol + h.colCount - 1
+        for (let c = start; c <= end; c++) {
+          const m = colRemap.get(c)
+          if (m != null) mappedCols.push(m)
+        }
+        if (mappedCols.length === 0) return null
+        const min = Math.min(...mappedCols)
+        const max = Math.max(...mappedCols)
+        return { label: h.label, startCol: min, colCount: max - min + 1 }
+      })
+      .filter(
+        (
+          x,
+        ): x is {
+          label: string
+          startCol: number
+          colCount: number
+        } => x != null,
+      )
+  }, [positionHeaders, colRemap])
   const totalRows = rows.length
   const totalCols =
-    placement.size > 0
-      ? Math.max(...Array.from(placement.values()).map((p) => p.col)) + 1
+    effectivePlacement.size > 0
+      ? Math.max(...Array.from(effectivePlacement.values()).map((p) => p.col)) +
+        1
       : totalRows > 0
         ? Math.max(...rows.map((r) => r.length))
         : 0
@@ -99,14 +175,14 @@ export function LineageTree({
         continue
       }
       const prevEnd = lefts[c - 1] + CARD_WIDTH
-      if (separatorBeforeCols.includes(c)) {
+      if (effectiveSeparatorBeforeCols.includes(c)) {
         lefts[c] = prevEnd + SEPARATOR_OFFSET_PX + SEPARATOR_TO_CARD_GAP
       } else {
         lefts[c] = lefts[c - 1] + COL_STEP
       }
     }
     return (col: number) => lefts[col] ?? col * COL_STEP
-  }, [totalCols, separatorBeforeCols])
+  }, [totalCols, effectiveSeparatorBeforeCols])
 
   const treeWidth =
     totalCols > 0
@@ -121,7 +197,7 @@ export function LineageTree({
 
   const yearBasedTotalHeight = useMemo(() => {
     if (!useYearBasedLayout || !yearRange) return 0
-    const range = yearRange.maxYear - yearRange.minYear
+    const range = yearSpan(yearRange.minYear, yearRange.maxYear)
     return Math.min(MAX_YEAR_BASED_HEIGHT, Math.max(400, range * 12))
   }, [useYearBasedLayout, yearRange])
 
@@ -138,7 +214,7 @@ export function LineageTree({
    * 픽셀 = 세그먼트 내 (연도 - seg.start) / seg.range * seg.heightPx (카드·세기 라벨 동일).
    */
   const yearBasedLayout = useMemo(() => {
-    if (!useYearBasedLayout || !yearRange || !placement) {
+    if (!useYearBasedLayout || !yearRange || !effectivePlacement) {
       return {
         positionByYear: null as Map<
           string,
@@ -173,7 +249,7 @@ export function LineageTree({
         totalHeight: 0,
         minYear: yearRange.minYear,
         maxYear: yearRange.maxYear,
-        range: Math.max(1, yearRange.maxYear - yearRange.minYear),
+        range: yearSpan(yearRange.minYear, yearRange.maxYear),
         segments: [],
       }
     }
@@ -220,7 +296,7 @@ export function LineageTree({
     const mergedSpanned = spanMerge(merged)
 
     const totalDataYears = mergedSpanned.reduce(
-      (s, seg) => s + (seg.end - seg.start),
+      (s, seg) => s + yearSpan(seg.start, seg.end),
       0,
     )
     const nSeg = mergedSpanned.length
@@ -230,7 +306,7 @@ export function LineageTree({
       Math.max(500 - gapTotal, totalDataYears * 14),
     )
     let segmentBaseHeights = mergedSpanned.map(
-      (seg) => ((seg.end - seg.start) / totalDataYears) * available,
+      (seg) => (yearSpan(seg.start, seg.end) / totalDataYears) * available,
     )
     /* 긴 재임(예: 쇼와 63년)이 있는 세그먼트는 재임 기간에 비례해 최소 높이 보장 */
     const maxDurationBySeg = mergedSpanned.map((seg, i) => {
@@ -245,7 +321,7 @@ export function LineageTree({
         ...list.map((t: any) => {
           const start = getYearFromDate(t.startDate)!
           const end = getYearFromDate(t.endDate) ?? new Date().getFullYear()
-          return end - start
+          return yearSpan(start, end)
         }),
         0,
       )
@@ -265,7 +341,7 @@ export function LineageTree({
         if (start == null) return
         const end = getYearFromDate(t.endDate) ?? new Date().getFullYear()
         if (start > seg.end || end < seg.start) return
-        const col = placement.get(t.id)?.col ?? 0
+        const col = effectivePlacement.get(t.id)?.col ?? 0
         list.push({ id: t.id, start, end, col })
       })
       return list
@@ -274,7 +350,10 @@ export function LineageTree({
     const segmentMinScales = segmentBaseHeights.map((baseH, segIdx) => {
       const list = tenuresBySeg[segIdx]
       const seg = mergedSpanned[segIdx]
-      const range = seg.end - seg.start
+      const range = yearSpan(seg.start, seg.end)
+      const effectiveMinCardHeight = STRICT_YEAR_ALIGNMENT
+        ? STRICT_MIN_CARD_HEIGHT_PX
+        : CARD_HEIGHT_MIN_YEAR_BASED
       const byCol = new Map<
         number,
         { id: string; start: number; end: number }[]
@@ -290,8 +369,7 @@ export function LineageTree({
         /* 1년 재임 등 짧은 카드가 많을 때: 열 전체가 n*최소높이+(n-1)*갭 이상 필요 */
         const n = colList.length
         const totalNeededPx =
-          n * CARD_HEIGHT_MIN_YEAR_BASED +
-          Math.max(0, n - 1) * CARD_STACK_GAP_PX
+          n * effectiveMinCardHeight + Math.max(0, n - 1) * CARD_STACK_GAP_PX
         if (totalNeededPx > baseH) {
           minScale = Math.max(minScale, totalNeededPx / baseH)
         }
@@ -299,13 +377,13 @@ export function LineageTree({
           const prev = colList[i - 1]
           const curr = colList[i]
           const yearGap = curr.start - prev.start
-          const prevDuration = Math.max(1, prev.end - prev.start)
+          const prevDuration = yearSpan(prev.start, prev.end)
           /* 재임이 세그먼트 대부분이면 카드가 세그먼트 전체 높이를 쓰므로 baseH로 계산 */
           const prevHeightPx =
             prevDuration >= range * 0.95
               ? baseH
               : Math.max(
-                  CARD_HEIGHT_MIN_YEAR_BASED,
+                  effectiveMinCardHeight,
                   Math.min(
                     CARD_HEIGHT_MAX_YEAR_BASED,
                     (prevDuration / range) * baseH,
@@ -321,8 +399,8 @@ export function LineageTree({
     })
 
     /* minScale 적용. 상한 초과 시 세그먼트 높이 캡으로 빈 공간 폭증 방지 */
-    let segmentHeights = segmentBaseHeights.map(
-      (h, i) => Math.min(h * segmentMinScales[i], MAX_SEGMENT_HEIGHT_PX),
+    let segmentHeights = segmentBaseHeights.map((h, i) =>
+      Math.min(h * segmentMinScales[i], MAX_SEGMENT_HEIGHT_PX),
     )
 
     let accTop = 0
@@ -348,115 +426,96 @@ export function LineageTree({
       const seg = mergedSpanned[segIdx]
       const segTop = segments[segIdx].topPx
       const segH = segments[segIdx].heightPx
-      const range = seg.end - seg.start
-      const durationYears = Math.max(1, (end ?? start) - start)
-      const topPx = segTop + ((start - seg.start) / range) * segH
-      /* 재임이 세그먼트 전체(또는 거의 전체)를 차지하면 카드가 세그먼트 높이를 채우도록 (예: 메이지 1868~1912) */
-      const proportionalHeight = (durationYears / range) * segH
-      const heightPx =
-        durationYears >= range * 0.95
+      const range = yearSpan(seg.start, seg.end)
+      const durationYears = yearSpan(start, end ?? start)
+      const startRatio = (start - seg.start) / range
+      const endRatio = (end + 1 - seg.start) / range
+      const mappedTop = segTop + startRatio * segH
+      const mappedBottom = segTop + endRatio * segH
+      const proportionalHeight = Math.max(1, mappedBottom - mappedTop)
+      const clampedHeight = STRICT_YEAR_ALIGNMENT
+        ? proportionalHeight
+        : durationYears >= range * 0.95
           ? segH
           : Math.max(
               CARD_HEIGHT_MIN_YEAR_BASED,
               Math.min(CARD_HEIGHT_MAX_YEAR_BASED, proportionalHeight),
             )
+      /**
+       * strict 모드에서는 같은 시작/종료 연도가 동일한 픽셀선에 떨어지도록
+       * top/bottom을 같은 반올림 규칙으로 정수화해 하단 정렬 오차(±1px)를 제거.
+       */
+      const topPx = STRICT_YEAR_ALIGNMENT ? Math.round(mappedTop) : mappedTop
+      const bottomPx = STRICT_YEAR_ALIGNMENT
+        ? Math.round(mappedBottom)
+        : mappedBottom
+      const heightPx = STRICT_YEAR_ALIGNMENT
+        ? Math.max(1, bottomPx - topPx)
+        : clampedHeight
       positionByYear.set(t.id, { topPx, heightPx })
     })
 
-    /* 같은 열·같은 세그먼트에서 겹치는 카드는 아래로 쌓기 */
-    const oldAccTop = segments.map((s) => s.topPx)
-    mergedSpanned.forEach((seg, segIdx) => {
-      const list = tenuresBySeg[segIdx]
-        .slice()
-        .sort((a, b) => a.start - b.start || a.end - b.end)
-      const byCol = new Map<number, typeof list>()
-      list.forEach((item) => {
-        const arr = byCol.get(item.col) ?? []
-        arr.push(item)
-        byCol.set(item.col, arr)
-      })
-      byCol.forEach((colList) => {
-        for (let i = 1; i < colList.length; i++) {
-          const prev = positionByYear.get(colList[i - 1].id)!
-          const curr = positionByYear.get(colList[i].id)!
-          const needTop = prev.topPx + prev.heightPx + CARD_STACK_GAP_PX
-          if (curr.topPx < needTop) {
-            curr.topPx = needTop
-          }
-        }
-      })
-    })
-
-    /* 쌓인 카드가 세그먼트 밖으로 나가면 세그먼트 높이 확대 */
-    segments.forEach((seg, segIdx) => {
-      let maxBottom = seg.topPx + seg.heightPx
-      tenuresBySeg[segIdx].forEach(({ id }) => {
-        const pos = positionByYear.get(id)
-        if (pos) maxBottom = Math.max(maxBottom, pos.topPx + pos.heightPx)
-      })
-      const needH = maxBottom - seg.topPx
-      if (needH > seg.heightPx) {
-        seg.heightPx = needH
-        segmentHeights[segIdx] = needH
-      }
-    })
-    const totalHeight = segmentHeights.reduce((a, b) => a + b, 0) + gapTotal
-
-    /* 세그먼트 높이 변경으로 다음 세그먼트 top이 밀리면 해당 열 카드 top 보정 */
-    let accTopNew = 0
-    segments.forEach((seg, i) => {
-      const newTop = accTopNew
-      const delta = newTop - oldAccTop[i]
-      if (delta !== 0) {
-        tenuresBySeg[i].forEach(({ id }) => {
-          const pos = positionByYear.get(id)
-          if (pos) pos.topPx += delta
+    if (!STRICT_YEAR_ALIGNMENT) {
+      /* 같은 열·같은 세그먼트에서 겹치는 카드는 아래로 쌓기 */
+      const oldAccTop = segments.map((s) => s.topPx)
+      mergedSpanned.forEach((seg, segIdx) => {
+        const list = tenuresBySeg[segIdx]
+          .slice()
+          .sort((a, b) => a.start - b.start || a.end - b.end)
+        const byCol = new Map<number, typeof list>()
+        list.forEach((item) => {
+          const arr = byCol.get(item.col) ?? []
+          arr.push(item)
+          byCol.set(item.col, arr)
         })
-      }
-      seg.topPx = newTop
-      accTopNew += seg.heightPx + SEGMENT_GAP_PX
-    })
-
-    /* 세그먼트를 넘어서도 같은 열에서 이어지는 재임(prev.end ≈ curr.start)은 바로 아래로 붙이기 */
-    const flatWithYear = flat
-      .map((t: any) => {
-        const start = getYearFromDate(t.startDate)
-        if (start == null) return null
-        const end = getYearFromDate(t.endDate) ?? new Date().getFullYear()
-        const col = placement.get(t.id)?.col ?? 0
-        return { id: t.id, start, end, col }
+        byCol.forEach((colList) => {
+          for (let i = 1; i < colList.length; i++) {
+            const prev = positionByYear.get(colList[i - 1].id)!
+            const curr = positionByYear.get(colList[i].id)!
+            const needTop = prev.topPx + prev.heightPx + CARD_STACK_GAP_PX
+            if (curr.topPx < needTop) curr.topPx = needTop
+          }
+        })
       })
-      .filter(Boolean) as { id: string; start: number; end: number; col: number }[]
-    const byColAll = new Map<number, typeof flatWithYear>()
-    flatWithYear.forEach((item) => {
-      const arr = byColAll.get(item.col) ?? []
-      arr.push(item)
-      byColAll.set(item.col, arr)
-    })
-    byColAll.forEach((colList) => {
-      colList.sort((a, b) => a.start - b.start || a.end - b.end)
-      for (let i = 1; i < colList.length; i++) {
-        const prev = colList[i - 1]
-        const curr = colList[i]
-        const prevPos = positionByYear.get(prev.id)
-        const currPos = positionByYear.get(curr.id)
-        if (!prevPos || !currPos) continue
-        const needTop = prevPos.topPx + prevPos.heightPx + CARD_STACK_GAP_PX
-        if (curr.start <= prev.end + 1 && currPos.topPx > needTop) {
-          currPos.topPx = needTop
+
+      /* 쌓인 카드가 세그먼트 밖으로 나가면 세그먼트 높이 확대 */
+      segments.forEach((seg, segIdx) => {
+        let maxBottom = seg.topPx + seg.heightPx
+        tenuresBySeg[segIdx].forEach(({ id }) => {
+          const pos = positionByYear.get(id)
+          if (pos) maxBottom = Math.max(maxBottom, pos.topPx + pos.heightPx)
+        })
+        const needH = maxBottom - seg.topPx
+        if (needH > seg.heightPx) {
+          seg.heightPx = needH
+          segmentHeights[segIdx] = needH
         }
-      }
-    })
+      })
+      let accTopNew = 0
+      segments.forEach((seg, i) => {
+        const newTop = accTopNew
+        const delta = newTop - oldAccTop[i]
+        if (delta !== 0) {
+          tenuresBySeg[i].forEach(({ id }) => {
+            const pos = positionByYear.get(id)
+            if (pos) pos.topPx += delta
+          })
+        }
+        seg.topPx = newTop
+        accTopNew += seg.heightPx + SEGMENT_GAP_PX
+      })
+    }
+    const totalHeight = segmentHeights.reduce((a, b) => a + b, 0) + gapTotal
 
     return {
       positionByYear,
       totalHeight,
       minYear: yearRange.minYear,
       maxYear: yearRange.maxYear,
-      range: Math.max(1, yearRange.maxYear - yearRange.minYear),
+      range: yearSpan(yearRange.minYear, yearRange.maxYear),
       segments,
     }
-  }, [useYearBasedLayout, yearRange, rows, placement])
+  }, [useYearBasedLayout, yearRange, rows, effectivePlacement])
 
   /** 재임 기간(년) → 카드 높이(px). 전체 보기에서만 사용. 연도 기준이면 yearBasedLayout 사용 */
   const tenureIdToCardHeight = useMemo(() => {
@@ -477,7 +536,7 @@ export function LineageTree({
       const end = t.endDate ? new Date(t.endDate).getFullYear() : null
       const endYear = end ?? (start != null ? new Date().getFullYear() : null)
       const years =
-        start != null && endYear != null ? Math.max(0, endYear - start) : 0
+        start != null && endYear != null ? yearSpan(start, endYear) : 0
       const h = Math.round(
         Math.min(MAX_H, Math.max(MIN_H, BASE_H + years * PX_PER_YEAR)),
       )
@@ -520,8 +579,8 @@ export function LineageTree({
       ? cardTopByRow(row) + (rowHeights[row] ?? ROW_HEIGHT) - CONNECTOR_GAP
       : round(row * ROW_HEIGHT + CONNECTOR_GAP / 2 + CARD_HEIGHT)
   const separatorColsSet = useMemo(
-    () => new Set(separatorBeforeCols),
-    [separatorBeforeCols],
+    () => new Set(effectiveSeparatorBeforeCols),
+    [effectiveSeparatorBeforeCols],
   )
 
   /** 막대바 라벨: 1400, 1800, 1900 등 세기(100년 단위)만 표시. 현재 연도는 "현재"로 표시 */
@@ -549,11 +608,12 @@ export function LineageTree({
       const addedYears = new Set<number>()
       segs.forEach((seg) => {
         const { start, end, topPx, heightPx } = seg
-        const range = seg.end - seg.start
+        const range = yearSpan(seg.start, seg.end)
         /* 세그먼트 실제 시작 연도(예: 1868) — 100년 단위가 아니면 맨 위에 표시 */
         if (start % centuryStep !== 0 && !addedYears.has(start)) {
           addedYears.add(start)
-          const nextY = Math.floor(start / centuryStep) * centuryStep + centuryStep
+          const nextY =
+            Math.floor(start / centuryStep) * centuryStep + centuryStep
           const segTop = topPx
           const segBottom =
             topPx + ((Math.min(nextY, end + 1) - start) / range) * heightPx
@@ -676,6 +736,44 @@ export function LineageTree({
     return spans
   }, [rows, useYearBasedLayout, yearBasedLayout])
 
+  /** 라벨 과밀 시 최소 간격을 유지하도록 자동 축약 (첫/마지막 라벨은 우선 보존) */
+  const visibleCenturySpans = useMemo(() => {
+    if (centurySpans.length <= 2) return centurySpans
+    const sorted = [...centurySpans].sort((a, b) => {
+      const topA = 'top' in a && a.top != null ? a.top : cardTop(a.startRow)
+      const topB = 'top' in b && b.top != null ? b.top : cardTop(b.startRow)
+      return topA - topB
+    })
+
+    const result: typeof sorted = []
+    let lastCenter = -Infinity
+
+    sorted.forEach((span, idx) => {
+      const top =
+        'top' in span && span.top != null ? span.top : cardTop(span.startRow)
+      const height =
+        'height' in span && span.height != null
+          ? span.height
+          : cardBottom(span.endRow) - cardTop(span.startRow)
+      const center = top + Math.max(1, height) / 2
+      const isFirst = idx === 0
+      const isLast = idx === sorted.length - 1
+
+      if (isFirst || center - lastCenter >= TIMELINE_LABEL_MIN_GAP_PX) {
+        result.push(span)
+        lastCenter = center
+        return
+      }
+
+      if (isLast && result.length > 0) {
+        result[result.length - 1] = span
+        lastCenter = center
+      }
+    })
+
+    return result
+  }, [centurySpans, cardTop, cardBottom])
+
   /** tenure id → tenure (선 끝 뱃지 라벨/색상용) */
   const tenureById = useMemo(() => {
     const m = new Map<string, any>()
@@ -689,13 +787,21 @@ export function LineageTree({
       d: string
       key: string
       vertices: { x: number; y: number }[]
-      endpoints: { childId: string; x: number; y: number; label: string; bg: string; color: string; border: string }[]
+      endpoints: {
+        childId: string
+        x: number
+        y: number
+        label: string
+        bg: string
+        color: string
+        border: string
+      }[]
     }[] = []
     parentToChildren.forEach((childIds, parentId) => {
-      const parent = placement.get(parentId)
+      const parent = effectivePlacement.get(parentId)
       if (!parent || childIds.length === 0) return
       const children = childIds
-        .map((id) => ({ id, pos: placement.get(id) }))
+        .map((id) => ({ id, pos: effectivePlacement.get(id) }))
         .filter(
           (c): c is { id: string; pos: { row: number; col: number } } =>
             c.pos != null,
@@ -722,7 +828,15 @@ export function LineageTree({
 
       let d = `M ${parentBottomX} ${parentBottomY} L ${parentBottomX} ${connectorY}`
       d += ` L ${leftX} ${connectorY} L ${rightX} ${connectorY}`
-      const endpoints: { childId: string; x: number; y: number; label: string; bg: string; color: string; border: string }[] = []
+      const endpoints: {
+        childId: string
+        x: number
+        y: number
+        label: string
+        bg: string
+        color: string
+        border: string
+      }[] = []
       children.forEach((c) => {
         const cx = colCenter(c.pos.col)
         vertices.push({ x: cx, y: connectorY }, { x: cx, y: childTopY })
@@ -745,7 +859,7 @@ export function LineageTree({
       paths.push({ d, key: parentId, vertices, endpoints })
     })
     return paths
-  }, [placement, parentToChildren, tenureById, getPositionLabel])
+  }, [effectivePlacement, parentToChildren, tenureById, getPositionLabel])
 
   /** 자식 tenure id → 부모 tenure (카드에 "↑ 부/이전" 표시용) */
   const childToParentTenure = useMemo(() => {
@@ -769,20 +883,89 @@ export function LineageTree({
     const end = t.endDate ? new Date(t.endDate).getFullYear() : null
     const endYear = end ?? (start != null ? new Date().getFullYear() : null)
     const years =
-      start != null && endYear != null ? Math.max(0, endYear - start) : null
+      start != null && endYear != null ? yearSpan(start, endYear) : null
     if (start == null && endYear == null) return '재위 기간 미상'
     const range = end == null ? `${start}~현재` : `${start}~${endYear}`
     return years != null ? `(${range}, ${years}년)` : `(${range})`
   }
 
+  /** 연도 기준 카드 시각 보정: 단기 재임 최소 높이 + 동일 열 중첩 lane 분리 */
+  const yearCardVisualById = useMemo(() => {
+    const posMap = yearBasedLayout?.positionByYear
+    if (!useYearBasedLayout || !posMap || posMap.size === 0) return null
+
+    const currentYear = new Date().getFullYear()
+    const baseItems: {
+      id: string
+      col: number
+      start: number
+      end: number
+      top: number
+      bottom: number
+    }[] = []
+
+    rows.flat().forEach((t: any) => {
+      const start = getYearFromDate(t.startDate)
+      if (start == null) return
+      const end = getYearFromDate(t.endDate) ?? currentYear
+      const pos = effectivePlacement.get(t.id)
+      const col = pos?.col ?? 0
+      const p = posMap.get(t.id)
+      if (!p) return
+      baseItems.push({
+        id: t.id,
+        col,
+        start,
+        end,
+        top: p.topPx,
+        bottom: p.topPx + p.heightPx,
+      })
+    })
+
+    const result = new Map<
+      string,
+      {
+        topPx: number
+        heightPx: number
+        leftOffsetPx: number
+        widthPx: number
+        isShort: boolean
+        isOverlap: boolean
+      }
+    >()
+
+    baseItems.forEach((it) => {
+      const rawHeight = Math.max(1, it.bottom - it.top)
+      const isShort = rawHeight < YEAR_SHORT_MIN_VISUAL_HEIGHT_PX
+      const visualHeight = isShort ? YEAR_SHORT_MIN_VISUAL_HEIGHT_PX : rawHeight
+      // 퇴임연도 정렬(하단)을 보존한 채 짧은 재임만 위로 확장
+      const visualTop = Math.max(0, it.bottom - visualHeight)
+      result.set(it.id, {
+        topPx: visualTop,
+        heightPx: visualHeight,
+        leftOffsetPx: 0,
+        widthPx: CARD_WIDTH,
+        isShort,
+        isOverlap: false,
+      })
+    })
+
+    return result
+  }, [
+    yearBasedLayout?.positionByYear,
+    effectivePlacement,
+    rows,
+    useYearBasedLayout,
+  ])
+
   return (
     <TreeOuter>
       <ScrollContainer>
-        {positionHeaders.length > 0 && (
+        {effectivePositionHeaders.length > 0 && (
           <PositionHeaderRow
             style={{ width: TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP + treeWidth }}
           >
-            {positionHeaders.map(({ label, startCol, colCount }) => (
+            {effectivePositionHeaders.map(({ label, startCol, colCount }) => (
               <PositionHeaderCell
                 key={label}
                 style={{
@@ -821,7 +1004,7 @@ export function LineageTree({
             >
               <TimelineColumnAbsolute style={{ height: svgHeight }}>
                 <TimelineBar />
-                {centurySpans.map((span, i) => {
+                {visibleCenturySpans.map((span, i) => {
                   const top =
                     'top' in span && span.top != null
                       ? span.top
@@ -852,12 +1035,18 @@ export function LineageTree({
               >
                 {rows.flat().map((t: any) => {
                   const positionByYear = yearBasedLayout.positionByYear!
-                  const pos = placement.get(t.id)
+                  const pos = effectivePlacement.get(t.id)
                   const col = pos?.col ?? 0
                   const posYear = positionByYear.get(t.id)
                   if (!posYear) return null
-                  const left = getCardLeft(col)
-                  const cardHeightPx = Math.round(posYear.heightPx)
+                  const visual = yearCardVisualById?.get(t.id)
+                  const left = getCardLeft(col) + (visual?.leftOffsetPx ?? 0)
+                  const cardHeightPx = Math.round(
+                    visual?.heightPx ?? posYear.heightPx,
+                  )
+                  const cardTopPx = Math.round(visual?.topPx ?? posYear.topPx)
+                  const cardWidthPx = Math.round(visual?.widthPx ?? CARD_WIDTH)
+                  const isCompactCard = !!visual?.isShort
                   const titleText = t.title || t.position?.title || '—'
                   const regnalName = getRegnalNameFromNotes(t.notes)
                   const personName = getPersonName(t.person)
@@ -873,6 +1062,13 @@ export function LineageTree({
                         ? `${t.regnalNumber}세`
                         : '—'
                   const reignLabel = getReignLabel(t)
+                  const reignMetaLabel =
+                    orderLabel !== '—'
+                      ? `${orderLabel} · ${reignLabel}`
+                      : reignLabel
+                  const compactCardTitle = `${reignMetaLabel}\n${mainLabel}${
+                    subLabel ? `\n${subLabel}` : ''
+                  }`
                   const parentTenure = childToParentTenure.get(t.id)
                   const parentOrderLabel = parentTenure
                     ? parentTenure.termNumber != null
@@ -894,11 +1090,13 @@ export function LineageTree({
                       key={t.id}
                       style={{
                         left,
-                        top: posYear.topPx,
+                        top: cardTopPx,
+                        width: cardWidthPx,
                         minHeight: cardHeightPx,
                         height: cardHeightPx,
                       }}
                       onClick={() => onCardClick(t.id)}
+                      title={isCompactCard ? compactCardTitle : undefined}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
@@ -908,41 +1106,35 @@ export function LineageTree({
                         }
                       }}
                     >
-                      <TreeCardOrder>{orderLabel}</TreeCardOrder>
-                      <TreeCardReign>{reignLabel}</TreeCardReign>
-                      <TreeCardHead>
-                        {getPositionLabel?.(t) && (() => {
-                          const label = getPositionLabel(t)
-                          const c = getBadgeColorsForLabel(label)
-                          return (
-                            <TreeCardPositionBadge $badgeBg={c.bg} $badgeColor={c.color} $badgeBorder={c.border}>
-                              {label}
-                            </TreeCardPositionBadge>
-                          )
-                        })()}
-                      </TreeCardHead>
+                      <TreeCardTopRow>
+                        <TreeCardPrimaryMeta>
+                          <TreeCardReign>{reignMetaLabel}</TreeCardReign>
+                        </TreeCardPrimaryMeta>
+                        <TreeCardAvatar $hasImage={!!t.person?.profileImageUrl}>
+                          {t.person?.profileImageUrl ? (
+                            <img src={t.person.profileImageUrl} alt="" />
+                          ) : (
+                            <FiUser size={22} />
+                          )}
+                        </TreeCardAvatar>
+                      </TreeCardTopRow>
                       <TreeCardMainName>{mainLabel}</TreeCardMainName>
-                      {subLabel && (
+                      {!isCompactCard && subLabel && (
                         <TreeCardSubName>{subLabel}</TreeCardSubName>
                       )}
-                      {resolveDynastyName(t) && (
-                        <TreeCardDynasty>가문: {resolveDynastyName(t)}</TreeCardDynasty>
+                      {!isCompactCard && resolveDynastyName(t) && (
+                        <TreeCardDynasty>
+                          가문: {resolveDynastyName(t)}
+                        </TreeCardDynasty>
                       )}
-                      {parentTenure && parentDisplay && (
+                      {!isCompactCard && parentTenure && parentDisplay && (
                         <TreeCardRelation>
                           ↑ 이전: {parentDisplay} ({parentOrderLabel})
                         </TreeCardRelation>
                       )}
-                      {titleText && titleText !== '—' && (
+                      {!isCompactCard && titleText && titleText !== '—' && (
                         <TreeCardTitle>{titleText}</TreeCardTitle>
                       )}
-                      <TreeCardAvatar $hasImage={!!t.person?.profileImageUrl}>
-                        {t.person?.profileImageUrl ? (
-                          <img src={t.person.profileImageUrl} alt="" />
-                        ) : (
-                          <FiUser size={28} />
-                        )}
-                      </TreeCardAvatar>
                     </TreeCardYearBased>
                   )
                 })}
@@ -955,7 +1147,7 @@ export function LineageTree({
                 style={useYearBasedLayout ? { height: svgHeight } : undefined}
               >
                 <TimelineBar />
-                {centurySpans.map((span, i) => {
+                {visibleCenturySpans.map((span, i) => {
                   const top =
                     'top' in span && span.top != null
                       ? span.top
@@ -997,7 +1189,7 @@ export function LineageTree({
                 >
                   {rows.map((row, rowIdx) =>
                     row.map((t: any, colIdx: number) => {
-                      const pos = placement.get(t.id)
+                      const pos = effectivePlacement.get(t.id)
                       const gridCol = (pos?.col ?? colIdx) + 1
                       const gridRow = (pos?.row ?? rowIdx) + 1
                       const cardHeightPx =
@@ -1019,6 +1211,10 @@ export function LineageTree({
                             ? `${t.regnalNumber}세`
                             : '—'
                       const reignLabel = getReignLabel(t)
+                      const reignMetaLabel =
+                        orderLabel !== '—'
+                          ? `${orderLabel} · ${reignLabel}`
+                          : reignLabel
                       const parentTenure = childToParentTenure.get(t.id)
                       const parentOrderLabel = parentTenure
                         ? parentTenure.termNumber != null
@@ -1068,25 +1264,28 @@ export function LineageTree({
                               }
                             }}
                           >
-                            <TreeCardOrder>{orderLabel}</TreeCardOrder>
-                            <TreeCardReign>{reignLabel}</TreeCardReign>
-                            <TreeCardHead>
-                              {getPositionLabel?.(t) && (() => {
-                                const label = getPositionLabel(t)
-                                const c = getBadgeColorsForLabel(label)
-                                return (
-                                  <TreeCardPositionBadge $badgeBg={c.bg} $badgeColor={c.color} $badgeBorder={c.border}>
-                                    {label}
-                                  </TreeCardPositionBadge>
-                                )
-                              })()}
-                            </TreeCardHead>
+                            <TreeCardTopRow>
+                              <TreeCardPrimaryMeta>
+                                <TreeCardReign>{reignMetaLabel}</TreeCardReign>
+                              </TreeCardPrimaryMeta>
+                              <TreeCardAvatar
+                                $hasImage={!!t.person?.profileImageUrl}
+                              >
+                                {t.person?.profileImageUrl ? (
+                                  <img src={t.person.profileImageUrl} alt="" />
+                                ) : (
+                                  <FiUser size={22} />
+                                )}
+                              </TreeCardAvatar>
+                            </TreeCardTopRow>
                             <TreeCardMainName>{mainLabel}</TreeCardMainName>
                             {subLabel && (
                               <TreeCardSubName>{subLabel}</TreeCardSubName>
                             )}
                             {resolveDynastyName(t) && (
-                              <TreeCardDynasty>가문: {resolveDynastyName(t)}</TreeCardDynasty>
+                              <TreeCardDynasty>
+                                가문: {resolveDynastyName(t)}
+                              </TreeCardDynasty>
                             )}
                             {parentTenure && parentDisplay && (
                               <TreeCardRelation>
@@ -1096,15 +1295,6 @@ export function LineageTree({
                             {titleText && titleText !== '—' && (
                               <TreeCardTitle>{titleText}</TreeCardTitle>
                             )}
-                            <TreeCardAvatar
-                              $hasImage={!!t.person?.profileImageUrl}
-                            >
-                              {t.person?.profileImageUrl ? (
-                                <img src={t.person.profileImageUrl} alt="" />
-                              ) : (
-                                <FiUser size={28} />
-                              )}
-                            </TreeCardAvatar>
                           </TreeCard>
                         </TreeCardWrap>
                       )
@@ -1130,8 +1320,9 @@ export function LineageTree({
                           key={key}
                           d={d}
                           fill="none"
-                          stroke="rgba(99, 102, 241, 0.28)"
-                          strokeWidth="1.25"
+                          stroke="rgba(71, 85, 105, 0.35)"
+                          strokeWidth="1.2"
+                          strokeDasharray="3 3"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -1142,7 +1333,8 @@ export function LineageTree({
                         position: 'absolute',
                         left: -(TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP),
                         top: 0,
-                        width: TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP + treeWidth,
+                        width:
+                          TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP + treeWidth,
                         height: svgHeight,
                         pointerEvents: 'none',
                         zIndex: 6,
@@ -1181,32 +1373,34 @@ export function LineageTree({
 
 /* ─── 디자인: 깔끔·트렌디 (미니멀, 여백, 소프트 섀도우) ─── */
 const BORDER_SUBTLE = '#e5e7eb'
-const SHADOW_SOFT = '0 1px 3px rgba(0, 0, 0, 0.04)'
-const SHADOW_CARD = '0 2px 12px rgba(0, 0, 0, 0.04)'
-const SHADOW_CARD_HOVER = '0 8px 24px rgba(99, 102, 241, 0.12)'
 const ACCENT = '#6366f1'
 
 /** 전체 블록 — 여백만 강조 */
 const TreeOuter = styled.div`
   width: 100%;
   box-sizing: border-box;
-  padding: 40px 48px 56px;
-  background: #fff;
+  padding: 20px 0 16px;
+  background: transparent;
   border-radius: 0;
 `
 
 const ScrollContainer = styled.div`
-  overflow: visible;
+  overflow-x: visible;
+  overflow-y: visible;
+  padding-left: 28px;
 `
 
-/** 직책 헤더 — 미니멀, 좌측 악센트만 */
+/** 직책 헤더 — 과한 좌측 보더 제거, 플랫 배지 톤 */
 const PositionHeaderRow = styled.div`
-  position: relative;
-  height: 48px;
-  margin-bottom: 32px;
+  position: sticky;
+  top: 12px;
+  z-index: 30;
+  height: 44px;
+  margin-bottom: 24px;
   display: flex;
   align-items: stretch;
   padding-left: ${TIMELINE_WIDTH}px;
+  pointer-events: none;
 `
 
 const PositionHeaderCell = styled.div`
@@ -1221,10 +1415,12 @@ const PositionHeaderCell = styled.div`
   color: #0f172a;
   letter-spacing: -0.03em;
   box-sizing: border-box;
-  padding: 0 24px 0 18px;
-  background: #fafbfc;
-  border-left: 3px solid ${ACCENT};
-  border-radius: 0 10px 10px 0;
+  padding: 0 18px;
+  background: rgba(248, 250, 252, 0.96);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 `
 
 const TreeWrap = styled.div`
@@ -1232,7 +1428,7 @@ const TreeWrap = styled.div`
   display: flex;
   margin: 0;
   margin-right: auto;
-  padding: 0 0 56px;
+  padding: 0 0 36px;
 `
 
 const Legend = styled.div`
@@ -1260,21 +1456,27 @@ const TimelineBar = styled.div`
   bottom: 0;
   width: 3px;
   margin-left: -1.5px;
-  background: linear-gradient(180deg, #c7d2fe 0%, #a5b4fc 50%, #818cf8 100%);
-  border-radius: 3px;
+  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 45%, #64748b 100%);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.65),
+    0 2px 10px rgba(100, 116, 139, 0.2);
 `
 
 /** 연도 노드 — 작은 도트 */
 const TimelineNode = styled.span`
   position: absolute;
   left: 50%;
-  top: 6px;
+  top: 50%;
   width: 8px;
   height: 8px;
   margin-left: -4px;
+  margin-top: -4px;
   border-radius: 50%;
-  background: ${ACCENT};
-  box-shadow: 0 0 0 3px #fff;
+  background: #334155;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px rgba(148, 163, 184, 0.2);
   flex-shrink: 0;
 `
 
@@ -1290,25 +1492,28 @@ const CenturySpanBlock = styled.div`
 
 const TimelineLabelWrap = styled.span`
   position: absolute;
-  left: 0;
-  top: 0;
+  left: 50%;
+  top: 50%;
+  transform: translate(-100%, -50%);
+  padding-right: 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  align-items: flex-end;
 `
 
 const TimelineLabel = styled.span`
   font-size: 12px;
   font-weight: 600;
-  color: #334155;
+  color: #475569;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  padding: 5px 12px;
-  background: #fff;
-  border: 1px solid ${BORDER_SUBTLE};
-  border-radius: 8px;
+  padding: 4px 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
   display: inline-block;
-  box-shadow: ${SHADOW_SOFT};
+  box-shadow: none;
 `
 
 const TreeArea = styled.div`
@@ -1416,13 +1621,15 @@ const TreeCardYearBased = styled.div`
   position: absolute;
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
-  padding: 20px 22px;
+  padding: 16px 16px 14px;
   background: #fff;
-  border: 1px solid ${BORDER_SUBTLE};
-  border-radius: 10px;
-  box-shadow: ${SHADOW_CARD};
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
   cursor: pointer;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -1432,8 +1639,8 @@ const TreeCardYearBased = styled.div`
   word-break: break-word;
 
   &:hover {
-    box-shadow: ${SHADOW_CARD_HOVER};
-    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.12);
+    transform: translateY(-1px);
   }
 `
 
@@ -1448,13 +1655,15 @@ const TreeCard = styled.div`
   box-sizing: border-box;
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
-  padding: 20px 22px;
+  padding: 16px 16px 14px;
   background: #fff;
-  border: 1px solid ${BORDER_SUBTLE};
-  border-radius: 10px;
-  box-shadow: ${SHADOW_CARD};
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
   cursor: pointer;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
   position: relative;
   text-align: left;
   display: flex;
@@ -1465,27 +1674,59 @@ const TreeCard = styled.div`
   word-break: break-word;
 
   &:hover {
-    box-shadow: ${SHADOW_CARD_HOVER};
-    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.12);
+    transform: translateY(-1px);
   }
 `
 
-const TreeCardHead = styled.div`
-  margin-bottom: 12px;
+const TreeCardTopRow = styled.div`
+  width: 100%;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+`
+
+const TreeCardPrimaryMeta = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
 `
 
 /** 직책별 뱃지 색 — 라벨 문자열로 일관된 색 부여 */
 const BADGE_PALETTE = [
-  { bg: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', border: 'rgba(99, 102, 241, 0.25)' },
-  { bg: 'rgba(16, 185, 129, 0.12)', color: '#047857', border: 'rgba(16, 185, 129, 0.25)' },
-  { bg: 'rgba(245, 158, 11, 0.12)', color: '#b45309', border: 'rgba(245, 158, 11, 0.25)' },
-  { bg: 'rgba(236, 72, 153, 0.12)', color: '#be185d', border: 'rgba(236, 72, 153, 0.25)' },
-  { bg: 'rgba(139, 92, 246, 0.12)', color: '#6d28d9', border: 'rgba(139, 92, 246, 0.25)' },
-  { bg: 'rgba(14, 165, 233, 0.12)', color: '#0369a1', border: 'rgba(14, 165, 233, 0.25)' },
+  {
+    bg: 'rgba(99, 102, 241, 0.12)',
+    color: '#4f46e5',
+    border: 'rgba(99, 102, 241, 0.25)',
+  },
+  {
+    bg: 'rgba(16, 185, 129, 0.12)',
+    color: '#047857',
+    border: 'rgba(16, 185, 129, 0.25)',
+  },
+  {
+    bg: 'rgba(245, 158, 11, 0.12)',
+    color: '#b45309',
+    border: 'rgba(245, 158, 11, 0.25)',
+  },
+  {
+    bg: 'rgba(236, 72, 153, 0.12)',
+    color: '#be185d',
+    border: 'rgba(236, 72, 153, 0.25)',
+  },
+  {
+    bg: 'rgba(139, 92, 246, 0.12)',
+    color: '#6d28d9',
+    border: 'rgba(139, 92, 246, 0.25)',
+  },
+  {
+    bg: 'rgba(14, 165, 233, 0.12)',
+    color: '#0369a1',
+    border: 'rgba(14, 165, 233, 0.25)',
+  },
 ] as const
 
 function getBadgeColorsForLabel(label: string): (typeof BADGE_PALETTE)[number] {
@@ -1495,65 +1736,39 @@ function getBadgeColorsForLabel(label: string): (typeof BADGE_PALETTE)[number] {
   return BADGE_PALETTE[idx]
 }
 
-const TreeCardPositionBadge = styled.span<{
-  $badgeBg?: string
-  $badgeColor?: string
-  $badgeBorder?: string
-}>`
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: ${({ $badgeBg }) => $badgeBg ?? 'rgba(99, 102, 241, 0.08)'};
-  color: ${({ $badgeColor }) => $badgeColor ?? ACCENT};
-  ${({ $badgeBorder }) => ($badgeBorder != null ? `border: 1px solid ${$badgeBorder};` : '')}
-`
-
-/** 몇 대(초대/제N대) — 카드에서 가장 중요 */
-const TreeCardOrder = styled.div`
-  font-size: 22px;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.04em;
-  line-height: 1.25;
-  margin-bottom: 8px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
-/** 재임 기간 — 두 번째로 강조, 잘 보이게 */
+/** 재임 메타(제N대 · YYYY~YYYY) — 카드 상단 강조 */
 const TreeCardReign = styled.div`
-  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  font-size: 13px;
   font-weight: 700;
-  color: #334155;
-  margin-bottom: 10px;
+  color: #1e3a8a;
+  margin-bottom: 2px;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1.35;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 `
 
 const TreeCardMainName = styled.div`
-  font-size: 14px;
-  font-weight: 500;
-  color: #475569;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
   letter-spacing: -0.02em;
-  line-height: 1.35;
-  margin-bottom: 4px;
+  line-height: 1.3;
+  margin-bottom: 3px;
   max-width: 100%;
   overflow-wrap: break-word;
 `
 
 const TreeCardSubName = styled.div`
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
   color: #64748b;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   line-height: 1.4;
   max-width: 100%;
   overflow-wrap: break-word;
@@ -1561,9 +1776,9 @@ const TreeCardSubName = styled.div`
 
 const TreeCardDynasty = styled.div`
   font-size: 12px;
-  font-weight: 500;
-  color: #7c3aed;
-  margin-bottom: 6px;
+  font-weight: 600;
+  color: #6d28d9;
+  margin-bottom: 4px;
   line-height: 1.4;
   max-width: 100%;
   overflow-wrap: break-word;
@@ -1572,11 +1787,10 @@ const TreeCardDynasty = styled.div`
 const TreeCardRelation = styled.div`
   font-size: 12px;
   color: #475569;
-  font-weight: 400;
-  margin-bottom: 6px;
-  padding: 6px 10px;
-  background: #f8fafc;
-  border-radius: 8px;
+  font-weight: 500;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
   line-height: 1.4;
 `
 
@@ -1591,16 +1805,13 @@ const TreeCardTitle = styled.div`
   font-size: 12px;
   font-weight: 500;
   color: #475569;
-  margin-top: 4px;
+  margin-top: 2px;
   line-height: 1.4;
 `
 
 const TreeCardAvatar = styled.div<{ $hasImage?: boolean }>`
-  position: absolute;
-  top: 24px;
-  right: 24px;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   overflow: hidden;
   background: ${({ $hasImage }) => ($hasImage ? '#f1f5f9' : '#e0e7ff')};
@@ -1608,6 +1819,7 @@ const TreeCardAvatar = styled.div<{ $hasImage?: boolean }>`
   align-items: center;
   justify-content: center;
   color: ${ACCENT};
+  flex-shrink: 0;
 
   img {
     width: 100%;

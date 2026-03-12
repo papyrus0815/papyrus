@@ -29,7 +29,7 @@ export type AdministrationDepartmentResponseDto = {
   id: string
   name: string
   thumbnailUrl: string | null
-  countryId: string
+  countryId: string | null
   parentId: string | null
   categoryId: string | null
   category: AdministrationDepartmentCategoryDto | null
@@ -117,7 +117,7 @@ export class AdministrationDepartmentController {
     id: string
     name: string
     thumbnailUrl: string | null
-    countryId: string
+    countryId: string | null
     parentId: string | null
     categoryId: string | null
     description: string | null
@@ -133,7 +133,7 @@ export class AdministrationDepartmentController {
       id: row.id,
       name: row.name,
       thumbnailUrl: row.thumbnailUrl ?? null,
-      countryId: row.countryId,
+      countryId: row.countryId ?? null,
       parentId: row.parentId ?? null,
       categoryId: row.categoryId ?? null,
       category: row.category

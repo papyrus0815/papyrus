@@ -389,6 +389,14 @@ export class PersonService {
     return this.personRepository.createCabinet(dto, accountId)
   }
 
+  async updateCabinet(
+    cabinetId: string,
+    dto: { name?: string | null },
+    accountId?: string,
+  ): Promise<any> {
+    return this.personRepository.updateCabinet(cabinetId, dto, accountId)
+  }
+
   async deleteCabinet(cabinetId: string, accountId?: string): Promise<void> {
     return this.personRepository.deleteCabinet(cabinetId, accountId)
   }

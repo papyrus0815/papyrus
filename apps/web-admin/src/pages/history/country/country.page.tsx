@@ -43,7 +43,7 @@ import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-sect
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
 import { DashboardEventDetailPage } from '@/pages/history/country/dashboard-event-detail.page'
 import { EventsTimelineSection } from '@/widgets/country/country-detail/ui/events-timeline-section.widget'
-import { CountryForm } from '@/widgets/country/country-form'
+import { CountryFormModal } from '@/widgets/country/country-form'
 import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
 import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
 import {
@@ -60,12 +60,16 @@ import * as S from './country.styles'
 function DashboardMenuContent({
   view,
   onNavigateFullPage,
+  onNavigateAdministration,
+  hasSelectedCountry,
 }: {
   view: Exclude<
     DashboardContentView,
     'stats' | 'person' | 'dynasty' | 'ethnicity' | 'events'
   >
   onNavigateFullPage: (path: string) => void
+  onNavigateAdministration: () => void
+  hasSelectedCountry: boolean
 }) {
   const configs: Record<
     Exclude<
@@ -100,6 +104,14 @@ function DashboardMenuContent({
     <S.DashboardMenuContentPanel>
       <S.DashboardMenuContentTitle>{title}</S.DashboardMenuContentTitle>
       <S.DashboardMenuContentDesc>{desc}</S.DashboardMenuContentDesc>
+      {view === 'administration' && (
+        <S.DashboardMenuContentButton
+          type="button"
+          onClick={onNavigateAdministration}
+        >
+          {hasSelectedCountry ? '선택 국가 행정조직 열기' : '국가를 먼저 선택하세요'}
+        </S.DashboardMenuContentButton>
+      )}
       {fullPath && fullLabel && (
         <S.DashboardMenuContentButton
           type="button"
@@ -1102,6 +1114,14 @@ export default function CountryPage() {
                     <DashboardMenuContent
                       view={dashboardContentView}
                       onNavigateFullPage={navigate}
+                      hasSelectedCountry={Boolean(selectedId)}
+                      onNavigateAdministration={() => {
+                        if (!selectedId) {
+                          toast('좌측 목록에서 국가를 먼저 선택해 주세요.')
+                          return
+                        }
+                        navigate(pathKeys.history.countryGovernment(selectedId))
+                      }}
                     />
                   )}
                 </motion.div>
@@ -1193,10 +1213,11 @@ export default function CountryPage() {
         />
       </CountryListStateProvider>
 
-      <CountryForm
+      <CountryFormModal
+        isOpen={!!editing}
+        onClose={() => setEditing(null)}
         editing={editing}
         continents={CONTINENTS}
-        onClose={() => setEditing(null)}
         onSave={handleSave}
       />
 

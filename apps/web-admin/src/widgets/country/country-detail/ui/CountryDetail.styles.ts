@@ -563,9 +563,15 @@ export const PersonInnerPillNav = styled.nav`
   gap: 6px;
   padding: 6px;
   margin-bottom: 20px;
+  max-width: 100%;
   width: fit-content;
   background: #f1f5f9;
   border-radius: 20px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `
 
 export const PersonInnerPillBtn = styled.button<{ $active?: boolean }>`
@@ -588,42 +594,43 @@ export const PersonInnerPillBtn = styled.button<{ $active?: boolean }>`
 
 /** 인물 탭 공통 헤더 — 전체 사건(EventsTimelineSection)과 동일: paddingBottom 24px, 다음 요소와 gap 32px */
 export const PersonTabSharedHeader = styled.header`
-  padding: 0 0 24px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px;
-  align-items: start;
-  gap: 24px;
+  padding: 0 0 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e9eef5;
+  margin-bottom: 24px;
 `
 
 /** 헤더 왼쪽 블록 — 제목·설명 항상 같은 영역 */
 export const PersonTabSharedHeaderLeft = styled.div`
   min-width: 0;
+  flex: 1;
 `
 
 export const PersonTabSharedTitle = styled.h2`
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
   color: #0f172a;
-  letter-spacing: -0.04em;
-  line-height: 1.25;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
 `
 
 export const PersonTabSharedDesc = styled.p`
-  margin: 10px 0 0 0;
-  font-size: 15px;
-  color: #64748b;
-  line-height: 1.55;
-  max-width: 540px;
-  font-weight: 500;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
 `
 
-/** 헤더 오른쪽 슬롯 — 항상 같은 너비로 두어 왼쪽 문구 위치 고정 */
+/** 헤더 오른쪽 슬롯 */
 export const PersonTabSharedHeaderRight = styled.div`
-  width: 140px;
   flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 `
 
 export const SimpleHeaderSubtitle = styled.p`
@@ -1499,8 +1506,8 @@ export const MiniFlagWrapper = styled.div`
   overflow: hidden;
   z-index: 1;
   border-radius: 0;
-  margin-right: -16px;
-  width: calc(100% + 16px);
+  margin-right: 0;
+  width: 100%;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.06),
     0 2px 12px rgba(0, 0, 0, 0.03);
@@ -1563,7 +1570,7 @@ export const CountryNameOverlay = styled.div`
 /** 국가명 글래스 패널 - 가독성·트렌디한 톤 */
 export const CountryNameGlass = styled.div`
   padding: 20px 24px;
-  border-radius: 0;
+  border-radius: 12px;
   background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1576,6 +1583,7 @@ export const CountryNameGlass = styled.div`
   @media (max-width: 768px) {
     padding: 14px 18px;
     min-width: 100px;
+    border-radius: 10px;
   }
 `
 

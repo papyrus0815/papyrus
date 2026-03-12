@@ -135,120 +135,57 @@ function getCentury(
 
 const CENTURY_UNKNOWN = 999
 
-// ─── Styled (인물 통계 헤더 참조: 타이틀·설명·KPI·툴바 간격 확대) ───
+// ─── Styled ───────────────────────────────────────────────────────────────────
 const ListHeader = styled.header<{ $compact?: boolean }>`
   display: flex;
-  flex-direction: column;
-  gap: 32px;
-  padding-bottom: 24px;
-  margin-bottom: 28px;
-  border-bottom: 1px solid #e2e8f0;
-  /* compact: KPI 컨테이너 상단 간격만 제거, 아래 간격(툴바 등)은 32px 유지 */
-  ${(p) =>
-    p.$compact &&
-    `
-    > *:nth-child(2) {
-      margin-top: -32px;
-    }
-  `}
-`
-
-const ListHeaderRow = styled.div`
-  display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px;
   flex-wrap: wrap;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
 `
 
-const ListHeaderTitleBlock = styled.div`
+const ListHeaderLeft = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 2px;
 `
 
-const ListHeaderTitle = styled.h1`
+const ListHeaderTitle = styled.h2`
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 700;
   color: #0f172a;
-  letter-spacing: -0.04em;
-  line-height: 1.25;
   display: flex;
   align-items: baseline;
-  gap: 8px;
-`
-
-const ListHeaderDesc = styled.p`
-  margin: 10px 0 0 0;
-  font-size: 15px;
-  color: #64748b;
-  line-height: 1.55;
-  max-width: 540px;
-  font-weight: 500;
-`
-
-const ListHeaderDot = styled.span`
-  color: #cbd5e1;
-  font-weight: 400;
+  gap: 6px;
 `
 
 const ListHeaderCount = styled.span`
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
-`
-
-const ListKpiStrip = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  flex-wrap: wrap;
-  padding: 20px 28px;
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  margin-bottom: 4px;
-`
-
-const ListKpiItem = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  span:first-child {
-    font-size: 12px;
-    font-weight: 600;
-    color: #64748b;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  span:last-child {
-    font-size: 20px;
-    font-weight: 700;
-    color: #0f172a;
-    letter-spacing: -0.03em;
-  }
+  font-size: 13px;
+  font-weight: 400;
+  color: #94a3b8;
 `
 
 const ToolbarRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 4px;
 `
 
 const SearchWrap = styled.div`
   flex: 1;
-  min-width: 200px;
-  max-width: 280px;
+  min-width: 180px;
+  max-width: 240px;
   position: relative;
 `
 
 const SearchIcon = styled.span`
   position: absolute;
-  left: 12px;
+  left: 10px;
   top: 50%;
   transform: translateY(-50%);
   color: #94a3b8;
@@ -258,103 +195,76 @@ const SearchIcon = styled.span`
 
 const SearchInput = styled.input`
   width: 100%;
-  padding: 12px 16px 12px 38px;
-  font-size: 14px;
+  padding: 8px 12px 8px 32px;
+  font-size: 13px;
   color: #111827;
-  background: #fff;
+  background: #f8fafc;
   border: 1px solid ${BORDER_COLOR};
-  border-radius: 12px;
+  border-radius: 8px;
   outline: none;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
-  &::placeholder {
-    color: #9ca3af;
-  }
-  &:hover {
-    border-color: #d1d5db;
-  }
+  &::placeholder { color: #9ca3af; }
+  &:hover { border-color: #d1d5db; }
   &:focus {
     border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.07);
   }
 `
 
 const FilterSelect = styled.select`
-  padding: 12px 32px 12px 16px;
-  font-size: 14px;
+  padding: 8px 28px 8px 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: #111827;
-  background-color: #fff;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  color: #374151;
+  background-color: #f8fafc;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 12px center;
+  background-position: right 10px center;
   border: 1px solid ${BORDER_COLOR};
-  border-radius: 12px;
+  border-radius: 8px;
   outline: none;
   cursor: pointer;
   appearance: none;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-  &:hover {
-    border-color: #d1d5db;
-  }
-  &:focus {
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
+  transition: border-color 0.15s;
+  &:hover { border-color: #d1d5db; background-color: #fff; }
+  &:focus { border-color: ${FOCUS_COLOR}; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.07); }
 `
 
 const CountryFilterBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  font-size: 14px;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: ${(p) => (p.$active ? '#fff' : '#111827')};
-  background: ${(p) => (p.$active ? '#6366f1' : '#fff')};
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 12px;
+  color: ${(p) => (p.$active ? '#4f46e5' : '#374151')};
+  background: ${(p) => (p.$active ? '#eef2ff' : '#f8fafc')};
+  border: 1px solid ${(p) => (p.$active ? '#c7d2fe' : BORDER_COLOR)};
+  border-radius: 8px;
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
-  &:hover {
-    border-color: #d1d5db;
-    background: ${(p) => (p.$active ? '#4f46e5' : '#f9fafb')};
-  }
-  &:focus {
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
+  transition: all 0.15s;
+  &:hover { border-color: #d1d5db; background: #fff; }
 `
 
 const CreateButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 6px;
+  padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
   color: #ffffff;
   background: #6366f1;
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-  &:hover:not(:disabled) {
-    background: #4f46e5;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  transition: background 0.15s;
+  white-space: nowrap;
+  &:hover:not(:disabled) { background: #4f46e5; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 `
 
 /** 관직 카테고리 필터 버튼 (주요 유형만) */
@@ -372,26 +282,26 @@ const POSITION_CATEGORY_OPTIONS: { value: string; label: string }[] = [
 ]
 
 const CategoryBtn = styled.button<{ $active?: boolean }>`
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${(p) => (p.$active ? '#fff' : '#64748b')};
-  background: ${(p) => (p.$active ? '#6366f1' : '#f1f5f9')};
-  border: none;
-  border-radius: 10px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: ${(p) => (p.$active ? '600' : '400')};
+  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
+  background: ${(p) => (p.$active ? '#eef2ff' : 'transparent')};
+  border: 1px solid ${(p) => (p.$active ? '#c7d2fe' : 'transparent')};
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.12s;
   white-space: nowrap;
   &:hover {
-    background: ${(p) => (p.$active ? '#4f46e5' : '#e2e8f0')};
-    color: ${(p) => (p.$active ? '#fff' : '#475569')};
+    background: ${(p) => (p.$active ? '#e0e7ff' : '#f1f5f9')};
+    color: ${(p) => (p.$active ? '#4338ca' : '#334155')};
   }
 `
 
 const CategoryBtnGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 2px;
   align-items: center;
 `
 
@@ -401,6 +311,11 @@ const ListSectionWrap = styled.div`
   display: flex;
   flex-direction: column;
   background: #ffffff;
+  padding: 20px 28px 48px;
+
+  @media (max-width: 768px) {
+    padding: 16px 16px 40px;
+  }
 `
 
 const ListScrollArea = styled.div`
@@ -413,6 +328,13 @@ const DetailViewWrap = styled.div`
   min-width: 0;
   min-height: 60vh;
   background: #ffffff;
+  padding: 28px 36px 56px;
+  max-width: 860px;
+  margin: 0 auto;
+
+  @media (max-width: 768px) {
+    padding: 20px 16px 40px;
+  }
 `
 
 const RegisterFormWrap = styled.div`
@@ -422,73 +344,77 @@ const RegisterFormWrap = styled.div`
 
 const AdaptiveGrid = styled.div`
   display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  @media (min-width: 1200px) {
-    gap: 24px;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  @media (min-width: 1400px) {
+    gap: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   }
   @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 `
 
 const CenturySection = styled.section`
-  margin-bottom: 28px;
-  &:last-child {
-    margin-bottom: 0;
-  }
+  margin-bottom: 32px;
+  &:last-child { margin-bottom: 0; }
 `
 
 const CenturyHeading = styled.h3`
-  margin: 0 0 12px 0;
-  font-size: 14px;
+  margin: 0 0 14px 0;
+  font-size: 11px;
   font-weight: 700;
-  color: #6366f1;
-  letter-spacing: -0.02em;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 `
 
 const Card = styled.div`
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 0;
   border: 1px solid ${BORDER_COLOR};
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   cursor: pointer;
   overflow: hidden;
   &:hover {
-    border-color: #d1d5db;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    border-color: #c7d2fe;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.1);
+    transform: translateY(-1px);
   }
 `
 
 const CardImageWrapper = styled.div`
   width: 100%;
   aspect-ratio: 3 / 4;
-  max-height: 320px;
-  min-height: 200px;
+  max-height: 260px;
+  min-height: 160px;
   position: relative;
   overflow: hidden;
-  background: #ffffff;
+  background: #f8fafc;
 `
 
 const NewBadge = styled.span`
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 1;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 800;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
   color: #fff;
   background: #dc2626;
-  border-radius: 6px;
+  border-radius: 4px;
   letter-spacing: 0.04em;
-  box-shadow: 0 2px 10px rgba(220, 38, 38, 0.5);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+  animation: newBadgePulse 2s ease-in-out infinite;
+
+  @keyframes newBadgePulse {
+    0%   { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+    60%  { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  }
 `
 
 const CardImage = styled.img`
@@ -497,9 +423,7 @@ const CardImage = styled.img`
   object-fit: cover;
   object-position: top center;
   transition: transform 0.3s ease;
-  ${Card}:hover & {
-    transform: scale(1.02);
-  }
+  ${Card}:hover & { transform: scale(1.03); }
 `
 
 const CardImagePlaceholder = styled.div`
@@ -508,35 +432,33 @@ const CardImagePlaceholder = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
+  background: #f8fafc;
   border-bottom: 1px solid ${BORDER_COLOR};
   color: #e2e8f0;
-  svg {
-    width: 40px;
-    height: 40px;
-  }
+  svg { width: 36px; height: 36px; }
 `
 
 const CardContent = styled.div`
-  padding: 18px 20px 20px;
+  padding: 14px 16px 16px;
 `
 
 const PersonInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 `
 
 const CardTitleRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 1px;
 `
 
 const PersonName = styled.h3`
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #0f172a;
   letter-spacing: -0.01em;
@@ -548,77 +470,80 @@ const PersonName = styled.h3`
 `
 
 const CardGender = styled.span`
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #94a3b8;
   flex-shrink: 0;
 `
 
 const PersonLifespan = styled.div`
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 400;
   color: #64748b;
   line-height: 1.4;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 `
 
 const CardDynasty = styled.div`
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+  color: #94a3b8;
 `
 
 /** 카드 이름 앞 국기/국가 표시 */
 const CardCountryPrefix = styled.span`
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.35;
   color: #64748b;
   font-weight: 500;
 `
 
-/** 역대 수반 단일 배지 — 깔끔한 pill */
+/** 역대 수반 단일 배지 */
 const CardHeadsBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  font-size: 11px;
+  padding: 2px 7px;
+  font-size: 10px;
   font-weight: 600;
   color: #4f46e5;
-  background: #f5f3ff;
-  border: 1px solid #ddd6fe;
-  border-radius: 6px;
-  letter-spacing: 0.02em;
+  background: #eef2ff;
+  border-radius: 4px;
+  letter-spacing: 0.01em;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
-const TombstoneIcon = styled.span`
-  font-size: 12px;
-  line-height: 1;
-  flex-shrink: 0;
+const CardBadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
 `
 
 const CardBio = styled.p`
-  margin: 6px 0 0 0;
-  font-size: 13px;
-  color: #64748b;
+  margin: 5px 0 0 0;
+  font-size: 12px;
+  color: #94a3b8;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 `
 
 const EmptyState = styled.div`
-  padding: 48px 24px;
+  padding: 60px 24px;
   text-align: center;
-  font-size: 14px;
-  font-weight: 500;
-  color: #64748b;
-  background: #ffffff;
-  border: 1px dashed ${BORDER_COLOR};
-  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #94a3b8;
+  background: #fafafa;
+  border-radius: 10px;
 `
 
 export function PersonListContent({
@@ -651,7 +576,7 @@ export function PersonListContent({
   const filteredPersons = useMemo(() => {
     return persons.filter((person) => {
       const name = getPersonDisplayName(person, true)
-      const bio = person.biography?.replace(/\s+/g, ' ').trim() || ''
+      const bio = (person.biography?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) || ''
       const dynastyName =
         person.dynasty?.name ??
         (person.dynastyId != null
@@ -756,94 +681,21 @@ export function PersonListContent({
         ) : (
           <ListSectionWrap key="list">
             <ListHeader $compact={hideMainHeader}>
-              <ListHeaderRow>
-                {!hideMainHeader ? (
-                  <ListHeaderTitleBlock>
-                    <ListHeaderTitle>
-                      {title}
-                      <ListHeaderDot>·</ListHeaderDot>
-                      <ListHeaderCount>
-                        {filteredPersons.length}명
-                        {(searchQuery.trim() ||
-                          filterGender ||
-                          filterPositionType ||
-                          filterCountryIds.length > 0) &&
-                          ` / 전체 ${persons.length}명`}
-                      </ListHeaderCount>
-                    </ListHeaderTitle>
-                    <ListHeaderDesc>
-                      이름·약력·가문 검색, 필터로 찾을 수 있습니다.
-                    </ListHeaderDesc>
-                  </ListHeaderTitleBlock>
-                ) : (
-                  <span style={{ flex: 1 }} />
+              <ListHeaderLeft>
+                {!hideMainHeader && (
+                  <ListHeaderTitle>
+                    {title}
+                    <ListHeaderCount>
+                      {filteredPersons.length}명
+                      {(searchQuery.trim() || filterGender || filterPositionType || filterCountryIds.length > 0) &&
+                        ` / ${persons.length}명`}
+                    </ListHeaderCount>
+                  </ListHeaderTitle>
                 )}
-                {!hideCreateButton && (
-                  <CreateButton
-                    type="button"
-                    onClick={() => {
-                      setEditingPersonId(null)
-                      setShowRegisterForm(true)
-                    }}
-                    aria-label="인물 등록"
-                  >
-                    <FiPlus size={18} />
-                  </CreateButton>
-                )}
-              </ListHeaderRow>
-              <ListKpiStrip>
-                <ListKpiItem>
-                  <span>총 인물</span>
-                  <span>
-                    {filteredPersons.length}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        marginLeft: 2,
-                      }}
-                    >
-                      명
-                    </span>
-                  </span>
-                </ListKpiItem>
-                <ListKpiItem>
-                  <span>남 / 여</span>
-                  <span>
-                    {filteredPersons.filter((p) => p.gender === 'MALE').length}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                      }}
-                    >
-                      {' '}
-                      /{' '}
-                    </span>
-                    {
-                      filteredPersons.filter((p) => p.gender === 'FEMALE')
-                        .length
-                    }
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        marginLeft: 2,
-                      }}
-                    >
-                      명
-                    </span>
-                  </span>
-                </ListKpiItem>
-              </ListKpiStrip>
+              </ListHeaderLeft>
               <ToolbarRow>
                 <SearchWrap>
-                  <SearchIcon>
-                    <FiSearch size={16} />
-                  </SearchIcon>
+                  <SearchIcon><FiSearch size={14} /></SearchIcon>
                   <SearchInput
                     type="search"
                     placeholder="이름, 약력, 가문 검색"
@@ -868,28 +720,36 @@ export function PersonListContent({
                     onClick={() => setShowCountryModal(true)}
                     aria-label="국가 필터"
                   >
-                    <FiGlobe size={14} />
-                    {filterCountryIds.length > 0
-                      ? `국가 ${filterCountryIds.length}개`
-                      : '국가'}
+                    <FiGlobe size={13} />
+                    {filterCountryIds.length > 0 ? `국가 ${filterCountryIds.length}개` : '국가'}
                   </CountryFilterBtn>
                 )}
-              </ToolbarRow>
-              <ToolbarRow style={{ marginTop: 4 }}>
-                <CategoryBtnGroup role="group" aria-label="관직 카테고리 필터">
-                  {POSITION_CATEGORY_OPTIONS.map((opt) => (
-                    <CategoryBtn
-                      key={opt.value || 'all'}
-                      type="button"
-                      $active={filterPositionType === opt.value}
-                      onClick={() => setFilterPositionType(opt.value)}
-                    >
-                      {opt.label}
-                    </CategoryBtn>
-                  ))}
-                </CategoryBtnGroup>
+                {!hideCreateButton && (
+                  <CreateButton
+                    type="button"
+                    onClick={() => { setEditingPersonId(null); setShowRegisterForm(true) }}
+                    aria-label="인물 등록"
+                  >
+                    <FiPlus size={14} />
+                    인물 등록
+                  </CreateButton>
+                )}
               </ToolbarRow>
             </ListHeader>
+            <ToolbarRow style={{ marginBottom: 16 }}>
+              <CategoryBtnGroup role="group" aria-label="관직 카테고리 필터">
+                {POSITION_CATEGORY_OPTIONS.map((opt) => (
+                  <CategoryBtn
+                    key={opt.value || 'all'}
+                    type="button"
+                    $active={filterPositionType === opt.value}
+                    onClick={() => setFilterPositionType(opt.value)}
+                  >
+                    {opt.label}
+                  </CategoryBtn>
+                ))}
+              </CategoryBtnGroup>
+            </ToolbarRow>
             {persons.length === 0 ? (
               <EmptyState>{emptyMessage}</EmptyState>
             ) : filteredPersons.length === 0 ? (
@@ -922,8 +782,20 @@ export function PersonListContent({
                             : person.gender === 'FEMALE'
                               ? '여'
                               : null
-                        const bioText =
-                          person.biography?.replace(/\s+/g, ' ').trim() || ''
+                        const bioText = (() => {
+                          const raw = person.biography?.trim() || ''
+                          if (!raw) return ''
+                          // HTML 태그 제거
+                          return raw
+                            .replace(/<[^>]+>/g, ' ')
+                            .replace(/&nbsp;/g, ' ')
+                            .replace(/&amp;/g, '&')
+                            .replace(/&lt;/g, '<')
+                            .replace(/&gt;/g, '>')
+                            .replace(/&quot;/g, '"')
+                            .replace(/\s+/g, ' ')
+                            .trim()
+                        })()
                         const bioExcerpt =
                           bioText.length > 120
                             ? `${bioText.slice(0, 120)}…`
@@ -963,37 +835,26 @@ export function PersonListContent({
                             <CardContent>
                               <PersonInfo>
                                 <CardTitleRow>
-                                  {person.country && (
-                                    <CardCountryPrefix>
-                                      {person.country.flagEmoji
-                                        ? person.country.flagEmoji
-                                        : `[${person.country.name}]`}
-                                    </CardCountryPrefix>
-                                  )}
-                                  <PersonName>
-                                    {fullName || '(이름 없음)'}
-                                  </PersonName>
-                                  {genderLabel && (
-                                    <CardGender>{genderLabel}</CardGender>
-                                  )}
+                                  <PersonName>{fullName || '(이름 없음)'}</PersonName>
                                 </CardTitleRow>
                                 <PersonLifespan>
-                                  {isDeceased && (
-                                    <TombstoneIcon aria-hidden>
-                                      🪦
-                                    </TombstoneIcon>
-                                  )}
-                                  {lifespan}
+                                  {lifespan}{isDeceased ? ' · 사망' : ''}
                                 </PersonLifespan>
                                 {dynastyName && (
-                                  <CardDynasty title="가문">
-                                    가문: {dynastyName}
-                                  </CardDynasty>
+                                  <CardDynasty>{dynastyName}</CardDynasty>
                                 )}
                                 {(person.governmentTenures?.length ?? 0) > 0 && (
-                                  <div style={{ marginTop: 8 }}>
-                                    <CardHeadsBadge>역대 수반</CardHeadsBadge>
-                                  </div>
+                                  <CardBadgeRow>
+                                    {Array.from(
+                                      new Set(
+                                        person.governmentTenures!
+                                          .map(t => t.positionDefinition?.title ?? t.title)
+                                          .filter(Boolean)
+                                      )
+                                    ).slice(0, 2).map((title, i) => (
+                                      <CardHeadsBadge key={i}>{title}</CardHeadsBadge>
+                                    ))}
+                                  </CardBadgeRow>
                                 )}
                                 {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
                               </PersonInfo>

@@ -1,7 +1,7 @@
 /**
  * 국가 선택 모달 컴포넌트
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -78,9 +78,22 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
     if (!searchQuery.trim()) return countries
 
     const query = searchQuery.toLowerCase()
-    return countries.filter((country) =>
-      country.name.toLowerCase().includes(query),
-    )
+    return countries.filter((country) => {
+      const modern = country as CountryResponseDto
+      const historical = country as HistoricalCountryResponseDto
+      const candidates = [
+        country.name,
+        modern.localName,
+        modern.isoCode,
+        (modern as { continent?: string }).continent,
+        historical.enName,
+      ]
+      return candidates.some((value) =>
+        String(value ?? '')
+          .toLowerCase()
+          .includes(query),
+      )
+    })
   }
 
   const filteredModernCountries = filterCountries(modernCountries)
@@ -160,6 +173,11 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
       : filteredHistoricalCountries,
   )
 
+  const selectedCount = useMemo(() => {
+    if (multiSelect) return selectedCountryIds.length
+    return selectedCountryId ? 1 : 0
+  }, [multiSelect, selectedCountryIds.length, selectedCountryId])
+
   return (
     <Overlay onClick={onClose}>
       <ModalContainer onClick={(e) => e.stopPropagation()}>
@@ -182,7 +200,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
               </SearchIcon>
               <SearchInput
                 type="text"
-                placeholder="국가명으로 검색..."
+                placeholder="국가명, 현지명, ISO 코드로 검색..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 autoFocus
@@ -284,6 +302,11 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                 </SortOrderBtn>
               </SortOrderGroup>
             </SortRow>
+            <ResultSummary aria-live="polite">
+              {searchQuery.trim()
+                ? `"${searchQuery}" 검색 결과 ${displayCountries.length}개`
+                : `${countryType === 'modern' ? '현대 국가' : '역사적 국가'} ${displayCountries.length}개`}
+            </ResultSummary>
           </TabSection>
 
           {/* 국가 목록 - 카드 그리드 */}
@@ -383,6 +406,16 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
             )}
           </CardGrid>
         </ModalBody>
+        <ModalFooter>
+          <FooterInfo>
+            {multiSelect ? `선택 ${selectedCount}개` : `선택 ${selectedCount > 0 ? '완료' : '안 됨'}`}
+          </FooterInfo>
+          <FooterActions>
+            <FooterButton type="button" onClick={onClose}>
+              {multiSelect ? '선택 완료' : '닫기'}
+            </FooterButton>
+          </FooterActions>
+        </ModalFooter>
       </ModalContainer>
     </Overlay>
   )
@@ -401,8 +434,8 @@ const TEXT_SUBTLE = '#94a3b8'
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -417,13 +450,17 @@ const Overlay = styled.div`
 
 const ModalContainer = styled.div`
   background: #ffffff;
-  border-radius: 20px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  border-radius: 22px;
+  border: 1px solid #e2e8f0;
+  box-shadow:
+    0 28px 60px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.4);
   width: 100%;
   max-width: 800px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   animation: modalUp 0.25s ease;
   @keyframes modalUp {
     from { transform: translateY(16px); opacity: 0; }
@@ -435,8 +472,9 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px;
+  padding: 22px 28px;
   border-bottom: 1px solid ${BORDER_LIGHT};
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 `
 
 const ModalTitle = styled.h3`
@@ -483,7 +521,7 @@ const ModalBody = styled.div`
 `
 
 const SearchSection = styled.div`
-  padding: 20px 28px;
+  padding: 16px 28px;
   border-bottom: 1px solid ${BORDER_LIGHT};
   background: #fff;
 `
@@ -547,9 +585,9 @@ const ClearButton = styled.button`
 const TabSection = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px 28px;
-  background: ${BG_MUTED};
+  gap: 10px;
+  padding: 14px 28px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid ${BORDER_LIGHT};
   flex-wrap: wrap;
 `
@@ -565,7 +603,7 @@ const Tab = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? '#fff' : TEXT_MUTED)};
   background: ${({ $active }) => ($active ? ACCENT : 'transparent')};
   border: 1px solid ${({ $active }) => ($active ? ACCENT : BORDER)};
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
 
@@ -590,6 +628,16 @@ const SortRow = styled.div`
   gap: 10px;
   margin-left: auto;
   flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
 `
 
 const SortLabel = styled.span`
@@ -620,6 +668,13 @@ const SortFieldSelect = styled.select`
 const SortOrderGroup = styled.div`
   display: flex;
   gap: 4px;
+`
+
+const ResultSummary = styled.div`
+  width: 100%;
+  font-size: 12px;
+  color: ${TEXT_MUTED};
+  padding-top: 4px;
 `
 
 const SortOrderBtn = styled.button<{ $active: boolean }>`
@@ -671,7 +726,7 @@ const CardGrid = styled.div`
 
 const CountryCard = styled.button<{ $selected: boolean }>`
   position: relative;
-  min-height: 120px;
+  min-height: 126px;
   padding: 16px 14px;
   display: flex;
   flex-direction: column;
@@ -683,7 +738,7 @@ const CountryCard = styled.button<{ $selected: boolean }>`
   color: ${({ $selected }) => ($selected ? ACCENT : TEXT)};
   background: ${({ $selected }) => ($selected ? 'rgba(99, 102, 241, 0.06)' : '#fff')};
   border: 2px solid ${({ $selected }) => ($selected ? ACCENT : BORDER)};
-  border-radius: 12px;
+  border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
@@ -692,7 +747,7 @@ const CountryCard = styled.button<{ $selected: boolean }>`
     background: ${({ $selected }) => ($selected ? 'rgba(99, 102, 241, 0.1)' : 'rgba(99, 102, 241, 0.04)')};
     border-color: ${ACCENT};
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.14);
   }
 `
 
@@ -780,4 +835,43 @@ const EmptyText = styled.div`
   font-size: 15px;
   font-weight: 500;
   color: ${TEXT_MUTED};
+`
+
+const ModalFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid ${BORDER_LIGHT};
+  background: #f8fafc;
+`
+
+const FooterInfo = styled.div`
+  font-size: 13px;
+  color: ${TEXT_MUTED};
+  font-weight: 600;
+`
+
+const FooterActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const FooterButton = styled.button`
+  border: 1px solid ${BORDER};
+  background: #fff;
+  color: ${TEXT};
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: ${ACCENT};
+    color: ${ACCENT};
+  }
 `

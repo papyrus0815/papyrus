@@ -1469,6 +1469,18 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
+    const existing = await this.prisma.cabinet.findUnique({
+      where: { headTenureId: dto.headTenureId },
+      include: {
+        headTenure: {
+          include: {
+            person: true,
+            positionDefinition: true,
+          },
+        },
+      },
+    })
+    if (existing) return serializeBigInt(existing)
     const cabinet = await this.prisma.cabinet.create({
       data: {
         headTenureId: dto.headTenureId,
@@ -1485,6 +1497,45 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     return serializeBigInt(cabinet)
+  }
+
+  async updateCabinet(
+    cabinetId: string,
+    dto: { name?: string | null },
+    accountId?: string,
+  ): Promise<any> {
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      select: { accountId: true },
+    })
+    if (!cabinet) return null
+    if (accountId != null && cabinet.accountId != null && cabinet.accountId !== accountId)
+      return null
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    const updated = await this.prisma.cabinet.update({
+      where: { id: cabinetId },
+      data: { ...(dto.name !== undefined && { name: dto.name }) },
+      include: {
+        headTenure: {
+          include: {
+            person: true,
+            positionDefinition: true,
+          },
+        },
+      },
+    })
+    return serializeBigInt(updated)
   }
 
   async deleteCabinet(cabinetId: string, accountId?: string): Promise<void> {

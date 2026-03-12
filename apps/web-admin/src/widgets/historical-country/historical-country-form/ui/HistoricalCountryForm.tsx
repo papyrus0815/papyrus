@@ -27,21 +27,22 @@ import type { TransitionEventType } from '@/shared/api/historical-countries'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal'
 import * as S from '../../../../pages/history/country/country.styles'
 
-/** 모달: FormScroll이 이미 24px 패딩을 주므로 FormSectionInner 패딩 제거해 간격 통일 */
+/** 모달: 인물 등록 모달(PersonRegisterView)과 동일 — FormSectionInner 기본 패딩(28px 32px 32px) 유지, FormHeader 24px 28px */
 const ModalFormLayoutWrap = styled.div`
   padding: 0;
   &[data-inner] {
     padding: 0;
   }
-  ${FormSectionInner} {
-    padding: 0;
-  }
+  /* 국가 등록 버튼: 하단 border 제거, 탭 메뉴와 간격 축소 */
   ${FormHeader} {
-    padding: 0 0 16px 0;
+    padding: 12px 28px 8px;
     border-bottom: none;
   }
+  ${FormSectionInner} {
+    padding-top: 16px;
+  }
   ${TabNavigation} {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
   }
   /* 섹션: 상단 보더 있는 경우(2번째 이후) — 간격 통일 */
   ${S.FormSection} {
@@ -57,6 +58,12 @@ const ModalFormLayoutWrap = styled.div`
     margin-top: 28px;
     padding-top: 32px;
     border-top: 1px solid #e5e7eb;
+  }
+  /* 중첩 섹션(존속 기간, 추가 정보): 여백만 적용 — 상단 border 제거(위 필드 그룹 border와 이중선 방지) */
+  ${S.FormSection} ${S.FormSection} {
+    margin-top: 28px;
+    padding-top: 32px;
+    border-top: none;
   }
   /* 모든 섹션 헤더(타이틀+설명) 동일 스타일·간격 */
   ${S.FormSectionHeader} {
@@ -166,36 +173,45 @@ const ModalFormLayoutWrap = styled.div`
   ${S.FormField}[data-field='thumbnail'] .thumbnail-right {
     grid-column: 2;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 12px;
     min-width: 0;
   }
-  /* 88px 원형 하나: 미리보기일 때 이미지, 없을 때 업로드 프롬프트 (인물 썸네일과 동일) */
+  /* 대표 이미지: 카드형 업로드 영역 — 원형 프리뷰 + 안내 문구 */
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle {
-    width: 88px;
-    height: 88px;
-    min-width: 88px;
-    min-height: 88px;
-    max-width: 88px;
-    max-height: 88px;
+    width: 96px;
+    height: 96px;
+    min-width: 96px;
+    min-height: 96px;
+    max-width: 96px;
+    max-height: 96px;
     border-radius: 50%;
     overflow: hidden;
-    background: rgba(226, 232, 240, 0.6);
-    border: 2px dashed rgba(99, 102, 241, 0.35);
+    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 2px dashed #cbd5e1;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
-    transition: border-color 0.2s, background 0.2s;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle:hover {
-    border-color: rgba(99, 102, 241, 0.6);
-    background: rgba(226, 232, 240, 0.9);
+    border-color: #6366f1;
+    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle[data-has-image] {
-    background: transparent;
-    border-color: transparent;
+    background: #fff;
+    border-color: #e5e7eb;
+    border-style: solid;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  }
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle[data-has-image]:hover {
+    border-color: #6366f1;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle img {
     width: 100%;
@@ -204,8 +220,13 @@ const ModalFormLayoutWrap = styled.div`
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle svg {
     color: #94a3b8;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
+  }
+  ${S.FormField}[data-field='thumbnail'] .thumbnail-hint {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
   }
   ${S.FormField}[data-field='thumbnail'] ${S.ErrorMessage} {
     grid-column: 2;
@@ -412,113 +433,28 @@ interface HistoricalCountryFormProps {
 /**
  * 역사적 국가 Form 컴포넌트
  */
-// 국가 형태 옵션
-const STATE_TYPE_OPTIONS = [
-  { value: 'EMPIRE', label: '제국', icon: '👑', desc: '황제가 통치하는 국가' },
-  { value: 'KINGDOM', label: '왕국', icon: '🏰', desc: '왕이 통치하는 국가' },
-  {
-    value: 'REPUBLIC',
-    label: '공화국',
-    icon: '🏛️',
-    desc: '선출된 대표가 통치하는 국가',
-  },
-  {
-    value: 'DYNASTY',
-    label: '왕조',
-    icon: '🎭',
-    desc: '세습적 왕가가 통치하는 국가',
-  },
-  {
-    value: 'SHOGUNATE',
-    label: '막부',
-    icon: '⚔️',
-    desc: '쇼군이 실권을 가진 군정 (무로마치·에도 막부 등)',
-  },
-  {
-    value: 'HEREDITARY',
-    label: '세습',
-    icon: '🏛️',
-    desc: '세습적 통치가 이어지는 정치체',
-  },
-  {
-    value: 'FEDERATION',
-    label: '연방',
-    icon: '🤝',
-    desc: '여러 국가의 연합체',
-  },
-  {
-    value: 'PRINCIPALITY',
-    label: '공국',
-    icon: '🎪',
-    desc: '공작이 통치하는 국가',
-  },
-  {
-    value: 'ELECTORATE',
-    label: '선제후국',
-    icon: '⚜️',
-    desc: '황제 선출권을 가진 제후의 영토',
-  },
-  {
-    value: 'MARGRAVIATE',
-    label: '변경백령',
-    icon: '🏴',
-    desc: '변경백이 다스리는 변경 지대의 영토',
-  },
-  {
-    value: 'CALIPHATE',
-    label: '칼리프국',
-    icon: '☪️',
-    desc: '이슬람 지도자가 통치하는 국가',
-  },
-  {
-    value: 'SULTANATE',
-    label: '술탄국',
-    icon: '🕌',
-    desc: '술탄이 통치하는 국가',
-  },
-  {
-    value: 'KHANATE',
-    label: '칸국',
-    icon: '🏹',
-    desc: '칸이 통치하는 유목 국가',
-  },
-  {
-    value: 'CONFEDERATION',
-    label: '연합',
-    icon: '🔗',
-    desc: '느슨한 형태의 국가 연합',
-  },
-  {
-    value: 'CITY_STATE',
-    label: '도시국가',
-    icon: '🏙️',
-    desc: '독립적인 도시 형태의 국가',
-  },
-  {
-    value: 'THEOCRACY',
-    label: '신정 국가',
-    icon: '⛪',
-    desc: '종교 지도자가 통치하는 국가',
-  },
-  {
-    value: 'TRIBAL_STATE',
-    label: '부족 국가/연합',
-    icon: '🛡️',
-    desc: '부족 또는 부족 연맹',
-  },
-  {
-    value: 'NOMADIC_EMPIRE',
-    label: '유목 제국',
-    icon: '🐎',
-    desc: '유목민이 세운 제국',
-  },
-  {
-    value: 'PERSONAL_UNION',
-    label: '동군연합',
-    icon: '👥',
-    desc: '같은 군주 아래 여러 정치체가 연합',
-  },
-  { value: 'OTHER', label: '기타', icon: '📋', desc: '기타 국가 형태' },
+// 국가 형태 옵션 (라벨 + 설명만, 이모지 없음)
+const STATE_TYPE_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: 'EMPIRE', label: '제국', desc: '황제가 통치하는 국가' },
+  { value: 'KINGDOM', label: '왕국', desc: '왕이 통치하는 국가' },
+  { value: 'REPUBLIC', label: '공화국', desc: '선출된 대표가 통치하는 국가' },
+  { value: 'DYNASTY', label: '왕조', desc: '세습적 왕가가 통치하는 국가' },
+  { value: 'SHOGUNATE', label: '막부', desc: '쇼군이 실권을 가진 군정 (무로마치·에도 막부 등)' },
+  { value: 'HEREDITARY', label: '세습', desc: '세습적 통치가 이어지는 정치체' },
+  { value: 'FEDERATION', label: '연방', desc: '여러 국가의 연합체' },
+  { value: 'PRINCIPALITY', label: '공국', desc: '공작이 통치하는 국가' },
+  { value: 'ELECTORATE', label: '선제후국', desc: '황제 선출권을 가진 제후의 영토' },
+  { value: 'MARGRAVIATE', label: '변경백령', desc: '변경백이 다스리는 변경 지대의 영토' },
+  { value: 'CALIPHATE', label: '칼리프국', desc: '이슬람 지도자가 통치하는 국가' },
+  { value: 'SULTANATE', label: '술탄국', desc: '술탄이 통치하는 국가' },
+  { value: 'KHANATE', label: '칸국', desc: '칸이 통치하는 유목 국가' },
+  { value: 'CONFEDERATION', label: '연합', desc: '느슨한 형태의 국가 연합' },
+  { value: 'CITY_STATE', label: '도시국가', desc: '독립적인 도시 형태의 국가' },
+  { value: 'THEOCRACY', label: '신정 국가', desc: '종교 지도자가 통치하는 국가' },
+  { value: 'TRIBAL_STATE', label: '부족 국가/연합', desc: '부족 또는 부족 연맹' },
+  { value: 'NOMADIC_EMPIRE', label: '유목 제국', desc: '유목민이 세운 제국' },
+  { value: 'PERSONAL_UNION', label: '동군연합', desc: '같은 군주 아래 여러 정치체가 연합' },
+  { value: 'OTHER', label: '기타', desc: '기타 국가 형태' },
 ]
 
 const ENTITY_KIND_OPTIONS: { value: 'STATE' | 'REGIME' | 'PERIOD'; label: string }[] = [
@@ -925,13 +861,12 @@ export function HistoricalCountryForm({
 
   /**
    * 국가 형태 선택 버튼 라벨 생성
-   * @returns 아이콘과 라벨 또는 플레이스홀더
    */
   const getStateTypeLabel = () => {
     const option = STATE_TYPE_OPTIONS.find(
       (opt) => opt.value === selectedStateType,
     )
-    return option ? `${option.icon} ${option.label}` : '선택하세요'
+    return option ? option.label : '선택하세요'
   }
 
   /**
@@ -1046,26 +981,33 @@ export function HistoricalCountryForm({
               </div>
             </S.FormSectionHeader>
 
-            {/* 대표 이미지 (국기·상징 등) — 인물 등록 썸네일과 동일: 88px 원형 하나 */}
+            {/* 대표 이미지 (국기·상징 등) */}
             <S.FormField data-field="thumbnail">
               <S.FormLabel htmlFor="thumbnail-upload">대표 이미지</S.FormLabel>
               <div className="thumbnail-right">
-                <label
-                  className="thumbnail-circle"
-                  htmlFor="thumbnail-upload"
-                  data-has-image={!!thumbnailPreview}
-                >
-                  {thumbnailPreview ? (
-                    <img src={thumbnailPreview} alt="대표 이미지 미리보기" />
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
-                    </svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <label
+                    className="thumbnail-circle"
+                    htmlFor="thumbnail-upload"
+                    data-has-image={!!thumbnailPreview}
+                  >
+                    {thumbnailPreview ? (
+                      <img src={thumbnailPreview} alt="대표 이미지 미리보기" />
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <path d="M21 15l-5-5L5 21" />
+                      </svg>
+                    )}
+                  </label>
+                  {thumbnailUploading && (
+                    <span style={{ fontSize: 13, color: '#64748b' }}>업로드 중…</span>
                   )}
-                </label>
-                {thumbnailUploading && (
-                  <span style={{ fontSize: 13, color: '#64748b' }}>업로드 중…</span>
-                )}
+                </div>
+                <span className="thumbnail-hint">
+                  {thumbnailPreview ? '클릭하면 이미지를 변경할 수 있습니다' : '클릭하여 국기·상징 이미지를 넣어주세요 (선택)'}
+                </span>
                 <S.FileInput
                   id="thumbnail-upload"
                   type="file"
@@ -1554,33 +1496,24 @@ export function HistoricalCountryForm({
                       $active={selectedStateType === option.value}
                       onClick={() => handleStateTypeSelect(option.value)}
                     >
-                      <S.SelectOptionIcon>{option.icon}</S.SelectOptionIcon>
                       <div
                         style={{
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '4px',
+                          gap: 2,
                           flex: 1,
                           minWidth: 0,
                         }}
                       >
                         <S.SelectOptionText>{option.label}</S.SelectOptionText>
-                        <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <span style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
                           {option.desc}
                         </span>
                       </div>
                       {selectedStateType === option.value && (
                         <S.SelectOptionCheck>
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                          >
-                            <path
-                              d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                              fill="currentColor"
-                            />
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="currentColor" />
                           </svg>
                         </S.SelectOptionCheck>
                       )}

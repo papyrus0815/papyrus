@@ -462,13 +462,16 @@ export const ListContainer = styled.div`
 export const TabBar = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   margin: 0;
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 0 2px;
-  background: transparent;
+  padding: 6px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
   overflow-x: auto;
   overscroll-behavior: contain;
 
@@ -482,11 +485,11 @@ export const TabBar = styled.div`
 `
 
 export const TabButton = styled.button<{ $active?: boolean }>`
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
   border: none;
-  background: transparent;
-  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
+  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
+  color: ${({ $active }) => ($active ? '#4338ca' : '#64748b')};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
@@ -494,30 +497,20 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   align-items: center;
   gap: 6px;
   position: relative;
+  white-space: nowrap;
   transition:
-    color 0.15s ease,
-    background 0.15s ease;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+    color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.2s ease;
+  box-shadow: ${({ $active }) =>
+    $active
+      ? '0 4px 12px rgba(79, 70, 229, 0.14), 0 0 0 1px rgba(79, 70, 229, 0.08)'
+      : 'none'};
 
   &:hover {
-    color: #6366f1;
-    background: #eef2ff;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 0;
-    height: 2px;
-    background: #6366f1;
-    border-radius: 2px;
-    opacity: ${({ $active }) => ($active ? '1' : '0')};
-    transition: opacity 0.15s ease;
+    color: ${({ $active }) => ($active ? '#4338ca' : '#475569')};
+    background: ${({ $active }) =>
+      $active ? '#ffffff' : 'rgba(255, 255, 255, 0.75)'};
   }
 
   @media (max-width: 768px) {
@@ -527,7 +520,7 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   }
 
   @media (max-width: 480px) {
-    padding: 6px 8px;
+    padding: 5px 8px;
     font-size: 11px;
   }
 `
@@ -839,9 +832,12 @@ export const ControlsRow = styled.div`
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #ffffff;
-  border-bottom: 1px solid #f1f5f9;
-  padding: 12px 16px;
+  background: rgba(248, 250, 252, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 24px;
+  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.14);
 `
 
 export const FilterRow = styled.div`
@@ -3659,7 +3655,7 @@ export const AnalyticsDashboard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 0 16px 0 0;
+  padding: 0;
 
   @media (max-width: 768px) {
     padding: 20px;

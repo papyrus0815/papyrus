@@ -17,6 +17,7 @@ import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 // 디자인 토큰
 const BRAND = {
@@ -369,17 +370,13 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                     : person.name
                   const isSelected = selectedPersonId === person.id
 
-                  // 생몰년도 포맷팅
+                  // 생몰년도 포맷팅 (직업·국가는 ID만 있어 카드에는 표시하지 않음)
                   const birthYear = person.birthYear
                   const deathYear = person.deathYear
                   const lifespan =
                     birthYear || deathYear
                       ? `${birthYear || '?'} ~ ${deathYear || '현재'}`
                       : null
-
-                  // 직업, 국가 추출
-                  const primaryJob = person.jobId
-                  const primaryCountry = person.countryId
 
                   return (
                     <PersonCard
@@ -405,29 +402,15 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                           ) : null}
                         </PersonNameRow>
 
-                        <PersonMetaRow>
-                          {lifespan && (
+                        {lifespan ? (
+                          <PersonMetaRow>
                             <PersonMeta>
                               <FiCalendar size={11} />
                               <span>{lifespan}</span>
                             </PersonMeta>
-                          )}
-                          {primaryJob && (
-                            <PersonMeta>
-                              <FiBriefcase size={11} />
-                              <span>{primaryJob}</span>
-                            </PersonMeta>
-                          )}
-                          {primaryCountry && (
-                            <PersonMeta>
-                              <FiMapPin size={11} />
-                              <span>{primaryCountry}</span>
-                            </PersonMeta>
-                          )}
-                        </PersonMetaRow>
-
-                        {!lifespan && !primaryJob && !primaryCountry && (
-                          <PersonDates $empty>정보 없음</PersonDates>
+                          </PersonMetaRow>
+                        ) : (
+                          <PersonDates $empty>생몰 정보 없음</PersonDates>
                         )}
                       </PersonMainInfo>
                     </PersonCard>
@@ -442,17 +425,15 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   )
 }
 
-// Styled Components
+// Styled Components — z-index를 상위 모달보다 높게 해 서브 모달에서도 앞에 표시
 const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.52);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: ${Z_INDEX.MODAL_CONTENT + 50};
   padding: 24px;
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -464,22 +445,21 @@ const ModalOverlay = styled.div`
 
 const ModalBox = styled.div`
   background: ${BRAND.white};
-  border-radius: 24px;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.04),
-    0 24px 48px -12px rgba(0, 0, 0, 0.15),
-    0 12px 24px -8px rgba(0, 0, 0, 0.08);
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
   width: 100%;
-  max-width: 900px;
-  max-height: 85vh;
+  max-width: 920px;
+  max-height: 82vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: ${Z_INDEX.MODAL_CONTENT + 51};
+  animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 
   @keyframes slideUp {
     from {
-      transform: translateY(24px) scale(0.98);
+      transform: translateY(20px) scale(0.99);
       opacity: 0;
     }
     to {
@@ -493,17 +473,18 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px 20px;
+  padding: 22px 28px 20px;
   border-bottom: 1px solid ${BRAND.borderLight};
+  background: linear-gradient(180deg, #fafbff 0%, ${BRAND.white} 100%);
 `
 
 const ModalTitle = styled.h2`
   margin: 0;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 700;
   color: ${BRAND.text};
-  letter-spacing: -0.04em;
-  line-height: 1.3;
+  letter-spacing: -0.03em;
+  line-height: 1.35;
 `
 
 const ModalCloseButton = styled.button`
@@ -522,6 +503,10 @@ const ModalCloseButton = styled.button`
   &:hover {
     background: ${BRAND.primaryLight};
     color: ${BRAND.primary};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
   }
 `
 
@@ -573,12 +558,14 @@ const SearchInput = styled.input`
 const SplitModalBody = styled.div`
   display: grid;
   grid-template-columns: 200px 1fr;
-  min-height: 420px;
+  flex: 1;
+  min-height: 0;
+  max-height: 56vh;
   overflow: hidden;
 
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    min-height: auto;
+    max-height: 60vh;
   }
 `
 
@@ -717,7 +704,7 @@ const PersonsHeader = styled.div`
 `
 
 const ResultCount = styled.div`
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: ${BRAND.textMuted};
 
@@ -727,6 +714,7 @@ const ResultCount = styled.div`
   }
   .total {
     color: ${BRAND.textSubtle};
+    font-weight: 500;
   }
 `
 
@@ -739,17 +727,24 @@ const EmptyMessage = styled.span`
 const PersonsList = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 16px 28px 24px;
+  padding: 18px 28px 28px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 
   &::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: ${BRAND.borderLight};
+    border-radius: 4px;
   }
   &::-webkit-scrollbar-thumb {
     background: ${BRAND.border};
-    border-radius: 3px;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: ${BRAND.textSubtle};
   }
 `
 
@@ -792,22 +787,29 @@ const PersonCard = styled.button<{ $selected: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
-  padding: 14px 18px;
+  padding: 16px 20px;
   background: ${({ $selected }) =>
     $selected ? BRAND.primaryLight : BRAND.white};
   border: 1px solid
-    ${({ $selected }) => ($selected ? BRAND.primaryMuted : BRAND.borderLight)};
+    ${({ $selected }) => ($selected ? BRAND.primary : BRAND.borderLight)};
   border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: left;
+  box-shadow: ${({ $selected }) =>
+    $selected ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none'};
 
   &:hover {
     border-color: ${({ $selected }) =>
       $selected ? BRAND.primary : BRAND.primaryMuted};
     background: ${({ $selected }) =>
       $selected ? BRAND.primaryLight : BRAND.surface};
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+  }
+  &:focus-visible {
+    outline: none;
+    border-color: ${BRAND.primary};
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
   }
 `
 

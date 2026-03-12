@@ -48,12 +48,18 @@ const BORDER_COLOR = '#e5e7eb'
 const FOCUS_COLOR = '#4f46e5'
 const TEXT_PRIMARY = '#0f172a'
 
+/** 썸네일 행 — FieldRow와 동일 그리드(360px 1fr), 라벨·썸네일 간격 확보 */
 const ThumbnailWrap = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 14px 0;
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 32px;
+  align-items: start;
+  padding: 20px 0;
   border-bottom: 1px solid #f3f4f6;
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
 `
 
 const ThumbnailPreview = styled.label<{ $hasImage?: boolean }>`
@@ -174,6 +180,37 @@ const NativeSelect = styled.select`
   &:focus {
     outline: none;
     border-color: ${FOCUS_COLOR};
+  }
+`
+
+/** 모달용: 컨트롤 열·입력 그룹을 넓혀 가로 여백을 줄임 */
+const PersonFormLayoutWrap = styled.div`
+  ${FieldControl} {
+    max-width: 520px;
+  }
+  ${DateFieldsRow} {
+    max-width: 520px;
+  }
+  ${DateFieldBtn} {
+    max-width: 100%;
+  }
+  ${InlineFields} {
+    max-width: 600px;
+  }
+  ${InlineFields2} {
+    max-width: 480px;
+  }
+  ${OriginalNameInputWrap} {
+    max-width: 520px;
+  }
+  ${SelectBtn} {
+    max-width: 440px;
+  }
+  ${NativeSelect} {
+    max-width: 440px;
+  }
+  [data-bio-editor-wrap] ${FieldControl} {
+    max-width: 720px;
   }
 `
 
@@ -653,7 +690,7 @@ export function PersonRegisterView({
           {activeTab === 'basic' && (
             <FormRows>
               <ThumbnailWrap>
-                <FieldLabel style={{ paddingTop: 8 }}>썸네일</FieldLabel>
+                <FieldLabel>썸네일</FieldLabel>
                 <FieldControl>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <ThumbnailPreview htmlFor="person-thumbnail-upload" $hasImage={!!profileImageUrl}>
@@ -812,7 +849,7 @@ export function PersonRegisterView({
                   </InlineFields>
                 </FieldControl>
               </FieldRowMulti>
-              <FieldRow>
+              <FieldRow data-bio-editor-wrap>
                 <FieldLabel>약력</FieldLabel>
                 <FieldControl>
                   <RichTextEditor
@@ -881,5 +918,5 @@ export function PersonRegisterView({
     </>
   )
 
-  return embedInCard ? <FormCardWrapper>{formContent}</FormCardWrapper> : formContent
+  return embedInCard ? <FormCardWrapper>{formContent}</FormCardWrapper> : <PersonFormLayoutWrap>{formContent}</PersonFormLayoutWrap>
 }

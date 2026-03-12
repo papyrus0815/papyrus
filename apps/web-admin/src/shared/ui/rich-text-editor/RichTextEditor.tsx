@@ -1629,6 +1629,34 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         if (tryConvertListOnSpace(e)) return
       }
 
+      // prose-hr div 안에서 Enter 시 복제 방지: 다음 빈 단락으로 이동
+      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        const selection = window.getSelection()
+        if (selection && selection.rangeCount > 0) {
+          let node: Node | null = selection.getRangeAt(0).startContainer
+          while (node && node !== editorRef.current) {
+            if (
+              node instanceof HTMLElement &&
+              node.classList.contains('prose-hr')
+            ) {
+              e.preventDefault()
+              // prose-hr 뒤에 빈 단락 삽입 후 커서 이동
+              const p = document.createElement('p')
+              p.innerHTML = '<br>'
+              node.after(p)
+              const range = document.createRange()
+              range.setStart(p, 0)
+              range.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(range)
+              handleContentChange()
+              return
+            }
+            node = node.parentNode
+          }
+        }
+      }
+
       // 단축키
       if (e.ctrlKey || e.metaKey) {
         if (e.key === 'b') {
@@ -1653,7 +1681,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
       }
     },
-    [applyFormat, tryConvertListOnSpace],
+    [applyFormat, tryConvertListOnSpace, handleContentChange],
   )
 
   // 이미지 업로드
@@ -2563,7 +2591,26 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             playClickSound()
             if (!editorRef.current) return
             editorRef.current.focus()
-            document.execCommand('insertHTML', false, PROSE_HR_HTML)
+            // HR 삽입 후 커서가 prose-hr div 안에 남아 Enter 시 복제되는 문제 방지
+            // HR + 빈 단락을 함께 삽입하고 커서를 빈 단락에 위치시킴
+            document.execCommand(
+              'insertHTML',
+              false,
+              `${PROSE_HR_HTML}<p><br></p>`,
+            )
+            // 삽입된 빈 <p> 안으로 커서 이동
+            const selection = window.getSelection()
+            if (selection && editorRef.current) {
+              const allPs = editorRef.current.querySelectorAll('p')
+              const lastP = allPs[allPs.length - 1]
+              if (lastP) {
+                const range = document.createRange()
+                range.setStart(lastP, 0)
+                range.collapse(true)
+                selection.removeAllRanges()
+                selection.addRange(range)
+              }
+            }
             handleContentChange()
           }}
           title="수평선 삽입"
