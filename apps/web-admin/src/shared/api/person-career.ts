@@ -236,6 +236,8 @@ export interface CreateGovernmentPositionTenureDto {
   endReasonDetail?: string
   notes?: string
   priority?: number
+  /** 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 */
+  administrationDepartmentId?: string | null
 }
 
 /**
@@ -248,9 +250,10 @@ export interface CreateGovernmentPositionDefinitionDto {
   positionType: string
   description?: string | null
   rank?: number | null
-  departmentName?: string | null
+  /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
+  categoryId?: string | null
+  /** 행정기구 연결 (사용자 등록 직위) */
   organizationId?: string | null
-  administrationDepartmentId?: string | null
   establishedDate?: string | null
   abolishedDate?: string | null
 }
@@ -265,9 +268,10 @@ export interface UpdateGovernmentPositionDefinitionDto {
   positionType?: string
   description?: string | null
   rank?: number | null
-  departmentName?: string | null
+  /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
+  categoryId?: string | null
+  /** 행정기구 연결 (사용자 등록 직위) */
   organizationId?: string | null
-  administrationDepartmentId?: string | null
   establishedDate?: string | null
   abolishedDate?: string | null
 }

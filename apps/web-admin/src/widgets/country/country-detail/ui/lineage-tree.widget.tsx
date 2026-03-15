@@ -27,7 +27,7 @@ const SEPARATOR_TO_CARD_GAP = 24
 /** 같은 열에서 카드 겹침 방지 시 카드 사이 최소 간격(px). 정이대장군 등 같은 열 다수 카드 겹침 방지 */
 const CARD_STACK_GAP_PX = 20
 /** 연도 기준 레이아웃 최대 높이(px). 범위가 크면 스크롤 없이 보이도록 상한 */
-const MAX_YEAR_BASED_HEIGHT = 900
+const MAX_YEAR_BASED_HEIGHT = 1800
 /** 세그먼트 하나당 높이 상한(px). 한 구간이 과도하게 늘어나 빈 공간 폭증 방지 */
 const MAX_SEGMENT_HEIGHT_PX = 1100
 /** 데이터 있는 구간(세그먼트) 사이 갭(px). 세기 구간을 넓게 느끼도록 */
@@ -35,7 +35,7 @@ const SEGMENT_GAP_PX = 32
 /** 타임라인 세기/연도 라벨 블록 최소 높이(px). 짧은 구간에서도 연도가 보이도록 */
 const TIMELINE_LABEL_MIN_HEIGHT_PX = 24
 /** 연도 기준 시 카드 높이: 재임 연수당 px. 세기 구간을 넓게 */
-const CARD_HEIGHT_PX_PER_YEAR = 14
+const CARD_HEIGHT_PX_PER_YEAR = 22
 const CARD_HEIGHT_MIN_YEAR_BASED = 72
 /** 긴 재임(예: 쇼와 63년)이 짧은 재임(예: 3년)보다 확실히 길어 보이도록 상한 확대 */
 const CARD_HEIGHT_MAX_YEAR_BASED = 720
@@ -43,8 +43,12 @@ const yearSpan = (start: number, end: number) => Math.max(1, end - start + 1)
 /** 연표 정합성 우선 모드: 같은 종료연도면 카드 하단 정렬을 강제 */
 const STRICT_YEAR_ALIGNMENT = true
 const STRICT_MIN_CARD_HEIGHT_PX = 1
-/** 연도 정합성 우선 모드에서는 짧은 재임 최소 높이를 강제하지 않음 */
-const YEAR_SHORT_MIN_VISUAL_HEIGHT_PX = 1
+/** 짧은 재임도 카드 내용을 읽을 수 있도록 최소 시각 높이 유지 */
+const YEAR_SHORT_MIN_VISUAL_HEIGHT_PX = 112
+/** N년 이하 재임은 최소 카드 높이 규칙 적용 */
+const YEAR_SHORT_TENURE_MAX_YEARS = 5
+/** 최소 높이 보정 후 같은 열 카드 간 최소 간격 */
+const YEAR_CARD_MIN_GAP_PX = 6
 
 interface LineageTreeProps {
   /** 세대별 재임 배열 (row 0 = 루트, row 1 = 그 자식들, ...) */
@@ -198,7 +202,7 @@ export function LineageTree({
   const yearBasedTotalHeight = useMemo(() => {
     if (!useYearBasedLayout || !yearRange) return 0
     const range = yearSpan(yearRange.minYear, yearRange.maxYear)
-    return Math.min(MAX_YEAR_BASED_HEIGHT, Math.max(400, range * 12))
+    return Math.min(MAX_YEAR_BASED_HEIGHT, Math.max(760, range * 20))
   }, [useYearBasedLayout, yearRange])
 
   /** 재임 기간–막대 연도 일치: 날짜 문자열에서 연도만 추출(타임존 영향 제거) */
@@ -303,7 +307,7 @@ export function LineageTree({
     const gapTotal = (nSeg - 1) * SEGMENT_GAP_PX
     const available = Math.min(
       MAX_YEAR_BASED_HEIGHT - gapTotal,
-      Math.max(500 - gapTotal, totalDataYears * 14),
+      Math.max(920 - gapTotal, totalDataYears * 22),
     )
     let segmentBaseHeights = mergedSpanned.map(
       (seg) => (yearSpan(seg.start, seg.end) / totalDataYears) * available,
@@ -900,6 +904,7 @@ export function LineageTree({
       col: number
       start: number
       end: number
+      durationYears: number
       top: number
       bottom: number
     }[] = []
@@ -917,6 +922,7 @@ export function LineageTree({
         col,
         start,
         end,
+        durationYears: yearSpan(start, end),
         top: p.topPx,
         bottom: p.topPx + p.heightPx,
       })
@@ -934,19 +940,49 @@ export function LineageTree({
       }
     >()
 
+    const byCol = new Map<number, typeof baseItems>()
     baseItems.forEach((it) => {
-      const rawHeight = Math.max(1, it.bottom - it.top)
-      const isShort = rawHeight < YEAR_SHORT_MIN_VISUAL_HEIGHT_PX
-      const visualHeight = isShort ? YEAR_SHORT_MIN_VISUAL_HEIGHT_PX : rawHeight
-      // 퇴임연도 정렬(하단)을 보존한 채 짧은 재임만 위로 확장
-      const visualTop = Math.max(0, it.bottom - visualHeight)
-      result.set(it.id, {
-        topPx: visualTop,
-        heightPx: visualHeight,
-        leftOffsetPx: 0,
-        widthPx: CARD_WIDTH,
-        isShort,
-        isOverlap: false,
+      const list = byCol.get(it.col) ?? []
+      list.push(it)
+      byCol.set(it.col, list)
+    })
+
+    byCol.forEach((items) => {
+      const prepared = items
+        .map((it) => {
+          const rawHeight = Math.max(1, it.bottom - it.top)
+          const isShortByYears = it.durationYears <= YEAR_SHORT_TENURE_MAX_YEARS
+          const visualHeight = isShortByYears
+            ? Math.max(YEAR_SHORT_MIN_VISUAL_HEIGHT_PX, rawHeight)
+            : rawHeight
+          // 기본은 퇴임연도(하단) 정렬 유지
+          const visualTop = Math.max(0, it.bottom - visualHeight)
+          return {
+            ...it,
+            isShortByYears,
+            visualTop,
+            visualHeight,
+          }
+        })
+        .sort((a, b) => a.visualTop - b.visualTop || a.end - b.end)
+
+      // 같은 열에서 최소 간격을 보장해 시각 겹침 제거
+      let prevBottom = -Infinity
+      prepared.forEach((it) => {
+        const desiredTop = Math.max(it.visualTop, prevBottom + YEAR_CARD_MIN_GAP_PX)
+        const shifted = desiredTop > it.visualTop
+        const topPx = desiredTop
+        const heightPx = it.visualHeight
+        const bottomPx = topPx + heightPx
+        result.set(it.id, {
+          topPx,
+          heightPx,
+          leftOffsetPx: 0,
+          widthPx: CARD_WIDTH,
+          isShort: it.isShortByYears,
+          isOverlap: shifted,
+        })
+        prevBottom = bottomPx
       })
     })
 

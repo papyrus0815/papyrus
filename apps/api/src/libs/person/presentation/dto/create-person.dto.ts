@@ -149,15 +149,6 @@ export class CreatePersonDto {
   middleNameMeaning?: string | null
 
   /**
-   * 별명/호/필명 목록
-   */
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => NicknameDto)
-  nicknames?: NicknameDto[]
-
-  /**
    * 출생 정보 (객체 형식)
    */
   @IsOptional()
@@ -288,6 +279,14 @@ export class CreatePersonDto {
   @IsOptional()
   @IsString()
   posthumousName?: string
+
+  /**
+   * 즉위 전 작호/봉호 (예: 수양대군, 충녕대군)
+   * @example "수양대군"
+   */
+  @IsOptional()
+  @IsString()
+  preEnthronementTitle?: string
 
   /**
    * 가문 ID (선택)

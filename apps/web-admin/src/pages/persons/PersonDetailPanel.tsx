@@ -1524,7 +1524,7 @@ const ListRowMeta = styled.div`
 `
 
 const TenureListWrap = styled.div`
-  max-width: 560px;
+  max-width: 100%;
 `
 
 const TenureList = styled.ul`
@@ -1534,8 +1534,8 @@ const TenureList = styled.ul`
   border-radius: 13px;
   overflow: hidden;
   background: #fff;
-  border: 1px solid rgba(226, 232, 240, 0.65);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  border: 1.5px solid #e8ecf8;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 `
 
 const TenureRow = styled.li`
@@ -1543,14 +1543,14 @@ const TenureRow = styled.li`
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 16px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.45);
+  padding: 14px 18px;
+  border-bottom: 1px solid #f0f2f7;
   transition: background 0.12s;
   &:last-child {
     border-bottom: none;
   }
   &:hover {
-    background: rgba(248, 250, 252, 0.6);
+    background: #fafbff;
   }
 `
 
@@ -1560,18 +1560,18 @@ const TenureRowMain = styled.div`
 `
 
 const TenureRowTitle = styled.div`
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   color: #0f172a;
   line-height: 1.35;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 `
 
 const TenureRowMeta = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 7px;
+  gap: 4px 6px;
   font-size: 11.5px;
   font-weight: 500;
   color: #64748b;
@@ -1579,32 +1579,42 @@ const TenureRowMeta = styled.div`
 `
 
 const TenureRowMetaItem = styled.span`
-  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
 `
 
 const TenureRowAgeBadge = styled.span`
-  padding: 1.5px 6px;
+  padding: 2px 8px;
   font-size: 10.5px;
   font-weight: 600;
   color: #7c3aed;
-  background: rgba(124, 58, 237, 0.07);
+  background: rgba(124, 58, 237, 0.08);
   border-radius: 5px;
 `
 
 const TenureRowSub = styled.div`
-  margin-top: 5px;
+  margin-top: 7px;
   font-size: 11px;
   color: #94a3b8;
   font-weight: 500;
-  line-height: 1.5;
+  line-height: 1.6;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 7px;
 
   span::before {
     content: '·';
     margin-right: 4px;
-    opacity: 0.5;
+    opacity: 0.4;
   }
   span:first-child::before {
     content: none;
@@ -1616,17 +1626,17 @@ const TenureRowEditBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: #94a3b8;
-  background: none;
-  border: none;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.07);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 7px;
   cursor: pointer;
-  transition: color 0.12s;
+  transition: background 0.12s;
   &:hover {
-    color: #374151;
-    text-decoration: underline;
+    background: rgba(99, 102, 241, 0.13);
   }
 `
 

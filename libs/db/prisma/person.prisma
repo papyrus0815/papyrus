@@ -130,6 +130,9 @@ model Person {
   /// 시호 (예: 문종, 무열왕, 효종)
   posthumousName String? @map("posthumous_name") @db.VarChar(100)
 
+  /// 즉위 전 작호/봉호 (예: 수양대군, 충녕대군, 양녕대군)
+  preEnthronementTitle String? @map("pre_enthronement_title") @db.VarChar(100)
+
   //--- 외래키
   dynastyId      String? @map("dynasty_id") @db.Char(36)
   religionId     String? @map("religion_id") @db.Char(36)

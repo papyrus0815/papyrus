@@ -128,6 +128,7 @@ export class PersonController {
     id: string
     name: string
     surname: string | null
+    nicknames: Array<{ id: string; nickname: string; type: string | null; priority: number | null }>
     birthEra: any
     birthYear: number | null
     birthMonth: number | null
@@ -194,6 +195,12 @@ export class PersonController {
       id: person.id,
       name: person.name,
       surname: person.surname,
+      nicknames: (person.nicknames || []).map((n: any) => ({
+        id: n.id,
+        nickname: n.nickname,
+        type: n.type ?? null,
+        priority: n.priority ?? null,
+      })),
       birthEra: person.birthEra as any,
       birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
       birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
@@ -286,6 +293,10 @@ export class PersonController {
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
       showLifespanOnEventList: dto.showLifespanOnEventList,
+      regnalName: dto.regnalName,
+      templeName: dto.templeName,
+      posthumousName: dto.posthumousName,
+      preEnthronementTitle: dto.preEnthronementTitle,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,
@@ -356,6 +367,10 @@ export class PersonController {
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
       showLifespanOnEventList: dto.showLifespanOnEventList,
+      regnalName: dto.regnalName,
+      templeName: dto.templeName,
+      posthumousName: dto.posthumousName,
+      preEnthronementTitle: dto.preEnthronementTitle,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,

@@ -288,9 +288,8 @@ const defaultForm: CreateGovernmentPositionDefinitionDto = {
   positionType: 'HEAD_OF_STATE',
   description: null,
   rank: null,
-  departmentName: null,
+  categoryId: null,
   organizationId: null,
-  administrationDepartmentId: null,
   establishedDate: null,
   abolishedDate: null,
 }
@@ -303,7 +302,7 @@ export function PositionCategoryCrudModal({
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [positionTypeModalOpen, setPositionTypeModalOpen] = useState(false)
-  const [departmentModalOpen, setDepartmentModalOpen] = useState(false)
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [form, setForm] = useState<CreateGovernmentPositionDefinitionDto>(defaultForm)
 
   const { data: definitions = [], isLoading } = useQuery({
@@ -312,9 +311,9 @@ export function PositionCategoryCrudModal({
     enabled: isOpen,
   })
 
-  const { data: departments = [] } = useQuery({
-    queryKey: ['administration-departments-all'],
-    queryFn: () => administrationDepartmentApi.getAll(),
+  const { data: categories = [] } = useQuery({
+    queryKey: ['admin-dept-categories'],
+    queryFn: () => administrationDepartmentApi.getCategories(),
     enabled: isOpen && view === 'form',
   })
 
@@ -345,9 +344,8 @@ export function PositionCategoryCrudModal({
         positionType: def.positionType,
         description: def.description ?? null,
         rank: def.rank ?? null,
-        departmentName: def.departmentName ?? null,
+        categoryId: def.categoryId ?? null,
         organizationId: def.organizationId ?? null,
-        administrationDepartmentId: def.administrationDepartmentId ?? def.administrationDepartment?.id ?? null,
         establishedDate: def.establishedDate ?? null,
         abolishedDate: def.abolishedDate ?? null,
       })
@@ -516,35 +514,35 @@ export function PositionCategoryCrudModal({
                   />
                 </Field>
                 <Field>
-                  <Label>중앙부처 (역대 장관 연결)</Label>
+                  <Label>부처 카테고리</Label>
                   <SelectBtn
                     type="button"
-                    $hasValue={!!form.administrationDepartmentId}
-                    onClick={() => setDepartmentModalOpen(true)}
+                    $hasValue={!!form.categoryId}
+                    onClick={() => setCategoryModalOpen(true)}
                   >
                     <span>
-                      {form.administrationDepartmentId
-                        ? departments.find((d) => d.id === form.administrationDepartmentId)?.name ?? '선택됨'
+                      {form.categoryId
+                        ? categories.find((c) => c.id === form.categoryId)?.name ?? '선택됨'
                         : '선택 안 함'}
                     </span>
                     <FiChevronDown size={18} />
                   </SelectBtn>
                   <SelectModal
-                    isOpen={departmentModalOpen}
-                    onClose={() => setDepartmentModalOpen(false)}
+                    isOpen={categoryModalOpen}
+                    onClose={() => setCategoryModalOpen(false)}
                     options={[
                       { value: '', label: '선택 안 함' },
-                      ...departments.map((d) => ({ value: d.id, label: d.name })),
+                      ...categories.map((c) => ({
+                        value: c.id,
+                        label: c.nameEn ? `${c.name} (${c.nameEn})` : c.name,
+                      })),
                     ]}
-                    selectedValue={form.administrationDepartmentId ?? ''}
+                    selectedValue={form.categoryId ?? ''}
                     onSelect={(value) => {
-                      setForm((f) => ({
-                        ...f,
-                        administrationDepartmentId: value || null,
-                      }))
-                      setDepartmentModalOpen(false)
+                      setForm((f) => ({ ...f, categoryId: value || null }))
+                      setCategoryModalOpen(false)
                     }}
-                    title="중앙부처 선택"
+                    title="부처 카테고리 선택"
                   />
                 </Field>
                 <FormActions>

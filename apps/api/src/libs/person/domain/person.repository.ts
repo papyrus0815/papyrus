@@ -55,6 +55,8 @@ export interface CreatePersonData {
   regnalName?: string
   templeName?: string
   posthumousName?: string
+  /** 즉위 전 작호/봉호 (예: 수양대군, 충녕대군) */
+  preEnthronementTitle?: string
   // 관계
   dynastyId?: string
   religionId?: string
@@ -101,6 +103,8 @@ export interface UpdatePersonData {
   regnalName?: string
   templeName?: string
   posthumousName?: string
+  /** 즉위 전 작호/봉호 (예: 수양대군, 충녕대군) */
+  preEnthronementTitle?: string
   // 관계
   dynastyId?: string
   religionId?: string

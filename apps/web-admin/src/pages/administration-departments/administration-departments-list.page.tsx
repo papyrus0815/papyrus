@@ -18,6 +18,7 @@ import {
   FiTrash2,
   FiUsers,
   FiX,
+  FiAward,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
@@ -30,8 +31,9 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/CountrySelectModal'
+import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
-type DetailTab = 'basic' | 'organization' | 'history' | 'location'
+type DetailTab = 'basic' | 'organization' | 'history' | 'location' | 'positions'
 
 type DepartmentWithCountryName = AdministrationDepartment & {
   countryName: string
@@ -498,6 +500,16 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                     >
                       <FiMapPin size={16} />
                       위치
+                    </TabButton>
+                    <TabButton
+                      $active={activeTab === 'positions'}
+                      onClick={() => {
+                        playClickSound()
+                        setActiveTab('positions')
+                      }}
+                    >
+                      <FiAward size={16} />
+                      직위 정의
                     </TabButton>
                   </TabNavigation>
 
@@ -1006,6 +1018,24 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                               Google Maps API 또는 Kakao Maps API 연동 필요
                             </MapNote>
                           </MapPlaceholder>
+                        </DetailCard>
+                      </motion.div>
+                    )}
+                    {activeTab === 'positions' && (
+                      <motion.div
+                        key="positions"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <DetailCard>
+                          <div style={{ padding: '24px' }}>
+                            <PositionDefinitionsSection
+                              fixedOrganizationId={selectedDept?.id}
+                              fixedOrganizationName={selectedDept?.name}
+                            />
+                          </div>
                         </DetailCard>
                       </motion.div>
                     )}

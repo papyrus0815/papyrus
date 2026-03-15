@@ -182,6 +182,13 @@ export class UpdatePersonDto {
   posthumousName?: string
 
   /**
+   * 즉위 전 작호/봉호 (예: 수양대군)
+   */
+  @IsOptional()
+  @IsString()
+  preEnthronementTitle?: string
+
+  /**
    * 가문 ID (선택)
    */
   @IsOptional()

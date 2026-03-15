@@ -66,6 +66,8 @@ export type CreatePersonInput = {
   regnalName?: string | null
   templeName?: string | null
   posthumousName?: string | null
+  /** 즉위 전 작호/봉호 (예: 수양대군, 충녕대군) */
+  preEnthronementTitle?: string | null
   // 관계
   countryId?: string | null
   dynastyId?: string | null

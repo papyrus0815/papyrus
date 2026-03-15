@@ -30,25 +30,16 @@ export interface GovernmentPositionDefinition {
   positionType: GovernmentPositionType
   description?: string
   rank?: number
-  departmentName?: string
+  /** 중앙부처 카테고리 연결 */
+  categoryId?: string | null
+  category?: { id: string; name: string; nameEn?: string } | null
+  /** 행정기구 연결 */
   organizationId?: string | null
   organization?: {
     id: string
     name: string
     shortName?: string | null
   } | null
-  administrationDepartmentId?: string | null
-  administrationDepartment?: { id: string; name: string } | null
-  countryId?: string
-  historicalCountryId?: string
-  country?: {
-    id: string
-    name: string
-  }
-  historicalCountry?: {
-    id: string
-    name: string
-  }
   establishedDate?: string | null
   abolishedDate?: string | null
 }

@@ -138,6 +138,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       regnalName: person.regnalName,
       templeName: person.templeName,
       posthumousName: person.posthumousName,
+      preEnthronementTitle: person.preEnthronementTitle ?? null,
       // 관계
       dynastyId: person.dynastyId,
       dynasty:
@@ -410,7 +411,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 title: true,
                 positionType: true,
-                administrationDepartment: { select: { id: true, name: true } },
+                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
               },
             },
             country: { select: { id: true, name: true } },
@@ -448,7 +449,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 title: true,
                 positionType: true,
-                administrationDepartment: { select: { id: true, name: true } },
+                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
               },
             },
             country: { select: { id: true, name: true } },
@@ -511,7 +512,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 title: true,
                 positionType: true,
-                administrationDepartment: { select: { id: true, name: true } },
+                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
               },
             },
             country: { select: { id: true, name: true } },
@@ -557,8 +558,9 @@ export class PersonPrismaRepository implements IPersonRepository {
                 positionType: true,
                 rank: true,
                 description: true,
-                departmentName: true,
-                administrationDepartment: { select: { id: true, name: true } },
+                categoryId: true,
+                category: { select: { id: true, name: true, nameEn: true } },
+                organization: { select: { id: true, name: true, shortName: true } },
               },
             },
             country: {
@@ -694,6 +696,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
         },
+        nicknames: true,
         foundedCompanies: {
           select: {
             id: true,
@@ -824,7 +827,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 title: true,
                 rank: true,
                 description: true,
-                administrationDepartment: { select: { id: true, name: true } },
+                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
               },
             },
             country: {
@@ -1250,6 +1253,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         notes: dto.notes,
         priority: dto.priority,
         cabinetId: dto.cabinetId ?? undefined,
+        administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
         ...(accountId != null && { accountId }),
       },
       include: {
@@ -1308,6 +1312,8 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.notes !== undefined) updateData.notes = dto.notes
     if (dto.priority !== undefined) updateData.priority = dto.priority
     if (dto.cabinetId !== undefined) updateData.cabinetId = dto.cabinetId || null
+    if (dto.administrationDepartmentId !== undefined)
+      updateData.administrationDepartmentId = dto.administrationDepartmentId || null
 
     const tenure = await this.prisma.governmentPositionTenure.update({
       where: { id },
@@ -1367,7 +1373,11 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { headTenureId },
       include: {
         headTenure: {
-          include: { person: true, positionDefinition: true },
+          include: {
+            person: true,
+            positionDefinition: true,
+            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+          },
         },
       },
     })
@@ -1402,6 +1412,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
+        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
       },
     })
     return tenures.map((t) => serializeBigInt(t))
@@ -1424,15 +1435,30 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
+    // 현대국가 조회 시 연결된 하위 역사국가의 행정부도 함께 포함
+    let linkedHistoricalIds: string[] = []
+    if (params.countryId) {
+      linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+        .findMany({
+          where: { modernCountryId: params.countryId },
+          select: { historicalCountryId: true },
+        })
+        .then((rows) => rows.map((r) => r.historicalCountryId))
+    }
+
     const baseWhere: any =
       params.countryId || params.historicalCountryId
         ? {
-            headTenure: {
-              ...(params.countryId && { countryId: params.countryId }),
-              ...(params.historicalCountryId && {
-                historicalCountryId: params.historicalCountryId,
-              }),
-            },
+            headTenure: params.countryId
+              ? linkedHistoricalIds.length > 0
+                ? {
+                    OR: [
+                      { countryId: params.countryId },
+                      { historicalCountryId: { in: linkedHistoricalIds } },
+                    ],
+                  }
+                : { countryId: params.countryId }
+              : { historicalCountryId: params.historicalCountryId },
           }
         : {}
     if (params.accountId != null) {
@@ -1446,6 +1472,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: true,
             positionDefinition: true,
+            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
         },
       },
@@ -1476,6 +1503,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: true,
             positionDefinition: true,
+            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
         },
       },
@@ -1492,6 +1520,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: true,
             positionDefinition: true,
+            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
         },
       },
@@ -1531,6 +1560,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: true,
             positionDefinition: true,
+            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
         },
       },
@@ -1577,6 +1607,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
+        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
       },
     })
     return tenures.map((t) => serializeBigInt(t))
@@ -1588,7 +1619,10 @@ export class PersonPrismaRepository implements IPersonRepository {
   async findTenureById(id: string): Promise<any | null> {
     const tenure = await this.prisma.governmentPositionTenure.findUnique({
       where: { id },
-      include: { person: true },
+      include: {
+        person: true,
+        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+      },
     })
     if (!tenure) return null
     const serializeBigInt = (obj: any): any => {
@@ -1671,7 +1705,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             positionDefinition: {
               select: {
                 title: true,
-                administrationDepartment: { select: { id: true, name: true } },
+                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
               },
             },
           },
@@ -1752,8 +1786,8 @@ export class PersonPrismaRepository implements IPersonRepository {
   }): Promise<any[]> {
     const list = await this.prisma.governmentPositionDefinition.findMany({
       include: {
-        organization: true,
-        administrationDepartment: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true, nameEn: true } },
+        organization: { select: { id: true, name: true, shortName: true } },
       },
       orderBy: [{ rank: 'asc' }, { title: 'asc' }],
     })
@@ -1767,8 +1801,8 @@ export class PersonPrismaRepository implements IPersonRepository {
     const row = await this.prisma.governmentPositionDefinition.findUnique({
       where: { id },
       include: {
-        organization: true,
-        administrationDepartment: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true, nameEn: true } },
+        organization: { select: { id: true, name: true, shortName: true } },
       },
     })
     return row ? this.serializeDefinition(row) : null
@@ -1788,17 +1822,15 @@ export class PersonPrismaRepository implements IPersonRepository {
         titleLocal: dto.titleLocal ?? undefined,
         description: dto.description ?? undefined,
         rank: dto.rank ?? undefined,
-        departmentName: dto.departmentName ?? undefined,
+        categoryId: dto.categoryId ?? undefined,
         organizationId: dto.organizationId ?? undefined,
-        administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
-        establishedDate: dto.establishedDate
-          ? new Date(dto.establishedDate)
-          : undefined,
-        abolishedDate: dto.abolishedDate
-          ? new Date(dto.abolishedDate)
-          : undefined,
+        establishedDate: dto.establishedDate ? new Date(dto.establishedDate) : undefined,
+        abolishedDate: dto.abolishedDate ? new Date(dto.abolishedDate) : undefined,
       },
-      include: { organization: true, administrationDepartment: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true, nameEn: true } },
+        organization: { select: { id: true, name: true, shortName: true } },
+      },
     })
     return this.serializeDefinition(row)
   }
@@ -1817,22 +1849,19 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.positionType !== undefined) data.positionType = dto.positionType as any
     if (dto.description !== undefined) data.description = dto.description
     if (dto.rank !== undefined) data.rank = dto.rank
-    if (dto.departmentName !== undefined) data.departmentName = dto.departmentName
+    if (dto.categoryId !== undefined) data.categoryId = dto.categoryId
     if (dto.organizationId !== undefined) data.organizationId = dto.organizationId
-    if (dto.administrationDepartmentId !== undefined)
-      data.administrationDepartmentId = dto.administrationDepartmentId
     if (dto.establishedDate !== undefined)
-      data.establishedDate = dto.establishedDate
-        ? new Date(dto.establishedDate)
-        : null
+      data.establishedDate = dto.establishedDate ? new Date(dto.establishedDate) : null
     if (dto.abolishedDate !== undefined)
-      data.abolishedDate = dto.abolishedDate
-        ? new Date(dto.abolishedDate)
-        : null
+      data.abolishedDate = dto.abolishedDate ? new Date(dto.abolishedDate) : null
     const row = await this.prisma.governmentPositionDefinition.update({
       where: { id },
       data,
-      include: { organization: true, administrationDepartment: { select: { id: true, name: true } } },
+      include: {
+        category: { select: { id: true, name: true, nameEn: true } },
+        organization: { select: { id: true, name: true, shortName: true } },
+      },
     })
     return this.serializeDefinition(row)
   }
@@ -1909,6 +1938,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
+        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
       },
       orderBy: { startDate: 'desc' },
     })
@@ -2101,7 +2131,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 title: true,
                 positionType: true,
-                administrationDepartment: { select: { id: true, name: true } },
+                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
               },
             },
             country: { select: { id: true, name: true } },

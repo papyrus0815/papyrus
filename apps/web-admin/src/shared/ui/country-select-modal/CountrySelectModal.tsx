@@ -69,6 +69,11 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
     }
   }, [countryType, sortBy])
 
+  const selectedCount = useMemo(() => {
+    if (multiSelect) return selectedCountryIds.length
+    return selectedCountryId ? 1 : 0
+  }, [multiSelect, selectedCountryIds.length, selectedCountryId])
+
   if (!isOpen) return null
 
   // 검색 필터링
@@ -172,11 +177,6 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
       ? filteredModernCountries
       : filteredHistoricalCountries,
   )
-
-  const selectedCount = useMemo(() => {
-    if (multiSelect) return selectedCountryIds.length
-    return selectedCountryId ? 1 : 0
-  }, [multiSelect, selectedCountryIds.length, selectedCountryId])
 
   return (
     <Overlay onClick={onClose}>

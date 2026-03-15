@@ -727,4 +727,9 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsString()
   cabinetId?: string | null
+
+  /** 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 (예: 미국 국무부, 한국 외교부) */
+  @IsOptional()
+  @IsString()
+  administrationDepartmentId?: string | null
 }

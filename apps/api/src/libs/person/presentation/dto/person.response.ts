@@ -28,6 +28,7 @@ export interface PersonResponseDto {
   regnalName: string | null
   templeName: string | null
   posthumousName: string | null
+  preEnthronementTitle: string | null
   // 관계
   dynastyId: string | null
   /** 가문 (목록/재임 응답에서 노출, id·name만) */

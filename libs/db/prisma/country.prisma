@@ -310,7 +310,8 @@ model AdministrationDepartmentCategory {
   name   String  @db.VarChar(80)
   nameEn String? @map("name_en") @db.VarChar(80)
 
-  departments AdministrationDepartment[]
+  departments         AdministrationDepartment[]
+  positionDefinitions GovernmentPositionDefinition[] @relation("CategoryPositionDefinitions")
 
   @@unique([name], name: "uniq_admin_dept_category_name")
   @@map("administration_department_category")
@@ -365,8 +366,8 @@ model AdministrationDepartment {
   successor          AdministrationDepartment?      @relation("DeptSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
   predecessors       AdministrationDepartment[]     @relation("DeptSuccessor")
   events             AdministrationDepartmentEvent[] @relation("DeptEvents")
-  /// 이 부처에 연결된 직위 정의(장관 등). 해당 직위의 재임(Tenure)이 "역대 장관"으로 조회됨.
-  positionDefinitions GovernmentPositionDefinition[] @relation("PositionDefinitionDepartment")
+  /// 이 부처 소속으로 등록된 재임 기록 (역대 장관 조회)
+  tenures            GovernmentPositionTenure[]     @relation("TenureDepartment")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

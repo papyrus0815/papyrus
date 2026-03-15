@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
-import { FiGrid, FiInfo, FiPlus, FiSearch, FiX } from 'react-icons/fi'
+import { FiGrid, FiInfo, FiPlus, FiSearch, FiX, FiAward } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import * as S from '@/pages/history/country/country.styles'
@@ -1631,6 +1631,11 @@ export function GovernmentInfoSection({
     useState(false)
   const [organizationSearchQuery, setOrganizationSearchQuery] = useState('')
   const [editingOrganization, setEditingOrganization] =
+    useState<OrganizationResponseDto | null>(null)
+  /** 행정기구 상세 모달 탭: 'info' | 'positions' */
+  const [orgModalTab, setOrgModalTab] = useState<'info' | 'positions'>('info')
+  /** 행정기구 상세 뷰용 — null이면 목록, 값이 있으면 상세 뷰 */
+  const [selectedOrganization, setSelectedOrganization] =
     useState<OrganizationResponseDto | null>(null)
   const [organizationForm, setOrganizationForm] = useState<{
     name: string
@@ -4021,7 +4026,7 @@ export function GovernmentInfoSection({
 
       {contentTab === 'positions' && country && (
         <section aria-label="직위 정의(관직)">
-          <PositionDefinitionsSection country={country} />
+          <PositionDefinitionsSection />
         </section>
       )}
 
@@ -4058,6 +4063,127 @@ export function GovernmentInfoSection({
 
       {contentTab === 'organizations' && (
         <section aria-label="행정기구(조직)">
+          {selectedOrganization ? (
+            /* ── 상세 뷰 ── */
+            <>
+              {/* 헤더: 뒤로가기 + 조직명 + 액션 버튼 */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  paddingBottom: 20,
+                  marginBottom: 24,
+                  borderBottom: '1px solid #e9eef5',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedOrganization(null)
+                      setEditingOrganization(null)
+                      setOrganizationModalError(null)
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '8px 14px', fontSize: 13, fontWeight: 600,
+                      color: '#64748b', background: 'transparent', border: 'none',
+                      borderRadius: 12, cursor: 'pointer',
+                    }}
+                    onMouseOver={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#475569' }}
+                    onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b' }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    목록으로
+                  </button>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', letterSpacing: '-0.025em' }}>
+                    {selectedOrganization.name}
+                    {selectedOrganization.shortName && (
+                      <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8', marginLeft: 8 }}>
+                        ({selectedOrganization.shortName})
+                      </span>
+                    )}
+                  </h2>
+                </div>
+                {/* 액션 버튼 */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingOrganization(selectedOrganization)
+                      setOrganizationForm({
+                        name: selectedOrganization.name,
+                        shortName: selectedOrganization.shortName,
+                        localName: selectedOrganization.localName,
+                        type: selectedOrganization.type,
+                        scope: selectedOrganization.scope,
+                        countryId: selectedOrganization.countryId,
+                        historicalCountryId: selectedOrganization.historicalCountryId,
+                        description: selectedOrganization.description,
+                        foundedDate: selectedOrganization.foundedDate ? selectedOrganization.foundedDate.slice(0, 10) : null,
+                        dissolvedDate: selectedOrganization.dissolvedDate ? selectedOrganization.dissolvedDate.slice(0, 10) : null,
+                        websiteUrl: selectedOrganization.websiteUrl,
+                        logoUrl: selectedOrganization.logoUrl,
+                        ideology: selectedOrganization.ideology,
+                      })
+                      setOrganizationModalError(null)
+                      setOrganizationModalOpen(true)
+                    }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '9px 16px', fontSize: 13, fontWeight: 600,
+                      color: '#475569', background: '#fff',
+                      border: '1px solid #e2e8f0', borderRadius: 10, cursor: 'pointer',
+                    }}
+                  >
+                    <FiGrid size={13} />
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrgModalTab('positions')}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '9px 16px', fontSize: 13, fontWeight: 600,
+                      color: '#4f46e5', background: '#eef2ff',
+                      border: '1px solid #c7d2fe', borderRadius: 10, cursor: 'pointer',
+                    }}
+                  >
+                    <FiAward size={13} />
+                    직위 설정
+                  </button>
+                </div>
+              </div>
+
+              {/* 조직 기본 정보 표시 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+                {[
+                  { label: '유형', value: ORGANIZATION_TYPE_LABEL[selectedOrganization.type] ?? selectedOrganization.type },
+                  { label: '설립일', value: selectedOrganization.foundedDate ? selectedOrganization.foundedDate.slice(0, 10) : '—' },
+                  { label: '해체일', value: selectedOrganization.dissolvedDate ? selectedOrganization.dissolvedDate.slice(0, 10) : '—' },
+                  { label: '로컬명', value: selectedOrganization.localName ?? '—' },
+                ].map((item) => (
+                  <div key={item.label} style={{ background: '#f8fafc', borderRadius: 12, padding: '14px 16px', border: '1px solid #f1f5f9' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              {selectedOrganization.description && (
+                <div style={{ background: '#f8fafc', borderRadius: 12, padding: '16px 18px', border: '1px solid #f1f5f9', marginBottom: 24 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>설명</div>
+                  <p style={{ margin: 0, fontSize: 14, color: '#374151', lineHeight: 1.6 }}>{selectedOrganization.description}</p>
+                </div>
+              )}
+            </>
+          ) : (
+          /* ── 목록 뷰 ── */
+          <>
           {!effectiveCountryId ? (
             <>
               <SectionLabel>행정기구·조직</SectionLabel>
@@ -4289,7 +4415,17 @@ export function GovernmentInfoSection({
                       </OrgCard>
                       {filteredOrganizationsList.map(
                         (org: OrganizationResponseDto) => (
-                          <OrgCard key={org.id}>
+                          <OrgCard
+                            key={org.id}
+                            as="button"
+                            type="button"
+                            onClick={() => {
+                              setOrgModalTab('info')
+                              setOrganizationModalError(null)
+                              setSelectedOrganization(org)
+                            }}
+                            style={{ cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                          >
                             <OrgCardContent>
                               <div
                                 style={{
@@ -4339,47 +4475,9 @@ export function GovernmentInfoSection({
                                     )}
                                   </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setEditingOrganization(org)
-                                    setOrganizationForm({
-                                      name: org.name,
-                                      shortName: org.shortName,
-                                      localName: org.localName,
-                                      type: org.type,
-                                      scope: org.scope,
-                                      countryId: org.countryId,
-                                      historicalCountryId:
-                                        org.historicalCountryId,
-                                      description: org.description,
-                                      foundedDate: org.foundedDate
-                                        ? org.foundedDate.slice(0, 10)
-                                        : null,
-                                      dissolvedDate: org.dissolvedDate
-                                        ? org.dissolvedDate.slice(0, 10)
-                                        : null,
-                                      websiteUrl: org.websiteUrl,
-                                      logoUrl: org.logoUrl,
-                                      ideology: org.ideology,
-                                    })
-                                    setOrganizationModalOpen(true)
-                                  }}
-                                  style={{
-                                    padding: '8px 14px',
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    color: '#475569',
-                                    background: '#fff',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 10,
-                                    cursor: 'pointer',
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  수정
-                                </button>
+                                <div style={{ color: '#cbd5e1', flexShrink: 0 }}>
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                                </div>
                               </div>
                             </OrgCardContent>
                           </OrgCard>
@@ -4390,6 +4488,8 @@ export function GovernmentInfoSection({
                 </>
               )}
             </>
+          )}
+          </>
           )}
 
           {organizationModalOpen &&
@@ -4415,7 +4515,7 @@ export function GovernmentInfoSection({
                     <OrgModalHeader>
                       <OrgModalTitle id="org-modal-title">
                         <FiGrid size={24} strokeWidth={2} />
-                        {editingOrganization ? '조직 수정' : '조직 등록'}
+                        {editingOrganization ? editingOrganization.name : '조직 등록'}
                       </OrgModalTitle>
                       <OrgCloseBtn
                         type="button"
@@ -4476,6 +4576,9 @@ export function GovernmentInfoSection({
                                 body,
                               )
                               toast.success('수정되었습니다.')
+                              if (selectedOrganization?.id === editingOrganization.id) {
+                                setSelectedOrganization({ ...selectedOrganization, ...body })
+                              }
                             } else {
                               await createOrganization(apiConnection, body)
                               toast.success('등록되었습니다.')
@@ -4738,6 +4841,51 @@ export function GovernmentInfoSection({
               </OrgModalOverlay>,
               document.body,
             )}
+
+        {/* 직위 설정 모달 */}
+        {orgModalTab === 'positions' && selectedOrganization && createPortal(
+          <OrgModalOverlay
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="org-position-modal-title"
+            onClick={() => setOrgModalTab('info')}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: '90vw', maxWidth: 700, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+            >
+              <OrgModalBox style={{ maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <OrgModalHeader>
+                  <OrgModalTitle id="org-position-modal-title">
+                    <FiAward size={22} strokeWidth={2} />
+                    직위 설정 — {selectedOrganization.name}
+                  </OrgModalTitle>
+                  <OrgCloseBtn
+                    type="button"
+                    onClick={() => setOrgModalTab('info')}
+                    aria-label="닫기"
+                  >
+                    <FiX size={22} strokeWidth={2} />
+                  </OrgCloseBtn>
+                </OrgModalHeader>
+                <OrgFormBody style={{ flex: 1, overflow: 'auto' }}>
+                  <PositionDefinitionsSection
+                    fixedOrganizationId={selectedOrganization.id}
+                    fixedOrganizationName={
+                      selectedOrganization.shortName
+                        ? `${selectedOrganization.name} (${selectedOrganization.shortName})`
+                        : selectedOrganization.name
+                    }
+                  />
+                </OrgFormBody>
+              </OrgModalBox>
+            </motion.div>
+          </OrgModalOverlay>,
+          document.body,
+        )}
         </section>
       )}
 

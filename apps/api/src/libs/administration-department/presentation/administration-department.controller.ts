@@ -245,7 +245,7 @@ export class AdministrationDepartmentController {
   }
 
   /**
-   * 부처별 역대 장관(재임) — 이 부처에 연결된 직위 정의의 재임 목록
+   * 부처별 역대 장관(재임) — 이 부처에 직접 연결된 재임 목록
    */
   @Get(':id/tenures')
   async getTenuresByDepartmentId(
@@ -253,11 +253,11 @@ export class AdministrationDepartmentController {
   ): Promise<any[]> {
     const list = await this.prisma.governmentPositionTenure.findMany({
       where: {
-        positionDefinition: { administrationDepartmentId: id },
+        administrationDepartmentId: id,
       },
       orderBy: { startDate: 'desc' },
       include: {
-        person: { select: { id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true } },
+        person: { select: { id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, birthYear: true, deathYear: true, birthEra: true, deathEra: true, birthDate: true, deathDate: true } },
         positionDefinition: { select: { id: true, title: true, positionType: true } },
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
@@ -269,10 +269,10 @@ export class AdministrationDepartmentController {
       startDate: row.startDate?.toISOString() ?? null,
       endDate: row.endDate?.toISOString() ?? null,
       title: row.title,
-      positionDefinition: row.positionDefinition,
-      person: row.person,
-      country: row.country,
-      historicalCountry: row.historicalCountry,
+      positionDefinition: (row as any).positionDefinition,
+      person: (row as any).person,
+      country: (row as any).country,
+      historicalCountry: (row as any).historicalCountry,
     }))
   }
 

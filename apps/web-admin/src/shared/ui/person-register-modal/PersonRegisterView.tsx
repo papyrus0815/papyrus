@@ -300,6 +300,7 @@ export function PersonRegisterView({
   // 기타
   const [biography, setBiography] = useState('')
   const [profileImageUrl, setProfileImageUrl] = useState('')
+  const [preEnthronementTitle, setPreEnthronementTitle] = useState('')
   const [regnalName, setRegnalName] = useState('')
   const [templeName, setTempleName] = useState('')
   const [posthumousName, setPosthumousName] = useState('')
@@ -371,6 +372,10 @@ export function PersonRegisterView({
         setGender(p.gender ?? '')
         setBiography(p.biography ?? '')
         setProfileImageUrl(p.profileImageUrl ?? '')
+        const preEnthronement = Array.isArray((p as any).nicknames)
+          ? (p as any).nicknames.find((n: any) => n?.type === 'PRE_ENTHRONEMENT_TITLE')
+          : null
+        setPreEnthronementTitle(preEnthronement?.nickname ?? p.preEnthronementTitle ?? '')
         setRegnalName(p.regnalName ?? '')
         setTempleName(p.templeName ?? '')
         setPosthumousName(p.posthumousName ?? '')
@@ -593,6 +598,7 @@ export function PersonRegisterView({
       regnalName: regnalName.trim() || undefined,
       templeName: templeName.trim() || undefined,
       posthumousName: posthumousName.trim() || undefined,
+      preEnthronementTitle: preEnthronementTitle.trim() || undefined,
       countryId: countryId || undefined,
       birthCityId: birthCityId || undefined,
       deathCityId: deathCityId || undefined,
@@ -731,6 +737,18 @@ export function PersonRegisterView({
                   </OriginalNameInputWrap>
                 </FieldControl>
               </FieldRow>
+              <FieldRow>
+                <FieldLabel>즉위 전 작호(군호)</FieldLabel>
+                <FieldControl>
+                  <OriginalNameInputWrap>
+                    <Input
+                      value={preEnthronementTitle}
+                      onChange={(e) => setPreEnthronementTitle(e.target.value)}
+                      placeholder="예: 수양대군, 충녕대군"
+                    />
+                  </OriginalNameInputWrap>
+                </FieldControl>
+              </FieldRow>
               <CheckboxRowTwo>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input type="checkbox" checked={isBirthDateUnknown} onChange={(e) => setIsBirthDateUnknown(e.target.checked)} />
@@ -810,7 +828,6 @@ export function PersonRegisterView({
                     <span>{countryName || '국가 선택'}</span>
                     <FiChevronDown size={18} />
                   </SelectBtn>
-                  <CountrySelectModal isOpen={showCountryModal} onClose={() => setShowCountryModal(false)} onSelect={handleCountrySelect} modernCountries={modernCountries} historicalCountries={historicalCountries} title="소속 국가 선택" selectedCountryId={countryId || undefined} />
                 </FieldControl>
               </FieldRow>
               {countryId && cities.length > 0 && (
@@ -897,6 +914,15 @@ export function PersonRegisterView({
             </FormSectionInner>
       </form>
 
+      <CountrySelectModal
+        isOpen={showCountryModal}
+        onClose={() => setShowCountryModal(false)}
+        onSelect={handleCountrySelect}
+        modernCountries={modernCountries}
+        historicalCountries={historicalCountries}
+        title="소속 국가 선택"
+        selectedCountryId={countryId || undefined}
+      />
       {showBirthDateModal && (
         <DatePickerModal
           isOpen={showBirthDateModal}

@@ -138,25 +138,25 @@ model GovernmentPositionDefinition {
   description String? @db.Text
   rank        Int?    @default(999)
 
-  departmentName String? @map("department_name") @db.VarChar(100)
-  organizationId String? @map("organization_id") @db.Char(36)
+  /// 중앙부처 카테고리 연결 — 외교부 장관, 국방부 장관 등 일반 직위 (관리자 등록)
+  categoryId String? @map("category_id") @db.Char(36)
 
-  /// 행정 부처(AdministrationDepartment) 연결 — 이 직위가 해당 부처의 장관 등일 때. 부처별 역대 장관 조회에 사용.
-  administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
+  /// 행정기구(Organization) 연결 — 조선총독, 만철 총재 등 특정 기구 직위 (사용자 등록)
+  organizationId String? @map("organization_id") @db.Char(36)
 
   establishedDate DateTime? @map("established_date")
   abolishedDate   DateTime? @map("abolished_date")
 
-  organization             Organization?             @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
-  administrationDepartment AdministrationDepartment? @relation("PositionDefinitionDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
+  category     AdministrationDepartmentCategory? @relation("CategoryPositionDefinitions", fields: [categoryId], references: [id], onDelete: SetNull)
+  organization Organization?                     @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
   tenures GovernmentPositionTenure[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([categoryId], name: "idx_gov_pos_def_categoryId")
   @@index([organizationId], name: "idx_gov_pos_def_organizationId")
-  @@index([administrationDepartmentId], name: "idx_gov_pos_def_administrationDepartmentId")
   @@index([positionType], name: "idx_gov_pos_def_positionType")
   @@index([rank], name: "idx_gov_pos_def_rank")
   @@map("government_position_definition")
@@ -254,7 +254,7 @@ model GovernmentPositionTenure {
   endReason TenureEndReason? @map("end_reason")
 
   /// 종료 사유 상세 설명
-  endReasonDetail String? @map("end_reason_detail") @db.VarChar(200)
+  endReasonDetail String? @map("end_reason_detail") @db.Text
 
   /// 특이사항/비고
   notes String? @db.Text
@@ -264,6 +264,9 @@ model GovernmentPositionTenure {
 
   /// 소속 행정부 ID — 이 각료/총독 재임이 속한 행정부(Cabinet)
   cabinetId String? @map("cabinet_id") @db.Char(36)
+
+  /// 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 (예: 미국 국무부, 한국 외교부)
+  administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
 
   /// 등록한 계정 (계정별 각료/재임 구분)
   accountId String? @map("account_id") @db.Char(36)
@@ -279,6 +282,7 @@ model GovernmentPositionTenure {
   regnalEras         RegnalEra[]                   @relation("TenureRegnalEras")
   /// 재임 기간 중 업적·한일 (사건과 별도 개념)
   achievements       TenureAchievement[]           @relation("TenureAchievements")
+  administrationDepartment AdministrationDepartment? @relation("TenureDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -292,6 +296,7 @@ model GovernmentPositionTenure {
   @@index([termNumber], name: "idx_gov_tenure_termNum")
   @@index([startDate], name: "idx_gov_tenure_startDate")
   @@index([cabinetId], name: "idx_gov_tenure_cabinetId")
+  @@index([administrationDepartmentId], name: "idx_gov_tenure_adminDeptId")
   @@index([accountId], name: "idx_gov_tenure_accountId")
   @@map("government_position_tenure")
 }

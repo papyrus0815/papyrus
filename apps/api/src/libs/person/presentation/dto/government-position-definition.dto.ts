@@ -31,17 +31,15 @@ export class CreateGovernmentPositionDefinitionDto {
   @Min(0)
   rank?: number | null
 
+  /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
   @IsOptional()
-  @IsString()
-  departmentName?: string | null
+  @IsUUID()
+  categoryId?: string | null
 
+  /** 행정기구 연결 (사용자 등록 직위) */
   @IsOptional()
   @IsUUID()
   organizationId?: string | null
-
-  @IsOptional()
-  @IsUUID()
-  administrationDepartmentId?: string | null
 
   @IsOptional()
   @IsDateString()
@@ -78,17 +76,15 @@ export class UpdateGovernmentPositionDefinitionDto {
   @Min(0)
   rank?: number | null
 
+  /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
   @IsOptional()
-  @IsString()
-  departmentName?: string | null
+  @IsUUID()
+  categoryId?: string | null
 
+  /** 행정기구 연결 (사용자 등록 직위) */
   @IsOptional()
   @IsUUID()
   organizationId?: string | null
-
-  @IsOptional()
-  @IsUUID()
-  administrationDepartmentId?: string | null
 
   @IsOptional()
   @IsDateString()
