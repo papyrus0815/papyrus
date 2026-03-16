@@ -35,6 +35,10 @@ import { getAllPersons } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import {
+  calcAgeAtTenure,
+  formatPersonLifespan,
+} from '@/shared/lib/tenure-person-utils'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { DateRangeField } from '@/shared/ui/form-fields'
@@ -509,58 +513,6 @@ function getPersonName(p: any): string {
     },
     true,
   )
-}
-
-/** 인물 카드용 생몰년 표시 (각료 선택 모달 등) */
-function formatPersonLifespan(p: any): string {
-  if (!p) return '생몰년 미상'
-  const be = p.birthEra === 'BC' ? 'BC ' : ''
-  const de = p.deathEra === 'BC' ? 'BC ' : ''
-  // birthYear 필드가 있으면 우선 사용, 없으면 birthDate에서 연도 추출
-  const by =
-    p.birthYear != null
-      ? p.birthYear
-      : p.birthDate
-        ? new Date(p.birthDate).getFullYear()
-        : null
-  const dy =
-    p.deathYear != null
-      ? p.deathYear
-      : p.deathDate
-        ? new Date(p.deathDate).getFullYear()
-        : null
-  if (by != null && dy != null) return `${be}${by} ~ ${de}${dy}`
-  if (by != null) return `${be}${by} ~`
-  if (dy != null) return `~ ${de}${dy}`
-  return '생몰년 미상'
-}
-
-/** 취임일 기준 나이 계산 (birthDate/birthYear 기반) */
-function calcAgeAtTenure(
-  person: any,
-  tenureStartDate: string | null | undefined,
-): number | null {
-  if (!person || !tenureStartDate) return null
-  const startYear = new Date(tenureStartDate).getFullYear()
-  const startMonth = new Date(tenureStartDate).getMonth() + 1
-  const startDay = new Date(tenureStartDate).getDate()
-
-  // birthDate(ISO string) 우선, 없으면 birthYear만
-  if (person.birthDate) {
-    const bd = new Date(person.birthDate)
-    let age = startYear - bd.getFullYear()
-    if (
-      startMonth < bd.getMonth() + 1 ||
-      (startMonth === bd.getMonth() + 1 && startDay < bd.getDate())
-    )
-      age -= 1
-    return age >= 0 ? age : null
-  }
-  if (person.birthYear != null) {
-    const age = startYear - person.birthYear
-    return age >= 0 ? age : null
-  }
-  return null
 }
 
 /** 퇴임일 기준 나이 계산 (birthDate/birthYear 기반) */
@@ -3307,7 +3259,8 @@ export function CabinetsSection({
                                       rows={3}
                                       placeholder="취임 배경, 특이 사항 등"
                                       style={{
-                                        maxWidth: 360,
+                                        maxWidth: 500,
+                                        height: 200,
                                         width: '100%',
                                         padding: '8px 10px',
                                         fontSize: 13,
@@ -3566,7 +3519,8 @@ export function CabinetsSection({
                                       rows={3}
                                       placeholder="퇴임 경위, 상세 내용 등"
                                       style={{
-                                        maxWidth: 360,
+                                        maxWidth: 500,
+                                        height: 200,
                                         width: '100%',
                                         padding: '8px 10px',
                                         fontSize: 13,

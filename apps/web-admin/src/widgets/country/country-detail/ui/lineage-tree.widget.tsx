@@ -830,7 +830,14 @@ export function LineageTree({
         { x: rightX, y: connectorY },
       ]
 
-      let d = `M ${parentBottomX} ${parentBottomY} L ${parentBottomX} ${connectorY}`
+      /** bezier 반경 — 꺾임점에서 곡선 처리할 픽셀 */
+      const R = 8
+      /** 부모 하단 → 수평 중간선(connectorY)으로 내려가는 수직선, 꺾임에 R 적용 */
+      let d = `M ${parentBottomX} ${parentBottomY}`
+      d += ` L ${parentBottomX} ${connectorY - R}`
+      /** 수평선으로 꺾이는 지점 — 오른쪽 자식이 있으면 rightX, 왼쪽이면 leftX 방향 */
+      const horizDir = rightX > parentBottomX ? 1 : -1
+      d += ` Q ${parentBottomX} ${connectorY} ${parentBottomX + horizDir * R} ${connectorY}`
       d += ` L ${leftX} ${connectorY} L ${rightX} ${connectorY}`
       const endpoints: {
         childId: string
@@ -844,7 +851,10 @@ export function LineageTree({
       children.forEach((c) => {
         const cx = colCenter(c.pos.col)
         vertices.push({ x: cx, y: connectorY }, { x: cx, y: childTopY })
-        d += ` M ${cx} ${connectorY} L ${cx} ${childTopY}`
+        /** 수평선에서 수직 하강으로 꺾이는 지점 */
+        d += ` M ${cx} ${connectorY}`
+        d += ` L ${cx} ${connectorY + R}`
+        d += ` L ${cx} ${childTopY}`
         const tenure = tenureById.get(c.id)
         const label = getPositionLabel?.(tenure) ?? ''
         if (label) {
@@ -969,7 +979,10 @@ export function LineageTree({
       // 같은 열에서 최소 간격을 보장해 시각 겹침 제거
       let prevBottom = -Infinity
       prepared.forEach((it) => {
-        const desiredTop = Math.max(it.visualTop, prevBottom + YEAR_CARD_MIN_GAP_PX)
+        const desiredTop = Math.max(
+          it.visualTop,
+          prevBottom + YEAR_CARD_MIN_GAP_PX,
+        )
         const shifted = desiredTop > it.visualTop
         const topPx = desiredTop
         const heightPx = it.visualHeight
@@ -1150,7 +1163,7 @@ export function LineageTree({
                           {t.person?.profileImageUrl ? (
                             <img src={t.person.profileImageUrl} alt="" />
                           ) : (
-                            <FiUser size={22} />
+                            <FiUser size={24} />
                           )}
                         </TreeCardAvatar>
                       </TreeCardTopRow>
@@ -1165,7 +1178,7 @@ export function LineageTree({
                       )}
                       {!isCompactCard && parentTenure && parentDisplay && (
                         <TreeCardRelation>
-                          ↑ 이전: {parentDisplay} ({parentOrderLabel})
+                          이전: {parentDisplay} ({parentOrderLabel})
                         </TreeCardRelation>
                       )}
                       {!isCompactCard && titleText && titleText !== '—' && (
@@ -1310,7 +1323,7 @@ export function LineageTree({
                                 {t.person?.profileImageUrl ? (
                                   <img src={t.person.profileImageUrl} alt="" />
                                 ) : (
-                                  <FiUser size={22} />
+                                  <FiUser size={24} />
                                 )}
                               </TreeCardAvatar>
                             </TreeCardTopRow>
@@ -1325,7 +1338,7 @@ export function LineageTree({
                             )}
                             {parentTenure && parentDisplay && (
                               <TreeCardRelation>
-                                ↑ 이전: {parentDisplay} ({parentOrderLabel})
+                                이전: {parentDisplay} ({parentOrderLabel})
                               </TreeCardRelation>
                             )}
                             {titleText && titleText !== '—' && (
@@ -1356,9 +1369,9 @@ export function LineageTree({
                           key={key}
                           d={d}
                           fill="none"
-                          stroke="rgba(71, 85, 105, 0.35)"
-                          strokeWidth="1.2"
-                          strokeDasharray="3 3"
+                          stroke="rgba(99, 102, 241, 0.4)"
+                          strokeWidth="1.5"
+                          strokeDasharray="4 3"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -1410,6 +1423,7 @@ export function LineageTree({
 /* ─── 디자인: 깔끔·트렌디 (미니멀, 여백, 소프트 섀도우) ─── */
 const BORDER_SUBTLE = '#e5e7eb'
 const ACCENT = '#6366f1'
+const TIMELINE_ACCENT = '#7c3aed'
 
 /** 전체 블록 — 여백만 강조 */
 const TreeOuter = styled.div`
@@ -1446,14 +1460,14 @@ const PositionHeaderCell = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  font-size: 14px;
-  font-weight: 600;
-  color: #0f172a;
-  letter-spacing: -0.03em;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e1b4b;
+  letter-spacing: -0.02em;
   box-sizing: border-box;
-  padding: 0 18px;
-  background: rgba(248, 250, 252, 0.96);
-  border: 1px solid #e2e8f0;
+  padding: 0 16px;
+  background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%);
+  border: 1px solid #ddd6fe;
   border-radius: 10px;
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
@@ -1468,12 +1482,13 @@ const TreeWrap = styled.div`
 `
 
 const Legend = styled.div`
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 28px;
+  font-size: 11px;
+  color: ${TIMELINE_ACCENT};
+  margin-top: 20px;
   padding-left: ${TIMELINE_WIDTH + TIMELINE_TO_CARD_GAP}px;
-  font-weight: 400;
+  font-weight: 500;
   max-width: 420px;
+  opacity: 0.7;
 `
 
 /** 타임라인 열 — 미니멀 */
@@ -1490,13 +1505,11 @@ const TimelineBar = styled.div`
   left: 50%;
   top: 0;
   bottom: 0;
-  width: 3px;
-  margin-left: -1.5px;
-  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 45%, #64748b 100%);
+  width: 2px;
+  margin-left: -1px;
+  background: linear-gradient(180deg, #ddd6fe 0%, #a78bfa 40%, ${TIMELINE_ACCENT} 100%);
   border-radius: 999px;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.65),
-    0 2px 10px rgba(100, 116, 139, 0.2);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
 `
 
 /** 연도 노드 — 작은 도트 */
@@ -1509,10 +1522,10 @@ const TimelineNode = styled.span`
   margin-left: -4px;
   margin-top: -4px;
   border-radius: 50%;
-  background: #334155;
+  background: ${TIMELINE_ACCENT};
   box-shadow:
     0 0 0 2px #fff,
-    0 0 0 4px rgba(148, 163, 184, 0.2);
+    0 0 0 4px rgba(124, 58, 237, 0.2);
   flex-shrink: 0;
 `
 
@@ -1539,17 +1552,18 @@ const TimelineLabelWrap = styled.span`
 `
 
 const TimelineLabel = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4c1d95;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  padding: 4px 10px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  background: #faf5ff;
+  border: 1px solid #ddd6fe;
   border-radius: 999px;
   display: inline-block;
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(124, 58, 237, 0.08);
+  letter-spacing: 0.01em;
 `
 
 const TreeArea = styled.div`
@@ -1592,8 +1606,8 @@ const PositionSeparatorLine = styled.div`
   bottom: 0;
   width: 0;
   margin-left: -1px;
-  border-left: 1px dashed #94a3b8;
-  opacity: 0.85;
+  border-left: 1.5px solid #e0e7ff;
+  opacity: 0.9;
 `
 
 const TreeSvg = styled.svg`
@@ -1657,14 +1671,17 @@ const TreeCardYearBased = styled.div`
   position: absolute;
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
-  padding: 16px 16px 14px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  padding: 14px 14px 12px;
+  background: linear-gradient(160deg, #fff 0%, #f8faff 100%);
+  border: 1.5px solid #e2e8f0;
   border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 4px 12px rgba(99, 102, 241, 0.04);
   cursor: pointer;
   transition:
     box-shadow 0.2s ease,
+    border-color 0.2s ease,
     transform 0.2s ease;
   text-align: left;
   display: flex;
@@ -1675,8 +1692,11 @@ const TreeCardYearBased = styled.div`
   word-break: break-word;
 
   &:hover {
-    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.12);
-    transform: translateY(-1px);
+    box-shadow:
+      0 8px 24px rgba(79, 70, 229, 0.12),
+      0 2px 8px rgba(15, 23, 42, 0.06);
+    border-color: #a5b4fc;
+    transform: translateY(-2px);
   }
 `
 
@@ -1691,14 +1711,17 @@ const TreeCard = styled.div`
   box-sizing: border-box;
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
-  padding: 16px 16px 14px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  padding: 14px 14px 12px;
+  background: linear-gradient(160deg, #fff 0%, #f8faff 100%);
+  border: 1.5px solid #e2e8f0;
   border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.06),
+    0 4px 12px rgba(99, 102, 241, 0.04);
   cursor: pointer;
   transition:
     box-shadow 0.2s ease,
+    border-color 0.2s ease,
     transform 0.2s ease;
   position: relative;
   text-align: left;
@@ -1710,8 +1733,11 @@ const TreeCard = styled.div`
   word-break: break-word;
 
   &:hover {
-    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.12);
-    transform: translateY(-1px);
+    box-shadow:
+      0 8px 24px rgba(79, 70, 229, 0.12),
+      0 2px 8px rgba(15, 23, 42, 0.06);
+    border-color: #a5b4fc;
+    transform: translateY(-2px);
   }
 `
 
@@ -1776,17 +1802,17 @@ function getBadgeColorsForLabel(label: string): (typeof BADGE_PALETTE)[number] {
 const TreeCardReign = styled.div`
   display: inline-flex;
   align-items: center;
-  padding: 4px 11px;
+  padding: 2px 9px;
   border-radius: 999px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
-  font-size: 13px;
+  border: 1px solid #ddd6fe;
+  background: #f5f3ff;
+  font-size: 11px;
   font-weight: 700;
-  color: #1e3a8a;
-  margin-bottom: 2px;
+  color: #4c1d95;
+  margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
 `
 
 const TreeCardMainName = styled.div`
@@ -1795,7 +1821,7 @@ const TreeCardMainName = styled.div`
   color: #0f172a;
   letter-spacing: -0.02em;
   line-height: 1.3;
-  margin-bottom: 3px;
+  margin-bottom: 1px;
   max-width: 100%;
   overflow-wrap: break-word;
 `
@@ -1804,29 +1830,34 @@ const TreeCardSubName = styled.div`
   font-size: 12px;
   font-weight: 500;
   color: #64748b;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   line-height: 1.4;
   max-width: 100%;
   overflow-wrap: break-word;
 `
 
 const TreeCardDynasty = styled.div`
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: #6d28d9;
-  margin-bottom: 4px;
+  color: ${TIMELINE_ACCENT};
+  margin-bottom: 3px;
   line-height: 1.4;
   max-width: 100%;
   overflow-wrap: break-word;
 `
 
 const TreeCardRelation = styled.div`
-  font-size: 12px;
-  color: #475569;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px dashed #e2e8f0;
+  padding: 4px 8px;
+  background: #f8fafc;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 500;
   line-height: 1.4;
 `
 
@@ -1838,24 +1869,33 @@ const TreeCardRegnal = styled.div`
 `
 
 const TreeCardTitle = styled.div`
-  font-size: 12px;
-  font-weight: 500;
-  color: #475569;
-  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
   line-height: 1.4;
+  letter-spacing: 0.01em;
 `
 
 const TreeCardAvatar = styled.div<{ $hasImage?: boolean }>`
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   overflow: hidden;
-  background: ${({ $hasImage }) => ($hasImage ? '#f1f5f9' : '#e0e7ff')};
+  background: ${({ $hasImage }) => ($hasImage ? '#f1f5f9' : '#ede9fe')};
   display: flex;
   align-items: center;
   justify-content: center;
   color: ${ACCENT};
   flex-shrink: 0;
+  border: 2px solid ${({ $hasImage }) => ($hasImage ? '#e2e8f0' : '#ddd6fe')};
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.1);
 
   img {
     width: 100%;

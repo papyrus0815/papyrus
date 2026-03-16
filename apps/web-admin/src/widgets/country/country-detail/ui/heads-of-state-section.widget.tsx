@@ -18,6 +18,7 @@ import {
   FiInfo,
   FiPlus,
   FiSave,
+  FiSearch,
   FiSettings,
   FiTrash2,
   FiUser,
@@ -31,6 +32,7 @@ import { personCareerApi } from '@/shared/api/person-career'
 import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { uploadImage } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { calcAgeAtTenure, formatPersonLifespan } from '@/shared/lib/tenure-person-utils'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker'
 import { DateRangeField, PersonSelectField } from '@/shared/ui/form-fields'
@@ -120,6 +122,8 @@ export function HeadsOfStateSection({
   const [selectedPositionFilter, setSelectedPositionFilter] = useState<
     string | null
   >(null)
+  /** 목록 검색어 */
+  const [tenureSearchQuery, setTenureSearchQuery] = useState('')
   /** 수반 등록 시 소속 국가: null = 현대 국가(현재), 값 있으면 하위 역사적 국가 ID */
   const [selectedAffinityHistoricalId, setSelectedAffinityHistoricalId] =
     useState<string | null>(null)
@@ -1340,26 +1344,6 @@ export function HeadsOfStateSection({
                           ))}
                         </PositionFilterTabs>
                       )}
-                      {showLineageTab && (
-                        <ViewModeTabs role="tablist" aria-label="보기 방식">
-                          <ViewModeTab
-                            role="tab"
-                            aria-selected={listViewMode === 'lineage'}
-                            $active={listViewMode === 'lineage'}
-                            onClick={() => setListViewMode('lineage')}
-                          >
-                            계보도
-                          </ViewModeTab>
-                          <ViewModeTab
-                            role="tab"
-                            aria-selected={listViewMode === 'list'}
-                            $active={listViewMode === 'list'}
-                            onClick={() => setListViewMode('list')}
-                          >
-                            목록
-                          </ViewModeTab>
-                        </ViewModeTabs>
-                      )}
                       <ListTitle>
                         {listViewMode === 'lineage' && lineageTenures.length > 0
                           ? effectivePositionLabel
@@ -1380,6 +1364,52 @@ export function HeadsOfStateSection({
                         )}
                       </ListTitle>
                     </ListHeadLeft>
+                    {/* 목록 검색창 — 목록 뷰일 때만 노출 */}
+                    {listViewMode === 'list' && tenures.length > 0 && (
+                      <TenureSearchWrap>
+                        <TenureSearchIcon><FiSearch size={14} /></TenureSearchIcon>
+                        <TenureSearchInput
+                          type="text"
+                          placeholder="이름, 직책, 연도 검색"
+                          value={tenureSearchQuery}
+                          onChange={(e) => setTenureSearchQuery(e.target.value)}
+                        />
+                        {tenureSearchQuery && (
+                          <TenureSearchClear
+                            type="button"
+                            onClick={() => setTenureSearchQuery('')}
+                            aria-label="검색어 지우기"
+                          >
+                            <FiX size={12} />
+                          </TenureSearchClear>
+                        )}
+                      </TenureSearchWrap>
+                    )}
+                    {/* 보기 방식 탭 — 우측 분리 배치 */}
+                    {showLineageTab && (
+                      <>
+                        <div style={{ width: 1, height: 24, background: '#e2e8f0', flexShrink: 0 }} />
+                        <ViewModeTabs role="tablist" aria-label="보기 방식">
+                          <ViewModeTab
+                            role="tab"
+                            aria-selected={listViewMode === 'lineage'}
+                            $active={listViewMode === 'lineage'}
+                            onClick={() => setListViewMode('lineage')}
+                          >
+                            계보도
+                          </ViewModeTab>
+                          <ViewModeTab
+                            role="tab"
+                            aria-selected={listViewMode === 'list'}
+                            $active={listViewMode === 'list'}
+                            onClick={() => setListViewMode('list')}
+                          >
+                            목록
+                          </ViewModeTab>
+                        </ViewModeTabs>
+                        <div style={{ width: 1, height: 24, background: '#e2e8f0', flexShrink: 0 }} />
+                      </>
+                    )}
                     <AddTenureButton
                       type="button"
                       onClick={() => setView('register')}
@@ -1466,64 +1496,101 @@ export function HeadsOfStateSection({
                               {groupTenures.length}명
                             </span>
                           </PositionSectionTitle>
-                          <List>
-                            {groupTenures.map((t: any) => {
-                              const titleText =
-                                t.title || t.position?.title || '—'
-                              const regnalFromNotes = getRegnalNameFromNotes(
-                                t.notes,
-                              )
-                              const countryLabel =
-                                !isHistorical &&
-                                (t.country?.name || t.historicalCountry?.name)
-                                  ? t.country?.name || t.historicalCountry?.name
-                                  : null
-                              const isHead =
-                                t.positionType === 'HEAD_OF_STATE' ||
-                                t.positionType === 'HEAD_OF_GOVERNMENT'
+                           <List>
+                             {groupTenures.filter((t: any) => {
+                               if (!tenureSearchQuery.trim()) return true
+                               const q = tenureSearchQuery.trim().toLowerCase()
+                               const name = getPersonName(t.person).toLowerCase()
+                               const regnal = getRegnalNameFromNotes(t.notes)?.toLowerCase() ?? ''
+                               const title = (t.title || t.position?.title || '').toLowerCase()
+                               const startYear = t.startDate ? String(t.startDate).slice(0, 4) : ''
+                               const endYear = t.endDate ? String(t.endDate).slice(0, 4) : ''
+                               return (
+                                 name.includes(q) ||
+                                 regnal.includes(q) ||
+                                 title.includes(q) ||
+                                 startYear.includes(q) ||
+                                 endYear.includes(q)
+                               )
+                             }).map((t: any) => {
+                               const titleText =
+                                 t.title || t.position?.title || '—'
+                               const regnalFromNotes = getRegnalNameFromNotes(
+                                 t.notes,
+                               )
+                               const countryLabel =
+                                 !isHistorical &&
+                                 (t.country?.name || t.historicalCountry?.name)
+                                   ? t.country?.name || t.historicalCountry?.name
+                                   : null
+                               const lifespan = formatPersonLifespan(t.person)
+                               const ageAtStart = calcAgeAtTenure(t.person, t.startDate)
+                               const isHead =
+                                 t.positionType === 'HEAD_OF_STATE' ||
+                                 t.positionType === 'HEAD_OF_GOVERNMENT'
                               const isCabinetExpanded =
                                 expandedCabinetTenureId === t.id
                               return (
                                 <React.Fragment key={t.id}>
-                                  <ListItem
-                                    onClick={() => {
-                                      setEditingTenureId(t.id)
-                                      setView('register')
-                                    }}
-                                  >
+                                 <ListItem
+                                     role="button"
+                                     tabIndex={0}
+                                     onClick={() => {
+                                       setEditingTenureId(t.id)
+                                       setView('register')
+                                     }}
+                                     onKeyDown={(e) => {
+                                       if (e.key === 'Enter' || e.key === ' ') {
+                                         e.preventDefault()
+                                         setEditingTenureId(t.id)
+                                         setView('register')
+                                       }
+                                     }}
+                                   >
                                     <ItemAvatar
                                       $hasImage={!!t.person?.profileImageUrl}
                                     >
                                       {t.person?.profileImageUrl ? (
                                         <img
                                           src={t.person.profileImageUrl}
-                                          alt=""
+                                          alt={getPersonName(t.person)}
                                         />
                                       ) : (
                                         <FiUser size={22} />
                                       )}
                                     </ItemAvatar>
                                     <ListItemBody>
-                                      <ItemRow>
-                                        <ItemName>
-                                          {getPersonName(t.person)}
-                                        </ItemName>
-                                        {(t.termNumber != null ||
-                                          t.regnalNumber != null) && (
-                                          <ItemTermBadge>
-                                            {t.regnalNumber != null
-                                              ? `${t.regnalNumber}세`
-                                              : `제${t.termNumber}대`}
-                                          </ItemTermBadge>
-                                        )}
-                                        <ItemDates>
-                                          {formatDate(t.startDate)}
-                                          <span className="sep">–</span>
-                                          {t.endDate
-                                            ? formatDate(t.endDate)
-                                            : '현재'}
-                                        </ItemDates>
-                                      </ItemRow>
+                                       <ItemRow>
+                                         <ItemName>
+                                           {getPersonName(t.person)}
+                                         </ItemName>
+                                         {(t.termNumber != null ||
+                                           t.regnalNumber != null) && (
+                                           <ItemTermBadge>
+                                             {t.regnalNumber != null
+                                               ? `${t.regnalNumber}세`
+                                               : `제${t.termNumber}대`}
+                                           </ItemTermBadge>
+                                         )}
+                                         <ItemDates>
+                                           {formatDate(t.startDate)}
+                                           <span className="sep">–</span>
+                                           {t.endDate
+                                             ? formatDate(t.endDate)
+                                             : '현재'}
+                                         </ItemDates>
+                                       </ItemRow>
+                                       {/* 생몰년 + 취임 당시 나이 */}
+                                       {(lifespan !== '생몰년 미상' || ageAtStart != null) && (
+                                         <ItemRow>
+                                           {lifespan !== '생몰년 미상' && (
+                                             <ItemLifespan>{lifespan}</ItemLifespan>
+                                           )}
+                                           {ageAtStart != null && (
+                                             <ItemAgeBadge>취임 {ageAtStart}세</ItemAgeBadge>
+                                           )}
+                                         </ItemRow>
+                                       )}
                                       <ItemRow>
                                         <ItemTitleBadge>
                                           {titleText}
@@ -1608,27 +1675,13 @@ export function HeadsOfStateSection({
                                         marginBottom: 12,
                                       }}
                                     >
-                                      <button
+                                      <CabinetExpandButton
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation()
                                           setExpandedCabinetTenureId(
                                             isCabinetExpanded ? null : t.id,
                                           )
-                                        }}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: 6,
-                                          padding: '6px 12px',
-                                          fontSize: 13,
-                                          color: '#6366f1',
-                                          background:
-                                            'rgba(99, 102, 241, 0.08)',
-                                          border:
-                                            '1px solid rgba(99, 102, 241, 0.2)',
-                                          borderRadius: 8,
-                                          cursor: 'pointer',
                                         }}
                                       >
                                         <FiChevronDown
@@ -1640,68 +1693,69 @@ export function HeadsOfStateSection({
                                           }}
                                         />
                                         이 행정부 각료
-                                      </button>
-                                      {isCabinetExpanded && (
-                                        <div
-                                          style={{
-                                            marginTop: 10,
-                                            padding: '12px 16px',
-                                            background: '#f8fafc',
-                                            borderRadius: 12,
-                                            border: '1px solid #e2e8f0',
-                                          }}
-                                        >
-                                          {(subordinateTenures as any[])
-                                            .length === 0 ? (
-                                            <span
-                                              style={{
-                                                fontSize: 13,
-                                                color: '#64748b',
-                                              }}
-                                            >
-                                              등록된 각료가 없습니다. 인물 재임
-                                              등록 시 소속 행정부를 선택하면
-                                              여기에서 확인할 수 있습니다.
-                                            </span>
-                                          ) : (
-                                            <ul
-                                              style={{
-                                                margin: 0,
-                                                paddingLeft: 20,
-                                              }}
-                                            >
-                                              {(
-                                                subordinateTenures as any[]
-                                              ).map((sub: any) => (
-                                                <li
-                                                  key={sub.id}
-                                                  style={{
-                                                    marginBottom: 6,
-                                                    fontSize: 13,
-                                                    listStyle: 'disc',
-                                                  }}
-                                                >
-                                                  <strong>
-                                                    {sub.positionDefinition
-                                                      ?.title ??
-                                                      sub.title ??
-                                                      '—'}
-                                                  </strong>
-                                                  {' · '}
-                                                  {getPersonName(sub.person)}
-                                                  {' · '}
-                                                  {formatDate(sub.startDate)}~
-                                                  {sub.endDate
-                                                    ? formatDate(sub.endDate)
-                                                    : '현재'}
-                                                </li>
-                                              ))}
-                                            </ul>
-                                          )}
-                                        </div>
-                                      )}
+                                      </CabinetExpandButton>
+                                       {isCabinetExpanded && (
+                                         <CabinetExpandPanel>
+                                           {(subordinateTenures as any[])
+                                             .length === 0 ? (
+                                             <span
+                                               style={{
+                                                 fontSize: 13,
+                                                 color: '#64748b',
+                                               }}
+                                             >
+                                               등록된 각료가 없습니다. 인물 재임
+                                               등록 시 소속 행정부를 선택하면
+                                               여기에서 확인할 수 있습니다.
+                                             </span>
+                                           ) : (
+                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                               {(
+                                                 subordinateTenures as any[]
+                                               ).map((sub: any) => (
+                                                 <div
+                                                   key={sub.id}
+                                                   style={{
+                                                     display: 'flex',
+                                                     alignItems: 'center',
+                                                     gap: 10,
+                                                     padding: '8px 12px',
+                                                     background: '#fff',
+                                                     border: '1px solid #e8ecf0',
+                                                     borderRadius: 8,
+                                                     fontSize: 13,
+                                                   }}
+                                                 >
+                                                   <div style={{ flex: 1, minWidth: 0 }}>
+                                                     <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                                       {sub.positionDefinition?.title ?? sub.title ?? '—'}
+                                                     </span>
+                                                     <span style={{ color: '#64748b', margin: '0 5px' }}>·</span>
+                                                     <span style={{ color: '#334155' }}>{getPersonName(sub.person)}</span>
+                                                   </div>
+                                                   <span style={{
+                                                     fontSize: 11.5, color: '#94a3b8',
+                                                     whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+                                                   }}>
+                                                     {formatDate(sub.startDate)}~{sub.endDate ? formatDate(sub.endDate) : '현재'}
+                                                   </span>
+                                                   <span style={{
+                                                     padding: '2px 7px', fontSize: 11, fontWeight: 600,
+                                                     borderRadius: 999,
+                                                     color: sub.endDate ? '#64748b' : '#15803d',
+                                                     background: sub.endDate ? '#f1f5f9' : '#f0fdf4',
+                                                     border: `1px solid ${sub.endDate ? '#e2e8f0' : '#bbf7d0'}`,
+                                                   }}>
+                                                     {sub.endDate ? '퇴임' : '재임 중'}
+                                                   </span>
+                                                 </div>
+                                               )                                                  )}
+                                                </div>
+                                              )}
+                                         </CabinetExpandPanel>
+                                       )}
                                     </div>
-                                  )}
+                                 )}
                                 </React.Fragment>
                               )
                             })}
@@ -2438,13 +2492,36 @@ export function HeadsOfStateSection({
                   {selectedCabinetHeadName})의 각료 구성
                 </CabinetMembersModalDesc>
               </div>
-              <CabinetMembersModalClose
-                type="button"
-                onClick={() => setCabinetModalTenureId(null)}
-                aria-label="각료 목록 닫기"
-              >
-                <FiX size={18} />
-              </CabinetMembersModalClose>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* 수반 수정 버튼 — 계보도 카드에서 접근 */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tenureId = cabinetModalTenureId
+                    setCabinetModalTenureId(null)
+                    if (tenureId) {
+                      setEditingTenureId(tenureId)
+                      setView('register')
+                    }
+                  }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                    color: '#4f46e5', background: '#eef2ff',
+                    border: '1px solid #c7d2fe', borderRadius: 8, cursor: 'pointer',
+                  }}
+                >
+                  <FiEdit2 size={12} />
+                  수정
+                </button>
+                <CabinetMembersModalClose
+                  type="button"
+                  onClick={() => setCabinetModalTenureId(null)}
+                  aria-label="각료 목록 닫기"
+                >
+                  <FiX size={18} />
+                </CabinetMembersModalClose>
+              </div>
             </CabinetMembersModalHeader>
 
             <CabinetMembersModalBody>
@@ -2521,38 +2598,10 @@ const SectionOuter = styled.div<{ $embedded?: boolean }>`
   margin-top: ${({ $embedded }) => ($embedded ? '0' : '0')};
 `
 
-const SectionHeader = styled.div`
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #edf0f7;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-`
-
-const SectionTitle = styled.h3`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-  letter-spacing: -0.025em;
-  line-height: 1.3;
-`
-
-const SectionSubtitle = styled.p`
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #94a3b8;
-  line-height: 1.5;
-`
-
 const CabinetMembersModalOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2564,9 +2613,11 @@ const CabinetMembersModalCard = styled.div`
   width: min(720px, 100%);
   max-height: min(80vh, 760px);
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2577,13 +2628,13 @@ const CabinetMembersModalHeader = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px 20px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 20px 24px;
+  border-bottom: 1px solid #f3f4f6;
 `
 
 const CabinetMembersModalTitle = styled.h3`
   margin: 0;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.02em;
@@ -2853,14 +2904,15 @@ const LineageWrap = styled.div`
 `
 
 const LineageLegend = styled.div`
-  margin-bottom: 24px;
-  padding: 16px 20px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.55;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background: #faf5ff;
+  border: 1px solid #ede9fe;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #6d28d9;
+  line-height: 1.5;
+  opacity: 0.85;
 `
 
 const ListTitle = styled.h2`
@@ -2882,15 +2934,15 @@ const ListTitle = styled.h2`
 /** 직책별 섹션 제목 (국왕, 쇼군, 대통령, 총리 등) */
 const PositionSectionTitle = styled.h3`
   margin: 0;
-  padding: 7px 20px;
+  padding: 6px 20px;
   font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-  letter-spacing: 0.07em;
+  font-weight: 700;
+  color: #3730a3;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: #f1f5f9;
-  border-bottom: 1px solid #e8ecf2;
-  border-top: 1px solid #e8ecf2;
+  background: #f5f3ff;
+  border-bottom: 1px solid #ede9fe;
+  border-top: 1px solid #ede9fe;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2898,33 +2950,35 @@ const PositionSectionTitle = styled.h3`
   .count {
     font-weight: 500;
     font-size: 11px;
-    color: #94a3b8;
+    color: #7c3aed;
     letter-spacing: 0;
     text-transform: none;
+    opacity: 0.7;
   }
 `
 
 const AddTenureButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 14px;
+  gap: 6px;
+  padding: 7px 14px;
   font-size: 13px;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, ${HEAD_ACCENT} 0%, #4f46e5 100%);
+  background: #6366f1;
   border: none;
-  border-radius: 10px;
+  border-radius: 9px;
   cursor: pointer;
+  white-space: nowrap;
   flex-shrink: 0;
   transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.24);
+    background 0.15s,
+    box-shadow 0.15s;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.22);
 
   &:hover {
-    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+    background: #4f46e5;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.32);
   }
 
   &:active {
@@ -2954,9 +3008,7 @@ const SettingsButton = styled.button`
 const SettingsOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.42);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2967,9 +3019,11 @@ const SettingsOverlay = styled.div`
 const SettingsCard = styled.div`
   width: min(460px, 100%);
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.2);
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 `
 
@@ -2977,13 +3031,13 @@ const SettingsHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 20px 24px;
+  border-bottom: 1px solid #f3f4f6;
 `
 
 const SettingsTitle = styled.h4`
   margin: 0;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   color: #0f172a;
 `
@@ -3056,33 +3110,38 @@ const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 56px 24px;
-  gap: 16px;
+  padding: 40px 24px;
+  gap: 12px;
   text-align: center;
+  background: #f8fafc;
+  border: 1.5px dashed #e2e8f0;
+  border-radius: 14px;
+  margin: 16px;
 `
 
 const EmptyIconWrap = styled.div`
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #cbd5e1;
-  background: #f1f5f9;
-  border-radius: 12px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
 `
 
 const EmptyTitle = styled.p`
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: #475569;
 `
 
 const EmptyDesc = styled.p`
   margin: 0;
-  font-size: 14px;
-  color: #64748b;
+  font-size: 13px;
+  color: #94a3b8;
   max-width: 320px;
   line-height: 1.5;
 `
@@ -3101,21 +3160,27 @@ const ListItem = styled.li`
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #ffffff;
-  border-bottom: 1px solid #f1f5f9;
+  background: #fff;
+  border: 1px solid #e8ecf0;
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   position: relative;
   margin: 0 8px;
-  border-radius: 8px;
-  margin-bottom: 2px;
+  margin-bottom: 6px;
 
   &:last-child {
     margin-bottom: 0;
   }
 
   &:hover {
-    background: #f8faff;
+    background: #f8fafc;
+    border-color: #94a3b8;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   }
 `
 
@@ -3222,6 +3287,24 @@ const ItemDynastyName = styled.span`
   color: #7c3aed;
 `
 
+const ItemLifespan = styled.span`
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+`
+
+const ItemAgeBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #0369a1;
+  background: #e0f2fe;
+  border-radius: 4px;
+`
+
 const AchievementChips = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -3259,7 +3342,15 @@ const AchievementButton = styled.button`
   cursor: pointer;
   transition:
     background 0.2s ease,
-    color 0.2s ease;
+    color 0.2s ease,
+    opacity 0.15s ease;
+  opacity: 0;
+  pointer-events: none;
+
+  ${ListItem}:hover & {
+    opacity: 1;
+    pointer-events: auto;
+  }
 
   &:hover {
     background: #e0e7ff;
@@ -3374,39 +3465,6 @@ const SectionHint = styled.p`
   font-size: 13px;
   color: #64748b;
   line-height: 1.5;
-`
-
-const AchievementList = styled.ul`
-  list-style: none;
-  margin: 0 0 20px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const AchievementListItem = styled.li`
-  padding: 12px 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
-
-  strong {
-    display: block;
-    margin-bottom: 4px;
-    color: #0f172a;
-  }
-  .desc {
-    display: block;
-    color: #64748b;
-    font-size: 13px;
-    margin-bottom: 4px;
-  }
-  .date {
-    font-size: 12px;
-    color: #94a3b8;
-  }
 `
 
 const AchievementCardList = styled.div`
@@ -3582,11 +3640,13 @@ const AchievementInlineActions = styled.div`
   }
 `
 
-const AchievementForm = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-`
+/* 행정조직과 동일한 디자인·색상 */
+const BORDER_COLOR = '#e5e7eb'
+const FOCUS_COLOR = '#4f46e5'
+const BG_INPUT = '#f8fafc'
+const TEXT_PRIMARY = '#0f172a'
+const TEXT_SECONDARY = '#64748b'
+const TEXT_MUTED = '#6b7280'
 
 const AchievementTitleInputWrap = styled.div`
   max-width: 480px;
@@ -3612,38 +3672,6 @@ const AchievementField = styled.div`
     min-height: 72px;
   }
 `
-
-const AchievementDateRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  .date-btn {
-    flex: 1;
-    padding: 10px 14px;
-    font-size: 14px;
-    text-align: left;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    background: #f8fafc;
-    color: #475569;
-    cursor: pointer;
-  }
-  .date-btn:hover {
-    background: #f1f5f9;
-  }
-  .sep {
-    color: #94a3b8;
-    font-size: 14px;
-  }
-`
-
-/* 행정조직과 동일한 디자인·색상 */
-const BORDER_COLOR = '#e5e7eb'
-const FOCUS_COLOR = '#4f46e5'
-const BG_INPUT = '#f8fafc'
-const TEXT_PRIMARY = '#0f172a'
-const TEXT_SECONDARY = '#64748b'
-const TEXT_MUTED = '#6b7280'
 
 const FormCardWrapper = styled.div`
   background: #ffffff;
@@ -3718,36 +3746,6 @@ const FormSectionInner = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0;
-`
-
-const SectionHeaderBlock = styled.div`
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  padding-bottom: 24px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid #e5e7eb;
-
-  > svg {
-    color: ${FOCUS_COLOR};
-    margin-top: 2px;
-    flex-shrink: 0;
-  }
-`
-
-const SectionHeaderTitle = styled.h3`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: ${TEXT_PRIMARY};
-  letter-spacing: -0.025em;
-`
-
-const SectionHeaderDesc = styled.p`
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #94a3b8;
-  line-height: 1.5;
 `
 
 const FormRows = styled.div`
@@ -3981,4 +3979,97 @@ const ResetButton = styled.button`
     opacity: 0.5;
     cursor: not-allowed;
   }
+`
+
+const TenureSearchWrap = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+`
+
+const TenureSearchIcon = styled.span`
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+`
+
+const TenureSearchInput = styled.input`
+  width: 200px;
+  height: 34px;
+  padding: 0 32px 0 32px;
+  font-size: 13px;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &::placeholder {
+    color: #94a3b8;
+  }
+
+  &:focus {
+    border-color: #a5b4fc;
+    background: #fff;
+  }
+`
+
+const TenureSearchClear = styled.button`
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #cbd5e1;
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    background: #94a3b8;
+  }
+`
+
+const CabinetExpandButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.14);
+    border-color: rgba(99, 102, 241, 0.35);
+  }
+`
+
+const CabinetExpandPanel = styled.div`
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 `
