@@ -709,10 +709,69 @@ export const EventsCatalogPage: React.FC = () => {
     <Layout.PageScene>
       <Layout.PageWrapper>
         <Layout.PageTopBar>
-          <Layout.PageTopTitle>
-            <h1>역사적 사건</h1>
-            <p>시대별 주요 사건과 계층적 관계를 탐색합니다</p>
-          </Layout.PageTopTitle>
+          <Filter.FilterColumn>
+            <Filter.FilterBlock>
+              <Filter.FilterBlockLabel>필터</Filter.FilterBlockLabel>
+
+              <Filter.FilterSearchInput
+                type="search"
+                placeholder="사건명, 태그 검색"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+              />
+
+              <Filter.FilterTriggerButton
+                type="button"
+                onClick={() => setShowCategoryModal(true)}
+              >
+                <span>
+                  {selectedCategory === FILTER_ALL
+                    ? '전체 카테고리'
+                    : dbCategories.find((cat) => cat.id === selectedCategory)
+                        ?.name || '알 수 없음'}
+                </span>
+                <FiChevronRight size={14} />
+              </Filter.FilterTriggerButton>
+
+              <Filter.FilterTriggerButton
+                type="button"
+                onClick={() => setShowCountryModal(true)}
+              >
+                <span>
+                  {selectedCountry === FILTER_ALL
+                    ? '전체 국가'
+                    : selectedCountry}
+                </span>
+                <FiChevronRight size={14} />
+              </Filter.FilterTriggerButton>
+
+              <Filter.FilterToggle>
+                <Filter.FilterToggleLabel>
+                  계층 구조 해제
+                </Filter.FilterToggleLabel>
+                <Filter.Switch
+                  type="button"
+                  $active={showFlatView}
+                  onClick={() => {
+                    setShowFlatView(!showFlatView)
+                  }}
+                >
+                  <Filter.SwitchThumb $active={showFlatView} />
+                </Filter.Switch>
+              </Filter.FilterToggle>
+
+              {hasActiveFilters && (
+                <Filter.FilterResetButton
+                  type="button"
+                  onClick={handleResetFilters}
+                >
+                  <FiX size={14} />
+                  초기화
+                </Filter.FilterResetButton>
+              )}
+            </Filter.FilterBlock>
+          </Filter.FilterColumn>
+
           <Layout.CreateEventButton
             onClick={() => navigate(pathKeys.events.create())}
           >
@@ -775,136 +834,7 @@ export const EventsCatalogPage: React.FC = () => {
         </Skeleton.CategorySummaryGrid>
 
         <Layout.CatalogSplit>
-          {/* 좌측: 필터 + 세기 선택 */}
-          <Filter.FilterColumn>
-            {/* 통합된 필터 블록 */}
-            <Filter.FilterBlock>
-              <Filter.FilterBlockLabel>필터</Filter.FilterBlockLabel>
-
-              {/* 검색 */}
-              <Filter.FilterSearchInput
-                type="search"
-                placeholder="사건명, 태그 검색"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-              />
-
-              {/* 카테고리 */}
-              <Filter.FilterTriggerButton
-                type="button"
-                onClick={() => setShowCategoryModal(true)}
-                style={{ marginTop: '10px' }}
-              >
-                <span>
-                  {selectedCategory === FILTER_ALL
-                    ? '전체 카테고리'
-                    : dbCategories.find((cat) => cat.id === selectedCategory)
-                        ?.name || '알 수 없음'}
-                </span>
-                <FiChevronRight size={14} />
-              </Filter.FilterTriggerButton>
-
-              {/* 국가 */}
-              <Filter.FilterTriggerButton
-                type="button"
-                onClick={() => setShowCountryModal(true)}
-                style={{ marginTop: '6px' }}
-              >
-                <span>
-                  {selectedCountry === FILTER_ALL
-                    ? '전체 국가'
-                    : selectedCountry}
-                </span>
-                <FiChevronRight size={14} />
-              </Filter.FilterTriggerButton>
-
-              {/* 계층 분리 토글 */}
-              <Filter.FilterToggle style={{ marginTop: '12px' }}>
-                <Filter.FilterToggleLabel>
-                  계층 구조 해제
-                </Filter.FilterToggleLabel>
-                <Filter.Switch
-                  type="button"
-                  $active={showFlatView}
-                  onClick={() => {
-                    setShowFlatView(!showFlatView)
-                  }}
-                >
-                  <Filter.SwitchThumb $active={showFlatView} />
-                </Filter.Switch>
-              </Filter.FilterToggle>
-            </Filter.FilterBlock>
-
-            {hasActiveFilters && (
-              <Filter.FilterResetButton
-                type="button"
-                onClick={handleResetFilters}
-              >
-                <FiX size={14} />
-                초기화
-              </Filter.FilterResetButton>
-            )}
-
-            <Filter.FilterDivider />
-
-            <Filter.CenturyHeader>
-              <Filter.CenturyTitle>시대 선택</Filter.CenturyTitle>
-              <Filter.CenturyCount>
-                {isLoading ? '...' : `${availableCenturies.length}개`}
-              </Filter.CenturyCount>
-            </Filter.CenturyHeader>
-            {isLoading ? (
-              <Filter.CenturyList>
-                {[...Array(6)].map((_, index) => (
-                  <Skeleton.SkeletonCenturyButton key={index}>
-                    <Skeleton.SkeletonCenturyLabel />
-                    <Skeleton.SkeletonCenturyCount />
-                  </Skeleton.SkeletonCenturyButton>
-                ))}
-              </Filter.CenturyList>
-            ) : (
-              <Filter.CenturyList>
-                <Filter.CenturyButton
-                  $active={selectedCentury === FILTER_ALL}
-                  type="button"
-                  onClick={() => setSelectedCentury('all')}
-                >
-                  <Filter.CenturyLabel>
-                    <strong>전체 시대</strong>
-                    <span>모든 연대</span>
-                  </Filter.CenturyLabel>
-                  <Filter.CenturyEventCount>
-                    {events.length}건
-                  </Filter.CenturyEventCount>
-                </Filter.CenturyButton>
-                {availableCenturies.map((century) => {
-                  const centuryEvents = events.filter((event) => {
-                    const startCentury = getCenturyFromDate(event.startDate)
-                    const endCentury = getCenturyFromDate(event.endDate)
-                    return startCentury === century || endCentury === century
-                  })
-                  return (
-                    <Filter.CenturyButton
-                      key={century}
-                      $active={selectedCentury === century}
-                      type="button"
-                      onClick={() => setSelectedCentury(century)}
-                    >
-                      <Filter.CenturyLabel>
-                        <strong>{formatCenturyLabel(century)}</strong>
-                        <span>{formatCenturyRange(century)}</span>
-                      </Filter.CenturyLabel>
-                      <Filter.CenturyEventCount>
-                        {centuryEvents.length}건
-                      </Filter.CenturyEventCount>
-                    </Filter.CenturyButton>
-                  )
-                })}
-              </Filter.CenturyList>
-            )}
-          </Filter.FilterColumn>
-
-          {/* 중앙: 간결한 사건 목록 */}
+          {/* 사건 목록 */}
           <List.CatalogSection>
             <List.ResultControls>
               <List.ToolbarMeta>

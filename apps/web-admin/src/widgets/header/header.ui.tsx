@@ -9,10 +9,12 @@ import {
   FiLayers,
   FiLogOut,
   FiMenu,
+  FiMoon,
   FiPause,
   FiPlay,
   FiSkipBack,
   FiSkipForward,
+  FiSun,
   FiUser,
   FiVolume2,
   FiVolumeX,
@@ -34,6 +36,7 @@ import {
   useClickSound,
 } from '@/shared/hooks/use-click-sound.hook'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
+import { useThemeStore } from '@/shared/theme/theme.store'
 
 import { TopNavBar, type TopNavItemSpec } from './top-nav.ui'
 
@@ -51,12 +54,21 @@ function formatMessageTime(isoOrText: string): string {
   const s = isoOrText.trim()
   if (!s) return ''
   const parsed = new Date(s)
-  if (Number.isNaN(parsed.getTime())) return s.length > 20 ? s.slice(0, 16) + '…' : s
+  if (Number.isNaN(parsed.getTime()))
+    return s.length > 20 ? s.slice(0, 16) + '…' : s
   const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime()
   const yesterday = today - 86400000
   const t = parsed.getTime()
-  const dateOnly = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime()
+  const dateOnly = new Date(
+    parsed.getFullYear(),
+    parsed.getMonth(),
+    parsed.getDate(),
+  ).getTime()
   if (dateOnly === today) {
     const h = parsed.getHours()
     const m = parsed.getMinutes()
@@ -77,6 +89,7 @@ const Header: React.FC = () => {
   const { username, reset } = useSessionStore()
   const { messages, markAllRead, markOneRead, fetchNotifications } =
     useNotificationStore()
+  const { mode, toggleTheme } = useThemeStore()
 
   const [isBellOpen, setIsBellOpen] = useState(false)
 
@@ -344,6 +357,20 @@ const Header: React.FC = () => {
         </CenterZone>
 
         <RightZone>
+          {/* 다크모드 토글 버튼 */}
+          <ThemeToggleButton
+            aria-label={
+              mode === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'
+            }
+            $isDark={mode === 'dark'}
+            onClick={() => {
+              playClickSound()
+              toggleTheme()
+            }}
+          >
+            {mode === 'dark' ? <FiSun size={16} /> : <FiMoon size={16} />}
+          </ThemeToggleButton>
+
           {/* 설정 버튼 */}
           <div ref={settingsMenuRef} style={{ position: 'relative' }}>
             <IconButton
@@ -833,10 +860,15 @@ const HeaderBar = styled.header`
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background: #ffffff;
-  border-bottom: 1px solid #f1f5f9;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0,0,0,0.97)' : '#ffffff'};
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#f1f5f9')};
   z-index: ${Z_INDEX.HEADER};
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease;
 `
 
 const LeftZone = styled.div`
@@ -1186,7 +1218,7 @@ const SettingsVolumeSlider = styled.input`
 const LogoButton = styled.button`
   border: none;
   background: transparent;
-  color: #334155;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#ffffff' : '#334155')};
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.02em;
@@ -1194,7 +1226,7 @@ const LogoButton = styled.button`
   transition: color 0.2s ease;
 
   &:hover {
-    color: #6366f1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a78bfa' : '#6366f1')};
   }
 `
 
@@ -1208,17 +1240,47 @@ const IconButton = styled.button`
   border: none;
   border-radius: 14px;
   background: transparent;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a0aec0' : '#64748b')};
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#1a1a1a' : '#f1f5f9'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#475569')};
   }
 
   &:active {
     transform: scale(0.96);
+  }
+`
+
+const ThemeToggleButton = styled.button<{ $isDark: boolean }>`
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 14px;
+  background: ${({ $isDark }) => ($isDark ? '#1a1a1a' : 'transparent')};
+  color: ${({ $isDark }) => ($isDark ? '#fbbf24' : '#64748b')};
+  cursor: pointer;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease,
+    transform 0.2s ease;
+
+  &:hover {
+    background: ${({ $isDark }) => ($isDark ? '#2a2a2a' : '#f1f5f9')};
+    color: ${({ $isDark }) => ($isDark ? '#fcd34d' : '#475569')};
+  }
+
+  &:active {
+    transform: scale(0.92);
   }
 `
 
@@ -1266,7 +1328,9 @@ const DropdownMenu = styled.div<{ $isOpen: boolean }>`
   background: #ffffff;
   border: 1px solid #f1f5f9;
   border-radius: 20px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.03);
   padding: 12px;
   display: ${({ $isOpen }) => ($isOpen ? 'block' : 'none')};
 
@@ -1374,7 +1438,8 @@ const MessageRow = styled.button<{ $unread: boolean }>`
   cursor: pointer;
   text-align: left;
   transition: all 0.2s ease;
-  border-left: 4px solid ${({ $unread }) => ($unread ? '#6366f1' : 'transparent')};
+  border-left: 4px solid
+    ${({ $unread }) => ($unread ? '#6366f1' : 'transparent')};
 
   &:hover {
     background: ${({ $unread }) => ($unread ? '#f1f5f9' : '#f8fafc')};
@@ -1518,7 +1583,9 @@ const MobileMenuButton = styled.button`
   color: #64748b;
   cursor: pointer;
   border-radius: 10px;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     background: #f1f5f9;

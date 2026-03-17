@@ -44,8 +44,8 @@ export const PageTopBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  gap: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
 
   @media (max-width: 768px) {
     flex-direction: column;
@@ -119,14 +119,14 @@ export const TopFilterBar = styled.div`
 
 export const CatalogSplit = styled.div`
   display: grid;
-  grid-template-columns: 700px 1fr;
+  grid-template-columns: minmax(0, 1fr) 400px;
   gap: 24px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 
   @media (max-width: 1400px) {
-    grid-template-columns: 650px 1fr;
+    grid-template-columns: minmax(0, 1fr) 360px;
     gap: 20px;
   }
 

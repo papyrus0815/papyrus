@@ -22,6 +22,7 @@ import {
   FiSettings,
   FiTrash2,
   FiUser,
+  FiUsers,
   FiX,
 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -80,6 +81,73 @@ interface HeadsOfStateSectionProps {
 
 const MIN_LOADING_MS = 1000
 const FADE_DURATION = 0.35
+
+// ─── 인포그래픽 타임라인 ────────────────────────────────────────────────────
+const HEADS_TL_ROWS = [
+  { line: '#6366f1', textColor: '#3730a3' },
+  { line: '#f59e0b', textColor: '#78350f' },
+  { line: '#10b981', textColor: '#065f46' },
+  { line: '#e11d48', textColor: '#881337' },
+]
+const HEADS_TL_ROW_SIZE = 4
+const HEADS_ROW_H = 380
+const HEADS_BUBBLE_W = 84
+const HEADS_THUMB = 72
+
+function HeadsTlCard({ thumbUrl, personName, titleText, range, ageAtStart, birthPlace, lifespan, regnalName, dynastyName, achievements, lineColor }: {
+  thumbUrl: string | null; personName: string; titleText: string; range: string
+  ageAtStart: number | null; birthPlace: string | null; lifespan: string | null
+  regnalName: string | null | undefined; dynastyName: string | null; achievements: any[]
+  lineColor: string; textColor: string
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* 원형 썸네일 */}
+      <div style={{
+        flexShrink: 0,
+        width: HEADS_THUMB, height: HEADS_THUMB, borderRadius: '50%',
+        overflow: 'hidden',
+        background: `${lineColor}18`,
+        border: `3px solid ${lineColor}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: `0 3px 10px ${lineColor}44`,
+      }}>
+        {thumbUrl
+          ? <img src={thumbUrl} alt={personName} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+          : <FiUser size={26} color={lineColor} style={{ opacity: 0.3 }} />
+        }
+      </div>
+      {/* 우측 텍스트 */}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{personName}</div>
+        {regnalName && <div style={{ fontSize: 11, color: '#7c3aed', fontStyle: 'italic', marginTop: 1 }}>{regnalName}</div>}
+        <div style={{ fontSize: 12, color: lineColor, fontWeight: 600, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titleText}</div>
+        <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 8px' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: lineColor, background: `${lineColor}12`, borderRadius: 5, padding: '2px 9px', whiteSpace: 'nowrap' }}>{range}</span>
+          {ageAtStart != null && <span style={{ fontSize: 11, color: '#94a3b8' }}>취임 {ageAtStart}세</span>}
+        </div>
+        <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: '2px 8px' }}>
+          {lifespan && <span style={{ fontSize: 11, color: '#b0bac9' }}>{lifespan}</span>}
+          {birthPlace && (
+            <span style={{ fontSize: 11, color: '#b0bac9', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+              <span style={{ fontSize: 9.5, color: '#c8d0da' }}>출신</span>{birthPlace}
+            </span>
+          )}
+          {dynastyName && <span style={{ fontSize: 11, color: '#7c3aed' }}>가문: {dynastyName}</span>}
+        </div>
+        {achievements.length > 0 && (
+          <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            {achievements.slice(0, 2).map((a: any) => (
+              <span key={a.id} style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 10, color: '#6d28d9', background: '#f5f3ff' }}>{a.title}</span>
+            ))}
+            {achievements.length > 2 && <span style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 10, color: '#94a3b8', background: '#f1f5f9' }}>+{achievements.length - 2}</span>}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 
 export function HeadsOfStateSection({
   country,
@@ -1373,8 +1441,10 @@ export function HeadsOfStateSection({
                           placeholder="이름, 직책, 연도 검색"
                           value={tenureSearchQuery}
                           onChange={(e) => setTenureSearchQuery(e.target.value)}
+                          onFocus={e => { e.currentTarget.style.borderColor = '#a5b4fc'; e.currentTarget.style.background = '#fff' }}
+                          onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc' }}
                         />
-                        {tenureSearchQuery && (
+                        {tenureSearchQuery ? (
                           <TenureSearchClear
                             type="button"
                             onClick={() => setTenureSearchQuery('')}
@@ -1382,6 +1452,10 @@ export function HeadsOfStateSection({
                           >
                             <FiX size={12} />
                           </TenureSearchClear>
+                        ) : (
+                          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#c8d0da', pointerEvents: 'none' }}>
+                            {tenures.length}개
+                          </span>
                         )}
                       </TenureSearchWrap>
                     )}
@@ -1488,291 +1562,207 @@ export function HeadsOfStateSection({
                             (g) => g.label === selectedPositionFilter,
                           )
                         : tenuresByPosition
-                      ).map(({ label, tenures: groupTenures }) => (
-                        <div key={label}>
-                          <PositionSectionTitle>
-                            {toDisplayPositionLabel(label)}{' '}
-                            <span className="count">
-                              {groupTenures.length}명
-                            </span>
-                          </PositionSectionTitle>
-                           <List>
-                             {groupTenures.filter((t: any) => {
-                               if (!tenureSearchQuery.trim()) return true
-                               const q = tenureSearchQuery.trim().toLowerCase()
-                               const name = getPersonName(t.person).toLowerCase()
-                               const regnal = getRegnalNameFromNotes(t.notes)?.toLowerCase() ?? ''
-                               const title = (t.title || t.position?.title || '').toLowerCase()
-                               const startYear = t.startDate ? String(t.startDate).slice(0, 4) : ''
-                               const endYear = t.endDate ? String(t.endDate).slice(0, 4) : ''
-                               return (
-                                 name.includes(q) ||
-                                 regnal.includes(q) ||
-                                 title.includes(q) ||
-                                 startYear.includes(q) ||
-                                 endYear.includes(q)
-                               )
-                             }).map((t: any) => {
-                               const titleText =
-                                 t.title || t.position?.title || '—'
-                               const regnalFromNotes = getRegnalNameFromNotes(
-                                 t.notes,
-                               )
-                               const countryLabel =
-                                 !isHistorical &&
-                                 (t.country?.name || t.historicalCountry?.name)
-                                   ? t.country?.name || t.historicalCountry?.name
-                                   : null
-                               const lifespan = formatPersonLifespan(t.person)
-                               const ageAtStart = calcAgeAtTenure(t.person, t.startDate)
-                               const isHead =
-                                 t.positionType === 'HEAD_OF_STATE' ||
-                                 t.positionType === 'HEAD_OF_GOVERNMENT'
-                              const isCabinetExpanded =
-                                expandedCabinetTenureId === t.id
+                      ).map(({ label, tenures: groupTenures }): React.ReactNode => {
+                        const filteredTenures = groupTenures.filter((t: any) => {
+                          if (!tenureSearchQuery.trim()) return true
+                          const q = tenureSearchQuery.trim().toLowerCase()
+                          const name = getPersonName(t.person).toLowerCase()
+                          const regnal = getRegnalNameFromNotes(t.notes)?.toLowerCase() ?? ''
+                          const title = (t.title || t.position?.title || '').toLowerCase()
+                          const startYear = t.startDate ? String(t.startDate).slice(0, 4) : ''
+                          const endYear = t.endDate ? String(t.endDate).slice(0, 4) : ''
+                          return name.includes(q) || regnal.includes(q) || title.includes(q) || startYear.includes(q) || endYear.includes(q)
+                        })
+                        if (filteredTenures.length === 0) return null
+
+                        const rows: any[][] = []
+                        for (let i = 0; i < filteredTenures.length; i += HEADS_TL_ROW_SIZE) {
+                          rows.push(filteredTenures.slice(i, i + HEADS_TL_ROW_SIZE))
+                        }
+
+                        return (
+                          <div key={label} style={{ marginBottom: 24 }}>
+                            <PositionSectionTitle>
+                              {toDisplayPositionLabel(label)}{' '}
+                              <span className="count">{filteredTenures.length}명</span>
+                            </PositionSectionTitle>
+                            {/* 직책 그룹 요약 바 */}
+                            {(() => {
+                              const years = filteredTenures.flatMap((t: any) => {
+                                const s = t.startDate ? new Date(t.startDate).getFullYear() : null
+                                return s ? [s] : []
+                              })
+                              const minY = years.length ? Math.min(...years) : null
+                              const maxY = years.length ? Math.max(...years) : null
                               return (
-                                <React.Fragment key={t.id}>
-                                 <ListItem
-                                     role="button"
-                                     tabIndex={0}
-                                     onClick={() => {
-                                       setEditingTenureId(t.id)
-                                       setView('register')
-                                     }}
-                                     onKeyDown={(e) => {
-                                       if (e.key === 'Enter' || e.key === ' ') {
-                                         e.preventDefault()
-                                         setEditingTenureId(t.id)
-                                         setView('register')
-                                       }
-                                     }}
-                                   >
-                                    <ItemAvatar
-                                      $hasImage={!!t.person?.profileImageUrl}
-                                    >
-                                      {t.person?.profileImageUrl ? (
-                                        <img
-                                          src={t.person.profileImageUrl}
-                                          alt={getPersonName(t.person)}
-                                        />
-                                      ) : (
-                                        <FiUser size={22} />
-                                      )}
-                                    </ItemAvatar>
-                                    <ListItemBody>
-                                       <ItemRow>
-                                         <ItemName>
-                                           {getPersonName(t.person)}
-                                         </ItemName>
-                                         {(t.termNumber != null ||
-                                           t.regnalNumber != null) && (
-                                           <ItemTermBadge>
-                                             {t.regnalNumber != null
-                                               ? `${t.regnalNumber}세`
-                                               : `제${t.termNumber}대`}
-                                           </ItemTermBadge>
-                                         )}
-                                         <ItemDates>
-                                           {formatDate(t.startDate)}
-                                           <span className="sep">–</span>
-                                           {t.endDate
-                                             ? formatDate(t.endDate)
-                                             : '현재'}
-                                         </ItemDates>
-                                       </ItemRow>
-                                       {/* 생몰년 + 취임 당시 나이 */}
-                                       {(lifespan !== '생몰년 미상' || ageAtStart != null) && (
-                                         <ItemRow>
-                                           {lifespan !== '생몰년 미상' && (
-                                             <ItemLifespan>{lifespan}</ItemLifespan>
-                                           )}
-                                           {ageAtStart != null && (
-                                             <ItemAgeBadge>취임 {ageAtStart}세</ItemAgeBadge>
-                                           )}
-                                         </ItemRow>
-                                       )}
-                                       {(() => {
-                                         const p = t.person as any
-                                         const birthPlace = p?.birthCity?.name ?? p?.birthAdminDivision?.name ?? p?.birthPlaceText
-                                         return birthPlace ? (
-                                           <ItemRow>
-                                             <ItemBirthPlace>
-                                               출신: {birthPlace}
-                                             </ItemBirthPlace>
-                                           </ItemRow>
-                                         ) : null
-                                       })()}
-                                      <ItemRow>
-                                        <ItemTitleBadge>
-                                          {titleText}
-                                        </ItemTitleBadge>
-                                        {countryLabel != null && (
-                                          <ItemCountryBadge>
-                                            {countryLabel}
-                                          </ItemCountryBadge>
-                                        )}
-                                        {regnalFromNotes && (
-                                          <ItemRegnalName>
-                                            왕명: {regnalFromNotes}
-                                          </ItemRegnalName>
-                                        )}
-                                        {(
-                                          t.person as {
-                                            dynasty?: {
-                                              id: string
-                                              name: string
-                                            } | null
-                                          }
-                                        )?.dynasty?.name && (
-                                          <ItemDynastyName>
-                                            가문:{' '}
-                                            {
-                                              (
-                                                t.person as {
-                                                  dynasty: { name: string }
-                                                }
-                                              ).dynasty.name
-                                            }
-                                          </ItemDynastyName>
-                                        )}
-                                      </ItemRow>
-                                      {(t.achievements?.length ?? 0) > 0 && (
-                                        <ItemRow>
-                                          <AchievementChips>
-                                            {(t.achievements as any[])
-                                              .slice(0, 5)
-                                              .map((a: any) => (
-                                                <AchievementChip key={a.id}>
-                                                  {a.title}
-                                                </AchievementChip>
-                                              ))}
-                                            {(t.achievements as any[]).length >
-                                              5 && (
-                                              <AchievementChip $more>
-                                                +
-                                                {(t.achievements as any[])
-                                                  .length - 5}
-                                              </AchievementChip>
-                                            )}
-                                          </AchievementChips>
-                                        </ItemRow>
-                                      )}
-                                    </ListItemBody>
-                                    <ItemActions>
-                                      <AchievementButton
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          setEditingTenureId(t.id)
-                                          setView('register')
-                                        }}
-                                        title="수정·업적 등록"
-                                      >
-                                        <FiAward size={16} />
-                                        업적·한일
-                                      </AchievementButton>
-                                      <ItemAction aria-label="재임 수정">
-                                        <FiChevronRight
-                                          size={20}
-                                          strokeWidth={2.5}
-                                        />
-                                      </ItemAction>
-                                    </ItemActions>
-                                  </ListItem>
-                                  {isHead && (
-                                    <div
-                                      style={{
-                                        marginLeft: 48,
-                                        marginBottom: 12,
-                                      }}
-                                    >
-                                      <CabinetExpandButton
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          setExpandedCabinetTenureId(
-                                            isCabinetExpanded ? null : t.id,
-                                          )
-                                        }}
-                                      >
-                                        <FiChevronDown
-                                          size={16}
-                                          style={{
-                                            transform: isCabinetExpanded
-                                              ? 'rotate(180deg)'
-                                              : 'none',
-                                          }}
-                                        />
-                                        이 행정부 각료
-                                      </CabinetExpandButton>
-                                       {isCabinetExpanded && (
-                                         <CabinetExpandPanel>
-                                           {(subordinateTenures as any[])
-                                             .length === 0 ? (
-                                             <span
-                                               style={{
-                                                 fontSize: 13,
-                                                 color: '#64748b',
-                                               }}
-                                             >
-                                               등록된 각료가 없습니다. 인물 재임
-                                               등록 시 소속 행정부를 선택하면
-                                               여기에서 확인할 수 있습니다.
-                                             </span>
-                                           ) : (
-                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                               {(
-                                                 subordinateTenures as any[]
-                                               ).map((sub: any) => (
-                                                 <div
-                                                   key={sub.id}
-                                                   style={{
-                                                     display: 'flex',
-                                                     alignItems: 'center',
-                                                     gap: 10,
-                                                     padding: '8px 12px',
-                                                     background: '#fff',
-                                                     border: '1px solid #e8ecf0',
-                                                     borderRadius: 8,
-                                                     fontSize: 13,
-                                                   }}
-                                                 >
-                                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                                     <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                                                       {sub.positionDefinition?.title ?? sub.title ?? '—'}
-                                                     </span>
-                                                     <span style={{ color: '#64748b', margin: '0 5px' }}>·</span>
-                                                     <span style={{ color: '#334155' }}>{getPersonName(sub.person)}</span>
-                                                   </div>
-                                                   <span style={{
-                                                     fontSize: 11.5, color: '#94a3b8',
-                                                     whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
-                                                   }}>
-                                                     {formatDate(sub.startDate)}~{sub.endDate ? formatDate(sub.endDate) : '현재'}
-                                                   </span>
-                                                   <span style={{
-                                                     padding: '2px 7px', fontSize: 11, fontWeight: 600,
-                                                     borderRadius: 999,
-                                                     color: sub.endDate ? '#64748b' : '#15803d',
-                                                     background: sub.endDate ? '#f1f5f9' : '#f0fdf4',
-                                                     border: `1px solid ${sub.endDate ? '#e2e8f0' : '#bbf7d0'}`,
-                                                   }}>
-                                                     {sub.endDate ? '퇴임' : '재임 중'}
-                                                   </span>
-                                                 </div>
-                                               )                                                  )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 20px 10px', borderBottom: '1px solid #f0f2f5', background: '#fafbfc' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <FiUsers size={12} color="#94a3b8" />
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{filteredTenures.length}명</span>
+                                  </div>
+                                  {minY && (
+                                    <>
+                                      <div style={{ width: 1, height: 10, background: '#e2e8f0' }} />
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                        <FiCalendar size={11} color="#94a3b8" />
+                                        <span style={{ fontSize: 12, color: '#64748b' }}>{minY} – {maxY ?? '현재'}</span>
+                                      </div>
+                                    </>
+                                  )}
+                                  <div style={{ flex: 1 }} />
+                                  <div style={{ display: 'flex', gap: 4 }}>
+                                    {HEADS_TL_ROWS.map((r, i) => (
+                                      <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: r.line }} />
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+
+                            {rows.map((rowItems, rowIdx) => {
+                              const p = HEADS_TL_ROWS[rowIdx % HEADS_TL_ROWS.length]
+                              const isReversed = rowIdx % 2 === 1
+                              const displayItems = isReversed ? [...rowItems].reverse() : rowItems
+                              const isLastRow = rowIdx === rows.length - 1
+
+                              return (
+                                <div key={rowIdx} style={{ background: '#fff', borderBottom: rowIdx < rows.length - 1 ? '1px solid #f0f2f5' : 'none' }}>
+                                  {/* 행 레이블 */}
+                                  {(() => {
+                                    const firstTerm = rowItems[0]?.regnalNumber ?? rowItems[0]?.termNumber
+                                    const lastTerm = rowItems[rowItems.length - 1]?.regnalNumber ?? rowItems[rowItems.length - 1]?.termNumber
+                                    const rangeLabel = firstTerm != null && lastTerm != null
+                                      ? firstTerm === lastTerm ? `제${firstTerm}대` : `제${firstTerm}–${lastTerm}대`
+                                      : `${rowIdx * HEADS_TL_ROW_SIZE + 1}번째 행`
+                                    return (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px 0' }}>
+                                        <div style={{ width: 4, height: 16, borderRadius: 2, background: p.line, flexShrink: 0 }} />
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: p.line, letterSpacing: '0.04em' }}>
+                                          {rangeLabel}
+                                        </span>
+                                        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${p.line}33, transparent)` }} />
+                                        <span style={{ fontSize: 10.5, color: '#c8d0da' }}>{rowItems.length}명</span>
+                                      </div>
+                                    )
+                                  })()}
+                                  <div style={{ position: 'relative', height: HEADS_ROW_H, padding: '0 20px' }}>
+
+                                    {/* 수평선 — 노드 X 기준으로 좌측 시작 */}
+                                    <div style={{
+                                      position: 'absolute',
+                                      left: 20 + HEADS_BUBBLE_W / 2,
+                                      right: 0,
+                                      top: '50%',
+                                      transform: 'translateY(-50%)',
+                                      height: 3,
+                                      background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
+                                      zIndex: 0,
+                                    }} />
+
+                                    {/* 아이템 그리드 */}
+                                    <div style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: `repeat(${HEADS_TL_ROW_SIZE}, 1fr)`,
+                                      height: '100%',
+                                      gap: '0 8px',
+                                      position: 'relative',
+                                      zIndex: 1,
+                                    }}>
+                                      {Array.from({ length: HEADS_TL_ROW_SIZE }).map((_, colIdx) => {
+                                        const t = displayItems[colIdx]
+                                        if (!t) return <div key={`e-${colIdx}`} />
+
+                                        const titleText = t.title || t.position?.title || '—'
+                                        const regnalFromNotes = getRegnalNameFromNotes(t.notes)
+                                        const lifespan = formatPersonLifespan(t.person)
+                                        const ageAtStart = calcAgeAtTenure(t.person, t.startDate)
+                                        const startYear = t.startDate ? new Date(t.startDate).getFullYear() : null
+                                        const endYear = t.endDate ? new Date(t.endDate).getFullYear() : null
+                                        const range = startYear ? `${startYear}–${endYear ?? '현재'}` : '—'
+                                        const termLabel = t.regnalNumber != null ? `${t.regnalNumber}세` : t.termNumber != null ? `제${t.termNumber}대` : null
+                                        const thumbUrl = t.person?.profileImageUrl ?? null
+                                        const personName = getPersonName(t.person)
+                                        const birthPlace = ((t.person as any)?.birthCity?.name ?? (t.person as any)?.birthAdminDivision?.name ?? (t.person as any)?.birthPlaceText ?? null) as string | null
+                                        const dynastyName = (t.person as any)?.dynasty?.name ?? null
+                                        const itemOnTop = colIdx % 2 === 0
+
+                                        return (
+                                          <div
+                                            key={t.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            style={{
+                                              display: 'flex', flexDirection: 'column',
+                                              alignItems: 'flex-start', height: '100%',
+                                              cursor: 'pointer', padding: '0 4px',
+                                            }}
+                                            onClick={() => { setEditingTenureId(t.id); setView('register') }}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingTenureId(t.id); setView('register') } }}
+                                          >
+                                            {/* 위쪽 */}
+                                            <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 8 }}>
+                                              {itemOnTop ? (
+                                                <div style={{ width: '100%', transition: 'transform 0.18s ease, opacity 0.15s' }}
+                                                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLDivElement).style.opacity = '0.92' }}
+                                                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.opacity = '1' }}>
+                                                  <HeadsTlCard thumbUrl={thumbUrl} personName={personName} titleText={titleText} range={range} ageAtStart={ageAtStart} birthPlace={birthPlace} lifespan={lifespan !== '생몰년 미상' ? lifespan : null} regnalName={regnalFromNotes} dynastyName={dynastyName} achievements={t.achievements ?? []} lineColor={p.line} textColor={p.textColor} />
+                                                </div>
+                                              ) : (
+                                                <div style={{
+                                                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                                                  background: '#fff', border: `2.5px solid ${p.line}`, borderRadius: 28,
+                                                  padding: '6px 14px', minWidth: HEADS_BUBBLE_W,
+                                                  boxShadow: `0 2px 10px ${p.line}44`, textAlign: 'center',
+                                                }}>
+                                                  <span style={{ fontSize: 17, fontWeight: 900, color: p.textColor, letterSpacing: '-0.03em', lineHeight: 1.2 }}>{startYear ?? '—'}</span>
+                                                  {termLabel && <span style={{ fontSize: 10, fontWeight: 700, color: p.line, marginTop: 1 }}>{termLabel}</span>}
                                                 </div>
                                               )}
-                                         </CabinetExpandPanel>
-                                       )}
+                                            </div>
+
+                                            {/* 수직선 + 노드 — 버블 중앙 정렬 */}
+                                            <div style={{ width: 2, height: 10, background: p.line, opacity: 0.6, marginLeft: HEADS_BUBBLE_W / 2 - 1, flexShrink: 0 }} />
+                                            <div style={{
+                                              width: 14, height: 14, borderRadius: '50%',
+                                              background: '#fff', border: `3px solid ${p.line}`,
+                                              boxShadow: `0 0 0 3px #fff`,
+                                              marginLeft: HEADS_BUBBLE_W / 2 - 7,
+                                              flexShrink: 0, zIndex: 2,
+                                            }} />
+                                            <div style={{ width: 2, height: 10, background: p.line, opacity: 0.6, marginLeft: HEADS_BUBBLE_W / 2 - 1, flexShrink: 0 }} />
+
+                                            {/* 아래쪽 */}
+                                            <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', paddingTop: 8 }}>
+                                              {!itemOnTop ? (
+                                                <div style={{ width: '100%', transition: 'transform 0.18s ease, opacity 0.15s' }}
+                                                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(3px)'; (e.currentTarget as HTMLDivElement).style.opacity = '0.92' }}
+                                                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.opacity = '1' }}>
+                                                  <HeadsTlCard thumbUrl={thumbUrl} personName={personName} titleText={titleText} range={range} ageAtStart={ageAtStart} birthPlace={birthPlace} lifespan={lifespan !== '생몰년 미상' ? lifespan : null} regnalName={regnalFromNotes} dynastyName={dynastyName} achievements={t.achievements ?? []} lineColor={p.line} textColor={p.textColor} />
+                                                </div>
+                                              ) : (
+                                                <div style={{
+                                                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                                                  background: '#fff', border: `2.5px solid ${p.line}`, borderRadius: 28,
+                                                  padding: '6px 14px', minWidth: HEADS_BUBBLE_W,
+                                                  boxShadow: `0 2px 10px ${p.line}44`, textAlign: 'center',
+                                                }}>
+                                                  <span style={{ fontSize: 17, fontWeight: 900, color: p.textColor, letterSpacing: '-0.03em', lineHeight: 1.2 }}>{startYear ?? '—'}</span>
+                                                  {termLabel && <span style={{ fontSize: 10, fontWeight: 700, color: p.line, marginTop: 1 }}>{termLabel}</span>}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
                                     </div>
-                                 )}
-                                </React.Fragment>
+                                  </div>
+                                </div>
                               )
                             })}
-                          </List>
-                        </div>
-                      ))}
+                          </div>
+                        )
+                      })
+                      .filter(Boolean)}
                     </>
                   )}
                 </ListWrap>
@@ -1796,7 +1786,7 @@ export function HeadsOfStateSection({
             <HeadsFormTitle>
               {editingTenureId ? '수반 수정' : '수반 등록'}
             </HeadsFormTitle>
-            <SubmitButton
+            <HeadsSubmitButton
               type="submit"
               form="heads-of-state-register-form"
               disabled={
@@ -1808,7 +1798,7 @@ export function HeadsOfStateSection({
             >
               <FiSave size={16} />
               {isSubmitting ? '저장 중…' : '저장'}
-            </SubmitButton>
+            </HeadsSubmitButton>
           </HeadsFormHeader>
           <form id="heads-of-state-register-form" onSubmit={handleAddSubmit}>
             <FormSectionInner>
@@ -3160,7 +3150,7 @@ const EmptyDesc = styled.p`
 const List = styled.ul`
   list-style: none;
   margin: 0;
-  padding: 6px 0;
+  padding: 4px 0 8px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -3168,37 +3158,22 @@ const List = styled.ul`
 
 const ListItem = styled.li`
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border: 1px solid #e8ecf0;
-  border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  align-items: stretch;
+  gap: 0;
   cursor: pointer;
-  transition:
-    background 0.12s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
   position: relative;
-  margin: 0 8px;
-  margin-bottom: 6px;
 
-  &:last-child {
-    margin-bottom: 0;
-  }
-
-  &:hover {
-    background: #f8fafc;
-    border-color: #94a3b8;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  &:hover .tenure-card {
+    border-color: #a5b4fc;
+    background: linear-gradient(135deg, #eef2ff 0%, #f8f9ff 100%);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
   }
 `
 
 const ItemAvatar = styled.div<{ $hasImage?: boolean }>`
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  width: 44px;
+  height: 54px;
+  border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
   background: ${({ $hasImage }) => ($hasImage ? '#f1f5f9' : '#eff1fe')};
@@ -3212,6 +3187,7 @@ const ItemAvatar = styled.div<{ $hasImage?: boolean }>`
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: top center;
   }
 `
 
@@ -3220,7 +3196,7 @@ const ListItemBody = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 `
 
 const ItemRow = styled.div`
@@ -3231,21 +3207,22 @@ const ItemRow = styled.div`
 `
 
 const ItemName = styled.div`
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
   color: #1e293b;
   line-height: 1.3;
+  letter-spacing: -0.02em;
 `
 
 const ItemTermBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 1px 6px;
+  padding: 2px 7px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: #6366f1;
   background: #eef2ff;
-  border-radius: 4px;
+  border-radius: 5px;
   letter-spacing: 0.01em;
   flex-shrink: 0;
 `
@@ -3254,25 +3231,28 @@ const ItemDates = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 12px;
-  font-weight: 400;
-  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4338ca;
+  background: #eef2ff;
+  padding: 2px 8px;
+  border-radius: 5px;
   margin-left: auto;
   white-space: nowrap;
 
   .sep {
     margin: 0 1px;
-    color: #cbd5e1;
+    color: #a5b4fc;
   }
 `
 
 const ItemTitleBadge = styled.span`
   display: inline-block;
-  padding: 1px 7px;
+  padding: 2px 8px;
   font-size: 11px;
-  font-weight: 500;
-  color: #64748b;
-  background: #f1f5f9;
+  font-weight: 600;
+  color: #6366f1;
+  background: transparent;
   border-radius: 4px;
 `
 
@@ -3299,7 +3279,7 @@ const ItemDynastyName = styled.span`
 `
 
 const ItemLifespan = styled.span`
-  font-size: 11.5px;
+  font-size: 11px;
   color: #94a3b8;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -3953,7 +3933,7 @@ const DeleteButton = styled.button`
   }
 `
 
-const SubmitButton = styled.button`
+const HeadsSubmitButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;

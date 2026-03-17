@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { useSessionStore } from '@/entities/session'
+import { useThemeStore } from '@/shared/theme/theme.store'
 
 // --- 메인 컨테이너 ---
 const DashboardContainer = styled.div`
@@ -18,8 +19,9 @@ const DashboardContainer = styled.div`
   height: 100vh;
   padding: 0;
   margin: 0;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#000000' : '#ffffff')};
   box-sizing: border-box;
+  transition: background 0.25s ease;
 `
 
 const CentralContent = styled.div`
@@ -45,7 +47,7 @@ const TopNav = styled.nav`
   align-items: center;
   justify-content: center;
   gap: 24px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   padding: 0;
 `
 
@@ -56,14 +58,14 @@ const TopNavItem = styled.button`
   gap: 4px;
   background: none;
   border: none;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   cursor: pointer;
   padding: 8px 12px;
   border-radius: 8px;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: #f8f9fa;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#f8f9fa')};
   }
 `
 
@@ -83,7 +85,7 @@ const TopIcon = styled.span`
 const TopLabel = styled.span`
   font-size: 11px;
   font-weight: 500;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   font-family:
     'Roboto',
     -apple-system,
@@ -102,7 +104,7 @@ const ClockContainer = styled.div`
 const Time = styled.div`
   font-size: 28px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#ffffff' : '#202124')};
   font-family:
     'Roboto',
     -apple-system,
@@ -114,7 +116,7 @@ const Time = styled.div`
 const DateText = styled.div`
   font-size: 12px;
   font-weight: 400;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   font-family:
     'Roboto',
     -apple-system,
@@ -146,24 +148,39 @@ const CircleButton = styled.button<{ $primary?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  border: ${({ $primary }) => ($primary ? 'none' : '1px solid #dadce0')};
+  border: ${({ $primary, theme }) =>
+    $primary
+      ? 'none'
+      : `1px solid ${theme.mode === 'dark' ? '#2c2c2e' : '#dadce0'}`};
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  background: ${({ $primary }) =>
-    $primary ? 'var(--color-primary)' : '#ffffff'};
-  color: ${({ $primary }) => ($primary ? '#ffffff' : '#3c4043')};
+  background: ${({ $primary, theme }) => {
+    if ($primary) return 'var(--color-primary)'
+    return theme.mode === 'dark' ? '#1c1c1e' : '#ffffff'
+  }};
+  color: ${({ $primary, theme }) => {
+    if ($primary) return '#ffffff'
+    return theme.mode === 'dark' ? '#ebebf5' : '#3c4043'
+  }};
   box-shadow: none;
 
   &:hover {
-    background: ${({ $primary }) =>
-      $primary ? 'var(--color-primary-300)' : '#f8f9fa'};
-    border-color: ${({ $primary }) => ($primary ? 'none' : '#bdc1c6')};
+    background: ${({ $primary, theme }) => {
+      if ($primary) return 'var(--color-primary-300)'
+      return theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa'
+    }};
+    border-color: ${({ $primary, theme }) => {
+      if ($primary) return 'none'
+      return theme.mode === 'dark' ? '#3a3a3c' : '#bdc1c6'
+    }};
     box-shadow: 0 1px 3px rgba(60, 64, 67, 0.1);
   }
 
   &:active {
-    background: ${({ $primary }) =>
-      $primary ? 'var(--color-primary-200)' : '#f1f3f4'};
+    background: ${({ $primary, theme }) => {
+      if ($primary) return 'var(--color-primary-200)'
+      return theme.mode === 'dark' ? '#3a3a3c' : '#f1f3f4'
+    }};
   }
 
   svg {
@@ -175,7 +192,7 @@ const CircleButton = styled.button<{ $primary?: boolean }>`
 const ButtonLabel = styled.span`
   font-size: 11px;
   font-weight: 500;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   font-family:
     'Roboto',
     -apple-system,
@@ -183,8 +200,8 @@ const ButtonLabel = styled.span`
 `
 
 const TextButton = styled.button`
-  background: #ffffff;
-  border: 1px solid #dadce0;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#ffffff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#dadce0')};
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -200,17 +217,17 @@ const TextButton = styled.button`
     'Roboto',
     -apple-system,
     sans-serif;
-  color: #3c4043;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#3c4043')};
 
   &:hover {
-    background: #f8f9fa;
-    border-color: #bdc1c6;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#bdc1c6')};
   }
 
   svg {
     width: 12px;
     height: 12px;
-    fill: #5f6368;
+    fill: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   }
 `
 
@@ -244,8 +261,8 @@ const MeetingInfo = styled.div`
 `
 
 const MeetingCard = styled.div`
-  background: #ffffff;
-  border: 1px solid #dadce0;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#ffffff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#dadce0')};
   border-radius: 12px;
   padding: 12px 14px 10px 14px;
   display: flex;
@@ -259,11 +276,11 @@ const MeetingCard = styled.div`
   width: 100%;
   min-width: 0;
   position: relative;
-  min-height: 128px; /* 카드 높이 균일화 */
+  min-height: 128px;
 
   &:hover {
-    background: #f8f9fa;
-    border-color: #c6cacc;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#c6cacc')};
     box-shadow: 0 1px 2px rgba(60, 64, 67, 0.15);
   }
 
@@ -275,7 +292,7 @@ const MeetingCard = styled.div`
     top: 16px;
     width: 2px;
     height: 20px;
-    background: #dadce0;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#dadce0')};
     border-radius: 2px;
   }
 `
@@ -283,7 +300,7 @@ const MeetingCard = styled.div`
 const MeetingTime = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   font-family:
     'Roboto',
     -apple-system,
@@ -300,7 +317,7 @@ const MeetingDetails = styled.div`
 const MeetingTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#202124')};
   font-family:
     'Roboto',
     -apple-system,
@@ -309,7 +326,7 @@ const MeetingTitle = styled.div`
 
 const MeetingSubtitle = styled.div`
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   font-family:
     'Roboto',
     -apple-system,
@@ -322,7 +339,7 @@ const CardMetaRow = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   font-size: 12px;
 `
 
@@ -331,12 +348,12 @@ const MetaDot = styled.span`
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #9aa0a6;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#636366' : '#9aa0a6')};
 `
 
 const HostLine = styled.div`
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
 `
 
 const CardFooter = styled.div`
@@ -368,14 +385,14 @@ const StartChip = styled.button`
 const MoreBtn = styled.button`
   background: transparent;
   border: none;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   padding: 4px;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: #f1f3f4;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f1f3f4')};
   }
 
   svg {
@@ -401,13 +418,13 @@ const DatePill = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border: 1px solid #e6e8eb;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#e6e8eb')};
   border-radius: 10px;
   padding: 8px 10px;
-  color: #3c4043;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#3c4043')};
   font-size: 14px;
   font-weight: 500;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#ffffff')};
 `
 
 const NavButton = styled.button`
@@ -419,13 +436,13 @@ const NavButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
   cursor: pointer;
-  font-size: 0; /* 텍스트 아이콘 숨김 */
+  font-size: 0;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: #f8f9fa;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
   }
 
   &.add-btn {
@@ -435,10 +452,10 @@ const NavButton = styled.button`
 
 const TodayButton = styled.button`
   background: none;
-  border: 1px solid #dadce0;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#dadce0')};
   border-radius: 20px;
   padding: 6px 16px;
-  color: #3c4043;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#3c4043')};
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
@@ -449,13 +466,14 @@ const TodayButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background: #f8f9fa;
-    border-color: #bdc1c6;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#bdc1c6')};
   }
 `
 
 export default function DashboardPage() {
   const { username } = useSessionStore()
+  const { mode } = useThemeStore()
   const [currentTime, setCurrentTime] = useState(new Date())
   const navigate = useNavigate()
 
@@ -466,9 +484,10 @@ export default function DashboardPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // 대시보드 마운트 시 body 배경색 변경
+  // 대시보드 마운트/테마 변경 시 body 배경색 변경
   useEffect(() => {
-    document.body.style.backgroundColor = '#ffffff'
+    const bgColor = mode === 'dark' ? '#000000' : '#ffffff'
+    document.body.style.backgroundColor = bgColor
     document.body.setAttribute('data-dashboard', 'true')
     const globalBg = document.getElementById('global-bg')
     if (globalBg) {
@@ -483,7 +502,7 @@ export default function DashboardPage() {
         gb.style.display = ''
       }
     }
-  }, [])
+  }, [mode])
 
   const timeString = currentTime.toLocaleTimeString('en-US', {
     hour: '2-digit',

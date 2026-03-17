@@ -16,6 +16,7 @@ import {
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
+  FiClock,
   FiEdit2,
   FiInfo,
   FiPlus,
@@ -500,6 +501,59 @@ const CabinetCancelBtn = styled.button`
     background: #f9fafb;
   }
 `
+
+// ─── 인포그래픽 타임라인 ───────────────────────────────────────────────────────
+const TL_ROWS = [
+  { line: '#6366f1', textColor: '#3730a3' },
+  { line: '#f59e0b', textColor: '#78350f' },
+  { line: '#10b981', textColor: '#065f46' },
+  { line: '#e11d48', textColor: '#881337' },
+]
+const TL_ROW_SIZE = 4
+const TL_ROW_H = 340   // 행 높이 고정
+const TL_BUBBLE_W = 84  // 연도 버블 너비
+const TL_THUMB = 72     // 썸네일 지름
+
+function TlItem({ thumbUrl, personName, posTitle, range, ageAtStart, birthPlace, lineColor }: {
+  thumbUrl: string | null; personName: string; posTitle: string
+  range: string; ageAtStart: number | null; birthPlace: string | null
+  lineColor: string
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* 원형 썸네일 */}
+      <div style={{
+        flexShrink: 0,
+        width: TL_THUMB, height: TL_THUMB, borderRadius: '50%',
+        overflow: 'hidden',
+        background: `${lineColor}18`,
+        border: `3px solid ${lineColor}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: `0 3px 10px ${lineColor}44`,
+      }}>
+        {thumbUrl
+          ? <img src={thumbUrl} alt={personName} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+          : <FiUser size={26} color={lineColor} style={{ opacity: 0.3 }} />
+        }
+      </div>
+      {/* 우측 텍스트 */}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{personName}</div>
+        <div style={{ fontSize: 12, color: lineColor, fontWeight: 600, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{posTitle}</div>
+        <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 8px' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: lineColor, background: `${lineColor}12`, borderRadius: 5, padding: '2px 9px', whiteSpace: 'nowrap' }}>{range}</span>
+          {ageAtStart != null && <span style={{ fontSize: 11, color: '#94a3b8' }}>취임 {ageAtStart}세</span>}
+        </div>
+        {birthPlace && (
+          <div style={{ marginTop: 4, fontSize: 11, color: '#b0bac9', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 9.5, color: '#c8d0da' }}>출신</span>{birthPlace}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 
 function getPersonName(p: any): string {
   if (!p) return '—'
@@ -1572,32 +1626,6 @@ export function CabinetsSection({
     const dep = (ministriesForCabinet as any[]).find((d: any) => d.id === depId)
     return dep?.name ?? '미연결'
   }
-  const renderMinisterListItem = (t: any) => {
-    const achievementCount = Array.isArray(t.achievements)
-      ? t.achievements.length
-      : 0
-    return (
-      <MinisterListItem key={t.id}>
-        <MinisterListName>{getPersonName(t.person)}</MinisterListName>
-        <MinisterListTitle>
-          {t.positionDefinition?.title ?? t.title ?? ''}
-        </MinisterListTitle>
-        <MinisterListMeta>
-          {formatDate(t.startDate)}–{t.endDate ? formatDate(t.endDate) : '현재'}
-        </MinisterListMeta>
-        <MinisterListActions>
-          <MinisterHistoryButton
-            type="button"
-            onClick={(e) => openMinisterHistoryModal(t, e)}
-            title="각료 히스토리 등록/수정"
-          >
-            히스토리 {achievementCount > 0 ? `(${achievementCount})` : ''}
-          </MinisterHistoryButton>
-        </MinisterListActions>
-      </MinisterListItem>
-    )
-  }
-
   if (loadingCabinets) {
     return (
       <div
@@ -1628,113 +1656,110 @@ export function CabinetsSection({
             transition={{ duration: 0.18 }}
             style={{ padding: '0' }}
           >
-            {/* 국가 필터 탭 — 현대국가이고 하위 역사국가가 있을 때만 표시 */}
-            {country.type === 'modern' &&
-              Array.isArray(country.historicalCountries) &&
-              country.historicalCountries.length > 0 && (
-                <CabCountryFilterBar>
-                  <CabCountryFilterBtn
-                    $active={cabinetCountryFilter === ''}
-                    type="button"
-                    onClick={() => setCabinetCountryFilter('')}
-                  >
-                    전체
-                  </CabCountryFilterBtn>
-                  <CabCountryFilterBtn
-                    $active={cabinetCountryFilter === countryId}
-                    type="button"
-                    onClick={() => setCabinetCountryFilter(countryId ?? '')}
-                  >
-                    {country.name}
-                  </CabCountryFilterBtn>
-                  {country.historicalCountries.map((hc) => (
-                    <CabCountryFilterBtn
-                      key={hc.id}
-                      $active={cabinetCountryFilter === hc.id}
-                      type="button"
-                      onClick={() => setCabinetCountryFilter(hc.id)}
-                    >
-                      {hc.name}
-                    </CabCountryFilterBtn>
-                  ))}
-                </CabCountryFilterBar>
-              )}
-            {/* 검색창 + 등록 버튼 (검색창 내 우측) */}
-            <CabListColumnHeader>
-              <CabSearchWrap style={{ flex: 1 }}>
-                <CabSearchIcon>
-                  <FiSearch size={15} />
-                </CabSearchIcon>
-                <CabSearchInput
-                  type="search"
-                  placeholder="수반명, 직위, 연도 검색"
-                  value={cabinetSearchQuery}
-                  onChange={(e) => setCabinetSearchQuery(e.target.value)}
-                  style={{ paddingRight: cabinetSearchQuery.trim() ? 108 : 92 }}
-                />
-                {cabinetSearchQuery.trim() && (
-                  <CabSearchClear
-                    type="button"
-                    style={{ right: 80 }}
-                    onClick={() => setCabinetSearchQuery('')}
-                  >
-                    <FiX size={13} />
-                  </CabSearchClear>
+            {/* ── 툴바: 국가 필터 + 검색 + 등록 ── */}
+            <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* 국가 필터 탭 */}
+              {country.type === 'modern' &&
+                Array.isArray(country.historicalCountries) &&
+                country.historicalCountries.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {[
+                      { id: '', label: '전체' },
+                      { id: countryId ?? '', label: country.name },
+                      ...country.historicalCountries.map((hc) => ({ id: hc.id, label: hc.name })),
+                    ].map((tab) => {
+                      const active = cabinetCountryFilter === tab.id
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setCabinetCountryFilter(tab.id)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            padding: '4px 14px', fontSize: 12.5, fontWeight: active ? 700 : 500,
+                            color: active ? '#fff' : '#64748b',
+                            background: active ? '#6366f1' : '#f8fafc',
+                            border: `1.5px solid ${active ? '#6366f1' : '#e2e8f0'}`,
+                            borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap',
+                            transition: 'all 0.13s',
+                            boxShadow: active ? '0 2px 8px #6366f144' : 'none',
+                          }}
+                          onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.borderColor = '#a5b4fc'; (e.currentTarget as HTMLButtonElement).style.color = '#4f46e5' } }}
+                          onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; (e.currentTarget as HTMLButtonElement).style.color = '#64748b' } }}
+                        >
+                          {tab.label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
-                {filteredCabinets.length > 0 && !cabinetSearchQuery.trim() && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      right: 80,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      fontSize: 11.5,
-                      fontWeight: 600,
-                      color: '#b0bac9',
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    {filteredCabinets.length}개
+
+              {/* 검색창 + 등록 버튼 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 14, borderBottom: '1px solid #f0f2f7' }}>
+                {/* 검색창 */}
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#b0bac9', display: 'flex', pointerEvents: 'none' }}>
+                    <FiSearch size={15} />
                   </span>
-                )}
-                {/* 등록 버튼 - 검색창 내 우측 고정 */}
+                  <input
+                    type="text"
+                    placeholder="수반명, 직위, 연도 검색"
+                    value={cabinetSearchQuery}
+                    onChange={(e) => setCabinetSearchQuery(e.target.value)}
+                    style={{
+                      width: '100%', height: 40, border: '1.5px solid #e5e7eb',
+                      borderRadius: 10, padding: '0 36px 0 38px',
+                      fontSize: 13, color: '#0f172a', background: '#f8fafc',
+                      outline: 'none', boxSizing: 'border-box',
+                      transition: 'border-color 0.14s, background 0.14s',
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#a5b4fc'; e.currentTarget.style.background = '#fff' }}
+                    onBlur={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.background = '#f8fafc' }}
+                  />
+                  {/* 건수 or 클리어 */}
+                  {cabinetSearchQuery.trim() ? (
+                    <button
+                      type="button"
+                      onClick={() => setCabinetSearchQuery('')}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', cursor: 'pointer', color: '#b0bac9', borderRadius: 5 }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#f1f5f9'; (e.currentTarget as HTMLButtonElement).style.color = '#475569' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#b0bac9' }}
+                    >
+                      <FiX size={13} />
+                    </button>
+                  ) : (
+                    <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11.5, fontWeight: 600, color: '#c8d0da', pointerEvents: 'none' }}>
+                      {filteredCabinets.length > 0 ? `${filteredCabinets.length}개` : ''}
+                    </span>
+                  )}
+                </div>
+
+                {/* 정렬 표시 (간단) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#94a3b8', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  <FiClock size={13} />
+                  최신순
+                </div>
+
+                {/* 등록 버튼 */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setRegisterFlow('new')
-                    setRegisterCabinetModalOpen(true)
-                  }}
+                  onClick={() => { setRegisterFlow('new'); setRegisterCabinetModalOpen(true) }}
                   style={{
-                    position: 'absolute',
-                    right: 4,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '5px 10px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: '#fff',
-                    background: '#6366f1',
-                    border: 'none',
-                    borderRadius: 7,
-                    cursor: 'pointer',
-                    transition: 'background 0.14s',
-                    whiteSpace: 'nowrap',
+                    flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '0 16px', height: 40, fontSize: 13, fontWeight: 600,
+                    color: '#fff', background: '#6366f1', border: 'none',
+                    borderRadius: 10, cursor: 'pointer',
+                    boxShadow: '0 2px 8px #6366f133',
+                    transition: 'background 0.13s, box-shadow 0.13s',
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#4f46e5'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#6366f1'
-                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#4f46e5'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 12px #6366f155' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#6366f1'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 8px #6366f133' }}
                 >
-                  <FiPlus size={12} />
-                  등록
+                  <FiPlus size={14} />
+                  행정부 등록
                 </button>
-              </CabSearchWrap>
-            </CabListColumnHeader>
+              </div>
+            </div>
             {filteredCabinets.length === 0 ? (
               <EmptyStateBox
                 style={{
@@ -1750,6 +1775,24 @@ export function CabinetsSection({
                     ? '검색 결과가 없습니다.'
                     : '등록된 행정부가 없습니다.'}
                 </div>
+                {(cabinetSearchQuery.trim() || cabinetCountryFilter) && (
+                  <button
+                    type="button"
+                    onClick={() => { setCabinetSearchQuery(''); setCabinetCountryFilter('') }}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '6px 14px', fontSize: 12.5, fontWeight: 600,
+                      color: '#6366f1', background: '#eef2ff',
+                      border: '1.5px solid #c7d2fe', borderRadius: 8, cursor: 'pointer',
+                      transition: 'background 0.13s',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = '#e0e7ff' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#eef2ff' }}
+                  >
+                    <FiX size={13} />
+                    필터 초기화
+                  </button>
+                )}
                 {!cabinetSearchQuery.trim() && !cabinetCountryFilter && (
                   <CabRegisterBtn
                     type="button"
@@ -1763,469 +1806,195 @@ export function CabinetsSection({
                   </CabRegisterBtn>
                 )}
               </EmptyStateBox>
-            ) : (
-              <div style={{ padding: '8px 20px 32px' }}>
+) : (
+              <div style={{ padding: '0 0 32px' }}>
+                {/* 타임라인 요약 헤더 */}
                 {(() => {
-                  // termNumber 연속 그룹핑
-                  const groups: Array<{
-                    items: any[]
-                    consecutive: boolean[]
-                  }> = []
-                  let current: any[] = []
-                  let currentConseq: boolean[] = []
-                  filteredCabinets.forEach((c: any, idx: number) => {
-                    current.push(c)
-                    const nextC = filteredCabinets[idx + 1]
-                    const termNum =
-                      c.headTenure?.termNumber ?? c.headTenure?.regnalNumber
-                    const nextTermNum =
-                      nextC?.headTenure?.termNumber ??
-                      nextC?.headTenure?.regnalNumber
-                    const isConsec =
-                      termNum != null &&
-                      nextTermNum != null &&
-                      nextTermNum === termNum + 1
-                    if (isConsec) {
-                      currentConseq.push(true)
-                    } else {
-                      currentConseq.push(false)
-                      groups.push({
-                        items: current,
-                        consecutive: currentConseq,
-                      })
-                      current = []
-                      currentConseq = []
-                    }
+                  const items = filteredCabinets as any[]
+                  const years = items.flatMap(c => {
+                    const s = c.headTenure?.startDate ? new Date(c.headTenure.startDate).getFullYear() : null
+                    return s ? [s] : []
                   })
+                  const minY = years.length ? Math.min(...years) : null
+                  const maxY = years.length ? Math.max(...years) : null
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 24px', borderBottom: '1px solid #f0f2f5', background: '#fafbfc' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <FiUsers size={13} color="#94a3b8" />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{items.length}개 행정부</span>
+                      </div>
+                      {minY && (
+                        <>
+                          <div style={{ width: 1, height: 12, background: '#e2e8f0' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <FiCalendar size={12} color="#94a3b8" />
+                            <span style={{ fontSize: 12, color: '#64748b' }}>{minY} – {maxY ?? '현재'}</span>
+                          </div>
+                        </>
+                      )}
+                      <div style={{ flex: 1 }} />
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {TL_ROWS.map((r, i) => (
+                          <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: r.line }} />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+                {(() => {
+                  const items = filteredCabinets as any[]
+                  const rows: any[][] = []
+                  for (let i = 0; i < items.length; i += TL_ROW_SIZE) {
+                    rows.push(items.slice(i, i + TL_ROW_SIZE))
+                  }
 
-                  return groups.map((group, gIdx) => {
-                    const isChain = group.items.length > 1
-                    const CARD_V_PAD = 14
+                  return rows.map((rowItems, rowIdx) => {
+                    const p = TL_ROWS[rowIdx % TL_ROWS.length]
+                    const isReversed = rowIdx % 2 === 1
+                    const displayItems = isReversed ? [...rowItems].reverse() : rowItems
+                    // 노드 중앙 X = 패딩(20) + 버블너비/2
+                    const NODE_X = 20 + TL_BUBBLE_W / 2
+
                     return (
-                      <div
-                        key={gIdx}
-                        style={{
-                          marginBottom: gIdx < groups.length - 1 ? 12 : 0,
-                        }}
-                      >
-                        {group.items.map((c: any, iIdx: number) => {
-                          const head = c.headTenure
-                          const personName = head?.person
-                            ? getPersonName(head.person)
-                            : '이름 없음'
-                          const posTitle =
-                            head?.positionDefinition?.title ??
-                            head?.title ??
-                            '—'
-                          const termNum = head?.termNumber ?? head?.regnalNumber
-                          const isDeleting = deletingCabinetId === c.id
-                          const thumbUrl = head?.person?.profileImageUrl ?? null
-                          const start = head?.startDate
-                            ? new Date(head.startDate).getFullYear()
-                            : ''
-                          const end = head?.endDate
-                            ? new Date(head.endDate).getFullYear()
-                            : '현재'
-                          const range = start ? `${start} – ${end}` : '—'
-                          const isLast = iIdx === group.items.length - 1
-                          const lifespan = head?.person
-                            ? formatPersonLifespan(head.person)
-                            : null
-                          const ageAtStart =
-                            head?.person && head?.startDate
-                              ? calcAgeAtTenure(head.person, head.startDate)
-                              : null
-
-                          const countryFlagEmoji: string | null = (() => {
-                            if (head?.historicalCountryId) {
-                              const hc = (
-                                country.historicalCountries ?? []
-                              ).find(
-                                (h: any) => h.id === head.historicalCountryId,
-                              )
-                              return (hc as any)?.flagEmoji ?? null
-                            }
-                            if (head?.countryId)
-                              return (country as any).flagEmoji ?? null
-                            return null
-                          })()
-                          const countryBadgeLabel: string | null = (() => {
-                            const showBadge =
-                              country.type === 'modern' &&
-                              Array.isArray(country.historicalCountries) &&
-                              country.historicalCountries.length > 0
-                            if (!showBadge) return null
-                            if (head?.historicalCountryId) {
-                              const hc = (
-                                country.historicalCountries ?? []
-                              ).find(
-                                (h: any) => h.id === head.historicalCountryId,
-                              )
-                              return hc?.name ?? null
-                            }
-                            if (head?.countryId) return country.name
-                            return null
-                          })()
-
+                      <div key={rowIdx} style={{ background: '#fff', borderBottom: rowIdx < rows.length - 1 ? '1px solid #f0f2f5' : 'none' }}>
+                        {/* 행 레이블 */}
+                        {(() => {
+                          const firstTerm = rowItems[0]?.headTenure?.termNumber ?? rowItems[0]?.headTenure?.regnalNumber
+                          const lastTerm = rowItems[rowItems.length - 1]?.headTenure?.termNumber ?? rowItems[rowItems.length - 1]?.headTenure?.regnalNumber
+                          const rangeLabel = firstTerm != null && lastTerm != null
+                            ? firstTerm === lastTerm ? `제${firstTerm}대` : `제${firstTerm}–${lastTerm}대`
+                            : `${rowIdx * TL_ROW_SIZE + 1}번째 행`
                           return (
-                            <div
-                              key={c.id}
-                              style={{
-                                display: 'flex',
-                                gap: 10,
-                                paddingBottom: isChain && !isLast ? 4 : 0,
-                              }}
-                            >
-                              {/* 인디케이터 열 */}
-                              <div
-                                style={{
-                                  flexShrink: 0,
-                                  width: 40,
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <div
-                                  style={{ height: CARD_V_PAD, flexShrink: 0 }}
-                                />
-                                {/* 연도 */}
-                                {start && (
-                                  <div
-                                    style={{
-                                      fontSize: 8.5,
-                                      fontWeight: 600,
-                                      color: isChain ? '#475569' : '#b0bad1',
-                                      letterSpacing: '0.01em',
-                                      marginBottom: 3,
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {start}
-                                  </div>
-                                )}
-                                {/* 원 */}
-                                <div
-                                  style={{
-                                    width: 30,
-                                    height: 30,
-                                    borderRadius: '50%',
-                                    flexShrink: 0,
-                                    background: isChain ? '#334155' : '#f8fafc',
-                                    border: `2px solid ${isChain ? '#475569' : '#e2e8f0'}`,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                  }}
-                                >
-                                  {termNum != null ? (
-                                    <>
-                                      <span
-                                        style={{
-                                          fontSize:
-                                            String(termNum).length >= 3
-                                              ? 7
-                                              : String(termNum).length === 2
-                                                ? 8
-                                                : 9.5,
-                                          fontWeight: 700,
-                                          color: isChain ? '#fff' : '#94a3b8',
-                                          lineHeight: 1,
-                                        }}
-                                      >
-                                        {termNum}
-                                      </span>
-                                      <span
-                                        style={{
-                                          fontSize: 6,
-                                          fontWeight: 600,
-                                          color: isChain
-                                            ? 'rgba(255,255,255,0.6)'
-                                            : '#b0bad1',
-                                          lineHeight: 1,
-                                          marginTop: 1,
-                                        }}
-                                      >
-                                        대
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <div
-                                      style={{
-                                        width: 5,
-                                        height: 5,
-                                        borderRadius: '50%',
-                                        background: '#cbd5e1',
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                                {/* 연결선 — 연속 체인일 때만, 마지막 제외 */}
-                                {isChain && !isLast && (
-                                  <div
-                                    style={{
-                                      flex: 1,
-                                      width: 2,
-                                      marginTop: 4,
-                                      background: '#334155',
-                                      borderRadius: 1,
-                                      opacity: 0.25,
-                                    }}
-                                  />
-                                )}
-                              </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px 0' }}>
+                              <div style={{ width: 4, height: 16, borderRadius: 2, background: p.line, flexShrink: 0 }} />
+                              <span style={{ fontSize: 11, fontWeight: 700, color: p.line, letterSpacing: '0.04em' }}>
+                                {rangeLabel}
+                              </span>
+                              <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${p.line}33, transparent)` }} />
+                              <span style={{ fontSize: 10.5, color: '#c8d0da' }}>
+                                {rowItems.length}명
+                              </span>
+                            </div>
+                          )
+                        })()}
+                        <div style={{ position: 'relative', height: TL_ROW_H, padding: '0 20px' }}>
 
-                              {/* 카드 — 말풍선 스타일 */}
-                              <div
-                                style={{ flex: 1, position: 'relative' }}
-                                onMouseEnter={(e) => {
-                                  const card = e.currentTarget.querySelector(
-                                    '[data-card]',
-                                  ) as HTMLElement | null
-                                  const tailBorder =
-                                    e.currentTarget.querySelector(
-                                      '[data-tail-border]',
-                                    ) as HTMLElement | null
-                                  const tailFill =
-                                    e.currentTarget.querySelector(
-                                      '[data-tail-fill]',
-                                    ) as HTMLElement | null
-                                  if (card) {
-                                    card.style.borderColor = '#c8d0dc'
-                                    card.style.background = '#fafbfc'
-                                  }
-                                  if (tailBorder)
-                                    tailBorder.style.borderRightColor =
-                                      '#c8d0dc'
-                                  if (tailFill)
-                                    tailFill.style.borderRightColor = '#fafbfc'
-                                }}
-                                onMouseLeave={(e) => {
-                                  const card = e.currentTarget.querySelector(
-                                    '[data-card]',
-                                  ) as HTMLElement | null
-                                  const tailBorder =
-                                    e.currentTarget.querySelector(
-                                      '[data-tail-border]',
-                                    ) as HTMLElement | null
-                                  const tailFill =
-                                    e.currentTarget.querySelector(
-                                      '[data-tail-fill]',
-                                    ) as HTMLElement | null
-                                  if (card) {
-                                    card.style.borderColor = '#e8ecf0'
-                                    card.style.background = '#fff'
-                                  }
-                                  if (tailBorder)
-                                    tailBorder.style.borderRightColor =
-                                      '#e8ecf0'
-                                  if (tailFill)
-                                    tailFill.style.borderRightColor = '#fff'
-                                }}
-                              >
-                                {/* 말풍선 꼬리 (border) */}
+                          {/* 수평선 — 노드 X 기준으로 좌측 시작 */}
+                          <div style={{
+                            position: 'absolute',
+                            left: NODE_X,
+                            right: 0,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: 3,
+                            background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
+                            zIndex: 0,
+                          }} />
+
+                          {/* 아이템 그리드 */}
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${TL_ROW_SIZE}, 1fr)`,
+                            height: '100%',
+                            gap: '0 8px',
+                            position: 'relative',
+                            zIndex: 1,
+                          }}>
+                            {Array.from({ length: TL_ROW_SIZE }).map((_, colIdx) => {
+                              const item = displayItems[colIdx]
+                              if (!item) return <div key={`e-${colIdx}`} />
+
+                              const head = item.headTenure
+                              const personName = head?.person ? getPersonName(head.person) : '이름 없음'
+                              const posTitle = head?.positionDefinition?.title ?? head?.title ?? '—'
+                              const termNum = head?.termNumber ?? head?.regnalNumber
+                              const thumbUrl = head?.person?.profileImageUrl ?? null
+                              const startYear = head?.startDate ? new Date(head.startDate).getFullYear() : null
+                              const endYear = head?.endDate ? new Date(head.endDate).getFullYear() : null
+                              const range = startYear ? `${startYear}–${endYear ?? '현재'}` : '—'
+                              const ageAtStart = head?.person && head?.startDate ? calcAgeAtTenure(head.person, head.startDate) : null
+                              const birthPlace = head?.person
+                                ? ((head.person as any).birthCity?.name ?? (head.person as any).birthAdminDivision?.name ?? (head.person as any).birthPlaceText ?? null)
+                                : null
+                              const isDeleting = deletingCabinetId === item.id
+                              // 짝수: 아이템 위 / 버블 아래, 홀수: 버블 위 / 아이템 아래
+                              const itemOnTop = colIdx % 2 === 0
+
+                              return (
                                 <div
-                                  data-tail-border
+                                  key={item.id}
                                   style={{
-                                    position: 'absolute',
-                                    left: -6,
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    width: 0,
-                                    height: 0,
-                                    borderTop: '6px solid transparent',
-                                    borderBottom: '6px solid transparent',
-                                    borderRight: '6px solid #e8ecf0',
-                                    zIndex: 1,
-                                    pointerEvents: 'none',
-                                  }}
-                                />
-                                {/* 말풍선 꼬리 (fill) */}
-                                <div
-                                  data-tail-fill
-                                  style={{
-                                    position: 'absolute',
-                                    left: -5,
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    width: 0,
-                                    height: 0,
-                                    borderTop: '6px solid transparent',
-                                    borderBottom: '6px solid transparent',
-                                    borderRight: '6px solid #fff',
-                                    zIndex: 2,
-                                    pointerEvents: 'none',
-                                  }}
-                                />
-                                <div
-                                  data-card
-                                  onClick={() => {
-                                    if (!isDeleting) {
-                                      setSelectedCabinetId(c.id)
-                                      setCabinetView('detail')
-                                    }
-                                  }}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 12,
-                                    padding: `${CARD_V_PAD}px 14px`,
-                                    background: '#fff',
-                                    border: '1px solid #e8ecf0',
-                                    borderRadius: 10,
+                                    display: 'flex', flexDirection: 'column',
+                                    alignItems: 'flex-start',
+                                    height: '100%',
                                     cursor: isDeleting ? 'wait' : 'pointer',
-                                    transition:
-                                      'border-color 0.15s, background 0.15s',
+                                    padding: '0 4px',
                                   }}
+                                  onClick={() => { if (!isDeleting) { setSelectedCabinetId(item.id); setCabinetView('detail') } }}
                                 >
-                                  {/* 썸네일 */}
-                                  <div
-                                    style={{
-                                      flexShrink: 0,
-                                      width: 46,
-                                      height: 56,
-                                      borderRadius: 8,
-                                      overflow: 'hidden',
-                                      background: '#f1f5f9',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                    }}
-                                  >
-                                    {thumbUrl ? (
-                                      <img
-                                        src={thumbUrl}
-                                        alt={personName}
-                                        style={{
-                                          width: '100%',
-                                          height: '100%',
-                                          objectFit: 'cover',
-                                          objectPosition: 'top center',
-                                        }}
-                                      />
+                                  {/* 위쪽 영역 */}
+                                  <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 8 }}>
+                                    {itemOnTop ? (
+                                      /* 아이템 (위) */
+                                      <div style={{ width: '100%', transition: 'transform 0.18s ease, opacity 0.15s' }}
+                                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLDivElement).style.opacity = '0.92' }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.opacity = '1' }}
+                                      >
+                                        <TlItem thumbUrl={thumbUrl} personName={personName} posTitle={posTitle} range={range} ageAtStart={ageAtStart} birthPlace={birthPlace} lineColor={p.line} />
+                                      </div>
                                     ) : (
-                                      <FiUser size={20} color="#c8d0dc" />
+                                      /* 연도 버블 (위) */
+                                      <div style={{
+                                        display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                                        background: '#fff', border: `2.5px solid ${p.line}`, borderRadius: 28,
+                                        padding: '6px 14px', minWidth: TL_BUBBLE_W,
+                                        boxShadow: `0 2px 10px ${p.line}44`, textAlign: 'center',
+                                      }}>
+                                        <span style={{ fontSize: 17, fontWeight: 900, color: p.textColor, letterSpacing: '-0.03em', lineHeight: 1.2 }}>{startYear ?? '—'}</span>
+                                        {termNum != null && <span style={{ fontSize: 10, fontWeight: 700, color: p.line, marginTop: 1 }}>제{termNum}대</span>}
+                                      </div>
                                     )}
                                   </div>
 
-                                  {/* 텍스트 */}
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    {/* 이름 + 국기 */}
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 5,
-                                        marginBottom: 2,
-                                      }}
-                                    >
-                                      {countryBadgeLabel &&
-                                        (countryFlagEmoji ? (
-                                          <span
-                                            style={{
-                                              fontSize: 13,
-                                              lineHeight: 1,
-                                              flexShrink: 0,
-                                            }}
-                                          >
-                                            {countryFlagEmoji}
-                                          </span>
-                                        ) : (
-                                          <span
-                                            style={{
-                                              fontSize: 9.5,
-                                              fontWeight: 600,
-                                              color: '#64748b',
-                                              border: '1px solid #e2e8f0',
-                                              borderRadius: 4,
-                                              padding: '1px 5px',
-                                              flexShrink: 0,
-                                              whiteSpace: 'nowrap',
-                                            }}
-                                          >
-                                            {countryBadgeLabel}
-                                          </span>
-                                        ))}
-                                      <span
-                                        style={{
-                                          fontSize: 14,
-                                          fontWeight: 700,
-                                          color: '#1e293b',
-                                          letterSpacing: '-0.02em',
-                                          overflow: 'hidden',
-                                          textOverflow: 'ellipsis',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        {personName}
-                                      </span>
-                                      {ageAtStart != null && (
-                                        <span
-                                          style={{
-                                            fontSize: 10,
-                                            fontWeight: 600,
-                                            color: '#94a3b8',
-                                            flexShrink: 0,
-                                          }}
-                                        >
-                                          취임 {ageAtStart}세
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div
-                                      style={{
-                                        fontSize: 12,
-                                        color: '#64748b',
-                                        fontWeight: 500,
-                                        marginBottom: 3,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {posTitle}
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                        flexWrap: 'wrap',
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          fontSize: 11,
-                                          color: '#94a3b8',
-                                          fontWeight: 400,
-                                        }}
-                                      >
-                                        {range}
-                                      </span>
-                                      {lifespan && (
-                                        <span
-                                          style={{
-                                            fontSize: 10.5,
-                                            color: '#b0bac9',
-                                          }}
-                                        >
-                                          {lifespan}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
+                                  {/* 수직선 + 노드 — 왼쪽 정렬 */}
+                                  <div style={{ width: 2, height: 10, background: p.line, opacity: 0.6, marginLeft: TL_BUBBLE_W / 2 - 1, flexShrink: 0 }} />
+                                  <div style={{
+                                    width: 14, height: 14, borderRadius: '50%',
+                                    background: '#fff', border: `3px solid ${p.line}`,
+                                    boxShadow: `0 0 0 3px #fff`,
+                                    marginLeft: TL_BUBBLE_W / 2 - 7,
+                                    flexShrink: 0, zIndex: 2,
+                                  }} />
+                                  <div style={{ width: 2, height: 10, background: p.line, opacity: 0.6, marginLeft: TL_BUBBLE_W / 2 - 1, flexShrink: 0 }} />
 
-                                  <FiChevronRight
-                                    size={13}
-                                    color="#c8d0dc"
-                                    style={{ flexShrink: 0 }}
-                                  />
+                                  {/* 아래쪽 영역 */}
+                                  <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', paddingTop: 8 }}>
+                                    {!itemOnTop ? (
+                                      /* 아이템 (아래) */
+                                      <div style={{ width: '100%', transition: 'transform 0.18s ease, opacity 0.15s' }}
+                                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(3px)'; (e.currentTarget as HTMLDivElement).style.opacity = '0.92' }}
+                                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.opacity = '1' }}
+                                      >
+                                        <TlItem thumbUrl={thumbUrl} personName={personName} posTitle={posTitle} range={range} ageAtStart={ageAtStart} birthPlace={birthPlace} lineColor={p.line} />
+                                      </div>
+                                    ) : (
+                                      /* 연도 버블 (아래) */
+                                      <div style={{
+                                        display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                                        background: '#fff', border: `2.5px solid ${p.line}`, borderRadius: 28,
+                                        padding: '6px 14px', minWidth: TL_BUBBLE_W,
+                                        boxShadow: `0 2px 10px ${p.line}44`, textAlign: 'center',
+                                      }}>
+                                        <span style={{ fontSize: 17, fontWeight: 900, color: p.textColor, letterSpacing: '-0.03em', lineHeight: 1.2 }}>{startYear ?? '—'}</span>
+                                        {termNum != null && <span style={{ fontSize: 10, fontWeight: 700, color: p.line, marginTop: 1 }}>제{termNum}대</span>}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          )
-                        })}
+                              )
+                            })}
+                          </div>
+                        </div>
                       </div>
                     )
                   })
@@ -2421,11 +2190,11 @@ export function CabinetsSection({
                           cursor: 'pointer',
                           transition: 'all 0.14s',
                         }}
-                        onMouseOver={(e) => {
+                        onMouseEnter={(e) => {
                           e.currentTarget.style.background = '#fff1f1'
                           e.currentTarget.style.borderColor = '#f87171'
                         }}
-                        onMouseOut={(e) => {
+                        onMouseLeave={(e) => {
                           e.currentTarget.style.background = 'transparent'
                           e.currentTarget.style.borderColor = '#fecaca'
                         }}
@@ -2555,7 +2324,10 @@ export function CabinetsSection({
                               )}
                               {(() => {
                                 const p = minister.person as any
-                                const birthPlace = p?.birthCity?.name ?? p?.birthAdminDivision?.name ?? p?.birthPlaceText
+                                const birthPlace =
+                                  p?.birthCity?.name ??
+                                  p?.birthAdminDivision?.name ??
+                                  p?.birthPlaceText
                                 return birthPlace ? (
                                   <MinisterProfileLifespan>
                                     <span
@@ -3054,7 +2826,10 @@ export function CabinetsSection({
                               )}
                               {(() => {
                                 const p = head?.person as any
-                                const birthPlace = p?.birthCity?.name ?? p?.birthAdminDivision?.name ?? p?.birthPlaceText
+                                const birthPlace =
+                                  p?.birthCity?.name ??
+                                  p?.birthAdminDivision?.name ??
+                                  p?.birthPlaceText
                                 return birthPlace ? (
                                   <HeadLifespan>
                                     <span
@@ -3764,7 +3539,7 @@ export function CabinetsSection({
                                     <FiSearch size={14} />
                                   </CabSearchIcon>
                                   <CabSearchInput
-                                    type="search"
+                                    type="text"
                                     placeholder="각료명, 직위..."
                                     value={ministerSearchQuery}
                                     onChange={(e) =>
@@ -3863,6 +3638,7 @@ export function CabinetsSection({
                                   return (
                                     <MinisterCard
                                       key={t.id}
+                                      $selected={selectedMinisterId === t.id}
                                       onClick={() =>
                                         setSelectedMinisterId(t.id)
                                       }
@@ -4915,7 +4691,7 @@ function RegisterCabinetModal({
                       <FiSearch size={16} />
                     </CabinetSearchIcon>
                     <RegisterInput
-                      type="search"
+                      type="text"
                       placeholder="이름, 직위, 기간 검색"
                       value={headTenureFilter}
                       onChange={(e) => setHeadTenureFilter(e.target.value)}
@@ -5473,44 +5249,6 @@ const CabResultCount = styled.span`
    ══════════════════════════════════════════════ */
 
 /* ListRow: flex row, 상세+카드그리드 나란히 */
-const CabListColumnHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 20px 14px;
-  border-bottom: 1px solid #f0f2f7;
-  margin-bottom: 16px;
-`
-
-/* 국가 필터 탭 바 */
-const CabCountryFilterBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 16px 20px 0;
-  margin-bottom: 0;
-`
-const CabCountryFilterBtn = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 11px;
-  font-size: 12px;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
-  color: ${(p) => (p.$active ? '#1e293b' : '#64748b')};
-  background: ${(p) => (p.$active ? '#f1f5f9' : 'transparent')};
-  border: 1px solid ${(p) => (p.$active ? '#cbd5e1' : '#e2e8f0')};
-  border-radius: 20px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.14s;
-  &:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-    color: #1e293b;
-  }
-`
-
 /* 좌: 상세 패널 — 인물의 DetailPanel */
 
 /* 닫기 버튼 — 상단 bar에 인라인 배치 */
@@ -5837,14 +5575,15 @@ const MinisterCardGrid = styled.div`
   overflow: hidden;
   border: 1px solid #f0f2f7;
 `
-const MinisterCard = styled.div`
+const MinisterCard = styled.div<{ $selected?: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  background: #fff;
+  background: ${p => p.$selected ? '#eef2ff' : '#fff'};
   cursor: pointer;
   transition: background 0.12s;
+  border-left: ${p => p.$selected ? '3px solid #6366f1' : '3px solid transparent'};
   &:first-child {
     border-radius: 12px 12px 0 0;
   }
@@ -5855,7 +5594,7 @@ const MinisterCard = styled.div`
     border-radius: 12px;
   }
   &:hover {
-    background: #f8fafc;
+    background: ${p => p.$selected ? '#e0e7ff' : '#f8fafc'};
   }
 `
 const MinisterCardThumb = styled.div`
@@ -5925,11 +5664,6 @@ const MinisterCardAge = styled.span`
   background: #6366f1;
   border-radius: 4px;
   padding: 1px 5px;
-`
-const MinisterCardDuration = styled.div`
-  font-size: 10.5px;
-  font-weight: 500;
-  color: #94a3b8;
 `
 const MinisterCardLifespan = styled.div`
   font-size: 10.5px;
@@ -6151,68 +5885,6 @@ const ProfileEmptyNote = styled.div`
   line-height: 1.7;
 `
 
-/* ── 기존 스타일 유지용 alias ── */
-const MinisterListItem = styled.li`
-  font-size: 14px;
-  color: #334155;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    'name meta action'
-    'title meta action';
-  column-gap: 10px;
-  row-gap: 2px;
-  align-items: center;
-  padding: 11px 12px;
-  background: #ffffff;
-  border-radius: 10px;
-  border: 1px solid #e3eaf3;
-  line-height: 1.45;
-`
-const MinisterListName = styled.span`
-  grid-area: name;
-  font-weight: 700;
-  font-size: 14px;
-  color: #0f172a;
-`
-const MinisterListTitle = styled.span`
-  grid-area: title;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 500;
-`
-const MinisterListMeta = styled.span`
-  grid-area: meta;
-  color: #94a3b8;
-  font-size: 12px;
-  margin-left: 0;
-  white-space: nowrap;
-`
-const MinisterListActions = styled.div`
-  grid-area: action;
-  display: inline-flex;
-  align-items: center;
-`
-const MinisterHistoryButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #475569;
-  border-radius: 8px;
-  padding: 5px 11px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background 0.14s,
-    border-color 0.14s;
-  &:hover {
-    background: #f8fafc;
-    border-color: #94a3b8;
-  }
-`
 const MinisterEmptyText = styled.span`
   font-size: 13px;
   color: #94a3b8;

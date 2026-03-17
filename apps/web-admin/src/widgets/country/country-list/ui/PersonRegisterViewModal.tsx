@@ -102,6 +102,10 @@ export interface PersonRegisterViewModalProps {
   onClose: () => void
   initialCountryId?: string | null
   onSuccess?: (personId: string) => void
+  /** 수정할 인물 ID (없으면 신규 등록) */
+  editPersonId?: string | null
+  /** 모달 제목 (기본: 인물 등록) */
+  title?: string
 }
 
 export function PersonRegisterViewModal({
@@ -109,6 +113,8 @@ export function PersonRegisterViewModal({
   onClose,
   initialCountryId,
   onSuccess,
+  editPersonId,
+  title,
 }: PersonRegisterViewModalProps) {
   const queryClient = useQueryClient()
 
@@ -140,7 +146,7 @@ export function PersonRegisterViewModal({
           >
             <ModalHeader>
               <ModalTitle id="person-register-modal-title">
-                인물 등록
+                {title ?? (editPersonId ? '인물 수정' : '인물 등록')}
               </ModalTitle>
               <CloseBtn type="button" onClick={onClose} aria-label="닫기">
                 <FiX size={20} />
@@ -149,6 +155,7 @@ export function PersonRegisterViewModal({
             <FormScroll>
               <PersonRegisterView
                 initialCountryId={initialCountryId}
+                editPersonId={editPersonId ?? undefined}
                 onCancel={onClose}
                 onSuccess={handleSuccess}
                 embedInCard={false}
