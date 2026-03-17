@@ -809,3 +809,19 @@ export const CollapsedListButton = styled.button`
     border-color: ${({ theme }) => theme.colors.activeLight};
   }
 `
+
+// ─── 상세 패널 (country.page.tsx 에서 직접 렌더) ──────────────────────────────
+
+export const DetailPane = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: calc(100vh - var(--header-height));
+  min-height: 0;
+  overflow-y: auto;
+  border-left: none;
+
+  @media (max-width: 1024px) {
+    display: none;
+  }
+`
