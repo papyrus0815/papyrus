@@ -25,7 +25,7 @@ import { useHistoricalCountry } from '@/features/historical-country/use-historic
 import { uploadImage } from '@/shared/api/upload'
 import type { TransitionEventType } from '@/shared/api/historical-countries'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal'
-import * as S from '../../../../pages/history/country/country.styles'
+import * as S from '@/widgets/country/country-form/ui/country-form.styles'
 
 /** 모달: 인물 등록 모달(PersonRegisterView)과 동일 — FormSectionInner 기본 패딩(28px 32px 32px) 유지, FormHeader 24px 28px */
 const ModalFormLayoutWrap = styled.div`

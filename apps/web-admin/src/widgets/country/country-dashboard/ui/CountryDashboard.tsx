@@ -9,7 +9,7 @@ import { type UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 
-import * as S from '../../../../pages/history/country/country.styles'
+import * as S from './country-dashboard.styles'
 import { formatEventPeriod, formatRelativeTime } from '../relative-time'
 
 /** 전 세계 국가 수 기준 (UN 회원국·옵저버 등 통상 인용치) */

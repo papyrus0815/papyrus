@@ -8,8 +8,6 @@ import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import { FiGrid, FiInfo, FiPlus, FiSearch, FiX, FiAward } from 'react-icons/fi'
 import styled from 'styled-components'
-
-import * as S from '@/pages/history/country/country.styles'
 import type {
   AdministrationDepartment,
   AdministrationDepartmentCategory,

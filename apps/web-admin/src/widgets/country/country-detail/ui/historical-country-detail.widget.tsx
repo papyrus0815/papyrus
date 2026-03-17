@@ -5,8 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import * as CountryStyles from '@/pages/history/country/country.styles'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import * as DetailStyles from './country-detail.styles'
+import * as ListStyles from '@/widgets/country/country-list/ui/country-list.styles'
+
+const CountryStyles = { ...DetailStyles, ...ListStyles }
 
 import {
   getTransitionsByHistoricalCountryId,

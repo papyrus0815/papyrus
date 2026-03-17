@@ -7,7 +7,6 @@ import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { SelectModal } from '@/shared/ui/select-modal'
-import * as S from '@/pages/history/country/country.styles'
 
 const sectionLabelStyle: React.CSSProperties = {
   marginBottom: 18,

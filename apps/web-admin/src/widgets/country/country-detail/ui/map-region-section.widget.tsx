@@ -11,7 +11,7 @@ import {
   mockAdministrativeRegions,
   mockCityDetails,
 } from '../mock'
-import * as CountryStyles from '@/pages/history/country/country.styles'
+import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
 import * as S from './CountryDetail.styles'
 import { MapRegionAdministrativeView } from './MapRegionAdministrativeView'
 import { MapRegionInfrastructureView } from './MapRegionInfrastructureView'

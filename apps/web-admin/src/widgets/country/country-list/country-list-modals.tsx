@@ -9,7 +9,7 @@ import { COUNTRY_TYPE_LABELS } from '@/entities/country/model/unified-types'
 import type { CountryTypeFilter } from '@/entities/country/model/unified-types'
 import { useCountryListState } from './country-list-state.context'
 import type { SortBy } from './country-list-state.context'
-import * as S from '@/pages/history/country/country.styles'
+import * as S from './ui/country-list.styles'
 
 interface CountryListModalsProps {
   showContinentModal: boolean

@@ -5,7 +5,7 @@ import { FiPlus, FiSettings } from 'react-icons/fi'
 
 import { type ContinentOption, type Country } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import * as CountryStyles from '@/pages/history/country/country.styles'
+import * as CountryStyles from './country-detail.styles'
 
 import * as CountryDetailStyles from './CountryDetail.styles'
 import { LoadingOverlay } from './LoadingOverlay'

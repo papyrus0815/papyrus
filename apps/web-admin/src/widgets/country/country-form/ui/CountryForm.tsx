@@ -21,7 +21,7 @@ import {
 } from '@/entities/country/api'
 import { countrySchema } from '@/entities/country/model/schema'
 import { uploadImage } from '@/shared/api/upload'
-import * as S from '../../../../pages/history/country/country.styles'
+import * as S from './country-form.styles'
 
 /** 모달: 역사적 국가 폼과 동일 디자인 — 섹션/필드 그리드·간격·보더 */
 const CountryFormModalLayout = styled.div`

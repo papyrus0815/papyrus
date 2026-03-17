@@ -27,7 +27,7 @@ import {
   getTransitionsByHistoricalCountryIds,
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
-import * as CountryStyles from '@/pages/history/country/country.styles'
+import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
 
 /* 행정조직·인물과 동일: 단일 악센트, 회색 톤 */
 const MAIN = '#6366f1'

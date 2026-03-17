@@ -3,7 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { type Country, type ContinentOption } from '@/entities/country/api'
 import { type UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
-import * as S from '../../../../pages/history/country/country.styles'
+import * as PageS from '@/pages/history/country/country-page.styles'
+import * as ListS from '@/widgets/country/country-list/ui/country-list.styles'
+
+// 두 스타일 모듈을 합쳐서 S.*로 사용 가능하도록
+const S = { ...PageS, ...ListS }
 
 interface CountryMobileUIProps {
   activeTab: 'dashboard' | 'list'

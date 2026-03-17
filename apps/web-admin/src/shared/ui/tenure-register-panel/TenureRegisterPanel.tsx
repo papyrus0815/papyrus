@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiUser } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import * as S from '@/pages/history/country/country.styles'
+import * as S from '@/shared/ui/form-styles'
 import { toast } from 'react-hot-toast'
 
 import { useCountries } from '@/features/country/api'

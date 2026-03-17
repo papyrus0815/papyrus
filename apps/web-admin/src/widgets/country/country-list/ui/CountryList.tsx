@@ -10,7 +10,7 @@ import {
   type CountryTypeFilter,
   type UnifiedCountry,
 } from '@/entities/country/model/unified-types'
-import * as S from '@/pages/history/country/country.styles'
+import * as S from './country-list.styles'
 import { getUploadImageUrl } from '@/shared/api/upload'
 
 import { useCountryListState } from '../country-list-state.context'

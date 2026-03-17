@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 
-import * as CountryStyles from '@/pages/history/country/country.styles'
+import * as CountryStyles from './country-detail.styles'
 
 interface LoadingOverlayProps {
   message?: string

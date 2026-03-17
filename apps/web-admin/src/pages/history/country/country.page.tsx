@@ -54,7 +54,7 @@ import { CountryMobileUI } from '@/widgets/country/country-mobile-ui'
 import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 
-import * as S from './country.styles'
+import * as S from './country-page.styles'
 
 /** 대시보드 메뉴 선택 시 오른쪽 컨텐츠 (통계·가문·민족·전체사건·인물 제외 — 해당 뷰는 각각 전용 섹션으로 렌더) */
 function DashboardMenuContent({
