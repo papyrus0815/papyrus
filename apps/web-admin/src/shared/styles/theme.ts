@@ -62,6 +62,8 @@ const lightTheme = {
       primary: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
       secondary: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
       accent: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+      blue: 'linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 100%)',
+      pink: 'linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%)',
     },
   },
   spacing: {
@@ -114,28 +116,28 @@ const darkTheme = {
       secondary: '#1c1c1e',
     },
     background: {
-      primary: '#1c1c1e',   // iOS 다크 메인 배경 (시스템 배경)
+      primary: '#1c1c1e', // iOS 다크 메인 배경 (시스템 배경)
       secondary: '#2c2c2e', // iOS 그룹화된 배경 2레벨
-      tertiary: '#3a3a3c',  // iOS 그룹화된 배경 3레벨
+      tertiary: '#3a3a3c', // iOS 그룹화된 배경 3레벨
       quaternary: '#48484a', // iOS 그룹화된 배경 4레벨
     },
     white: '#1c1c1e',
     primary: '#636af2',
     secondary: '#9f7aea',
-    accent: '#32ade6',   // iOS 시스템 블루
-    success: '#30d158',  // iOS 시스템 그린
-    warning: '#ffd60a',  // iOS 시스템 옐로우
-    error: '#ff453a',    // iOS 시스템 레드
+    accent: '#32ade6', // iOS 시스템 블루
+    success: '#30d158', // iOS 시스템 그린
+    warning: '#ffd60a', // iOS 시스템 옐로우
+    error: '#ff453a', // iOS 시스템 레드
     active: '#636af2',
     activeLight: '#2c2c3e',
     hover: '#2c2c2e',
     text: {
-      primary: '#f5f5f7',   // iOS 라벨 (거의 흰색, 눈이 덜 피로함)
+      primary: '#f5f5f7', // iOS 라벨 (거의 흰색, 눈이 덜 피로함)
       secondary: '#98989d', // iOS 세컨더리 라벨
-      tertiary: '#636366',  // iOS 터셔리 라벨
+      tertiary: '#636366', // iOS 터셔리 라벨
     },
     border: {
-      light: '#2c2c2e',  // iOS separator
+      light: '#2c2c2e', // iOS separator
       default: '#3a3a3c',
       medium: '#48484a',
       dark: '#636366',
@@ -150,6 +152,8 @@ const darkTheme = {
       primary: 'linear-gradient(135deg, #636af2 0%, #9f7aea 100%)',
       secondary: 'linear-gradient(135deg, #32ade6 0%, #3b82f6 100%)',
       accent: 'linear-gradient(135deg, #30d158 0%, #34c759 100%)',
+      blue: 'linear-gradient(135deg, #1c3a52 0%, #1e4a6e 100%)',
+      pink: 'linear-gradient(135deg, #3d1a2e 0%, #5c2a44 100%)',
     },
   },
   spacing: {

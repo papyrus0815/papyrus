@@ -11,7 +11,7 @@ export const Wrap = styled.div<{ $inHistory?: boolean }>`
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   padding: ${({ $inHistory }) => ($inHistory ? '0' : '64px 0 0')};
 
   @media (max-width: 1024px) {
@@ -74,10 +74,10 @@ export const KpiRow = styled.div`
 `
 
 export const KpiCard = styled.div`
-  border: 1px solid #eceff2;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 10px;
   padding: 10px 12px;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -86,16 +86,19 @@ export const KpiCard = styled.div`
 
 export const KpiLabel = styled.div`
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const KpiValue = styled.div`
   font-size: 18px;
   font-weight: 700;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
-export const MainGrid = styled.div<{ $noSidebar?: boolean; $listCollapsed?: boolean }>`
+export const MainGrid = styled.div<{
+  $noSidebar?: boolean
+  $listCollapsed?: boolean
+}>`
   width: 100%;
   padding: 0;
   display: grid;
@@ -122,14 +125,17 @@ export const MainGrid = styled.div<{ $noSidebar?: boolean; $listCollapsed?: bool
   }
 `
 
-export const ListPane = styled.div<{ $inHistory?: boolean; $collapsed?: boolean }>`
+export const ListPane = styled.div<{
+  $inHistory?: boolean
+  $collapsed?: boolean
+}>`
   display: flex;
   flex-direction: column;
   gap: 0;
   height: 100%;
   max-height: 100%;
-  background: #ffffff;
-  border-right: 1px solid #eee;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
   overflow: hidden;
   padding-top: 0;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -147,28 +153,32 @@ export const ListCollapseButton = styled.button<{ $collapsed?: boolean }>`
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #ffffff;
-  color: #64748b;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  box-shadow: 0 1px 4px ${({ theme }) => theme.colors.shadow.sm};
+  transition:
+    color 0.2s,
+    border-color 0.2s,
+    background 0.2s;
 
   svg {
     width: 14px;
     height: 14px;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: ${({ $collapsed }) => ($collapsed ? 'rotate(180deg)' : 'rotate(0deg)')};
+    transform: ${({ $collapsed }) =>
+      $collapsed ? 'rotate(180deg)' : 'rotate(0deg)'};
   }
 
   &:hover {
-    background: #f8fafc;
-    color: #6366f1;
-    border-color: rgba(99, 102, 241, 0.3);
+    background: ${({ theme }) => theme.colors.background.secondary};
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.activeLight};
   }
 
   @media (max-width: 1024px) {
@@ -208,7 +218,10 @@ export const CollapsedListButton = styled.button`
   justify-content: center;
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    border-color 0.2s,
+    background 0.2s;
 
   svg {
     width: 16px;
@@ -554,10 +567,12 @@ export const TabBar = styled.div`
   top: 0;
   z-index: 1;
   padding: 6px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) =>
+    `linear-gradient(180deg, ${theme.colors.background.secondary} 0%, ${theme.colors.background.tertiary} 100%)`};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0
+    ${({ theme }) => `${theme.colors.background.primary}b3`};
   overflow-x: auto;
   overscroll-behavior: contain;
 
@@ -574,8 +589,10 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   padding: 8px 14px;
   border-radius: 10px;
   border: none;
-  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#4338ca' : '#64748b')};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
@@ -588,15 +605,18 @@ export const TabButton = styled.button<{ $active?: boolean }>`
     color 0.16s ease,
     background 0.16s ease,
     box-shadow 0.2s ease;
-  box-shadow: ${({ $active }) =>
+  box-shadow: ${({ $active, theme }) =>
     $active
-      ? '0 4px 12px rgba(79, 70, 229, 0.14), 0 0 0 1px rgba(79, 70, 229, 0.08)'
+      ? `0 4px 12px ${theme.colors.shadow.md}, 0 0 0 1px ${theme.colors.shadow.sm}`
       : 'none'};
 
   &:hover {
-    color: ${({ $active }) => ($active ? '#4338ca' : '#475569')};
-    background: ${({ $active }) =>
-      $active ? '#ffffff' : 'rgba(255, 255, 255, 0.75)'};
+    color: ${({ $active, theme }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.colors.background.primary
+        : `${theme.colors.background.primary}bf`};
   }
 
   @media (max-width: 768px) {
@@ -611,7 +631,6 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   }
 `
 
-/** 국가 상세 Overview 서브탭 (통계·지도·행정조직·인물·역사) — 몽글몽글·트렌디 */
 export const OverviewSubTabRow = styled.div`
   display: flex;
   align-items: center;
@@ -621,9 +640,9 @@ export const OverviewSubTabRow = styled.div`
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   padding: 12px 20px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const OverviewSubTabBar = styled.div`
@@ -631,7 +650,7 @@ export const OverviewSubTabBar = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px;
-  background: #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 20px;
   overflow-x: auto;
   overscroll-behavior: contain;
@@ -645,8 +664,10 @@ export const OverviewSubTabButton = styled.button<{ $active?: boolean }>`
   padding: 10px 18px;
   border-radius: 14px;
   border: none;
-  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#4f46e5' : '#64748b')};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
@@ -659,13 +680,16 @@ export const OverviewSubTabButton = styled.button<{ $active?: boolean }>`
     box-shadow 0.2s ease;
   font-family: inherit;
   white-space: nowrap;
-  box-shadow: ${({ $active }) =>
-    $active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
+  box-shadow: ${({ $active, theme }) =>
+    $active ? `0 2px 8px ${theme.colors.shadow.sm}` : 'none'};
 
   &:hover {
-    color: ${({ $active }) => ($active ? '#4f46e5' : '#475569')};
-    background: ${({ $active }) =>
-      $active ? '#ffffff' : 'rgba(255,255,255,0.6)'};
+    color: ${({ $active, theme }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.colors.background.primary
+        : `${theme.colors.background.primary}99`};
   }
 `
 
@@ -674,8 +698,8 @@ export const TabBadge = styled.span`
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: #eef2ff;
-  color: #6366f1;
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.primary};
   font-size: 11px;
   font-weight: 600;
   display: inline-flex;
@@ -918,12 +942,12 @@ export const ControlsRow = styled.div`
   position: sticky;
   top: 0;
   z-index: 2;
-  background: rgba(248, 250, 252, 0.9);
+  background: ${({ theme }) => `${theme.colors.background.secondary}e6`};
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   padding: 12px 24px;
-  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.14);
+  box-shadow: 0 1px 0 ${({ theme }) => theme.colors.shadow.sm};
 `
 
 export const FilterRow = styled.div`
@@ -934,8 +958,8 @@ export const FilterRow = styled.div`
   position: sticky;
   top: 57px;
   z-index: 2;
-  background: #ffffff;
-  border-bottom: 1px solid #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-wrap: wrap;
 
   @media (max-width: 768px) {
@@ -980,7 +1004,7 @@ export const AddIconButton = styled.button`
   padding: 0;
   border: none;
   border-radius: 8px;
-  background: #6366f1;
+  background: ${({ theme }) => theme.colors.primary};
   color: #fff;
   cursor: pointer;
   transition:
@@ -988,7 +1012,7 @@ export const AddIconButton = styled.button`
     opacity 0.15s ease;
 
   &:hover {
-    background: #4f46e5;
+    background: ${({ theme }) => theme.colors.button.hover};
   }
 
   &:active {
@@ -1055,7 +1079,7 @@ export const SearchIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   pointer-events: none;
   z-index: 1;
 `
@@ -1064,24 +1088,24 @@ export const SearchInput = styled.input`
   width: 100%;
   height: 36px;
   padding: 0 32px 0 38px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   font-size: 14px;
-  color: #0f172a;
-  background: #ffffff;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
   transition: border-color 0.15s ease;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
 
   &:focus {
     outline: none;
-    border-color: #6366f1;
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 
   @media (max-width: 768px) {
@@ -1294,8 +1318,8 @@ export const FilterResultBar = styled.div`
   align-items: center;
   justify-content: center;
   padding: 8px 16px;
-  background: #ffffff;
-  border-bottom: 1px solid #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   position: sticky;
   top: 113px;
   z-index: 1;
@@ -1306,17 +1330,17 @@ export const FilterResultText = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 
   svg {
-    color: #64748b;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
 export const FilterResultCount = styled.span`
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-size: 13px;
 `
 
@@ -1411,7 +1435,7 @@ export const VirtualList = styled.div`
   overflow-x: hidden;
   height: 100%;
   padding: 6px 0 12px 8px;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
 
   /* 작고 깔끔한 스크롤바 */
   &::-webkit-scrollbar {
@@ -1423,16 +1447,16 @@ export const VirtualList = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 4px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: ${({ theme }) => theme.colors.border.dark};
   }
 
   &::-webkit-scrollbar-thumb:active {
-    background: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
   }
 
   @media (max-width: 768px) {
@@ -1446,12 +1470,12 @@ export const ContinentSectionHeader = styled.div`
   padding: 10px 16px 10px 18px;
   font-size: 11px;
   font-weight: 600;
-  color: #6366f1;
+  color: ${({ theme }) => theme.colors.primary};
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  background: #faf5ff;
-  border-left: 3px solid #6366f1;
-  border-bottom: 1px solid #f3e8ff;
+  background: ${({ theme }) => theme.colors.activeLight};
+  border-left: 3px solid ${({ theme }) => theme.colors.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 10px 10px 0 0;
 `
 
@@ -1651,14 +1675,19 @@ export const FileUploadText = styled.span`
   white-space: nowrap;
 `
 
-export const ListRow = styled.button<{ $active?: boolean }>`
+export const ListRow = styled.button<{ $active?: boolean; $historicalActive?: boolean }>`
   width: 100%;
   padding: 8px 10px 10px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: #ffffff;
-  border: 1px solid #f1f5f9;
+  background: ${({ $historicalActive, theme }) =>
+    $historicalActive ? theme.colors.activeLight : theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-left: ${({ $historicalActive, theme }) =>
+    $historicalActive
+      ? `2px solid ${theme.colors.primary}`
+      : `2px solid ${theme.colors.border.light}`};
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
@@ -1679,23 +1708,23 @@ export const ListRow = styled.button<{ $active?: boolean }>`
     top: 6px;
     bottom: 6px;
     width: 2px;
-    background: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
     border-radius: 2px;
     opacity: ${({ $active }) => ($active ? '1' : '0')};
     transition: opacity 0.2s ease;
   }
 
   &:hover {
-    background: #fafbff;
-    border-color: #e0e7ff;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06);
+    background: ${({ theme }) => theme.colors.activeLight};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
     &::before {
       opacity: ${({ $active }) => ($active ? '1' : '0.4')};
     }
   }
 
   &:active {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   @media (max-width: 768px) {
@@ -1752,7 +1781,7 @@ export const RowLeft = styled.div`
 export const RowCheckbox = styled.span`
   width: 14px;
   height: 14px;
-  border: 1px solid #dadce0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 3px;
 `
 
@@ -1761,7 +1790,7 @@ export const ExpandButton = styled.button`
   height: 20px;
   border: none;
   background: none;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -1774,7 +1803,7 @@ export const ExpandButton = styled.button`
   border-radius: 4px;
 
   &:hover {
-    color: #6366f1;
+    color: ${({ theme }) => theme.colors.primary};
   }
 
   &:active {
@@ -1784,7 +1813,7 @@ export const ExpandButton = styled.button`
 
 export const StarIcon = styled.span`
   font-size: 12px;
-  color: #e2e8f0;
+  color: ${({ theme }) => theme.colors.border.default};
 `
 
 export const FlagBadge = styled.span`
@@ -1794,17 +1823,17 @@ export const FlagBadge = styled.span`
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: #f8fafc;
+  background: ${({ theme }) => theme.colors.background.secondary};
   font-size: 20px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   transition:
     background 0.2s ease,
     border-color 0.2s ease;
   flex-shrink: 0;
 
   ${ListRow}:hover & {
-    background: #f1f5f9;
-    border-color: #e2e8f0;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    border-color: ${({ theme }) => theme.colors.border.default};
   }
 
   @media (max-width: 768px) {
@@ -1833,7 +1862,7 @@ export const TextCol = styled.div`
 export const CodeText = styled.div<{ $unread?: boolean }>`
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
   font-family:
     'Roboto',
@@ -1854,7 +1883,7 @@ export const CodeText = styled.div<{ $unread?: boolean }>`
 
 export const NameText = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 400;
   letter-spacing: 0;
   font-family:
@@ -1885,8 +1914,11 @@ export const RadioDot = styled.span<{ $active?: boolean }>`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: ${({ $active }) => ($active ? '#6366f1' : 'transparent')};
-  border: 2px solid ${({ $active }) => ($active ? '#6366f1' : '#e2e8f0')};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : 'transparent'};
+  border: 2px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.default};
   transition:
     background 0.2s ease,
     border-color 0.2s ease;
@@ -1894,19 +1926,19 @@ export const RadioDot = styled.span<{ $active?: boolean }>`
 
 export const MetaDate = styled.span`
   font-size: 11px;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const AttachmentDot = styled.span`
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #e2e8f0;
+  background: ${({ theme }) => theme.colors.border.default};
 `
 
 export const TimeText = styled.span`
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
   min-width: 44px;
   text-align: right;
@@ -1939,14 +1971,14 @@ export const Meta = styled.div`
   gap: 8px;
   align-items: center;
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
 `
 
 export const Dot = styled.span`
   width: 3px;
   height: 3px;
-  background: #cbd5e1;
+  background: ${({ theme }) => theme.colors.border.medium};
   border-radius: 50%;
   display: inline-block;
 `
@@ -1973,7 +2005,7 @@ export const DetailPaneRelative = styled.div`
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
 
   /* 커스텀 스크롤바 */
   &::-webkit-scrollbar {
@@ -1981,15 +2013,15 @@ export const DetailPaneRelative = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f3f4;
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 4px;
 
     &:hover {
-      background: #bdc1c6;
+      background: ${({ theme }) => theme.colors.border.dark};
     }
   }
 
@@ -2141,7 +2173,7 @@ export const HeaderStatValue = styled.div`
 // Global Dashboard Styles
 export const GlobalDashboard = styled.div`
   padding: 32px 40px 48px;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   min-height: calc(100vh - var(--header-height));
   display: flex;
   flex-direction: column;
@@ -2167,7 +2199,7 @@ export const GlobalDashboard = styled.div`
 export const GlobalDashboardHero = styled.header`
   padding: 0 0 16px 0;
   margin-bottom: 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   background: transparent;
   position: relative;
 
@@ -2207,7 +2239,7 @@ export const HeroIcon = styled.div`
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: ${({ theme }) => theme.colors.gradient.primary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2242,7 +2274,7 @@ export const HeroTitle = styled.h1`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   line-height: 1.3;
 
@@ -2255,7 +2287,7 @@ export const HeroSubtitle = styled.p`
   margin: 0;
   font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0;
 
   @media (max-width: 768px) {
@@ -2265,25 +2297,25 @@ export const HeroSubtitle = styled.p`
 
 /** 등록 현황 게시판 (인물·국가 등록 내역) */
 export const DashboardBoard = styled.section`
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 16px;
   padding: 22px 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 export const DashboardBoardTitle = styled.h3`
   margin: 0 0 18px 0;
   font-size: 14px;
   font-weight: 700;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.03em;
 `
 
 export const DashboardBoardEmpty = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   padding: 12px 0;
 `
 
@@ -2300,7 +2332,7 @@ export const DashboardBoardList = styled.ul`
 
 export const DashboardBoardItem = styled.li`
   padding: 12px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2311,52 +2343,53 @@ export const DashboardBoardItem = styled.li`
   }
 
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 `
 
 export const DashboardBoardItemDate = styled.span`
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   letter-spacing: 0.02em;
 `
 
 export const DashboardBoardItemText = styled.span`
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.4;
 `
 
-export const DashboardSectionTitle = styled.div`
+export const DashboardSectionTitle = styled.div<{ $mt?: string }>`
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 24px 0 18px;
   background: transparent;
-  border-bottom: 2px solid #f1f5f9;
+  border-bottom: 2px solid ${({ theme }) => theme.colors.border.light};
   margin-bottom: 6px;
+  ${({ $mt }) => $mt && `margin-top: ${$mt};`}
 `
 
 export const SectionTitleIcon = styled.div`
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  background: ${({ theme }) => theme.colors.activeLight};
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
-  color: #6366f1;
+  color: ${({ theme }) => theme.colors.primary};
 `
 
 export const SectionTitleText = styled.h2`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 
   @media (max-width: 768px) {
@@ -2368,8 +2401,8 @@ export const GlobalMetricsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0;
-  background: #ffffff;
-  border: 1px solid #e8ecf1;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   overflow: hidden;
 
@@ -2403,21 +2436,21 @@ export const GlobalDashboardGrid = styled.div`
 `
 
 export const GlobalWidget = styled.div`
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 16px;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
   transition:
     box-shadow 0.2s ease,
     border-color 0.2s ease;
 
   &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-    border-color: #c7d2fe;
+    box-shadow: 0 4px 16px ${({ theme }) => theme.colors.shadow.md};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 
   @media (max-width: 480px) {
@@ -2431,18 +2464,18 @@ export const GlobalWidgetHeader = styled.div`
   align-items: center;
   gap: 12px;
   padding-bottom: 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const GlobalWidgetIcon = styled.div`
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  background: ${({ theme }) => theme.colors.activeLight};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6366f1;
+  color: ${({ theme }) => theme.colors.primary};
   flex-shrink: 0;
 
   svg {
@@ -2455,7 +2488,7 @@ export const GlobalWidgetTitle = styled.h3`
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
 
@@ -2467,7 +2500,7 @@ export const GlobalWidgetContent = styled.div`
 `
 
 export const GlobalMetricCard = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   padding: 24px 26px;
   display: flex;
   flex-direction: column;
@@ -2476,37 +2509,37 @@ export const GlobalMetricCard = styled.div`
   transition:
     background 0.2s ease,
     box-shadow 0.2s ease;
-  border-right: 1px solid #f1f5f9;
-  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:nth-child(4n) {
     border-right: none;
   }
 
   &:hover {
-    background: #fafbff;
-    box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.08);
+    background: ${({ theme }) => theme.colors.background.secondary};
+    box-shadow: inset 0 0 0 1px ${({ theme }) => theme.colors.activeLight};
   }
 
   @media (min-width: 769px) and (max-width: 1024px) {
     padding: 22px 24px;
-    border-right: 1px solid #f1f5f9;
-    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     &:nth-child(4n) {
-      border-right: 1px solid #f1f5f9;
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
     }
     &:nth-child(2n) {
       border-right: none;
     }
     &:nth-child(n + 3) {
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     }
   }
 
   @media (max-width: 768px) {
     padding: 22px 24px;
     border-right: none;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     &:last-child {
       border-bottom: none;
     }
@@ -2521,8 +2554,8 @@ export const GlobalMetricIcon = styled.div`
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  color: #6366f1;
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.primary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2544,14 +2577,14 @@ export const GlobalMetricContent = styled.div`
 export const GlobalMetricLabel = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.4;
 `
 
 export const GlobalMetricValue = styled.div`
   font-size: 24px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.2;
   letter-spacing: -0.02em;
   display: flex;
@@ -2567,7 +2600,7 @@ export const GlobalMetricValue = styled.div`
 export const GlobalMetricSubtext = styled.div`
   font-size: 11px;
   font-weight: 500;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.4;
 `
 
@@ -2580,10 +2613,10 @@ export const EmptyGlobalState = styled.div`
   padding: 80px 40px;
   text-align: center;
   min-height: 420px;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 export const EmptyGlobalIcon = styled.div`
@@ -2594,23 +2627,23 @@ export const EmptyGlobalIcon = styled.div`
   justify-content: center;
   font-size: 40px;
   margin-bottom: 24px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  background: ${({ theme }) => theme.colors.activeLight};
   border-radius: 20px;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 4px 12px ${({ theme }) => theme.colors.shadow.md};
 `
 
 export const EmptyGlobalTitle = styled.h3`
   margin: 0 0 12px 0;
   font-size: 22px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
 
 export const EmptyGlobalDesc = styled.p`
   margin: 0;
   font-size: 15px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.6;
   max-width: 360px;
 `
@@ -2620,7 +2653,7 @@ export const DashboardView = styled.div`
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 export const DashboardContent = styled.div`
@@ -2771,11 +2804,11 @@ export const DashboardSubtitle = styled.p`
 `
 
 export const DashboardTableWrap = styled.div`
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 export const DashboardTable = styled.table`
@@ -2795,8 +2828,8 @@ export const DashboardTable = styled.table`
 `
 
 export const DashboardTableHead = styled.thead`
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 
   @media (max-width: 480px) {
     display: none;
@@ -2808,7 +2841,7 @@ export const DashboardTh = styled.th<{ align?: string }>`
   text-align: ${(props) => props.align || 'left'};
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.03em;
   white-space: nowrap;
 
@@ -2818,11 +2851,11 @@ export const DashboardTh = styled.th<{ align?: string }>`
 `
 
 export const DashboardTr = styled.tr`
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   transition: background 0.15s ease;
 
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &:last-child {
@@ -2833,7 +2866,7 @@ export const DashboardTr = styled.tr`
 export const DashboardTd = styled.td<{ align?: string }>`
   padding: 12px 16px;
   font-size: 14px;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   text-align: ${(props) => props.align || 'left'};
   white-space: nowrap;
   vertical-align: middle;
@@ -2880,19 +2913,19 @@ export const CountryInfo = styled.div`
 
 export const CountryName = styled.div`
   font-weight: 600;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const CountryLocalName = styled.div`
   font-size: 12px;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const IsoCode = styled.code`
   font-size: 12px;
   font-family: ui-monospace, monospace;
-  color: #64748b;
-  background: #f1f5f9;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
   padding: 4px 8px;
   border-radius: 6px;
 `
@@ -2902,8 +2935,8 @@ export const ContinentBadge = styled.span`
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: #475569;
-  background: #f1f5f9;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 8px;
 `
 
@@ -3435,12 +3468,12 @@ export const FilterButton = styled.button<{ $active?: boolean }>`
   gap: 6px;
   height: 36px;
   padding: 0 12px;
-  border: 1px solid ${({ $active }) => ($active ? '#6366f1' : '#e2e8f0')};
+  border: 1px solid ${({ $active, theme }) => ($active ? theme.colors.primary : theme.colors.border.default)};
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
-  background: ${({ $active }) => ($active ? '#eef2ff' : '#ffffff')};
+  color: ${({ $active, theme }) => ($active ? theme.colors.primary : theme.colors.text.secondary)};
+  background: ${({ $active, theme }) => ($active ? theme.colors.activeLight : theme.colors.background.primary)};
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -3450,13 +3483,13 @@ export const FilterButton = styled.button<{ $active?: boolean }>`
   flex-shrink: 0;
 
   &:hover {
-    border-color: #6366f1;
-    background: #eef2ff;
-    color: #6366f1;
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.activeLight};
+    color: ${({ theme }) => theme.colors.primary};
   }
 
   &:active {
-    background: #e0e7ff;
+    background: ${({ theme }) => theme.colors.activeLight};
   }
 
   svg {
@@ -3512,9 +3545,9 @@ export const SelectModal = styled.div`
   transform: translate(-50%, -50%);
   width: min(440px, calc(100% - 32px));
   max-height: 85vh;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 22px;
-  box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 32px 64px -16px ${({ theme }) => theme.colors.shadow.lg};
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
@@ -3530,14 +3563,14 @@ export const SelectModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 26px 28px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const SelectModalTitle = styled.h3`
   margin: 0;
   font-size: 19px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
 `
 
@@ -3551,15 +3584,15 @@ export const SelectModalClose = styled.button`
   border: none;
   border-radius: 12px;
   background: transparent;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition:
     background 0.2s,
     color 0.2s;
 
   &:hover {
-    background: #f3f4f6;
-    color: #111827;
+    background: ${({ theme }) => theme.colors.background.secondary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -3575,7 +3608,7 @@ export const SelectModalContent = styled.div`
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #e5e7eb;
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 3px;
   }
 `
@@ -3585,26 +3618,26 @@ export const ModalSearchWrap = styled.div`
   align-items: center;
   gap: 10px;
   padding: 12px 20px;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fafafa;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.secondary};
 `
 
 export const ModalSearchInput = styled.input`
   flex: 1;
   height: 40px;
   padding: 0 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   font-size: 14px;
-  color: #111827;
-  background: #fff;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
   &::placeholder {
-    color: #9ca3af;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   &:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.activeLight};
   }
 `
 
@@ -3613,14 +3646,14 @@ export const SelectModalFooter = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px 18px;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 0 0 22px 22px;
 `
 
 export const SelectModalFooterCount = styled.span`
   font-size: 14px;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 `
 
@@ -3628,14 +3661,14 @@ export const SelectModalFooterButton = styled.button`
   padding: 8px 20px;
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
-  background: #4f46e5;
+  color: ${({ theme }) => theme.colors.button.text};
+  background: ${({ theme }) => theme.colors.button.primary};
   border: none;
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.2s;
   &:hover {
-    background: #4338ca;
+    background: ${({ theme }) => theme.colors.button.hover};
   }
 `
 
@@ -3648,8 +3681,8 @@ export const SelectOption = styled.button<{ $active?: boolean }>`
   margin-bottom: 4px;
   border: none;
   border-radius: 12px;
-  background: ${({ $active }) => ($active ? '#f5f3ff' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#4f46e5' : '#374151')};
+  background: ${({ $active, theme }) => ($active ? theme.colors.activeLight : 'transparent')};
+  color: ${({ $active, theme }) => ($active ? theme.colors.active : theme.colors.text.primary)};
   cursor: pointer;
   transition:
     background 0.15s,
@@ -3659,7 +3692,7 @@ export const SelectOption = styled.button<{ $active?: boolean }>`
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
 
   &:hover {
-    background: ${({ $active }) => ($active ? '#ede9fe' : '#f9fafb')};
+    background: ${({ $active, theme }) => ($active ? theme.colors.activeLight : theme.colors.background.secondary)};
   }
   &:last-child {
     margin-bottom: 0;
@@ -3674,8 +3707,8 @@ export const SelectOptionIcon = styled.div`
   height: 36px;
   flex-shrink: 0;
   border-radius: 10px;
-  background: #f3f4f6;
-  color: #6366f1;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.primary};
 `
 
 export const SelectOptionText = styled.span`
@@ -3688,7 +3721,7 @@ export const SelectOptionCheck = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #4f46e5;
+  color: ${({ theme }) => theme.colors.active};
   flex-shrink: 0;
 `
 
@@ -4372,7 +4405,7 @@ export const BarChartLabel = styled.div`
   max-width: 120px;
   font-size: 12px;
   font-weight: 500;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   flex-shrink: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4383,7 +4416,7 @@ export const BarChartTrack = styled.div`
   flex: 1;
   min-width: 0;
   height: 12px;
-  background: #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 6px;
   overflow: hidden;
 `
@@ -4402,7 +4435,7 @@ export const BarChartFill = styled.div<{
         ? 'linear-gradient(90deg, #c0c0c0 0%, #94a3b8 100%)'
         : p.$rank === 3
           ? 'linear-gradient(90deg, #d97706 0%, #b45309 100%)'
-          : '#6366f1'};
+          : p.theme.colors.primary};
   border-radius: 6px;
   transition: width 0.3s ease;
 `
@@ -4425,7 +4458,7 @@ export const BarChartRank = styled.div<{ $rank: number }>`
         ? '#475569'
         : p.$rank === 3
           ? '#78350f'
-          : '#64748b'};
+          : p.theme.colors.text.secondary};
   background: ${(p) =>
     p.$rank === 1
       ? 'linear-gradient(135deg, #fde047 0%, #f59e0b 100%)'
@@ -4433,14 +4466,14 @@ export const BarChartRank = styled.div<{ $rank: number }>`
         ? 'linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%)'
         : p.$rank === 3
           ? 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
-          : '#f1f5f9'};
+          : p.theme.colors.background.tertiary};
   box-shadow: ${(p) => (p.$rank <= 3 ? '0 1px 2px rgba(0,0,0,0.08)' : 'none')};
 `
 
 export const BarChartValue = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   flex-shrink: 0;
   min-width: 44px;
   text-align: right;
@@ -4671,9 +4704,9 @@ export const DashboardSidebarSectionTitle = styled.h2`
   padding: 14px 20px 12px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.02em;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-bottom: none;
 `
 
@@ -4683,7 +4716,7 @@ export const DashboardSummary = styled.div`
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   overflow-y: auto;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 export const SummaryCard = styled.div`
@@ -4692,8 +4725,8 @@ export const SummaryCard = styled.div`
   align-items: center;
   justify-content: center;
   padding: 16px 12px;
-  background: #ffffff;
-  border: 1px solid #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 10px;
   transition:
     border-color 0.2s ease,
@@ -4701,8 +4734,8 @@ export const SummaryCard = styled.div`
     transform 0.15s ease;
 
   &:hover {
-    border-color: #e2e8f0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border-color: ${({ theme }) => theme.colors.border.default};
+    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
     transform: translateY(-1px);
   }
 `
@@ -4714,7 +4747,7 @@ export const SummaryIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   flex-shrink: 0;
   opacity: 0.9;
 
@@ -4727,7 +4760,7 @@ export const SummaryIcon = styled.div`
 export const SummaryValue = styled.div`
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 2px;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -4735,7 +4768,7 @@ export const SummaryValue = styled.div`
 
 export const SummaryLabel = styled.div`
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
   letter-spacing: 0.01em;
 `
@@ -4745,13 +4778,13 @@ export const DashboardMenu = styled.nav`
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 export const DashboardMenuTitle = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   letter-spacing: 0.04em;
   padding: 8px 10px 10px;
   text-transform: none;
@@ -4765,8 +4798,10 @@ export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
   padding: 10px 12px;
   border: none;
   border-radius: 8px;
-  background: ${(p) => (p.$active ? '#eef2ff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
+  background: ${(p) =>
+    p.$active ? p.theme.colors.activeLight : 'transparent'};
+  color: ${(p) =>
+    p.$active ? p.theme.colors.active : p.theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${(p) => (p.$active ? 600 : 500)};
   text-align: left;
@@ -4776,27 +4811,31 @@ export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
     color 0.2s ease;
 
   &:hover {
-    background: ${(p) => (p.$active ? '#e0e7ff' : '#f1f5f9')};
-    color: ${(p) => (p.$active ? '#4338ca' : '#334155')};
+    background: ${(p) =>
+      p.$active ? p.theme.colors.activeLight : p.theme.colors.hover};
+    color: ${(p) =>
+      p.$active ? p.theme.colors.active : p.theme.colors.text.primary};
   }
 
   svg {
     width: 18px;
     height: 18px;
     flex-shrink: 0;
-    color: ${(p) => (p.$active ? '#6366f1' : '#64748b')};
+    color: ${(p) =>
+      p.$active ? p.theme.colors.primary : p.theme.colors.text.secondary};
     opacity: ${(p) => (p.$active ? 1 : 0.85)};
   }
 
   &:hover svg {
-    color: ${(p) => (p.$active ? '#4f46e5' : '#334155')};
+    color: ${(p) =>
+      p.$active ? p.theme.colors.primary : p.theme.colors.text.primary};
   }
 `
 
 export const DashboardMenuContentPanel = styled.div`
   padding: 32px 24px;
   min-height: 100%;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4808,13 +4847,13 @@ export const DashboardMenuContentTitle = styled.h3`
   margin: 0 0 8px;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const DashboardMenuContentDesc = styled.p`
   margin: 0 0 20px;
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
   max-width: 360px;
 `
@@ -4822,9 +4861,9 @@ export const DashboardMenuContentDesc = styled.p`
 export const DashboardMenuContentButton = styled.button`
   padding: 10px 20px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -4834,9 +4873,9 @@ export const DashboardMenuContentButton = styled.button`
     color 0.15s ease;
 
   &:hover {
-    background: #f8fafc;
-    border-color: #6366f1;
-    color: #6366f1;
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -4888,4 +4927,53 @@ export const QuickActionButton = styled.button`
   svg {
     stroke: #fff;
   }
+`
+
+/** 현대 국가의 역사 국가 수 뱃지 */
+export const HistoricalCountBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: clamp(16px, 3vw, 18px);
+  height: clamp(16px, 3vw, 18px);
+  padding: 0 clamp(3px, 1vw, 5px);
+  font-size: clamp(9px, 2vw, 10px);
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
+  background-color: ${({ theme }) => theme.colors.activeLight};
+  border-radius: 9px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  flex-shrink: 0;
+`
+export const ThumbnailAvatar = styled.div<{ $size?: 'sm' | 'md' }>`
+  width: ${({ $size }) => ($size === 'sm' ? 'clamp(24px, 5vw, 28px)' : 'clamp(24px, 5vw, 32px)')};
+  height: ${({ $size }) => ($size === 'sm' ? 'clamp(24px, 5vw, 28px)' : 'clamp(24px, 5vw, 32px)')};
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+`
+
+/** SelectOption 내 텍스트 그룹 */
+export const SelectOptionTextGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+export const SelectOptionLabel = styled.span`
+  font-weight: 600;
+`
+
+export const SelectOptionDesc = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
