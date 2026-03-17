@@ -249,6 +249,8 @@ model AdministrativeDivision {
   cities          City[]
   event           Event[]
   CompanyFacility CompanyFacility[]
+  personsBornHere Person[]          @relation("PersonBirthAdminDivision")
+  personsDiedHere Person[]          @relation("PersonDeathAdminDivision")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

@@ -29,6 +29,14 @@ export type Person = {
   countryId?: string | null
   birthCityId?: string | null
   deathCityId?: string | null
+  /** 출생지 행정구역 ID */
+  birthAdminDivisionId?: string | null
+  /** 사망지 행정구역 ID */
+  deathAdminDivisionId?: string | null
+  /** 출생지 직접 입력 텍스트 */
+  birthPlaceText?: string | null
+  /** 사망지 직접 입력 텍스트 */
+  deathPlaceText?: string | null
   createdAt: string
   updatedAt: string
   country?: {
@@ -40,6 +48,8 @@ export type Person = {
   dynasty?: { id: string; name: string } | null
   birthCity?: { id: string; name: string; countryId: string } | null
   deathCity?: { id: string; name: string; countryId: string } | null
+  birthAdminDivision?: { id: string; name: string } | null
+  deathAdminDivision?: { id: string; name: string } | null
 }
 
 export type DateInfo = {
@@ -75,10 +85,18 @@ export type CreatePersonInput = {
   jobId?: string | null
   fatherId?: string | null
   motherId?: string | null
-  /** 출생지 도시 ID (등록된 도시/행정구역에서 선택) */
+  /** 출생지 도시 ID (등록된 도시) */
   birthCityId?: string | null
   /** 사망지 도시 ID */
   deathCityId?: string | null
+  /** 출생지 행정구역 ID */
+  birthAdminDivisionId?: string | null
+  /** 사망지 행정구역 ID */
+  deathAdminDivisionId?: string | null
+  /** 출생지 직접 입력 텍스트 */
+  birthPlaceText?: string | null
+  /** 사망지 직접 입력 텍스트 */
+  deathPlaceText?: string | null
   /** 이름 원어 (Original Name) */
   originalName?: string | null
   /** 성의 뜻 */

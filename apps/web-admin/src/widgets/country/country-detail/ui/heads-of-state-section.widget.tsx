@@ -1591,6 +1591,17 @@ export function HeadsOfStateSection({
                                            )}
                                          </ItemRow>
                                        )}
+                                       {(() => {
+                                         const p = t.person as any
+                                         const birthPlace = p?.birthCity?.name ?? p?.birthAdminDivision?.name ?? p?.birthPlaceText
+                                         return birthPlace ? (
+                                           <ItemRow>
+                                             <ItemBirthPlace>
+                                               출신: {birthPlace}
+                                             </ItemBirthPlace>
+                                           </ItemRow>
+                                         ) : null
+                                       })()}
                                       <ItemRow>
                                         <ItemTitleBadge>
                                           {titleText}
@@ -3292,6 +3303,15 @@ const ItemLifespan = styled.span`
   color: #94a3b8;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
+`
+
+const ItemBirthPlace = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
 `
 
 const ItemAgeBadge = styled.span`

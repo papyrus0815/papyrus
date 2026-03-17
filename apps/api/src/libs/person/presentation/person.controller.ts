@@ -140,11 +140,22 @@ export class PersonController {
     gender: string | null
     biography: string | null
     profileImageUrl: string | null
+    countryId: string | null
     country: any
     dynasty: any
     religion: any
     denomination: any
     job: any
+    birthCityId: string | null
+    deathCityId: string | null
+    birthAdminDivisionId: string | null
+    deathAdminDivisionId: string | null
+    birthPlaceText: string | null
+    deathPlaceText: string | null
+    birthCity: { id: string; name: string } | null
+    deathCity: { id: string; name: string } | null
+    birthAdminDivision: { id: string; name: string } | null
+    deathAdminDivision: { id: string; name: string } | null
     father: any
     mother: any
     children: any[]
@@ -158,6 +169,9 @@ export class PersonController {
     governmentPositions: any[]
     spouseRelations: any[]
     spouse: any
+    isBirthDateUnknown: boolean
+    isDeathDateUnknown: boolean
+    isAlive: boolean
     createdAt: string
     updatedAt: string
   }> {
@@ -217,6 +231,17 @@ export class PersonController {
       religion: serializeBigInt(person.religion),
       denomination: serializeBigInt(person.denomination),
       job: serializeBigInt(person.job),
+      birthCityId: person.birthCityId ?? null,
+      deathCityId: person.deathCityId ?? null,
+      birthAdminDivisionId: person.birthAdminDivisionId ?? null,
+      deathAdminDivisionId: person.deathAdminDivisionId ?? null,
+      birthPlaceText: person.birthPlaceText ?? null,
+      deathPlaceText: person.deathPlaceText ?? null,
+      birthCity: person.birthCity ? { id: person.birthCity.id, name: person.birthCity.name } : null,
+      deathCity: person.deathCity ? { id: person.deathCity.id, name: person.deathCity.name } : null,
+      birthAdminDivision: person.birthAdminDivision ? { id: person.birthAdminDivision.id, name: person.birthAdminDivision.name } : null,
+      deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
+      countryId: person.countryId ?? null,
       father: person.father,
       mother: person.mother,
       children,
@@ -236,6 +261,9 @@ export class PersonController {
         spouse: rel.spouse,
       })),
       spouse: person.spouseRelationsAsPerson?.[0]?.spouse ?? null,
+      isBirthDateUnknown: person.isBirthDateUnknown ?? false,
+      isDeathDateUnknown: person.isDeathDateUnknown ?? false,
+      isAlive: person.isAlive ?? false,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
     }
@@ -306,6 +334,10 @@ export class PersonController {
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
+      birthAdminDivisionId: dto.birthAdminDivisionId,
+      deathAdminDivisionId: dto.deathAdminDivisionId,
+      birthPlaceText: dto.birthPlaceText,
+      deathPlaceText: dto.deathPlaceText,
       spouseRelations: dto.spouseRelations?.map((s) => ({
         spouseId: s.spouseId,
         marriageStartDate: s.marriageStartDate ? new Date(s.marriageStartDate) : undefined,
@@ -380,6 +412,10 @@ export class PersonController {
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
+      birthAdminDivisionId: dto.birthAdminDivisionId,
+      deathAdminDivisionId: dto.deathAdminDivisionId,
+      birthPlaceText: dto.birthPlaceText,
+      deathPlaceText: dto.deathPlaceText,
       spouseRelations: dto.spouseRelations?.map((s) => ({
         spouseId: s.spouseId,
         marriageStartDate: s.marriageStartDate ? new Date(s.marriageStartDate) : undefined,

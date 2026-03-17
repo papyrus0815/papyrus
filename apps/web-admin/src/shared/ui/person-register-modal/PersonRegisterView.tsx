@@ -7,12 +7,12 @@ import React, { useEffect, useState } from 'react'
 import { FiArrowLeft, FiCalendar, FiChevronDown, FiGlobe, FiInfo, FiUsers } from 'react-icons/fi'
 import styled from 'styled-components'
 import { toast } from 'react-hot-toast'
+import { PlaceAutocomplete, type PlaceResult } from '@/shared/ui/place-autocomplete'
 
 import { personApi, type CreatePersonInput, type Era } from '@/shared/api/person'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl, uploadImage, validateImageFile } from '@/shared/api/upload'
 import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
-import { cityApi } from '@/shared/api/city'
 import { getAllCountries } from '@/shared/api/countries'
 import { dynastyApi } from '@/shared/api/dynasty'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -168,19 +168,9 @@ const SelectBtn = styled.button<{ $hasValue?: boolean }>`
   }
 `
 
-const NativeSelect = styled.select`
+const PlaceAutocompleteWrap = styled.div`
+  max-width: 480px;
   width: 100%;
-  max-width: 380px;
-  padding: 12px 16px;
-  font-size: 14px;
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 12px;
-  background: #fff;
-  color: #111827;
-  &:focus {
-    outline: none;
-    border-color: ${FOCUS_COLOR};
-  }
 `
 
 /** 모달용: 컨트롤 열·입력 그룹을 넓혀 가로 여백을 줄임 */
@@ -204,9 +194,6 @@ const PersonFormLayoutWrap = styled.div`
     max-width: 520px;
   }
   ${SelectBtn} {
-    max-width: 440px;
-  }
-  ${NativeSelect} {
     max-width: 440px;
   }
   [data-bio-editor-wrap] ${FieldControl} {
@@ -281,6 +268,7 @@ export function PersonRegisterView({
   const [birthMonth, setBirthMonth] = useState('')
   const [birthDay, setBirthDay] = useState('')
   const [isDeathDateUnknown, setIsDeathDateUnknown] = useState(false)
+  const [isAlive, setIsAlive] = useState(false)
   const [deathEra, setDeathEra] = useState<Era>('AD')
   const [deathYear, setDeathYear] = useState('')
   const [deathMonth, setDeathMonth] = useState('')
@@ -290,6 +278,8 @@ export function PersonRegisterView({
   const [countryName, setCountryName] = useState<string>('')
   const [birthCityId, setBirthCityId] = useState('')
   const [deathCityId, setDeathCityId] = useState('')
+  const [birthPlace, setBirthPlace] = useState<PlaceResult | null>(null)
+  const [deathPlace, setDeathPlace] = useState<PlaceResult | null>(null)
   const [dynastyId, setDynastyId] = useState('')
   const [religionId, setReligionId] = useState('')
   const [jobId, setJobId] = useState('')
@@ -328,7 +318,6 @@ export function PersonRegisterView({
   const [religions, setReligions] = useState<Array<{ id: string; name: string }>>([])
   const [jobs, setJobs] = useState<Array<{ id: string; name?: string; title?: string }>>([])
   const [persons, setPersons] = useState<PersonResponseDto[]>([])
-  const [cities, setCities] = useState<Array<{ id: string; name: string; countryId: string }>>([])
 
   useEffect(() => {
     Promise.all([
@@ -382,6 +371,49 @@ export function PersonRegisterView({
         setCountryId(p.countryId ?? '')
         setBirthCityId(p.birthCityId ?? '')
         setDeathCityId(p.deathCityId ?? '')
+        // PlaceResult 복원: 도시 > 행정구역 > 직접입력 순 우선순위
+        if ((p as any).birthCity?.name) {
+          setBirthPlace({
+            cityId: p.birthCityId ?? undefined,
+            adminDivisionId: (p as any).birthAdminDivisionId ?? undefined,
+            displayName: (p as any).birthCity.name,
+            shortName: (p as any).birthCity.name,
+            region: (p as any).birthAdminDivision?.name ?? undefined,
+          })
+        } else if ((p as any).birthAdminDivision?.name) {
+          setBirthPlace({
+            adminDivisionId: (p as any).birthAdminDivisionId ?? undefined,
+            displayName: (p as any).birthAdminDivision.name,
+            shortName: (p as any).birthAdminDivision.name,
+          })
+        } else if ((p as any).birthPlaceText) {
+          setBirthPlace({
+            displayName: (p as any).birthPlaceText,
+            shortName: (p as any).birthPlaceText,
+            isManual: true,
+          })
+        }
+        if ((p as any).deathCity?.name) {
+          setDeathPlace({
+            cityId: p.deathCityId ?? undefined,
+            adminDivisionId: (p as any).deathAdminDivisionId ?? undefined,
+            displayName: (p as any).deathCity.name,
+            shortName: (p as any).deathCity.name,
+            region: (p as any).deathAdminDivision?.name ?? undefined,
+          })
+        } else if ((p as any).deathAdminDivision?.name) {
+          setDeathPlace({
+            adminDivisionId: (p as any).deathAdminDivisionId ?? undefined,
+            displayName: (p as any).deathAdminDivision.name,
+            shortName: (p as any).deathAdminDivision.name,
+          })
+        } else if ((p as any).deathPlaceText) {
+          setDeathPlace({
+            displayName: (p as any).deathPlaceText,
+            shortName: (p as any).deathPlaceText,
+            isManual: true,
+          })
+        }
         setDynastyId(p.dynastyId ?? '')
         setReligionId(p.religionId ?? '')
         setJobId(p.jobId ?? '')
@@ -417,7 +449,13 @@ export function PersonRegisterView({
             setDeathDay(d.day != null ? String(d.day) : '')
           }
           setIsDeathDateUnknown(false)
-        } else setIsDeathDateUnknown(true)
+          setIsAlive(false)
+        } else {
+          const alive = (p as any).isAlive === true
+          const deathUnknown = (p as any).isDeathDateUnknown === true
+          setIsAlive(alive)
+          setIsDeathDateUnknown(!alive && deathUnknown)
+        }
       })
       .catch(() => toast.error('인물 정보를 불러오지 못했습니다.'))
     return () => { cancelled = true }
@@ -430,14 +468,6 @@ export function PersonRegisterView({
     if (modern) setCountryName(modern.name)
     else if (historical) setCountryName((historical as any).name ?? '')
   }, [countryId, modernCountries, historicalCountries])
-
-  useEffect(() => {
-    if (!countryId) {
-      setCities([])
-      return
-    }
-    cityApi.getByCountryId(countryId).then(setCities).catch(() => setCities([]))
-  }, [countryId])
 
   const handleCountrySelect = (c: { id: string; name: string }) => {
     setCountryId(c.id)
@@ -536,8 +566,6 @@ export function PersonRegisterView({
   const spouseName = spouseId
     ? getPersonDisplayName(persons.find((p) => p.id === spouseId)!, true)
     : ''
-  const birthCityName = birthCityId ? cities.find((c) => c.id === birthCityId)?.name : ''
-  const deathCityName = deathCityId ? cities.find((c) => c.id === deathCityId)?.name : ''
 
   // 인물 등록 페이지와 동일 검증: 이름, 성, 성별, 출생 국가 필수 + 사망일 ≥ 출생일
   const validate = (): boolean => {
@@ -602,12 +630,19 @@ export function PersonRegisterView({
       countryId: countryId || undefined,
       birthCityId: birthCityId || undefined,
       deathCityId: deathCityId || undefined,
+      birthAdminDivisionId: birthPlace?.adminDivisionId || undefined,
+      deathAdminDivisionId: deathPlace?.adminDivisionId || undefined,
+      birthPlaceText: birthPlace?.isManual ? birthPlace.shortName : undefined,
+      deathPlaceText: deathPlace?.isManual ? deathPlace.shortName : undefined,
       dynastyId: dynastyId || undefined,
       religionId: religionId || undefined,
       jobId: jobId || undefined,
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
       spouseRelations: spouseId ? [{ spouseId }] : undefined,
+      isBirthDateUnknown,
+      isDeathDateUnknown,
+      isAlive,
     }
 
     if (!isBirthDateUnknown && birthYear.trim()) {
@@ -755,7 +790,23 @@ export function PersonRegisterView({
                   출생일 미상
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" checked={isDeathDateUnknown} onChange={(e) => setIsDeathDateUnknown(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={isAlive}
+                    onChange={(e) => {
+                      setIsAlive(e.target.checked)
+                      if (e.target.checked) {
+                        setIsDeathDateUnknown(false)
+                        setDeathYear('')
+                        setDeathMonth('')
+                        setDeathDay('')
+                      }
+                    }}
+                  />
+                  생존 중
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: isAlive ? 0.4 : 1, pointerEvents: isAlive ? 'none' : 'auto' }}>
+                  <input type="checkbox" checked={isDeathDateUnknown} onChange={(e) => setIsDeathDateUnknown(e.target.checked)} disabled={isAlive} />
                   사망일 미상
                 </label>
               </CheckboxRowTwo>
@@ -768,9 +819,9 @@ export function PersonRegisterView({
                       <span>{formatDateDisplay(birthEra, birthYear, birthMonth, birthDay)}</span>
                       <FiChevronDown size={16} />
                     </DateFieldBtn>
-                    <DateFieldBtn type="button" $hasValue={!!deathYear.trim()} onClick={() => setShowDeathDateModal(true)}>
+                    <DateFieldBtn type="button" $hasValue={!!deathYear.trim()} onClick={() => !isAlive && setShowDeathDateModal(true)} disabled={isAlive} style={isAlive ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}>
                       <FiCalendar size={18} />
-                      <span>{formatDateDisplay(deathEra, deathYear, deathMonth, deathDay)}</span>
+                      <span>{isAlive ? '생존 중' : formatDateDisplay(deathEra, deathYear, deathMonth, deathDay)}</span>
                       <FiChevronDown size={16} />
                     </DateFieldBtn>
                   </DateFieldsRow>
@@ -830,24 +881,37 @@ export function PersonRegisterView({
                   </SelectBtn>
                 </FieldControl>
               </FieldRow>
-              {countryId && cities.length > 0 && (
-                <FieldRow>
-                  <FieldLabel>출생지 · 사망지 (도시)</FieldLabel>
-                  <FieldControl>
-                    <InlineFields2>
-                      <NativeSelect value={birthCityId} onChange={(e) => setBirthCityId(e.target.value)}>
-                        <option value="">출생지 선택</option>
-                        {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </NativeSelect>
-                      <NativeSelect value={deathCityId} onChange={(e) => setDeathCityId(e.target.value)}>
-                        <option value="">사망지 선택</option>
-                        {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </NativeSelect>
-                    </InlineFields2>
-                  </FieldControl>
-                </FieldRow>
-              )}
-              <FieldRowMulti>
+              <FieldRow>
+                <FieldLabel>출생지</FieldLabel>
+                <FieldControl>
+                  <PlaceAutocompleteWrap>
+                    <PlaceAutocomplete
+                      value={birthPlace}
+                      onChange={(place) => {
+                        setBirthPlace(place)
+                        setBirthCityId(place?.cityId ?? '')
+                      }}
+                      countryId={countryId || undefined}
+                    />
+                  </PlaceAutocompleteWrap>
+                </FieldControl>
+              </FieldRow>
+              <FieldRow>
+                <FieldLabel>사망지</FieldLabel>
+                <FieldControl>
+                  <PlaceAutocompleteWrap>
+                    <PlaceAutocomplete
+                      value={deathPlace}
+                      onChange={(place) => {
+                        setDeathPlace(place)
+                        setDeathCityId(place?.cityId ?? '')
+                      }}
+                      countryId={countryId || undefined}
+                    />
+                  </PlaceAutocompleteWrap>
+                </FieldControl>
+              </FieldRow>
+                            <FieldRowMulti>
                 <FieldLabel>가문 · 종교 · 직업</FieldLabel>
                 <FieldControl>
                   <InlineFields $cols={3}>

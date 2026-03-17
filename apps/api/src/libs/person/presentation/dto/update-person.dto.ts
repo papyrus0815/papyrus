@@ -252,6 +252,36 @@ export class UpdatePersonDto {
   deathCityId?: string
 
   /**
+   * 출생지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때
+   */
+  @IsOptional()
+  @IsString()
+  birthAdminDivisionId?: string
+
+  /**
+   * 사망지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때
+   */
+  @IsOptional()
+  @IsString()
+  deathAdminDivisionId?: string
+
+  /**
+   * 출생지 직접 입력 텍스트 (역사적 지명 등)
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  birthPlaceText?: string | null
+
+  /**
+   * 사망지 직접 입력 텍스트 (역사적 지명 등)
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathPlaceText?: string | null
+
+  /**
    * 배우자 관계 목록 (선택, 있으면 기존 삭제 후 일괄 반영)
    */
   @IsOptional()

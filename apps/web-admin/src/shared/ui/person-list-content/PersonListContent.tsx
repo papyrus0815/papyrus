@@ -16,8 +16,8 @@ import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
 import { GovernmentPositionType } from '@/shared/api/government-positions'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal'
-import { PersonRegisterView } from '@/shared/ui/person-register-modal'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
+import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/PersonRegisterViewModal'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
@@ -48,6 +48,14 @@ type PersonLike = {
   country?: { id: string; name: string; flagEmoji?: string | null } | null
   /** 등록일 (24시간 이내면 NEW 뱃지 표시) */
   createdAt?: string | null
+  /** 사망일 미상 여부 */
+  isDeathDateUnknown?: boolean | null
+  /** 생존 여부 */
+  isAlive?: boolean | null
+  /** 출생지 */
+  birthCity?: { id: string; name: string } | null
+  birthAdminDivision?: { id: string; name: string } | null
+  birthPlaceText?: string | null
   /** 관직 재임 기록 (필터용 positionType, 표시용 직책명) */
   governmentTenures?: Array<{
     id: string
@@ -337,11 +345,6 @@ const DetailViewWrap = styled.div`
   }
 `
 
-const RegisterFormWrap = styled.div`
-  width: 100%;
-  min-width: 0;
-`
-
 const AdaptiveGrid = styled.div`
   display: grid;
   gap: 16px;
@@ -536,6 +539,15 @@ const CardBio = styled.p`
   overflow: hidden;
 `
 
+const CardBirthPlace = styled.div`
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+`
+
 const EmptyState = styled.div`
   padding: 60px 24px;
   text-align: center;
@@ -607,17 +619,35 @@ export function PersonListContent({
   }, [persons, dynasties, searchQuery, filterGender, filterPositionType, filterCountryIds])
 
   const personsByCentury = useMemo(() => {
+    const currentCentury = Math.ceil(new Date().getFullYear() / 100)
     const map = new Map<number, PersonLike[]>()
     filteredPersons.forEach((p) => {
-      const year = p.birthYear ?? p.birth_year
-      const era = p.birthEra ?? p.birth_era
-      const key = getCentury(year ?? undefined, era ?? undefined) ?? CENTURY_UNKNOWN
+      const deathYear = p.deathYear ?? p.death_year
+      const deathEra = p.deathEra ?? p.death_era
+      // 명시적으로 생존(isAlive=true)인 경우만 현재 세기, 사망일 미상이거나 사망 연도 없으면 세기 미상
+      const isAlive = p.isAlive === true
+      const key = isAlive
+        ? currentCentury
+        : (getCentury(deathYear ?? undefined, deathEra ?? undefined) ?? CENTURY_UNKNOWN)
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(p)
     })
-    return Array.from(map.entries()).sort(([a], [b]) =>
-      a === CENTURY_UNKNOWN ? 1 : b === CENTURY_UNKNOWN ? -1 : b - a,
-    )
+
+    const toBirthSortableYear = (p: PersonLike): number => {
+      const year = p.birthYear ?? p.birth_year
+      const era = p.birthEra ?? p.birth_era
+      if (year == null) return -Infinity
+      return era === 'BC' ? -year : year
+    }
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) =>
+        a === CENTURY_UNKNOWN ? 1 : b === CENTURY_UNKNOWN ? -1 : b - a,
+      )
+      .map(([century, list]) => [
+        century,
+        [...list].sort((a, b) => toBirthSortableYear(b) - toBirthSortableYear(a)),
+      ] as [number, PersonLike[]])
   }, [filteredPersons])
 
   useEffect(() => {
@@ -631,33 +661,24 @@ export function PersonListContent({
     }
   }, [registerTrigger])
 
-  const handleSuccess = () => {
-    if (invalidateKeys.length > 0) {
-      queryClient.invalidateQueries({ queryKey: invalidateKeys as string[] })
-    }
-    setShowRegisterForm(false)
-    setEditingPersonId(null)
-    setSelectedPersonId(null)
-  }
-
-  if (showRegisterForm) {
-    return (
-      <RegisterFormWrap>
-        <PersonRegisterView
-          initialCountryId={initialCountryId ?? undefined}
-          editPersonId={editingPersonId ?? undefined}
-          onCancel={() => {
-            setShowRegisterForm(false)
-            setEditingPersonId(null)
-          }}
-          onSuccess={handleSuccess}
-        />
-      </RegisterFormWrap>
-    )
-  }
 
   return (
     <>
+      {/* 등록/수정 모달 */}
+      <PersonRegisterViewModal
+        isOpen={showRegisterForm}
+        onClose={() => { setShowRegisterForm(false); setEditingPersonId(null) }}
+        initialCountryId={initialCountryId}
+        editPersonId={editingPersonId}
+        onSuccess={(personId) => {
+          if (invalidateKeys.length > 0) {
+            queryClient.invalidateQueries({ queryKey: invalidateKeys as string[] })
+          }
+          setShowRegisterForm(false)
+          setEditingPersonId(null)
+          setSelectedPersonId(null)
+        }}
+      />
       <AnimatePresence mode="wait">
         {selectedPersonId ? (
           <DetailViewWrap
@@ -804,12 +825,17 @@ export function PersonListContent({
                         const showNewBadge = isRegisteredWithin24h(
                           person.createdAt ?? (person as any).created_at,
                         )
-                        const dynastyName =
-                          person.dynasty?.name ??
-                          (person.dynastyId != null
-                            ? dynasties.find((d) => d.id === person.dynastyId)
-                                ?.name
-                            : undefined)
+                                const dynastyName =
+                                  person.dynasty?.name ??
+                                  (person.dynastyId != null
+                                    ? dynasties.find((d) => d.id === person.dynastyId)
+                                        ?.name
+                                    : undefined)
+                                const birthPlace =
+                                  person.birthCity?.name ??
+                                  person.birthAdminDivision?.name ??
+                                  person.birthPlaceText ??
+                                  null
                         return (
                           <Card
                             key={person.id}
@@ -842,6 +868,12 @@ export function PersonListContent({
                                 </PersonLifespan>
                                 {dynastyName && (
                                   <CardDynasty>{dynastyName}</CardDynasty>
+                                )}
+                                {birthPlace && (
+                                  <CardBirthPlace>
+                                    <span style={{ fontWeight: 600, color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>출신</span>
+                                    {birthPlace}
+                                  </CardBirthPlace>
                                 )}
                                 {(person.governmentTenures?.length ?? 0) > 0 && (
                                   <CardBadgeRow>

@@ -2553,6 +2553,27 @@ export function CabinetsSection({
                                   {formatPersonLifespan(minister.person)}
                                 </MinisterProfileLifespan>
                               )}
+                              {(() => {
+                                const p = minister.person as any
+                                const birthPlace = p?.birthCity?.name ?? p?.birthAdminDivision?.name ?? p?.birthPlaceText
+                                return birthPlace ? (
+                                  <MinisterProfileLifespan>
+                                    <span
+                                      style={{
+                                        fontWeight: 700,
+                                        color: '#94a3b8',
+                                        marginRight: 4,
+                                        fontSize: 10,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.04em',
+                                      }}
+                                    >
+                                      출신
+                                    </span>
+                                    {birthPlace}
+                                  </MinisterProfileLifespan>
+                                ) : null
+                              })()}
                             </MinisterProfileMeta>
                             <MinisterProfileAction></MinisterProfileAction>
                           </MinisterProfileBlock>
@@ -3031,6 +3052,27 @@ export function CabinetsSection({
                                   {formatPersonLifespan(head.person)}
                                 </HeadLifespan>
                               )}
+                              {(() => {
+                                const p = head?.person as any
+                                const birthPlace = p?.birthCity?.name ?? p?.birthAdminDivision?.name ?? p?.birthPlaceText
+                                return birthPlace ? (
+                                  <HeadLifespan>
+                                    <span
+                                      style={{
+                                        fontWeight: 700,
+                                        color: '#94a3b8',
+                                        marginRight: 4,
+                                        fontSize: 10,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.04em',
+                                      }}
+                                    >
+                                      출신
+                                    </span>
+                                    {birthPlace}
+                                  </HeadLifespan>
+                                ) : null
+                              })()}
                             </HeadProfileMeta>
                             <HeadProfileActions>
                               <HeadActionBtn

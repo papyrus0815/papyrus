@@ -338,18 +338,48 @@ export class CreatePersonDto {
   countryId?: string
 
   /**
-   * 출생지 도시 ID (선택) — 등록된 도시(City) 또는 국가 행정구역 데이터에서 선택
+   * 출생지 도시 ID (선택) — 등록된 도시(City)
    */
   @IsOptional()
   @IsString()
   birthCityId?: string
 
   /**
-   * 사망지 도시 ID (선택)
+   * 사망지 도시 ID (선택) — 등록된 도시(City)
    */
   @IsOptional()
   @IsString()
   deathCityId?: string
+
+  /**
+   * 출생지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때
+   */
+  @IsOptional()
+  @IsString()
+  birthAdminDivisionId?: string
+
+  /**
+   * 사망지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때
+   */
+  @IsOptional()
+  @IsString()
+  deathAdminDivisionId?: string
+
+  /**
+   * 출생지 텍스트 (선택) — 역사적 지명 등 직접 입력값
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  birthPlaceText?: string | null
+
+  /**
+   * 사망지 텍스트 (선택) — 역사적 지명 등 직접 입력값
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathPlaceText?: string | null
 
   /**
    * 배우자 관계 목록 (선택)

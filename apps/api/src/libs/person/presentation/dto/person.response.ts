@@ -45,8 +45,28 @@ export interface PersonResponseDto {
   country?: { id: string; name: string; flagEmoji?: string | null } | null
   birthCityId: string | null
   deathCityId: string | null
+  /** 출생지 행정구역 ID */
+  birthAdminDivisionId?: string | null
+  /** 사망지 행정구역 ID */
+  deathAdminDivisionId?: string | null
+  /** 출생지 직접 입력 텍스트 */
+  birthPlaceText?: string | null
+  /** 사망지 직접 입력 텍스트 */
+  deathPlaceText?: string | null
+  /** 출생지 도시 정보 */
+  birthCity?: { id: string; name: string } | null
+  /** 사망지 도시 정보 */
+  deathCity?: { id: string; name: string } | null
+  /** 출생지 행정구역 정보 */
+  birthAdminDivision?: { id: string; name: string } | null
+  /** 사망지 행정구역 정보 */
+  deathAdminDivision?: { id: string; name: string } | null
   // 이벤트 목록에 생몰년 표시 여부
   showLifespanOnEventList?: boolean
+  /** 사망일 미상 여부 */
+  isDeathDateUnknown?: boolean
+  /** 생존 여부 */
+  isAlive?: boolean
   // 정부 직위 재임 기록
   governmentTenures?: any[]
   createdAt: string

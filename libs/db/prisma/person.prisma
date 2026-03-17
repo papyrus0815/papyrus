@@ -146,6 +146,14 @@ model Person {
   birthCityId    String? @map("birth_city_id") @db.Char(36)
   /// 사망지 (도시)
   deathCityId    String? @map("death_city_id") @db.Char(36)
+  /// 출생지 행정구역 (도시 없이 행정구역만 선택할 때)
+  birthAdminDivisionId String? @map("birth_admin_division_id") @db.Char(36)
+  /// 사망지 행정구역 (도시 없이 행정구역만 선택할 때)
+  deathAdminDivisionId String? @map("death_admin_division_id") @db.Char(36)
+  /// 출생지 직접 입력 텍스트 (역사적 지명 등)
+  birthPlaceText String? @map("birth_place_text") @db.VarChar(255)
+  /// 사망지 직접 입력 텍스트 (역사적 지명 등)
+  deathPlaceText String? @map("death_place_text") @db.VarChar(255)
 
   //--- 관계 필드
   Company            Company[]
@@ -156,6 +164,8 @@ model Person {
   country            Country?              @relation("CountryToPerson", fields: [countryId], references: [id], onDelete: SetNull)
   birthCity          City?                 @relation("PersonBirthCity", fields: [birthCityId], references: [id], onDelete: SetNull)
   deathCity          City?                 @relation("PersonDeathCity", fields: [deathCityId], references: [id], onDelete: SetNull)
+  birthAdminDivision AdministrativeDivision? @relation("PersonBirthAdminDivision", fields: [birthAdminDivisionId], references: [id], onDelete: SetNull)
+  deathAdminDivision AdministrativeDivision? @relation("PersonDeathAdminDivision", fields: [deathAdminDivisionId], references: [id], onDelete: SetNull)
   father             Person?               @relation("ParentChildFather", fields: [fatherId], references: [id], onDelete: SetNull)
   mother             Person?               @relation("ParentChildMother", fields: [motherId], references: [id], onDelete: SetNull)
   childrenFromFather Person[]              @relation("ParentChildFather")

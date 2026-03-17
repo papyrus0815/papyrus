@@ -257,7 +257,7 @@ export class AdministrationDepartmentController {
       },
       orderBy: { startDate: 'desc' },
       include: {
-        person: { select: { id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, birthYear: true, deathYear: true, birthEra: true, deathEra: true, birthDate: true, deathDate: true } },
+        person: { select: { id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, birthEra: true, deathEra: true, birthDate: true, deathDate: true, birthCityId: true, birthAdminDivisionId: true, birthPlaceText: true, birthCity: { select: { id: true, name: true } }, birthAdminDivision: { select: { id: true, name: true } } } },
         positionDefinition: { select: { id: true, title: true, positionType: true } },
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
