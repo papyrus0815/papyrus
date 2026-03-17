@@ -36,7 +36,7 @@ import {
   useClickSound,
 } from '@/shared/hooks/use-click-sound.hook'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
-import { useThemeStore } from '@/shared/theme/theme.store'
+import { useThemeStore } from '@/shared/styles/theme.store'
 
 import { TopNavBar, type TopNavItemSpec } from './top-nav.ui'
 
@@ -860,12 +860,10 @@ const HeaderBar = styled.header`
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(0,0,0,0.97)' : '#ffffff'};
-  border-bottom: 1px solid
-    ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#f1f5f9')};
+  background: ${({ theme }) => theme.colors.header.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   z-index: ${Z_INDEX.HEADER};
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
   transition:
     background 0.25s ease,
     border-color 0.25s ease;
@@ -898,16 +896,16 @@ const SoundController = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #e6e8eb;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 0.375rem 0.75rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    background: ${({ theme }) => theme.colors.background.secondary};
+    box-shadow: 0 2px 6px ${({ theme }) => theme.colors.shadow.md};
   }
 
   @media (max-width: 768px) {
@@ -922,7 +920,7 @@ const SoundButton = styled.button`
   justify-content: center;
   background: transparent;
   border: none;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   padding: 0.25rem;
   border-radius: 6px;
@@ -930,8 +928,8 @@ const SoundButton = styled.button`
   flex-shrink: 0;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #202124;
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:active {
@@ -943,7 +941,7 @@ const VolumeSlider = styled.input`
   width: 80px;
   height: 4px;
   border-radius: 2px;
-  background: #e6e8eb;
+  background: ${({ theme }) => theme.colors.border.default};
   outline: none;
   -webkit-appearance: none;
   appearance: none;
@@ -955,13 +953,13 @@ const VolumeSlider = styled.input`
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #5f6368;
+    background: ${({ theme }) => theme.colors.text.secondary};
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   &::-webkit-slider-thumb:hover {
-    background: #202124;
+    background: ${({ theme }) => theme.colors.text.primary};
     transform: scale(1.1);
   }
 
@@ -969,14 +967,14 @@ const VolumeSlider = styled.input`
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #5f6368;
+    background: ${({ theme }) => theme.colors.text.secondary};
     cursor: pointer;
     border: none;
     transition: all 0.2s ease;
   }
 
   &::-moz-range-thumb:hover {
-    background: #202124;
+    background: ${({ theme }) => theme.colors.text.primary};
     transform: scale(1.1);
   }
 
@@ -992,7 +990,7 @@ const SettingsHeader = styled.div`
 const SettingsTitle = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
 `
 
@@ -1003,14 +1001,14 @@ const SettingsContent = styled.div`
 const TrackInfo = styled.div`
   padding: 16px 14px;
   margin-bottom: 12px;
-  background: #f8fafc;
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 16px;
 `
 
 const TrackName = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 8px;
   text-align: center;
   overflow: hidden;
@@ -1027,7 +1025,7 @@ const TrackProgress = styled.div`
 const ProgressBar = styled.div`
   width: 100%;
   height: 8px;
-  background: #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -1036,7 +1034,7 @@ const ProgressBar = styled.div`
 const ProgressFill = styled.div<{ $progress: number }>`
   height: 100%;
   width: ${({ $progress }) => `${$progress}%`};
-  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
+  background: ${({ theme }) => theme.colors.gradient.primary};
   border-radius: 8px;
   transition: width 0.1s linear;
 `
@@ -1047,7 +1045,7 @@ const TimeDisplay = styled.div`
   justify-content: center;
   gap: 6px;
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-variant-numeric: tabular-nums;
   margin-top: 8px;
 `
@@ -1068,15 +1066,15 @@ const PlaybackButton = styled.button`
   height: 42px;
   border: none;
   border-radius: 50%;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 
   &:hover {
-    background: #e2e8f0;
-    color: #4f46e5;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.primary};
     transform: scale(1.05);
   }
 
@@ -1086,20 +1084,19 @@ const PlaybackButton = styled.button`
 
   &:focus {
     outline: none;
-    box-shadow: 0 0 0 2px #c7d2fe;
+    box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.activeLight};
   }
 
   &:nth-child(2) {
     width: 50px;
     height: 50px;
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-    color: #ffffff;
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    background: ${({ theme }) => theme.colors.gradient.primary};
+    color: ${({ theme }) => theme.colors.button.text};
+    box-shadow: 0 4px 14px ${({ theme }) => theme.colors.shadow.md};
 
     &:hover {
-      background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+      background: ${({ theme }) => theme.colors.button.hover};
       transform: scale(1.06);
-      box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
     }
   }
 `
@@ -1123,21 +1120,21 @@ const SoundControlIcon = styled.div`
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  background: #eef2ff;
-  color: #6366f1;
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.primary};
   flex-shrink: 0;
 `
 
 const SoundControlTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 2px;
 `
 
 const SoundControlSubtitle = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const SoundControlActions = styled.div`
@@ -1156,15 +1153,15 @@ const SoundToggleButton = styled.button`
   height: 40px;
   border: none;
   border-radius: 14px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 
   &:hover {
-    background: #eef2ff;
-    color: #6366f1;
+    background: ${({ theme }) => theme.colors.activeLight};
+    color: ${({ theme }) => theme.colors.primary};
   }
 
   &:active {
@@ -1176,7 +1173,7 @@ const SettingsVolumeSlider = styled.input`
   flex: 1;
   height: 8px;
   border-radius: 8px;
-  background: #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   outline: none;
   -webkit-appearance: none;
   appearance: none;
@@ -1188,14 +1185,14 @@ const SettingsVolumeSlider = styled.input`
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
+    box-shadow: 0 2px 6px ${({ theme }) => theme.colors.shadow.md};
   }
 
   &::-webkit-slider-thumb:hover {
-    background: #4f46e5;
+    background: ${({ theme }) => theme.colors.button.hover};
     transform: scale(1.1);
   }
 
@@ -1203,14 +1200,14 @@ const SettingsVolumeSlider = styled.input`
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
     cursor: pointer;
     border: none;
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);
+    box-shadow: 0 2px 6px ${({ theme }) => theme.colors.shadow.md};
   }
 
   &::-moz-range-thumb:hover {
-    background: #4f46e5;
+    background: ${({ theme }) => theme.colors.button.hover};
     transform: scale(1.1);
   }
 `
@@ -1218,7 +1215,7 @@ const SettingsVolumeSlider = styled.input`
 const LogoButton = styled.button`
   border: none;
   background: transparent;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#ffffff' : '#334155')};
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.02em;
@@ -1226,7 +1223,7 @@ const LogoButton = styled.button`
   transition: color 0.2s ease;
 
   &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a78bfa' : '#6366f1')};
+    color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -1240,16 +1237,15 @@ const IconButton = styled.button`
   border: none;
   border-radius: 14px;
   background: transparent;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a0aec0' : '#64748b')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition:
     background 0.2s ease,
     color 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? '#1a1a1a' : '#f1f5f9'};
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#475569')};
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:active {
@@ -1266,8 +1262,10 @@ const ThemeToggleButton = styled.button<{ $isDark: boolean }>`
   justify-content: center;
   border: none;
   border-radius: 14px;
-  background: ${({ $isDark }) => ($isDark ? '#1a1a1a' : 'transparent')};
-  color: ${({ $isDark }) => ($isDark ? '#fbbf24' : '#64748b')};
+  background: ${({ $isDark, theme }) =>
+    $isDark ? theme.colors.background.secondary : 'transparent'};
+  color: ${({ $isDark, theme }) =>
+    $isDark ? '#fbbf24' : theme.colors.text.secondary};
   cursor: pointer;
   transition:
     background 0.25s ease,
@@ -1275,8 +1273,10 @@ const ThemeToggleButton = styled.button<{ $isDark: boolean }>`
     transform 0.2s ease;
 
   &:hover {
-    background: ${({ $isDark }) => ($isDark ? '#2a2a2a' : '#f1f5f9')};
-    color: ${({ $isDark }) => ($isDark ? '#fcd34d' : '#475569')};
+    background: ${({ $isDark, theme }) =>
+      $isDark ? theme.colors.background.tertiary : theme.colors.hover};
+    color: ${({ $isDark, theme }) =>
+      $isDark ? '#fcd34d' : theme.colors.text.primary};
   }
 
   &:active {
@@ -1292,14 +1292,14 @@ const Badge = styled.span`
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: #6366f1;
-  color: #fff;
+  background: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.button.text};
   font-size: 10px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 0 2px #fff;
+  box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.header.primary};
 `
 
 const UserButton = styled(IconButton)`
@@ -1313,24 +1313,24 @@ const Avatar = styled.span`
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  background: ${({ theme }) => theme.colors.activeLight};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 600;
-  color: #4f46e5;
+  color: ${({ theme }) => theme.colors.primary};
 `
 
 const DropdownMenu = styled.div<{ $isOpen: boolean }>`
   position: absolute;
   top: 44px;
-  background: #ffffff;
-  border: 1px solid #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 20px;
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.06),
-    0 4px 12px rgba(0, 0, 0, 0.03);
+    0 20px 50px ${({ theme }) => theme.colors.shadow.lg},
+    0 4px 12px ${({ theme }) => theme.colors.shadow.sm};
   padding: 12px;
   display: ${({ $isOpen }) => ($isOpen ? 'block' : 'none')};
 
@@ -1355,7 +1355,7 @@ const DropdownHeaderRow = styled.div`
 const DropdownTitle = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SmallButton = styled.button`
@@ -1364,19 +1364,19 @@ const SmallButton = styled.button`
   border: none;
   border-radius: 12px;
   background: transparent;
-  color: #6366f1;
+  color: ${({ theme }) => theme.colors.primary};
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: #eef2ff;
-    color: #4f46e5;
+    background: ${({ theme }) => theme.colors.activeLight};
+    color: ${({ theme }) => theme.colors.button.hover};
   }
 
   &:active {
-    background: #e0e7ff;
+    background: ${({ theme }) => theme.colors.activeLight};
   }
 `
 
@@ -1391,17 +1391,17 @@ const MessageList = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.colors.background.primary};
     border-radius: 6px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 6px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: #cbd5e1;
+    background: ${({ theme }) => theme.colors.border.medium};
   }
 `
 
@@ -1412,11 +1412,11 @@ const EmptyNotice = styled.div`
   justify-content: center;
   padding: 52px 28px;
   font-size: 14px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   text-align: center;
   gap: 14px;
   border-radius: 16px;
-  background: #fafbff;
+  background: ${({ theme }) => theme.colors.background.secondary};
 
   &::before {
     content: '🔔';
@@ -1433,16 +1433,17 @@ const MessageRow = styled.button<{ $unread: boolean }>`
   padding: 16px 14px;
   margin-bottom: 8px;
   border: none;
-  background: ${({ $unread }) => ($unread ? '#f8fafc' : 'transparent')};
+  background: ${({ $unread, theme }) =>
+    $unread ? theme.colors.background.secondary : 'transparent'};
   border-radius: 16px;
   cursor: pointer;
   text-align: left;
   transition: all 0.2s ease;
   border-left: 4px solid
-    ${({ $unread }) => ($unread ? '#6366f1' : 'transparent')};
+    ${({ $unread, theme }) => ($unread ? theme.colors.primary : 'transparent')};
 
   &:hover {
-    background: ${({ $unread }) => ($unread ? '#f1f5f9' : '#f8fafc')};
+    background: ${({ theme }) => theme.colors.hover};
   }
 
   &:active {
@@ -1455,10 +1456,10 @@ const UnreadDot = styled.span<{ $visible: boolean }>`
   height: 10px;
   margin-top: 6px;
   border-radius: 50%;
-  background: #6366f1;
+  background: ${({ theme }) => theme.colors.primary};
   opacity: ${({ $visible }) => ($visible ? 1 : 0)};
-  box-shadow: ${({ $visible }) =>
-    $visible ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none'};
+  box-shadow: ${({ $visible, theme }) =>
+    $visible ? `0 0 0 2px ${theme.colors.activeLight}` : 'none'};
   transition: all 0.2s ease;
   flex-shrink: 0;
 `
@@ -1485,14 +1486,14 @@ const EntityTypeChip = styled.span`
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
-  color: #4f46e5;
-  background: #eef2ff;
+  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.activeLight};
   flex-shrink: 0;
 `
 
 const MessageTitle = styled.div`
   font-size: 14px;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 600;
   line-height: 1.45;
   min-width: 0;
@@ -1504,7 +1505,7 @@ const MessageTitle = styled.div`
 
 const MessagePreview = styled.div`
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1518,7 +1519,7 @@ const MessageMeta = styled.div`
   gap: 4px;
   margin-top: 8px;
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
 `
 
@@ -1537,18 +1538,18 @@ const AvatarLg = styled(Avatar)`
 
 const ProfileName = styled.div`
   font-size: 13px;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 700;
 `
 
 const ProfileRole = styled.div`
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const Divider = styled.div`
   height: 1px;
-  background: #f1f5f9;
+  background: ${({ theme }) => theme.colors.border.light};
   margin: 14px 0;
   border-radius: 1px;
 `
@@ -1561,14 +1562,14 @@ const MenuItem = styled.button`
   padding: 12px 14px;
   border: none;
   background: transparent;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   border-radius: 12px;
   cursor: pointer;
   font-size: 13px;
   transition: background 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
@@ -1580,7 +1581,7 @@ const MobileMenuButton = styled.button`
   height: 36px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   border-radius: 10px;
   transition:
@@ -1588,8 +1589,8 @@ const MobileMenuButton = styled.button`
     color 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:active {
@@ -1607,7 +1608,7 @@ const MobileOverlay = styled(motion.div)`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: ${({ theme }) => theme.colors.shadow.lg};
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   backdrop-filter: blur(2px);
   display: none;
@@ -1629,9 +1630,9 @@ const MobileMenuModal = styled(motion.div)`
     width: 92%;
     max-width: 420px;
     max-height: 65vh;
-    background: #fff;
+    background: ${({ theme }) => theme.colors.background.primary};
     border-radius: 24px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 24px 64px ${({ theme }) => theme.colors.shadow.lg};
     z-index: ${Z_INDEX.MODAL_CONTENT};
     overflow: hidden;
   }
@@ -1645,14 +1646,14 @@ const MobileCloseButton = styled.button`
   height: 36px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   border-radius: 12px;
   transition: all 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #334155;
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:active {
@@ -1671,7 +1672,7 @@ const MobileMenuContent = styled.div`
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -1682,12 +1683,12 @@ const MobileMenuContent = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.15);
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 2px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.25);
+    background: ${({ theme }) => theme.colors.border.medium};
   }
 `
 
@@ -1699,8 +1700,10 @@ const MobileNavItem = styled.button<{ $active?: boolean }>`
   padding: 16px 18px;
   margin-bottom: 6px;
   border: none;
-  background: ${({ $active }) => ($active ? '#eef2ff' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#4f46e5' : '#334155')};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.active : theme.colors.text.primary};
   border-radius: 16px;
   cursor: pointer;
   text-align: left;
@@ -1717,14 +1720,14 @@ const MobileNavItem = styled.button<{ $active?: boolean }>`
     width: 3px;
     height: 20px;
     border-radius: 0 2px 2px 0;
-    background: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
     opacity: ${({ $active }) => ($active ? '1' : '0')};
     transition: opacity 0.2s ease;
   }
 
   &:hover {
-    background: ${({ $active }) => ($active ? '#e0e7ff' : '#f8fafc')};
-    color: ${({ $active }) => ($active ? '#4338ca' : '#1e293b')};
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:active {
@@ -1792,9 +1795,9 @@ const MobileModal = styled(motion.div)`
     width: 90%;
     max-width: 400px;
     max-height: 80vh;
-    background: #fff;
+    background: ${({ theme }) => theme.colors.background.primary};
     border-radius: 24px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 24px 64px ${({ theme }) => theme.colors.shadow.lg};
     z-index: ${Z_INDEX.MODAL_CONTENT};
     overflow: hidden;
   }
@@ -1805,15 +1808,15 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 18px 20px 14px;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fff;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
 
@@ -1821,7 +1824,7 @@ const ModalContent = styled.div`
   flex: 1;
   padding: 16px;
   overflow-y: auto;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -1832,11 +1835,11 @@ const ModalContent = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.15);
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 2px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.25);
+    background: ${({ theme }) => theme.colors.border.medium};
   }
 `

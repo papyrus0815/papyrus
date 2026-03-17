@@ -1,26 +1,3 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-
-export type ThemeMode = 'light' | 'dark'
-
-interface ThemeState {
-  mode: ThemeMode
-  toggleTheme: () => void
-  setTheme: (mode: ThemeMode) => void
-}
-
-export const useThemeStore = create<ThemeState>()(
-  persist(
-    (set) => ({
-      mode: 'light',
-      toggleTheme: () =>
-        set((state) => ({
-          mode: state.mode === 'light' ? 'dark' : 'light',
-        })),
-      setTheme: (mode) => set({ mode }),
-    }),
-    {
-      name: 'theme-storage',
-    },
-  ),
-)
+// 이 파일은 하위 호환성을 위해 유지됩니다.
+// 실제 구현은 @/shared/styles/theme.store 에 있습니다.
+export { useThemeStore, type ThemeMode } from '@/shared/styles/theme.store'

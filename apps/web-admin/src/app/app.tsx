@@ -5,7 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
-import { ThemeProvider } from 'styled-components'
+import { ThemeProvider, useTheme } from 'styled-components'
 import styled, { keyframes } from 'styled-components'
 
 import { attachAuthInterceptor } from '@/entities/session/session.lib'
@@ -14,7 +14,7 @@ import { useEnvConfig } from '@/shared/hooks/use-env-config.hook'
 import { queryClient } from '@/shared/queryClient'
 import { useBackgroundStore } from '@/shared/store/background.store'
 import { getTheme } from '@/shared/styles/theme'
-import { useThemeStore } from '@/shared/theme/theme.store'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { EnvConfigModal } from '@/shared/ui/env-config-modal/env-config-modal.ui'
 import { logError } from '@/shared/ui/error-handler/error-handler.lib'
 import { ErrorHandler } from '@/shared/ui/error-handler/error.handler.ui'
@@ -23,6 +23,76 @@ import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-bounda
 import { BootstrappedRouter } from './browser-router'
 
 attachAuthInterceptor()
+
+// ThemeProvider 내부에서 테마 값을 읽어 Toaster에 전달
+function ThemedToaster() {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+
+  const bg = theme.colors.background.primary
+  const border = theme.colors.border.default
+  const textPrimary = theme.colors.text.primary
+
+  return (
+    <Toaster
+      position="top-right"
+      gutter={16}
+      containerStyle={{ top: 80, right: 20 }}
+      toastOptions={{
+        duration: 3500,
+        style: {
+          background: bg,
+          color: textPrimary,
+          fontSize: '14px',
+          borderRadius: '12px',
+          padding: '12px 16px',
+          fontWeight: '500',
+          boxShadow: isDark
+            ? `0 4px 12px ${theme.colors.shadow.md}`
+            : '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
+          border: `1px solid ${border}`,
+          maxWidth: '400px',
+          minWidth: '280px',
+        },
+        success: {
+          duration: 3000,
+          style: {
+            background: bg,
+            color: isDark ? theme.colors.success : '#065f46',
+            borderLeft: `4px solid ${theme.colors.success}`,
+          },
+          iconTheme: {
+            primary: theme.colors.success,
+            secondary: bg,
+          },
+        },
+        error: {
+          duration: 4000,
+          style: {
+            background: bg,
+            color: isDark ? theme.colors.error : '#991b1b',
+            borderLeft: `4px solid ${theme.colors.error}`,
+          },
+          iconTheme: {
+            primary: theme.colors.error,
+            secondary: bg,
+          },
+        },
+        loading: {
+          style: {
+            background: bg,
+            color: isDark ? theme.colors.accent : '#1e40af',
+            borderLeft: `4px solid ${theme.colors.accent}`,
+          },
+          iconTheme: {
+            primary: theme.colors.accent,
+            secondary: bg,
+          },
+        },
+      }}
+    />
+  )
+}
 
 // 전역 배경 컨테이너
 const GlobalBackgroundContainer = styled.div<{ $isVisible: boolean }>`
@@ -39,12 +109,12 @@ const GlobalBackgroundContainer = styled.div<{ $isVisible: boolean }>`
   transition: opacity 0.5s ease;
 `
 
-// 검은 화면 오버레이
+// 검은 화면 오버레이 (배경 꺼짐 상태)
 const BlackOverlay = styled.div<{ $isVisible: boolean }>`
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: ${({ $isVisible }) => ($isVisible ? '#f6f7fb' : 'transparent')};
+  background: ${({ theme }) => theme.colors.background.primary};
   opacity: ${({ $isVisible }) => ($isVisible ? 1 : 0)};
   transition: opacity 0.5s ease;
   pointer-events: none;
@@ -56,8 +126,8 @@ const ContentContainer = styled.div<{ $hasGlobalBackground: boolean }>`
   z-index: 10;
   width: 100%;
   min-height: 100vh;
-  background: ${({ $hasGlobalBackground }) =>
-    $hasGlobalBackground ? 'transparent' : '#f6f7fb'};
+  background: ${({ $hasGlobalBackground, theme }) =>
+    $hasGlobalBackground ? 'transparent' : theme.colors.background.primary};
 `
 
 // 전역 로딩 오버레이
@@ -104,9 +174,10 @@ export default function App() {
     setIsBackgroundLoaded(true)
   }
 
-  // 테마 변경 시 body에 data-theme 속성 설정
+  // 테마 변경 시 body에 data-theme 속성 + 배경색 동기화
   useEffect(() => {
     document.body.setAttribute('data-theme', mode)
+    document.body.style.backgroundColor = getTheme(mode).colors.background.primary
   }, [mode])
 
   // 전역 focus 에러 방지
@@ -187,71 +258,7 @@ export default function App() {
               buttonPosition="bottom-left"
             />
             {/* Toast 알림 */}
-            <Toaster
-              position="top-right"
-              gutter={16}
-              containerStyle={{
-                top: 80,
-                right: 20,
-              }}
-              toastOptions={{
-                duration: 3500,
-                style: {
-                  background: '#ffffff',
-                  color: '#1f2937',
-                  fontSize: '14px',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  fontWeight: '500',
-                  boxShadow:
-                    '0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
-                  maxWidth: '400px',
-                  minWidth: '280px',
-                },
-                success: {
-                  duration: 3000,
-                  style: {
-                    background: '#ffffff',
-                    color: '#065f46',
-                    borderLeft: '4px solid #10b981',
-                    boxShadow:
-                      '0 4px 12px rgba(16, 185, 129, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04)',
-                  },
-                  iconTheme: {
-                    primary: '#10b981',
-                    secondary: '#ffffff',
-                  },
-                },
-                error: {
-                  duration: 4000,
-                  style: {
-                    background: '#ffffff',
-                    color: '#991b1b',
-                    borderLeft: '4px solid #ef4444',
-                    boxShadow:
-                      '0 4px 12px rgba(239, 68, 68, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04)',
-                  },
-                  iconTheme: {
-                    primary: '#ef4444',
-                    secondary: '#ffffff',
-                  },
-                },
-                loading: {
-                  style: {
-                    background: '#ffffff',
-                    color: '#1e40af',
-                    borderLeft: '4px solid #3b82f6',
-                    boxShadow:
-                      '0 4px 12px rgba(59, 130, 246, 0.12), 0 2px 4px rgba(0, 0, 0, 0.04)',
-                  },
-                  iconTheme: {
-                    primary: '#3b82f6',
-                    secondary: '#ffffff',
-                  },
-                },
-              }}
-            />
+            <ThemedToaster />
             {/* 환경 변수 설정 모달 */}
             {showModal && (
               <EnvConfigModal

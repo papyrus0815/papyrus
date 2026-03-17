@@ -104,52 +104,52 @@ const lightTheme = {
 const darkTheme = {
   colors: {
     button: {
-      primary: '#7c3aed', // 다크모드에서 더 선명한 보라색
-      hover: '#6d28d9',
-      disabled: '#6b7280',
+      primary: '#636af2', // 다크모드 인디고 (라이트와 유사 톤 유지)
+      hover: '#4f57e8',
+      disabled: '#48484a',
       text: '#ffffff',
     },
     header: {
-      primary: 'rgba(0, 0, 0, 0.95)', // 진짜 검은색 헤더 배경
-      secondary: '#000000',
+      primary: 'rgba(28, 28, 30, 0.97)', // iOS 다크 네비게이션바
+      secondary: '#1c1c1e',
     },
     background: {
-      primary: '#000000', // 진짜 검은색
-      secondary: '#0a0a0a', // 매우 어두운 검은색
-      tertiary: '#1a1a1a', // 어두운 회색
-      quaternary: '#2a2a2a', // 약간 밝은 어두운 회색
+      primary: '#1c1c1e',   // iOS 다크 메인 배경 (시스템 배경)
+      secondary: '#2c2c2e', // iOS 그룹화된 배경 2레벨
+      tertiary: '#3a3a3c',  // iOS 그룹화된 배경 3레벨
+      quaternary: '#48484a', // iOS 그룹화된 배경 4레벨
     },
-    white: '#000000', // 다크모드에서는 검은색
-    primary: '#7c3aed', // 다크모드 주 색상
-    secondary: '#a855f7', // 다크모드 보조 색상
-    accent: '#0ea5e9', // 다크모드 액센트 색상
-    success: '#22c55e',
-    warning: '#f97316',
-    error: '#ef4444',
-    active: '#7c3aed',
-    activeLight: '#1e1b4b', // 다크모드 active 배경색
-    hover: '#1a1a1a', // 어두운 회색
+    white: '#1c1c1e',
+    primary: '#636af2',
+    secondary: '#9f7aea',
+    accent: '#32ade6',   // iOS 시스템 블루
+    success: '#30d158',  // iOS 시스템 그린
+    warning: '#ffd60a',  // iOS 시스템 옐로우
+    error: '#ff453a',    // iOS 시스템 레드
+    active: '#636af2',
+    activeLight: '#2c2c3e',
+    hover: '#2c2c2e',
     text: {
-      primary: '#ffffff', // 흰색 텍스트
-      secondary: '#e5e7eb', // 밝은 회색 텍스트
-      tertiary: '#d1d5db', // 중간 밝기 회색 텍스트
+      primary: '#f5f5f7',   // iOS 라벨 (거의 흰색, 눈이 덜 피로함)
+      secondary: '#98989d', // iOS 세컨더리 라벨
+      tertiary: '#636366',  // iOS 터셔리 라벨
     },
     border: {
-      light: '#1a1a1a', // 어두운 회색
-      default: '#2a2a2a', // 약간 밝은 어두운 회색
-      medium: '#404040', // 중간 어두운 회색
-      dark: '#6b7280', // 밝은 회색
+      light: '#2c2c2e',  // iOS separator
+      default: '#3a3a3c',
+      medium: '#48484a',
+      dark: '#636366',
     },
     shadow: {
-      sm: 'rgba(0, 0, 0, 0.8)',
-      md: 'rgba(0, 0, 0, 0.9)',
-      lg: 'rgba(0, 0, 0, 0.95)',
-      xl: 'rgba(0, 0, 0, 1)',
+      sm: 'rgba(0, 0, 0, 0.4)',
+      md: 'rgba(0, 0, 0, 0.6)',
+      lg: 'rgba(0, 0, 0, 0.75)',
+      xl: 'rgba(0, 0, 0, 0.9)',
     },
     gradient: {
-      primary: 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)',
-      secondary: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
-      accent: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+      primary: 'linear-gradient(135deg, #636af2 0%, #9f7aea 100%)',
+      secondary: 'linear-gradient(135deg, #32ade6 0%, #3b82f6 100%)',
+      accent: 'linear-gradient(135deg, #30d158 0%, #34c759 100%)',
     },
   },
   spacing: {

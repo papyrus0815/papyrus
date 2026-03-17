@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { useSessionStore } from '@/entities/session'
-import { useThemeStore } from '@/shared/theme/theme.store'
 
 // --- 메인 컨테이너 ---
 const DashboardContainer = styled.div`
@@ -19,7 +18,7 @@ const DashboardContainer = styled.div`
   height: 100vh;
   padding: 0;
   margin: 0;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#000000' : '#ffffff')};
+  background: ${({ theme }) => theme.colors.background.primary};
   box-sizing: border-box;
   transition: background 0.25s ease;
 `
@@ -47,7 +46,7 @@ const TopNav = styled.nav`
   align-items: center;
   justify-content: center;
   gap: 24px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   padding: 0;
 `
 
@@ -58,14 +57,14 @@ const TopNavItem = styled.button`
   gap: 4px;
   background: none;
   border: none;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   padding: 8px 12px;
   border-radius: 8px;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#f8f9fa')};
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
@@ -85,7 +84,7 @@ const TopIcon = styled.span`
 const TopLabel = styled.span`
   font-size: 11px;
   font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-family:
     'Roboto',
     -apple-system,
@@ -104,7 +103,7 @@ const ClockContainer = styled.div`
 const Time = styled.div`
   font-size: 28px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#ffffff' : '#202124')};
+  color: ${({ theme }) => theme.colors.text.primary};
   font-family:
     'Roboto',
     -apple-system,
@@ -116,7 +115,7 @@ const Time = styled.div`
 const DateText = styled.div`
   font-size: 12px;
   font-weight: 400;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-family:
     'Roboto',
     -apple-system,
@@ -149,38 +148,26 @@ const CircleButton = styled.button<{ $primary?: boolean }>`
   align-items: center;
   justify-content: center;
   border: ${({ $primary, theme }) =>
-    $primary
-      ? 'none'
-      : `1px solid ${theme.mode === 'dark' ? '#2c2c2e' : '#dadce0'}`};
+    $primary ? 'none' : `1px solid ${theme.colors.border.default}`};
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  background: ${({ $primary, theme }) => {
-    if ($primary) return 'var(--color-primary)'
-    return theme.mode === 'dark' ? '#1c1c1e' : '#ffffff'
-  }};
-  color: ${({ $primary, theme }) => {
-    if ($primary) return '#ffffff'
-    return theme.mode === 'dark' ? '#ebebf5' : '#3c4043'
-  }};
+  background: ${({ $primary, theme }) =>
+    $primary ? theme.colors.primary : theme.colors.background.primary};
+  color: ${({ $primary, theme }) =>
+    $primary ? '#ffffff' : theme.colors.text.primary};
   box-shadow: none;
 
   &:hover {
-    background: ${({ $primary, theme }) => {
-      if ($primary) return 'var(--color-primary-300)'
-      return theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa'
-    }};
-    border-color: ${({ $primary, theme }) => {
-      if ($primary) return 'none'
-      return theme.mode === 'dark' ? '#3a3a3c' : '#bdc1c6'
-    }};
-    box-shadow: 0 1px 3px rgba(60, 64, 67, 0.1);
+    background: ${({ $primary, theme }) =>
+      $primary ? theme.colors.button.hover : theme.colors.background.secondary};
+    border-color: ${({ $primary, theme }) =>
+      $primary ? 'transparent' : theme.colors.border.medium};
+    box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
   }
 
   &:active {
-    background: ${({ $primary, theme }) => {
-      if ($primary) return 'var(--color-primary-200)'
-      return theme.mode === 'dark' ? '#3a3a3c' : '#f1f3f4'
-    }};
+    background: ${({ $primary, theme }) =>
+      $primary ? theme.colors.button.hover : theme.colors.background.tertiary};
   }
 
   svg {
@@ -192,7 +179,7 @@ const CircleButton = styled.button<{ $primary?: boolean }>`
 const ButtonLabel = styled.span`
   font-size: 11px;
   font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-family:
     'Roboto',
     -apple-system,
@@ -200,8 +187,8 @@ const ButtonLabel = styled.span`
 `
 
 const TextButton = styled.button`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#ffffff')};
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#dadce0')};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -217,17 +204,17 @@ const TextButton = styled.button`
     'Roboto',
     -apple-system,
     sans-serif;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#3c4043')};
+  color: ${({ theme }) => theme.colors.text.primary};
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#bdc1c6')};
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
 
   svg {
     width: 12px;
     height: 12px;
-    fill: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+    fill: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -239,14 +226,14 @@ const BottomScheduleContainer = styled.div`
   right: 0;
   width: 100%;
   display: flex;
-  justify-content: center; /* 가로 정중앙에 고정 */
+  justify-content: center;
   padding: 0;
   background: transparent;
   z-index: 20;
 `
 
 const BottomInner = styled.div`
-  width: min(820px, calc(100% - 64px)); /* 중앙 고정폭 */
+  width: min(820px, calc(100% - 64px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -261,8 +248,8 @@ const MeetingInfo = styled.div`
 `
 
 const MeetingCard = styled.div`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#ffffff')};
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#dadce0')};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   padding: 12px 14px 10px 14px;
   display: flex;
@@ -279,9 +266,9 @@ const MeetingCard = styled.div`
   min-height: 128px;
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#c6cacc')};
-    box-shadow: 0 1px 2px rgba(60, 64, 67, 0.15);
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
   }
 
   /* 왼쪽 얇은 상태 바 */
@@ -292,7 +279,7 @@ const MeetingCard = styled.div`
     top: 16px;
     width: 2px;
     height: 20px;
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#dadce0')};
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 2px;
   }
 `
@@ -300,7 +287,7 @@ const MeetingCard = styled.div`
 const MeetingTime = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-family:
     'Roboto',
     -apple-system,
@@ -317,7 +304,7 @@ const MeetingDetails = styled.div`
 const MeetingTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#202124')};
+  color: ${({ theme }) => theme.colors.text.primary};
   font-family:
     'Roboto',
     -apple-system,
@@ -326,7 +313,7 @@ const MeetingTitle = styled.div`
 
 const MeetingSubtitle = styled.div`
   font-size: 12px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-family:
     'Roboto',
     -apple-system,
@@ -334,12 +321,12 @@ const MeetingSubtitle = styled.div`
   margin-top: 2px;
 `
 
-// 메타 행 (Today • 16:30 - 17:00)
+// 메타 행
 const CardMetaRow = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 12px;
 `
 
@@ -348,12 +335,12 @@ const MetaDot = styled.span`
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#636366' : '#9aa0a6')};
+  background: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const HostLine = styled.div`
   font-size: 12px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const CardFooter = styled.div`
@@ -369,30 +356,31 @@ const StartChip = styled.button`
   gap: 6px;
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--color-primary-300);
-  background: var(--color-primary-100);
-  color: var(--color-primary);
+  border: 1px solid ${({ theme }) => theme.colors.active};
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.active};
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
 
   svg {
     width: 14px;
     height: 14px;
-    fill: var(--color-primary);
+    fill: ${({ theme }) => theme.colors.active};
   }
 `
 
 const MoreBtn = styled.button`
   background: transparent;
   border: none;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   padding: 4px;
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f1f3f4')};
+    background: ${({ theme }) => theme.colors.hover};
   }
 
   svg {
@@ -401,7 +389,7 @@ const MoreBtn = styled.button`
   }
 `
 
-// --- 스케줄 헤더 (상단 날짜 필 디자인) ---
+// --- 스케줄 헤더 ---
 const ScheduleHeader = styled.div`
   padding: 0 0 4px 0;
 `
@@ -418,13 +406,13 @@ const DatePill = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#e6e8eb')};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 10px;
   padding: 8px 10px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#3c4043')};
+  color: ${({ theme }) => theme.colors.text.primary};
   font-size: 14px;
   font-weight: 500;
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#1c1c1e' : '#ffffff')};
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const NavButton = styled.button`
@@ -436,13 +424,13 @@ const NavButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#8e8e93' : '#5f6368')};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   font-size: 0;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
+    background: ${({ theme }) => theme.colors.hover};
   }
 
   &.add-btn {
@@ -452,10 +440,10 @@ const NavButton = styled.button`
 
 const TodayButton = styled.button`
   background: none;
-  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#dadce0')};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 6px 16px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#ebebf5' : '#3c4043')};
+  color: ${({ theme }) => theme.colors.text.primary};
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
@@ -466,14 +454,13 @@ const TodayButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#2c2c2e' : '#f8f9fa')};
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3c' : '#bdc1c6')};
+    background: ${({ theme }) => theme.colors.hover};
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
 `
 
 export default function DashboardPage() {
   const { username } = useSessionStore()
-  const { mode } = useThemeStore()
   const [currentTime, setCurrentTime] = useState(new Date())
   const navigate = useNavigate()
 
@@ -484,25 +471,18 @@ export default function DashboardPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // 대시보드 마운트/테마 변경 시 body 배경색 변경
+  // 대시보드 마운트 시 전역 배경 숨기기
   useEffect(() => {
-    const bgColor = mode === 'dark' ? '#000000' : '#ffffff'
-    document.body.style.backgroundColor = bgColor
     document.body.setAttribute('data-dashboard', 'true')
     const globalBg = document.getElementById('global-bg')
-    if (globalBg) {
-      globalBg.style.display = 'none'
-    }
+    if (globalBg) globalBg.style.display = 'none'
 
     return () => {
-      document.body.style.backgroundColor = ''
       document.body.removeAttribute('data-dashboard')
       const gb = document.getElementById('global-bg')
-      if (gb) {
-        gb.style.display = ''
-      }
+      if (gb) gb.style.display = ''
     }
-  }, [mode])
+  }, [])
 
   const timeString = currentTime.toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -638,7 +618,7 @@ export default function DashboardPage() {
                   탐험하기
                 </StartChip>
                 <MoreBtn aria-label="more">
-                  <svg viewBox="0 0 24 24">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                   </svg>
                 </MoreBtn>
@@ -661,7 +641,7 @@ export default function DashboardPage() {
                   탐험하기
                 </StartChip>
                 <MoreBtn aria-label="more">
-                  <svg viewBox="0 0 24 24">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                   </svg>
                 </MoreBtn>

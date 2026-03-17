@@ -48,15 +48,15 @@ const TopNavItem = styled.button`
   gap: 4px;
   background: none;
   border: none;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   padding: 6px 14px;
   border-radius: 10px;
   transition: background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:active {
@@ -65,12 +65,12 @@ const TopNavItem = styled.button`
 
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px #6366f1;
+    box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.primary};
   }
 
   &[aria-current='page'] {
-    color: #4f46e5;
-    background: #eef2ff;
+    color: ${({ theme }) => theme.colors.active};
+    background: ${({ theme }) => theme.colors.activeLight};
     font-weight: 600;
   }
 `
@@ -93,8 +93,4 @@ const TopLabel = styled.span`
   font-weight: 500;
   color: inherit;
   letter-spacing: 0.01em;
-
-  ${TopNavItem}[aria-current='page'] & {
-    color: #4f46e5;
-  }
 `
