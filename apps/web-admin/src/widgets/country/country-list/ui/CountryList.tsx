@@ -102,6 +102,10 @@ interface CountryListProps {
   /** 대시보드 오른쪽 컨텐츠 뷰 (메뉴 선택 시 컨텐츠만 전환) */
   dashboardContentView?: DashboardContentView
   onDashboardMenuSelect?: (view: DashboardContentView) => void
+  /** 좌측 패널 접기 상태 */
+  collapsed?: boolean
+  /** 접기/펼치기 토글 핸들러 */
+  onToggleCollapse?: () => void
 }
 
 export type DashboardContentView =
@@ -153,6 +157,8 @@ function CountryListInner({
   setShowCountryTypeModal,
   dashboardContentView = 'stats',
   onDashboardMenuSelect,
+  collapsed = false,
+  onToggleCollapse,
 }: CountryListProps) {
   const {
     countries,
@@ -297,7 +303,10 @@ function CountryListInner({
 
   return (
     <>
-      <S.ListPane $inHistory={inHistory}>
+      <S.ListPaneWrapper>
+        <S.ListPane $inHistory={inHistory} $collapsed={collapsed}>
+          {!collapsed && (
+            <>
         <S.ControlsRow>
           <S.ControlsLeft>
             <S.TabBar>
@@ -892,7 +901,15 @@ function CountryListInner({
           )}
           </AnimatePresence>
         </S.SidebarTabBody>
-      </S.ListPane>
+            </>
+          )}
+        </S.ListPane>
+        <S.ListCollapseButton $collapsed={collapsed} onClick={onToggleCollapse} title={collapsed ? '펼치기' : '접기'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </S.ListCollapseButton>
+      </S.ListPaneWrapper>
 
       {/* 국가 타입 선택 모달 - Portal로 body에 렌더링 */}
       {showAddTypeModal

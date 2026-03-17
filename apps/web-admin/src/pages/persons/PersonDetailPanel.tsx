@@ -314,13 +314,8 @@ export function PersonDetailPanel({
         </HeaderLeft>
       </HeaderRow>
 
-      {/* 기본정보 + 요약: 생몰·직업·국가·성별·가문·종교·배우자·저작·정부직위·사건·조직 */}
+      {/* 기본정보 + 요약: 생몰·국가·성별·가문·종교·배우자·저작·정부직위·사건·조직 */}
       <KpiStrip $compact={embedInModal}>
-        <KpiItem>
-          <KpiLabel>직업</KpiLabel>
-          <KpiValue>{person.job?.title || '—'}</KpiValue>
-        </KpiItem>
-        <KpiDivider />
         {person.country && (
           <>
             <KpiItem>

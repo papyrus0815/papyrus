@@ -2,16 +2,13 @@ import React, { useEffect, useRef, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  FiArchive,
   FiBell,
-  FiBook,
-  FiBriefcase,
-  FiChevronDown,
+  FiFileText,
+  FiGlobe,
   FiHome,
   FiLayers,
   FiLogOut,
   FiMenu,
-  FiMoreHorizontal,
   FiPause,
   FiPlay,
   FiSkipBack,
@@ -295,38 +292,24 @@ const Header: React.FC = () => {
       active: location.pathname.startsWith('/events'),
     },
     {
-      key: 'persons',
-      label: '인물',
-      icon: <FiUser size={16} />,
+      key: 'continents',
+      label: '대륙',
+      icon: <FiGlobe size={16} />,
       onClick: () => {
         playClickSound()
-        navigate('/persons')
+        navigate('/history/continents')
       },
-      active: location.pathname.startsWith('/persons'),
+      active: location.pathname.startsWith('/history/continents'),
     },
     {
-      key: 'dynasties',
-      label: '왕조',
-      icon: <FiBook size={16} />,
+      key: 'post',
+      label: '글',
+      icon: <FiFileText size={16} />,
       onClick: () => {
         playClickSound()
+        navigate('/history/post')
       },
-    },
-    {
-      key: 'archive',
-      label: '아카이브',
-      icon: <FiArchive size={16} />,
-      onClick: () => {
-        playClickSound()
-      },
-    },
-    {
-      key: 'more',
-      label: 'more',
-      icon: <FiMoreHorizontal size={16} />,
-      onClick: () => {
-        playClickSound()
-      },
+      active: location.pathname.startsWith('/history/post'),
     },
   ]
 

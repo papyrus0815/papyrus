@@ -416,6 +416,16 @@ export default function CountryPage() {
   const [showSortModal, setShowSortModal] = useState(false)
   const [showCountryTypeModal, setShowCountryTypeModal] = useState(false)
 
+  // 국가 리스트 패널 접기 상태 (로컬 스토리지에서 복원)
+  const [listCollapsed, setListCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('country-list-collapsed')
+      return saved ? JSON.parse(saved) : false
+    } catch {
+      return false
+    }
+  })
+
   // 편집 상태
   const [editing, setEditing] = useState<Country | null>(null)
   const [editingHistorical, setEditingHistorical] =
@@ -494,6 +504,18 @@ export default function CountryPage() {
     }[]
   >([])
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
+
+  const handleToggleListCollapsed = useCallback(() => {
+    setListCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('country-list-collapsed', JSON.stringify(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }, [])
 
   // 이미지 업로드 상태
   const [thumbnailPreview, setThumbnailPreview] = useState<string>('')
@@ -1026,7 +1048,7 @@ export default function CountryPage() {
         continents={CONTINENTS}
       >
         {/* 히스토리 모드: MainGrid를 먼저 배치해 대시보드/국가목록 탭이 상단에 붙도록 함 */}
-        <S.MainGrid $noSidebar={inHistory}>
+        <S.MainGrid $noSidebar={inHistory} $listCollapsed={listCollapsed}>
           <CountryList
             selectedId={selectedId}
             onSelect={handleSelectCountry}
@@ -1055,6 +1077,8 @@ export default function CountryPage() {
               }
               else if (id === 'stats') navigate(pathKeys.history.dashboard())
             }}
+            collapsed={listCollapsed}
+            onToggleCollapse={handleToggleListCollapsed}
           />
 
           <S.DetailPane>

@@ -95,44 +95,130 @@ export const KpiValue = styled.div`
   color: #202124;
 `
 
-export const MainGrid = styled.div<{ $noSidebar?: boolean }>`
+export const MainGrid = styled.div<{ $noSidebar?: boolean; $listCollapsed?: boolean }>`
   width: 100%;
   padding: 0;
   display: grid;
-  grid-template-columns: ${({ $noSidebar }) =>
-    $noSidebar ? '15% minmax(0, 1fr)' : '15% 30% minmax(0, 1fr)'};
+  grid-template-columns: ${({ $noSidebar, $listCollapsed }) => {
+    if ($listCollapsed) return '48px minmax(0, 1fr)'
+    return $noSidebar ? '15% minmax(0, 1fr)' : '15% 30% minmax(0, 1fr)'
+  }};
   column-gap: 0;
   align-items: start;
   min-height: inherit;
+  transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: 1280px) {
-    grid-template-columns: ${({ $noSidebar }) =>
-      $noSidebar ? '35% minmax(0, 1fr)' : '18% 35% minmax(0, 1fr)'};
-    column-gap: 0; /* 반응형에서도 보더가 겹치지 않도록 */
+    grid-template-columns: ${({ $noSidebar, $listCollapsed }) => {
+      if ($listCollapsed) return '48px minmax(0, 1fr)'
+      return $noSidebar ? '35% minmax(0, 1fr)' : '18% 35% minmax(0, 1fr)'
+    }};
   }
 
   @media (max-width: 1024px) {
-    grid-template-columns: 1fr; /* 태블릿/모바일에서는 리스트 숨김 */
+    grid-template-columns: 1fr;
     row-gap: 12px;
-    padding: 0; /* 여백 제거 */
+    padding: 0;
   }
 `
 
-export const ListPane = styled.div<{ $inHistory?: boolean }>`
+export const ListPane = styled.div<{ $inHistory?: boolean; $collapsed?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 0;
-  height: calc(100vh - var(--header-height));
-  max-height: calc(100vh - var(--header-height));
+  height: 100%;
+  max-height: 100%;
   background: #ffffff;
-  position: sticky;
-  top: var(--header-height);
   border-right: 1px solid #eee;
   overflow: hidden;
   padding-top: 0;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: 1024px) {
     display: none;
+  }
+`
+
+export const ListCollapseButton = styled.button<{ $collapsed?: boolean }>`
+  position: absolute;
+  top: 50%;
+  right: -16px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: ${({ $collapsed }) => ($collapsed ? 'rotate(180deg)' : 'rotate(0deg)')};
+  }
+
+  &:hover {
+    background: #f8fafc;
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.3);
+  }
+
+  @media (max-width: 1024px) {
+    display: none;
+  }
+`
+export const ListPaneWrapper = styled.div`
+  position: sticky;
+  top: var(--header-height);
+  align-self: start;
+  height: calc(100vh - var(--header-height));
+  overflow: visible;
+
+  @media (max-width: 1024px) {
+    display: none;
+  }
+`
+
+export const CollapsedListPane = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+`
+
+export const CollapsedListButton = styled.button`
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    background: #f8fafc;
+    color: #6366f1;
+    border-color: rgba(99, 102, 241, 0.3);
   }
 `
 
