@@ -334,15 +334,6 @@ const ListScrollArea = styled.div`
 const DetailViewWrap = styled.div`
   width: 100%;
   min-width: 0;
-  min-height: 60vh;
-  background: #ffffff;
-  padding: 28px 36px 56px;
-  max-width: 860px;
-  margin: 0 auto;
-
-  @media (max-width: 768px) {
-    padding: 20px 16px 40px;
-  }
 `
 
 const AdaptiveGrid = styled.div`
@@ -375,16 +366,16 @@ const CenturyHeading = styled.h3`
 
 const Card = styled.div`
   background: #ffffff;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 0;
   border: 1px solid ${BORDER_COLOR};
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition: border-color 0.15s, box-shadow 0.2s, transform 0.2s;
   cursor: pointer;
   overflow: hidden;
   &:hover {
-    border-color: #c7d2fe;
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.1);
-    transform: translateY(-1px);
+    border-color: #a5b4fc;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.14);
+    transform: translateY(-3px);
   }
 `
 
@@ -395,14 +386,14 @@ const CardImageWrapper = styled.div`
   min-height: 160px;
   position: relative;
   overflow: hidden;
-  background: #f8fafc;
+  background: #1e293b;
 `
 
 const NewBadge = styled.span`
   position: absolute;
   top: 8px;
   right: 8px;
-  z-index: 1;
+  z-index: 3;
   padding: 3px 8px;
   font-size: 10px;
   font-weight: 700;
@@ -420,13 +411,32 @@ const NewBadge = styled.span`
   }
 `
 
+/* 이미지 하단 그라데이션 오버레이 + 이름/연도 */
+const CardImageOverlay = styled.div`
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 2;
+  padding: 28px 12px 10px;
+  background: linear-gradient(to top, rgba(15,23,42,0.88) 0%, transparent 100%);
+`
+const CardOverlayName = styled.div`
+  font-size: 13.5px; font-weight: 800; color: #fff;
+  letter-spacing: -0.02em; line-height: 1.25;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+`
+const CardOverlayLife = styled.div`
+  font-size: 10.5px; font-weight: 500; color: rgba(255,255,255,0.65);
+  margin-top: 2px;
+`
+
 const CardImage = styled.img`
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  transition: transform 0.3s ease;
-  ${Card}:hover & { transform: scale(1.03); }
+  transition: transform 0.35s ease;
+  ${Card}:hover & { transform: scale(1.05); }
 `
 
 const CardImagePlaceholder = styled.div`
@@ -435,20 +445,19 @@ const CardImagePlaceholder = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8fafc;
-  border-bottom: 1px solid ${BORDER_COLOR};
-  color: #e2e8f0;
-  svg { width: 36px; height: 36px; }
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: #475569;
+  svg { width: 40px; height: 40px; }
 `
 
 const CardContent = styled.div`
-  padding: 14px 16px 16px;
+  padding: 10px 14px 14px;
 `
 
 const PersonInfo = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 `
 
 const CardTitleRow = styled.div`
@@ -461,13 +470,13 @@ const CardTitleRow = styled.div`
 
 const PersonName = styled.h3`
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.01em;
-  line-height: 1.35;
+  line-height: 1.3;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 `
@@ -480,8 +489,8 @@ const CardGender = styled.span`
 `
 
 const PersonLifespan = styled.div`
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11.5px;
+  font-weight: 500;
   color: #64748b;
   line-height: 1.4;
   display: flex;
@@ -490,12 +499,13 @@ const PersonLifespan = styled.div`
 `
 
 const CardDynasty = styled.div`
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 500;
   color: #94a3b8;
+  display: flex; align-items: center; gap: 4px;
+  &::before { content: ''; display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: #cbd5e1; }
 `
 
-/** 카드 이름 앞 국기/국가 표시 */
 const CardCountryPrefix = styled.span`
   flex-shrink: 0;
   font-size: 13px;
@@ -504,18 +514,18 @@ const CardCountryPrefix = styled.span`
   font-weight: 500;
 `
 
-/** 역대 수반 단일 배지 */
 const CardHeadsBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
+  padding: 2px 8px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   color: #4f46e5;
   background: #eef2ff;
-  border-radius: 4px;
+  border: 1px solid #c7d2fe;
+  border-radius: 20px;
   letter-spacing: 0.01em;
-  max-width: 120px;
+  max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -525,14 +535,14 @@ const CardBadgeRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 4px;
 `
 
 const CardBio = styled.p`
-  margin: 5px 0 0 0;
-  font-size: 12px;
+  margin: 4px 0 0 0;
+  font-size: 11.5px;
   color: #94a3b8;
-  line-height: 1.5;
+  line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -540,12 +550,13 @@ const CardBio = styled.p`
 `
 
 const CardBirthPlace = styled.div`
-  font-size: 11px;
+  font-size: 10.5px;
   color: #64748b;
-  font-weight: 400;
+  font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  &::before { content: '📍'; font-size: 10px; }
 `
 
 const EmptyState = styled.div`
@@ -857,21 +868,19 @@ export function PersonListContent({
                                   </svg>
                                 </CardImagePlaceholder>
                               )}
+                              {/* 이미지 하단 오버레이 — 이름 + 생몰 */}
+                              <CardImageOverlay>
+                                <CardOverlayName>{fullName || '(이름 없음)'}</CardOverlayName>
+                                {lifespan && <CardOverlayLife>{lifespan}{isDeceased ? '' : ' · 생존'}</CardOverlayLife>}
+                              </CardImageOverlay>
                             </CardImageWrapper>
                             <CardContent>
                               <PersonInfo>
-                                <CardTitleRow>
-                                  <PersonName>{fullName || '(이름 없음)'}</PersonName>
-                                </CardTitleRow>
-                                <PersonLifespan>
-                                  {lifespan}{isDeceased ? ' · 사망' : ''}
-                                </PersonLifespan>
                                 {dynastyName && (
                                   <CardDynasty>{dynastyName}</CardDynasty>
                                 )}
                                 {birthPlace && (
                                   <CardBirthPlace>
-                                    <span style={{ fontWeight: 600, color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>출신</span>
                                     {birthPlace}
                                   </CardBirthPlace>
                                 )}
