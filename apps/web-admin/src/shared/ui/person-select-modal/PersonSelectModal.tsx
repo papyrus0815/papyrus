@@ -787,31 +787,24 @@ const PersonCard = styled.button<{ $selected: boolean }>`
   width: 100%;
   display: flex;
   align-items: center;
-  padding: 12px 16px;
-  background: ${({ $selected }) => $selected ? '#eef2ff' : BRAND.white};
-  border: 1.5px solid ${({ $selected }) => $selected ? '#6366f1' : BRAND.borderLight};
-  border-radius: 12px;
+  padding: 16px 20px;
+  background: ${({ $selected }) =>
+    $selected ? BRAND.primaryLight : BRAND.white};
+  border: 1px solid
+    ${({ $selected }) => ($selected ? BRAND.primary : BRAND.borderLight)};
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: left;
-  box-shadow: ${({ $selected }) => $selected ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none'};
-  position: relative;
-  overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: ${({ $selected }) => $selected ? '3px' : '0'};
-    background: #6366f1;
-    transition: width 0.18s;
-  }
+  box-shadow: ${({ $selected }) =>
+    $selected ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none'};
 
   &:hover {
-    border-color: ${({ $selected }) => $selected ? '#6366f1' : '#a5b4fc'};
-    background: ${({ $selected }) => $selected ? '#eef2ff' : '#f8faff'};
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
-    transform: translateX(2px);
+    border-color: ${({ $selected }) =>
+      $selected ? BRAND.primary : BRAND.primaryMuted};
+    background: ${({ $selected }) =>
+      $selected ? BRAND.primaryLight : BRAND.surface};
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
   }
   &:focus-visible {
     outline: none;
@@ -821,26 +814,24 @@ const PersonCard = styled.button<{ $selected: boolean }>`
 `
 
 const PersonAvatar = styled.div<{ $selected?: boolean }>`
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: ${({ $selected }) =>
     $selected
-      ? `linear-gradient(135deg, #6366f1 0%, #818cf8 100%)`
-      : `linear-gradient(135deg, #1e293b 0%, #334155 100%)`};
-  color: ${({ $selected }) => $selected ? BRAND.white : '#64748b'};
+      ? `linear-gradient(135deg, ${BRAND.primary} 0%, #818cf8 100%)`
+      : `linear-gradient(135deg, ${BRAND.surface} 0%, #e2e8f0 100%)`};
+  border-radius: 50%;
+  color: ${({ $selected }) => ($selected ? BRAND.white : BRAND.textSubtle)};
   flex-shrink: 0;
   overflow: hidden;
-  border: 1.5px solid ${({ $selected }) => $selected ? '#6366f1' : '#e2e8f0'};
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: top;
   }
 `
 
@@ -849,33 +840,32 @@ const PersonMainInfo = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-left: 12px;
+  gap: 6px;
+  margin-left: 16px;
 `
 
 const PersonNameRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
 `
 
 const PersonName = styled.div`
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: ${BRAND.text};
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   line-height: 1.3;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 `
 
 const SelectedBadge = styled.div`
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #6366f1;
+  background: ${BRAND.primary};
   color: ${BRAND.white};
   border-radius: 50%;
   flex-shrink: 0;
@@ -884,22 +874,22 @@ const SelectedBadge = styled.div`
 const PersonMetaRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   flex-wrap: wrap;
 `
 
 const PersonMeta = styled.div`
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11.5px;
+  gap: 5px;
+  font-size: 12px;
   font-weight: 500;
   color: ${BRAND.textMuted};
 
   svg {
     color: ${BRAND.textSubtle};
     flex-shrink: 0;
-    opacity: 0.7;
+    opacity: 0.8;
   }
 
   span {
@@ -911,8 +901,8 @@ const PersonMeta = styled.div`
 `
 
 const PersonDates = styled.div<{ $empty?: boolean }>`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
-  color: ${({ $empty }) => $empty ? BRAND.textSubtle : BRAND.textMuted};
-  font-style: ${({ $empty }) => $empty ? 'italic' : 'normal'};
+  color: ${({ $empty }) =>
+    $empty ? BRAND.textSubtle : BRAND.textMuted};
 `
