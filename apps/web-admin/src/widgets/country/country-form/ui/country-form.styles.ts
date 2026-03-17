@@ -473,17 +473,3 @@ export const FileUploadText = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-export {
-  Form,
-  FormSection,
-  FormSectionHeader,
-  FormSectionIcon,
-  FormSectionTitle,
-  FormSectionDescription,
-  FormRow,
-  FormField,
-  FormLabel,
-  RequiredStar,
-  ErrorMessage,
-  ModalFormActions,
-} from '@/shared/ui/form-styles'
