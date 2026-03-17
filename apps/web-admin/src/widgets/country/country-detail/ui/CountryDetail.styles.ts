@@ -1,27 +1,6 @@
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
-// Design System Colors
-const COLORS = {
-  // Header/Title backgrounds
-  headerBg: '#fafbfc',
-  headerBorder: '#e5e7eb',
-
-  // Text colors
-  titleText: '#374151',
-  bodyText: '#4b5563',
-  secondaryText: '#6b7280',
-  lightText: '#9ca3af',
-
-  // Backgrounds
-  white: '#ffffff',
-  lightBg: '#f9fafb',
-
-  // Borders
-  border: '#e5e7eb',
-  divider: '#e5e7eb',
-}
-
 // Grid Layouts (Modern Design)
 export const DashboardGrid = styled.div`
   display: grid;
@@ -71,13 +50,13 @@ export const ChartGrid = styled(DashboardGrid)`
 
 // Card Components - Enhanced Modern Design
 export const Card = styled.div`
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+  background: ${({ theme }) => theme.colors.background.primary};
   padding: 20px 22px;
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.02);
+    0 2px 4px ${({ theme }) => theme.colors.shadow.sm},
+    0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -101,10 +80,10 @@ export const Card = styled.div`
 
   &:hover {
     transform: translateY(-2px);
-    border-color: #d1d5db;
+    border-color: ${({ theme }) => theme.colors.border.medium};
     box-shadow:
-      0 8px 16px rgba(0, 0, 0, 0.08),
-      0 4px 8px rgba(0, 0, 0, 0.04);
+      0 8px 16px ${({ theme }) => theme.colors.shadow.md},
+      0 4px 8px ${({ theme }) => theme.colors.shadow.sm};
 
     &::before {
       opacity: 1;
@@ -136,7 +115,7 @@ export const CardHeader = styled.div`
 
 export const CardLabel = styled.span`
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -150,14 +129,10 @@ export const CardLabel = styled.span`
 export const CardValue = styled.div`
   font-size: 28px;
   font-weight: 700;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.1;
   letter-spacing: -0.02em;
   transition: all 0.25s ease;
-  background: linear-gradient(135deg, #202124 0%, #5f6368 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 
   ${Card}:hover & {
     background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
@@ -195,14 +170,14 @@ export const PercentageChange = styled.div<{ positive?: boolean }>`
 `
 
 export const ChartCard = styled.div`
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
   padding: 16px;
 `
 
 export const ChartTitle = styled.h3`
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0 0 20px 0;
 `
 
@@ -217,17 +192,25 @@ export const EmptyStateContainer = styled.div`
   min-height: calc(100vh - var(--header-height, 64px));
   padding: 80px 40px;
   box-sizing: border-box;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
-export const EmptyStateBgOrb = styled.div<{ $x: string; $y: string; $size: string }>`
+export const EmptyStateBgOrb = styled.div<{
+  $x: string
+  $y: string
+  $size: string
+}>`
   position: absolute;
   left: ${(p) => p.$x};
   top: ${(p) => p.$y};
   width: ${(p) => p.$size};
   height: ${(p) => p.$size};
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(99, 102, 241, 0.08) 0%,
+    transparent 70%
+  );
   filter: blur(40px);
   pointer-events: none;
 `
@@ -241,10 +224,10 @@ export const EmptyStateCard = styled(motion.div)`
   text-align: center;
   max-width: 360px;
   padding: 56px 40px;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 // Compact Hero Section
@@ -253,8 +236,8 @@ export const CompactHeroSection = styled.div`
   align-items: center;
   gap: 32px;
   padding: 24px 32px;
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid var(--border-color);
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   margin-bottom: 20px;
   position: relative;
   overflow: visible;
@@ -365,7 +348,7 @@ export const CompactCountryName = styled.h1`
   margin: 0;
   font-size: 32px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
   line-height: 1.2;
 
@@ -377,7 +360,7 @@ export const CompactCountryName = styled.h1`
 export const CompactCountryLocalName = styled.p`
   margin: 0;
   font-size: 16px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 `
 
@@ -396,12 +379,12 @@ export const MetaBadge = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%);
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
   transition: all 0.2s ease;
 
   svg {
@@ -409,15 +392,14 @@ export const MetaBadge = styled.div`
   }
 
   &:hover {
-    background: linear-gradient(135deg, #e8f0fe 0%, #d3e3fd 100%);
-    border-color: #4285f4;
-    color: #1967d2;
+    background: ${({ theme }) => theme.colors.activeLight};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(66, 133, 244, 0.15);
+    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
 
     svg {
       opacity: 1;
-      fill: #4285f4;
     }
   }
 `
@@ -458,9 +440,9 @@ export const HeaderRightSlot = styled.div`
 // Simple Header for other tabs
 export const SimpleHeader = styled.div`
   padding: 16px 32px;
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   margin-bottom: 20px;
 
   @media (max-width: 768px) {
@@ -472,7 +454,7 @@ export const SimpleHeaderTitle = styled.h2`
   margin: 0;
   font-size: 24px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
 
@@ -516,10 +498,12 @@ export const PersonInnerTabBar = styled.div`
   margin-top: 0;
   margin-bottom: 0;
   padding: 8px 2px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   background: transparent;
   overflow-x: auto;
-  &::-webkit-scrollbar { display: none; }
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `
 
 export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
@@ -527,7 +511,8 @@ export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
   border-radius: 6px;
   border: none;
   background: transparent;
-  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
@@ -535,11 +520,13 @@ export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
   align-items: center;
   gap: 6px;
   position: relative;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
 
   &:hover {
-    color: #6366f1;
-    background: #eef2ff;
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.activeLight};
   }
 
   &::after {
@@ -549,7 +536,7 @@ export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
     right: 12px;
     bottom: 0;
     height: 2px;
-    background: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
     border-radius: 2px;
     opacity: ${({ $active }) => ($active ? 1 : 0)};
     transition: opacity 0.15s ease;
@@ -565,7 +552,7 @@ export const PersonInnerPillNav = styled.nav`
   margin-bottom: 20px;
   max-width: 100%;
   width: fit-content;
-  background: #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 20px;
   overflow-x: auto;
   flex-shrink: 0;
@@ -578,17 +565,26 @@ export const PersonInnerPillBtn = styled.button<{ $active?: boolean }>`
   padding: 10px 18px;
   border-radius: 14px;
   border: none;
-  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#4f46e5' : '#64748b')};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
-  box-shadow: ${({ $active }) => ($active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
-  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: ${({ $active, theme }) =>
+    $active ? `0 2px 8px ${theme.colors.shadow.sm}` : 'none'};
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
-    color: #4f46e5;
-    background: ${({ $active }) => ($active ? '#ffffff' : 'rgba(255,255,255,0.7)')};
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.colors.background.primary
+        : theme.colors.background.secondary};
   }
 `
 
@@ -599,7 +595,7 @@ export const PersonTabSharedHeader = styled.header`
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid #e9eef5;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   margin-bottom: 24px;
 `
 
@@ -613,7 +609,7 @@ export const PersonTabSharedTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.03em;
   line-height: 1.3;
 `
@@ -621,7 +617,7 @@ export const PersonTabSharedTitle = styled.h2`
 export const PersonTabSharedDesc = styled.p`
   margin: 4px 0 0;
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;
 `
 
@@ -633,10 +629,52 @@ export const PersonTabSharedHeaderRight = styled.div`
   gap: 8px;
 `
 
+/** 헤더 액션 버튼 (관직 카테고리 등 텍스트+아이콘) */
+export const HeaderActionButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+/** 헤더 아이콘 전용 버튼 (인물 등록 등) */
+export const HeaderIconButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
 export const SimpleHeaderSubtitle = styled.p`
   margin: 4px 0 0 0;
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 `
 
@@ -653,7 +691,7 @@ export const EmptyStateIllustration = styled.div`
 export const EmptyStateTitle = styled.h3`
   font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0 0 8px 0;
   letter-spacing: -0.03em;
   line-height: 1.3;
@@ -662,7 +700,7 @@ export const EmptyStateTitle = styled.h3`
 
 export const EmptyStateDescription = styled.p`
   font-size: 14px;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
   margin: 0;
   text-align: center;
@@ -671,7 +709,7 @@ export const EmptyStateDescription = styled.p`
 export const EmptyStateHint = styled.span`
   margin-top: 20px;
   font-size: 13px;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   letter-spacing: -0.01em;
 `
 
@@ -753,23 +791,23 @@ export const KebabMenuWrapper = styled.div`
 
 export const KebabButton = styled.button`
   padding: 10px;
-  background: rgba(255, 255, 255, 0.95);
+  background: ${({ theme }) => theme.colors.background.primary};
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition: all 0.25s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
 
   &:hover {
-    background: #ffffff;
-    border-color: rgba(99, 102, 241, 0.3);
-    color: #6366f1;
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.activeLight};
+    color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 4px 16px ${({ theme }) => theme.colors.shadow.sm};
   }
 `
 
@@ -779,13 +817,13 @@ export const DropdownMenu = styled.div`
   top: 100%;
   right: 0;
   margin-top: 8px;
-  background: rgba(255, 255, 255, 0.98);
+  background: ${({ theme }) => theme.colors.background.primary};
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(229, 231, 235, 0.8);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.08);
+    0 8px 32px ${({ theme }) => theme.colors.shadow.md},
+    0 4px 16px ${({ theme }) => theme.colors.shadow.sm};
   min-width: 160px;
   z-index: 20;
   overflow: hidden;
@@ -811,13 +849,13 @@ export const DropdownButton = styled.button<{ $isDelete?: boolean }>`
   text-align: left;
   font-size: 14px;
   font-weight: 600;
-  color: ${(props) => (props.$isDelete ? '#dc2626' : '#374151')};
+  color: ${(props) => (props.$isDelete ? props.theme.colors.error : props.theme.colors.text.primary)};
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
   border-bottom: ${(props) =>
-    props.$isDelete ? 'none' : '1px solid rgba(241, 245, 249, 0.8)'};
+    props.$isDelete ? 'none' : `1px solid ${props.theme.colors.border.light}`};
   transition: all 0.2s ease;
 
   svg {
@@ -827,9 +865,8 @@ export const DropdownButton = styled.button<{ $isDelete?: boolean }>`
   &:hover {
     background: ${(props) =>
       props.$isDelete
-        ? 'linear-gradient(135deg, rgba(254, 242, 242, 0.8) 0%, rgba(254, 226, 226, 0.6) 100%)'
-        : 'linear-gradient(135deg, rgba(248, 250, 252, 0.8) 0%, rgba(241, 245, 249, 0.6) 100%)'};
-    color: ${(props) => (props.$isDelete ? '#b91c1c' : '#111827')};
+        ? `rgba(255, 69, 58, 0.1)`
+        : props.theme.colors.background.secondary};
 
     svg {
       transform: translateX(2px);
@@ -848,14 +885,14 @@ export const MetaInfoItem = styled.div``
 
 export const MetaInfoLabel = styled.div`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   margin-bottom: 4px;
   font-weight: 500;
 `
 
 export const MetaInfoValue = styled.div`
   font-size: 15px;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 600;
 `
 
@@ -873,18 +910,18 @@ export const DensityUnit = styled.span`
 
 // Map Components - Matching List Design
 export const MapContainer = styled.div`
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
   overflow: hidden;
   height: 560px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-right: none;
   border-top-left-radius: 10px;
   border-bottom-left-radius: 10px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
   transition: all 0.2s ease;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.md};
   }
 
   /* 지도가 컨테이너를 꽉 채우도록 */
@@ -1267,7 +1304,7 @@ export const MilitaryPlaceholder = styled.div`
 
 // Info Table Panel (지도 우측)
 export const InfoTablePanel = styled.div`
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -1277,15 +1314,15 @@ export const InfoTablePanel = styled.div`
 
 export const InfoTableHeader = styled.div`
   padding: 16px 20px;
-  border-bottom: 1px solid #e8eaed;
-  background: #fff;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 export const InfoTableTitle = styled.h3`
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const InfoTableContent = styled.div`
@@ -1298,11 +1335,11 @@ export const InfoTableContent = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f3f4;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 3px;
   }
 `
@@ -1313,11 +1350,11 @@ export const InfoTable = styled.table`
 `
 
 export const InfoTableRow = styled.tr`
-  border-bottom: 1px solid #f1f3f4;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   transition: background 0.15s ease;
 
   &:hover {
-    background: #f8f9fa;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &:last-child {
@@ -1329,14 +1366,14 @@ export const InfoTableLabel = styled.td`
   padding: 12px 20px;
   font-size: 12px;
   font-weight: 400;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
   width: 35%;
 `
 
 export const InfoTableValue = styled.td`
   padding: 12px 20px;
   font-size: 13px;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 400;
 `
 
@@ -1361,16 +1398,15 @@ export const ChartGridTwoCol = styled.div`
 `
 
 // Chart Card (Simplified Design)
-// Chart Card - Matching List Design
 export const ChartCardModern = styled.div`
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 14px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -1396,8 +1432,8 @@ export const ChartCardModern = styled.div`
 
   &:hover {
     transform: translateY(-2px);
-    border-color: #cbd5e1;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
 
     &::before {
       opacity: 1;
@@ -1410,14 +1446,14 @@ export const ChartCardHeader = styled.div`
   flex-direction: column;
   gap: 3px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #f1f5f9;
+  border-bottom: 2px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const ChartCardTitle = styled.h3`
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
   display: flex;
   align-items: center;
@@ -1427,7 +1463,7 @@ export const ChartCardTitle = styled.h3`
 export const ChartCardSubtitle = styled.p`
   margin: 0;
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 `
 
@@ -1469,19 +1505,19 @@ export const TableHeader = styled.th`
   padding: 12px 16px;
   font-size: 12px;
   font-weight: 600;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 2px solid #e5e7eb;
-  background: #f8f9fa;
+  border-bottom: 2px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
 `
 
 export const TableRow = styled.tr`
-  border-bottom: 1px solid #f1f3f4;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   transition: background 0.15s ease;
 
   &:hover {
-    background: #f8f9fa;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &:last-child {
@@ -1492,7 +1528,7 @@ export const TableRow = styled.tr`
 export const TableCell = styled.td<{ $bold?: boolean }>`
   padding: 14px 16px;
   font-size: 14px;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: ${(props) => (props.$bold ? '600' : '400')};
 `
 
@@ -1533,7 +1569,12 @@ export const FlagGradientOverlay = styled.div`
   right: 0;
   bottom: 0;
   background:
-    linear-gradient(105deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 45%, transparent 70%),
+    linear-gradient(
+      105deg,
+      rgba(0, 0, 0, 0.55) 0%,
+      rgba(0, 0, 0, 0.2) 45%,
+      transparent 70%
+    ),
     linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.25) 100%);
   pointer-events: none;
   z-index: 1;
@@ -1720,19 +1761,19 @@ export const BadgeValue = styled.span`
 
 // Region Panel - Matching List Design
 export const RegionPanel = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 10px;
-  border: 1px solid #eceff2;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   flex-direction: column;
   gap: 0;
   height: 560px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
   transition: all 0.2s ease;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.md};
   }
 `
 
@@ -1752,12 +1793,8 @@ export const RegionSectionHeader = styled.div`
   align-items: center;
   gap: 10px;
   padding: 18px 22px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
-  background: linear-gradient(
-    135deg,
-    rgba(248, 250, 252, 0.8) 0%,
-    rgba(241, 245, 249, 0.6) 100%
-  );
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.secondary};
 
   svg {
     color: #4285f4;
@@ -1773,7 +1810,7 @@ export const RegionSectionTitle = styled.h3`
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
 `
 
@@ -1789,12 +1826,12 @@ export const RegionItem = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #f3f4f6;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   transition: background 0.2s ease;
 
   &:hover {
-    background: #f9fafb;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &:last-child {
@@ -1804,13 +1841,13 @@ export const RegionItem = styled.div`
 
 export const RegionLabel = styled.span`
   font-size: 11px;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
 `
 
 export const RegionValue = styled.span`
   font-size: 12px;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 600;
 `
 
@@ -1824,15 +1861,15 @@ export const CityListCompact = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f3f4f6;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 2px;
 
     &:hover {
-      background: #9ca3af;
+      background: ${({ theme }) => theme.colors.border.dark};
     }
   }
 `
@@ -1842,12 +1879,12 @@ export const CityItemCompact = styled.div`
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   transition: background 0.2s ease;
   cursor: pointer;
 
   &:hover {
-    background: #f9fafb;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &:last-child {
@@ -1861,8 +1898,8 @@ export const CityRankSmall = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #e5e7eb;
-  color: #6b7280;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 10px;
   font-weight: 700;
   border-radius: 50%;
@@ -1873,7 +1910,7 @@ export const CityNameCompact = styled.div`
   flex: 1;
   font-size: 12px;
   font-weight: 600;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1882,26 +1919,25 @@ export const CityNameCompact = styled.div`
 
 export const CityPopCompact = styled.div`
   font-size: 10px;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
   flex-shrink: 0;
 `
 
-// Government Panel - 정부부처 및 행정수반
 export const GovernmentPanel = styled.div`
-  background: #ffffff;
-  border-right: 1px solid #eceff2;
-  border-bottom: 1px solid #eceff2;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   flex-direction: column;
   gap: 0;
   height: 560px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
   transition: all 0.2s ease;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.md};
   }
 `
 
@@ -1909,7 +1945,7 @@ export const GovernmentSection = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   overflow: hidden;
   min-height: 0;
 
@@ -1928,15 +1964,15 @@ export const GovernmentList = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f3f4f6;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 2px;
 
     &:hover {
-      background: #9ca3af;
+      background: ${({ theme }) => theme.colors.border.dark};
     }
   }
 `
@@ -1946,11 +1982,11 @@ export const GovernmentItem = styled.div`
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   transition: background 0.2s ease;
 
   &:hover {
-    background: #f9fafb;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &:last-child {
@@ -1961,31 +1997,31 @@ export const GovernmentItem = styled.div`
 export const GovernmentItemName = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const GovernmentItemRole = styled.div`
   font-size: 10px;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
 `
 
 export const LeaderCard = styled.div`
   padding: 16px;
-  background: ${COLORS.headerBg};
-  border-bottom: 1px solid ${COLORS.headerBorder};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
 export const LeaderName = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: ${COLORS.titleText};
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 4px;
 `
 
 export const LeaderTitle = styled.div`
   font-size: 11px;
-  color: ${COLORS.secondaryText};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
   margin-bottom: 8px;
 `
@@ -1995,7 +2031,7 @@ export const LeaderInfo = styled.div`
   flex-direction: column;
   gap: 4px;
   font-size: 10px;
-  color: ${COLORS.lightText};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 export const LeaderInfoRow = styled.div`
@@ -2009,7 +2045,7 @@ export const LeaderInfoLabel = styled.span`
 `
 
 export const LeaderInfoValue = styled.span`
-  color: #374151;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 500;
 `
 
@@ -2518,9 +2554,9 @@ export const TimelineModal = styled.div`
   width: 90%;
   max-width: 700px;
   max-height: 85vh;
-  background: white;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px ${({ theme }) => theme.colors.shadow.xl};
   z-index: 1001;
   overflow: hidden;
   display: flex;
@@ -2533,15 +2569,15 @@ export const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 24px;
-  border-bottom: 1px solid #e8e8e8;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
 `
 
 export const ModalTitle = styled.h3`
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #262626;
+  color: ${({ theme }) => theme.colors.text.primary};
   flex: 1;
 `
 
@@ -2556,11 +2592,11 @@ export const ModalCloseButton = styled.button`
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s ease;
-  color: #8c8c8c;
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   &:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #262626;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -2622,13 +2658,13 @@ export const ModalInfoItem = styled.div`
 
 export const ModalInfoLabel = styled.span`
   font-size: 13px;
-  color: #8c8c8c;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 `
 
 export const ModalInfoValue = styled.span`
   font-size: 15px;
-  color: #262626;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 500;
 `
 
@@ -2636,7 +2672,7 @@ export const ModalDescription = styled.p`
   margin: 16px 0 0 0;
   font-size: 14px;
   line-height: 1.6;
-  color: #595959;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 // 시설 카드
@@ -2705,11 +2741,10 @@ export const PersonRole = styled.div`
   margin-top: 6px;
 `
 
-// Premium KPI Card Styles - Clean Dashboard Design (Like Image)
 export const PremiumCard = styled.div`
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   border-left: none;
   border-right: none;
   border-radius: 0;
@@ -2724,12 +2759,12 @@ export const PremiumCard = styled.div`
 
   /* 첫 번째 카드만 왼쪽 보더 */
   &:first-child {
-    border-left: 1px solid #e5e7eb;
+    border-left: 1px solid ${({ theme }) => theme.colors.border.default};
   }
 
   /* 마지막 카드는 우측 보더 추가 */
   &:last-child {
-    border-right: 1px solid #e5e7eb;
+    border-right: 1px solid ${({ theme }) => theme.colors.border.default};
   }
 
   /* 우측 구분선 - 가운데만 보이도록 (마지막 카드 제외) */
@@ -2740,14 +2775,14 @@ export const PremiumCard = styled.div`
     top: 20%;
     height: 60%;
     width: 1px;
-    background: #e5e7eb;
+    background: ${({ theme }) => theme.colors.border.default};
   }
 
   &:hover {
-    background: #fafbfc;
+    background: ${({ theme }) => theme.colors.background.secondary};
 
     &:not(:last-child)::after {
-      background: #d1d5db;
+      background: ${({ theme }) => theme.colors.border.medium};
     }
   }
 `
@@ -2779,7 +2814,7 @@ export const PremiumCardLabelRow = styled.div`
 export const PremiumCardLabel = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   text-transform: none;
   letter-spacing: -0.02em;
   margin: 0;
@@ -2788,12 +2823,12 @@ export const PremiumCardLabel = styled.div`
 export const PremiumCardRank = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: ${({ theme }) => theme.colors.background.secondary};
   padding: 4px 10px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
 export const PremiumCardValueRow = styled.div`
@@ -2806,7 +2841,7 @@ export const PremiumCardValueRow = styled.div`
 export const PremiumCardValue = styled.div`
   font-size: 36px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1;
   letter-spacing: -0.02em;
 `
@@ -2822,7 +2857,7 @@ export const PremiumCardBottomRow = styled.div`
 export const PremiumCardYear = styled.div`
   font-size: 11px;
   font-weight: 500;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   letter-spacing: 0.02em;
 `
 

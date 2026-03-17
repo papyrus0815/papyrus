@@ -103,6 +103,17 @@ export const LoadingText = styled.div`
   letter-spacing: 0.01em;
 `
 
+// ─── 탭 콘텐츠 공통 패널 (government / person 탭 등) ─────────────────────────
+
+export const TabContentPane = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 28px 32px 40px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  flex: 1;
+  min-height: 0;
+`
+
 // ─── Analytics 대시보드 ───────────────────────────────────────────────────────
 
 export const AnalyticsDashboard = styled.div`

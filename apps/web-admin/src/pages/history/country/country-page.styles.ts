@@ -537,27 +537,42 @@ export const MobileDashboardText = styled.p`
 `
 
 export const MobileViewSwitcher = styled.div`
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 10px;
+  display: none;
+
+  @media (max-width: 1024px) {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-radius: 10px;
+  }
 `
 
 export const ViewSwitchButton = styled.button<{ $active?: boolean }>`
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+  gap: 6px;
+  padding: 8px 14px;
+  height: 36px;
   border: none;
   border-radius: 8px;
   background: ${({ $active, theme }) =>
     $active ? theme.colors.background.primary : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.primary : theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.colors.background.primary
+        : theme.colors.background.tertiary};
+  }
 `
 
 export const MobileSearchWrapper = styled.div`

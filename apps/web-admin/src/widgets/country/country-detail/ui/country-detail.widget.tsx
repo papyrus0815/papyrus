@@ -5,15 +5,14 @@ import { FiPlus, FiSettings } from 'react-icons/fi'
 
 import { type ContinentOption, type Country } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import * as CountryStyles from './country-detail.styles'
 
 import * as CountryDetailStyles from './CountryDetail.styles'
 import { LoadingOverlay } from './LoadingOverlay'
 import { type OverviewSubTab, OverviewSubTabs } from './OverviewSubTabs'
 import { PersonTabContent } from './PersonTabContent'
-import { StatisticsModal } from './StatisticsModal'
 import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
+import * as CountryStyles from './country-detail.styles'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
@@ -124,10 +123,7 @@ function CountryDetailInner({
     longitude: number
     name: string
   } | null>(null)
-  const [isPopulationModalOpen, setIsPopulationModalOpen] = useState(false)
-  const [isGdpModalOpen, setIsGdpModalOpen] = useState(false)
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
-
   // 선택된 행정구역 정보 상태
   const [selectedRegionInfo, setSelectedRegionInfo] = useState<{
     name: string
@@ -205,19 +201,6 @@ function CountryDetailInner({
   }
 
   const continent = continents.find((cont) => cont.id === country.continentId)
-  const populationFormatted = country.population
-    ? Number(country.population).toLocaleString('ko-KR')
-    : '-'
-  const areaFormatted = country.areaSqKm
-    ? `${Number(country.areaSqKm).toLocaleString()}km²`
-    : '-'
-  const densityFormatted =
-    country.population && country.areaSqKm
-      ? Math.round(
-          Number(country.population) / Number(country.areaSqKm),
-        ).toLocaleString('ko-KR')
-      : '-'
-  const gdpPerCapitaFormatted = '$45,000'
 
   const handleCityClick = (
     city: (typeof mockCities)[0] & {
@@ -357,16 +340,7 @@ function CountryDetailInner({
                       )}
 
                       {activeSubTab === 'government' && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            padding: '28px 32px 40px',
-                            background: '#ffffff',
-                            flex: 1,
-                            minHeight: 0,
-                          }}
-                        >
+                        <CountryStyles.TabContentPane>
                           <GovernmentInfoSection
                             country={country}
                             countryId={country.id}
@@ -381,7 +355,7 @@ function CountryDetailInner({
                               initialDetailTab === 'heads' ? 'heads' : undefined
                             }
                           />
-                        </div>
+                        </CountryStyles.TabContentPane>
                       )}
 
                       {activeSubTab === 'ethnicity' && (
@@ -389,16 +363,7 @@ function CountryDetailInner({
                       )}
 
                       {activeSubTab === 'person' && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            padding: '28px 32px 40px',
-                            background: '#ffffff',
-                            flex: 1,
-                            minHeight: 0,
-                          }}
-                        >
+                        <CountryStyles.TabContentPane>
                           <CountryDetailStyles.PersonTabSharedHeader>
                             <CountryDetailStyles.PersonTabSharedHeaderLeft>
                               <CountryDetailStyles.PersonTabSharedTitle>
@@ -420,50 +385,26 @@ function CountryDetailInner({
                             </CountryDetailStyles.PersonTabSharedHeaderLeft>
                             <CountryDetailStyles.PersonTabSharedHeaderRight>
                               {personInnerTab === 'stats' && (
-                                <button
+                                <CountryDetailStyles.HeaderActionButton
                                   type="button"
                                   onClick={() => setCategoryCrudModalOpen(true)}
                                   aria-label="관직 카테고리 관리"
                                   title="관직 카테고리 관리"
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 7,
-                                    padding: '8px 14px',
-                                    borderRadius: 10,
-                                    border: '1px solid #e5e7eb',
-                                    background: '#fff',
-                                    color: '#64748b',
-                                    cursor: 'pointer',
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                  }}
                                 >
                                   <FiSettings size={15} />
                                   관직 카테고리
-                                </button>
+                                </CountryDetailStyles.HeaderActionButton>
                               )}
                               {personInnerTab === 'list' && (
-                                <button
+                                <CountryDetailStyles.HeaderIconButton
                                   type="button"
                                   onClick={() =>
                                     setPersonRegisterTrigger((r) => r + 1)
                                   }
                                   aria-label="인물 등록"
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    padding: '8px',
-                                    borderRadius: 10,
-                                    border: '1px solid #e5e7eb',
-                                    background: '#fff',
-                                    color: '#64748b',
-                                    cursor: 'pointer',
-                                  }}
                                 >
                                   <FiPlus size={16} />
-                                </button>
+                                </CountryDetailStyles.HeaderIconButton>
                               )}
                             </CountryDetailStyles.PersonTabSharedHeaderRight>
                           </CountryDetailStyles.PersonTabSharedHeader>
@@ -520,7 +461,7 @@ function CountryDetailInner({
                               registerTrigger={personRegisterTrigger}
                             />
                           )}
-                        </div>
+                        </CountryStyles.TabContentPane>
                       )}
 
                       {activeSubTab === 'history' && (
@@ -532,25 +473,6 @@ function CountryDetailInner({
               </motion.div>
             </CountryStyles.AnalyticsDashboard>
 
-            {isPopulationModalOpen && (
-              <StatisticsModal
-                isOpen={isPopulationModalOpen}
-                onClose={() => setIsPopulationModalOpen(false)}
-                title="인구 통계"
-                countryId={country.id}
-                type="population"
-              />
-            )}
-
-            {isGdpModalOpen && (
-              <StatisticsModal
-                isOpen={isGdpModalOpen}
-                onClose={() => setIsGdpModalOpen(false)}
-                title="1인당 GDP"
-                countryId={country.id}
-                type="gdp"
-              />
-            )}
           </motion.div>
         )}
       </AnimatePresence>

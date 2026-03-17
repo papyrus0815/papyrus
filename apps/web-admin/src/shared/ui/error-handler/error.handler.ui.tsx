@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import * as S from './error-handler.styles'
+import React, { useEffect, useState } from 'react'
+
 import { Button } from '../button'
+import * as S from './error-handler.styles'
 
 // --- 타입 정의 ---
 type ErrorHandlerProps = {

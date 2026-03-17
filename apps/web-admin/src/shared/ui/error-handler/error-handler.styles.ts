@@ -93,10 +93,6 @@ export const FloatingElements = styled.div`
   overflow: hidden;
 `
 
-export const FloatingDot = styled.div<{ $delay: number }>`
-  display: none;
-`
-
 export const ErrorCard = styled.div<{ $isVisible: boolean }>`
   position: relative;
   max-width: 600px;
@@ -203,22 +199,10 @@ export const RobotMouth = styled.div`
   border-radius: 0 0 12px 12px;
 `
 
-export const RobotBody = styled.div`
-  display: none;
-`
-
 export const HeartIcon = styled.div`
   font-size: 32px;
   animation: ${pulse} 2s ease-in-out infinite;
   filter: drop-shadow(0 4px 8px rgba(239, 68, 68, 0.4));
-`
-
-export const ErrorWaves = styled.div`
-  display: none;
-`
-
-export const Wave = styled.div<{ $delay: number }>`
-  display: none;
 `
 
 export const ContentContainer = styled.div`
