@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   useDynasties,
@@ -52,14 +52,7 @@ export const DynastyPage = () => {
         <HeaderContent>
           <Title>가문 관리</Title>
           <CreateButton onClick={handleCreate}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -88,14 +81,7 @@ export const DynastyPage = () => {
                       </DynastyImage>
                     ) : (
                       <DynastyImagePlaceholder>
-                        <svg
-                          width="48"
-                          height="48"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                        >
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                           <polyline points="9 22 9 12 15 12 15 22" />
                         </svg>
@@ -107,34 +93,19 @@ export const DynastyPage = () => {
                   <DynastyInfo>
                     <DynastyName>{dynasty.name}</DynastyName>
                     {dynasty.description && (
-                      <DynastyDescription>
-                        {dynasty.description}
-                      </DynastyDescription>
+                      <DynastyDescription>{dynasty.description}</DynastyDescription>
                     )}
-
                     {(dynasty.startDate || dynasty.endDate) && (
                       <DynastyMeta>
                         <MetaItem>
                           <MetaIcon>📅</MetaIcon>
                           <MetaText>
                             {dynasty.startDate
-                              ? new Date(dynasty.startDate).toLocaleDateString(
-                                  'ko-KR',
-                                  {
-                                    year: 'numeric',
-                                    month: 'long',
-                                  },
-                                )
+                              ? new Date(dynasty.startDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })
                               : '시작일 미정'}
                             {' ~ '}
                             {dynasty.endDate
-                              ? new Date(dynasty.endDate).toLocaleDateString(
-                                  'ko-KR',
-                                  {
-                                    year: 'numeric',
-                                    month: 'long',
-                                  },
-                                )
+                              ? new Date(dynasty.endDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })
                               : '현재'}
                           </MetaText>
                         </MetaItem>
@@ -144,28 +115,14 @@ export const DynastyPage = () => {
 
                   <DynastyActions>
                     <ActionButton onClick={() => handleEdit(dynasty)}>
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                       </svg>
                       수정
                     </ActionButton>
                     <DeleteButton onClick={() => handleDelete(dynasty.id)}>
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
@@ -179,14 +136,7 @@ export const DynastyPage = () => {
           {!dynasties || !Array.isArray(dynasties) || dynasties.length === 0 ? (
             <EmptyState>
               <EmptyIcon>
-                <svg
-                  width="64"
-                  height="64"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                   <polyline points="9 22 9 12 15 12 15 22" />
                 </svg>
@@ -209,15 +159,22 @@ export const DynastyPage = () => {
 
 const Container = styled.div`
   min-height: 100vh;
-  background: #f8fafc;
+  background: ${({ theme }) => theme.mode === 'dark' ? '#0f0f0f' : '#f8fafc'};
 `
 
 const Header = styled.div`
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
   z-index: 10;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(15, 15, 15, 0.85);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  ` : css`
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+  `}
 `
 
 const HeaderContent = styled.div`
@@ -233,7 +190,7 @@ const Title = styled.h1`
   margin: 0;
   font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#1e293b'};
 `
 
 const CreateButton = styled.button`
@@ -269,17 +226,28 @@ const DynastyGrid = styled.div`
 `
 
 const DynastyCard = styled.div`
-  background: white;
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid #f1f5f9;
-
-  &:hover {
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
-    border-color: #e2e8f0;
-  }
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    &:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.14);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+  ` : css`
+    background: white;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    &:hover {
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+      border-color: #e2e8f0;
+    }
+  `}
 `
 
 const CardHeader = styled.div`
@@ -293,13 +261,20 @@ const CardBadge = styled.div`
   top: 16px;
   right: 16px;
   padding: 6px 14px;
-  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 20px;
   font-size: 12px;
   font-weight: 700;
-  color: #667eea;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(102, 126, 234, 0.25);
+    border: 1px solid rgba(102, 126, 234, 0.4);
+    color: #a5b4fc;
+  ` : css`
+    background: rgba(255, 255, 255, 0.95);
+    color: #667eea;
+  `}
 `
 
 const DynastyImage = styled.div`
@@ -337,19 +312,19 @@ const DynastyName = styled.h3`
   margin: 0 0 12px;
   font-size: 22px;
   font-weight: 700;
-  color: #1e293b;
   letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#1e293b'};
 `
 
 const DynastyDescription = styled.p`
   margin: 0 0 16px;
   font-size: 14px;
-  color: #64748b;
   line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
 `
 
 const DynastyMeta = styled.div`
@@ -371,16 +346,21 @@ const MetaIcon = styled.span`
 
 const MetaText = styled.span`
   font-size: 13px;
-  color: #64748b;
   font-weight: 500;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
 `
 
 const DynastyActions = styled.div`
   display: flex;
   gap: 8px;
   padding: 16px 24px;
-  border-top: 1px solid #f1f5f9;
-  background: #fafbfc;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.02);
+  ` : css`
+    border-top: 1px solid #f1f5f9;
+    background: #fafbfc;
+  `}
 `
 
 const ActionButton = styled.button`
@@ -390,29 +370,46 @@ const ActionButton = styled.button`
   justify-content: center;
   gap: 6px;
   padding: 11px;
-  background: white;
-  color: #475569;
-  border: 1px solid #e2e8f0;
   border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-
-  &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-    transform: translateY(-1px);
-  }
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+      transform: translateY(-1px);
+    }
+  ` : css`
+    background: white;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    &:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      transform: translateY(-1px);
+    }
+  `}
 `
 
 const DeleteButton = styled(ActionButton)`
-  color: #dc2626;
-
-  &:hover {
-    background: #fef2f2;
-    border-color: #fecaca;
-  }
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    color: #f87171;
+    &:hover {
+      background: rgba(248, 113, 113, 0.12);
+      border-color: rgba(248, 113, 113, 0.3);
+    }
+  ` : css`
+    color: #dc2626;
+    &:hover {
+      background: #fef2f2;
+      border-color: #fecaca;
+    }
+  `}
 `
 
 const EmptyState = styled.div`
@@ -428,26 +425,31 @@ const EmptyState = styled.div`
 const EmptyIcon = styled.div`
   width: 80px;
   height: 80px;
-  background: #f1f5f9;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 24px;
-  color: #94a3b8;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(255, 255, 255, 0.06);
+    color: #475569;
+  ` : css`
+    background: #f1f5f9;
+    color: #94a3b8;
+  `}
 `
 
 const EmptyTitle = styled.h3`
   margin: 0 0 8px;
   font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#e2e8f0' : '#1e293b'};
 `
 
 const EmptyDescription = styled.p`
   margin: 0;
   font-size: 15px;
-  color: #64748b;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 `
 
 const LoadingWrapper = styled.div`
@@ -462,20 +464,18 @@ const LoadingWrapper = styled.div`
 const LoadingSpinner = styled.div`
   width: 40px;
   height: 40px;
-  border: 3px solid #f1f5f9;
+  border: 3px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
   border-top-color: #667eea;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 
   @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
   }
 `
 
 const LoadingText = styled.div`
   font-size: 15px;
-  color: #64748b;
   font-weight: 500;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 `

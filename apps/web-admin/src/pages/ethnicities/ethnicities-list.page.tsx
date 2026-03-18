@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiPlus, FiEdit2, FiTrash2, FiUsers } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
@@ -14,18 +14,22 @@ const Page = styled.div`
   max-width: 1000px;
   margin: 0 auto;
 `
+
 const Title = styled.h1`
   font-size: 1.5rem;
   margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
 `
+
 const Subtitle = styled.p`
-  color: #64748b;
   font-size: 0.875rem;
   margin-bottom: 1.25rem;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 `
+
 const Toolbar = styled.div`
   display: flex;
   align-items: center;
@@ -34,29 +38,66 @@ const Toolbar = styled.div`
   margin-bottom: 1rem;
   flex-wrap: wrap;
 `
+
 const SearchInput = styled.input`
   padding: 0.5rem 0.75rem;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
   min-width: 200px;
   font-size: 0.875rem;
+  transition: all 0.2s;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f1f5f9;
+    &::placeholder { color: #475569; }
+    &:focus {
+      outline: none;
+      border-color: rgba(99, 102, 241, 0.5);
+      background: rgba(255, 255, 255, 0.07);
+    }
+  ` : css`
+    background: white;
+    border: 1px solid #e5e7eb;
+    color: #0f172a;
+    &:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+  `}
 `
-const Btn = styled.button<{ $primary?: boolean }>`
+
+const Btn = styled.button<{ $primary?: boolean; $danger?: boolean }>`
   padding: 0.5rem 1rem;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  background: ${(p) => (p.$primary ? '#6366f1' : '#fff')};
-  color: ${(p) => (p.$primary ? '#fff' : '#374151')};
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
   font-weight: 500;
-  &:hover {
-    opacity: 0.9;
-  }
+  transition: all 0.2s;
+  &:hover { opacity: 0.9; }
+  ${({ theme, $primary, $danger }) => {
+    if ($primary) return css`background: #6366f1; color: white; border: none;`
+    if ($danger && theme.mode === 'dark') return css`
+      background: rgba(248, 113, 113, 0.1);
+      color: #f87171;
+      border: 1px solid rgba(248, 113, 113, 0.25);
+    `
+    if (theme.mode === 'dark') return css`
+      background: rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      &:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+    `
+    return css`
+      background: white;
+      color: ${$danger ? '#b91c1c' : '#374151'};
+      border: 1px solid ${$danger ? '#fecaca' : '#e5e7eb'};
+    `
+  }}
 `
+
 const List = styled.ul`
   list-style: none;
   padding: 0;
@@ -65,50 +106,87 @@ const List = styled.ul`
   flex-direction: column;
   gap: 8px;
 `
+
 const ListItem = styled.li<{ $selected?: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  background: ${(p) => (p.$selected ? '#eef2ff' : '#fff')};
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  &:hover {
-    background: #f8fafc;
-    border-color: #c7d2fe;
-  }
+  transition: all 0.15s;
+  ${({ theme, $selected }) => theme.mode === 'dark' ? css`
+    background: ${$selected ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255, 255, 255, 0.04)'};
+    border: 1px solid ${$selected ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.08)'};
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    &:hover {
+      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+  ` : css`
+    background: ${$selected ? '#eef2ff' : 'white'};
+    border: 1px solid ${$selected ? '#c7d2fe' : '#e5e7eb'};
+    &:hover {
+      background: #f8fafc;
+      border-color: #c7d2fe;
+    }
+  `}
 `
+
 const Thumb = styled.div`
   width: 40px;
   height: 40px;
   border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
-  background: #f1f5f9;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.25rem;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
 `
+
 const ItemContent = styled.div`
   flex: 1;
   min-width: 0;
 `
+
 const ItemName = styled.div`
   font-weight: 600;
-  color: #0f172a;
   font-size: 0.9375rem;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
 `
+
 const ItemMeta = styled.div`
   font-size: 0.75rem;
-  color: #64748b;
   margin-top: 2px;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 `
+
 const ItemActions = styled.div`
   display: flex;
   gap: 8px;
+`
+
+const EmptyBox = styled.div`
+  padding: 48px;
+  text-align: center;
+  border-radius: 16px;
+  font-size: 14px;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #64748b;
+  ` : css`
+    background: #f8fafc;
+    color: #64748b;
+  `}
+`
+
+const LoadingText = styled.p`
+  font-size: 14px;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#475569' : '#64748b'};
 `
 
 export const EthnicitiesListPage: React.FC = () => {
@@ -127,17 +205,13 @@ export const EthnicitiesListPage: React.FC = () => {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => {
-    load()
-  }, [])
+  useEffect(() => { load() }, [])
 
   const filtered = React.useMemo(() => {
     if (!search.trim()) return list
     const q = search.trim().toLowerCase()
     return list.filter(
-      (e) =>
-        e.name.toLowerCase().includes(q) ||
-        (e.nameLocal?.toLowerCase().includes(q) ?? false),
+      (e) => e.name.toLowerCase().includes(q) || (e.nameLocal?.toLowerCase().includes(q) ?? false),
     )
   }, [list, search])
 
@@ -180,20 +254,11 @@ export const EthnicitiesListPage: React.FC = () => {
       </Toolbar>
 
       {loading ? (
-        <p style={{ color: '#64748b', fontSize: 14 }}>불러오는 중...</p>
+        <LoadingText>불러오는 중...</LoadingText>
       ) : filtered.length === 0 ? (
-        <div
-          style={{
-            padding: 48,
-            textAlign: 'center',
-            background: '#f8fafc',
-            borderRadius: 16,
-            color: '#64748b',
-            fontSize: 14,
-          }}
-        >
+        <EmptyBox>
           {search ? '검색 결과가 없습니다.' : '등록된 민족이 없습니다. 민족 추가로 등록하세요.'}
-        </div>
+        </EmptyBox>
       ) : (
         <List>
           {filtered.map((e, idx) => (
@@ -208,14 +273,8 @@ export const EthnicitiesListPage: React.FC = () => {
             >
               <Thumb>
                 {e.thumbnailUrl ? (
-                  <img
-                    src={getUploadImageUrl(e.thumbnailUrl)}
-                    alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  '👥'
-                )}
+                  <img src={getUploadImageUrl(e.thumbnailUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : '👥'}
               </Thumb>
               <ItemContent>
                 <ItemName>{e.name}</ItemName>
@@ -225,19 +284,10 @@ export const EthnicitiesListPage: React.FC = () => {
                 </ItemMeta>
               </ItemContent>
               <ItemActions>
-                <Btn
-                  type="button"
-                  onClick={(ev) => handleEdit(e.id, ev)}
-                  title="수정"
-                >
+                <Btn type="button" onClick={(ev) => handleEdit(e.id, ev)} title="수정">
                   <FiEdit2 size={16} />
                 </Btn>
-                <Btn
-                  type="button"
-                  onClick={(ev) => handleDelete(e.id, e.name, ev)}
-                  title="삭제"
-                  style={{ color: '#b91c1c', borderColor: '#fecaca' }}
-                >
+                <Btn type="button" $danger onClick={(ev) => handleDelete(e.id, e.name, ev)} title="삭제">
                   <FiTrash2 size={16} />
                 </Btn>
               </ItemActions>

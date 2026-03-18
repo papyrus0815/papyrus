@@ -1,19 +1,17 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 
 import { createPortal } from 'react-dom'
 
 import { AnimatePresence, motion } from 'framer-motion'
 
-import { type ContinentOption, type Country } from '@/entities/country/api'
 import {
   COUNTRY_TYPE_LABELS,
-  type CountryTypeFilter,
   type UnifiedCountry,
 } from '@/entities/country/model/unified-types'
-import * as S from './country-list.styles'
 import { getUploadImageUrl } from '@/shared/api/upload'
 
 import { useCountryListState } from '../country-list-state.context'
+import * as S from './country-list.styles'
 import { PersonRegisterViewModal } from './person-register-view-modal'
 
 // Dashboard summary SVG icons
@@ -305,7 +303,7 @@ function CountryListInner({
   }, [filtered, continents, countryTypeFilter])
 
   // 액티브 국가가 변경되면 자동으로 펼치기
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedId) {
       setExpandedCountries((prev) => {
         const newSet = new Set<string>()

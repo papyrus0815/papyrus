@@ -2,7 +2,7 @@
  * List Styled Components
  * 이벤트 리스트 관련 스타일
  */
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import type { HistoricalEventCategory } from '../create/events.types'
 import { CATEGORY_BADGE_COLORS } from './theme'
@@ -21,17 +21,14 @@ export const CompactList = styled.div`
   &::-webkit-scrollbar {
     width: 6px;
   }
-
   &::-webkit-scrollbar-track {
     background: transparent;
     border-radius: 3px;
   }
-
   &::-webkit-scrollbar-thumb {
     background: rgba(99, 102, 241, 0.2);
     border-radius: 3px;
   }
-
   &::-webkit-scrollbar-thumb:hover {
     background: rgba(99, 102, 241, 0.3);
   }
@@ -45,28 +42,11 @@ export const CompactListItem = styled.div<{
   $active: boolean
   $depth: number
 }>`
-  border: 1.5px solid
-    ${({ $active, $depth }) =>
-      $active
-        ? 'rgba(99, 102, 241, 0.4)'
-        : $depth > 0
-          ? 'rgba(99, 102, 241, 0.08)'
-          : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 14px;
   padding: 0;
   margin-left: ${({ $depth }) => $depth * 24}px;
-  background: ${({ $active, $depth }) =>
-    $active
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.06))'
-      : $depth > 0
-        ? 'rgba(248, 250, 252, 0.8)'
-        : '#ffffff'};
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: ${({ $active, $depth }) =>
-    $active
-      ? '0 2px 8px rgba(99, 102, 241, 0.12)'
-      : '0 1px 3px rgba(0, 0, 0, 0.04)'};
   position: relative;
   display: flex;
   animation: fadeIn 0.3s ease-out;
@@ -82,12 +62,10 @@ export const CompactListItem = styled.div<{
     }
   }
 
-  /* 선택 상태 좌측 강조 */
   border-left: ${({ $active }) =>
-    $active ? '4px solid #6366f1' : '1.5px solid rgba(20, 19, 34, 0.08)'};
-  padding-left: ${({ $active }) => ($active ? '0' : '0')};
+    $active ? '4px solid #6366f1' : '1.5px solid transparent'};
 
-  /* 타임라인 연결선 - depth에 따라 위치 조정 */
+  /* 타임라인 연결선 */
   &::before {
     content: '';
     position: absolute;
@@ -99,38 +77,98 @@ export const CompactListItem = styled.div<{
     transition: all 0.2s ease;
   }
 
-  /* 타임라인 점 - depth에 따라 위치 조정 */
-  &::after {
-    content: '';
-    position: absolute;
-    left: ${({ $depth }) => -41 - $depth * 24}px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: ${({ $active }) => ($active ? '10px' : '8px')};
-    height: ${({ $active }) => ($active ? '10px' : '8px')};
-    background: ${({ $active }) => ($active ? '#6366f1' : '#ffffff')};
-    border: 2px solid
-      ${({ $active }) => ($active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)')};
-    border-radius: 50%;
-    box-shadow: 0 0 0 2px #ffffff;
-    transition: all 0.2s ease;
-    z-index: 1;
+  &:hover::before {
+    width: ${({ $depth }) => 40 + $depth * 24}px;
   }
 
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    transform: translateX(2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
-
-    &::before {
-      width: ${({ $depth }) => 40 + $depth * 24}px;
-    }
-
-    &::after {
-      background: #6366f1;
-      transform: translateY(-50%) scale(1.15);
-    }
-  }
+  ${({ theme, $active, $depth }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$active
+            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
+            : $depth > 0
+              ? 'rgba(255, 255, 255, 0.03)'
+              : 'rgba(255, 255, 255, 0.04)'};
+          border: 1.5px solid
+            ${$active
+              ? 'rgba(99, 102, 241, 0.4)'
+              : $depth > 0
+                ? 'rgba(99, 102, 241, 0.1)'
+                : 'rgba(255, 255, 255, 0.07)'};
+          border-left: ${$active
+            ? '4px solid #6366f1'
+            : `1.5px solid ${$depth > 0 ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255, 255, 255, 0.07)'}`};
+          box-shadow: ${$active
+            ? '0 2px 8px rgba(99, 102, 241, 0.15)'
+            : 'none'};
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateX(2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+          }
+          &::after {
+            content: '';
+            position: absolute;
+            left: ${-41 - $depth * 24}px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: ${$active ? '10px' : '8px'};
+            height: ${$active ? '10px' : '8px'};
+            background: ${$active ? '#6366f1' : 'rgba(30, 30, 40, 0.9)'};
+            border: 2px solid ${$active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)'};
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px rgba(15, 15, 15, 0.8);
+            transition: all 0.2s ease;
+            z-index: 1;
+          }
+          &:hover::after {
+            background: #6366f1;
+            transform: translateY(-50%) scale(1.15);
+          }
+        `
+      : css`
+          background: ${$active
+            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.06))'
+            : $depth > 0
+              ? 'rgba(248, 250, 252, 0.8)'
+              : '#ffffff'};
+          border: 1.5px solid
+            ${$active
+              ? 'rgba(99, 102, 241, 0.4)'
+              : $depth > 0
+                ? 'rgba(99, 102, 241, 0.08)'
+                : 'rgba(20, 19, 34, 0.08)'};
+          border-left: ${$active
+            ? '4px solid #6366f1'
+            : `1.5px solid ${$depth > 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(20, 19, 34, 0.08)'}`};
+          box-shadow: ${$active
+            ? '0 2px 8px rgba(99, 102, 241, 0.12)'
+            : '0 1px 3px rgba(0, 0, 0, 0.04)'};
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateX(2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+          }
+          &::after {
+            content: '';
+            position: absolute;
+            left: ${-41 - $depth * 24}px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: ${$active ? '10px' : '8px'};
+            height: ${$active ? '10px' : '8px'};
+            background: ${$active ? '#6366f1' : '#ffffff'};
+            border: 2px solid ${$active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)'};
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px #ffffff;
+            transition: all 0.2s ease;
+            z-index: 1;
+          }
+          &:hover::after {
+            background: #6366f1;
+            transform: translateY(-50%) scale(1.15);
+          }
+        `}
 
   @media (max-width: 768px) {
     min-height: ${({ $depth }) => Math.max(80, 100 - $depth * 10)}px;
@@ -166,7 +204,7 @@ export const CompactThumbnail = styled.div<{
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     &::before {
       content: '';
       width: 24px;
@@ -206,7 +244,7 @@ export const CompactCategoryBadge = styled.span<{
   letter-spacing: 0.05em;
   background: ${({ $category }) => {
     const color = CATEGORY_BADGE_COLORS[$category]
-    return `${color}E6` // 90% opacity
+    return `${color}E6`
   }};
 `
 
@@ -215,7 +253,7 @@ export const CompactListContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 12px 14px 12px 14px;
+  padding: 12px 14px;
   min-width: 0;
 `
 
@@ -228,27 +266,38 @@ export const CompactListHeader = styled.div`
 `
 
 export const ExpandButton = styled.button`
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  background: #fff;
+  border-radius: 6px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
-  border-radius: 6px;
   color: #6366f1;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
   margin-top: 1px;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: rgba(99, 102, 241, 0.35);
-    color: #4f46e5;
-    transform: scale(1.1);
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(99, 102, 241, 0.12);
+          border: 1px solid rgba(99, 102, 241, 0.25);
+          &:hover {
+            background: rgba(99, 102, 241, 0.22);
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: scale(1.1);
+          }
+        `
+      : css`
+          background: #fff;
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          &:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.35);
+            transform: scale(1.1);
+          }
+        `}
 `
 
 export const ExpandSpacer = styled.span`
@@ -276,7 +325,6 @@ export const CompactListTitle = styled.h4`
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
   line-height: 1.4;
   flex: 1;
   min-width: 0;
@@ -284,6 +332,7 @@ export const CompactListTitle = styled.h4`
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#0f172a')};
 
   @media (max-width: 768px) {
     font-size: 14px;
@@ -296,7 +345,7 @@ export const CompactListMeta = styled.div<{ $depth: number }>`
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#64748b')};
 
   span {
     line-height: 1;
@@ -312,7 +361,7 @@ export const TimelineDateWrapper = styled.div`
   flex-direction: column;
   gap: 4px;
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#64748b')};
 `
 
 export const TimelineDateRow = styled.div`
@@ -323,27 +372,33 @@ export const TimelineDateRow = styled.div`
 
   &::before {
     content: '━━━';
-    color: #cbd5e1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#334155' : '#cbd5e1')};
     letter-spacing: -2px;
   }
 `
 
 export const TimelineDuration = styled.div`
   font-size: 10px;
-  color: #94a3b8;
   text-align: center;
   font-weight: 600;
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   padding: 2px 8px;
   border-radius: 10px;
   display: inline-block;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#94a3b8')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.06)'
+      : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)'};
 `
 
 export const LoadingSpinner = styled.div`
   width: 24px;
   height: 24px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #94a3b8;
+  border: 3px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+  border-top-color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#6366f1' : '#94a3b8'};
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 
@@ -367,7 +422,6 @@ export const YearDivider = styled.button`
   transition: all 0.3s ease;
   position: relative;
 
-  /* 타임라인 점 (년도 마커) - CompactList 기준 33px */
   &::before {
     content: '';
     position: absolute;
@@ -376,7 +430,8 @@ export const YearDivider = styled.button`
     width: 14px;
     height: 14px;
     background: #6366f1;
-    border: 3px solid #ffffff;
+    border: 3px solid
+      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f0f' : '#ffffff')};
     border-radius: 50%;
     box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
     z-index: 2;
@@ -391,17 +446,27 @@ export const YearDivider = styled.button`
     margin-left: 60px;
     font-size: 11px;
     font-weight: 600;
-    color: #475569;
-    background: #ffffff;
     padding: 4px 12px;
     border-radius: 8px;
-    border: 1px solid rgba(203, 213, 225, 0.5);
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 5px;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? css`
+            color: #94a3b8;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: none;
+          `
+        : css`
+            color: #475569;
+            background: #ffffff;
+            border: 1px solid rgba(203, 213, 225, 0.5);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          `}
 
     svg {
       transition: transform 0.2s ease;
@@ -428,7 +493,6 @@ export const CollapsedCount = styled.span`
   flex-shrink: 0;
 `
 
-/** 같은 연도 내 같은 취임일자(날짜) 묶음 접기용 */
 export const DateDivider = styled.button`
   display: flex;
   align-items: center;
@@ -456,13 +520,21 @@ export const DateDivider = styled.button`
     margin-left: 52px;
     font-size: 11px;
     font-weight: 500;
-    color: #64748b;
     padding: 2px 10px;
     border-radius: 6px;
-    border: 1px solid rgba(203, 213, 225, 0.4);
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? css`
+            color: #64748b;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+          `
+        : css`
+            color: #64748b;
+            border: 1px solid rgba(203, 213, 225, 0.4);
+          `}
 
     svg {
       transition: transform 0.2s ease;
@@ -480,22 +552,30 @@ export const SimpleYearLabel = styled.div`
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 600;
-  color: #94a3b8;
   background: transparent;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#94a3b8')};
 `
 
 export const CollapsedPlaceholder = styled.div`
   margin: 0 0 16px 0;
   padding: 16px 20px;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.03) 0%,
-    rgba(168, 85, 247, 0.02) 100%
-  );
-  border: 1px dashed rgba(99, 102, 241, 0.2);
   border-radius: 12px;
   text-align: center;
   position: relative;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(99, 102, 241, 0.03);
+          border: 1px dashed rgba(99, 102, 241, 0.15);
+        `
+      : css`
+          background: linear-gradient(
+            135deg,
+            rgba(99, 102, 241, 0.03) 0%,
+            rgba(168, 85, 247, 0.02) 100%
+          );
+          border: 1px dashed rgba(99, 102, 241, 0.2);
+        `}
 
   &::before {
     content: '';
@@ -504,7 +584,6 @@ export const CollapsedPlaceholder = styled.div`
     top: 50%;
     width: 38px;
     height: 1px;
-    background: rgba(99, 102, 241, 0.15);
     border-top: 1px dashed rgba(99, 102, 241, 0.2);
   }
 
@@ -519,20 +598,20 @@ export const CollapsedPlaceholder = styled.div`
     background: rgba(99, 102, 241, 0.2);
     border: 2px solid rgba(99, 102, 241, 0.3);
     border-radius: 50%;
-    box-shadow: 0 0 0 2px #ffffff;
+    box-shadow: 0 0 0 2px
+      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f0f' : '#ffffff')};
   }
 
   span {
     font-size: 11px;
-    color: #94a3b8;
     font-weight: 500;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#94a3b8')};
   }
 `
 
 export const CompactListSummary = styled.p<{ $depth: number }>`
   margin: 0;
   font-size: 12px;
-  color: #475569;
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -540,6 +619,7 @@ export const CompactListSummary = styled.p<{ $depth: number }>`
   overflow: hidden;
   word-break: break-word;
   overflow-wrap: break-word;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#475569')};
 
   @media (max-width: 768px) {
     font-size: 13px;
@@ -569,7 +649,6 @@ export const EmptyCatalogState = styled.div`
   position: relative;
   margin-left: 40px;
 
-  /* 타임라인 세로선 연장 */
   &::before {
     content: '';
     position: absolute;
@@ -579,13 +658,18 @@ export const EmptyCatalogState = styled.div`
     width: 2px;
     background: linear-gradient(
       to bottom,
-      #e2e8f0 0%,
-      #cbd5e1 50%,
-      #e2e8f0 100%
+      ${({ theme }) =>
+          theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.15)' : '#e2e8f0'}
+        0%,
+      ${({ theme }) =>
+          theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.25)' : '#cbd5e1'}
+        50%,
+      ${({ theme }) =>
+          theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.15)' : '#e2e8f0'}
+        100%
     );
   }
 
-  /* 타임라인 점 */
   &::after {
     content: '';
     position: absolute;
@@ -595,16 +679,22 @@ export const EmptyCatalogState = styled.div`
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: #f1f5f9;
-    border: 2px solid #cbd5e1;
-    box-shadow: 0 0 0 4px rgba(226, 232, 240, 0.3);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+    border: 2px solid
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.3)' : '#cbd5e1'};
+    box-shadow: 0 0 0 4px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.08)'
+          : 'rgba(226, 232, 240, 0.3)'};
   }
 
   @media (max-width: 768px) {
     padding: 60px 30px;
     min-height: 360px;
   }
-
   @media (max-width: 480px) {
     padding: 50px 24px;
     min-height: 320px;
@@ -617,33 +707,40 @@ export const EmptyIcon = styled.div`
   width: 56px;
   height: 56px;
   border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 16px;
-
-  svg {
-    color: #94a3b8;
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          svg {
+            color: #64748b;
+          }
+        `
+      : css`
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          svg {
+            color: #94a3b8;
+          }
+        `}
 
   @media (max-width: 768px) {
     width: 52px;
     height: 52px;
     margin-bottom: 14px;
-
     svg {
       width: 24px;
       height: 24px;
     }
   }
-
   @media (max-width: 480px) {
     width: 48px;
     height: 48px;
     margin-bottom: 12px;
-
     svg {
       width: 22px;
       height: 22px;
@@ -666,14 +763,13 @@ export const EmptyTitle = styled.h3`
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #475569;
   letter-spacing: -0.01em;
   line-height: 1.4;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
 
   @media (max-width: 768px) {
     font-size: 14px;
   }
-
   @media (max-width: 480px) {
     font-size: 14px;
   }
@@ -682,13 +778,12 @@ export const EmptyTitle = styled.h3`
 export const EmptyDescription = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #94a3b8;
   line-height: 1.6;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#94a3b8')};
 
   @media (max-width: 768px) {
     font-size: 12px;
   }
-
   @media (max-width: 480px) {
     font-size: 12px;
   }
@@ -705,11 +800,8 @@ export const EmptyActions = styled.div`
 `
 
 export const EmptyResetButton = styled.button`
-  border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 8px 16px;
-  background: #ffffff;
-  color: #64748b;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -718,16 +810,30 @@ export const EmptyResetButton = styled.button`
   align-items: center;
   gap: 6px;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
-
   svg {
     width: 14px;
     height: 14px;
   }
-
-  &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.04);
+          color: #64748b;
+          &:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.14);
+          }
+        `
+      : css`
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          color: #64748b;
+          &:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+          }
+        `}
 
   @media (max-width: 480px) {
     padding: 9px 18px;
@@ -736,11 +842,8 @@ export const EmptyResetButton = styled.button`
 `
 
 export const EmptyCreateButton = styled.button`
-  border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 8px 16px;
-  background: #ffffff;
-  color: #0f172a;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -748,20 +851,32 @@ export const EmptyCreateButton = styled.button`
   display: flex;
   align-items: center;
   gap: 6px;
-
   svg {
     width: 14px;
     height: 14px;
   }
-
-  &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
-  }
-
   &:active {
     transform: translateY(0);
   }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          border: 1px solid rgba(99, 102, 241, 0.25);
+          background: rgba(99, 102, 241, 0.1);
+          color: #a5b4fc;
+          &:hover {
+            background: rgba(99, 102, 241, 0.18);
+          }
+        `
+      : css`
+          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          color: #0f172a;
+          &:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+          }
+        `}
 
   @media (max-width: 480px) {
     padding: 10px 20px;
@@ -790,7 +905,6 @@ export const SummaryIconButton = styled.button`
   }
 `
 
-// Catalog Section (Main Container)
 export const CatalogSection = styled.section`
   display: flex;
   flex-direction: column;
@@ -800,7 +914,6 @@ export const CatalogSection = styled.section`
   overflow: hidden;
   position: relative;
 
-  /* 타임라인 세로 바 - 스크롤과 무관하게 고정 */
   &::before {
     content: '';
     position: absolute;
@@ -820,30 +933,41 @@ export const CatalogSection = styled.section`
   }
 `
 
-// Result Controls (Toolbar)
 export const ResultControls = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  background: #ffffff;
-  border: 1.5px solid rgba(20, 19, 34, 0.08);
   border-radius: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   transition: all 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1.5px solid rgba(255, 255, 255, 0.07);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          &:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1.5px solid rgba(20, 19, 34, 0.08);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          &:hover {
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+          }
+        `}
 `
 
 export const ToolbarMeta = styled.div`
   font-size: 14px;
-  color: #475569;
   font-weight: 600;
   padding: 6px 12px;
   background: rgba(99, 102, 241, 0.08);
   border-radius: 8px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
 
   span {
     color: #6366f1;
@@ -855,9 +979,17 @@ export const ToolbarToggle = styled.div`
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-  background: rgba(99, 102, 241, 0.04);
-  border: 1px solid rgba(99, 102, 241, 0.12);
   border-radius: 10px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(99, 102, 241, 0.06);
+          border: 1px solid rgba(99, 102, 241, 0.15);
+        `
+      : css`
+          background: rgba(99, 102, 241, 0.04);
+          border: 1px solid rgba(99, 102, 241, 0.12);
+        `}
 `
 
 export const ToolbarToggleText = styled.div`
@@ -869,76 +1001,104 @@ export const ToolbarToggleText = styled.div`
 export const ToolbarToggleLabel = styled.span`
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
 `
 
 export const ToolbarToggleDescription = styled.span`
   font-size: 10px;
-  color: rgba(20, 19, 34, 0.5);
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(20, 19, 34, 0.5)'};
 `
 
-// Sort Controls
 export const SortSelect = styled.select`
-  border: 1.5px solid rgba(99, 102, 241, 0.2);
   border-radius: 10px;
   padding: 9px 32px 9px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
-  background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
   appearance: none;
   background-image: url('data:image/svg+xml,%3Csvg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M1 1L6 6L11 1" stroke="%236366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E');
   background-repeat: no-repeat;
   background-position: calc(100% - 10px) 50%;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.35);
-    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
-  }
-
-  &:focus {
-    outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background-color: rgba(255, 255, 255, 0.05);
+          border: 1.5px solid rgba(99, 102, 241, 0.2);
+          color: #e2e8f0;
+          option {
+            background: #1e1e2e;
+            color: #e2e8f0;
+          }
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.35);
+          }
+          &:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+          }
+        `
+      : css`
+          background-color: #ffffff;
+          border: 1.5px solid rgba(99, 102, 241, 0.2);
+          color: #0f172a;
+          box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.35);
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
+          }
+          &:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+          }
+        `}
 `
 
 export const SortDirectionToggle = styled.button`
-  border: 1.5px solid rgba(99, 102, 241, 0.2);
   border-radius: 10px;
   padding: 9px 11px;
-  background: #ffffff;
   color: #6366f1;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
-
   svg {
     transition: transform 0.2s ease;
   }
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.35);
-    background: rgba(99, 102, 241, 0.05);
-    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
-
-    svg {
-      transform: scale(1.1);
-    }
-  }
-
   &:active {
     transform: scale(0.95);
   }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.05);
+          border: 1.5px solid rgba(99, 102, 241, 0.2);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.35);
+            background: rgba(99, 102, 241, 0.1);
+            svg {
+              transform: scale(1.1);
+            }
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1.5px solid rgba(99, 102, 241, 0.2);
+          box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.35);
+            background: rgba(99, 102, 241, 0.05);
+            svg {
+              transform: scale(1.1);
+            }
+          }
+        `}
 `
 
-// 국가 원수 정보 스타일
 export const HeadOfStateSection = styled.div<{ $depth: number }>`
   margin-top: 8px;
   padding: 10px 12px;
@@ -962,7 +1122,6 @@ export const HeadOfStateTitle = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-
   svg {
     width: 12px;
     height: 12px;
@@ -980,15 +1139,26 @@ export const HeadOfStateItem = styled.div`
   align-items: center;
   gap: 8px;
   padding: 6px;
-  background: white;
   border-radius: 6px;
-  border: 1px solid rgba(99, 102, 241, 0.08);
   transition: all 0.2s ease;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.2);
-    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.08);
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(99, 102, 241, 0.1);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          }
+        `
+      : css`
+          background: white;
+          border: 1px solid rgba(99, 102, 241, 0.08);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.2);
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.08);
+          }
+        `}
 `
 
 export const HeadOfStateAvatar = styled.div`
@@ -1008,7 +1178,6 @@ export const HeadOfStateAvatar = styled.div`
   color: rgba(99, 102, 241, 0.9);
   flex-shrink: 0;
   overflow: hidden;
-
   img {
     width: 100%;
     height: 100%;
@@ -1024,17 +1193,18 @@ export const HeadOfStateInfo = styled.div`
 export const HeadOfStateName = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #141322;
   margin-bottom: 2px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#141322')};
 `
 
 export const HeadOfStateDetails = styled.div`
   font-size: 10px;
-  color: rgba(20, 19, 34, 0.6);
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(20, 19, 34, 0.6)'};
 `
 
 export const HeadOfStateCountry = styled.span`
@@ -1049,16 +1219,17 @@ export const HeadOfStateCountry = styled.span`
 `
 
 export const HeadOfStatePosition = styled.span`
-  color: rgba(20, 19, 34, 0.7);
   font-weight: 500;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(20, 19, 34, 0.7)'};
 `
 
 export const HeadOfStateTenure = styled.span`
-  color: rgba(20, 19, 34, 0.5);
   font-size: 9px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(20, 19, 34, 0.5)'};
 `
 
-// 재위 시작 연도만 표시하는 행 (첫 사건 연도보다 이전인 경우)
 export const TenureStartYearRow = styled.div`
   margin: 4px 0 8px 12px;
   padding: 6px 10px;
@@ -1070,7 +1241,6 @@ export const TenureStartYearRow = styled.div`
   border-left: 2px solid rgba(99, 102, 241, 0.25);
 `
 
-// 퇴임 연도 표시 행 (루이16세 1792년, 트럼프 2021년 등)
 export const TenureEndYearRow = styled.div`
   margin: 4px 0 8px 12px;
   padding: 6px 10px;
@@ -1082,7 +1252,6 @@ export const TenureEndYearRow = styled.div`
   border-left: 2px solid rgba(99, 102, 241, 0.25);
 `
 
-// 국가 원수 집권 기간 헤더
 export const TenureGroupHeader = styled.div<{
   $depth: number
   $clickable?: boolean
@@ -1106,9 +1275,7 @@ export const TenureGroupHeader = styled.div<{
     border: none;
     border-left: 3px solid rgba(99, 102, 241, 0.5);
     transition: background 0.2s ease;
-    &:hover {
-      background: rgba(99, 102, 241, 0.08);
-    }
+    &:hover { background: rgba(99, 102, 241, 0.08); }
   `}
 `
 
@@ -1119,7 +1286,6 @@ export const TenureGroupTitle = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-
   svg {
     width: 13px;
     height: 13px;
@@ -1131,9 +1297,9 @@ export const TenureGroupInfo = styled.div`
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #141322;
   font-weight: 600;
   flex: 1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#141322')};
 `
 
 export const TenureGroupExpandButton = styled.button`
@@ -1150,12 +1316,10 @@ export const TenureGroupExpandButton = styled.button`
   gap: 4px;
   transition: all 0.2s ease;
   margin-left: auto;
-
   svg {
     width: 12px;
     height: 12px;
   }
-
   &:hover {
     background: rgba(99, 102, 241, 0.15);
     border-color: rgba(99, 102, 241, 0.3);
@@ -1165,13 +1329,20 @@ export const TenureGroupExpandButton = styled.button`
 export const TenureDetailsPanel = styled.div`
   margin: 0 0 8px 0;
   padding: 10px 12px;
-  background: rgba(249, 250, 251, 0.9);
   border-radius: 6px;
   border-left: 3px solid rgba(99, 102, 241, 0.25);
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-size: 11px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+        `
+      : css`
+          background: rgba(249, 250, 251, 0.9);
+        `}
 `
 
 export const TenureDetailsHeader = styled.div`
@@ -1183,12 +1354,13 @@ export const TenureDetailsHeader = styled.div`
 export const TenureSectionTitle = styled.div`
   font-size: 12px;
   font-weight: 700;
-  color: #141322;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#141322')};
 `
 
 export const TenureSectionDescription = styled.div`
   font-size: 10px;
-  color: rgba(20, 19, 34, 0.5);
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(20, 19, 34, 0.5)'};
 `
 
 export const TenureDetailRow = styled.div`
@@ -1204,11 +1376,12 @@ export const TenureDetailLabel = styled.span`
 `
 
 export const TenureDetailValue = styled.div`
-  color: rgba(20, 19, 34, 0.7);
   display: flex;
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(20, 19, 34, 0.7)'};
 `
 
 export const TenureTimeline = styled.div`
@@ -1223,26 +1396,35 @@ export const TenureTimelineItem = styled.div`
   gap: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #fff;
-  border: 1px solid rgba(99, 102, 241, 0.08);
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(99, 102, 241, 0.1);
+        `
+      : css`
+          background: #fff;
+          border: 1px solid rgba(99, 102, 241, 0.08);
+        `}
 `
 
 export const TenureTimelinePeriod = styled.span`
   font-size: 10px;
-  color: rgba(20, 19, 34, 0.5);
   min-width: 72px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(20, 19, 34, 0.5)'};
 `
 
 export const TenureTimelineTitle = styled.span`
   font-weight: 600;
-  color: #141322;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#141322')};
 `
 
 export const TenureTimelineMeta = styled.span`
-  color: rgba(20, 19, 34, 0.6);
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(20, 19, 34, 0.6)'};
 `
 
-/** 재위 년도가 같은 카드 묶음 컨테이너 (배경/테두리 없음) */
 export const HeadsOfStateYearGroup = styled.div`
   margin: 10px 0 12px 0;
   padding: 0;
@@ -1250,7 +1432,6 @@ export const HeadsOfStateYearGroup = styled.div`
   display: block;
 `
 
-/** 묶음 라벨 (예: "1945년 취임", "1945년 퇴임") */
 export const HeadsOfStateYearGroupLabel = styled.div`
   margin: 0 0 8px 0;
   padding: 0;
@@ -1261,7 +1442,6 @@ export const HeadsOfStateYearGroupLabel = styled.div`
   display: block;
 `
 
-/** 재위 년도 그룹 접기용 토글 행 (옛날 디자인: 퇴임 N명 요약) */
 export const HeadsOfStateYearGroupToggle = styled.button`
   display: flex;
   align-items: center;
@@ -1279,7 +1459,6 @@ export const HeadsOfStateYearGroupToggle = styled.button`
   cursor: pointer;
   text-align: left;
   transition: background 0.2s ease;
-
   &:hover {
     background: rgba(99, 102, 241, 0.1);
   }
@@ -1288,12 +1467,19 @@ export const HeadsOfStateYearGroupToggle = styled.button`
 export const OtherHeadsOfStateList = styled.div`
   margin: 0 0 6px 0;
   padding: 8px 12px;
-  background: rgba(249, 250, 251, 1);
   border-radius: 6px;
   border-left: 3px solid rgba(99, 102, 241, 0.3);
   display: flex;
   flex-direction: column;
   gap: 6px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+        `
+      : css`
+          background: rgba(249, 250, 251, 1);
+        `}
 `
 
 export const OtherHeadOfStateRow = styled.div`
@@ -1301,16 +1487,27 @@ export const OtherHeadOfStateRow = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: white;
   border-radius: 6px;
-  border: 1px solid rgba(99, 102, 241, 0.08);
   font-size: 11px;
   transition: all 0.2s ease;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.15);
-    background: rgba(249, 250, 251, 1);
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(99, 102, 241, 0.08);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.15);
+            background: rgba(255, 255, 255, 0.06);
+          }
+        `
+      : css`
+          background: white;
+          border: 1px solid rgba(99, 102, 241, 0.08);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.15);
+            background: rgba(249, 250, 251, 1);
+          }
+        `}
 `
 
 export const OtherHeadAvatar = styled.div`
@@ -1330,7 +1527,6 @@ export const OtherHeadAvatar = styled.div`
   color: rgba(99, 102, 241, 0.8);
   flex-shrink: 0;
   overflow: hidden;
-
   img {
     width: 100%;
     height: 100%;
@@ -1343,15 +1539,16 @@ export const OtherHeadInfo = styled.div`
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
-  color: #475569;
-
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#475569')};
   strong {
     font-weight: 600;
-    color: #141322;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#141322')};
   }
-
   span {
-    color: rgba(20, 19, 34, 0.6);
+    color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.4)'
+        : 'rgba(20, 19, 34, 0.6)'};
   }
 `
 
@@ -1372,9 +1569,10 @@ export const TenureGroupAvatar = styled.div`
   color: rgba(99, 102, 241, 1);
   flex-shrink: 0;
   overflow: hidden;
-  border: 1.5px solid white;
+  border: 1.5px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'white'};
   box-shadow: 0 1px 3px rgba(99, 102, 241, 0.1);
-
   img {
     width: 100%;
     height: 100%;
@@ -1390,15 +1588,16 @@ export const TenureGroupDetails = styled.div`
 export const TenureGroupName = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #141322;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#141322')};
 `
 
 export const TenureGroupMeta = styled.div`
   font-size: 10px;
-  color: rgba(20, 19, 34, 0.5);
   display: flex;
   align-items: center;
   gap: 4px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(20, 19, 34, 0.5)'};
 `
 
 export const TenureGroupBadge = styled.span`
@@ -1411,14 +1610,12 @@ export const TenureGroupBadge = styled.span`
   font-weight: 500;
   color: rgba(99, 102, 241, 0.9);
   font-size: 10px;
-
   svg {
     width: 10px;
     height: 10px;
   }
 `
 
-// 집권 기간 내 사건 스타일
 export const CompactListItemInTenure = styled(CompactListItem)`
   position: relative;
   margin-left: ${({ $depth }) => $depth * 24 + 8}px;
@@ -1439,34 +1636,13 @@ export const CompactListItemInTenure = styled(CompactListItem)`
         ? '#6366f1'
         : 'linear-gradient(180deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.3))'};
 
-  /* 타임라인 연결선 - InTenure는 8px 더 밀림 */
   &::before {
-    content: '';
-    position: absolute;
     left: ${({ $depth }) => -49 - $depth * 24}px;
-    top: 50%;
     width: ${({ $depth }) => 46 + $depth * 24}px;
-    height: 2px;
-    background: rgba(99, 102, 241, 0.25);
-    transition: all 0.2s ease;
   }
 
-  /* 타임라인 점 - InTenure는 8px 더 밀림 */
   &::after {
-    content: '';
-    position: absolute;
     left: ${({ $depth }) => -49 - $depth * 24}px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: ${({ $active }) => ($active ? '10px' : '8px')};
-    height: ${({ $active }) => ($active ? '10px' : '8px')};
-    background: ${({ $active }) => ($active ? '#6366f1' : '#ffffff')};
-    border: 2px solid
-      ${({ $active }) => ($active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)')};
-    border-radius: 50%;
-    box-shadow: 0 0 0 2px #ffffff;
-    transition: all 0.2s ease;
-    z-index: 1;
   }
 
   &:hover {

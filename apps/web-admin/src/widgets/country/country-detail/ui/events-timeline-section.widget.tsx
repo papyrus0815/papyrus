@@ -3,13 +3,16 @@
  * 목록 뷰 + 사건 등록(events/create 전체 기능, 카드만 가문·민족 스타일)
  */
 import React, { useEffect, useState } from 'react'
+
 import { motion } from 'framer-motion'
-import styled from 'styled-components'
 import { useNavigate } from 'react-router-dom'
+import styled from 'styled-components'
+
 import { useEvents } from '@/entities/event/model'
-import { EventCreateFormDashboard } from './event-create-form-dashboard'
-import { pathKeys } from '@/shared/router'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
+import { pathKeys } from '@/shared/router'
+
+import { EventCreateFormDashboard } from './event-create-form-dashboard'
 
 const MAIN = '#6366f1'
 
@@ -37,9 +40,13 @@ const GovTabButton = styled.button<{ $active?: boolean }>`
   font-size: 13px;
   font-weight: ${(p) => (p.$active ? '600' : '500')};
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.2s ease;
   white-space: nowrap;
-  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
+  box-shadow: ${(p) =>
+    p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
   &:hover {
     color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
     background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
@@ -51,7 +58,6 @@ const Root = styled(motion.div)<{ $isForm?: boolean }>`
   flex-direction: column;
   gap: ${(p) => (p.$isForm ? 0 : 32)}px;
   padding: ${(p) => (p.$isForm ? '24px 28px 0' : '36px 32px 48px')};
-  background: #ffffff;
   position: relative;
   min-height: ${(p) => (p.$isForm ? 0 : 'calc(100vh - 200px)')};
   height: ${(p) => (p.$isForm ? '100%' : 'auto')};
@@ -95,13 +101,8 @@ export function EventsTimelineSection({
   const [view, setView] = useState<'list' | 'form'>(() =>
     initialFormFromSearchParams ? 'form' : 'list',
   )
-  const {
-    events,
-    isLoading,
-    hasMore,
-    fetchMoreEvents,
-    resetAndFetch,
-  } = useEvents(pageSize, countryId)
+  const { events, isLoading, hasMore, fetchMoreEvents, resetAndFetch } =
+    useEvents(pageSize, countryId)
 
   const list = events ?? []
 
@@ -209,7 +210,16 @@ export function EventsTimelineSection({
               flexShrink: 0,
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
@@ -239,12 +249,36 @@ export function EventsTimelineSection({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#64748b',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
                 등록 사건
               </span>
-              <span style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em' }}>
+              <span
+                style={{
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  letterSpacing: '-0.03em',
+                }}
+              >
                 {list.length}
-                <span style={{ fontSize: 14, fontWeight: 500, color: '#64748b', marginLeft: 2 }}>건</span>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: '#64748b',
+                    marginLeft: 2,
+                  }}
+                >
+                  건
+                </span>
               </span>
             </div>
           </div>
@@ -259,160 +293,241 @@ export function EventsTimelineSection({
           />
         </FormSection>
       ) : (
-      <section aria-label="연대표 현황" style={{ paddingTop: 8 }}>
-        <div style={{ marginBottom: 28 }}>
-          <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>
-            연대표 현황
-          </h3>
-          <p style={{ margin: '6px 0 0', fontSize: 14, color: '#64748b', fontWeight: 500 }}>
-            등록된 사건 목록입니다. 카드를 클릭하면 연대표 상세로 이동합니다.
-          </p>
-        </div>
-
-        {isLoading && list.length === 0 ? (
-          <div
-            style={{
-              padding: 56,
-              textAlign: 'center',
-              color: '#6b7280',
-              fontSize: 14,
-              background: '#f9fafb',
-              borderRadius: 16,
-              border: '1px solid #e5e7eb',
-            }}
-          >
-            불러오는 중…
-          </div>
-        ) : list.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-            style={{
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '64px 40px 72px',
-              background: '#ffffff',
-              borderRadius: 20,
-              border: '1px solid #f1f5f9',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
+        <section aria-label="연대표 현황" style={{ paddingTop: 8 }}>
+          <div style={{ marginBottom: 28 }}>
+            <h3
               style={{
-                position: 'absolute',
-                left: '50%',
-                top: '20%',
-                width: 280,
-                height: 280,
-                marginLeft: -140,
-                marginTop: -140,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)',
-                filter: 'blur(32px)',
-                pointerEvents: 'none',
-              }}
-            />
-            <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>
-                등록된 사건이 없습니다
-              </h3>
-              <p style={{ margin: '10px 0 0', fontSize: 14, color: '#64748b', maxWidth: 320, lineHeight: 1.55, fontWeight: 500 }}>
-                위 <strong style={{ color: '#475569', fontWeight: 600 }}>새 사건 등록</strong> 버튼을 눌러 첫 사건을 등록하거나,{' '}
-                <strong style={{ color: '#475569', fontWeight: 600 }}>사건</strong> 메뉴에서 연대표를 이용해 보세요.
-              </p>
-            </div>
-          </motion.div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 24 }}>
-            {list.map((evt: { id: string; title?: string; startDate?: string; endDate?: string; description?: string }) => {
-              const start = evt.startDate
-              const end = evt.endDate
-              const dateLabel = start
-                ? end
-                  ? formatDateRange(start, end)
-                  : formatDateRange(start)
-                : '—'
-              return (
-                <button
-                  key={evt.id}
-                  type="button"
-                  onClick={() => navigate(pathKeys.history.dashboardEventDetail(evt.id))}
-                  style={{
-                    textAlign: 'left',
-                    background: '#fff',
-                    borderRadius: 16,
-                    minHeight: 160,
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    border: '1px solid #e5e7eb',
-                    cursor: 'pointer',
-                    padding: 24,
-                    transition: 'border-color 0.2s, box-shadow 0.2s',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = '#c7d2fe'
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.08)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = '#e5e7eb'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
-                >
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.35, marginBottom: 8 }}>
-                    {evt.title || '제목 없음'}
-                  </div>
-                  <div style={{ fontSize: 13, color: '#64748b', marginBottom: 10 }}>
-                    {dateLabel}
-                  </div>
-                  {(evt.description ?? '').trim() && (
-                    <div
-                      style={{
-                        fontSize: 13,
-                        color: '#64748b',
-                        lineHeight: 1.5,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical' as const,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {evt.description!.trim()}
-                    </div>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        {hasMore && pageSize <= 100 && (
-          <div style={{ marginTop: 24, textAlign: 'center' }}>
-            <button
-              type="button"
-              onClick={() => fetchMoreEvents()}
-              disabled={isLoading}
-              style={{
-                padding: '12px 24px',
-                borderRadius: 12,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#475569',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: isLoading ? 'wait' : 'pointer',
+                margin: 0,
+                fontSize: 20,
+                fontWeight: 700,
+                color: '#0f172a',
+                letterSpacing: '-0.02em',
               }}
             >
-              {isLoading ? '불러오는 중…' : '더 보기'}
-            </button>
+              연대표 현황
+            </h3>
+            <p
+              style={{
+                margin: '6px 0 0',
+                fontSize: 14,
+                color: '#64748b',
+                fontWeight: 500,
+              }}
+            >
+              등록된 사건 목록입니다. 카드를 클릭하면 연대표 상세로 이동합니다.
+            </p>
           </div>
-        )}
-      </section>
+
+          {isLoading && list.length === 0 ? (
+            <div
+              style={{
+                padding: 56,
+                textAlign: 'center',
+                color: '#6b7280',
+                fontSize: 14,
+                background: '#f9fafb',
+                borderRadius: 16,
+                border: '1px solid #e5e7eb',
+              }}
+            >
+              불러오는 중…
+            </div>
+          ) : list.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '64px 40px 72px',
+                background: '#ffffff',
+                borderRadius: 20,
+                border: '1px solid #f1f5f9',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '20%',
+                  width: 280,
+                  height: 280,
+                  marginLeft: -140,
+                  marginTop: -140,
+                  borderRadius: '50%',
+                  background:
+                    'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)',
+                  filter: 'blur(32px)',
+                  pointerEvents: 'none',
+                }}
+              />
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                }}
+              >
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  등록된 사건이 없습니다
+                </h3>
+                <p
+                  style={{
+                    margin: '10px 0 0',
+                    fontSize: 14,
+                    color: '#64748b',
+                    maxWidth: 320,
+                    lineHeight: 1.55,
+                    fontWeight: 500,
+                  }}
+                >
+                  위{' '}
+                  <strong style={{ color: '#475569', fontWeight: 600 }}>
+                    새 사건 등록
+                  </strong>{' '}
+                  버튼을 눌러 첫 사건을 등록하거나,{' '}
+                  <strong style={{ color: '#475569', fontWeight: 600 }}>
+                    사건
+                  </strong>{' '}
+                  메뉴에서 연대표를 이용해 보세요.
+                </p>
+              </div>
+            </motion.div>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+                gap: 24,
+              }}
+            >
+              {list.map(
+                (evt: {
+                  id: string
+                  title?: string
+                  startDate?: string
+                  endDate?: string
+                  description?: string
+                }) => {
+                  const start = evt.startDate
+                  const end = evt.endDate
+                  const dateLabel = start
+                    ? end
+                      ? formatDateRange(start, end)
+                      : formatDateRange(start)
+                    : '—'
+                  return (
+                    <button
+                      key={evt.id}
+                      type="button"
+                      onClick={() =>
+                        navigate(pathKeys.history.dashboardEventDetail(evt.id))
+                      }
+                      style={{
+                        textAlign: 'left',
+                        background: '#fff',
+                        borderRadius: 16,
+                        minHeight: 160,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        border: '1px solid #e5e7eb',
+                        cursor: 'pointer',
+                        padding: 24,
+                        transition: 'border-color 0.2s, box-shadow 0.2s',
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.borderColor = '#c7d2fe'
+                        e.currentTarget.style.boxShadow =
+                          '0 4px 12px rgba(99,102,241,0.08)'
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.borderColor = '#e5e7eb'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 16,
+                          fontWeight: 700,
+                          color: '#0f172a',
+                          letterSpacing: '-0.02em',
+                          lineHeight: 1.35,
+                          marginBottom: 8,
+                        }}
+                      >
+                        {evt.title || '제목 없음'}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: '#64748b',
+                          marginBottom: 10,
+                        }}
+                      >
+                        {dateLabel}
+                      </div>
+                      {(evt.description ?? '').trim() && (
+                        <div
+                          style={{
+                            fontSize: 13,
+                            color: '#64748b',
+                            lineHeight: 1.5,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical' as const,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {evt.description!.trim()}
+                        </div>
+                      )}
+                    </button>
+                  )
+                },
+              )}
+            </div>
+          )}
+
+          {hasMore && pageSize <= 100 && (
+            <div style={{ marginTop: 24, textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => fetchMoreEvents()}
+                disabled={isLoading}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 12,
+                  border: '1px solid #e5e7eb',
+                  background: '#fff',
+                  color: '#475569',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: isLoading ? 'wait' : 'pointer',
+                }}
+              >
+                {isLoading ? '불러오는 중…' : '더 보기'}
+              </button>
+            </div>
+          )}
+        </section>
       )}
     </Root>
   )

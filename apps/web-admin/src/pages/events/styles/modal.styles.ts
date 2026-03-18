@@ -2,13 +2,14 @@
  * Modal Styled Components
  * 모달 관련 스타일
  */
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 export const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 1000;
 `
 
@@ -17,9 +18,7 @@ export const Modal = styled.div`
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: #ffffff;
   border-radius: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   z-index: 1001;
   width: 90%;
   max-width: 480px;
@@ -27,21 +26,35 @@ export const Modal = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(20, 20, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  ` : css`
+    background: #ffffff;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  `}
 `
 
 export const ModalHeader = styled.div`
   padding: 24px;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  ` : css`
+    border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+  `}
 `
 
 export const ModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
 `
 
 export const ModalClose = styled.button`
@@ -49,16 +62,16 @@ export const ModalClose = styled.button`
   background: transparent;
   padding: 4px;
   cursor: pointer;
-  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   transition: all 0.2s ease;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 
   &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    color: #6366f1;
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(99, 102, 241, 0.08)'};
+    color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#6366f1'};
   }
 `
 
@@ -69,62 +82,41 @@ export const ModalContent = styled.div`
   flex-direction: column;
   gap: 8px;
 
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.2);
-    border-radius: 3px;
-  }
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 3px; }
 `
 
 export const ModalOption = styled.button<{ $active: boolean }>`
-  border: 1.5px solid
-    ${({ $active }) =>
-      $active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 14px;
   padding: 14px 16px;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))'
-      : '#ffffff'};
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   gap: 14px;
   align-items: center;
   text-align: left;
-
-  div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  strong {
-    font-size: 14px;
-    color: #0f172a;
-    font-weight: 600;
-  }
-
-  span {
-    font-size: 12px;
-    color: #6b7280;
-  }
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.1))'
-        : '#f8fafc'};
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
-  }
+  div { display: flex; flex-direction: column; gap: 4px; }
+  ${({ theme, $active }) => theme.mode === 'dark' ? css`
+    background: ${$active ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.04)'};
+    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.08)'};
+    strong { font-size: 14px; font-weight: 600; color: ${$active ? '#a5b4fc' : '#e2e8f0'}; }
+    span { font-size: 12px; color: #64748b; }
+    &:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+      background: ${$active ? 'rgba(99, 102, 241, 0.22)' : 'rgba(255,255,255,0.07)'};
+    }
+  ` : css`
+    background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))' : '#ffffff'};
+    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(20, 19, 34, 0.08)'};
+    strong { font-size: 14px; font-weight: 600; color: #0f172a; }
+    span { font-size: 12px; color: #6b7280; }
+    &:hover {
+      border-color: rgba(99, 102, 241, 0.25);
+      background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.1))' : '#f8fafc'};
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+    }
+  `}
 `
 
 export const ModalOptionIcon = styled.div`
@@ -137,22 +129,15 @@ export const ModalOptionIcon = styled.div`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-
-  svg {
-    width: 20px;
-    height: 20px;
-  }
+  svg { width: 20px; height: 20px; }
 `
 
-// Summary Modal
 export const SummaryModal = styled.div`
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: #ffffff;
   border-radius: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   z-index: 1001;
   width: 90%;
   max-width: 1000px;
@@ -160,34 +145,41 @@ export const SummaryModal = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(15, 15, 20, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  ` : css`
+    background: #ffffff;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  `}
 `
 
 export const SummarySubtitle = styled.p`
   margin: 4px 0 0;
   font-size: 13px;
-  color: #64748b;
   font-weight: 500;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 `
 
 export const SummaryTabBar = styled.div`
   display: flex;
   gap: 8px;
   padding: 16px 24px;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.1);
-  background: #fafbff;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.02);
+  ` : css`
+    border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+    background: #fafbff;
+  `}
 `
 
 export const SummaryTab = styled.button<{ $active: boolean }>`
-  border: 1.5px solid
-    ${({ $active }) =>
-      $active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 12px;
   padding: 10px 16px;
-  background: ${({ $active }) =>
-    $active
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08))'
-      : '#ffffff'};
-  color: ${({ $active }) => ($active ? '#4f46e5' : '#64748b')};
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -195,14 +187,17 @@ export const SummaryTab = styled.button<{ $active: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    background: ${({ $active }) =>
-      $active
-        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
-        : '#f8fafc'};
-  }
+  ${({ theme, $active }) => theme.mode === 'dark' ? css`
+    background: ${$active ? 'rgba(99, 102, 241, 0.15)' : 'transparent'};
+    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.07)'};
+    color: ${$active ? '#a5b4fc' : '#64748b'};
+    &:hover { border-color: rgba(99, 102, 241, 0.3); background: ${$active ? 'rgba(99, 102, 241, 0.22)' : 'rgba(255,255,255,0.05)'}; }
+  ` : css`
+    background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08))' : '#ffffff'};
+    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(20, 19, 34, 0.08)'};
+    color: ${$active ? '#4f46e5' : '#64748b'};
+    &:hover { border-color: rgba(99, 102, 241, 0.3); background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))' : '#f8fafc'}; }
+  `}
 `
 
 export const SummaryContent = styled.div`
@@ -210,25 +205,12 @@ export const SummaryContent = styled.div`
   overflow-y: auto;
   padding: 24px;
 
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: rgba(99, 102, 241, 0.04);
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.2);
-    border-radius: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: rgba(99, 102, 241, 0.3);
-  }
+  &::-webkit-scrollbar { width: 8px; }
+  &::-webkit-scrollbar-track { background: rgba(99, 102, 241, 0.04); }
+  &::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 4px; }
+  &::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.3); }
 `
 
-// Timeline View
 export const TimelineContainer = styled.div`
   position: relative;
   padding-left: 32px;
@@ -240,12 +222,7 @@ export const TimelineContainer = styled.div`
     top: 0;
     bottom: 0;
     width: 3px;
-    background: linear-gradient(
-      180deg,
-      rgba(99, 102, 241, 0.3) 0%,
-      rgba(168, 85, 247, 0.25) 50%,
-      rgba(99, 102, 241, 0.2) 100%
-    );
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.25) 50%, rgba(99, 102, 241, 0.2) 100%);
     border-radius: 999px;
   }
 `
@@ -255,13 +232,19 @@ export const TimelineEventCard = styled.div<{ $depth: number }>`
   padding: 16px 18px;
   margin-bottom: 20px;
   margin-left: ${({ $depth }) => $depth * 24}px;
-  border: 1.5px solid rgba(99, 102, 241, 0.15);
   border-radius: 14px;
-  background: ${({ $depth }) =>
-    $depth === 0
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.03))'
-      : '#ffffff'};
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+  transition: all 0.2s ease;
+  ${({ theme, $depth }) => theme.mode === 'dark' ? css`
+    background: ${$depth === 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255,255,255,0.04)'};
+    border: 1.5px solid rgba(99, 102, 241, 0.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    &:hover { border-color: rgba(99, 102, 241, 0.3); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+  ` : css`
+    background: ${$depth === 0 ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.03))' : '#ffffff'};
+    border: 1.5px solid rgba(99, 102, 241, 0.15);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+    &:hover { border-color: rgba(99, 102, 241, 0.3); box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12); }
+  `}
 
   &::before {
     content: '';
@@ -271,16 +254,9 @@ export const TimelineEventCard = styled.div<{ $depth: number }>`
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: ${({ $depth }) =>
-      $depth === 0 ? 'linear-gradient(135deg, #6366f1, #a855f7)' : '#ffffff'};
-    border: 3px solid
-      ${({ $depth }) => ($depth === 0 ? '#6366f1' : 'rgba(99, 102, 241, 0.5)')};
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, 1);
-  }
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12);
+    background: ${({ $depth }) => $depth === 0 ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'transparent'};
+    border: 3px solid ${({ $depth }) => $depth === 0 ? '#6366f1' : 'rgba(99, 102, 241, 0.5)'};
+    box-shadow: 0 0 0 4px ${({ theme }) => theme.mode === 'dark' ? 'rgba(15,15,20,0.9)' : 'rgba(255, 255, 255, 1)'};
   }
 `
 
@@ -295,14 +271,14 @@ export const TimelineEventTitle = styled.h4`
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
 `
 
 export const TimelineEventSummary = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #475569;
   line-height: 1.6;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#475569'};
 `
 
 export const TimelineImportance = styled.span<{
@@ -318,27 +294,20 @@ export const TimelineImportance = styled.span<{
   letter-spacing: 0.05em;
   background: ${({ $importance }) => {
     switch ($importance) {
-      case 'critical':
-        return 'rgba(239, 68, 68, 0.15)'
-      case 'major':
-        return 'rgba(251, 191, 36, 0.15)'
-      default:
-        return 'rgba(99, 102, 241, 0.1)'
+      case 'critical': return 'rgba(239, 68, 68, 0.15)'
+      case 'major': return 'rgba(251, 191, 36, 0.15)'
+      default: return 'rgba(99, 102, 241, 0.1)'
     }
   }};
   color: ${({ $importance }) => {
     switch ($importance) {
-      case 'critical':
-        return '#dc2626'
-      case 'major':
-        return '#d97706'
-      default:
-        return '#6366f1'
+      case 'critical': return '#dc2626'
+      case 'major': return '#d97706'
+      default: return '#6366f1'
     }
   }};
 `
 
-// Tree View
 export const TreeContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -349,9 +318,7 @@ export const TreeNodeWrapper = styled.div<{ $depth: number }>`
   margin-left: ${({ $depth }) => $depth * 32}px;
   position: relative;
 
-  ${({ $depth }) =>
-    $depth > 0 &&
-    `
+  ${({ $depth }) => $depth > 0 && `
     &::before {
       content: '';
       position: absolute;
@@ -361,7 +328,7 @@ export const TreeNodeWrapper = styled.div<{ $depth: number }>`
       height: 2px;
       background: rgba(99, 102, 241, 0.25);
     }
-    
+
     &::after {
       content: '';
       position: absolute;
@@ -378,31 +345,26 @@ export const TreeNodeCard = styled.div<{
   $depth: number
   $importance: 'critical' | 'major' | 'notable'
 }>`
-  border: 2px solid
-    ${({ $importance }) => {
-      switch ($importance) {
-        case 'critical':
-          return 'rgba(239, 68, 68, 0.3)'
-        case 'major':
-          return 'rgba(251, 191, 36, 0.3)'
-        default:
-          return 'rgba(99, 102, 241, 0.2)'
-      }
-    }};
   border-radius: 14px;
   padding: 14px 16px;
-  background: ${({ $depth }) =>
-    $depth === 0
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.05))'
-      : '#ffffff'};
   margin-bottom: 12px;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
   transition: all 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12);
-    transform: translateX(4px);
-  }
+  border: 2px solid ${({ $importance }) => {
+    switch ($importance) {
+      case 'critical': return 'rgba(239, 68, 68, 0.3)'
+      case 'major': return 'rgba(251, 191, 36, 0.3)'
+      default: return 'rgba(99, 102, 241, 0.2)'
+    }
+  }};
+  ${({ theme, $depth }) => theme.mode === 'dark' ? css`
+    background: ${$depth === 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255,255,255,0.04)'};
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    &:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.3); transform: translateX(4px); }
+  ` : css`
+    background: ${$depth === 0 ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.05))' : '#ffffff'};
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+    &:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12); transform: translateX(4px); }
+  `}
 `
 
 export const TreeNodeHeader = styled.div`
@@ -417,8 +379,8 @@ export const TreeNodeTitle = styled.h4`
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
   flex: 1;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
 `
 
 export const TreeImportanceBadge = styled.span<{
@@ -432,22 +394,16 @@ export const TreeImportanceBadge = styled.span<{
   letter-spacing: 0.05em;
   background: ${({ $importance }) => {
     switch ($importance) {
-      case 'critical':
-        return 'rgba(239, 68, 68, 0.15)'
-      case 'major':
-        return 'rgba(251, 191, 36, 0.15)'
-      default:
-        return 'rgba(99, 102, 241, 0.1)'
+      case 'critical': return 'rgba(239, 68, 68, 0.15)'
+      case 'major': return 'rgba(251, 191, 36, 0.15)'
+      default: return 'rgba(99, 102, 241, 0.1)'
     }
   }};
   color: ${({ $importance }) => {
     switch ($importance) {
-      case 'critical':
-        return '#dc2626'
-      case 'major':
-        return '#d97706'
-      default:
-        return '#6366f1'
+      case 'critical': return '#dc2626'
+      case 'major': return '#d97706'
+      default: return '#6366f1'
     }
   }};
 `
@@ -462,8 +418,8 @@ export const TreeNodeDate = styled.div`
 export const TreeNodeSummary = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #475569;
   line-height: 1.6;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#475569'};
 `
 
 export const TreeNodeChildren = styled.div`
@@ -472,7 +428,6 @@ export const TreeNodeChildren = styled.div`
   gap: 12px;
 `
 
-// Summary Icon Button (inline hierarchy button)
 export const SummaryIconButton = styled.button`
   border: none;
   background: rgba(99, 102, 241, 0.1);
@@ -494,12 +449,9 @@ export const SummaryIconButton = styled.button`
   }
 `
 
-// View All Hierarchy Button
 export const ViewAllHierarchyButton = styled.button`
-  border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 10px;
   padding: 12px 16px;
-  background: rgba(99, 102, 241, 0.05);
   color: #6366f1;
   font-size: 14px;
   font-weight: 600;
@@ -510,14 +462,14 @@ export const ViewAllHierarchyButton = styled.button`
   cursor: pointer;
   transition: all 0.2s ease;
   width: 100%;
-
-  &:hover {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: rgba(99, 102, 241, 0.35);
-    transform: translateY(-1px);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    &:hover { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.35); transform: translateY(-1px); }
+  ` : css`
+    background: rgba(99, 102, 241, 0.05);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    &:hover { background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.35); transform: translateY(-1px); }
+  `}
+  &:active { transform: translateY(0); }
 `

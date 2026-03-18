@@ -63,7 +63,6 @@ const fadeSlideIn = keyframes`
 
 export const GlobalDashboard = styled.div`
   padding: 32px 40px 48px;
-  background: ${({ theme }) => theme.colors.background.primary};
   min-height: calc(100vh - var(--header-height));
   display: flex;
   flex-direction: column;
@@ -71,9 +70,18 @@ export const GlobalDashboard = styled.div`
   overflow-y: auto;
   animation: ${fadeSlideIn} 0.35s ease;
 
-  @media (max-width: 1024px) { padding: 24px 28px 36px; gap: 28px; }
-  @media (max-width: 768px)  { padding: 20px 20px 28px; gap: 24px; }
-  @media (max-width: 480px)  { padding: 16px 16px 24px; gap: 20px; }
+  @media (max-width: 1024px) {
+    padding: 24px 28px 36px;
+    gap: 28px;
+  }
+  @media (max-width: 768px) {
+    padding: 20px 20px 28px;
+    gap: 24px;
+  }
+  @media (max-width: 480px) {
+    padding: 16px 16px 24px;
+    gap: 20px;
+  }
 `
 
 // ─── 히어로 헤더 ──────────────────────────────────────────────────────────────
@@ -101,7 +109,10 @@ export const GlobalDashboardHero = styled.header`
           box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
         `}
 
-  @media (max-width: 768px) { padding: 20px 22px; border-radius: 16px; }
+  @media (max-width: 768px) {
+    padding: 20px 22px;
+    border-radius: 16px;
+  }
 `
 
 export const HeroBackground = styled.div`
@@ -136,7 +147,9 @@ export const HeroContent = styled.div`
   position: relative;
   z-index: 1;
 
-  @media (max-width: 768px) { gap: 14px; }
+  @media (max-width: 768px) {
+    gap: 14px;
+  }
 `
 
 export const HeroIcon = styled.div`
@@ -149,18 +162,27 @@ export const HeroIcon = styled.div`
   justify-content: center;
   flex-shrink: 0;
   color: #fff;
-  box-shadow: 0 8px 20px
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 106, 242, 0.4)'
-        : 'rgba(99, 102, 241, 0.3)'},
+  box-shadow:
+    0 8px 20px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.4)'
+          : 'rgba(99, 102, 241, 0.3)'},
     inset 0 1px 0 rgba(255, 255, 255, 0.25);
 
-  svg { width: 24px; height: 24px; }
+  svg {
+    width: 24px;
+    height: 24px;
+  }
 
   @media (max-width: 768px) {
-    width: 42px; height: 42px; border-radius: 12px;
-    svg { width: 21px; height: 21px; }
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    svg {
+      width: 21px;
+      height: 21px;
+    }
   }
 `
 
@@ -180,7 +202,9 @@ export const HeroTitle = styled.h1`
   letter-spacing: -0.025em;
   line-height: 1.3;
 
-  @media (max-width: 768px) { font-size: 18px; }
+  @media (max-width: 768px) {
+    font-size: 18px;
+  }
 `
 
 export const HeroSubtitle = styled.p`
@@ -189,7 +213,9 @@ export const HeroSubtitle = styled.p`
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 
-  @media (max-width: 768px) { font-size: 12px; }
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
 `
 
 // ─── 섹션 타이틀 ──────────────────────────────────────────────────────────────
@@ -235,7 +261,9 @@ export const SectionTitleText = styled.h2`
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 
-  @media (max-width: 768px) { font-size: 17px; }
+  @media (max-width: 768px) {
+    font-size: 17px;
+  }
 `
 
 // ─── 글로벌 KPI 그리드 ────────────────────────────────────────────────────────
@@ -245,9 +273,17 @@ export const GlobalMetricsGrid = styled.div`
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 
-  @media (min-width: 769px) and (max-width: 1024px) { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: 768px)  { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  @media (max-width: 480px)  { grid-template-columns: 1fr; gap: 8px; }
+  @media (min-width: 769px) and (max-width: 1024px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
 `
 
 export const GlobalMetricCard = styled.div`
@@ -259,13 +295,21 @@ export const GlobalMetricCard = styled.div`
   min-width: 0;
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 
   ${({ theme }) => liquidCard(theme)}
 
-  &:hover { ${({ theme }) => liquidHover(theme)} }
+  &:hover {
+    ${({ theme }) => liquidHover(theme)}
+  }
 
-  @media (max-width: 480px) { padding: 18px 20px; border-radius: 16px; }
+  @media (max-width: 480px) {
+    padding: 18px 20px;
+    border-radius: 16px;
+  }
 `
 
 export const GlobalMetricIcon = styled.div`
@@ -284,7 +328,10 @@ export const GlobalMetricIcon = styled.div`
         ? 'rgba(99, 106, 242, 0.35)'
         : 'rgba(99, 102, 241, 0.25)'};
 
-  svg { width: 20px; height: 20px; }
+  svg {
+    width: 20px;
+    height: 20px;
+  }
 `
 
 export const GlobalMetricContent = styled.div`
@@ -312,7 +359,9 @@ export const GlobalMetricValue = styled.div`
   flex-wrap: wrap;
   gap: 0 2px;
 
-  @media (max-width: 480px) { font-size: 20px; }
+  @media (max-width: 480px) {
+    font-size: 20px;
+  }
 `
 
 export const GlobalMetricSubtext = styled.div`
@@ -329,9 +378,17 @@ export const GlobalDashboardGrid = styled.div`
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
 
-  @media (min-width: 769px) and (max-width: 1024px) { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  @media (max-width: 768px)  { grid-template-columns: 1fr; gap: 12px; }
-  @media (max-width: 480px)  { gap: 10px; }
+  @media (min-width: 769px) and (max-width: 1024px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 480px) {
+    gap: 10px;
+  }
 `
 
 export const GlobalWidget = styled.div`
@@ -342,13 +399,21 @@ export const GlobalWidget = styled.div`
   gap: 18px;
   position: relative;
   overflow: hidden;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
 
   ${({ theme }) => liquidCard(theme)}
 
-  &:hover { ${({ theme }) => liquidHover(theme)} }
+  &:hover {
+    ${({ theme }) => liquidHover(theme)}
+  }
 
-  @media (max-width: 480px) { padding: 20px; border-radius: 16px; }
+  @media (max-width: 480px) {
+    padding: 20px;
+    border-radius: 16px;
+  }
 `
 
 export const GlobalWidgetHeader = styled.div`
@@ -387,7 +452,10 @@ export const GlobalWidgetIcon = styled.div`
           background: ${theme.colors.activeLight};
         `}
 
-  svg { width: 19px; height: 19px; }
+  svg {
+    width: 19px;
+    height: 19px;
+  }
 `
 
 export const GlobalWidgetTitle = styled.h3`
@@ -437,7 +505,9 @@ export const BarChartLabel = styled.div`
 export const BarChartTrack = styled.div`
   height: 7px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : theme.colors.background.tertiary};
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : theme.colors.background.tertiary};
   border-radius: 4px;
   overflow: hidden;
 `
@@ -487,7 +557,13 @@ export const BarChartRank = styled.div<{ $rank: number }>`
           ? 'linear-gradient(135deg, #fef3c7, #fcd34d)'
           : p.theme.colors.background.tertiary};
   color: ${(p) =>
-    p.$rank === 1 ? '#d97706' : p.$rank === 2 ? '#64748b' : p.$rank === 3 ? '#92400e' : p.theme.colors.text.secondary};
+    p.$rank === 1
+      ? '#d97706'
+      : p.$rank === 2
+        ? '#64748b'
+        : p.$rank === 3
+          ? '#92400e'
+          : p.theme.colors.text.secondary};
 `
 
 export const BarChartValue = styled.div`
@@ -514,18 +590,30 @@ export const DashboardTable = styled.table`
   border-collapse: collapse;
   font-size: 14px;
 
-  @media (max-width: 768px) { font-size: 13px; }
-  @media (max-width: 480px) { font-size: 12px; display: block; overflow-x: auto; }
+  @media (max-width: 768px) {
+    font-size: 13px;
+  }
+  @media (max-width: 480px) {
+    font-size: 12px;
+    display: block;
+    overflow-x: auto;
+  }
 `
 
 export const DashboardTableHead = styled.thead`
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : theme.colors.background.secondary};
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.03)'
+      : theme.colors.background.secondary};
   border-bottom: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : theme.colors.border.default};
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : theme.colors.border.default};
 
-  @media (max-width: 480px) { display: none; }
+  @media (max-width: 480px) {
+    display: none;
+  }
 `
 
 export const DashboardTh = styled.th<{ align?: string }>`
@@ -537,21 +625,29 @@ export const DashboardTh = styled.th<{ align?: string }>`
   letter-spacing: 0.03em;
   white-space: nowrap;
 
-  @media (max-width: 768px) { padding: 10px 12px; }
+  @media (max-width: 768px) {
+    padding: 10px 12px;
+  }
 `
 
 export const DashboardTr = styled.tr`
   border-bottom: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : theme.colors.border.light};
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : theme.colors.border.light};
   transition: background 0.15s ease;
 
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : theme.colors.background.secondary};
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : theme.colors.background.secondary};
   }
 
-  &:last-child { border-bottom: none; }
+  &:last-child {
+    border-bottom: none;
+  }
 `
 
 export const DashboardTd = styled.td<{ align?: string }>`
@@ -562,7 +658,10 @@ export const DashboardTd = styled.td<{ align?: string }>`
   white-space: nowrap;
   vertical-align: middle;
 
-  @media (max-width: 768px) { padding: 10px 12px; font-size: 13px; }
+  @media (max-width: 768px) {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
 `
 
 export const CountryCell = styled.div`
@@ -598,10 +697,14 @@ export const IsoCode = styled.code`
   font-family: ui-monospace, monospace;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : theme.colors.background.tertiary};
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : theme.colors.background.tertiary};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : theme.colors.border.light};
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : theme.colors.border.light};
   padding: 3px 8px;
   border-radius: 6px;
 `
@@ -613,7 +716,9 @@ export const ContinentBadge = styled.span`
   font-weight: 500;
   color: ${({ theme }) => theme.colors.primary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.15)' : theme.colors.activeLight};
+    theme.mode === 'dark'
+      ? 'rgba(99, 106, 242, 0.15)'
+      : theme.colors.activeLight};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.25)' : 'transparent'};

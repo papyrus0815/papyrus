@@ -21,7 +21,7 @@ import { FILTER_ALL } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
-import { MOCK_POSITION_TYPES } from '../../../pages/events/list/mock-government-positions'
+import { MOCK_POSITION_TYPES } from '../../../entities/event/model/mock-government-positions'
 import * as Filter from '../../../pages/events/styles/filter.styles'
 import * as Skeleton from '../../../pages/events/styles/skeleton.styles'
 import {

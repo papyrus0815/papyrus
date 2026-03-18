@@ -58,10 +58,11 @@ import type {
   EventHierarchyNode,
   HistoricalEvent,
 } from '../create/events.types'
+import type { SortOption } from '@/features/event-list/lib/constants'
 import * as Layout from '../styles/layout.styles'
 import * as Modal from '../styles/modal.styles'
 import { formatDateRange } from '../utils/events.utils'
-import { MOCK_POSITION_TYPES } from './mock-government-positions'
+import { MOCK_POSITION_TYPES } from '../../../entities/event/model/mock-government-positions'
 
 export interface EventsCatalogPageRefactoredProps {
   /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 사건 */
@@ -404,8 +405,8 @@ export const EventsCatalogPageRefactored: React.FC<
             }
             onResetFilters={handleResetFilters}
             onSelectCentury={setSelectedCentury}
-            onSortChange={(newSortBy) => {
-              setSortBy(newSortBy)
+            onSortChange={(newSortBy: string) => {
+              setSortBy(newSortBy as SortOption)
               if (newSortBy === 'recent' || newSortBy === 'duration') {
                 setSortDirection('desc')
               }
@@ -507,8 +508,8 @@ export const EventsCatalogPageRefactored: React.FC<
                   setSummaryEventId(eventId)
                   setShowSummaryModal(true)
                 }}
-                onSortChange={(newSortBy) => {
-                  setSortBy(newSortBy)
+                onSortChange={(newSortBy: string) => {
+                  setSortBy(newSortBy as SortOption)
                   if (newSortBy === 'recent' || newSortBy === 'duration') {
                     setSortDirection('desc')
                   }

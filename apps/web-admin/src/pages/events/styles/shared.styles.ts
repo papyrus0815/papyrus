@@ -4,7 +4,7 @@
  */
 
 import styled, { css } from 'styled-components'
-import { COLORS, KEYFRAMES, BREAKPOINTS } from './theme'
+import { KEYFRAMES, BREAKPOINTS } from './theme'
 
 /**
  * Shimmer 애니메이션 믹스인
@@ -75,8 +75,9 @@ export const SkeletonText = styled(SkeletonBase)<{ $width?: string }>`
 export const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 1000;
 `
 
@@ -88,9 +89,7 @@ export const ModalContainer = styled.div`
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: ${COLORS.background.white};
   border-radius: 24px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   z-index: 1001;
   width: 90%;
   max-width: 480px;
@@ -98,6 +97,16 @@ export const ModalContainer = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(20, 20, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  ` : css`
+    background: #ffffff;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  `}
 `
 
 /**
@@ -105,10 +114,14 @@ export const ModalContainer = styled.div`
  */
 export const ModalHeader = styled.div`
   padding: 24px;
-  border-bottom: 1px solid ${COLORS.borderLight};
   display: flex;
   align-items: center;
   justify-content: space-between;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  ` : css`
+    border-bottom: 1px solid rgba(99, 102, 241, 0.12);
+  `}
 `
 
 /**
@@ -118,7 +131,7 @@ export const ModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: ${COLORS.text.primary};
+  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
 `
 
 /**
@@ -129,16 +142,16 @@ export const ModalClose = styled.button`
   background: transparent;
   padding: 4px;
   cursor: pointer;
-  color: ${COLORS.text.tertiary};
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   transition: all 0.2s ease;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 
   &:hover {
-    background: ${COLORS.primaryLight};
-    color: ${COLORS.primary};
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(99, 102, 241, 0.12)'};
+    color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#6366f1'};
   }
 `
 
@@ -158,21 +171,22 @@ export const ModalContent = styled.div`
  * 엠티 스테이트 컨테이너
  */
 export const EmptyStateContainer = styled.div`
-  border: 2px dashed ${COLORS.borderLight};
   border-radius: 24px;
   padding: 80px 40px;
   text-align: center;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.03),
-    rgba(168, 85, 247, 0.02)
-  );
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
   min-height: 400px;
   justify-content: center;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    border: 2px dashed rgba(99, 102, 241, 0.2);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), rgba(168, 85, 247, 0.02));
+  ` : css`
+    border: 2px dashed rgba(99, 102, 241, 0.12);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.03), rgba(168, 85, 247, 0.02));
+  `}
 
   @media (max-width: ${BREAKPOINTS.mobile}) {
     padding: 60px 24px;
@@ -187,11 +201,7 @@ export const EmptyIcon = styled.div`
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.1),
-    rgba(168, 85, 247, 0.08)
-  );
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -199,7 +209,7 @@ export const EmptyIcon = styled.div`
   box-shadow: 0 8px 24px rgba(99, 102, 241, 0.15);
 
   svg {
-    color: ${COLORS.primary};
+    color: #6366f1;
     opacity: 0.7;
   }
 
@@ -221,8 +231,8 @@ export const EmptyTitle = styled.h3`
   margin: 0;
   font-size: 24px;
   font-weight: 700;
-  color: ${COLORS.text.primary};
   letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#e2e8f0' : '#0f172a'};
 
   @media (max-width: ${BREAKPOINTS.mobile}) {
     font-size: 20px;
@@ -235,9 +245,9 @@ export const EmptyTitle = styled.h3`
 export const EmptyDescription = styled.p`
   margin: 0;
   font-size: 15px;
-  color: ${COLORS.text.tertiary};
   line-height: 1.6;
   max-width: 400px;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 
   @media (max-width: ${BREAKPOINTS.mobile}) {
     font-size: 14px;
@@ -248,11 +258,8 @@ export const EmptyDescription = styled.p`
  * 버튼 베이스 스타일
  */
 export const ButtonBase = styled.button`
-  border: 1.5px solid ${COLORS.borderLight};
   border-radius: 12px;
   padding: 12px 24px;
-  background: ${COLORS.primaryLight};
-  color: ${COLORS.primaryDark};
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -260,13 +267,27 @@ export const ButtonBase = styled.button`
   display: flex;
   align-items: center;
   gap: 8px;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.4);
-    background: rgba(99, 102, 241, 0.18);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
-    transform: translateY(-2px);
-  }
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    background: rgba(99, 102, 241, 0.15);
+    border: 1.5px solid rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
+    &:hover {
+      background: rgba(99, 102, 241, 0.25);
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+      transform: translateY(-2px);
+    }
+  ` : css`
+    background: rgba(99, 102, 241, 0.12);
+    border: 1.5px solid rgba(99, 102, 241, 0.12);
+    color: #4f46e5;
+    &:hover {
+      border-color: rgba(99, 102, 241, 0.4);
+      background: rgba(99, 102, 241, 0.18);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+      transform: translateY(-2px);
+    }
+  `}
 
   &:disabled {
     opacity: 0.5;
@@ -274,4 +295,3 @@ export const ButtonBase = styled.button`
     transform: none;
   }
 `
-

@@ -13,7 +13,7 @@ import {
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
-import { MOCK_POSITION_TYPES } from '../../../pages/events/list/mock-government-positions'
+import { MOCK_POSITION_TYPES } from '../../../entities/event/model/mock-government-positions'
 import { getCenturyFromDate } from '../../../pages/events/utils/events.utils'
 
 export const useEventFilters = (

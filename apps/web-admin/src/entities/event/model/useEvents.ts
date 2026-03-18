@@ -8,7 +8,7 @@ import { getAllEvents } from '@/shared/api/events'
 import { getAllPersonsWithGovernmentPositions } from '@/shared/api/persons'
 
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
-import { MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS } from '../../../pages/events/list/mock-government-positions'
+import { MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS } from './mock-government-positions'
 import { transformEventsFromApi } from './eventTransformers'
 
 export const useEvents = (

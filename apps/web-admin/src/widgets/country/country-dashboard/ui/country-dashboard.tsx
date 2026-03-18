@@ -9,8 +9,8 @@ import { type UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 
-import * as S from './country-dashboard.styles'
 import { formatEventPeriod, formatRelativeTime } from '../relative-time'
+import * as S from './country-dashboard.styles'
 
 /** 전 세계 국가 수 기준 (UN 회원국·옵저버 등 통상 인용치) */
 const TOTAL_COUNTRIES_IN_WORLD = 195
