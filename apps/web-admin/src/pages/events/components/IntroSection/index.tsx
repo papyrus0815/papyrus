@@ -12,7 +12,7 @@ import {
 } from '../../create/events.constants'
 import type { HistoricalEventCategory } from '../../create/events.types'
 import { CATEGORY_COLORS } from '../../styles/theme'
-import * as S from './IntroSection.styles'
+import * as S from './intro-section.styles'
 
 interface IntroSectionProps {
   isLoading: boolean

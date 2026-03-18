@@ -14,10 +14,10 @@ import {
   useHistoricalCountry,
   useUpdateHistoricalCountry,
 } from '@/features/historical-country'
-import { HistoricalCountryDashboard } from '@/widgets/historical-country/historical-country-dashboard'
-import { HistoricalCountryDetail } from '@/widgets/historical-country/historical-country-detail'
-import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form'
-import { HistoricalCountryList } from '@/widgets/historical-country/historical-country-list'
+import { HistoricalCountryDashboard } from '@/widgets/historical-country/historical-country-dashboard/ui/historical-country-dashboard'
+import { HistoricalCountryDetail } from '@/widgets/historical-country/historical-country-detail/ui/historical-country-detail'
+import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
+import { HistoricalCountryList } from '@/widgets/historical-country/historical-country-list/ui/historical-country-list'
 
 export default function HistoricalCountryPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('dashboard')

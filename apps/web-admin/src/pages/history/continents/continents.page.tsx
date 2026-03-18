@@ -13,10 +13,10 @@ import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import styled from 'styled-components'
 import type { ContinentResponseDto } from '@/shared/api/continents'
-import { ActionMenu } from '@/shared/ui/action-menu'
+import { ActionMenu } from '@/shared/ui/action-menu/action-menu'
 import { Z_INDEX, OVERLAY_STYLES } from '@/shared/styles/z-index'
 import { useContinentPage } from './use-continent-page.hook'
-import { ContinentForm } from './components/ContinentForm'
+import { ContinentForm } from './components/continent-form'
 
 export default function ContinentsPage() {
   const {

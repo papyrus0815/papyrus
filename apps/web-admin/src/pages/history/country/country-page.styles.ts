@@ -3,7 +3,7 @@
  * country.page.tsx 전용: 페이지 루트, 그리드, PageHeader, KPI 등
  */
 import { motion } from 'framer-motion'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 
@@ -87,13 +87,36 @@ export const KpiRow = styled.div`
 `
 
 export const KpiCard = styled.div`
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  border-radius: 12px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          backdrop-filter: blur(16px) saturate(160%);
+          -webkit-backdrop-filter: blur(16px) saturate(160%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid ${theme.colors.border.light};
+          box-shadow: 0 1px 4px ${theme.colors.shadow.sm};
+        `}
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 6px 18px rgba(0,0,0,0.5)'
+        : `0 4px 12px ${theme.colors.shadow.md}`};
+  }
 `
 
 export const KpiLabel = styled.div`
@@ -126,12 +149,24 @@ export const Primary = styled.button`
 
 export const PageHeader = styled.div`
   width: 100%;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
-  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
   position: sticky;
   top: 64px;
   z-index: 10;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(23, 23, 23, 0.88);
+          backdrop-filter: blur(20px) saturate(180%);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border-bottom: 1px solid ${theme.colors.border.default};
+          box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
+        `}
 `
 
 export const HeaderContent = styled.div`
@@ -165,12 +200,19 @@ export const PageHeaderLeft = styled.div`
 export const PageHeaderIcon = styled.div`
   width: 56px;
   height: 56px;
-  background: ${({ theme }) => theme.colors.activeLight};
-  border-radius: 14px;
+  background: ${({ theme }) => theme.colors.gradient.primary};
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${({ theme }) => theme.colors.primary};
+  color: #fff;
+  box-shadow:
+    0 8px 20px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.4)'
+          : 'rgba(99, 102, 241, 0.3)'},
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
 
   @media (min-width: 769px) and (max-width: 1024px) {
     width: 52px;
@@ -274,9 +316,6 @@ export const DashboardMenuContentDesc = styled.p`
 export const DashboardMenuContentButton = styled.button`
   padding: 10px 20px;
   border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -285,11 +324,30 @@ export const DashboardMenuContentButton = styled.button`
     border-color 0.15s ease,
     color 0.15s ease;
 
-  &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.primary};
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.05);
+          color: ${theme.colors.text.primary};
+
+          &:hover {
+            background: rgba(99, 106, 242, 0.15);
+            border-color: rgba(99, 106, 242, 0.4);
+            color: #ffffff;
+          }
+        `
+      : css`
+          border: 1px solid ${theme.colors.border.default};
+          background: ${theme.colors.background.primary};
+          color: ${theme.colors.text.primary};
+
+          &:hover {
+            background: ${theme.colors.background.secondary};
+            border-color: ${theme.colors.primary};
+            color: ${theme.colors.primary};
+          }
+        `}
 `
 
 // ─── 모바일 UI (CountryMobileUI.tsx 전용) ─────────────────────────────────────
@@ -744,20 +802,41 @@ export const OverviewSubTabRow = styled.div`
   position: sticky;
   top: 0;
   z-index: 2;
-  background: ${({ theme }) => theme.colors.background.primary};
   padding: 12px 20px 14px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(23, 23, 23, 0.9);
+          backdrop-filter: blur(16px) saturate(160%);
+          -webkit-backdrop-filter: blur(16px) saturate(160%);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border-bottom: 1px solid ${theme.colors.border.light};
+        `}
 `
 
 export const OverviewSubTabBar = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px;
-  background: ${({ theme }) => theme.colors.background.tertiary};
+  padding: 5px;
   border-radius: 20px;
   overflow-x: auto;
   overscroll-behavior: contain;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: ${theme.colors.background.tertiary};
+          border: 1px solid ${theme.colors.border.light};
+        `}
 
   &::-webkit-scrollbar {
     display: none;
@@ -768,23 +847,50 @@ export const OverviewSubTabButton = styled.button<{ $active?: boolean }>`
   padding: 10px 18px;
   border-radius: 14px;
   border: none;
-  background: ${({ $active, theme }) =>
-    $active ? theme.colors.background.primary : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.active : theme.colors.text.secondary};
   font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   transition:
     color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    box-shadow 0.15s ease;
   font-family: inherit;
   white-space: nowrap;
-  box-shadow: ${({ $active, theme }) =>
-    $active ? `0 2px 8px ${theme.colors.shadow.sm}` : 'none'};
+
+  ${({ $active, theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$active ? 'rgba(255, 255, 255, 0.1)' : 'transparent'};
+          color: ${$active ? '#ffffff' : theme.colors.text.secondary};
+          font-weight: ${$active ? '600' : '500'};
+          backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
+          -webkit-backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
+          box-shadow: ${$active
+            ? '0 4px 12px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.08)'
+            : 'none'};
+
+          &:hover {
+            color: #ffffff;
+            background: ${$active
+              ? 'rgba(255, 255, 255, 0.14)'
+              : 'rgba(255, 255, 255, 0.06)'};
+          }
+        `
+      : css`
+          background: ${$active ? theme.colors.background.primary : 'transparent'};
+          color: ${$active ? theme.colors.active : theme.colors.text.secondary};
+          font-weight: ${$active ? '600' : '500'};
+          box-shadow: ${$active ? `0 2px 8px ${theme.colors.shadow.sm}` : 'none'};
+
+          &:hover {
+            color: ${$active ? theme.colors.active : theme.colors.text.primary};
+            background: ${$active
+              ? theme.colors.background.primary
+              : theme.colors.background.secondary};
+          }
+        `}
 `
 
 export const CollapsedListPane = styled.div`
@@ -800,18 +906,32 @@ export const CollapsedListButton = styled.button`
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 1px 4px ${({ theme }) => theme.colors.shadow.sm};
   transition:
     color 0.2s,
     border-color 0.2s,
-    background 0.2s;
+    background 0.2s,
+    box-shadow 0.2s;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(33, 33, 33, 0.9);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          color: ${theme.colors.text.secondary};
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+        `
+      : css`
+          border: 1px solid ${theme.colors.border.default};
+          background: ${theme.colors.background.primary};
+          color: ${theme.colors.text.secondary};
+          box-shadow: 0 1px 4px ${theme.colors.shadow.sm};
+        `}
 
   svg {
     width: 16px;
@@ -819,9 +939,13 @@ export const CollapsedListButton = styled.button`
   }
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.2)'
+        : theme.colors.background.secondary};
     color: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.activeLight};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.4)' : theme.colors.activeLight};
   }
 `
 

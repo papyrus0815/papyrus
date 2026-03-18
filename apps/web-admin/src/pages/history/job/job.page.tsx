@@ -6,8 +6,8 @@ import {
   useJobCategories,
   useDeleteJobCategory,
 } from '@/features/job-category/use-job-categories.hook'
-import { JobForm } from './components/JobForm'
-import { JobCategoryForm } from '../job-category/components/JobCategoryForm'
+import { JobForm } from './components/job-form'
+import { JobCategoryForm } from '../job-category/components/job-category-form'
 import type { Job } from '@/shared/api/job'
 import type { JobCategory } from '@/shared/api/job-category'
 

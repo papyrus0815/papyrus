@@ -5,7 +5,7 @@
 import styled from 'styled-components'
 
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
-import { FormInput } from '@/shared/ui/form-input'
+import { FormInput } from '@/shared/ui/form-input/form-input'
 
 // ─── 사이드 패널 ──────────────────────────────────────────────────────────────
 

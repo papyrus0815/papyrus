@@ -44,12 +44,10 @@ import {
 import { getAllEvents } from '@/shared/api/events'
 import { personCareerApi } from '@/shared/api/person-career'
 import { pathKeys } from '@/shared/router'
-import {
-  CategoryModal,
-  EventDetailPanel,
-  SimpleSelectModal,
-  TreeView,
-} from '@/widgets/event-list/ui'
+import { CategoryModal } from '@/widgets/event-list/ui/category-modal'
+import { EventDetailPanel } from '@/widgets/event-list/ui/event-detail-panel'
+import { SimpleSelectModal } from '@/widgets/event-list/ui/simple-select-modal'
+import { TreeView } from '@/widgets/event-list/ui/tree-view'
 
 import { CATEGORY_ICON_MAP } from '../create/events.constants'
 import {

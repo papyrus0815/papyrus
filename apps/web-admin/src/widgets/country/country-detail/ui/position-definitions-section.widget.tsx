@@ -21,7 +21,7 @@ import { toast } from 'react-hot-toast'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateGovernmentPositionDefinitionDto } from '@/shared/api/person-career'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
+import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
 import {
   FormCardWrapper,

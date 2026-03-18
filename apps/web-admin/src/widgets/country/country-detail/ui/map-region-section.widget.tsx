@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { motion } from 'framer-motion'
 
-import { GoogleMap } from '@/shared/ui/GoogleMap'
+import { GoogleMap } from '@/shared/ui/google-map/google-map'
 
 // Mock 데이터 import
 import {
@@ -12,10 +12,10 @@ import {
   mockCityDetails,
 } from '../mock'
 import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
-import * as S from './CountryDetail.styles'
-import { MapRegionAdministrativeView } from './MapRegionAdministrativeView'
-import { MapRegionInfrastructureView } from './MapRegionInfrastructureView'
-import { MapRegionNatureView } from './MapRegionNatureView'
+import * as S from './country-detail.styles'
+import { MapRegionAdministrativeView } from './map-region-administrative-view'
+import { MapRegionInfrastructureView } from './map-region-infrastructure-view'
+import { MapRegionNatureView } from './map-region-nature-view'
 import * as Styled from './map-region-section.styles'
 
 interface City {

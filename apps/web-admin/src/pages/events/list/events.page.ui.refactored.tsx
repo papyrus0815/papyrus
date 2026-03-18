@@ -46,15 +46,13 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
 import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
 import { pathKeys } from '@/shared/router'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
-import { FiltersPanel } from '@/widgets/event-filters-panel/ui'
-import { EventCompactList } from '@/widgets/event-list-compact/ui'
-import {
-  CategoryModal,
-  EventDetailPanel,
-  SimpleSelectModal,
-  TreeView,
-} from '@/widgets/event-list/ui'
+import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { FiltersPanel } from '@/widgets/event-filters-panel/ui/filters-panel'
+import { EventCompactList } from '@/widgets/event-list-compact/ui/event-compact-list'
+import { CategoryModal } from '@/widgets/event-list/ui/category-modal'
+import { EventDetailPanel } from '@/widgets/event-list/ui/event-detail-panel'
+import { SimpleSelectModal } from '@/widgets/event-list/ui/simple-select-modal'
+import { TreeView } from '@/widgets/event-list/ui/tree-view'
 
 import type {
   EventHierarchyNode,

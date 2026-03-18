@@ -41,13 +41,18 @@ export async function getPersonsByTenureCountry(params: {
   const conn = getApiConnection()
   try {
     if (countryId) {
-      const data = await governmentPositions.countries.persons.getPersonsByCountryId(conn, countryId)
+      const data =
+        await governmentPositions.countries.persons.getPersonsByCountryId(
+          conn,
+          countryId,
+        )
       return Array.isArray(data) ? data : []
     }
-    const data = await governmentPositions.historical_countries.persons.getPersonsByHistoricalCountryId(
-      conn,
-      historicalCountryId!,
-    )
+    const data =
+      await governmentPositions.historical_countries.persons.getPersonsByHistoricalCountryId(
+        conn,
+        historicalCountryId!,
+      )
     return Array.isArray(data) ? data : []
   } catch (error) {
     throw error
@@ -88,7 +93,11 @@ export async function updatePerson(
   data: UpdatePersonDto,
 ): Promise<PersonResponseDto> {
   try {
-    const response = (await personsApi.update(getApiConnection(), id, data)) as any
+    const response = (await personsApi.update(
+      getApiConnection(),
+      id,
+      data,
+    )) as any
     return response.data || response
   } catch (error) {
     throw error
@@ -112,7 +121,10 @@ export async function deletePerson(id: string): Promise<void> {
 export async function getAllPersonsWithGovernmentPositions(): Promise<any[]> {
   try {
     const conn = getApiConnection()
-    const data = await personsApi.with_government_positions.getAllWithGovernmentPositions(conn)
+    const data =
+      await personsApi.with_government_positions.getAllWithGovernmentPositions(
+        conn,
+      )
     return Array.isArray(data) ? data : []
   } catch (error) {
     throw error

@@ -1,1 +1,0 @@
-export { PersonSelectModal } from './PersonSelectModal'

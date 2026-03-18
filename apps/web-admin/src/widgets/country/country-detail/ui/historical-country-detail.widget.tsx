@@ -37,10 +37,10 @@ import {
 
 import { historicalCountryMockData } from '../mock/historical-country.mock'
 import { CountryFlag } from '../../shared'
-import * as S from './CountryDetail.styles'
+import * as S from './country-detail.styles'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
-import { LoadingOverlay } from './LoadingOverlay'
+import { LoadingOverlay } from './loading-overlay'
 
 // 역사적 국가 전용 컴팩트 스타일 (자리 최소화)
 const CompactFlagWrapper = styled(S.MiniFlagWrapper)`

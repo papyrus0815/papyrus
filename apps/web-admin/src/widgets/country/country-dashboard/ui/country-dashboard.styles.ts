@@ -1,8 +1,63 @@
 /**
  * CountryDashboard 위젯 전용 스타일
  * 우측 컨텐츠: 전 세계 국가 통계, KPI, 차트, 테이블
+ * 리퀴드 글래스 디자인은 다크 모드 전용
  */
-import styled from 'styled-components'
+import styled, { css, keyframes } from 'styled-components'
+import type { DefaultTheme } from 'styled-components'
+
+// ─── 공통 헬퍼 ───────────────────────────────────────────────────────────────
+
+/** 다크 모드 리퀴드 글래스 카드 기본 스타일 */
+const liquidCard = (theme: DefaultTheme) =>
+  theme.mode === 'dark'
+    ? css`
+        background: rgba(255, 255, 255, 0.04);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        box-shadow:
+          0 4px 20px rgba(0, 0, 0, 0.45),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+        &::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: inherit;
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.03) 0%,
+            transparent 50%
+          );
+          pointer-events: none;
+        }
+      `
+    : css`
+        background: ${theme.colors.background.primary};
+        border: 1px solid ${theme.colors.border.default};
+        box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
+      `
+
+/** 다크 모드 리퀴드 글래스 hover 효과 */
+const liquidHover = (theme: DefaultTheme) =>
+  theme.mode === 'dark'
+    ? css`
+        transform: translateY(-2px);
+        box-shadow:
+          0 8px 28px rgba(0, 0, 0, 0.6),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        border-color: rgba(99, 106, 242, 0.4);
+      `
+    : css`
+        box-shadow: 0 4px 16px ${theme.colors.shadow.md};
+        border-color: ${theme.colors.primary};
+      `
+
+const fadeSlideIn = keyframes`
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+`
 
 // ─── 전체 레이아웃 ────────────────────────────────────────────────────────────
 
@@ -14,88 +69,98 @@ export const GlobalDashboard = styled.div`
   flex-direction: column;
   gap: 32px;
   overflow-y: auto;
+  animation: ${fadeSlideIn} 0.35s ease;
 
-  @media (max-width: 1024px) {
-    padding: 24px 28px 36px;
-    gap: 28px;
-  }
-
-  @media (max-width: 768px) {
-    padding: 20px 20px 28px;
-    gap: 24px;
-  }
-
-  @media (max-width: 480px) {
-    padding: 16px 16px 24px;
-    gap: 20px;
-  }
+  @media (max-width: 1024px) { padding: 24px 28px 36px; gap: 28px; }
+  @media (max-width: 768px)  { padding: 20px 20px 28px; gap: 24px; }
+  @media (max-width: 480px)  { padding: 16px 16px 24px; gap: 20px; }
 `
 
 // ─── 히어로 헤더 ──────────────────────────────────────────────────────────────
 
 export const GlobalDashboardHero = styled.header`
-  padding: 0 0 16px 0;
-  margin-bottom: 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
+  padding: 28px 32px;
+  border-radius: 20px;
   position: relative;
+  overflow: hidden;
 
-  @media (max-width: 768px) {
-    padding-bottom: 14px;
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid ${theme.colors.border.default};
+          box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
+        `}
+
+  @media (max-width: 768px) { padding: 20px 22px; border-radius: 16px; }
 `
 
 export const HeroBackground = styled.div`
   position: absolute;
   inset: 0;
-  background-image:
+  pointer-events: none;
+  background:
     radial-gradient(
-      circle at 20% 50%,
-      rgba(255, 255, 255, 0.1) 0%,
-      transparent 50%
+      ellipse at 15% 50%,
+      ${({ theme }) =>
+          theme.mode === 'dark'
+            ? 'rgba(99, 106, 242, 0.1)'
+            : 'rgba(99, 102, 241, 0.06)'}
+        0%,
+      transparent 60%
     ),
     radial-gradient(
-      circle at 80% 80%,
-      rgba(255, 255, 255, 0.1) 0%,
-      transparent 50%
+      ellipse at 85% 20%,
+      ${({ theme }) =>
+          theme.mode === 'dark'
+            ? 'rgba(159, 122, 234, 0.07)'
+            : 'rgba(139, 92, 246, 0.04)'}
+        0%,
+      transparent 55%
     );
-  opacity: 0.3;
 `
 
 export const HeroContent = styled.div`
   display: flex;
   align-items: center;
   gap: 20px;
+  position: relative;
+  z-index: 1;
 
-  @media (max-width: 768px) {
-    gap: 14px;
-  }
+  @media (max-width: 768px) { gap: 14px; }
 `
 
 export const HeroIcon = styled.div`
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   background: ${({ theme }) => theme.colors.gradient.primary};
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   color: #fff;
+  box-shadow: 0 8px 20px
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.4)'
+        : 'rgba(99, 102, 241, 0.3)'},
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
 
-  svg {
-    width: 22px;
-    height: 22px;
-  }
+  svg { width: 24px; height: 24px; }
 
   @media (max-width: 768px) {
-    width: 38px;
-    height: 38px;
-    border-radius: 8px;
-    svg {
-      width: 20px;
-      height: 20px;
-    }
+    width: 42px; height: 42px; border-radius: 12px;
+    svg { width: 21px; height: 21px; }
   }
 `
 
@@ -115,9 +180,7 @@ export const HeroTitle = styled.h1`
   letter-spacing: -0.025em;
   line-height: 1.3;
 
-  @media (max-width: 768px) {
-    font-size: 18px;
-  }
+  @media (max-width: 768px) { font-size: 18px; }
 `
 
 export const HeroSubtitle = styled.p`
@@ -125,11 +188,8 @@ export const HeroSubtitle = styled.p`
   font-size: 13px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
-  letter-spacing: 0;
 
-  @media (max-width: 768px) {
-    font-size: 12px;
-  }
+  @media (max-width: 768px) { font-size: 12px; }
 `
 
 // ─── 섹션 타이틀 ──────────────────────────────────────────────────────────────
@@ -139,23 +199,33 @@ export const DashboardSectionTitle = styled.div<{ $mt?: string }>`
   align-items: center;
   gap: 14px;
   padding: 24px 0 18px;
-  background: transparent;
   border-bottom: 2px solid ${({ theme }) => theme.colors.border.light};
   margin-bottom: 6px;
   ${({ $mt }) => $mt && `margin-top: ${$mt};`}
 `
 
 export const SectionTitleIcon = styled.div`
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 12px;
-  background: ${({ theme }) => theme.colors.activeLight};
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 16px;
   flex-shrink: 0;
   color: ${({ theme }) => theme.colors.primary};
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.06);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        `
+      : css`
+          background: ${theme.colors.activeLight};
+        `}
 `
 
 export const SectionTitleText = styled.h2`
@@ -165,9 +235,7 @@ export const SectionTitleText = styled.h2`
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 
-  @media (max-width: 768px) {
-    font-size: 17px;
-  }
+  @media (max-width: 768px) { font-size: 17px; }
 `
 
 // ─── 글로벌 KPI 그리드 ────────────────────────────────────────────────────────
@@ -175,87 +243,48 @@ export const SectionTitleText = styled.h2`
 export const GlobalMetricsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
-  overflow: hidden;
+  gap: 12px;
 
-  @media (min-width: 769px) and (max-width: 1024px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
+  @media (min-width: 769px) and (max-width: 1024px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 768px)  { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  @media (max-width: 480px)  { grid-template-columns: 1fr; gap: 8px; }
 `
 
 export const GlobalMetricCard = styled.div`
-  background: ${({ theme }) => theme.colors.background.primary};
-  padding: 24px 26px;
+  border-radius: 18px;
+  padding: 22px 24px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-  transition:
-    background 0.2s ease,
-    box-shadow 0.2s ease;
-  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 
-  &:nth-child(4n) {
-    border-right: none;
-  }
+  ${({ theme }) => liquidCard(theme)}
 
-  &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
-    box-shadow: inset 0 0 0 1px ${({ theme }) => theme.colors.activeLight};
-  }
+  &:hover { ${({ theme }) => liquidHover(theme)} }
 
-  @media (min-width: 769px) and (max-width: 1024px) {
-    padding: 22px 24px;
-    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-    &:nth-child(4n) {
-      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-    &:nth-child(2n) {
-      border-right: none;
-    }
-    &:nth-child(n + 3) {
-      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-  }
-
-  @media (max-width: 768px) {
-    padding: 22px 24px;
-    border-right: none;
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-    &:last-child {
-      border-bottom: none;
-    }
-  }
-
-  @media (max-width: 480px) {
-    padding: 20px 22px;
-  }
+  @media (max-width: 480px) { padding: 18px 20px; border-radius: 16px; }
 `
 
 export const GlobalMetricIcon = styled.div`
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
-  background: ${({ theme }) => theme.colors.activeLight};
-  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.gradient.primary};
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.35)'
+        : 'rgba(99, 102, 241, 0.25)'};
 
-  svg {
-    width: 21px;
-    height: 21px;
-  }
+  svg { width: 20px; height: 20px; }
 `
 
 export const GlobalMetricContent = styled.div`
@@ -283,9 +312,7 @@ export const GlobalMetricValue = styled.div`
   flex-wrap: wrap;
   gap: 0 2px;
 
-  @media (max-width: 480px) {
-    font-size: 20px;
-  }
+  @media (max-width: 480px) { font-size: 20px; }
 `
 
 export const GlobalMetricSubtext = styled.div`
@@ -302,43 +329,26 @@ export const GlobalDashboardGrid = styled.div`
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
 
-  @media (min-width: 769px) and (max-width: 1024px) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  @media (max-width: 480px) {
-    gap: 10px;
-  }
+  @media (min-width: 769px) and (max-width: 1024px) { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (max-width: 768px)  { grid-template-columns: 1fr; gap: 12px; }
+  @media (max-width: 480px)  { gap: 10px; }
 `
 
 export const GlobalWidget = styled.div`
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
-  transition:
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
 
-  &:hover {
-    box-shadow: 0 4px 16px ${({ theme }) => theme.colors.shadow.md};
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
+  ${({ theme }) => liquidCard(theme)}
 
-  @media (max-width: 480px) {
-    padding: 20px;
-    border-radius: 14px;
-  }
+  &:hover { ${({ theme }) => liquidHover(theme)} }
+
+  @media (max-width: 480px) { padding: 20px; border-radius: 16px; }
 `
 
 export const GlobalWidgetHeader = styled.div`
@@ -346,24 +356,38 @@ export const GlobalWidgetHeader = styled.div`
   align-items: center;
   gap: 12px;
   padding-bottom: 14px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : theme.colors.border.light};
+  position: relative;
+  z-index: 1;
 `
 
 export const GlobalWidgetIcon = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: ${({ theme }) => theme.colors.activeLight};
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: ${({ theme }) => theme.colors.primary};
   flex-shrink: 0;
 
-  svg {
-    width: 20px;
-    height: 20px;
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+        `
+      : css`
+          background: ${theme.colors.activeLight};
+        `}
+
+  svg { width: 19px; height: 19px; }
 `
 
 export const GlobalWidgetTitle = styled.h3`
@@ -372,6 +396,8 @@ export const GlobalWidgetTitle = styled.h3`
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
+  position: relative;
+  z-index: 1;
 `
 
 export const GlobalWidgetContent = styled.div`
@@ -379,6 +405,8 @@ export const GlobalWidgetContent = styled.div`
   flex-direction: column;
   gap: 12px;
   min-height: 200px;
+  position: relative;
+  z-index: 1;
 `
 
 // ─── 바 차트 ─────────────────────────────────────────────────────────────────
@@ -407,19 +435,18 @@ export const BarChartLabel = styled.div`
 `
 
 export const BarChartTrack = styled.div`
-  height: 8px;
-  background: ${({ theme }) => theme.colors.background.tertiary};
+  height: 7px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : theme.colors.background.tertiary};
   border-radius: 4px;
   overflow: hidden;
 `
 
-export const BarChartFill = styled.div<{
-  $percent: number
-  $rank?: 1 | 2 | 3
-}>`
+export const BarChartFill = styled.div<{ $percent: number; $rank?: 1 | 2 | 3 }>`
   height: 100%;
   width: ${(p) => p.$percent}%;
   border-radius: 4px;
+  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
   background: ${(p) =>
     p.$rank === 1
       ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
@@ -427,8 +454,17 @@ export const BarChartFill = styled.div<{
         ? 'linear-gradient(90deg, #94a3b8, #cbd5e1)'
         : p.$rank === 3
           ? 'linear-gradient(90deg, #92400e, #b45309)'
-          : p.theme.colors.primary};
-  transition: width 0.4s ease;
+          : p.theme.colors.gradient.primary};
+  box-shadow: ${(p) =>
+    p.theme.mode === 'dark'
+      ? p.$rank === 1
+        ? '0 0 6px rgba(245, 158, 11, 0.5)'
+        : p.$rank === 2
+          ? '0 0 4px rgba(148, 163, 184, 0.3)'
+          : p.$rank === 3
+            ? '0 0 5px rgba(146, 64, 14, 0.4)'
+            : '0 0 6px rgba(99, 106, 242, 0.4)'
+      : 'none'};
 `
 
 export const BarChartRank = styled.div<{ $rank: number }>`
@@ -441,22 +477,17 @@ export const BarChartRank = styled.div<{ $rank: number }>`
   font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   background: ${(p) =>
     p.$rank === 1
-      ? '#fef3c7'
+      ? 'linear-gradient(135deg, #fef3c7, #fde68a)'
       : p.$rank === 2
-        ? '#f1f5f9'
+        ? 'linear-gradient(135deg, #f1f5f9, #e2e8f0)'
         : p.$rank === 3
-          ? '#fef3c7'
+          ? 'linear-gradient(135deg, #fef3c7, #fcd34d)'
           : p.theme.colors.background.tertiary};
   color: ${(p) =>
-    p.$rank === 1
-      ? '#d97706'
-      : p.$rank === 2
-        ? '#64748b'
-        : p.$rank === 3
-          ? '#92400e'
-          : p.theme.colors.text.secondary};
+    p.$rank === 1 ? '#d97706' : p.$rank === 2 ? '#64748b' : p.$rank === 3 ? '#92400e' : p.theme.colors.text.secondary};
 `
 
 export const BarChartValue = styled.div`
@@ -471,11 +502,11 @@ export const BarChartValue = styled.div`
 // ─── 국가 비교 테이블 ─────────────────────────────────────────────────────────
 
 export const DashboardTableWrap = styled.div`
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
+  position: relative;
+
+  ${({ theme }) => liquidCard(theme)}
 `
 
 export const DashboardTable = styled.table`
@@ -483,65 +514,55 @@ export const DashboardTable = styled.table`
   border-collapse: collapse;
   font-size: 14px;
 
-  @media (max-width: 768px) {
-    font-size: 13px;
-  }
-
-  @media (max-width: 480px) {
-    font-size: 12px;
-    display: block;
-    overflow-x: auto;
-  }
+  @media (max-width: 768px) { font-size: 13px; }
+  @media (max-width: 480px) { font-size: 12px; display: block; overflow-x: auto; }
 `
 
 export const DashboardTableHead = styled.thead`
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : theme.colors.background.secondary};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : theme.colors.border.default};
 
-  @media (max-width: 480px) {
-    display: none;
-  }
+  @media (max-width: 480px) { display: none; }
 `
 
 export const DashboardTh = styled.th<{ align?: string }>`
   padding: 12px 16px;
-  text-align: ${(props) => props.align || 'left'};
+  text-align: ${(p) => p.align || 'left'};
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.03em;
   white-space: nowrap;
 
-  @media (max-width: 768px) {
-    padding: 10px 12px;
-  }
+  @media (max-width: 768px) { padding: 10px 12px; }
 `
 
 export const DashboardTr = styled.tr`
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : theme.colors.border.light};
   transition: background 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : theme.colors.background.secondary};
   }
 
-  &:last-child {
-    border-bottom: none;
-  }
+  &:last-child { border-bottom: none; }
 `
 
 export const DashboardTd = styled.td<{ align?: string }>`
   padding: 12px 16px;
   font-size: 14px;
   color: ${({ theme }) => theme.colors.text.primary};
-  text-align: ${(props) => props.align || 'left'};
+  text-align: ${(p) => p.align || 'left'};
   white-space: nowrap;
   vertical-align: middle;
 
-  @media (max-width: 768px) {
-    padding: 10px 12px;
-    font-size: 13px;
-  }
+  @media (max-width: 768px) { padding: 10px 12px; font-size: 13px; }
 `
 
 export const CountryCell = styled.div`
@@ -576,8 +597,12 @@ export const IsoCode = styled.code`
   font-size: 12px;
   font-family: ui-monospace, monospace;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => theme.colors.background.tertiary};
-  padding: 4px 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : theme.colors.background.tertiary};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : theme.colors.border.light};
+  padding: 3px 8px;
   border-radius: 6px;
 `
 
@@ -586,8 +611,12 @@ export const ContinentBadge = styled.span`
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.15)' : theme.colors.activeLight};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.25)' : 'transparent'};
   border-radius: 8px;
 `
 
@@ -601,10 +630,11 @@ export const EmptyGlobalState = styled.div`
   padding: 80px 40px;
   text-align: center;
   min-height: 420px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-radius: 20px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+
+  ${({ theme }) => liquidCard(theme)}
 `
 
 export const EmptyGlobalIcon = styled.div`
@@ -613,11 +643,23 @@ export const EmptyGlobalIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 40px;
+  font-size: 38px;
   margin-bottom: 24px;
-  background: ${({ theme }) => theme.colors.activeLight};
-  border-radius: 20px;
-  box-shadow: 0 4px 12px ${({ theme }) => theme.colors.shadow.md};
+  border-radius: 22px;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.06);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 8px 24px rgba(99, 106, 242, 0.25);
+        `
+      : css`
+          background: ${theme.colors.activeLight};
+          box-shadow: 0 4px 12px ${theme.colors.shadow.md};
+        `}
 `
 
 export const EmptyGlobalTitle = styled.h3`

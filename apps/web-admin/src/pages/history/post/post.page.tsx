@@ -9,15 +9,15 @@ import {
   useDeletePost,
   useUpdatePost,
 } from '@/features/post/use-posts.hook'
-import { PostForm } from './components/PostForm'
+import { PostForm } from './components/post-form'
 import type { PostItem } from '@/shared/api/post'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { getGlossaryTermById } from '@/shared/api/glossary'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
+import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { useFormEntities } from '@/entities/event-form/model'
-import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '임시저장',

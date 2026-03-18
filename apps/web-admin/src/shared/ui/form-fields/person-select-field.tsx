@@ -1,0 +1,110 @@
+/**
+ * 인물 선택 필드 - 인물 등록/역대 수반 등록 등에서 공통 사용
+ * 라벨 + 아바타/이름 버튼 + PersonSelectModal
+ */
+import React from 'react'
+import { FiChevronRight, FiUser } from 'react-icons/fi'
+
+import type { PersonResponseDto } from '@/shared/api/persons'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import {
+  FieldControl,
+  FieldHint,
+  FieldLabel,
+  FieldRow,
+  Required,
+} from '@/shared/ui/register-form-layout'
+import {
+  PersonAvatar,
+  PersonLabel,
+  PersonSelectButton,
+} from './form-fields.styles'
+
+export interface PersonSelectFieldProps {
+  label?: string
+  required?: boolean
+  /** 라벨 아래·컨트롤 아래에 표시할 설명 (통일된 스타일) */
+  hint?: string
+  value: string
+  selectedPerson: Pick<
+    PersonResponseDto,
+    'id' | 'name' | 'surname' | 'middleName' | 'nameDisplayOrder' | 'profileImageUrl'
+  > | null
+  persons: PersonResponseDto[]
+  isModalOpen: boolean
+  onModalOpenChange: (open: boolean) => void
+  onSelect: (personId: string) => void
+  placeholder?: string
+}
+
+function getDisplayName(
+  p: Pick<
+    PersonResponseDto,
+    'name' | 'surname' | 'middleName' | 'nameDisplayOrder'
+  > | null,
+): string {
+  if (!p) return '—'
+  return getPersonDisplayName({
+    name: p.name ?? '',
+    surname: p.surname ?? '',
+    middleName: p.middleName ?? '',
+    nameDisplayOrder: (p.nameDisplayOrder as 'korean' | 'western') ?? 'korean',
+  })
+}
+
+export const PersonSelectField: React.FC<PersonSelectFieldProps> = ({
+  label = '인물',
+  required = false,
+  hint,
+  value,
+  selectedPerson,
+  persons,
+  isModalOpen,
+  onModalOpenChange,
+  onSelect,
+  placeholder = '인물 선택',
+}) => {
+  return (
+    <>
+      <FieldRow>
+        <FieldLabel>
+          {label}
+          {required && <Required aria-label="필수" />}
+        </FieldLabel>
+        <FieldControl $variant="person">
+          <PersonSelectButton
+            type="button"
+            onClick={() => onModalOpenChange(true)}
+            $hasValue={!!value}
+          >
+            <PersonAvatar $hasImage={!!selectedPerson?.profileImageUrl}>
+              {selectedPerson?.profileImageUrl ? (
+                <img src={selectedPerson.profileImageUrl} alt="" />
+              ) : (
+                <FiUser size={22} />
+              )}
+            </PersonAvatar>
+            <PersonLabel>
+              {value ? getDisplayName(selectedPerson) : placeholder}
+            </PersonLabel>
+            <FiChevronRight size={20} strokeWidth={2.5} />
+          </PersonSelectButton>
+          {hint && <FieldHint>{hint}</FieldHint>}
+        </FieldControl>
+      </FieldRow>
+
+      {isModalOpen && (
+        <PersonSelectModal
+          persons={persons}
+          selectedPersonId={value}
+          onSelect={(id) => {
+            onSelect(id)
+            onModalOpenChange(false)
+          }}
+          onClose={() => onModalOpenChange(false)}
+        />
+      )}
+    </>
+  )
+}

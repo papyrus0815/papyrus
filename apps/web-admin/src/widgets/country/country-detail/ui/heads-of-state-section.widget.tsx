@@ -34,9 +34,10 @@ import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { uploadImage } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { calcAgeAtTenure, formatPersonLifespan } from '@/shared/lib/tenure-person-utils'
-import { CountrySearchModal } from '@/shared/ui/country-search-modal'
-import { DatePickerModal } from '@/shared/ui/date-picker'
-import { DateRangeField, PersonSelectField } from '@/shared/ui/form-fields'
+import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
+import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import {
   DateFieldBtn,
   DateFieldsRow,
@@ -44,8 +45,8 @@ import {
   Input as RegisterInput,
   Required,
 } from '@/shared/ui/register-form-layout'
-import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 import { LineageTree } from './lineage-tree.widget'
 

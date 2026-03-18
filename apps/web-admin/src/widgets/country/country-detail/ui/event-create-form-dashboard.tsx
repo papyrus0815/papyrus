@@ -36,9 +36,9 @@ import {
   uploadImage,
   validateImageFile,
 } from '@/shared/api/upload'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
-import { DatePickerModal } from '@/shared/ui/date-picker'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal'
+import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   BackButton,
   DateFieldBtn,
@@ -55,7 +55,7 @@ import {
   TabNavigation,
 } from '@/shared/ui/register-form-layout'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
-import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
 const CategoryChip = styled.button<{ $active?: boolean }>`
   padding: 10px 18px;

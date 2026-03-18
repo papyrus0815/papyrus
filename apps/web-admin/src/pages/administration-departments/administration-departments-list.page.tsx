@@ -30,7 +30,7 @@ import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/CountrySelectModal'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
 type DetailTab = 'basic' | 'organization' | 'history' | 'location' | 'positions'

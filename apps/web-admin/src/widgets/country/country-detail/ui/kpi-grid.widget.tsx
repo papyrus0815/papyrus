@@ -1,4 +1,4 @@
-import * as S from './CountryDetail.styles'
+import * as S from './country-detail.styles'
 import { KPICard } from './kpi-card.ui'
 
 interface KPIGridProps {

@@ -4,7 +4,7 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { cityApi } from '@/shared/api/city'
 import { getAllEvents } from '@/shared/api/events'
 import { militaryUnitApi } from '@/shared/api/military-unit'
-import { personApi } from '@/shared/api/person'
+import { getPersonsByTenureCountry } from '@/shared/api/persons'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 
 export interface RecentPersonItem {
@@ -37,7 +37,7 @@ export function useCountryDashboardStats(country: UnifiedCountry | null): Countr
       queries: [
         {
           queryKey: ['persons-by-country', countryId],
-          queryFn: () => personApi.getByCountryId(countryId),
+          queryFn: () => getPersonsByTenureCountry({ countryId }),
           enabled: Boolean(countryId && isModern),
         },
         {

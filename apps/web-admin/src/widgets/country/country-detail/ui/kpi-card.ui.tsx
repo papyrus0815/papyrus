@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 
-import * as S from './CountryDetail.styles'
+import * as S from './country-detail.styles'
 
 interface KPICardProps {
   label: string

@@ -6,7 +6,7 @@ import {
   useDeleteMilitaryUnit,
 } from '@/features/military-unit/use-military-units.hook'
 import type { MilitaryUnit } from '@/shared/api/military-unit'
-import { MilitaryUnitForm } from './components/MilitaryUnitForm'
+import { MilitaryUnitForm } from './components/military-unit-form'
 
 const UNIT_TYPE_LABELS: Record<string, string> = {
   FIELD_ARMY: '야전군',

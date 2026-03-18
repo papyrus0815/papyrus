@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import type { Country } from '@/entities/country/api'
 
 import { CountryFlag } from '../../shared'
-import * as S from './CountryDetail.styles'
+import * as S from './country-detail.styles'
 
 interface CountryDetailHeaderProps {
   country: Country

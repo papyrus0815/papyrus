@@ -5,7 +5,7 @@ import {
   useJobCategories,
   useDeleteJobCategory,
 } from '@/features/job-category/use-job-categories.hook'
-import { JobCategoryForm } from './components/JobCategoryForm'
+import { JobCategoryForm } from './components/job-category-form'
 import type { JobCategory } from '@/shared/api/job-category'
 
 export const JobCategoryPage = () => {

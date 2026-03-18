@@ -2,27 +2,523 @@ import { useEffect, useRef, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiSettings } from 'react-icons/fi'
+import styled, { css } from 'styled-components'
 
-import { PositionCategoryCrudModal } from '@/pages/persons/PositionCategoryCrudModal'
-import { type Person, personApi } from '@/shared/api/person'
+import { PositionCategoryCrudModal } from '@/pages/persons/position-category-crud-modal'
+import { type PersonResponseDto as Person, getPersonsByTenureCountry, getAllPersons } from '@/shared/api/persons'
+import { ACCENT } from '@/shared/styles/constants'
+import { darkGlassMixin, glassOrSolidMixin } from '@/shared/styles/mixins'
 
-const MAIN = '#6366f1'
-const sectionLabelStyle: React.CSSProperties = {
-  marginBottom: 18,
-  fontSize: 12,
-  fontWeight: 600,
-  color: '#64748b',
-  lineHeight: 1.4,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-}
+// ─── Styled ───────────────────────────────────────────────────────────────────
+const SectionLabelEl = styled.div`
+  margin-bottom: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
 
+const StatCardRoot = styled.div`
+  border-radius: 16px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+  cursor: default;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          ${darkGlassMixin}
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.14);
+          }
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid ${theme.colors.border.default};
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+            border-color: #d1d5db;
+          }
+        `}
+`
+
+const StatCardIcon = styled.div<{ $accent: string }>`
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: ${({ $accent }) => $accent};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#f3f4f6'};
+`
+
+const StatCardTitle = styled.div`
+  font-size: 11px;
+  margin-bottom: 4px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const StatCardValueRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+`
+
+const StatCardBig = styled.span`
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const StatCardUnit = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+// KPI 요약 바
+const KpiBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding: 20px 28px;
+  border-radius: 16px;
+
+  ${({ theme }) => glassOrSolidMixin(theme)}
+`
+
+const KpiItem = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+`
+
+const KpiLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const KpiValueBig = styled.span`
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const KpiValueSub = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const KpiDivider = styled.span`
+  width: 1px;
+  height: 24px;
+  border-radius: 1px;
+  background: ${({ theme }) => theme.colors.border.default};
+`
+
+// 리스트 패널 (역할별 / 최근 인물)
+const PanelCard = styled.div`
+  border-radius: 24px;
+  overflow: hidden;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          ${darkGlassMixin}
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.04),
+            0 1px 2px rgba(0, 0, 0, 0.02);
+        `}
+`
+
+const PanelRow = styled.li<{ $last?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: ${({ $last, theme }) =>
+    $last
+      ? 'none'
+      : `1px solid ${theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.colors.border.light}`};
+  transition: background 0.15s ease;
+  list-style: none;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : theme.colors.background.secondary};
+  }
+`
+
+const RoleName = styled.span`
+  flex: 0 0 140px;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ProgressTrack = styled.div`
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'};
+`
+
+const ProgressFill = styled.div<{ $pct: number }>`
+  height: 100%;
+  width: ${({ $pct }) => $pct}%;
+  min-width: ${({ $pct }) => ($pct > 0 ? 4 : 0)}px;
+  background: ${ACCENT};
+  border-radius: 3px;
+  transition: width 0.25s ease;
+`
+
+const RoleCount = styled.span`
+  flex: 0 0 56px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const PanelSubheader = styled.div`
+  padding: 16px 24px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : theme.colors.border.light};
+`
+
+const PanelSubheaderText = styled.p`
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+// 최근 인물 아이템
+const RecentPersonAvatar = styled.div<{ $gender: string | null | undefined }>`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: ${({ $gender }) => ($gender === 'MALE' ? '#3b82f6' : '#ec4899')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9'};
+`
+
+const RecentPersonName = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const RecentPersonMeta = styled.div`
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const RecentPersonCountry = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TenureBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 14px;
+  padding: 3px 10px;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          color: #a5b4fc;
+          background: rgba(99, 106, 242, 0.2);
+          border: 1px solid rgba(99, 106, 242, 0.3);
+        `
+      : css`
+          color: #4f46e5;
+          background: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+          border: 1px solid #c4b5fd;
+          box-shadow: 0 1px 2px rgba(99, 102, 241, 0.1);
+        `}
+`
+
+const TenureLabel = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(163,130,252,0.8)' : '#6366f1'};
+`
+
+const RoleFallback = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RecentMeta = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const MetaDivider = styled.span`
+  width: 1px;
+  height: 10px;
+  border-radius: 1px;
+  background: ${({ theme }) => theme.colors.border.default};
+`
+
+const AliveStatus = styled.span<{ $alive: boolean }>`
+  font-weight: 500;
+  color: ${({ $alive }) => ($alive ? '#10b981' : undefined)};
+`
+
+// 차트 (세기별)
+const ChartWrap = styled.div`
+  border-radius: 24px;
+  padding: 28px;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          ${darkGlassMixin}
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.04),
+            0 1px 2px rgba(0, 0, 0, 0.02);
+        `}
+`
+
+const ChartSubtitle = styled.p`
+  margin: 0 0 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ChartGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 6px 10px;
+  align-items: flex-end;
+  height: 140px;
+`
+
+const ChartBarWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const ChartBar = styled.div<{ $height: number; $hasCount: boolean }>`
+  width: 100%;
+  min-height: ${({ $hasCount }) => ($hasCount ? 14 : 0)}px;
+  height: ${({ $height }) => $height}px;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: ${({ $hasCount }) => ($hasCount ? '4px 2px' : '0')};
+  font-size: 11px;
+  font-weight: 600;
+  transition: opacity 0.2s ease;
+  background: ${({ $hasCount }) =>
+    $hasCount ? ACCENT : 'rgba(226, 232, 240, 0.5)'};
+  color: ${({ $hasCount }) => ($hasCount ? '#fff' : 'transparent')};
+
+  &:hover {
+    opacity: 0.85;
+  }
+`
+
+const ChartBarLabel = styled.span`
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ChartEmptyMsg = styled.div`
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+// 헤더 (hideHeader=false 시)
+const StandaloneHeader = styled.header`
+  padding-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+`
+
+const StandaloneTitle = styled.h2`
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.25;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const StandaloneDesc = styled.p`
+  margin: 10px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.55;
+  max-width: 540px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeaderActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.06);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          color: ${theme.colors.text.primary};
+          &:hover {
+            background: rgba(99, 106, 242, 0.15);
+            border-color: rgba(99, 106, 242, 0.4);
+            color: #ffffff;
+          }
+        `
+      : css`
+          border: 1px solid ${theme.colors.border.default};
+          background: ${theme.colors.background.primary};
+          color: #374151;
+          &:hover {
+            background: ${theme.colors.background.secondary};
+            border-color: ${theme.colors.border.medium};
+          }
+        `}
+`
+
+const LoadingWrap = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const Spinner = styled.div`
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 1s linear infinite;
+  border: 4px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  border-top-color: #8b5cf6;
+`
+
+const StatsContent = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-height: calc(100vh - 200px);
+  position: relative;
+`
+
+const StatCardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+`
+
+const PanelEmptyMsg = styled.div`
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div style={sectionLabelStyle}>{children}</div>
+  return <SectionLabelEl>{children}</SectionLabelEl>
 }
 
 function GovStatCard({
-  accentColor = MAIN,
+  accentColor = ACCENT,
   icon,
   title,
   value,
@@ -35,85 +531,24 @@ function GovStatCard({
   unit: string
 }) {
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 16,
-        padding: 22,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 14,
-        transition:
-          'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)'
-        e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.06)'
-        e.currentTarget.style.borderColor = '#d1d5db'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.boxShadow = 'none'
-        e.currentTarget.style.borderColor = '#e5e7eb'
-      }}
-    >
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 12,
-          background: '#f3f4f6',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: accentColor,
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </div>
+    <StatCardRoot>
+      <StatCardIcon $accent={accentColor}>{icon}</StatCardIcon>
       <div>
-        <div
-          style={{
-            fontSize: 11,
-            color: '#6b7280',
-            marginBottom: 4,
-            fontWeight: 600,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {title}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span
-            style={{
-              fontSize: 24,
-              fontWeight: 700,
-              color: '#111827',
-              letterSpacing: '-0.03em',
-            }}
-          >
-            {value}
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#6b7280' }}>
-            {unit}
-          </span>
-        </div>
+        <StatCardTitle>{title}</StatCardTitle>
+        <StatCardValueRow>
+          <StatCardBig>{value}</StatCardBig>
+          <StatCardUnit>{unit}</StatCardUnit>
+        </StatCardValueRow>
       </div>
-    </div>
+    </StatCardRoot>
   )
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface PersonStatsProps {
-  /** 국가 ID. 미전달 시 전체 인물 통계 */
   countryId?: string | null
-  /** true면 상단 여백 겹침 없음(탭 아래 등) — 카드 그리드 marginTop 0 */
   noOverlap?: boolean
-  /** true면 타이틀·설명 헤더 숨김 (국가 상세 인물 탭에서 공통 헤더 사용) */
   hideHeader?: boolean
-  /** hideHeader일 때 관직 카테고리 모달 제어 (부모가 헤더에 버튼 배치) */
   categoryModalOpen?: boolean
   onCategoryModalOpenChange?: (open: boolean) => void
 }
@@ -126,21 +561,26 @@ interface PersonStats {
   deceasedCount: number
   averageAge: number
   byRole: { [key: string]: number }
-  /** 출생 연도 기준 세기별 분포 (예: "20세기" -> 인원 수) */
   byCentury: { [key: string]: number }
   recentPersons: Person[]
 }
 
-/**
- * 인물 통계 대시보드
- * - 요약 지표 (총 인물, 성별, 생존/사망)
- * - 역할별 분포
- * - 세기별 분포
- * - 최근 등록 인물
- */
 const MIN_LOADING_MS = 1000
 const FADE_DURATION = 0.35
 
+const CENTURY_ORDER = [
+  '15세기 이전',
+  '15세기',
+  '16세기',
+  '17세기',
+  '18세기',
+  '19세기',
+  '20세기',
+  '21세기',
+  '22세기 이후',
+]
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export function PersonStatsSection({
   countryId,
   noOverlap,
@@ -148,7 +588,6 @@ export function PersonStatsSection({
   categoryModalOpen,
   onCategoryModalOpenChange,
 }: PersonStatsProps) {
-  const [persons, setPersons] = useState<Person[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [internalCategoryModal, setInternalCategoryModal] = useState(false)
   const showCategoryCrudModal =
@@ -173,17 +612,16 @@ export function PersonStatsSection({
     recentPersons: [],
   })
 
-  // 데이터 로드 — 최소 1초 로딩 표시 후 부드럽게 전환
   useEffect(() => {
     loadStartRef.current = Date.now()
     setIsLoading(true)
     const fetchData = async () => {
       try {
         const data = countryId
-          ? await personApi.getByCountryId(countryId)
-          : await personApi.getAll()
-        setPersons(Array.isArray(data) ? data : [])
-        calculateStats(Array.isArray(data) ? data : [])
+          ? await getPersonsByTenureCountry({ countryId })
+          : await getAllPersons()
+        const list = Array.isArray(data) ? data : []
+        calculateStats(list)
       } catch {
         // fetch failed, keep state as-is
       } finally {
@@ -197,14 +635,10 @@ export function PersonStatsSection({
     }
     fetchData()
     return () => {
-      if (minLoadTimeoutRef.current) {
-        clearTimeout(minLoadTimeoutRef.current)
-        minLoadTimeoutRef.current = null
-      }
+      if (minLoadTimeoutRef.current) clearTimeout(minLoadTimeoutRef.current)
     }
   }, [countryId])
 
-  // 통계 계산
   const calculateStats = (personList: Person[]) => {
     const total = personList.length
     const male = personList.filter((p) => p.gender === 'MALE').length
@@ -212,7 +646,6 @@ export function PersonStatsSection({
     const alive = personList.filter((p) => p.deathDate === null).length
     const deceased = total - alive
 
-    // 평균 나이 계산 (생존자 기준)
     const alivePersons = personList.filter(
       (p) => p.deathDate === null && p.birthDate,
     )
@@ -221,20 +654,17 @@ export function PersonStatsSection({
         ? Math.round(
             alivePersons.reduce((sum, p) => {
               const birthYear = new Date(p.birthDate!).getFullYear()
-              const age = new Date().getFullYear() - birthYear
-              return sum + age
+              return sum + (new Date().getFullYear() - birthYear)
             }, 0) / alivePersons.length,
           )
         : 0
 
-    // 역할별 분포
     const roleMap: { [key: string]: number } = {}
     personList.forEach((p) => {
-      const role = p.role || '기타'
+      const role = (p as { role?: string }).role || '기타'
       roleMap[role] = (roleMap[role] || 0) + 1
     })
 
-    // 세기별 분포 (출생 연도 기준) — birthDate 또는 birthYear 모두 사용
     const centuryMap: { [key: string]: number } = {}
     personList.forEach((p) => {
       let year: number | null = null
@@ -245,7 +675,6 @@ export function PersonStatsSection({
         if (typeof by === 'number' && !Number.isNaN(by)) year = by
       }
       if (year != null) {
-        // 1세기=1~100, 20세기=1901~2000, 21세기=2001~2100 (한국 통상 표기)
         let label: string
         if (year < 1500) label = '15세기 이전'
         else if (year >= 2100) label = '22세기 이후'
@@ -254,7 +683,6 @@ export function PersonStatsSection({
       }
     })
 
-    // 최근 등록 인물 (상위 6명)
     const recent = [...personList]
       .sort(
         (a, b) =>
@@ -285,87 +713,31 @@ export function PersonStatsSection({
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: FADE_DURATION, ease: [0.25, 0.1, 0.25, 1] }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '400px',
-              color: '#64748b',
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-            }}
           >
-            <div style={{ textAlign: 'center' }}>
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  border: '4px solid #e2e8f0',
-                  borderTopColor: '#8b5cf6',
-                  borderRadius: '50%',
-                  margin: '0 auto 16px',
-                  animation: 'spin 1s linear infinite',
-                }}
-              />
-              <p>인물 데이터를 불러오는 중...</p>
-            </div>
+            <LoadingWrap>
+              <div style={{ textAlign: 'center' }}>
+                <Spinner />
+                <p>인물 데이터를 불러오는 중...</p>
+              </div>
+            </LoadingWrap>
           </motion.div>
         ) : (
-          <motion.div
+          <StatsContent
             key="content"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 32,
-
-              background: '#ffffff',
-              minHeight: 'calc(100vh - 200px)',
-              position: 'relative',
-            }}
           >
             {!hideHeader && (
-              <header
-                style={{
-                  paddingBottom: 24,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'space-between',
-                  gap: 24,
-                  flexWrap: 'wrap',
-                }}
-              >
+              <StandaloneHeader>
                 <div>
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: 26,
-                      fontWeight: 800,
-                      color: '#0f172a',
-                      letterSpacing: '-0.04em',
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    인물 통계
-                  </h2>
-                  <p
-                    style={{
-                      margin: '10px 0 0',
-                      fontSize: 15,
-                      color: '#64748b',
-                      lineHeight: 1.55,
-                      maxWidth: 540,
-                      fontWeight: 500,
-                    }}
-                  >
+                  <StandaloneTitle>인물 통계</StandaloneTitle>
+                  <StandaloneDesc>
                     총 인물 수, 역할·세기별 분포, 최근 등록 인물을 한눈에 볼 수
                     있습니다.
-                  </p>
+                  </StandaloneDesc>
                 </div>
-                <button
+                <HeaderActionBtn
                   type="button"
                   onClick={(e) => {
                     e.preventDefault()
@@ -374,240 +746,61 @@ export function PersonStatsSection({
                   }}
                   aria-label="관직 카테고리 관리"
                   title="관직 카테고리 관리"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '10px 18px',
-                    borderRadius: 12,
-                    border: '1px solid #e5e7eb',
-                    background: '#fff',
-                    color: '#374151',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
                 >
                   <FiSettings size={18} />
                   관직 카테고리
-                </button>
-              </header>
+                </HeaderActionBtn>
+              </StandaloneHeader>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 28,
-                  flexWrap: 'wrap',
-                  padding: '20px 28px',
-                  background: '#fff',
-                  borderRadius: 16,
-                  border: '1px solid #e5e7eb',
-                }}
-              >
-                <div
-                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#64748b',
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    총 인물
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {stats.totalPersons}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        marginLeft: 2,
-                      }}
-                    >
-                      명
-                    </span>
-                  </span>
-                </div>
-                <span
-                  style={{
-                    width: 1,
-                    height: 24,
-                    background: '#e2e8f0',
-                    borderRadius: 1,
-                  }}
-                />
-                <div
-                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#64748b',
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    남 / 여
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {stats.maleCount}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                      }}
-                    >
-                      {' '}
-                      /{' '}
-                    </span>
-                    {stats.femaleCount}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        marginLeft: 2,
-                      }}
-                    >
-                      명
-                    </span>
-                  </span>
-                </div>
-                <span
-                  style={{
-                    width: 1,
-                    height: 24,
-                    background: '#e2e8f0',
-                    borderRadius: 1,
-                  }}
-                />
-                <div
-                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#64748b',
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    생존 / 사망
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {stats.aliveCount}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                      }}
-                    >
-                      {' '}
-                      /{' '}
-                    </span>
-                    {stats.deceasedCount}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        marginLeft: 2,
-                      }}
-                    >
-                      명
-                    </span>
-                  </span>
-                </div>
-                <span
-                  style={{
-                    width: 1,
-                    height: 24,
-                    background: '#e2e8f0',
-                    borderRadius: 1,
-                  }}
-                />
-                <div
-                  style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#64748b',
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    평균 나이
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {stats.averageAge}
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        marginLeft: 2,
-                      }}
-                    >
-                      세
-                    </span>
-                  </span>
-                </div>
-              </div>
-            </div>
+            {/* KPI 요약 바 */}
+            <KpiBar>
+              <KpiItem>
+                <KpiLabel>총 인물</KpiLabel>
+                <KpiValueBig>
+                  {stats.totalPersons}
+                  <KpiValueSub> 명</KpiValueSub>
+                </KpiValueBig>
+              </KpiItem>
+              <KpiDivider />
+              <KpiItem>
+                <KpiLabel>남 / 여</KpiLabel>
+                <KpiValueBig>
+                  {stats.maleCount}
+                  <KpiValueSub> / </KpiValueSub>
+                  {stats.femaleCount}
+                  <KpiValueSub> 명</KpiValueSub>
+                </KpiValueBig>
+              </KpiItem>
+              <KpiDivider />
+              <KpiItem>
+                <KpiLabel>생존 / 사망</KpiLabel>
+                <KpiValueBig>
+                  {stats.aliveCount}
+                  <KpiValueSub> / </KpiValueSub>
+                  {stats.deceasedCount}
+                  <KpiValueSub> 명</KpiValueSub>
+                </KpiValueBig>
+              </KpiItem>
+              <KpiDivider />
+              <KpiItem>
+                <KpiLabel>평균 나이</KpiLabel>
+                <KpiValueBig>
+                  {stats.averageAge}
+                  <KpiValueSub> 세</KpiValueSub>
+                </KpiValueBig>
+              </KpiItem>
+            </KpiBar>
 
-            {/* 요약 지표 (행정조직 StatCard 스타일) */}
+            {/* 요약 지표 */}
             <section aria-label="요약 지표">
               <SectionLabel>요약 지표</SectionLabel>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(5, 1fr)',
-                  gap: 20,
-                }}
-              >
+              <StatCardGrid>
                 <GovStatCard
-                  accentColor={MAIN}
+                  accentColor={ACCENT}
+                  title="총 인물"
+                  value={stats.totalPersons}
+                  unit="명"
                   icon={
                     <svg
                       width="24"
@@ -624,33 +817,12 @@ export function PersonStatsSection({
                       <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                     </svg>
                   }
-                  title="총 인물"
-                  value={stats.totalPersons}
-                  unit="명"
                 />
                 <GovStatCard
                   accentColor="#3b82f6"
-                  icon={
-                    <svg
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                    </svg>
-                  }
                   title="남성"
                   value={stats.maleCount}
                   unit="명"
-                />
-                <GovStatCard
-                  accentColor="#ec4899"
                   icon={
                     <svg
                       width="24"
@@ -666,12 +838,33 @@ export function PersonStatsSection({
                       <circle cx="9" cy="7" r="4" />
                     </svg>
                   }
+                />
+                <GovStatCard
+                  accentColor="#ec4899"
                   title="여성"
                   value={stats.femaleCount}
                   unit="명"
+                  icon={
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                    </svg>
+                  }
                 />
                 <GovStatCard
                   accentColor="#10b981"
+                  title="생존"
+                  value={stats.aliveCount}
+                  unit="명"
                   icon={
                     <svg
                       width="24"
@@ -687,12 +880,12 @@ export function PersonStatsSection({
                       <polyline points="22 4 12 14.01 9 11.01" />
                     </svg>
                   }
-                  title="생존"
-                  value={stats.aliveCount}
-                  unit="명"
                 />
                 <GovStatCard
                   accentColor="#64748b"
+                  title="사망"
+                  value={stats.deceasedCount}
+                  unit="명"
                   icon={
                     <svg
                       width="24"
@@ -709,345 +902,112 @@ export function PersonStatsSection({
                       <line x1="9" y1="9" x2="15" y2="15" />
                     </svg>
                   }
-                  title="사망"
-                  value={stats.deceasedCount}
-                  unit="명"
                 />
-              </div>
+              </StatCardGrid>
             </section>
 
             {/* 역할별 분포 */}
             <section aria-label="역할별 분포">
               <SectionLabel>역할별 분포</SectionLabel>
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  borderRadius: 24,
-                  padding: 0,
-                  boxShadow:
-                    '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
-                  overflow: 'hidden',
-                }}
-              >
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              <PanelCard>
+                <ul style={{ margin: 0, padding: 0 }}>
                   {Object.entries(stats.byRole)
                     .sort(([, a], [, b]) => b - a)
-                    .map(([role, count], idx) => {
+                    .map(([role, count], idx, arr) => {
                       const pct =
                         stats.totalPersons > 0
                           ? (count / stats.totalPersons) * 100
                           : 0
                       return (
-                        <li
-                          key={idx}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 16,
-                            padding: '12px 24px',
-                            borderBottom:
-                              idx < Object.keys(stats.byRole).length - 1
-                                ? '1px solid #f1f5f9'
-                                : 'none',
-                            transition: 'background 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#f8fafc'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent'
-                          }}
-                        >
-                          <span
-                            style={{
-                              flex: '0 0 140px',
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: '#0f172a',
-                            }}
-                          >
-                            {role}
-                          </span>
-                          <div
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              height: 6,
-                              background: '#e2e8f0',
-                              borderRadius: 3,
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                height: '100%',
-                                width: `${pct}%`,
-                                minWidth: pct > 0 ? 4 : 0,
-                                background: MAIN,
-                                borderRadius: 3,
-                                transition: 'width 0.25s ease',
-                              }}
-                            />
-                          </div>
-                          <span
-                            style={{
-                              flex: '0 0 56px',
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: '#475569',
-                              textAlign: 'right',
-                            }}
-                          >
-                            {count}명
-                          </span>
-                        </li>
+                        <PanelRow key={idx} $last={idx === arr.length - 1}>
+                          <RoleName>{role}</RoleName>
+                          <ProgressTrack>
+                            <ProgressFill $pct={pct} />
+                          </ProgressTrack>
+                          <RoleCount>{count}명</RoleCount>
+                        </PanelRow>
                       )
                     })}
                 </ul>
                 {Object.keys(stats.byRole).length === 0 && (
-                  <div
-                    style={{
-                      padding: 24,
-                      textAlign: 'center',
-                      fontSize: 13,
-                      color: '#94a3b8',
-                    }}
-                  >
+                  <PanelEmptyMsg>
                     역할 정보가 있는 인물이 없습니다.
-                  </div>
+                  </PanelEmptyMsg>
                 )}
-              </div>
+              </PanelCard>
             </section>
 
             {/* 출생 세기별 분포 */}
             <section aria-label="출생 세기별 분포">
               <SectionLabel>출생 세기별 분포</SectionLabel>
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  borderRadius: 24,
-                  padding: 28,
-                  boxShadow:
-                    '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
-                }}
-              >
-                <p
-                  style={{
-                    margin: '0 0 16px',
-                    fontSize: 12,
-                    color: '#64748b',
-                    fontWeight: 500,
-                  }}
-                >
-                  출생 연도 기준 세기별 분류
-                </p>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(9, 1fr)',
-                    gap: '6px 10px',
-                    alignItems: 'flex-end',
-                    height: '140px',
-                  }}
-                >
+              <ChartWrap>
+                <ChartSubtitle>출생 연도 기준 세기별 분류</ChartSubtitle>
+                <ChartGrid>
                   {(() => {
-                    const centuryOrder = [
-                      '15세기 이전',
-                      '15세기',
-                      '16세기',
-                      '17세기',
-                      '18세기',
-                      '19세기',
-                      '20세기',
-                      '21세기',
-                      '22세기 이후',
-                    ]
                     const maxCount = Math.max(
                       1,
                       ...Object.values(stats.byCentury),
                       0,
                     )
                     const barMaxHeight = 88
-                    return centuryOrder.map((century, idx) => {
+                    return CENTURY_ORDER.map((century, idx) => {
                       const count = stats.byCentury[century] ?? 0
                       const height =
                         maxCount > 0 ? (count / maxCount) * barMaxHeight : 0
                       return (
-                        <div
-                          key={idx}
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 6,
-                            minWidth: 0,
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: '100%',
-                              minHeight: count > 0 ? 14 : 0,
-                              height: `${height}px`,
-                              background:
-                                count > 0 ? MAIN : 'rgba(226, 232, 240, 0.5)',
-                              borderRadius: '6px 6px 0 0',
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              justifyContent: 'center',
-                              padding: count > 0 ? '4px 2px' : 0,
-                              color: count > 0 ? '#fff' : 'transparent',
-                              fontSize: 11,
-                              fontWeight: 600,
-                              transition: 'opacity 0.2s ease',
-                            }}
-                            onMouseEnter={(e) => {
-                              if (count > 0)
-                                e.currentTarget.style.opacity = '0.9'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.opacity = '1'
-                            }}
+                        <ChartBarWrap key={idx}>
+                          <ChartBar
+                            $height={height}
+                            $hasCount={count > 0}
                             title={`${century}: ${count}명`}
                           >
                             {count > 0 ? count : ''}
-                          </div>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 500,
-                              color: '#64748b',
-                              textAlign: 'center',
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            {century}
-                          </span>
-                        </div>
+                          </ChartBar>
+                          <ChartBarLabel>{century}</ChartBarLabel>
+                        </ChartBarWrap>
                       )
                     })
                   })()}
-                </div>
+                </ChartGrid>
                 {Object.keys(stats.byCentury).length === 0 && (
-                  <div
-                    style={{
-                      marginTop: '16px',
-                      textAlign: 'center',
-                      color: '#94a3b8',
-                      fontSize: '14px',
-                    }}
-                  >
+                  <ChartEmptyMsg>
                     출생 연도 정보가 있는 인물이 없습니다.
-                  </div>
+                  </ChartEmptyMsg>
                 )}
-              </div>
+              </ChartWrap>
             </section>
 
             {/* 최근 등록 인물 */}
             <section aria-label="최근 등록 인물">
               <SectionLabel>최근 등록 인물</SectionLabel>
-              <div
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  borderRadius: 24,
-                  padding: 0,
-                  boxShadow:
-                    '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    padding: '16px 24px',
-                    borderBottom: '1px solid #f1f5f9',
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 12,
-                      color: '#64748b',
-                      fontWeight: 500,
-                    }}
-                  >
+              <PanelCard>
+                <PanelSubheader>
+                  <PanelSubheaderText>
                     가장 최근에 등록된 인물 6명
-                  </p>
-                </div>
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  </PanelSubheaderText>
+                </PanelSubheader>
+                <ul style={{ margin: 0, padding: 0 }}>
                   {stats.recentPersons.map((person, idx) => (
-                    <li
+                    <PanelRow
                       key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 16,
-                        padding: '14px 24px',
-                        borderBottom:
-                          idx < stats.recentPersons.length - 1
-                            ? '1px solid #f1f5f9'
-                            : 'none',
-                        transition: 'background 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#f8fafc'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent'
-                      }}
+                      $last={idx === stats.recentPersons.length - 1}
                     >
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: '50%',
-                          background: '#f1f5f9',
-                          color:
-                            person.gender === 'MALE' ? '#3b82f6' : '#ec4899',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 15,
-                          fontWeight: 600,
-                          flexShrink: 0,
-                        }}
-                      >
+                      <RecentPersonAvatar $gender={person.gender}>
                         {person.name[0]}
-                      </div>
+                      </RecentPersonAvatar>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: '#0f172a',
-                          }}
-                        >
+                        <RecentPersonName>
                           {[person.surname, person.name]
                             .filter(Boolean)
                             .join(' ') || person.name}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            flexWrap: 'wrap',
-                          }}
-                        >
+                        </RecentPersonName>
+                        <RecentPersonMeta>
                           {person.country && (
-                            <span
-                              style={{
-                                fontSize: 12,
-                                color: '#64748b',
-                                fontWeight: 500,
-                              }}
-                            >
+                            <RecentPersonCountry>
                               {person.country.flagEmoji &&
                                 `${person.country.flagEmoji} `}
                               {person.country.name}
-                            </span>
+                            </RecentPersonCountry>
                           )}
                           {(() => {
                             const tenures = (
@@ -1081,105 +1041,53 @@ export function PersonStatsSection({
                                     gap: 6,
                                   }}
                                 >
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      fontWeight: 700,
-                                      color: '#6366f1',
-                                      letterSpacing: '0.05em',
-                                      textTransform: 'uppercase',
-                                    }}
-                                  >
-                                    직책
-                                  </span>
+                                  <TenureLabel>직책</TenureLabel>
                                   {tenureTitles.slice(0, 3).map((title) => (
-                                    <span
-                                      key={title}
-                                      style={{
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        color: '#4f46e5',
-                                        background:
-                                          'linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%)',
-                                        border: '1px solid #c4b5fd',
-                                        borderRadius: 14,
-                                        padding: '3px 10px',
-                                        boxShadow:
-                                          '0 1px 2px rgba(99, 102, 241, 0.1)',
-                                      }}
-                                    >
+                                    <TenureBadge key={title}>
                                       {title}
-                                    </span>
+                                    </TenureBadge>
                                   ))}
                                   {tenureTitles.length > 3 && (
-                                    <span
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                        color: '#6366f1',
-                                      }}
-                                    >
+                                    <TenureLabel>
                                       +{tenureTitles.length - 3}
-                                    </span>
+                                    </TenureLabel>
                                   )}
                                 </span>
                               )
                             }
                             return (
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  color: '#64748b',
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {person.job?.title ||
+                              <RoleFallback>
+                                {(
+                                  person as {
+                                    job?: { title?: string }
+                                    role?: string
+                                  }
+                                ).job?.title ||
                                   (person as { role?: string }).role ||
                                   '역할 없음'}
-                              </span>
+                              </RoleFallback>
                             )
                           })()}
-                        </div>
+                        </RecentPersonMeta>
                       </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          flexShrink: 0,
-                          fontSize: 12,
-                          color: '#64748b',
-                        }}
-                      >
+                      <RecentMeta>
                         <span>
                           출생{' '}
                           {person.birthDate
                             ? new Date(person.birthDate).getFullYear()
                             : '미상'}
                         </span>
-                        <span
-                          style={{
-                            width: 1,
-                            height: 10,
-                            background: '#e2e8f0',
-                            borderRadius: 1,
-                          }}
-                        />
-                        <span
-                          style={{
-                            color: person.deathDate ? '#64748b' : '#10b981',
-                            fontWeight: 500,
-                          }}
-                        >
+                        <MetaDivider />
+                        <AliveStatus $alive={!person.deathDate}>
                           {person.deathDate ? '사망' : '생존'}
-                        </span>
-                      </div>
-                    </li>
+                        </AliveStatus>
+                      </RecentMeta>
+                    </PanelRow>
                   ))}
                 </ul>
-              </div>
+              </PanelCard>
             </section>
-          </motion.div>
+          </StatsContent>
         )}
       </AnimatePresence>
       <PositionCategoryCrudModal

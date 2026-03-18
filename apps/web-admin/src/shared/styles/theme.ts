@@ -97,52 +97,52 @@ const darkColors = {
   button: {
     primary: '#636af2',
     hover: '#4f57e8',
-    disabled: '#48484a',
+    disabled: '#333333',
     text: '#ffffff',
   },
   header: {
-    primary: 'rgba(28, 28, 30, 0.97)', // iOS 다크 네비게이션바
-    secondary: '#1c1c1e',
+    primary: 'rgba(23, 23, 23, 0.97)',
+    secondary: '#171717',
   },
   background: {
-    primary: '#1c1c1e',   // iOS 다크 메인 배경
-    secondary: '#2c2c2e', // iOS 그룹화된 배경 2레벨
-    tertiary: '#3a3a3c',  // iOS 그룹화된 배경 3레벨
-    quaternary: '#48484a', // iOS 그룹화된 배경 4레벨
+    primary: '#171717',   // 메인 배경
+    secondary: '#212121', // 2레벨
+    tertiary: '#2a2a2a',  // 3레벨
+    quaternary: '#333333', // 4레벨
   },
-  white: '#1c1c1e',
+  white: '#171717',
   primary: '#636af2',
   secondary: '#9f7aea',
-  accent: '#32ade6',  // iOS 시스템 블루
-  success: '#30d158', // iOS 시스템 그린
-  warning: '#ffd60a', // iOS 시스템 옐로우
-  error: '#ff453a',   // iOS 시스템 레드
+  accent: '#32ade6',
+  success: '#30d158',
+  warning: '#ffd60a',
+  error: '#ff453a',
   active: '#636af2',
-  activeLight: '#2c2c3e',
-  hover: '#2c2c2e',
+  activeLight: '#1e1e3a',
+  hover: '#212121',
   text: {
-    primary: '#f5f5f7',   // iOS 라벨 (거의 흰색)
-    secondary: '#98989d', // iOS 세컨더리 라벨
-    tertiary: '#636366',  // iOS 터셔리 라벨
+    primary: '#f5f5f5',
+    secondary: '#a1a1aa',
+    tertiary: '#71717a',
   },
   border: {
-    light: '#2c2c2e',  // iOS separator
-    default: '#3a3a3c',
-    medium: '#48484a',
-    dark: '#636366',
+    light: '#212121',
+    default: '#2a2a2a',
+    medium: '#333333',
+    dark: '#3f3f46',
   },
   shadow: {
-    sm: 'rgba(0, 0, 0, 0.4)',
-    md: 'rgba(0, 0, 0, 0.6)',
-    lg: 'rgba(0, 0, 0, 0.75)',
-    xl: 'rgba(0, 0, 0, 0.9)',
+    sm: 'rgba(0, 0, 0, 0.45)',
+    md: 'rgba(0, 0, 0, 0.65)',
+    lg: 'rgba(0, 0, 0, 0.8)',
+    xl: 'rgba(0, 0, 0, 0.92)',
   },
   gradient: {
     primary: 'linear-gradient(135deg, #636af2 0%, #9f7aea 100%)',
     secondary: 'linear-gradient(135deg, #32ade6 0%, #3b82f6 100%)',
     accent: 'linear-gradient(135deg, #30d158 0%, #34c759 100%)',
-    blue: 'linear-gradient(135deg, #1c3a52 0%, #1e4a6e 100%)',
-    pink: 'linear-gradient(135deg, #3d1a2e 0%, #5c2a44 100%)',
+    blue: 'linear-gradient(135deg, #1a2744 0%, #1e3460 100%)',
+    pink: 'linear-gradient(135deg, #3a1628 0%, #561f3c 100%)',
   },
 }
 

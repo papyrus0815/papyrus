@@ -53,14 +53,12 @@ import { uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
 import type { MilitaryEvent } from '@/shared/types/military-event.types'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/AdvancedCountrySelectModal'
-import { DatePickerModal } from '@/shared/ui/date-picker'
-import {
-  BasicInfoSection,
-  DetailsSection,
-  LocationSection,
-  StepNavigation,
-} from '@/widgets/event-form/ui'
+import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
+import { DetailsSection } from '@/widgets/event-form/ui/details-section'
+import { LocationSection } from '@/widgets/event-form/ui/location-section'
+import { StepNavigation } from '@/widgets/event-form/ui/step-navigation'
 
 import type { EventBelligerentsGraph } from '../types/belligerents-graph.types'
 import type { ConferenceEvent } from '../types/conference-event.types'

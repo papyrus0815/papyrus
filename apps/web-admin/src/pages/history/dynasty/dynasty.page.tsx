@@ -5,7 +5,7 @@ import {
   useDynasties,
   useDeleteDynasty,
 } from '@/features/dynasty/use-dynasties.hook'
-import { DynastyForm } from './components/DynastyForm'
+import { DynastyForm } from './components/dynasty-form'
 import type { Dynasty } from '@/shared/api/dynasty'
 
 export const DynastyPage = () => {

@@ -15,7 +15,7 @@ import {
   YAxis,
 } from 'recharts'
 
-import * as S from './CountryDetail.styles'
+import * as S from './country-detail.styles'
 
 interface ChartsSectionProps {
   economicGrowthData: Array<{ year: string; growth: number; avgGrowth: number }>

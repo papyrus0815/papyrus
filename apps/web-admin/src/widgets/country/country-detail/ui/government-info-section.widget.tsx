@@ -32,8 +32,8 @@ import {
   validateImageFile,
 } from '@/shared/api/upload'
 import { Z_INDEX } from '@/shared/styles/z-index'
-import { DatePickerModal } from '@/shared/ui/date-picker'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 import { mockGovernmentData } from '../mock'
 import type { HistoricalEvent } from '../mock/types'

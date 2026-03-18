@@ -15,7 +15,7 @@ import styled from 'styled-components'
 import { useFormEntities } from '@/entities/event-form/model'
 import { mapEventResponseToHistoricalEvent } from '@/pages/events/utils/event-detail.mapper'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
-import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
+import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { dynastyApi } from '@/shared/api/dynasty'
 import {
   type EventResponseDto,
@@ -26,7 +26,7 @@ import { getGlossaryTermById } from '@/shared/api/glossary'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
-import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
 const ARTICLE_MAX_WIDTH = '680px'
 

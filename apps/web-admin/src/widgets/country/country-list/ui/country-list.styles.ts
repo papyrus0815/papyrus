@@ -1,8 +1,34 @@
 /**
  * CountryList 위젯 전용 스타일
  * 좌측 사이드바: 탭, 필터, 리스트 행, 대시보드 메뉴
+ * 리퀴드 글래스 디자인은 다크 모드 전용
  */
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
+import type { DefaultTheme } from 'styled-components'
+
+// ─── 공통 헬퍼 ───────────────────────────────────────────────────────────────
+
+/** 다크 전용 backdrop-filter */
+const darkBlur = (px = 16) => css`
+  backdrop-filter: blur(${px}px) saturate(160%);
+  -webkit-backdrop-filter: blur(${px}px) saturate(160%);
+`
+
+/** 사이드바 sticky 상단 영역 공통 스타일 (다크: 리퀴드 / 라이트: 솔리드) */
+const stickyBar = (theme: DefaultTheme) => css`
+  position: sticky;
+  z-index: 2;
+  ${theme.mode === 'dark'
+    ? css`
+        background: rgba(23, 23, 23, 0.9);
+        ${darkBlur(16)}
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      `
+    : css`
+        background: ${theme.colors.background.primary};
+        border-bottom: 1px solid ${theme.colors.border.light};
+      `}
+`
 
 // ─── 리스트 패널 컨테이너 ─────────────────────────────────────────────────────
 
@@ -27,11 +53,21 @@ export const ListPane = styled.div<{
   gap: 0;
   height: 100%;
   max-height: 100%;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
   overflow: hidden;
   padding-top: 0;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(23, 23, 23, 0.85);
+          ${darkBlur(20)}
+          border-right: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border-right: 1px solid ${theme.colors.border.light};
+        `}
 
   @media (max-width: 1024px) {
     display: none;
@@ -46,19 +82,34 @@ export const ListCollapseButton = styled.button<{ $collapsed?: boolean }>`
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  box-shadow: 0 1px 4px ${({ theme }) => theme.colors.shadow.sm};
   transition:
     color 0.2s,
     border-color 0.2s,
-    background 0.2s;
+    background 0.2s,
+    box-shadow 0.2s;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(33, 33, 33, 0.9);
+          ${darkBlur(12)}
+          color: ${theme.colors.text.secondary};
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.45),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        `
+      : css`
+          border: 1px solid ${theme.colors.border.light};
+          background: ${theme.colors.background.primary};
+          color: ${theme.colors.text.secondary};
+          box-shadow: 0 1px 4px ${theme.colors.shadow.sm};
+        `}
 
   svg {
     width: 14px;
@@ -69,9 +120,15 @@ export const ListCollapseButton = styled.button<{ $collapsed?: boolean }>`
   }
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.2)'
+        : theme.colors.background.secondary};
     color: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.activeLight};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.4)'
+        : theme.colors.activeLight};
   }
 
   @media (max-width: 1024px) {
@@ -110,18 +167,21 @@ export const TabBar = styled.div`
   align-items: center;
   gap: 4px;
   margin: 0;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 6px;
-  background: ${({ theme }) =>
-    `linear-gradient(180deg, ${theme.colors.background.secondary} 0%, ${theme.colors.background.tertiary} 100%)`};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 14px;
-  box-shadow: inset 0 1px 0
-    ${({ theme }) => `${theme.colors.background.primary}b3`};
+  padding: 4px;
+  border-radius: 12px;
   overflow-x: auto;
   overscroll-behavior: contain;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: ${theme.colors.background.tertiary};
+          border: 1px solid ${theme.colors.border.default};
+        `}
 
   &::-webkit-scrollbar {
     display: none;
@@ -136,12 +196,7 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   padding: 8px 14px;
   border-radius: 10px;
   border: none;
-  background: ${({ $active, theme }) =>
-    $active ? theme.colors.background.primary : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.active : theme.colors.text.secondary};
   font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -152,26 +207,49 @@ export const TabButton = styled.button<{ $active?: boolean }>`
     color 0.16s ease,
     background 0.16s ease,
     box-shadow 0.2s ease;
-  box-shadow: ${({ $active, theme }) =>
-    $active
-      ? `0 4px 12px ${theme.colors.shadow.md}, 0 0 0 1px ${theme.colors.shadow.sm}`
-      : 'none'};
 
-  &:hover {
-    color: ${({ $active, theme }) =>
-      $active ? theme.colors.active : theme.colors.text.primary};
-    background: ${({ $active, theme }) =>
-      $active
-        ? theme.colors.background.primary
-        : `${theme.colors.background.primary}bf`};
-  }
+  ${({ $active, theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$active ? 'rgba(255, 255, 255, 0.1)' : 'transparent'};
+          color: ${$active ? '#ffffff' : theme.colors.text.secondary};
+          font-weight: ${$active ? '600' : '500'};
+          box-shadow: ${$active
+            ? '0 4px 12px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.08)'
+            : 'none'};
+          backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
+          -webkit-backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
+
+          &:hover {
+            color: #ffffff;
+            background: ${$active
+              ? 'rgba(255, 255, 255, 0.14)'
+              : 'rgba(255, 255, 255, 0.06)'};
+          }
+        `
+      : css`
+          background: ${$active
+            ? theme.colors.background.primary
+            : 'transparent'};
+          color: ${$active ? theme.colors.active : theme.colors.text.secondary};
+          font-weight: ${$active ? '600' : '500'};
+          box-shadow: ${$active
+            ? `0 2px 8px ${theme.colors.shadow.md}`
+            : 'none'};
+
+          &:hover {
+            color: ${$active ? theme.colors.active : theme.colors.text.primary};
+            background: ${$active
+              ? theme.colors.background.primary
+              : theme.colors.background.secondary};
+          }
+        `}
 
   @media (max-width: 768px) {
     padding: 6px 10px;
     font-size: 12px;
     gap: 5px;
   }
-
   @media (max-width: 480px) {
     padding: 5px 8px;
     font-size: 11px;
@@ -183,7 +261,15 @@ export const TabBadge = styled.span`
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: ${({ theme }) => theme.colors.activeLight};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 106, 242, 0.2)'
+      : 'rgba(99, 102, 241, 0.12)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.3)'
+        : 'rgba(99, 102, 241, 0.2)'};
   color: ${({ theme }) => theme.colors.primary};
   font-size: 11px;
   font-weight: 600;
@@ -204,15 +290,12 @@ export const ControlsRow = styled.div`
   justify-content: space-between;
   gap: 12px;
   margin: 0;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: ${({ theme }) => `${theme.colors.background.secondary}e6`};
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   padding: 12px 24px;
-  box-shadow: 0 1px 0 ${({ theme }) => theme.colors.shadow.sm};
+  top: 0;
+  ${({ theme }) => stickyBar(theme)}
+  box-shadow: 0 1px 0
+    ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)'};
 `
 
 export const ControlsLeft = styled.div`
@@ -250,14 +333,22 @@ export const AddIconButton = styled.button`
   cursor: pointer;
   transition:
     background 0.15s ease,
-    opacity 0.15s ease;
+    opacity 0.15s ease,
+    transform 0.15s ease;
+  box-shadow: 0 4px 12px
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.4)'
+        : 'rgba(99, 102, 241, 0.3)'};
 
   &:hover {
     background: ${({ theme }) => theme.colors.button.hover};
+    transform: translateY(-1px);
   }
 
   &:active {
     opacity: 0.9;
+    transform: translateY(0);
   }
 
   svg {
@@ -270,19 +361,15 @@ export const FilterRow = styled.div`
   align-items: center;
   gap: 8px;
   padding: 10px 16px 12px;
-  position: sticky;
-  top: 57px;
-  z-index: 2;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-wrap: wrap;
+  top: 57px;
+  ${({ theme }) => stickyBar(theme)}
 
   @media (max-width: 768px) {
     padding: 8px 12px 10px;
     gap: 6px;
     top: 47px;
   }
-
   @media (max-width: 480px) {
     padding: 6px 10px 8px;
     gap: 6px;
@@ -350,24 +437,49 @@ export const SearchInput = styled.input`
   width: 100%;
   height: 36px;
   padding: 0 32px 0 38px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.colors.background.primary};
-  transition: border-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          ${darkBlur(8)}
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid ${theme.colors.border.default};
+        `}
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.18)'
+        : theme.colors.border.medium};
   }
 
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : theme.colors.background.primary};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.2)'
+          : 'rgba(99, 102, 241, 0.12)'};
   }
 
   @media (max-width: 768px) {
@@ -375,7 +487,6 @@ export const SearchInput = styled.input`
     font-size: 13px;
     padding: 0 28px 0 34px;
   }
-
   @media (max-width: 480px) {
     height: 32px;
     font-size: 12px;
@@ -400,7 +511,10 @@ export const ClearButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(0, 0, 0, 0.06)'};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
@@ -411,27 +525,39 @@ export const ClearAllFiltersButton = styled.button`
   gap: 6px;
   height: 36px;
   padding: 0 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(0, 0, 0, 0.08)'};
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.05)'
+      : 'rgba(255, 255, 255, 0.8)'};
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background 0.15s,
-    color 0.15s;
+  transition: all 0.15s ease;
   white-space: nowrap;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.18)'
+        : 'rgba(0, 0, 0, 0.15)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(255, 255, 255, 0.95)'};
   }
 
   &:active {
-    background: ${({ theme }) => theme.colors.background.tertiary};
+    opacity: 0.85;
   }
 
   svg {
@@ -459,27 +585,42 @@ export const FilterButton = styled.button<{ $active?: boolean }>`
   padding: 0 12px;
   border: 1px solid
     ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.border.default};
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.4)'
+          : 'rgba(99, 102, 241, 0.3)'
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : 'rgba(0, 0, 0, 0.08)'};
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
   color: ${({ $active, theme }) =>
     $active ? theme.colors.primary : theme.colors.text.secondary};
   background: ${({ $active, theme }) =>
-    $active ? theme.colors.activeLight : theme.colors.background.primary};
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.15)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(255, 255, 255, 0.8)'};
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
   white-space: nowrap;
-  transition:
-    all 0.15s ease;
+  transition: all 0.15s ease;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.activeLight};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.4)'
+        : 'rgba(99, 102, 241, 0.3)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.12)'
+        : 'rgba(99, 102, 241, 0.07)'};
     color: ${({ theme }) => theme.colors.primary};
-  }
-
-  &:active {
-    background: ${({ theme }) => theme.colors.activeLight};
   }
 
   @media (max-width: 768px) {
@@ -494,9 +635,7 @@ export const FilterResultBar = styled.div`
   align-items: center;
   justify-content: center;
   padding: 8px 16px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  position: sticky;
+  ${({ theme }) => stickyBar(theme)}
   top: 113px;
   z-index: 1;
 `
@@ -526,12 +665,12 @@ export const VirtualList = styled.div`
   border: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
-  padding: 6px 0 12px 8px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 6px 8px 12px 8px;
+  background: transparent;
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -542,21 +681,23 @@ export const VirtualList = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.15)'
+        : 'rgba(0, 0, 0, 0.12)'};
     border-radius: 4px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: ${({ theme }) => theme.colors.border.dark};
-  }
-
-  &::-webkit-scrollbar-thumb:active {
-    background: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.25)'
+        : 'rgba(0, 0, 0, 0.2)'};
   }
 
   @media (max-width: 768px) {
     padding: 4px 6px 8px 6px;
-    gap: 4px;
+    gap: 3px;
   }
 `
 
@@ -567,10 +708,21 @@ export const ContinentSectionHeader = styled.div`
   color: ${({ theme }) => theme.colors.primary};
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  background: ${({ theme }) => theme.colors.activeLight};
   border-left: 3px solid ${({ theme }) => theme.colors.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 10px 10px 0 0;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(99, 106, 242, 0.1);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        `
+      : css`
+          background: rgba(99, 102, 241, 0.07);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        `}
 `
 
 export const ListRow = styled.button<{
@@ -582,52 +734,68 @@ export const ListRow = styled.button<{
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: ${({ $historicalActive, theme }) =>
-    $historicalActive
-      ? theme.colors.activeLight
-      : theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-left: ${({ $historicalActive, theme }) =>
-    $historicalActive
-      ? `2px solid ${theme.colors.primary}`
-      : `2px solid ${theme.colors.border.light}`};
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
   transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
   min-height: 48px;
   line-height: 1.3;
   position: relative;
   flex-shrink: 0;
   box-sizing: border-box;
 
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 2px;
-    background: ${({ theme }) => theme.colors.primary};
-    border-radius: 2px;
-    opacity: ${({ $active }) => ($active ? '1' : '0')};
-    transition: opacity 0.2s ease;
-  }
+  ${({ $active, $historicalActive, theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$active || $historicalActive
+            ? 'rgba(99, 106, 242, 0.12)'
+            : 'rgba(255, 255, 255, 0.03)'};
+          ${darkBlur(12)}
+          border: 1px solid
+            ${$active
+            ? 'rgba(99, 106, 242, 0.3)'
+            : 'rgba(255, 255, 255, 0.07)'};
+          border-left: 3px solid
+            ${$active || $historicalActive
+              ? theme.colors.primary
+              : 'rgba(255, 255, 255, 0.06)'};
+          box-shadow: ${$active
+            ? '0 4px 14px rgba(99, 106, 242, 0.2)'
+            : '0 1px 3px rgba(0,0,0,0.2)'};
 
-  &:hover {
-    background: ${({ theme }) => theme.colors.activeLight};
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
-    &::before {
-      opacity: ${({ $active }) => ($active ? '1' : '0.4')};
-    }
-  }
+          &:hover {
+            background: rgba(99, 106, 242, 0.1);
+            border-color: rgba(99, 106, 242, 0.3);
+            box-shadow: 0 4px 14px rgba(99, 106, 242, 0.18);
+            transform: translateX(1px);
+          }
+        `
+      : css`
+          background: ${$active || $historicalActive
+            ? theme.colors.activeLight
+            : theme.colors.background.primary};
+          border: 1px solid ${theme.colors.border.light};
+          border-left: 3px solid
+            ${$active || $historicalActive
+              ? theme.colors.primary
+              : theme.colors.border.light};
+          box-shadow: none;
+
+          &:hover {
+            background: ${theme.colors.activeLight};
+            border-color: ${theme.colors.border.medium};
+            box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
+            transform: translateX(1px);
+          }
+        `}
 
   &:active {
-    background: ${({ theme }) => theme.colors.background.secondary};
+    opacity: 0.9;
+    transform: translateX(0);
   }
 
   @media (max-width: 768px) {
@@ -635,7 +803,6 @@ export const ListRow = styled.button<{
     min-height: 46px;
     border-radius: 8px;
   }
-
   @media (max-width: 480px) {
     padding: 6px 8px;
     min-height: 44px;
@@ -691,7 +858,11 @@ export const RowRight = styled.div`
 export const RowCheckbox = styled.span`
   width: 14px;
   height: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.15)'
+        : 'rgba(0, 0, 0, 0.12)'};
   border-radius: 3px;
 `
 
@@ -733,17 +904,31 @@ export const FlagBadge = styled.span`
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.08)'
+      : 'rgba(255, 255, 255, 0.85)'};
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   font-size: 20px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(255, 255, 255, 0.9)'};
   transition:
     background 0.2s ease,
     border-color 0.2s ease;
   flex-shrink: 0;
+  box-shadow: 0 2px 6px
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.06)'};
 
   ${ListRow}:hover & {
-    background: ${({ theme }) => theme.colors.background.tertiary};
-    border-color: ${({ theme }) => theme.colors.border.default};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(255, 255, 255, 0.95)'};
   }
 
   @media (max-width: 768px) {
@@ -768,8 +953,15 @@ export const ThumbnailAvatar = styled.div<{ $size?: 'sm' | 'md' }>`
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.08)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(255, 255, 255, 0.7)'};
 
   img {
     width: 100%;
@@ -789,9 +981,16 @@ export const HistoricalCountBadge = styled.span`
   font-size: clamp(9px, 2vw, 10px);
   font-weight: 600;
   color: ${({ theme }) => theme.colors.primary};
-  background-color: ${({ theme }) => theme.colors.activeLight};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 106, 242, 0.15)'
+      : 'rgba(99, 102, 241, 0.1)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.3)'
+        : 'rgba(99, 102, 241, 0.2)'};
   border-radius: 9px;
-  border: 1px solid ${({ theme }) => theme.colors.border.medium};
   flex-shrink: 0;
 `
 
@@ -900,7 +1099,18 @@ export const EmptyFilterState = styled.div`
   padding: 40px 20px;
   text-align: center;
   margin: 20px 16px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.03)'
+      : 'rgba(255, 255, 255, 0.6)'};
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(255, 255, 255, 0.8)'};
 `
 
 export const EmptyFilterIcon = styled.div`
@@ -942,26 +1152,38 @@ export const AddButton = styled.button`
   gap: 8px;
   height: 38px;
   padding: 0 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.1)'};
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'rgba(255, 255, 255, 0.85)'};
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background 0.15s,
-    color 0.15s;
+  transition: all 0.15s ease;
   white-space: nowrap;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.22)'
+        : 'rgba(0, 0, 0, 0.18)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(255, 255, 255, 0.97)'};
   }
 
   &:active {
-    background: ${({ theme }) => theme.colors.background.tertiary};
+    opacity: 0.85;
   }
 `
 
@@ -981,17 +1203,17 @@ export const DashboardSidebarSectionTitle = styled.h2`
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.02em;
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: transparent;
   border-bottom: none;
 `
 
 export const DashboardSummary = styled.div`
-  padding: 0 20px 20px;
+  padding: 0 16px 20px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 8px;
   overflow-y: auto;
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: transparent;
 `
 
 export const SummaryCard = styled.div`
@@ -999,19 +1221,53 @@ export const SummaryCard = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px 12px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
+  padding: 14px 10px;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.15s ease;
 
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          ${darkBlur(16)}
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+          &::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(
+              135deg,
+              rgba(255, 255, 255, 0.03) 0%,
+              transparent 60%
+            );
+            pointer-events: none;
+          }
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid ${theme.colors.border.light};
+          box-shadow: 0 1px 4px ${theme.colors.shadow.sm};
+        `}
+
   &:hover {
-    border-color: ${({ theme }) => theme.colors.border.default};
-    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
-    transform: translateY(-1px);
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.35)'
+        : theme.colors.border.default};
+    transform: translateY(-2px);
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 6px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)'
+        : `0 4px 12px ${theme.colors.shadow.md}`};
   }
 `
 
@@ -1025,6 +1281,8 @@ export const SummaryIcon = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
   flex-shrink: 0;
   opacity: 0.9;
+  position: relative;
+  z-index: 1;
 
   svg {
     width: 22px;
@@ -1039,6 +1297,8 @@ export const SummaryValue = styled.div`
   margin-bottom: 2px;
   letter-spacing: -0.03em;
   line-height: 1.2;
+  position: relative;
+  z-index: 1;
 `
 
 export const SummaryLabel = styled.div`
@@ -1046,16 +1306,18 @@ export const SummaryLabel = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
   letter-spacing: 0.01em;
+  position: relative;
+  z-index: 1;
 `
 
 // ─── 사이드바 대시보드 메뉴 ───────────────────────────────────────────────────
 
 export const DashboardMenu = styled.nav`
-  padding: 16px 20px 24px;
+  padding: 16px 16px 24px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  background: ${({ theme }) => theme.colors.background.primary};
+  gap: 3px;
+  background: transparent;
 `
 
 export const DashboardMenuTitle = styled.div`
@@ -1073,25 +1335,53 @@ export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
   gap: 12px;
   width: 100%;
   padding: 10px 12px;
-  border: none;
-  border-radius: 8px;
-  background: ${(p) =>
-    p.$active ? p.theme.colors.activeLight : 'transparent'};
-  color: ${(p) =>
-    p.$active ? p.theme.colors.active : p.theme.colors.text.secondary};
+  border-radius: 10px;
   font-size: 13px;
   font-weight: ${(p) => (p.$active ? 600 : 500)};
   text-align: left;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease;
+  transition: all 0.18s ease;
+
+  ${(p) =>
+    p.theme.mode === 'dark'
+      ? css`
+          background: ${p.$active ? 'rgba(99, 106, 242, 0.15)' : 'transparent'};
+          border: 1px solid ${p.$active ? 'rgba(99, 106, 242, 0.35)' : 'transparent'};
+          color: ${p.$active ? '#ffffff' : p.theme.colors.text.secondary};
+          box-shadow: ${p.$active ? '0 3px 10px rgba(99, 106, 242, 0.25)' : 'none'};
+          backdrop-filter: ${p.$active ? 'blur(8px)' : 'none'};
+          -webkit-backdrop-filter: ${p.$active ? 'blur(8px)' : 'none'};
+        `
+      : css`
+          background: ${p.$active ? 'rgba(99, 102, 241, 0.08)' : 'transparent'};
+          border: 1px solid ${p.$active ? 'rgba(99, 102, 241, 0.2)' : 'transparent'};
+          color: ${p.$active ? p.theme.colors.active : p.theme.colors.text.secondary};
+          box-shadow: ${p.$active ? '0 3px 10px rgba(99, 102, 241, 0.12)' : 'none'};
+        `}
 
   &:hover {
     background: ${(p) =>
-      p.$active ? p.theme.colors.activeLight : p.theme.colors.hover};
+      p.theme.mode === 'dark'
+        ? p.$active
+          ? 'rgba(99, 106, 242, 0.2)'
+          : 'rgba(255, 255, 255, 0.05)'
+        : p.$active
+          ? 'rgba(99, 102, 241, 0.12)'
+          : p.theme.colors.background.secondary};
     color: ${(p) =>
-      p.$active ? p.theme.colors.active : p.theme.colors.text.primary};
+      p.theme.mode === 'dark'
+        ? '#ffffff'
+        : p.$active
+          ? p.theme.colors.active
+          : p.theme.colors.text.primary};
+    border-color: ${(p) =>
+      p.theme.mode === 'dark'
+        ? p.$active
+          ? 'rgba(99, 106, 242, 0.5)'
+          : 'rgba(255, 255, 255, 0.08)'
+        : p.$active
+          ? 'rgba(99, 102, 241, 0.3)'
+          : p.theme.colors.border.default};
   }
 
   svg {
@@ -1099,13 +1389,17 @@ export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
     height: 18px;
     flex-shrink: 0;
     color: ${(p) =>
-      p.$active ? p.theme.colors.primary : p.theme.colors.text.secondary};
+      p.$active
+        ? p.theme.mode === 'dark'
+          ? '#ffffff'
+          : p.theme.colors.primary
+        : p.theme.colors.text.secondary};
     opacity: ${(p) => (p.$active ? 1 : 0.85)};
   }
 
   &:hover svg {
     color: ${(p) =>
-      p.$active ? p.theme.colors.primary : p.theme.colors.text.primary};
+      p.theme.mode === 'dark' ? '#ffffff' : p.theme.colors.primary};
   }
 `
 
@@ -1118,6 +1412,8 @@ export const SelectModalOverlay = styled.div`
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 1000;
 `
 
@@ -1129,13 +1425,27 @@ export const SelectModal = styled.div`
   width: 480px;
   max-width: 90vw;
   max-height: 80vh;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-radius: 16px;
-  box-shadow: 0 20px 60px ${({ theme }) => theme.colors.shadow.lg};
+  border-radius: 20px;
   z-index: 1001;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(33, 33, 33, 0.92);
+          ${darkBlur(30)}
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow:
+            0 24px 64px rgba(0, 0, 0, 0.7),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border-radius: 16px;
+          box-shadow: 0 20px 60px ${theme.colors.shadow.lg};
+        `}
 `
 
 export const SelectModalHeader = styled.div`
@@ -1143,7 +1453,11 @@ export const SelectModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(0, 0, 0, 0.06)'};
 `
 
 export const SelectModalTitle = styled.h3`
@@ -1160,14 +1474,20 @@ export const SelectModalClose = styled.button`
   width: 32px;
   height: 32px;
   border: none;
-  background: transparent;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'rgba(0, 0, 0, 0.05)'};
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.1)'};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
@@ -1182,7 +1502,10 @@ export const SelectModalContent = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => theme.colors.border.default};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.15)'
+        : 'rgba(0, 0, 0, 0.1)'};
     border-radius: 2px;
   }
 `
@@ -1194,23 +1517,37 @@ export const SelectOption = styled.button<{ $active?: boolean }>`
   gap: 14px;
   padding: 14px 18px;
   margin-bottom: 4px;
-  border: none;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.3)'
+          : 'rgba(99, 102, 241, 0.2)'
+        : 'transparent'};
   border-radius: 12px;
   background: ${({ $active, theme }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.12)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.active : theme.colors.text.primary};
   cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
+  transition: all 0.15s ease;
   text-align: left;
   font-size: 15px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
 
   &:hover {
     background: ${({ $active, theme }) =>
-      $active ? theme.colors.activeLight : theme.colors.background.secondary};
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.16)'
+          : 'rgba(99, 102, 241, 0.1)'
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(0, 0, 0, 0.03)'};
   }
 
   &:last-child {
@@ -1226,7 +1563,15 @@ export const SelectOptionIcon = styled.div`
   height: 36px;
   flex-shrink: 0;
   border-radius: 10px;
-  background: ${({ theme }) => theme.colors.background.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'rgba(99, 102, 241, 0.08)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(99, 102, 241, 0.12)'};
   color: ${({ theme }) => theme.colors.primary};
 `
 

@@ -30,7 +30,7 @@ const Root = styled.div`
   min-height: 100vh;
   display: block;
   padding: var(--header-height) 0 0;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const Content = styled.div`
@@ -38,7 +38,7 @@ const Content = styled.div`
   height: calc(100vh - var(--header-height));
   overflow-y: auto;
   overflow-x: hidden;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   padding: 0;
   -webkit-overflow-scrolling: touch;
 `

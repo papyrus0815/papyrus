@@ -36,22 +36,22 @@ import {
   useUpdateHistoricalCountry,
 } from '@/features/historical-country'
 import { getAllEvents } from '@/shared/api/events'
-import { PersonDashboardSection } from '@/widgets/country/person-dashboard-section'
-import { CountryDashboard } from '@/widgets/country/country-dashboard'
-import { CountryDetail } from '@/widgets/country/country-detail'
+import { PersonDashboardSection } from '@/widgets/country/person-dashboard-section/ui/person-dashboard-section'
+import { CountryDashboard } from '@/widgets/country/country-dashboard/ui/country-dashboard'
+import { CountryDetail } from '@/widgets/country/country-detail/ui/country-detail.widget'
 import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-section.widget'
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
 import { DashboardEventDetailPage } from '@/pages/history/country/dashboard-event-detail.page'
 import { EventsTimelineSection } from '@/widgets/country/country-detail/ui/events-timeline-section.widget'
-import { CountryFormModal } from '@/widgets/country/country-form'
+import { CountryFormModal } from '@/widgets/country/country-form/ui/country-form-modal'
 import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
 import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
 import {
   CountryList,
   type DashboardContentView,
-} from '@/widgets/country/country-list'
-import { CountryMobileUI } from '@/widgets/country/country-mobile-ui'
-import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form'
+} from '@/widgets/country/country-list/ui/country-list'
+import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
+import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import * as S from './country-page.styles'

@@ -29,7 +29,7 @@ import {
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { PersonDetailPanel } from '@/pages/persons/PersonDetailPanel'
+import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
@@ -41,9 +41,9 @@ import {
   formatPersonLifespan,
 } from '@/shared/lib/tenure-person-utils'
 import { Z_INDEX } from '@/shared/styles/z-index'
-import { DatePickerModal } from '@/shared/ui/date-picker'
-import { DateRangeField } from '@/shared/ui/form-fields'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   DateFieldsRow,
   FieldControl,
@@ -56,7 +56,7 @@ import {
   TabButton,
   TabNavigation,
 } from '@/shared/ui/register-form-layout'
-import { RichTextEditor } from '@/shared/ui/rich-text-editor/RichTextEditor'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
 const MAIN = '#6366f1'
 const MAIN_HOVER = '#4f46e5'

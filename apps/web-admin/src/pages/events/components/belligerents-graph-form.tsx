@@ -26,9 +26,9 @@ import styled from 'styled-components'
 
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/CountrySelectModal'
-import { DatePickerModal } from '@/shared/ui/date-picker'
-import { TimePickerModal } from '@/shared/ui/time-picker-modal/TimePickerModal'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
 
 import type {
   BelligerentCountry,

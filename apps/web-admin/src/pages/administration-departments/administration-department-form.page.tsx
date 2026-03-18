@@ -31,9 +31,9 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { getAllPersons } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/CountrySelectModal'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/PersonSelectModal'
-import { DatePickerModal } from '@/shared/ui/date-picker/DatePickerModal'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 
 import {
   HistoryLayout,

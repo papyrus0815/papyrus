@@ -6,8 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import { dynastyApi } from '@/shared/api/dynasty'
-import { personApi } from '@/shared/api/person'
-import { PersonListContent } from '@/shared/ui/person-list-content'
+import { getPersonsByTenureCountry } from '@/shared/api/persons'
+import { PersonListContent } from '@/shared/ui/person-list-content/person-list-content'
+import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 
 interface PersonListSectionProps {
   countryId: string
@@ -54,7 +55,7 @@ export function PersonListSection({
   const queryClient = useQueryClient()
   const { data: persons = [], isLoading, error } = useQuery({
     queryKey: ['persons-by-country', countryId],
-    queryFn: () => personApi.getByCountryId(countryId),
+    queryFn: () => getPersonsByTenureCountry({ countryId }),
     staleTime: 1000 * 60 * 2,
   })
   const { data: dynasties = [] } = useQuery({
@@ -90,6 +91,15 @@ export function PersonListSection({
       hideCreateButton={hideCreateButton}
       registerTrigger={registerTrigger}
       enableCountryFilter={false}
+      renderRegisterModal={(props) => (
+        <PersonRegisterViewModal
+          isOpen={props.isOpen}
+          onClose={props.onClose}
+          initialCountryId={props.initialCountryId}
+          editPersonId={props.editPersonId}
+          onSuccess={props.onSuccess}
+        />
+      )}
     />
   )
 }

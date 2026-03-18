@@ -14,7 +14,7 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { MilitaryUnit, MilitaryUnitType } from '@/shared/api/military-unit'
 import { militaryUnitApi } from '@/shared/api/military-unit'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/CountrySelectModal'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 
 // 목업 데이터
 const MOCK_MILITARY_UNITS: MilitaryUnit[] = [

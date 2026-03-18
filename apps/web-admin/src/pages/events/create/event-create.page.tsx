@@ -64,12 +64,10 @@ import {
   type CountryInSide,
   type MilitaryEvent,
 } from '@/shared/types/military-event.types'
-import {
-  BasicInfoSection,
-  DetailsSection,
-  LocationSection,
-  StepNavigation,
-} from '@/widgets/event-form/ui'
+import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
+import { DetailsSection } from '@/widgets/event-form/ui/details-section'
+import { LocationSection } from '@/widgets/event-form/ui/location-section'
+import { StepNavigation } from '@/widgets/event-form/ui/step-navigation'
 
 import type { EventBelligerentsGraph } from '../types/belligerents-graph.types'
 import type { ConferenceEvent } from '../types/conference-event.types'

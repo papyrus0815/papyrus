@@ -37,9 +37,9 @@ import { militaryUnitApi } from '@/shared/api/military-unit'
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { getAllPersons } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/CountrySelectModal'
-import { DatePickerModal } from '@/shared/ui/date-picker/DatePickerModal'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/PersonSelectModal'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 
 const UNIT_TYPES: { value: MilitaryUnitType; label: string }[] = [
   { value: 'FIELD_ARMY', label: '야전군' },
