@@ -5,17 +5,22 @@
  */
 import styled from 'styled-components'
 
-const BORDER_COLOR = '#e5e7eb'
-const FOCUS_COLOR = '#4f46e5'
-const TEXT_PRIMARY = '#0f172a'
-const TEXT_SECONDARY = '#64748b'
-const TEXT_MUTED = '#6b7280'
+import { PillTabButton, PillTabNav } from '@/shared/ui/tab/tab.styles'
+import { glassOrSolidMixin } from '@/shared/styles/mixins'
+
+export const BORDER_COLOR = '#e5e7eb'
+export const FOCUS_COLOR = '#4f46e5'
+export const TEXT_PRIMARY = '#0f172a'
+export const TEXT_SECONDARY = '#64748b'
+export const TEXT_MUTED = '#6b7280'
 
 export const FormCardWrapper = styled.div`
-  background: #ffffff;
-  border: 1px solid ${BORDER_COLOR};
+  ${({ theme }) => glassOrSolidMixin(theme)}
   border-radius: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)'
+      : '0 1px 3px rgba(0, 0, 0, 0.04)'};
   overflow: hidden;
   padding: 0;
   display: flex;
@@ -28,8 +33,9 @@ export const FormHeader = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding: 24px 28px;
-  background: #fff;
-  border-bottom: 1px solid #f3f4f6;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-wrap: wrap;
 `
 
@@ -37,7 +43,7 @@ export const FormHeaderTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   flex: 1;
   min-width: 0;
@@ -55,16 +61,18 @@ export const BackButton = styled.button`
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: ${TEXT_SECONDARY};
+  color: ${({ theme }) => theme.colors.text.secondary};
   background: transparent;
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: color 0.2s ease, background 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
   order: 0;
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
     svg {
       transform: translateX(-2px);
     }
@@ -98,47 +106,11 @@ export const SubmitButton = styled.button`
   }
 `
 
-/** 역대 수반 기본정보/업적 탭과 동일: pill 배경, 활성 = 흰 배경 + 인디고 글자 */
-export const TabNavigation = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  margin-bottom: 24px;
-  width: fit-content;
-  background: #f1f5f9;
-  border-radius: 20px;
-  overflow-x: auto;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`
+/** @alias PillTabNav — 폼 레이아웃용 탭 컨테이너 */
+export const TabNavigation = PillTabNav
 
-export const TabButton = styled.button<{ $active?: boolean }>`
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 18px;
-  border-radius: 14px;
-  border: none;
-  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
-  white-space: nowrap;
-  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
-  svg {
-    flex-shrink: 0;
-  }
-  &:hover {
-    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
-    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
-  }
-`
+/** @alias PillTabButton — 폼 레이아웃용 탭 버튼 */
+export const TabButton = PillTabButton
 
 export const FormSectionInner = styled.div`
   padding: 28px 32px 32px;
@@ -153,14 +125,13 @@ export const FormRows = styled.div`
   gap: 0;
 `
 
-/** 행정조직·역대 수반 부처 등록 폼과 동일: grid 360px 1fr */
 export const FieldRow = styled.div`
   display: grid;
   grid-template-columns: 360px 1fr;
   gap: 24px;
   align-items: start;
   padding: 20px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
     padding: 20px 0;
@@ -170,7 +141,7 @@ export const FieldRow = styled.div`
 export const FieldLabel = styled.label`
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: ${({ theme }) => theme.colors.text.primary};
   padding-top: 10px;
   @media (max-width: 768px) {
     padding-top: 0;
@@ -180,10 +151,13 @@ export const FieldLabel = styled.label`
 export const FieldControl = styled.div<{ $variant?: 'person' | 'datePair' }>`
   min-width: 0;
   max-width: ${(p) =>
-    p.$variant === 'person' ? '360px' : p.$variant === 'datePair' ? '480px' : '360px'};
+    p.$variant === 'person'
+      ? '360px'
+      : p.$variant === 'datePair'
+        ? '480px'
+        : '360px'};
 `
 
-/** 인물 등록 출생일·사망일 / 역대 수반 취임일·퇴임일 공용: 2열 그리드, 달력 버튼 */
 export const DateFieldsRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -205,17 +179,20 @@ export const DateFieldBtn = styled.button<{ $hasValue?: boolean }>`
   gap: 10px;
   padding: 12px 16px;
   font-size: 14px;
-  color: ${(p) => (p.$hasValue ? '#111827' : '#9ca3af')};
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ $hasValue, theme }) =>
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
   outline: none;
   &:hover {
     border-color: ${FOCUS_COLOR};
-    background: #faf5ff;
-    color: #111827;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#faf5ff'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
     border-color: ${FOCUS_COLOR};
@@ -229,7 +206,7 @@ export const DateFieldBtn = styled.button<{ $hasValue?: boolean }>`
     flex-shrink: 0;
   }
   > svg:last-child {
-    color: ${TEXT_SECONDARY};
+    color: ${({ theme }) => theme.colors.text.secondary};
     flex-shrink: 0;
   }
 `
@@ -238,11 +215,10 @@ export const FieldHint = styled.span`
   display: block;
   margin-top: 6px;
   font-size: 12px;
-  color: ${TEXT_SECONDARY};
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.4;
 `
 
-/** 필수 필드 표시: 빨간 점 (자식 텍스트는 숨김, 라벨 텍스트와 시선 정렬) */
 export const Required = styled.span`
   display: inline-block;
   width: 6px;
@@ -257,36 +233,15 @@ export const Required = styled.span`
   text-indent: -999px;
 `
 
-/** 행정조직 부처 등록 input과 동일 */
-export const Input = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 14px;
-  color: #111827;
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
-  border-radius: 12px;
-  outline: none;
-  transition: border-color 0.2s ease;
-  box-sizing: border-box;
-  &::placeholder {
-    color: #9ca3af;
-  }
-  &:hover {
-    border-color: #d1d5db;
-  }
-  &:focus {
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
-`
+/** 공용 Input — FormInput 컴포넌트 직접 re-export */
+export { FormInput as Input } from '@/shared/ui/form-input/form-input'
 
 export const CheckboxRow = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 20px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   input[type='checkbox'] {
     width: 18px;
     height: 18px;
@@ -295,10 +250,131 @@ export const CheckboxRow = styled.div`
   }
   label {
     font-size: 14px;
-    color: ${TEXT_PRIMARY};
+    color: ${({ theme }) => theme.colors.text.primary};
     cursor: pointer;
     user-select: none;
   }
 `
 
-export { BORDER_COLOR, FOCUS_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED }
+// ---------------------------------------------------------------------------
+// 공용 폼 필드 컴포넌트 — 현대국가/역사국가/인물/사건 폼에서 공통 사용
+// ---------------------------------------------------------------------------
+
+/** 공용 Textarea — FormTextarea 컴포넌트 직접 re-export */
+export { FormTextarea as Textarea } from '@/shared/ui/form-input/form-input'
+
+/** 선택 버튼 (값 선택 트리거) */
+export const SelectBtn = styled.button<{
+  $hasValue?: boolean
+  $error?: boolean
+}>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  max-width: 380px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: ${({ $hasValue, theme }) =>
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid
+    ${({ $error, theme }) => ($error ? '#ea4335' : theme.colors.border.default)};
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  svg {
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+  &:hover {
+    border-color: ${({ $error, theme }) =>
+      $error ? '#ea4335' : theme.colors.border.medium};
+    svg {
+      opacity: 1;
+    }
+  }
+  &:focus-visible {
+    border-color: ${FOCUS_COLOR};
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  }
+`
+
+/** 에러 메시지 */
+export const ErrorMessage = styled.span`
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #ea4335;
+`
+
+/** 썸네일 원형 업로드 영역 */
+export const ThumbnailCircle = styled.label<{ $hasImage?: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: ${({ $hasImage, theme }) =>
+    $hasImage
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.08)'
+        : '#fff'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%)'};
+  border: 2px ${({ $hasImage }) => ($hasImage ? 'solid' : 'dashed')}
+    ${({ $hasImage, theme }) =>
+      $hasImage
+        ? theme.colors.border.default
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.2)'
+          : '#cbd5e1'};
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  svg {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    width: 36px;
+    height: 36px;
+  }
+  &:hover {
+    border-color: ${FOCUS_COLOR};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.1)'
+        : 'linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%)'};
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+  }
+`
+
+/** 썸네일 힌트 텍스트 */
+export const ThumbnailHint = styled.p`
+  margin: 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.4;
+`

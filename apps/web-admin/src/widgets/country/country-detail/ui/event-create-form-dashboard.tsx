@@ -14,7 +14,7 @@ import {
   FiPlus,
   FiX,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import { useFormEntities } from '@/entities/event-form/model'
 import {
@@ -43,6 +43,7 @@ import {
   BackButton,
   DateFieldBtn,
   DateFieldsRow,
+  FOCUS_COLOR,
   FieldControl,
   FieldLabel,
   FieldRow,
@@ -53,22 +54,24 @@ import {
   SubmitButton,
   TabButton,
   TabNavigation,
-} from '@/shared/ui/register-form-layout'
-import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
+} from '@/shared/ui/register-form-layout/register-form-layout.styles'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
 const CategoryChip = styled.button<{ $active?: boolean }>`
   padding: 10px 18px;
   font-size: 13px;
   font-weight: 600;
-  color: ${(p) => (p.$active ? '#fff' : '#475569')};
-  background: ${(p) => (p.$active ? '#6366f1' : '#f1f5f9')};
-  border: 1px solid ${(p) => (p.$active ? '#6366f1' : BORDER_COLOR)};
+  color: ${(p) => (p.$active ? '#fff' : p.theme.colors.text.secondary)};
+  background: ${(p) =>
+    p.$active ? '#6366f1' : p.theme.colors.background.tertiary};
+  border: 1px solid
+    ${(p) => (p.$active ? '#6366f1' : p.theme.colors.border.default)};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
   &:hover {
-    background: ${(p) => (p.$active ? '#4f46e5' : '#e2e8f0')};
+    background: ${(p) =>
+      p.$active ? '#4f46e5' : p.theme.colors.background.quaternary};
   }
 `
 
@@ -91,9 +94,15 @@ const TextArea = styled.textarea`
   min-height: 240px;
   padding: 12px 16px;
   font-size: 14px;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   resize: vertical;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
   &:focus {
     outline: none;
     border-color: ${FOCUS_COLOR};
@@ -106,9 +115,10 @@ const SelectInput = styled.select`
   max-width: 380px;
   padding: 12px 16px;
   font-size: 14px;
-  color: #111827;
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   outline: none;
   &:focus {
@@ -122,10 +132,10 @@ const Chip = styled.span`
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 10px;
   font-size: 13px;
-  color: #374151;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ChipRemoveBtn = styled.button`
@@ -133,7 +143,7 @@ const ChipRemoveBtn = styled.button`
   border: none;
   background: none;
   cursor: pointer;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 14px;
   &:hover {
     color: #dc2626;
@@ -146,7 +156,7 @@ const ContentTabWrap = styled.div`
 `
 
 const DashboardFormWrap = styled.div`
-  background: #ffffff;
+  background: transparent;
   border-radius: 0;
   overflow: hidden;
   padding: 0;
@@ -156,21 +166,22 @@ const DashboardFormWrap = styled.div`
   min-height: 0;
 `
 
+// 좌우 패딩 주지마라. 전체 컨테이너에서 패딩 주기 때문에.
 const FormBodyScroll = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 24px 28px 32px;
+  padding: 24px 0px 32px;
   &::-webkit-scrollbar {
     width: 6px;
   }
   &::-webkit-scrollbar-track {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.colors.background.secondary};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 3px;
   }
 `
@@ -181,8 +192,9 @@ const DashboardFormHeader = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding: 20px 28px;
-  background: #fff;
-  border-bottom: 1px solid #f1f5f9;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
   flex-wrap: wrap;
 `
@@ -191,13 +203,17 @@ const AddSectionBtn = styled.button`
   padding: 10px 18px;
   font-size: 13px;
   font-weight: 600;
-  color: #6366f1;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.35)' : '#c7d2fe'};
   border-radius: 12px;
   cursor: pointer;
   &:hover {
-    background: #e0e7ff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#e0e7ff'};
   }
 `
 
@@ -207,8 +223,12 @@ const RemoveSectionBtn = styled.button<{ $disabled?: boolean }>`
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 500;
-  color: ${(p) => (p.$disabled ? '#9ca3af' : '#64748b')};
-  background: ${(p) => (p.$disabled ? '#f3f4f6' : '#f1f5f9')};
+  color: ${(p) =>
+    p.$disabled ? p.theme.colors.text.tertiary : p.theme.colors.text.secondary};
+  background: ${(p) =>
+    p.$disabled
+      ? p.theme.colors.background.tertiary
+      : p.theme.colors.background.tertiary};
   border: none;
   border-radius: 10px;
   cursor: ${(p) => (p.$disabled ? 'not-allowed' : 'pointer')};
@@ -216,8 +236,13 @@ const RemoveSectionBtn = styled.button<{ $disabled?: boolean }>`
     color 0.15s,
     background 0.15s;
   &:hover {
-    color: ${(p) => (p.$disabled ? '#9ca3af' : '#dc2626')};
-    background: ${(p) => (p.$disabled ? '#f3f4f6' : '#fee2e2')};
+    color: ${(p) => (p.$disabled ? p.theme.colors.text.tertiary : '#dc2626')};
+    background: ${(p) =>
+      p.$disabled
+        ? p.theme.colors.background.tertiary
+        : p.theme.mode === 'dark'
+          ? 'rgba(220,38,38,0.15)'
+          : '#fee2e2'};
   }
 `
 
@@ -248,8 +273,9 @@ const ImageCard = styled.div<{ $isPrimary?: boolean }>`
   height: 90px;
   border-radius: 14px;
   overflow: hidden;
-  background: #f1f5f9;
-  border: 2px solid ${(p) => (p.$isPrimary ? '#6366f1' : BORDER_COLOR)};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  border: 2px solid
+    ${(p) => (p.$isPrimary ? '#6366f1' : p.theme.colors.border.default)};
   box-shadow: ${(p) =>
     p.$isPrimary ? '0 0 0 1px rgba(99,102,241,0.2)' : 'none'};
 `
@@ -295,21 +321,23 @@ const ImageAddBtn = styled.label`
   height: 90px;
   border-radius: 14px;
   border: 2px dashed rgba(99, 102, 241, 0.35);
-  background: #fafbff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.06)' : '#fafbff'};
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: #6366f1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
   font-size: 12px;
   font-weight: 600;
   transition:
     background 0.2s,
     border-color 0.2s;
   &:hover {
-    background: #eef2ff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
     border-color: #6366f1;
   }
   input {
@@ -339,9 +367,18 @@ const ModalOverlay = styled.div`
   padding: 24px;
 `
 const ModalPanel = styled.div`
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30,30,30,0.9)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.1)'
+        : theme.colors.border.default};
   border-radius: 20px;
-  border: 1px solid ${BORDER_COLOR};
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   width: 100%;
   max-width: 480px;
@@ -352,7 +389,7 @@ const ModalPanel = styled.div`
 `
 const ModalHeader = styled.div`
   padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -361,22 +398,22 @@ const ModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 const ModalCloseBtn = styled.button`
   width: 36px;
   height: 36px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 const ModalBody = styled.div`
@@ -388,15 +425,17 @@ const EventListBtn = styled.button`
   padding: 12px 16px;
   text-align: left;
   font-size: 14px;
-  color: #111827;
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   cursor: pointer;
   margin-bottom: 8px;
   transition: background 0.2s;
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f8fafc'};
     border-color: #c7d2fe;
   }
 `
@@ -438,6 +477,8 @@ export function EventCreateFormDashboard({
   eventId: editEventId,
 }: EventCreateFormDashboardProps) {
   const isEditMode = Boolean(editEventId)
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const {
     dbCategories,
     availableCountries,
@@ -570,10 +611,21 @@ export function EventCreateFormDashboard({
           setCategory(String(categoryId))
 
         if (event.keywords?.length) setKeywords(event.keywords)
-        const prec = event as { startDatePrecision?: string; endDatePrecision?: string }
-        if (prec.startDatePrecision === 'year' || prec.startDatePrecision === 'month' || prec.startDatePrecision === 'day')
+        const prec = event as {
+          startDatePrecision?: string
+          endDatePrecision?: string
+        }
+        if (
+          prec.startDatePrecision === 'year' ||
+          prec.startDatePrecision === 'month' ||
+          prec.startDatePrecision === 'day'
+        )
           setStartDatePrecision(prec.startDatePrecision)
-        if (prec.endDatePrecision === 'year' || prec.endDatePrecision === 'month' || prec.endDatePrecision === 'day')
+        if (
+          prec.endDatePrecision === 'year' ||
+          prec.endDatePrecision === 'month' ||
+          prec.endDatePrecision === 'day'
+        )
           setEndDatePrecision(prec.endDatePrecision)
 
         let modernIds: string[] = Array.isArray(event.relatedCountryIds)
@@ -954,8 +1006,8 @@ export function EventCreateFormDashboard({
                 style={{
                   marginBottom: 24,
                   padding: '12px 16px',
-                  background: '#fee2e2',
-                  border: '1px solid #fecaca',
+                  background: isDark ? 'rgba(220,38,38,0.15)' : '#fee2e2',
+                  border: `1px solid ${isDark ? 'rgba(220,38,38,0.3)' : '#fecaca'}`,
                   borderRadius: 10,
                   color: '#dc2626',
                   fontSize: 14,
@@ -1096,26 +1148,83 @@ export function EventCreateFormDashboard({
                         <FiChevronDown size={16} />
                       </DateFieldBtn>
                     </DateFieldsRowWide>
-                    <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-                      <span style={{ fontSize: 13, color: '#64748b' }}>알고 있는 범위:</span>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                        <span style={{ color: '#475569' }}>시작일</span>
+                    <div
+                      style={{
+                        marginTop: 10,
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 16,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: theme.colors.text.secondary,
+                        }}
+                      >
+                        알고 있는 범위:
+                      </span>
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span style={{ color: theme.colors.text.secondary }}>
+                          시작일
+                        </span>
                         <select
                           value={startDatePrecision}
-                          onChange={(e) => setStartDatePrecision(e.target.value as 'year' | 'month' | 'day')}
-                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}
+                          onChange={(e) =>
+                            setStartDatePrecision(
+                              e.target.value as 'year' | 'month' | 'day',
+                            )
+                          }
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            border: `1px solid ${theme.colors.border.default}`,
+                            background: isDark
+                              ? 'rgba(255,255,255,0.06)'
+                              : '#fff',
+                            color: theme.colors.text.primary,
+                          }}
                         >
                           <option value="day">년·월·일</option>
                           <option value="month">년·월</option>
                           <option value="year">년만</option>
                         </select>
                       </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-                        <span style={{ color: '#475569' }}>종료일</span>
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span style={{ color: theme.colors.text.secondary }}>
+                          종료일
+                        </span>
                         <select
                           value={endDatePrecision}
-                          onChange={(e) => setEndDatePrecision(e.target.value as 'year' | 'month' | 'day')}
-                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}
+                          onChange={(e) =>
+                            setEndDatePrecision(
+                              e.target.value as 'year' | 'month' | 'day',
+                            )
+                          }
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            border: `1px solid ${theme.colors.border.default}`,
+                            background: isDark
+                              ? 'rgba(255,255,255,0.06)'
+                              : '#fff',
+                            color: theme.colors.text.primary,
+                          }}
                         >
                           <option value="day">년·월·일</option>
                           <option value="month">년·월</option>
@@ -1205,10 +1314,12 @@ export function EventCreateFormDashboard({
                           fontSize: 14,
                           textAlign: 'left',
                           cursor: 'pointer',
-                          border: `1px solid ${BORDER_COLOR}`,
+                          border: `1px solid ${theme.colors.border.default}`,
                           borderRadius: 12,
-                          background: '#fff',
-                          color: '#111827',
+                          background: isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : '#fff',
+                          color: theme.colors.text.primary,
                         }}
                       >
                         {selectedCountriesForDisplay.length > 0
@@ -1276,7 +1387,7 @@ export function EventCreateFormDashboard({
                               style={{
                                 margin: '0 0 10px',
                                 fontSize: 12,
-                                color: '#64748b',
+                                color: theme.colors.text.secondary,
                               }}
                             >
                               설명이 필요한 문구를 선택한 뒤 우클릭 →{' '}
@@ -1337,10 +1448,12 @@ export function EventCreateFormDashboard({
                         fontSize: 14,
                         textAlign: 'left',
                         cursor: 'pointer',
-                        border: `1px solid ${BORDER_COLOR}`,
+                        border: `1px solid ${theme.colors.border.default}`,
                         borderRadius: 12,
-                        background: '#fff',
-                        color: rel.parentEventId ? '#111827' : '#9ca3af',
+                        background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                        color: rel.parentEventId
+                          ? theme.colors.text.primary
+                          : theme.colors.text.tertiary,
                       }}
                     >
                       {rel.parentEventId
@@ -1397,9 +1510,11 @@ export function EventCreateFormDashboard({
                           padding: '10px 16px',
                           fontSize: 13,
                           fontWeight: 600,
-                          color: '#6366f1',
-                          background: '#eef2ff',
-                          border: '1px solid #c7d2fe',
+                          color: isDark ? '#818cf8' : '#6366f1',
+                          background: isDark
+                            ? 'rgba(99,102,241,0.15)'
+                            : '#eef2ff',
+                          border: `1px solid ${isDark ? 'rgba(99,102,241,0.35)' : '#c7d2fe'}`,
                           borderRadius: 12,
                           cursor: 'pointer',
                         }}

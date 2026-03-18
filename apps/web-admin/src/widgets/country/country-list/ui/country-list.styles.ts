@@ -596,7 +596,11 @@ export const FilterButton = styled.button<{ $active?: boolean }>`
   font-size: 13px;
   font-weight: 500;
   color: ${({ $active, theme }) =>
-    $active ? theme.colors.primary : theme.colors.text.secondary};
+    $active
+      ? theme.mode === 'dark'
+        ? '#ffffff'
+        : theme.colors.primary
+      : theme.colors.text.secondary};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
@@ -1346,17 +1350,25 @@ export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
     p.theme.mode === 'dark'
       ? css`
           background: ${p.$active ? 'rgba(99, 106, 242, 0.15)' : 'transparent'};
-          border: 1px solid ${p.$active ? 'rgba(99, 106, 242, 0.35)' : 'transparent'};
+          border: 1px solid
+            ${p.$active ? 'rgba(99, 106, 242, 0.35)' : 'transparent'};
           color: ${p.$active ? '#ffffff' : p.theme.colors.text.secondary};
-          box-shadow: ${p.$active ? '0 3px 10px rgba(99, 106, 242, 0.25)' : 'none'};
+          box-shadow: ${p.$active
+            ? '0 3px 10px rgba(99, 106, 242, 0.25)'
+            : 'none'};
           backdrop-filter: ${p.$active ? 'blur(8px)' : 'none'};
           -webkit-backdrop-filter: ${p.$active ? 'blur(8px)' : 'none'};
         `
       : css`
           background: ${p.$active ? 'rgba(99, 102, 241, 0.08)' : 'transparent'};
-          border: 1px solid ${p.$active ? 'rgba(99, 102, 241, 0.2)' : 'transparent'};
-          color: ${p.$active ? p.theme.colors.active : p.theme.colors.text.secondary};
-          box-shadow: ${p.$active ? '0 3px 10px rgba(99, 102, 241, 0.12)' : 'none'};
+          border: 1px solid
+            ${p.$active ? 'rgba(99, 102, 241, 0.2)' : 'transparent'};
+          color: ${p.$active
+            ? p.theme.colors.active
+            : p.theme.colors.text.secondary};
+          box-shadow: ${p.$active
+            ? '0 3px 10px rgba(99, 102, 241, 0.12)'
+            : 'none'};
         `}
 
   &:hover {
@@ -1411,6 +1423,9 @@ export const SelectModalOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -1418,10 +1433,6 @@ export const SelectModalOverlay = styled.div`
 `
 
 export const SelectModal = styled.div`
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   width: 480px;
   max-width: 90vw;
   max-height: 80vh;
@@ -1430,6 +1441,7 @@ export const SelectModal = styled.div`
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 
   ${({ theme }) =>
     theme.mode === 'dark'

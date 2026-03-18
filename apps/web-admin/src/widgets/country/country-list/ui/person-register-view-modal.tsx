@@ -32,13 +32,25 @@ const ModalBox = styled(motion.div)`
   width: min(1200px, 96vw);
   max-height: min(92vh, 1200px);
   min-height: 560px;
-  background: #ffffff;
   border-radius: 22px;
-  box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `
+    background: rgba(20, 20, 20, 0.92);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  `
+      : `
+    background: #ffffff;
+    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);
+  `}
 `
 
 const ModalHeader = styled.div`
@@ -46,7 +58,7 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   flex-shrink: 0;
 `
 
@@ -54,7 +66,7 @@ const ModalTitle = styled.h2`
   margin: 0;
   font-size: 19px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
 `
 
@@ -68,15 +80,16 @@ const CloseBtn = styled.button`
   border: none;
   border-radius: 12px;
   background: transparent;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition:
     background 0.2s,
     color 0.2s;
 
   &:hover {
-    background: #f3f4f6;
-    color: #111827;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f3f4f6'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -92,7 +105,8 @@ const FormScroll = styled.div`
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #e5e7eb;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
     border-radius: 3px;
   }
 `

@@ -10,6 +10,7 @@ import styled from 'styled-components'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface AdvancedCountrySelectModalProps {
   isOpen: boolean
@@ -388,18 +389,29 @@ const Modal = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
 `
 
 const ModalContent = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#ffffff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
   border-radius: 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
   width: 92%;
   max-width: 1000px;
   max-height: 68vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 20px 60px rgba(0,0,0,0.6)'
+      : '0 20px 60px rgba(0, 0, 0, 0.3)'};
 `
 
 const ModalHeader = styled.div`
@@ -407,14 +419,14 @@ const ModalHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 24px 28px;
-  border-bottom: 1.5px solid rgba(226, 232, 240, 0.8);
+  border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ModalCloseButton = styled.button`
@@ -422,7 +434,7 @@ const ModalCloseButton = styled.button`
   border: none;
   padding: 8px;
   cursor: pointer;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   transition: all 0.2s ease;
   border-radius: 8px;
 
@@ -448,9 +460,9 @@ const ModalBody = styled.div`
 `
 
 const FilterSidebar = styled.div`
-  background: #f8fafc;
+  background: ${({ theme }) => theme.colors.background.secondary};
   padding: 24px 20px;
-  border-right: 1.5px solid rgba(226, 232, 240, 0.8);
+  border-right: 1.5px solid ${({ theme }) => theme.colors.border.light};
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -467,7 +479,7 @@ const FilterSidebarTitle = styled.h4`
   margin: 0 0 8px 0;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.5px;
 `
@@ -477,7 +489,12 @@ const CountryTypeOption = styled.button<{ $active: boolean }>`
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.1)'
+        : '#ffffff'
+      : 'transparent'};
   border: 1.5px solid
     ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.3)' : 'transparent')};
   border-radius: 10px;
@@ -485,11 +502,13 @@ const CountryTypeOption = styled.button<{ $active: boolean }>`
   transition: all 0.2s ease;
   font-size: 14px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
-  color: ${({ $active }) => ($active ? '#1e293b' : '#64748b')};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
   text-align: left;
 
   &:hover {
-    background: #ffffff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#ffffff'};
     border-color: rgba(99, 102, 241, 0.2);
   }
 `
@@ -516,20 +535,27 @@ const ModalRadioDot = styled.div<{ $active: boolean }>`
 
 const FilterOptionButton = styled.button<{ $active: boolean }>`
   padding: 8px 12px;
-  background: ${({ $active }) => ($active ? '#ffffff' : 'transparent')};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.1)'
+        : '#ffffff'
+      : 'transparent'};
   border: 1px solid
     ${({ $active }) => ($active ? 'rgba(99, 102, 241, 0.2)' : 'transparent')};
   border-radius: 8px;
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
-  color: ${({ $active }) => ($active ? '#6366f1' : '#64748b')};
+  color: ${({ $active, theme }) =>
+    $active ? '#818cf8' : theme.colors.text.secondary};
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
 
   &:hover {
-    background: #ffffff;
-    color: #6366f1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
   }
 `
 
@@ -543,13 +569,13 @@ const ListArea = styled.div`
 
 const SearchWrapper = styled.div`
   padding: 20px 24px;
-  border-bottom: 1.5px solid rgba(226, 232, 240, 0.6);
+  border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   align-items: center;
   gap: 12px;
 
   svg {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
   }
 `
@@ -559,11 +585,11 @@ const SearchInput = styled.input`
   border: none;
   outline: none;
   font-size: 14px;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
   background: transparent;
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -577,15 +603,15 @@ const SortRow = styled.div`
 const SortLabel = styled.span`
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const SortFieldSelect = styled.select`
   padding: 8px 28px 8px 12px;
   font-size: 13px;
-  color: #475569;
-  background: #f1f5f9;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 8px;
   cursor: pointer;
   appearance: none;
@@ -593,9 +619,9 @@ const SortFieldSelect = styled.select`
   background-repeat: no-repeat;
   background-position: right 10px center;
   min-width: 100px;
+  outline: none;
 
   &:focus {
-    outline: none;
     border-color: rgba(99, 102, 241, 0.4);
   }
 `
@@ -609,11 +635,15 @@ const SortOrderBtn = styled.button<{ $active: boolean }>`
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
-  background: ${({ $active }) =>
-    $active ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : '#f1f5f9'};
+  color: ${({ $active, theme }) =>
+    $active ? '#ffffff' : theme.colors.text.secondary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+      : theme.colors.background.tertiary};
   border: 1px solid
-    ${({ $active }) => ($active ? 'transparent' : 'rgba(226, 232, 240, 0.8)')};
+    ${({ $active, theme }) =>
+      $active ? 'transparent' : theme.colors.border.light};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -642,16 +672,12 @@ const CardGrid = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(248, 250, 252, 0.5);
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(203, 213, 225, 0.6);
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 4px;
-
-    &:hover {
-      background: rgba(148, 163, 184, 0.8);
-    }
   }
 `
 
@@ -665,11 +691,15 @@ const CountryCard = styled.button<{ $selected: boolean }>`
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(99, 102, 241, 0.08)' : '#ffffff'};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? 'rgba(99, 102, 241, 0.08)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : '#ffffff'};
   border: 1.5px solid
-    ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.35)' : 'rgba(226, 232, 240, 0.7)'};
+    ${({ $selected, theme }) =>
+      $selected ? 'rgba(99, 102, 241, 0.35)' : theme.colors.border.light};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -694,7 +724,7 @@ const CardFlag = styled.span`
 const CardName = styled.span`
   font-size: 13px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -716,7 +746,7 @@ const CardMetaList = styled.div`
 
 const CardMetaRow = styled.span`
   font-size: 10px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 400;
   line-height: 1.3;
   display: block;
@@ -752,6 +782,6 @@ const EmptyMessage = styled.div`
   grid-column: 1 / -1;
   padding: 48px 20px;
   text-align: center;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-size: 14px;
 `

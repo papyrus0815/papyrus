@@ -14,7 +14,7 @@ import {
   FiInfo,
   FiUsers,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import { getAllCountries } from '@/shared/api/countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -48,6 +48,7 @@ import {
   BackButton,
   DateFieldBtn,
   DateFieldsRow,
+  FOCUS_COLOR,
   FieldControl,
   FieldLabel,
   FieldRow,
@@ -55,21 +56,17 @@ import {
   FormHeader,
   FormRows,
   FormSectionInner,
-  Input,
   Required,
   SubmitButton,
   TabButton,
   TabNavigation,
-} from '@/shared/ui/register-form-layout'
+} from '@/shared/ui/register-form-layout/register-form-layout.styles'
+import { FormInput } from '@/shared/ui/form-input/form-input'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import {
   SelectModal,
   type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
-
-const BORDER_COLOR = '#e5e7eb'
-const FOCUS_COLOR = '#4f46e5'
-const TEXT_PRIMARY = '#0f172a'
 
 /** 썸네일 행 — FieldRow와 동일 그리드(360px 1fr), 라벨·썸네일 간격 확보 */
 const ThumbnailWrap = styled.div`
@@ -78,7 +75,7 @@ const ThumbnailWrap = styled.div`
   gap: 32px;
   align-items: start;
   padding: 20px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -91,7 +88,11 @@ const ThumbnailPreview = styled.label<{ $hasImage?: boolean }>`
   border-radius: 50%;
   overflow: hidden;
   background: ${(p) =>
-    p.$hasImage ? 'transparent' : 'rgba(226, 232, 240, 0.6)'};
+    p.$hasImage
+      ? 'transparent'
+      : p.theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(226, 232, 240, 0.6)'};
   border: 2px dashed
     ${(p) => (p.$hasImage ? 'transparent' : 'rgba(99, 102, 241, 0.35)')};
   display: flex;
@@ -105,7 +106,11 @@ const ThumbnailPreview = styled.label<{ $hasImage?: boolean }>`
   &:hover {
     border-color: rgba(99, 102, 241, 0.6);
     background: ${(p) =>
-      p.$hasImage ? 'transparent' : 'rgba(226, 232, 240, 0.9)'};
+      p.$hasImage
+        ? 'transparent'
+        : p.theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.1)'
+          : 'rgba(226, 232, 240, 0.9)'};
   }
   img {
     width: 100%;
@@ -113,7 +118,7 @@ const ThumbnailPreview = styled.label<{ $hasImage?: boolean }>`
     object-fit: cover;
   }
   svg {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.secondary};
     width: 32px;
     height: 32px;
   }
@@ -134,7 +139,7 @@ const FieldRowMulti = styled.div`
   gap: 24px;
   align-items: start;
   padding: 20px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
@@ -179,15 +184,17 @@ const SelectBtn = styled.button<{ $hasValue?: boolean }>`
   gap: 8px;
   padding: 10px 14px;
   font-size: 14px;
-  color: ${(p) => (p.$hasValue ? '#111827' : '#9ca3af')};
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ $hasValue, theme }) =>
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
   outline: none;
   &:hover {
-    border-color: #d1d5db;
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
   &:focus-visible {
     border-color: ${FOCUS_COLOR};
@@ -236,7 +243,7 @@ const CheckboxRowTwo = styled.div`
   align-items: center;
   gap: 24px;
   padding: 14px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-wrap: wrap;
   input {
     width: 18px;
@@ -246,7 +253,7 @@ const CheckboxRowTwo = styled.div`
   }
   label {
     font-size: 14px;
-    color: ${TEXT_PRIMARY};
+    color: ${({ theme }) => theme.colors.text.primary};
     cursor: pointer;
   }
 `
@@ -280,6 +287,8 @@ export function PersonRegisterView({
   embedInCard = true,
   editPersonId,
 }: PersonRegisterViewProps) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const isEditMode = Boolean(editPersonId)
   // 기본 정보
   const [name, setName] = useState('')
@@ -838,7 +847,12 @@ export function PersonRegisterView({
                       )}
                     </ThumbnailPreview>
                     {thumbnailUploading && (
-                      <span style={{ fontSize: 13, color: '#64748b' }}>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: isDark ? '#94a3b8' : '#64748b',
+                        }}
+                      >
                         업로드 중…
                       </span>
                     )}
@@ -858,17 +872,17 @@ export function PersonRegisterView({
                 </FieldLabel>
                 <FieldControl>
                   <InlineFields $cols={3}>
-                    <Input
+                    <FormInput
                       value={surname}
                       onChange={(e) => setSurname(e.target.value)}
                       placeholder="성 (예: 김)"
                     />
-                    <Input
+                    <FormInput
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="이름 (예: 홍길동)"
                     />
-                    <Input
+                    <FormInput
                       value={middleName}
                       onChange={(e) => setMiddleName(e.target.value)}
                       placeholder="중간이름"
@@ -880,7 +894,7 @@ export function PersonRegisterView({
                 <FieldLabel>이름 원어</FieldLabel>
                 <FieldControl>
                   <OriginalNameInputWrap>
-                    <Input
+                    <FormInput
                       value={originalName}
                       onChange={(e) => setOriginalName(e.target.value)}
                       placeholder="예: Franklin D. Roosevelt"
@@ -892,7 +906,7 @@ export function PersonRegisterView({
                 <FieldLabel>즉위 전 작호(군호)</FieldLabel>
                 <FieldControl>
                   <OriginalNameInputWrap>
-                    <Input
+                    <FormInput
                       value={preEnthronementTitle}
                       onChange={(e) => setPreEnthronementTitle(e.target.value)}
                       placeholder="예: 수양대군, 충녕대군"
@@ -998,17 +1012,17 @@ export function PersonRegisterView({
                 <FieldLabel>성의 뜻 / 이름의 뜻 / 중간이름의 뜻</FieldLabel>
                 <FieldControl>
                   <InlineFields $cols={3}>
-                    <Input
+                    <FormInput
                       value={surnameMeaning}
                       onChange={(e) => setSurnameMeaning(e.target.value)}
                       placeholder="성의 뜻"
                     />
-                    <Input
+                    <FormInput
                       value={nameMeaning}
                       onChange={(e) => setNameMeaning(e.target.value)}
                       placeholder="이름의 뜻"
                     />
-                    <Input
+                    <FormInput
                       value={middleNameMeaning}
                       onChange={(e) => setMiddleNameMeaning(e.target.value)}
                       placeholder="중간이름의 뜻"

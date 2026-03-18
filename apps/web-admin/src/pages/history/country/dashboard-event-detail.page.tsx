@@ -5,17 +5,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { toast } from 'react-hot-toast'
 import { FiEdit2, FiX } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import { useFormEntities } from '@/entities/event-form/model'
 import { mapEventResponseToHistoricalEvent } from '@/pages/events/utils/event-detail.mapper'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
-import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { dynastyApi } from '@/shared/api/dynasty'
 import {
   type EventResponseDto,
@@ -27,6 +26,7 @@ import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
 const ARTICLE_MAX_WIDTH = '680px'
 
@@ -34,12 +34,23 @@ const SansFamily =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
 
 const Page = styled(motion.article)`
-  max-width: ${ARTICLE_MAX_WIDTH};
-  margin: 0 auto;
-  padding: 40px 28px 64px;
-  background: #ffffff;
+  width: 100%;
+  padding: 40px 0 64px;
+  background: transparent;
   min-height: 100%;
   font-family: ${SansFamily};
+`
+
+/** 제목 영역 — 좌우 패딩만, max-width 없음 */
+const HeaderArea = styled.div`
+  padding: 0 28px;
+`
+
+/** 본문 내용 — 폭 제한 + 중앙 정렬 */
+const ContentArea = styled.div`
+  max-width: ${ARTICLE_MAX_WIDTH};
+  margin: 0 auto;
+  padding: 0 28px;
 `
 
 const Kicker = styled.span`
@@ -49,7 +60,7 @@ const Kicker = styled.span`
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 10px;
 `
 
@@ -60,10 +71,10 @@ const BackLink = styled.button`
   border: none;
   background: none;
   font-size: 13px;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   &:hover {
-    color: #111827;
+    color: ${({ theme }) => theme.colors.text.primary};
     text-decoration: underline;
   }
 `
@@ -85,13 +96,13 @@ const EditButton = styled.button`
   padding: 0;
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   background: none;
   border: none;
   cursor: pointer;
   transition: color 0.15s;
   &:hover {
-    color: #111827;
+    color: ${({ theme }) => theme.colors.text.primary};
     text-decoration: underline;
   }
 `
@@ -102,17 +113,17 @@ const Headline = styled.h1`
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.02em;
-  color: #121212;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0 0 16px;
 `
 
 const Byline = styled.p`
   font-family: ${SansFamily};
   font-size: 14px;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin: 0 0 28px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #ebebeb;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
 const Section = styled.section`
@@ -129,7 +140,7 @@ const SectionTitle = styled.h2`
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin: 0 0 14px;
 `
 
@@ -153,13 +164,13 @@ const SectionEditBtn = styled.button`
   padding: 0;
   font-size: 13px;
   font-weight: 500;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   background: none;
   border: none;
   cursor: pointer;
   transition: color 0.15s;
   &:hover {
-    color: #111827;
+    color: ${({ theme }) => theme.colors.text.primary};
     text-decoration: underline;
   }
 `
@@ -200,7 +211,7 @@ const Prose = styled.div`
   font-family: ${SansFamily};
   font-size: 15px;
   line-height: 1.7;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
 
   p {
     margin: 0 0 1em;
@@ -212,18 +223,15 @@ const Prose = styled.div`
     font-weight: 700;
   }
 
-  /* 에디터와 동일: 순서 없음/있음 목록 들여쓰기 */
   ul,
   ol {
     margin: 12px 0;
     padding-left: 28px;
   }
 
-  /* 개행 유지 (textarea/본문에서 입력한 줄바꿈) */
   white-space: pre-wrap;
   word-break: break-word;
 
-  /* 본문 내 인물/가문 등 엔티티 — 글자색은 본문 유지, 흐린 배지 배경만 */
   .mention,
   .entity-link {
     color: inherit;
@@ -234,7 +242,8 @@ const Prose = styled.div`
     padding: 1px 6px;
     margin: 0 1px;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.03);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0, 0, 0, 0.03)'};
     border: none;
     transition:
       background 0.15s ease,
@@ -246,7 +255,6 @@ const Prose = styled.div`
     background: rgba(29, 78, 216, 0.06);
   }
 
-  /* 본문 내 용어(문구·관직 설명) — 기본은 색만, 호버 시 구분되게 */
   .term {
     color: #0f766e;
     font-weight: inherit;
@@ -254,17 +262,18 @@ const Prose = styled.div`
     cursor: pointer;
     padding: 0 2px;
     border-radius: 3px;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
   }
   .term:hover {
     color: #0d9488;
     background: rgba(13, 148, 136, 0.1);
   }
 
-  /* 에디터(RichTextEditor)와 동일한 수평선 스타일 */
   hr {
     border: none;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.default};
     margin: 24px 0;
     height: 1px;
     display: block;
@@ -289,10 +298,11 @@ const TagRow = styled.div`
 const Tag = styled.span`
   font-family: ${SansFamily};
   font-size: 12px;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   padding: 5px 12px;
-  background: #f9fafb;
-  border: 1px solid #f3f4f6;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f9fafb'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 6px;
 `
 
@@ -301,18 +311,20 @@ const CountryChip = styled.span<{ $historical?: boolean }>`
   font-size: 12px;
   padding: 5px 12px;
   border-radius: 6px;
-  background: #f9fafb;
-  border: 1px solid ${(p) => (p.$historical ? '#fef3c7' : '#f3f4f6')};
-  color: ${(p) => (p.$historical ? '#b45309' : '#9ca3af')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f9fafb'};
+  border: 1px solid
+    ${(p) => (p.$historical ? '#fef3c7' : p.theme.colors.border.light)};
+  color: ${(p) => (p.$historical ? '#b45309' : p.theme.colors.text.tertiary)};
 `
 
 const SideBlock = styled.div`
   padding: 18px 0;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   margin-bottom: 0;
 
   &:last-child {
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   }
 `
 
@@ -320,14 +332,14 @@ const SideName = styled.div`
   font-family: ${SansFamily};
   font-size: 15px;
   font-weight: 700;
-  color: #121212;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 6px;
 `
 
 const SideDetail = styled.div`
   font-family: ${SansFamily};
   font-size: 14px;
-  color: #666;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 `
 
@@ -339,14 +351,14 @@ const ImageWrap = styled.figure`
     width: 100%;
     height: auto;
     display: block;
-    background: #fafafa;
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 `
 
 const Figcaption = styled.figcaption`
   font-family: ${SansFamily};
   font-size: 13px;
-  color: #666;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-top: 8px;
   line-height: 1.4;
 `
@@ -354,7 +366,7 @@ const Figcaption = styled.figcaption`
 const ImageSource = styled.cite`
   display: block;
   font-size: 12px;
-  color: #999;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   margin-top: 4px;
   font-style: normal;
 `
@@ -365,16 +377,16 @@ const SubEventBtn = styled.button`
   padding: 12px 0;
   text-align: left;
   border: none;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: none;
   font-family: ${SansFamily};
   font-size: 15px;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   cursor: pointer;
   transition: color 0.15s;
 
   &:hover {
-    color: #374151;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
   &:last-child {
     border-bottom: none;
@@ -384,7 +396,7 @@ const SubEventBtn = styled.button`
 const SubEventMeta = styled.span`
   font-family: ${SansFamily};
   font-size: 14px;
-  color: #888;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 400;
   margin-left: 8px;
 `
@@ -392,10 +404,10 @@ const SubEventMeta = styled.span`
 const MetaNote = styled.p`
   font-family: ${SansFamily};
   font-size: 11px;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   margin: 28px 0 0;
   padding-top: 20px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const LoadingWrap = styled.div`
@@ -403,7 +415,7 @@ const LoadingWrap = styled.div`
   text-align: center;
   font-family: ${SansFamily};
   font-size: 15px;
-  color: #888;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const ErrorWrap = styled.div`
@@ -428,7 +440,14 @@ const MentionModalOverlay = styled(motion.div)`
 `
 const MentionModalPanel = styled(motion.div)`
   position: relative;
-  background: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30,30,30,0.85)' : '#ffffff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  border: ${({ theme }) =>
+    theme.mode === 'dark' ? '1px solid rgba(255,255,255,0.1)' : 'none'};
   border-radius: 24px;
   box-shadow:
     0 32px 64px -16px rgba(0, 0, 0, 0.2),
@@ -450,13 +469,14 @@ const MentionModalHeader = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding: 16px 20px 12px;
-  background: #fafbfc;
-  border-bottom: 1px solid #f1f5f9;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafbfc'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 const MentionModalTitle = styled.span`
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -467,10 +487,11 @@ const MentionModalClose = styled.button`
   height: 40px;
   padding: 0;
   border: none;
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
   border-radius: 50%;
   cursor: pointer;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -480,8 +501,8 @@ const MentionModalClose = styled.button`
     box-shadow 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   &:hover {
-    color: #0f172a;
-    background: #f1f5f9;
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.background.tertiary};
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
   }
   &:active {
@@ -493,7 +514,8 @@ const MentionModalBody = styled.div`
   flex: 1;
   min-height: 280px;
   padding: 20px 24px 32px;
-  background: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
   &::-webkit-scrollbar {
     width: 8px;
   }
@@ -586,6 +608,8 @@ function stripMentionAt(html: string): string {
 export function DashboardEventDetailPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const [dto, setDto] = useState<EventResponseDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -781,7 +805,9 @@ export function DashboardEventDetailPage() {
     (key: EditingSection, initialValue: string, initialTitle?: string) => {
       setEditingSection(key)
       setDraftValue(initialValue ?? '')
-      setDraftSectionTitle(initialTitle ?? (key.type === 'section-new' ? 'Part 1' : ''))
+      setDraftSectionTitle(
+        initialTitle ?? (key.type === 'section-new' ? 'Part 1' : ''),
+      )
     },
     [],
   )
@@ -803,20 +829,38 @@ export function DashboardEventDetailPage() {
       } else if (editingSection.type === 'section') {
         const sections = (dto.eventSections ?? [])
           .slice()
-          .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
+          .sort(
+            (a: { order: number }, b: { order: number }) => a.order - b.order,
+          )
         const next = sections.map(
-          (sec: { id: string; title: string; content: string; order: number }) =>
+          (sec: {
+            id: string
+            title: string
+            content: string
+            order: number
+          }) =>
             sec.id === editingSection.id
               ? { title: sec.title, content: draftValue, order: sec.order }
-              : { title: sec.title, content: sec.content ?? '', order: sec.order },
+              : {
+                  title: sec.title,
+                  content: sec.content ?? '',
+                  order: sec.order,
+                },
         )
         await updateEvent(eventId, { eventSections: next })
       } else if (editingSection.type === 'section-new') {
         const sections = (dto.eventSections ?? [])
           .slice()
-          .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
+          .sort(
+            (a: { order: number }, b: { order: number }) => a.order - b.order,
+          )
         const next = sections.map(
-          (s: { title: string; content: string; order: number; sectionType?: string }) => ({
+          (s: {
+            title: string
+            content: string
+            order: number
+            sectionType?: string
+          }) => ({
             title: s.title,
             content: s.content ?? '',
             order: s.order,
@@ -852,10 +896,16 @@ export function DashboardEventDetailPage() {
   const dateLabel =
     mapped?.startDate &&
     (mapped.endDate
-      ? formatDateRange(mapped.startDate, mapped.endDate, mapped.startDatePrecision, mapped.endDatePrecision)
+      ? formatDateRange(
+          mapped.startDate,
+          mapped.endDate,
+          mapped.startDatePrecision,
+          mapped.endDatePrecision,
+        )
       : formatDateRange(mapped.startDate, undefined, mapped.startDatePrecision))
   const heroImage =
-    dto?.eventImages?.find((i) => i.isPrimary)?.imageUrl ??
+    dto?.eventImages?.find((i: { isPrimary?: boolean }) => i.isPrimary)
+      ?.imageUrl ??
     dto?.thumbnail ??
     dto?.eventImages?.[0]?.imageUrl
 
@@ -894,7 +944,7 @@ export function DashboardEventDetailPage() {
       : null
   const eventSections = (dto.eventSections ?? [])
     .slice()
-    .sort((a, b) => a.order - b.order)
+    .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
   // 상단 히어로에 이미 쓴 이미지는 갤러리에서 제외 (한 장만 있을 때 중복 표시 방지)
   const galleryWithoutHero =
     heroImage && mapped.visuals.gallery.length > 0
@@ -909,103 +959,111 @@ export function DashboardEventDetailPage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      <TopBar>
-        <BackLink type="button" onClick={goToList}>
-          ← 연대표 목록
-        </BackLink>
-        <EditButton type="button" onClick={goToEdit} aria-label="사건 수정">
-          <FiEdit2 size={14} />
-          수정
-        </EditButton>
-      </TopBar>
+      <HeaderArea>
+        <TopBar>
+          <BackLink type="button" onClick={goToList}>
+            ← 연대표 목록
+          </BackLink>
+          <EditButton type="button" onClick={goToEdit} aria-label="사건 수정">
+            <FiEdit2 size={14} />
+            수정
+          </EditButton>
+        </TopBar>
 
-      {mapped.category && <Kicker>{mapped.category}</Kicker>}
-      <Headline>{mapped.title}</Headline>
-      <Byline>
-        {dateLabel && <span>{dateLabel}</span>}
-        {mapped.location && (
-          <>
-            {dateLabel && ' · '}
-            <span>{mapped.location}</span>
-          </>
+        {mapped.category && <Kicker>{mapped.category}</Kicker>}
+        <Headline>{mapped.title}</Headline>
+        <Byline>
+          {dateLabel && <span>{dateLabel}</span>}
+          {mapped.location && (
+            <>
+              {dateLabel && ' · '}
+              <span>{mapped.location}</span>
+            </>
+          )}
+        </Byline>
+      </HeaderArea>
+
+      <ContentArea>
+        {heroImage && (
+          <ImageWrap>
+            <img src={heroImage} alt="" />
+          </ImageWrap>
         )}
-      </Byline>
-
-      {heroImage && (
-        <ImageWrap>
-          <img src={heroImage} alt="" />
-        </ImageWrap>
-      )}
 
       <Section>
         <SectionTitleRow>
           <SectionTitle>개요</SectionTitle>
           {editingSection?.type !== 'description' && (
+            <SectionEditBtn
+              type="button"
+              onClick={() =>
+                startEditSection(
+                  { type: 'description' },
+                  dto?.description ?? '',
+                )
+              }
+            >
+              <FiEdit2 size={14} />
+              {mapped.description ? '수정' : '추가'}
+            </SectionEditBtn>
+          )}
+        </SectionTitleRow>
+        {editingSection?.type === 'description' ? (
+          <>
+            <SectionEditorWrap>
+              <RichTextEditor
+                value={draftValue}
+                onChange={setDraftValue}
+                placeholder="개요를 입력하세요..."
+                mentionEntities={mentionEntities}
+                onEntityModalOpen={refetchEntities}
+                documentScope={
+                  eventId ? { type: 'event', id: eventId } : undefined
+                }
+              />
+            </SectionEditorWrap>
+            <SectionEditActions>
               <SectionEditBtn
                 type="button"
-                onClick={() =>
-                  startEditSection(
-                    { type: 'description' },
-                    dto?.description ?? '',
-                  )
-                }
+                onClick={cancelEditSection}
+                disabled={savingSection}
               >
-                <FiEdit2 size={14} />
-                {mapped.description ? '수정' : '추가'}
+                취소
               </SectionEditBtn>
-            )}
-          </SectionTitleRow>
-          {editingSection?.type === 'description' ? (
-            <>
-              <SectionEditorWrap>
-                <RichTextEditor
-                  value={draftValue}
-                  onChange={setDraftValue}
-                  placeholder="개요를 입력하세요..."
-                  mentionEntities={mentionEntities}
-                  onEntityModalOpen={refetchEntities}
-                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
-                />
-              </SectionEditorWrap>
-              <SectionEditActions>
-                <SectionEditBtn
-                  type="button"
-                  onClick={cancelEditSection}
-                  disabled={savingSection}
-                >
-                  취소
-                </SectionEditBtn>
-                <SectionSaveBtn
-                  type="button"
-                  onClick={saveEditSection}
-                  disabled={savingSection}
-                >
-                  {savingSection ? '저장 중…' : '저장'}
-                </SectionSaveBtn>
-              </SectionEditActions>
-            </>
-          ) : (
-            mapped.description && (
-              <div onClick={handleProseClick} role="presentation">
-                <Prose
-                  dangerouslySetInnerHTML={{
-                    __html: stripMentionAt(mapped.description),
-                  }}
-                />
-              </div>
-            )
-          )}
+              <SectionSaveBtn
+                type="button"
+                onClick={saveEditSection}
+                disabled={savingSection}
+              >
+                {savingSection ? '저장 중…' : '저장'}
+              </SectionSaveBtn>
+            </SectionEditActions>
+          </>
+        ) : (
+          mapped.description && (
+            <div onClick={handleProseClick} role="presentation">
+              <Prose
+                dangerouslySetInnerHTML={{
+                  __html: stripMentionAt(mapped.description),
+                }}
+              />
+            </div>
+          )
+        )}
       </Section>
 
       {/* 본문: 없을 때 추가 블록, 있을 때 목록 + 수정 */}
-      {(eventSections.length === 0 || editingSection?.type === 'section-new') && (
+      {(eventSections.length === 0 ||
+        editingSection?.type === 'section-new') && (
         <Section>
           <SectionTitleRow>
             <SectionTitle>본문</SectionTitle>
             {editingSection?.type !== 'section-new' && (
               <SectionEditBtn
                 type="button"
-                onClick={() => startEditSection({ type: 'section-new' }, '', 'Part 1')}
+                onClick={() =>
+                  startEditSection({ type: 'section-new' }, '', 'Part 1')
+                }
               >
                 <FiEdit2 size={14} />
                 본문 (제목과 내용) 추가
@@ -1020,7 +1078,7 @@ export function DashboardEventDetailPage() {
                     display: 'block',
                     fontSize: 13,
                     fontWeight: 600,
-                    color: '#374151',
+                    color: theme.colors.text.primary,
                     marginBottom: 6,
                   }}
                 >
@@ -1036,8 +1094,10 @@ export function DashboardEventDetailPage() {
                     maxWidth: 400,
                     padding: '10px 12px',
                     fontSize: 14,
-                    border: '1px solid #e2e8f0',
+                    border: `1px solid ${theme.colors.border.default}`,
                     borderRadius: 8,
+                    background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                    color: theme.colors.text.primary,
                   }}
                 />
               </div>
@@ -1048,7 +1108,9 @@ export function DashboardEventDetailPage() {
                   placeholder="본문 내용을 입력하세요..."
                   mentionEntities={mentionEntities}
                   onEntityModalOpen={refetchEntities}
-                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
+                  documentScope={
+                    eventId ? { type: 'event', id: eventId } : undefined
+                  }
                 />
               </SectionEditorWrap>
               <SectionEditActions>
@@ -1069,7 +1131,13 @@ export function DashboardEventDetailPage() {
               </SectionEditActions>
             </>
           ) : eventSections.length === 0 ? (
-            <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>
+            <p
+              style={{
+                fontSize: 14,
+                color: theme.colors.text.secondary,
+                margin: 0,
+              }}
+            >
               본문이 없습니다. 위 버튼으로 제목과 내용을 추가하세요.
             </p>
           ) : null}
@@ -1077,66 +1145,71 @@ export function DashboardEventDetailPage() {
       )}
 
       {eventSections.length > 0 &&
-        eventSections.map((sec) => (
-          <Section key={sec.id}>
-            <SectionTitleRow>
-              <SectionTitle>{sec.title}</SectionTitle>
-              {editingSection?.type !== 'section' ||
-              editingSection?.id !== sec.id ? (
-                <SectionEditBtn
-                  type="button"
-                  onClick={() =>
-                    startEditSection(
-                      { type: 'section', id: sec.id },
-                      sec.content ?? '',
-                    )
-                  }
-                >
-                  <FiEdit2 size={14} />
-                  수정
-                </SectionEditBtn>
-              ) : null}
-            </SectionTitleRow>
-            {editingSection?.type === 'section' && editingSection.id === sec.id ? (
-              <>
-                <SectionEditorWrap>
-                  <RichTextEditor
-                    value={draftValue}
-                    onChange={setDraftValue}
-                    placeholder="본문 내용을 입력하세요..."
-                    mentionEntities={mentionEntities}
-                    onEntityModalOpen={refetchEntities}
-                    documentScope={eventId ? { type: 'event', id: eventId } : undefined}
-                  />
-                </SectionEditorWrap>
-                <SectionEditActions>
+        eventSections.map(
+          (sec: { id: string; title?: string; content?: string }) => (
+            <Section key={sec.id}>
+              <SectionTitleRow>
+                <SectionTitle>{sec.title}</SectionTitle>
+                {editingSection?.type !== 'section' ||
+                editingSection?.id !== sec.id ? (
                   <SectionEditBtn
                     type="button"
-                    onClick={cancelEditSection}
-                    disabled={savingSection}
+                    onClick={() =>
+                      startEditSection(
+                        { type: 'section', id: sec.id },
+                        sec.content ?? '',
+                      )
+                    }
                   >
-                    취소
+                    <FiEdit2 size={14} />
+                    수정
                   </SectionEditBtn>
-                  <SectionSaveBtn
-                    type="button"
-                    onClick={saveEditSection}
-                    disabled={savingSection}
-                  >
-                    {savingSection ? '저장 중…' : '저장'}
-                  </SectionSaveBtn>
-                </SectionEditActions>
-              </>
-            ) : (
-              <div onClick={handleProseClick} role="presentation">
-                <Prose
-                  dangerouslySetInnerHTML={{
-                    __html: stripMentionAt(sec.content ?? ''),
-                  }}
-                />
-              </div>
-            )}
-          </Section>
-        ))}
+                ) : null}
+              </SectionTitleRow>
+              {editingSection?.type === 'section' &&
+              editingSection.id === sec.id ? (
+                <>
+                  <SectionEditorWrap>
+                    <RichTextEditor
+                      value={draftValue}
+                      onChange={setDraftValue}
+                      placeholder="본문 내용을 입력하세요..."
+                      mentionEntities={mentionEntities}
+                      onEntityModalOpen={refetchEntities}
+                      documentScope={
+                        eventId ? { type: 'event', id: eventId } : undefined
+                      }
+                    />
+                  </SectionEditorWrap>
+                  <SectionEditActions>
+                    <SectionEditBtn
+                      type="button"
+                      onClick={cancelEditSection}
+                      disabled={savingSection}
+                    >
+                      취소
+                    </SectionEditBtn>
+                    <SectionSaveBtn
+                      type="button"
+                      onClick={saveEditSection}
+                      disabled={savingSection}
+                    >
+                      {savingSection ? '저장 중…' : '저장'}
+                    </SectionSaveBtn>
+                  </SectionEditActions>
+                </>
+              ) : (
+                <div onClick={handleProseClick} role="presentation">
+                  <Prose
+                    dangerouslySetInnerHTML={{
+                      __html: stripMentionAt(sec.content ?? ''),
+                    }}
+                  />
+                </div>
+              )}
+            </Section>
+          ),
+        )}
 
       {(mapped.background ||
         mapped.aftermath ||
@@ -1164,14 +1237,16 @@ export function DashboardEventDetailPage() {
             {editingSection?.type === 'background' ? (
               <>
                 <SectionEditorWrap>
-                <RichTextEditor
-                  value={draftValue}
-                  onChange={setDraftValue}
-                  placeholder="배경을 입력하세요..."
-                  mentionEntities={mentionEntities}
-                  onEntityModalOpen={refetchEntities}
-                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
-                />
+                  <RichTextEditor
+                    value={draftValue}
+                    onChange={setDraftValue}
+                    placeholder="배경을 입력하세요..."
+                    mentionEntities={mentionEntities}
+                    onEntityModalOpen={refetchEntities}
+                    documentScope={
+                      eventId ? { type: 'event', id: eventId } : undefined
+                    }
+                  />
                 </SectionEditorWrap>
                 <SectionEditActions>
                   <SectionEditBtn
@@ -1223,14 +1298,16 @@ export function DashboardEventDetailPage() {
             {editingSection?.type === 'aftermath' ? (
               <>
                 <SectionEditorWrap>
-                <RichTextEditor
-                  value={draftValue}
-                  onChange={setDraftValue}
-                  placeholder="여파를 입력하세요..."
-                  mentionEntities={mentionEntities}
-                  onEntityModalOpen={refetchEntities}
-                  documentScope={eventId ? { type: 'event', id: eventId } : undefined}
-                />
+                  <RichTextEditor
+                    value={draftValue}
+                    onChange={setDraftValue}
+                    placeholder="여파를 입력하세요..."
+                    mentionEntities={mentionEntities}
+                    onEntityModalOpen={refetchEntities}
+                    documentScope={
+                      eventId ? { type: 'event', id: eventId } : undefined
+                    }
+                  />
                 </SectionEditorWrap>
                 <SectionEditActions>
                   <SectionEditBtn
@@ -1267,27 +1344,40 @@ export function DashboardEventDetailPage() {
       {hasBelligerents && (
         <Section>
           <SectionTitle>교전 세력</SectionTitle>
-          {dto.belligerents!.sides.map((side, i) => (
-            <SideBlock key={i}>
-              <SideName>{side.name}</SideName>
-              {side.commander && (
-                <SideDetail>지휘: {side.commander}</SideDetail>
-              )}
-              {side.forces && <SideDetail>병력: {side.forces}</SideDetail>}
-              {side.description && <SideDetail>{side.description}</SideDetail>}
-              {side.countries?.length > 0 && (
-                <SideDetail>
-                  참여:{' '}
-                  {[]
-                    .concat(side.countries)
-                    .map((c: any) =>
-                      typeof c === 'object' && c?.name ? c.name : String(c),
-                    )
-                    .join(', ')}
-                </SideDetail>
-              )}
-            </SideBlock>
-          ))}
+          {dto.belligerents!.sides.map(
+            (
+              side: {
+                name?: string
+                commander?: string
+                forces?: string
+                description?: string
+                countries?: unknown[]
+              },
+              i: number,
+            ) => (
+              <SideBlock key={i}>
+                <SideName>{side.name}</SideName>
+                {side.commander && (
+                  <SideDetail>지휘: {side.commander}</SideDetail>
+                )}
+                {side.forces && <SideDetail>병력: {side.forces}</SideDetail>}
+                {side.description && (
+                  <SideDetail>{side.description}</SideDetail>
+                )}
+                {(side.countries?.length ?? 0) > 0 && (
+                  <SideDetail>
+                    참여:{' '}
+                    {([] as unknown[])
+                      .concat(side.countries ?? [])
+                      .map((c: any) =>
+                        typeof c === 'object' && c?.name ? c.name : String(c),
+                      )
+                      .join(', ')}
+                  </SideDetail>
+                )}
+              </SideBlock>
+            ),
+          )}
         </Section>
       )}
 
@@ -1360,25 +1450,34 @@ export function DashboardEventDetailPage() {
       {dto.childEvents && dto.childEvents.length > 0 && (
         <Section>
           <SectionTitle>하위 사건</SectionTitle>
-          {dto.childEvents.map((child) => (
-            <SubEventBtn
-              key={child.id}
-              type="button"
-              onClick={() => goToEvent(child.id)}
-            >
-              {child.title}
-              {child.startDate && (
-                <SubEventMeta>
-                  {formatDateRange(
-                    child.startDate,
-                    child.endDate ?? undefined,
-                    child.startDatePrecision,
-                    child.endDatePrecision,
-                  )}
-                </SubEventMeta>
-              )}
-            </SubEventBtn>
-          ))}
+          {dto.childEvents.map(
+            (child: {
+              id: string
+              title?: string
+              startDate?: string
+              endDate?: string
+              startDatePrecision?: string
+              endDatePrecision?: string
+            }) => (
+              <SubEventBtn
+                key={child.id}
+                type="button"
+                onClick={() => goToEvent(child.id)}
+              >
+                {child.title}
+                {child.startDate && (
+                  <SubEventMeta>
+                    {formatDateRange(
+                      child.startDate,
+                      child.endDate ?? undefined,
+                      child.startDatePrecision,
+                      child.endDatePrecision,
+                    )}
+                  </SubEventMeta>
+                )}
+              </SubEventBtn>
+            ),
+          )}
         </Section>
       )}
 
@@ -1417,6 +1516,8 @@ export function DashboardEventDetailPage() {
             `등록: ${new Date(dto.createdAt).toLocaleString('ko-KR')}`}
         </MetaNote>
       )}
+
+      </ContentArea>
 
       <AnimatePresence>
         {mentionPersonId && (

@@ -30,51 +30,36 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import type { MilitaryUnit } from '@/shared/api/military-unit'
 import type { PersonResponseDto } from '@/shared/api/persons'
 
-import type { HistoricalEvent } from './events.types'
-
 // 멘션 가능한 엔티티 타입
 export type MentionEntityType =
-  // 인물/조직
   | 'person'
-  | 'dynasty'       // 가문
+  | 'dynasty'
   | 'organization'
   | 'militaryUnit'
-  
-  // 지리/정치
   | 'event'
   | 'country'
   | 'historicalCountry'
   | 'city'
   | 'administrativeDivision'
-  
-  // 경제/상업
-  | 'brand'              // 브랜드: 코카콜라, 배스킨라빈스
-  | 'company'            // 기업: IBM, 도요타
-  | 'product'            // 제품: M1 개런드, 지프
-  
-  // 군사
+  | 'brand'
+  | 'company'
+  | 'product'
   | 'weapon'
   | 'groundVehicle'
   | 'aircraft'
   | 'navalVessel'
-  
-  // 문화/사회
-  | 'culture'            // 문화 현상: 재즈, 스윙
-  | 'ideology'           // 이념: 파시즘, 공산주의
-  | 'religion'           // 종교: 기독교, 이슬람
-  | 'art'                // 예술 작품: 게르니카
-  | 'literature'         // 문학: 1984, 동물농장
-  | 'music'              // 음악: 라 마르세예즈
-  
-  // 과학/기술
-  | 'technology'         // 기술: 레이더, 암호 해독
-  | 'invention'          // 발명품: 페니실린, 제트 엔진
-  | 'scientificTheory'   // 과학 이론: 원자폭탄 이론
-  
-  // 법률/문서
-  | 'document'           // 문서: 대서양 헌장
-  | 'treaty'             // 조약: 베르사유 조약
-  | 'law'                // 법률: 뉘른베르크 법
+  | 'culture'
+  | 'ideology'
+  | 'religion'
+  | 'art'
+  | 'literature'
+  | 'music'
+  | 'technology'
+  | 'invention'
+  | 'scientificTheory'
+  | 'document'
+  | 'treaty'
+  | 'law'
 
 // 통합 멘션 아이템 타입
 export interface MentionItem {
@@ -84,7 +69,7 @@ export interface MentionItem {
   subtitle?: string
   icon?: IconType
   color?: string
-  data: unknown // 원본 데이터
+  data: unknown
 }
 
 // 타입별 설정
@@ -122,11 +107,10 @@ export const MENTION_TYPE_CONFIG: Record<
     icon: FiGlobe,
     color: '#d97706',
     searchFields: ['title', 'description'],
-    getName: (item: unknown) =>
-      (item as EventResponseDto).title || (item as HistoricalEvent).title,
+    getName: (item: unknown) => (item as EventResponseDto).title ?? '',
     getSubtitle: (item: unknown) => {
-      const event = item as EventResponseDto | HistoricalEvent
-      if ('startDate' in event && event.startDate) {
+      const event = item as EventResponseDto
+      if (event.startDate) {
         return `${new Date(event.startDate).getFullYear()}년`
       }
       return undefined
@@ -158,8 +142,7 @@ export const MENTION_TYPE_CONFIG: Record<
     getName: (item: unknown) =>
       (item as { name: string; country?: { name: string } }).name,
     getSubtitle: (item: unknown) =>
-      (item as { name: string; country?: { name: string } }).country?.name ||
-      undefined,
+      (item as { name: string; country?: { name: string } }).country?.name || undefined,
   },
   administrativeDivision: {
     label: '행정구역',
@@ -230,14 +213,10 @@ export const MENTION_TYPE_CONFIG: Record<
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
   },
-  
-  // ============================================
-  // 경제/상업 엔티티
-  // ============================================
   brand: {
     label: '브랜드',
     icon: FiShoppingBag,
-    color: '#ec4899', // 핑크
+    color: '#ec4899',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -249,7 +228,7 @@ export const MENTION_TYPE_CONFIG: Record<
   company: {
     label: '기업',
     icon: FiBriefcase,
-    color: '#0891b2', // 시안
+    color: '#0891b2',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -259,21 +238,17 @@ export const MENTION_TYPE_CONFIG: Record<
   product: {
     label: '제품',
     icon: FiPackage,
-    color: '#f59e0b', // 주황
+    color: '#f59e0b',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
     getSubtitle: (item: unknown) =>
       (item as { manufacturer?: string }).manufacturer || undefined,
   },
-  
-  // ============================================
-  // 문화/사회 엔티티
-  // ============================================
   culture: {
     label: '문화',
     icon: FiStar,
-    color: '#a855f7', // 보라
+    color: '#a855f7',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -281,7 +256,7 @@ export const MENTION_TYPE_CONFIG: Record<
   ideology: {
     label: '이념',
     icon: FiTrendingUp,
-    color: '#dc2626', // 빨강
+    color: '#dc2626',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -289,7 +264,7 @@ export const MENTION_TYPE_CONFIG: Record<
   religion: {
     label: '종교',
     icon: FiHeart,
-    color: '#7c3aed', // 진보라
+    color: '#7c3aed',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -297,7 +272,7 @@ export const MENTION_TYPE_CONFIG: Record<
   art: {
     label: '예술',
     icon: FiStar,
-    color: '#db2777', // 마젠타
+    color: '#db2777',
     searchFields: ['name', 'artist'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -307,7 +282,7 @@ export const MENTION_TYPE_CONFIG: Record<
   literature: {
     label: '문학',
     icon: FiBook,
-    color: '#059669', // 초록
+    color: '#059669',
     searchFields: ['name', 'author'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -317,21 +292,17 @@ export const MENTION_TYPE_CONFIG: Record<
   music: {
     label: '음악',
     icon: FiMusic,
-    color: '#d946ef', // 핑크
+    color: '#d946ef',
     searchFields: ['name', 'composer'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
     getSubtitle: (item: unknown) =>
       (item as { composer?: string }).composer || undefined,
   },
-  
-  // ============================================
-  // 과학/기술 엔티티
-  // ============================================
   technology: {
     label: '기술',
     icon: FiZap,
-    color: '#0284c7', // 블루
+    color: '#0284c7',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -339,7 +310,7 @@ export const MENTION_TYPE_CONFIG: Record<
   invention: {
     label: '발명품',
     icon: FiCoffee,
-    color: '#ea580c', // 주황
+    color: '#ea580c',
     searchFields: ['name', 'inventor'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -349,21 +320,17 @@ export const MENTION_TYPE_CONFIG: Record<
   scientificTheory: {
     label: '과학 이론',
     icon: FiBookOpen,
-    color: '#0369a1', // 다크 블루
+    color: '#0369a1',
     searchFields: ['name', 'scientist'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
     getSubtitle: (item: unknown) =>
       (item as { scientist?: string }).scientist || undefined,
   },
-  
-  // ============================================
-  // 법률/문서 엔티티
-  // ============================================
   document: {
     label: '문서',
     icon: FiFileText,
-    color: '#64748b', // 회색
+    color: '#64748b',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -373,7 +340,7 @@ export const MENTION_TYPE_CONFIG: Record<
   treaty: {
     label: '조약',
     icon: FiFileText,
-    color: '#16a34a', // 초록
+    color: '#16a34a',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -383,7 +350,7 @@ export const MENTION_TYPE_CONFIG: Record<
   law: {
     label: '법률',
     icon: FiShield,
-    color: '#b91c1c', // 다크 레드
+    color: '#b91c1c',
     searchFields: ['name', 'description'],
     getName: (item: unknown) =>
       (item as { name: string; [key: string]: unknown }).name,
@@ -399,7 +366,7 @@ export function searchMentionEntities(
   searchTerm: string,
   entities: {
     persons?: PersonResponseDto[]
-    events?: (EventResponseDto | HistoricalEvent)[]
+    events?: EventResponseDto[]
     countries?: CountryResponseDto[]
     historicalCountries?: HistoricalCountryResponseDto[]
     cities?: Array<{ id: string; name: string; [key: string]: unknown }>
@@ -409,171 +376,40 @@ export function searchMentionEntities(
 ): MentionItem[] {
   const results: MentionItem[] = []
   const normalizedSearch = searchTerm.toLowerCase().trim()
-
-  // 빈 검색어일 때는 모든 항목 반환 (최대 개수 제한)
   const shouldShowAll = !normalizedSearch
 
-  // 인물 검색
-  if (entities.persons) {
-    entities.persons
-      .filter((person) =>
+  const push = (type: MentionEntityType, items: unknown[], limit: number) => {
+    ;(items as unknown[])
+      .filter((item) =>
         shouldShowAll
           ? true
-          : MENTION_TYPE_CONFIG.person.searchFields.some((field) =>
-              (person as unknown as Record<string, unknown>)[field]
+          : MENTION_TYPE_CONFIG[type].searchFields.some((field) =>
+              (item as Record<string, unknown>)[field]
                 ?.toString()
                 .toLowerCase()
                 .includes(normalizedSearch),
             ),
       )
-      .slice(0, shouldShowAll ? 3 : 5)
-      .forEach((person) => {
+      .slice(0, shouldShowAll ? limit : 5)
+      .forEach((item) => {
         results.push({
-          type: 'person',
-          id: person.id,
-          name: MENTION_TYPE_CONFIG.person.getName(person),
-          subtitle: MENTION_TYPE_CONFIG.person.getSubtitle?.(person),
-          icon: MENTION_TYPE_CONFIG.person.icon,
-          color: MENTION_TYPE_CONFIG.person.color,
-          data: person,
+          type,
+          id: (item as { id: string }).id,
+          name: MENTION_TYPE_CONFIG[type].getName(item),
+          subtitle: MENTION_TYPE_CONFIG[type].getSubtitle?.(item),
+          icon: MENTION_TYPE_CONFIG[type].icon,
+          color: MENTION_TYPE_CONFIG[type].color,
+          data: item,
         })
       })
   }
 
-  // 사건 검색
-  if (entities.events) {
-    entities.events
-      .filter((event) =>
-        shouldShowAll
-          ? true
-          : MENTION_TYPE_CONFIG.event.searchFields.some((field) =>
-              (event as unknown as Record<string, unknown>)[field]
-                ?.toString()
-                .toLowerCase()
-                .includes(normalizedSearch),
-            ),
-      )
-      .slice(0, shouldShowAll ? 3 : 5)
-      .forEach((event) => {
-        results.push({
-          type: 'event',
-          id: event.id,
-          name: MENTION_TYPE_CONFIG.event.getName(event),
-          subtitle: MENTION_TYPE_CONFIG.event.getSubtitle?.(event),
-          icon: MENTION_TYPE_CONFIG.event.icon,
-          color: MENTION_TYPE_CONFIG.event.color,
-          data: event,
-        })
-      })
-  }
-
-  // 국가 검색
-  if (entities.countries) {
-    entities.countries
-      .filter((country) =>
-        shouldShowAll
-          ? true
-          : MENTION_TYPE_CONFIG.country.searchFields.some((field) =>
-              (country as unknown as Record<string, unknown>)[field]
-                ?.toString()
-                .toLowerCase()
-                .includes(normalizedSearch),
-            ),
-      )
-      .slice(0, shouldShowAll ? 3 : 5)
-      .forEach((country) => {
-        results.push({
-          type: 'country',
-          id: country.id,
-          name: MENTION_TYPE_CONFIG.country.getName(country),
-          subtitle: MENTION_TYPE_CONFIG.country.getSubtitle?.(country),
-          icon: MENTION_TYPE_CONFIG.country.icon,
-          color: MENTION_TYPE_CONFIG.country.color,
-          data: country,
-        })
-      })
-  }
-
-  // 역사적 국가 검색
-  if (entities.historicalCountries) {
-    entities.historicalCountries
-      .filter((hc) =>
-        shouldShowAll
-          ? true
-          : MENTION_TYPE_CONFIG.historicalCountry.searchFields.some((field) =>
-              (hc as unknown as Record<string, unknown>)[field]
-                ?.toString()
-                .toLowerCase()
-                .includes(normalizedSearch),
-            ),
-      )
-      .slice(0, shouldShowAll ? 3 : 5)
-      .forEach((hc) => {
-        results.push({
-          type: 'historicalCountry',
-          id: hc.id,
-          name: MENTION_TYPE_CONFIG.historicalCountry.getName(hc),
-          subtitle: MENTION_TYPE_CONFIG.historicalCountry.getSubtitle?.(hc),
-          icon: MENTION_TYPE_CONFIG.historicalCountry.icon,
-          color: MENTION_TYPE_CONFIG.historicalCountry.color,
-          data: hc,
-        })
-      })
-  }
-
-  // 군부대 검색
-  if (entities.militaryUnits) {
-    entities.militaryUnits
-      .filter((unit) =>
-        shouldShowAll
-          ? true
-          : MENTION_TYPE_CONFIG.militaryUnit.searchFields.some((field) =>
-              (unit as unknown as Record<string, unknown>)[field]
-                ?.toString()
-                .toLowerCase()
-                .includes(normalizedSearch),
-            ),
-      )
-      .slice(0, shouldShowAll ? 3 : 5)
-      .forEach((unit) => {
-        results.push({
-          type: 'militaryUnit',
-          id: unit.id,
-          name: MENTION_TYPE_CONFIG.militaryUnit.getName(unit),
-          subtitle: MENTION_TYPE_CONFIG.militaryUnit.getSubtitle?.(unit),
-          icon: MENTION_TYPE_CONFIG.militaryUnit.icon,
-          color: MENTION_TYPE_CONFIG.militaryUnit.color,
-          data: unit,
-        })
-      })
-  }
-
-  // 가문 검색
-  if (entities.dynasties) {
-    entities.dynasties
-      .filter((d) =>
-        shouldShowAll
-          ? true
-          : MENTION_TYPE_CONFIG.dynasty.searchFields.some((field) =>
-              (d as unknown as Record<string, unknown>)[field]
-                ?.toString()
-                .toLowerCase()
-                .includes(normalizedSearch),
-            ),
-      )
-      .slice(0, shouldShowAll ? 3 : 5)
-      .forEach((d) => {
-        results.push({
-          type: 'dynasty',
-          id: d.id,
-          name: MENTION_TYPE_CONFIG.dynasty.getName(d),
-          subtitle: MENTION_TYPE_CONFIG.dynasty.getSubtitle?.(d),
-          icon: MENTION_TYPE_CONFIG.dynasty.icon,
-          color: MENTION_TYPE_CONFIG.dynasty.color,
-          data: d,
-        })
-      })
-  }
+  if (entities.persons) push('person', entities.persons, 3)
+  if (entities.events) push('event', entities.events, 3)
+  if (entities.countries) push('country', entities.countries, 3)
+  if (entities.historicalCountries) push('historicalCountry', entities.historicalCountries, 3)
+  if (entities.militaryUnits) push('militaryUnit', entities.militaryUnits, 3)
+  if (entities.dynasties) push('dynasty', entities.dynasties, 3)
 
   return results
 }

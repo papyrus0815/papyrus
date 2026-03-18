@@ -24,6 +24,10 @@ import type { PersonResponseDto } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import {
+  FormInput as Input,
+  FormTextarea as TextArea,
+} from '@/shared/ui/form-input/form-input'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
 
 import type {
@@ -1456,20 +1460,23 @@ const EmptyState = styled.div`
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  background: linear-gradient(to bottom, #fafbfc, #f8fafc);
-  border: 2px dashed #e2e8f0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.03)'
+      : 'linear-gradient(to bottom, #fafbfc, #f8fafc)'};
+  border: 2px dashed ${({ theme }) => theme.colors.border.default};
   border-radius: 16px;
   gap: 12px;
   max-width: ${FORM_FIELD_MAX_WIDTH};
 
   svg {
-    color: #cbd5e1;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 
   p {
     margin: 0;
     font-size: 13px;
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -1492,8 +1499,9 @@ const TwoColumnLayout = styled.div`
   grid-template-columns: 280px 1fr;
   gap: 0;
   min-height: 400px;
-  background: white;
-  border: 1.5px solid #e2e8f0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'white'};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   overflow: hidden;
 
@@ -1505,19 +1513,23 @@ const TwoColumnLayout = styled.div`
 const CountryListColumn = styled.div`
   display: flex;
   flex-direction: column;
-  background: linear-gradient(to bottom, #fafbfc, #f8fafc);
-  border-right: 1.5px solid #f1f5f9;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.02)'
+      : 'linear-gradient(to bottom, #fafbfc, #f8fafc)'};
+  border-right: 1.5px solid ${({ theme }) => theme.colors.border.light};
 
   @media (max-width: 1024px) {
     border-right: none;
-    border-bottom: 1.5px solid #f1f5f9;
+    border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
   }
 `
 
 const DetailColumn = styled.div`
   display: flex;
   flex-direction: column;
-  background: white;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'transparent' : 'white'};
   width: 100%;
   max-width: ${FORM_FIELD_MAX_WIDTH};
 `
@@ -1527,14 +1539,15 @@ const ColumnHeader = styled.div`
   align-items: center;
   gap: 10px;
   padding: 18px 20px;
-  background: white;
-  border-bottom: 1.5px solid #f1f5f9;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'white'};
+  border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
 
   h3 {
     margin: 0;
     font-size: 14px;
     font-weight: 700;
-    color: #1e293b;
+    color: ${({ theme }) => theme.colors.text.primary};
     flex: 1;
     letter-spacing: -0.01em;
   }
@@ -1587,7 +1600,8 @@ const CountryListItem = styled.div<{ $selected: boolean }>`
   justify-content: space-between;
   padding: 12px 14px;
   margin-bottom: 4px;
-  background: ${(props) => (props.$selected ? '#ffffff' : 'transparent')};
+  background: ${(props) =>
+    props.$selected ? 'rgba(139,92,246,0.1)' : 'transparent'};
   border-left: 3px solid
     ${(props) => (props.$selected ? '#8b5cf6' : 'transparent')};
   border-radius: 8px;
@@ -1597,7 +1611,7 @@ const CountryListItem = styled.div<{ $selected: boolean }>`
     props.$selected ? '0 2px 8px rgba(139, 92, 246, 0.12)' : 'none'};
 
   &:hover {
-    background: #ffffff;
+    background: rgba(139, 92, 246, 0.06);
     border-left-color: ${(props) => (props.$selected ? '#8b5cf6' : '#cbd5e1')};
   }
 `
@@ -1613,7 +1627,7 @@ const CountryListInfo = styled.div`
 const CountryListName = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1878,32 +1892,6 @@ const Label = styled.label`
   color: #475569;
 `
 
-const Input = styled.input`
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 14px;
-  color: #1e293b;
-  background: #f8fafc;
-  transition: all 0.2s ease;
-
-  &::placeholder {
-    color: #94a3b8;
-  }
-
-  &:hover {
-    border-color: #cbd5e1;
-    background: #f1f5f9;
-  }
-
-  &:focus {
-    outline: none;
-    border-color: #8b5cf6;
-    background: #ffffff;
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
-  }
-`
-
 const SelectButton = styled.button<{ $hasValue?: boolean }>`
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
@@ -1977,35 +1965,6 @@ const DateButton = styled.button`
 
   span {
     font-weight: 500;
-  }
-`
-
-const TextArea = styled.textarea`
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 14px;
-  color: #1e293b;
-  resize: vertical;
-  font-family: inherit;
-  line-height: 1.6;
-  background: #f8fafc;
-  transition: all 0.2s ease;
-
-  &::placeholder {
-    color: #94a3b8;
-  }
-
-  &:hover {
-    border-color: #cbd5e1;
-    background: #f1f5f9;
-  }
-
-  &:focus {
-    outline: none;
-    border-color: #8b5cf6;
-    background: #ffffff;
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
   }
 `
 

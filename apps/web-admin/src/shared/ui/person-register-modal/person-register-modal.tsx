@@ -4,72 +4,37 @@
  * - initialCountryId 시 해당 국가로 미리 설정
  */
 import React, { useEffect, useState } from 'react'
+
 import { createPortal } from 'react-dom'
+
+import { toast } from 'react-hot-toast'
 import { FiChevronDown, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
-import { toast } from 'react-hot-toast'
 
-import { createPerson, type CreatePersonDto as CreatePersonInput } from '@/shared/api/persons'
-import { uploadImage } from '@/shared/api/upload'
+import { FormInput } from '@/shared/ui/form-input/form-input'
+
 import { getAllCountries } from '@/shared/api/countries'
-import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
+import {
+  type CreatePersonDto as CreatePersonInput,
+  createPerson,
+} from '@/shared/api/persons'
+import { uploadImage } from '@/shared/api/upload'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
-
-const OVERLAY_Z = 9000
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: ${OVERLAY_Z};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-`
-
-const ModalBox = styled.div`
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
-  max-width: 560px;
-  width: 100%;
-  max-height: 90vh;
-  overflow: auto;
-`
-
-const ModalHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
-`
-
-const ModalTitle = styled.h2`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111;
-`
-
-const CloseBtn = styled.button`
-  padding: 8px;
-  background: none;
-  border: none;
-  border-radius: 8px;
-  color: #666;
-  cursor: pointer;
-  &:hover {
-    background: #f3f4f6;
-    color: #111;
-  }
-`
+import {
+  SelectModal,
+  type SelectOption,
+} from '@/shared/ui/select-modal/select-modal'
+import {
+  ModalOverlay,
+  ModalBox,
+  ModalHeader,
+  ModalTitle,
+  ModalCloseButton,
+} from '@/shared/ui/modal'
 
 const FormBody = styled.div`
   padding: 24px;
@@ -78,7 +43,7 @@ const FormBody = styled.div`
 const FormDesc = styled.p`
   margin: 0 0 20px;
   font-size: 14px;
-  color: #666;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 `
 
@@ -90,21 +55,15 @@ const Label = styled.label`
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 6px;
 `
 
-const Input = styled.input`
-  width: 100%;
+/** 공용 Input — FormInput 컴포넌트 사용 (border-radius 8px 오버라이드) */
+const Input = styled(FormInput)`
   padding: 12px 14px;
   font-size: 15px;
-  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-sizing: border-box;
-  &:focus {
-    outline: none;
-    border-color: #6366f1;
-  }
 `
 
 const SelectBtn = styled.button<{ $hasValue?: boolean }>`
@@ -114,14 +73,16 @@ const SelectBtn = styled.button<{ $hasValue?: boolean }>`
   justify-content: space-between;
   padding: 12px 14px;
   font-size: 15px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
-  background: #fff;
-  color: ${(p) => (p.$hasValue ? '#111' : '#888')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  color: ${({ $hasValue, theme }) =>
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   cursor: pointer;
   text-align: left;
+  outline: none;
   &:focus {
-    outline: none;
     border-color: #6366f1;
   }
 `
@@ -132,7 +93,7 @@ const FormActions = styled.div`
   justify-content: flex-end;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const PrimaryBtn = styled.button`
@@ -157,13 +118,14 @@ const CancelBtn = styled.button`
   padding: 12px 20px;
   font-size: 14px;
   font-weight: 500;
-  color: #666;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   cursor: pointer;
   &:hover {
-    background: #f9fafb;
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
 `
 
@@ -208,7 +170,9 @@ export function PersonRegisterModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>([])
+  const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
+    [],
+  )
   const [historicalCountries, setHistoricalCountries] = useState<
     HistoricalCountryResponseDto[]
   >([])
@@ -239,7 +203,8 @@ export function PersonRegisterModal({
 
   // 국가 목록 로드 후 initialCountryId에 해당하는 국가명 표시
   useEffect(() => {
-    if (!countryId || (!modernCountries.length && !historicalCountries.length)) return
+    if (!countryId || (!modernCountries.length && !historicalCountries.length))
+      return
     const modern = modernCountries.find((c) => c.id === countryId)
     const historical = historicalCountries.find((c) => c.id === countryId)
     if (modern) setCountryName(modern.name)
@@ -297,17 +262,23 @@ export function PersonRegisterModal({
   if (!isOpen) return null
 
   const content = (
-    <Overlay onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="person-register-title">
+    <ModalOverlay
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="person-register-title"
+    >
       <ModalBox onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
           <ModalTitle id="person-register-title">인물 등록</ModalTitle>
-          <CloseBtn type="button" onClick={onClose} aria-label="닫기">
+          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
             <FiX size={20} />
-          </CloseBtn>
+          </ModalCloseButton>
         </ModalHeader>
         <FormBody>
           <FormDesc>
-            기본 정보를 입력하세요. 소속 국가는 미리 선택된 경우 해당 국가로 설정됩니다.
+            기본 정보를 입력하세요. 소속 국가는 미리 선택된 경우 해당 국가로
+            설정됩니다.
           </FormDesc>
           <form onSubmit={handleSubmit}>
             <Field>
@@ -335,7 +306,8 @@ export function PersonRegisterModal({
                 onClick={() => setShowGenderModal(true)}
               >
                 <span>
-                  {GENDER_OPTIONS.find((o) => o.value === gender)?.label ?? '선택'}
+                  {GENDER_OPTIONS.find((o) => o.value === gender)?.label ??
+                    '선택'}
                 </span>
                 <FiChevronDown size={18} />
               </SelectBtn>
@@ -418,7 +390,7 @@ export function PersonRegisterModal({
           </form>
         </FormBody>
       </ModalBox>
-    </Overlay>
+    </ModalOverlay>
   )
 
   return createPortal(content, document.body)

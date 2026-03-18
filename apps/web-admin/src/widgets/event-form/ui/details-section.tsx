@@ -31,8 +31,7 @@ import type { PersonResponseDto } from '@/shared/api/persons'
 import { uploadImage } from '@/shared/api/upload'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
-import * as S from '../../../pages/events/create/event-create.styles'
-// Explicitly import guide components
+import * as S from './details-section.styles'
 import {
   GuideIconButton,
   GuideTip,
@@ -45,11 +44,10 @@ import {
   TipExample,
   TipNumber,
   TipTitle,
-} from '../../../pages/events/create/event-create.styles'
-import type { HistoricalEventCategory } from '../../../pages/events/create/events.types'
-import { MENTION_TYPE_CONFIG } from '../../../pages/events/create/mention-system'
-import { getImageUrl } from '../../../pages/events/utils/event-create.utils'
-import { formatDateRange } from '../../../pages/events/utils/events.utils'
+} from './guide-tooltip.styles'
+import type { HistoricalEventCategory } from '../types'
+import { MENTION_TYPE_CONFIG } from '@/shared/lib/mention/mention-system'
+import { getImageUrl, formatDateRange } from '../utils'
 
 interface DetailsSectionProps {
   sections: EventSection[]

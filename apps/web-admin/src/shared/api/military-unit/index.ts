@@ -1,86 +1,11 @@
 import * as militaryUnitsApi from '@api/functional/military_units'
 import { apiConnection } from '../client'
 
-export type MilitaryUnitType =
-  | 'FIELD_ARMY'
-  | 'CORPS'
-  | 'DIVISION'
-  | 'BRIGADE'
-  | 'REGIMENT'
-  | 'BATTALION'
-  | 'COMPANY'
-  | 'PLATOON'
-  | 'SQUAD'
-  | 'FLEET'
-  | 'SQUADRON'
-  | 'WING'
-  | 'SPECIAL_FORCES'
-  | 'DETACHMENT'
-  | 'OTHER'
-
-export type MilitaryUnit = {
-  id: string
-  name: string
-  unitType?: MilitaryUnitType | null
-  countryId?: string | null
-  isActive?: boolean | null
-  establishedDate?: string | null
-  disbandedDate?: string | null
-  parentUnitId?: string | null
-  description?: string | null
-  createdAt: string
-  updatedAt: string
-  country?: {
-    id: string
-    name: string
-    flagEmoji?: string | null
-  } | null
-  parentUnit?: {
-    id: string
-    name: string
-    unitType?: MilitaryUnitType | null
-  } | null
-  subUnits?: Array<{
-    id: string
-    name: string
-    unitType?: MilitaryUnitType | null
-    isActive?: boolean | null
-  }>
-  commanders?: Array<{
-    id: string
-    personId: string
-    rank?: string | null
-    role?: string | null
-    isCurrent?: boolean | null
-    person?: {
-      id: string
-      name: string
-      surname?: string | null
-    }
-  }>
-}
-
-export type CreateMilitaryUnitInput = {
-  name: string
-  unitType?: MilitaryUnitType | null
-  countryId?: string | null
-  isActive?: boolean | null
-  establishedDate?: string | null
-  disbandedDate?: string | null
-  parentUnitId?: string | null
-  description?: string | null
-}
-
-export type UpdateMilitaryUnitInput = {
-  name?: string
-  unitType?: MilitaryUnitType | null
-  countryId?: string | null
-  isActive?: boolean | null
-  establishedDate?: string | null
-  disbandedDate?: string | null
-  parentUnitId?: string | null
-  description?: string | null
-}
+// SDK 기반 타입 — 서버·클라이언트 동일 타입 사용
+export type MilitaryUnit = Awaited<ReturnType<typeof militaryUnitsApi.getById>>
+export type MilitaryUnitType = NonNullable<MilitaryUnit['unitType']>
+export type CreateMilitaryUnitInput = Parameters<typeof militaryUnitsApi.create>[1]
+export type UpdateMilitaryUnitInput = Parameters<typeof militaryUnitsApi.update>[2]
 
 export const militaryUnitApi = {
   getAll: async () => {

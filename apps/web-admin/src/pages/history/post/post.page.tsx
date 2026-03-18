@@ -18,6 +18,10 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { useFormEntities } from '@/entities/event-form/model'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import {
+  PillTabButton,
+  PillTabNav,
+} from '@/shared/ui/tab/tab.styles'
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: '임시저장',
@@ -455,21 +459,21 @@ export default function PostPage() {
       </header>
 
       <div className="post-tabs-kpi">
-        <GovTabNav>
-          <GovTabButton type="button" $active={statusFilter === ''} onClick={() => setStatusFilter('')}>
+        <PillTabNav>
+          <PillTabButton type="button" $active={statusFilter === ''} onClick={() => setStatusFilter('')}>
             전체
-          </GovTabButton>
+          </PillTabButton>
           {(['PUBLISHED', 'DRAFT', 'PENDING_REVIEW'] as const).map((s) => (
-            <GovTabButton
+            <PillTabButton
               key={s}
               type="button"
               $active={statusFilter === s}
               onClick={() => setStatusFilter(s)}
             >
               {STATUS_LABEL[s] ?? s}
-            </GovTabButton>
+            </PillTabButton>
           ))}
-        </GovTabNav>
+        </PillTabNav>
         <KpiBox>
           <div className="kpi-inner">
             <span className="kpi-label">등록 포스트</span>

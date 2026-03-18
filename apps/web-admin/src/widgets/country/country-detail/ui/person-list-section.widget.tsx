@@ -3,6 +3,7 @@
  * - PersonListContent 공용 컴포넌트 사용 (국가 상세·인물 페이지 동일 기능·디자인)
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+
 import styled from 'styled-components'
 
 import { dynastyApi } from '@/shared/api/dynasty'
@@ -36,7 +37,11 @@ const Spinner = styled.div`
   border-radius: 50%;
   margin: 0 auto 16px;
   animation: spin 0.8s linear infinite;
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 `
 
 const ErrorWrap = styled.div`
@@ -53,7 +58,11 @@ export function PersonListSection({
   registerTrigger,
 }: PersonListSectionProps) {
   const queryClient = useQueryClient()
-  const { data: persons = [], isLoading, error } = useQuery({
+  const {
+    data: persons = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['persons-by-country', countryId],
     queryFn: () => getPersonsByTenureCountry({ countryId }),
     staleTime: 1000 * 60 * 2,

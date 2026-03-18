@@ -1,4 +1,6 @@
 import styled from 'styled-components'
+import { Z_INDEX } from '@/shared/styles/z-index'
+import { scrollbarThinMixin } from '@/shared/styles/mixins'
 
 export const SelectModalOverlay = styled.div`
   position: fixed;
@@ -6,25 +8,25 @@ export const SelectModalOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
 `
 
 export const SelectModal = styled.div`
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   width: 480px;
   max-width: 90vw;
   max-height: 80vh;
   background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 16px;
   box-shadow: 0 20px 60px ${({ theme }) => theme.colors.shadow.lg};
-  z-index: 1001;
+  z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 `
 
 export const SelectModalHeader = styled.div`
@@ -65,15 +67,7 @@ export const SelectModalContent = styled.div`
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
-
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => theme.colors.border.default};
-    border-radius: 2px;
-  }
+  ${scrollbarThinMixin}
 `
 
 export const SelectOption = styled.button<{ $active?: boolean }>`

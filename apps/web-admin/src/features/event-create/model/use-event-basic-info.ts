@@ -5,7 +5,7 @@
 import { useRef, useState } from 'react'
 
 import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
-import type { MentionEntityType } from '@/pages/events/create/mention-system'
+import type { MentionEntityType } from '@/shared/lib/mention/mention-system'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 export interface EventSection {

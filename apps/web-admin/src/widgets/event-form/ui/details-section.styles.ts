@@ -1,0 +1,33 @@
+/**
+ * details-section 전용 스타일 re-export
+ * pages/events/create/event-create.styles에서 details-section이 필요한 것만 추출
+ */
+export {
+  ContentLayoutWrapper,
+  EditorColumn,
+  SidebarColumn,
+  SidebarCard,
+  SidebarCardHeader,
+  SidebarCardTitle,
+  SidebarCardContent,
+  RemoveSectionButton,
+  RemoveMentionButton,
+  MentionsList,
+  MentionTag,
+  QuickInfoItem,
+  QuickInfoThumbnail,
+  QuickInfoValue,
+  QuickRefItem,
+  QuickRefList,
+  QuickRefName,
+  StatCard,
+  StatLabel,
+  StatValue,
+  StatsGrid,
+  TocItem,
+  TocItemBadge,
+  TocItemTitle,
+  TocList,
+  AddSectionButton,
+  AddSectionButtonCompact,
+} from '@/pages/events/create/event-create.styles'

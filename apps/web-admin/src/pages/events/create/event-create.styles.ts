@@ -4,8 +4,8 @@
 import styled, { keyframes } from 'styled-components'
 
 import type { HistoricalEventCategory } from './events.types'
-import type { MentionEntityType } from './mention-system'
-import { MENTION_TYPE_CONFIG } from './mention-system'
+import type { MentionEntityType } from '@/shared/lib/mention/mention-system'
+import { MENTION_TYPE_CONFIG } from '@/shared/lib/mention/mention-system'
 
 // ============================================
 // 폼 필드 max-width 설정 (여기서 한 번에 변경 가능)
@@ -93,7 +93,10 @@ const pulse = keyframes`
 `
 
 export const getCategoryColor = (category: HistoricalEventCategory | '') => {
-  const colors = {
+  type ColorKey = HistoricalEventCategory
+  const colors: Record<ColorKey, {
+    border: string; background: string; iconBackground: string; iconColor: string; shadow: string
+  }> = {
     military: {
       border: 'rgba(239, 68, 68, 0.4)',
       background: 'rgba(239, 68, 68, 0.08)',
@@ -166,11 +169,11 @@ export const getCategoryColor = (category: HistoricalEventCategory | '') => {
     },
   }
 
-  if (!category || !colors[category as HistoricalEventCategory]) {
+  if (!category || !(category in colors)) {
     return colors.other
   }
 
-  return colors[category as HistoricalEventCategory]
+  return colors[category as ColorKey]
 }
 
 export const PageWrapper = styled.div`
@@ -187,14 +190,11 @@ export const PageWrapper = styled.div`
 `
 
 export const PageHeader = styled.div`
-  background: linear-gradient(
-    135deg,
-    #ffffff 0%,
-    #f8fafc 20%,
-    #eef2ff 50%,
-    #e0e7ff 80%,
-    #ddd6fe 100%
-  );
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.04)'
+      : 'linear-gradient(135deg, #ffffff 0%, #f8fafc 20%, #eef2ff 50%, #e0e7ff 80%, #ddd6fe 100%)'};
+  backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(16px)' : 'none'};
   padding: 32px 40px;
   margin: -24px -24px 24px;
   border-radius: 0 0 24px 24px;
@@ -574,8 +574,10 @@ export const StepConnector = styled.div`
 `
 
 export const FormArea = styled.div`
-  background: ${COLORS.background.content};
-  border: 1.5px solid ${COLORS.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+  backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(12px)' : 'none'};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 16px;
   padding: 0;
   min-height: 500px;
@@ -592,8 +594,9 @@ export const FormAreaHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 24px 32px;
-  border-bottom: 1.5px solid ${COLORS.border.default};
-  background: ${COLORS.background.section};
+  border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
   border-radius: 16px 16px 0 0;
 `
 
@@ -601,7 +604,7 @@ export const FormAreaTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: ${COLORS.text.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
 
@@ -621,10 +624,10 @@ export const SectionHeader = styled.div`
   align-items: flex-start;
   padding-bottom: 24px;
   margin-bottom: 32px;
-  border-bottom: 2px solid ${COLORS.border.light};
+  border-bottom: 2px solid ${({ theme }) => theme.colors.border.light};
 
   svg {
-    color: ${COLORS.primary.main};
+    color: #8b5cf6;
     margin-top: 4px;
     flex-shrink: 0;
   }
@@ -653,7 +656,8 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   align-items: start;
   padding: ${(props) => (props.$compact ? '0' : '20px 0')};
   margin-top: ${(props) => (props.$compact ? '0' : '0')};
-  border-bottom: ${(props) => (props.$noBorder ? 'none' : '1px solid #f1f5f9')};
+  border-bottom: ${(props) =>
+    props.$noBorder ? 'none' : `1px solid ${props.theme.colors.border.light}`};
 
   &:last-child {
     border-bottom: none;
@@ -674,7 +678,7 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
 export const FormLabel = styled.label`
   font-size: 14px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
   padding-top: 12px;
   display: flex;
   flex-direction: column;
@@ -712,8 +716,9 @@ export const OptionalBadge = styled.span`
   padding: 3px 8px;
   font-size: 10px;
   font-weight: 600;
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.1);
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(148, 163, 184, 0.1)'};
   border-radius: 4px;
 `
 
@@ -741,7 +746,7 @@ export const DateRangeColumn = styled.div`
 export const DateRangeLabel = styled.div`
   font-size: 11px;
   font-weight: 700;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 2px;
@@ -765,7 +770,7 @@ export const FormGroup = styled.div`
 export const Label = styled.label`
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   display: flex;
   align-items: center;
   gap: 4px;
@@ -776,61 +781,8 @@ export const Required = styled.span`
   font-size: 14px;
 `
 
-// 모던 스타일 Input (보라색 계열)
-export const Input = styled.input`
-  border: 1.5px solid ${COLORS.border.default};
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 14px;
-  color: ${COLORS.text.primary};
-  background: ${COLORS.background.input};
-  transition: all 0.2s ease;
-
-  &::placeholder {
-    color: ${COLORS.text.muted};
-  }
-
-  &:hover {
-    border-color: ${COLORS.border.hover};
-    background: ${COLORS.border.light};
-  }
-
-  &:focus {
-    outline: none;
-    border-color: ${COLORS.border.focus};
-    background: ${COLORS.background.content};
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
-  }
-`
-
-export const Textarea = styled.textarea`
-  border: 1.5px solid ${COLORS.border.default};
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 14px;
-  color: ${COLORS.text.primary};
-  font-family: inherit;
-  line-height: 1.6;
-  resize: vertical;
-  background: ${COLORS.background.input};
-  transition: all 0.2s ease;
-
-  &::placeholder {
-    color: ${COLORS.text.muted};
-  }
-
-  &:hover {
-    border-color: ${COLORS.border.hover};
-    background: ${COLORS.border.light};
-  }
-
-  &:focus {
-    outline: none;
-    border-color: ${COLORS.border.focus};
-    background: ${COLORS.background.content};
-    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
-  }
-`
+/** 공용 Input — FormInput 컴포넌트 직접 re-export */
+export { FormInput as Input, FormTextarea as Textarea } from '@/shared/ui/form-input/form-input'
 
 export const CategoryGrid = styled.div`
   display: grid;
@@ -2395,15 +2347,23 @@ export const SidebarColumn = styled.div`
 // ============================================
 
 export const SidebarCard = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#ffffff'};
+  backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(12px)' : 'none'};
   border-radius: 12px;
-  border: 1px solid ${COLORS.border.default};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06)'
+      : '0 2px 8px rgba(15, 23, 42, 0.04)'};
   transition: all 0.2s ease;
 
   &:hover {
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08);
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(139,92,246,0.2)'
+        : '0 4px 12px rgba(139, 92, 246, 0.08)'};
     border-color: rgba(139, 92, 246, 0.2);
   }
 `
@@ -2414,10 +2374,10 @@ export const SidebarCardHeader = styled.div`
   gap: 8px;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid ${COLORS.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   svg {
-    color: ${COLORS.primary.main};
+    color: #8b5cf6;
     flex-shrink: 0;
   }
 `
@@ -2760,27 +2720,8 @@ export const BelligerentCard = styled.div`
   }
 `
 
-export const TextArea = styled.textarea`
-  width: 100%;
-  padding: 14px 16px;
-  font-size: 14px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
-  border-radius: 10px;
-  outline: none;
-  resize: vertical;
-  font-family: inherit;
-  transition: all 0.2s ease;
-
-  &::placeholder {
-    color: #94a3b8;
-  }
-
-  &:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  }
-`
+/** 공용 TextArea — FormTextarea 컴포넌트 직접 re-export (Textarea alias) */
+export { FormTextarea as TextArea } from '@/shared/ui/form-input/form-input'
 
 // 태그 관련 스타일
 export const TagInputWrapper = styled.div`

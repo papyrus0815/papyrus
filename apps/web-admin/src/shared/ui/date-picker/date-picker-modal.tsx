@@ -4,12 +4,16 @@ import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface DatePickerModalProps {
   isOpen: boolean
   onClose: () => void
   onSelect: (date: string) => void
+  /** 초기 선택 날짜 (ISO 형식). selectedDate도 동일하게 사용 가능 */
   initialDate?: string
+  /** @deprecated initialDate를 사용하세요 */
+  selectedDate?: string
   minDate?: string
   maxDate?: string
   title?: string
@@ -21,11 +25,13 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   isOpen,
   onClose,
   onSelect,
-  initialDate,
+  initialDate: initialDateProp,
+  selectedDate: selectedDateProp,
   minDate,
   maxDate,
   title = '날짜 선택',
 }) => {
+  const initialDate = initialDateProp ?? selectedDateProp
   const playClickSound = useClickSound()
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [viewYear, setViewYear] = useState(new Date().getFullYear())
@@ -38,7 +44,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const getDaysInMonth = (y: number, m: number) =>
     new Date(y, m + 1, 0).getDate()
 
-  // initialDate 변경 시 상태 업데이트
   useEffect(() => {
     if (isOpen) {
       const date = initialDate ? new Date(initialDate) : new Date()
@@ -58,7 +63,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   if (!isOpen) return null
 
-  // 년도 입력 변경
   const handleYearInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '')
     setYearInputValue(value)
@@ -72,7 +76,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
   }
 
-  // 년도 입력 포커스 아웃 (유효성 복구)
   const handleYearInputBlur = () => {
     const year = parseInt(yearInputValue, 10)
     if (isNaN(year) || year < 1 || year > 9999) {
@@ -82,7 +85,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
   }
 
-  // 년도 증감
   const handleYearChange = (delta: number) => {
     playClickSound()
     const newYear = viewYear + delta
@@ -96,13 +98,11 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
   }
 
-  // 기원전/기원후 토글
   const toggleEra = () => {
     playClickSound()
     setIsBCE(!isBCE)
   }
 
-  // 월 입력 변경 (직접 입력)
   const handleMonthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '')
     setMonthInputValue(value)
@@ -115,6 +115,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       setSelectedDate(new Date(isBCE ? -viewYear : viewYear, num - 1, d))
     }
   }
+
   const handleMonthInputBlur = () => {
     const num = parseInt(monthInputValue, 10)
     if (isNaN(num) || num < 1 || num > 12) {
@@ -124,7 +125,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
   }
 
-  // 일 입력 변경 (직접 입력)
   const handleDayInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '')
     setDayInputValue(value)
@@ -134,6 +134,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       setSelectedDate(new Date(isBCE ? -viewYear : viewYear, viewMonth, num))
     }
   }
+
   const handleDayInputBlur = () => {
     const num = parseInt(dayInputValue, 10)
     const lastDay = getDaysInMonth(viewYear, viewMonth)
@@ -144,7 +145,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
   }
 
-  // 월 변경 (화살표)
   const handleMonthChange = (delta: number) => {
     playClickSound()
     const newMonth = viewMonth + delta
@@ -162,13 +162,11 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     }
   }
 
-  // 날짜 선택 (달력에서 클릭)
   const handleDateSelect = (day: number) => {
     playClickSound()
     setSelectedDate(new Date(isBCE ? -viewYear : viewYear, viewMonth, day))
     setDayInputValue(String(day))
 
-    // ISO 8601 형식으로 포맷
     const actualYear = isBCE ? -viewYear : viewYear
     let formatted: string
     const absYear = Math.abs(actualYear)
@@ -186,7 +184,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     onClose()
   }
 
-  // 입력된 년/월/일로 날짜 확정 (적용 버튼 또는 Enter 시 사용)
   const applyTypedDate = () => {
     const y = parseInt(yearInputValue, 10)
     const m = parseInt(monthInputValue, 10)
@@ -207,11 +204,9 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     onClose()
   }
 
-  // 날짜 유효성 검사
   const isDateValid = (day: number | null): boolean => {
     if (day === null) return false
     if (isBCE) return true
-
     const date = new Date(viewYear, viewMonth, day)
     if (minDate && date < new Date(minDate)) return false
     if (maxDate && date > new Date(maxDate)) return false
@@ -239,16 +234,13 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     )
   }
 
-  // 달력 날짜 배열 생성
   const getCalendarDays = (): (number | null)[] => {
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
     const firstDay = new Date(viewYear, viewMonth, 1).getDay()
     const days: (number | null)[] = Array(firstDay).fill(null)
-
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i)
     }
-
     return days
   }
 
@@ -263,9 +255,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
         </ModalHeader>
 
         <ModalContent>
-          {/* 좌측: 설정 영역 - 년 월 일 가로 배치 */}
           <LeftPanel>
-            {/* 기원 선택 */}
             <SettingSection>
               <SettingLabel>기원</SettingLabel>
               <EraSelector>
@@ -278,7 +268,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
               </EraSelector>
             </SettingSection>
 
-            {/* 년 · 월 · 일 가로 한 줄 */}
             <SettingSection>
               <SettingLabel>날짜 입력</SettingLabel>
               <YearMonthDayRow>
@@ -328,7 +317,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
             </ApplyDateButton>
           </LeftPanel>
 
-          {/* 우측: 달력 영역 */}
           <RightPanel>
             <CalendarHeader>
               <NavButton onClick={() => handleMonthChange(-1)}>
@@ -370,7 +358,6 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   )
 }
 
-/* 행정조직 모달 스타일: 테두리 #e5e7eb, 인디고 포커스 */
 const Overlay = styled.div`
   position: fixed;
   top: 0;
@@ -382,27 +369,47 @@ const Overlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
   animation: fadeIn 0.2s ease;
 
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 `
 
 const ModalContainer = styled.div`
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(25,25,25,0.92)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   border-radius: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 32px rgba(0,0,0,0.5)'
+      : '0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04)'};
   width: 90%;
   max-width: 750px;
   animation: slideUp 0.3s ease;
 
   @keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 `
 
@@ -411,14 +418,14 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 24px 28px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
 `
 
@@ -430,14 +437,16 @@ const CloseButton = styled.button`
   height: 36px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   border-radius: 10px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #475569;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -449,8 +458,8 @@ const ModalContent = styled.div`
 const LeftPanel = styled.div`
   flex: 0 0 260px;
   padding: 24px 20px;
-  background: #f8fafc;
-  border-right: 1px solid #e5e7eb;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-right: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 0 0 0 20px;
 `
 
@@ -472,7 +481,7 @@ const SettingSection = styled.div`
 const SettingLabel = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 10px;
 `
 
@@ -486,17 +495,34 @@ const EraButton = styled.button<{ $isSelected: boolean }>`
   padding: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: ${({ $isSelected }) => ($isSelected ? '#111827' : '#64748b')};
-  background: ${({ $isSelected }) => ($isSelected ? '#fff' : 'transparent')};
-  border: 1px solid #e5e7eb;
+  color: ${({ $isSelected, theme }) =>
+    $isSelected ? theme.colors.text.primary : theme.colors.text.secondary};
+  background: ${({ $isSelected, theme }) =>
+    $isSelected
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.12)'
+        : '#fff'
+      : 'transparent'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
-  box-shadow: ${({ $isSelected }) => ($isSelected ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+  box-shadow: ${({ $isSelected }) =>
+    $isSelected ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
 
   &:hover {
-    background: ${({ $isSelected }) => ($isSelected ? '#fff' : 'rgba(255,255,255,0.6)')};
-    border-color: #d1d5db;
+    background: ${({ $isSelected, theme }) =>
+      $isSelected
+        ? theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.15)'
+          : '#fff'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : 'rgba(255,255,255,0.6)'};
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
 `
 
@@ -512,13 +538,16 @@ const ShortInput = styled.input`
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   text-align: center;
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
 
   &:focus {
     border-color: #4f46e5;
@@ -526,7 +555,7 @@ const ShortInput = styled.input`
   }
 
   &::placeholder {
-    color: #9ca3af;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -563,11 +592,13 @@ const NavButton = styled.button`
   width: 36px;
   height: 36px;
   border: none;
-  background: #f1f5f9;
-  color: #64748b;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   border-radius: 12px;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     background: rgba(79, 70, 229, 0.08);
@@ -587,12 +618,13 @@ const DateDisplayText = styled.div`
   gap: 8px;
   font-size: 17px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const EraTag = styled.span`
   padding: 4px 8px;
-  background: #fef2f2;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(220,38,38,0.15)' : '#fef2f2'};
   color: #dc2626;
   font-size: 11px;
   font-weight: 700;
@@ -613,7 +645,7 @@ const DayNameCell = styled.div`
   height: 32px;
   font-size: 11px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   text-transform: uppercase;
 `
 
@@ -630,18 +662,24 @@ const DayCell = styled.button<{
   border-radius: 12px;
   font-size: 14px;
   font-weight: ${({ $isSelected }) => ($isSelected ? '600' : '500')};
-  color: ${({ $isDisabled, $isSelected }) =>
-    $isDisabled ? '#e5e7eb' : $isSelected ? '#fff' : '#111827'};
+  color: ${({ $isDisabled, $isSelected, theme }) =>
+    $isDisabled
+      ? theme.colors.border.default
+      : $isSelected
+        ? '#fff'
+        : theme.colors.text.primary};
   background: ${({ $isSelected }) => ($isSelected ? '#4f46e5' : 'transparent')};
   cursor: ${({ $isDisabled }) => ($isDisabled ? 'not-allowed' : 'pointer')};
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   position: relative;
 
-  ${({ $isToday, $isSelected }) =>
+  ${({ $isToday, $isSelected, theme }) =>
     $isToday &&
     !$isSelected &&
     `
-    background: #fef3c7;
+    background: ${theme.mode === 'dark' ? 'rgba(251,191,36,0.15)' : '#fef3c7'};
     color: #d97706;
     font-weight: 600;
   `}
@@ -653,7 +691,7 @@ const DayCell = styled.button<{
         : $isDisabled
           ? 'transparent'
           : $isToday
-            ? '#fef3c7'
+            ? undefined
             : 'rgba(79, 70, 229, 0.08)'};
     color: ${({ $isSelected, $isDisabled }) =>
       $isSelected && !$isDisabled ? '#fff' : undefined};

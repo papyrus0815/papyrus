@@ -66,7 +66,7 @@ import { formatDateRange } from '../utils/events.utils'
 import { ConferenceEventForm } from './conference-event-form'
 import * as S from './event-create.styles'
 import { CATEGORY_ICON_MAP } from './events.constants'
-import { searchMentionEntities } from './mention-system'
+import { searchMentionEntities } from '@/shared/lib/mention/mention-system'
 import {
   type BelligerentSide,
   type CasualtyData,

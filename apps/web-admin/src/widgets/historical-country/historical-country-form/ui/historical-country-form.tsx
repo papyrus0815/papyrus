@@ -5,7 +5,7 @@ import { FiCalendar, FiChevronDown, FiGlobe, FiInfo, FiSearch } from 'react-icon
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
 import {
   DateFieldBtn,
@@ -25,6 +25,7 @@ import { useHistoricalCountry } from '@/features/historical-country/use-historic
 import { uploadImage } from '@/shared/api/upload'
 import type { TransitionEventType } from '@/shared/api/historical-countries'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
+import { FormInput } from '@/shared/ui/form-input/form-input'
 import * as S from '@/widgets/country/country-form/ui/country-form.styles'
 
 /** 모달: 인물 등록 모달(PersonRegisterView)과 동일 — FormSectionInner 기본 패딩(28px 32px 32px) 유지, FormHeader 24px 28px */
@@ -57,7 +58,7 @@ const ModalFormLayoutWrap = styled.div`
   ${S.FormSection}:not(:first-of-type) {
     margin-top: 28px;
     padding-top: 32px;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   }
   /* 중첩 섹션(존속 기간, 추가 정보): 여백만 적용 — 상단 border 제거(위 필드 그룹 border와 이중선 방지) */
   ${S.FormSection} ${S.FormSection} {
@@ -75,12 +76,12 @@ const ModalFormLayoutWrap = styled.div`
   ${S.FormSectionTitle} {
     font-size: 15px;
     font-weight: 600;
-    color: #111827;
+    color: ${({ theme }) => theme.colors.text.primary};
     margin: 0 0 4px 0;
   }
   ${S.FormSectionDescription} {
     font-size: 13px;
-    color: #6b7280;
+    color: ${({ theme }) => theme.colors.text.secondary};
     margin: 0;
   }
   ${S.FormRow} {
@@ -90,14 +91,14 @@ const ModalFormLayoutWrap = styled.div`
     padding: 0;
     border: none;
   }
-  /* 인물 등록 FieldRow와 동일: 360px 1fr, 20px 0, border #f3f4f6 */
+  /* 인물 등록 FieldRow와 동일: 360px 1fr, 20px 0 */
   ${S.FormField} {
     display: grid;
     grid-template-columns: 360px 1fr;
     gap: 24px;
     align-items: start;
     padding: 20px 0;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   }
   @media (max-width: 768px) {
     ${S.FormField} {
@@ -107,7 +108,7 @@ const ModalFormLayoutWrap = styled.div`
   ${S.FormLabel} {
     font-size: 13px;
     font-weight: 600;
-    color: #374151;
+    color: ${({ theme }) => theme.colors.text.primary};
     padding-top: 10px;
     margin: 0;
     grid-column: 1;
@@ -125,7 +126,7 @@ const ModalFormLayoutWrap = styled.div`
     grid-column: 2;
     grid-row: 2;
     font-size: 12px;
-    color: #dc2626;
+    color: #ea4335;
     margin-top: 4px;
   }
   ${S.FormField} > div {
@@ -136,14 +137,14 @@ const ModalFormLayoutWrap = styled.div`
     border-bottom: none;
   }
   .name-group {
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   }
   /* 국가 형태·정치체 성격: 같은 성격 필드끼리 그룹, 행 사이 보더 없음 */
   .state-type-group ${S.FormField} {
     border-bottom: none;
   }
   .state-type-group {
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   }
   /* 단일 컬럼 필드(국가명 유래, 설명 등)는 전체 너비 */
   ${S.FormField}[style*='marginTop'] {
@@ -162,7 +163,7 @@ const ModalFormLayoutWrap = styled.div`
     gap: 24px;
     align-items: start;
     padding: 20px 0;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     min-width: 0;
   }
   ${S.FormField}[data-field='thumbnail'] ${S.FormLabel} {
@@ -188,8 +189,12 @@ const ModalFormLayoutWrap = styled.div`
     max-height: 96px;
     border-radius: 50%;
     overflow: hidden;
-    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 2px dashed #cbd5e1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%)'};
+    border: 2px dashed ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
     display: flex;
     align-items: center;
     justify-content: center;
@@ -200,12 +205,16 @@ const ModalFormLayoutWrap = styled.div`
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle:hover {
     border-color: #6366f1;
-    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.1)'
+        : 'linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%)'};
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle[data-has-image] {
-    background: #fff;
-    border-color: #e5e7eb;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
+    border-color: ${({ theme }) => theme.colors.border.default};
     border-style: solid;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   }
@@ -219,13 +228,13 @@ const ModalFormLayoutWrap = styled.div`
     object-fit: cover;
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle svg {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.secondary};
     width: 36px;
     height: 36px;
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-hint {
     font-size: 12px;
-    color: #64748b;
+    color: ${({ theme }) => theme.colors.text.secondary};
     line-height: 1.4;
   }
   ${S.FormField}[data-field='thumbnail'] ${S.ErrorMessage} {
@@ -240,20 +249,16 @@ const ModalFormLayoutWrap = styled.div`
       grid-column: unset;
     }
   }
-  /* 존속 기간 DateDetailRow: RFL Input과 동일 스타일 */
+  /* 존속 기간 DateDetailRow: 너비·정렬만 오버라이드 (색상은 공용 Input에서 처리) */
   ${S.DateDetailRow} input[type='number'],
-  ${S.DateDetailRow} ${S.Input} {
-    padding: 12px 16px;
-    font-size: 14px;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
+  ${S.DateDetailRow} ${FormInput} {
     width: 72px;
     min-width: 72px;
     text-align: center;
     box-sizing: border-box;
   }
   ${S.DateDetailRow} input[type='number']:focus,
-  ${S.DateDetailRow} ${S.Input}:focus {
+  ${S.DateDetailRow} ${FormInput}:focus {
     outline: none;
     border-color: #4f46e5;
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
@@ -269,55 +274,37 @@ const ModalFormLayoutWrap = styled.div`
   ${DateFieldBtn} {
     padding: 12px 16px;
     font-size: 14px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
     border-radius: 12px;
-    background: #fff;
-    color: #111827;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   ${DateFieldBtn}:hover {
     border-color: #4f46e5;
-    background: #faf5ff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#faf5ff'};
   }
   ${DateFieldBtn}:focus-visible {
     outline: none;
     border-color: #4f46e5;
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
-  /* 인물 등록 RFL Input과 동일: #e5e7eb 테두리, 12px radius, 포커스 인디고 */
-  ${S.Input} {
-    width: 100%;
-    padding: 12px 16px;
-    font-size: 14px;
-    color: #111827;
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.2s ease;
-  }
-  ${S.Input}::placeholder {
-    color: #9ca3af;
-  }
-  ${S.Input}:hover:not(:focus) {
-    border-color: #d1d5db;
-  }
-  ${S.Input}:focus {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
-  /* 인물 등록 SelectBtn과 동일: 10px 14px, max-width 380px */
+  /* 인물 등록 RFL Input과 동일: 테두리, 12px radius, 포커스 인디고 */
+  /* S.Input은 공용 register-form-layout Input을 re-export하므로 별도 오버라이드 불필요 */
+  /* SelectButton */
   ${S.SelectButton} {
     padding: 10px 14px;
     font-size: 14px;
-    color: #111827;
-    background: #fff;
-    border: 1px solid #e5e7eb;
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
     border-radius: 12px;
     max-width: 380px;
   }
   ${S.SelectButton}:hover {
-    border-color: #d1d5db;
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
   ${S.SelectButton}:focus-visible {
     border-color: #4f46e5;
@@ -472,6 +459,45 @@ export function HistoricalCountryForm({
   onClose,
   onSave,
 }: HistoricalCountryFormProps) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+
+  /** 인라인 스타일 헬퍼 */
+  const inlineSelectStyle = {
+    width: '100%',
+    padding: '12px 16px',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.15)' : '#e5e7eb'}`,
+    borderRadius: 12,
+    fontSize: 14,
+    color: isDark ? '#f1f5f9' : '#111827',
+    background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+  } as const
+
+  const inlineHintStyle = {
+    fontSize: '12px',
+    color: isDark ? '#94a3b8' : '#6b7280',
+    marginTop: '4px',
+  } as const
+
+  const inlineCountStyle = {
+    fontSize: '12px',
+    color: isDark ? '#cbd5e1' : '#374151',
+    marginTop: '4px',
+  } as const
+
+  /** 날짜 입력 인라인 스타일 헬퍼 */
+  const inlineNumInputStyle = (w: number) => ({
+    width: w,
+    padding: '8px 10px',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.15)' : '#e5e7eb'}`,
+    borderRadius: 8,
+    textAlign: 'center' as const,
+    fontSize: 14,
+    color: isDark ? '#f1f5f9' : '#111827',
+    background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+    outline: 'none',
+  })
+
   // ==================== 상태 관리 ====================
 
   /** 썸네일 이미지 미리보기 URL */
@@ -1002,7 +1028,7 @@ export function HistoricalCountryForm({
                     )}
                   </label>
                   {thumbnailUploading && (
-                    <span style={{ fontSize: 13, color: '#64748b' }}>업로드 중…</span>
+                    <span style={{ fontSize: 13, color: isDark ? '#94a3b8' : '#64748b' }}>업로드 중…</span>
                   )}
                 </div>
                 <span className="thumbnail-hint">
@@ -1030,7 +1056,7 @@ export function HistoricalCountryForm({
                   <S.FormLabel htmlFor="name">
                     국가명 (한글) <S.RequiredStar>*</S.RequiredStar>
                   </S.FormLabel>
-                  <S.Input
+                  <FormInput
                     id="name"
                     type="text"
                     placeholder="예: 조선"
@@ -1044,7 +1070,7 @@ export function HistoricalCountryForm({
 
                 <S.FormField className="name-group-field">
                   <S.FormLabel htmlFor="enName">국가명 (영문)</S.FormLabel>
-                  <S.Input
+                  <FormInput
                     id="enName"
                     type="text"
                     placeholder="예: Joseon Dynasty"
@@ -1060,7 +1086,7 @@ export function HistoricalCountryForm({
               {/* 국가명 유래 */}
               <S.FormField className="name-group-field">
                 <S.FormLabel htmlFor="nameOrigin">국가명 유래</S.FormLabel>
-                <S.Input
+                <FormInput
                   as="textarea"
                   id="nameOrigin"
                   rows={3}
@@ -1136,7 +1162,7 @@ export function HistoricalCountryForm({
                         </option>
                       ))}
                     </S.Select>
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    <div style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#6b7280', marginTop: '4px' }}>
                       막부·메이지 시대 등은 정권/시대를 선택하세요
                     </div>
                   </S.FormField>
@@ -1161,7 +1187,7 @@ export function HistoricalCountryForm({
                   <div
                     style={{
                       fontSize: '12px',
-                      color: '#6b7280',
+                      color: isDark ? '#94a3b8' : '#6b7280',
                       marginTop: '4px',
                     }}
                   >
@@ -1190,7 +1216,7 @@ export function HistoricalCountryForm({
                     <div
                       style={{
                         fontSize: '12px',
-                        color: '#6b7280',
+                        color: isDark ? '#94a3b8' : '#6b7280',
                         marginTop: '4px',
                       }}
                     >
@@ -1200,7 +1226,7 @@ export function HistoricalCountryForm({
                       <div
                         style={{
                           fontSize: '12px',
-                          color: '#374151',
+                          color: isDark ? '#cbd5e1' : '#374151',
                           marginTop: '4px',
                         }}
                       >
@@ -1216,15 +1242,7 @@ export function HistoricalCountryForm({
                         onChange={(e) =>
                           setTransitionEventType(e.target.value as TransitionEventType)
                         }
-                        style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: '#111827',
-                          background: '#fff',
-                        }}
+                        style={inlineSelectStyle}
                       >
                         {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map(
                           (k) => (
@@ -1234,7 +1252,7 @@ export function HistoricalCountryForm({
                           )
                         )}
                       </select>
-                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '6px' }}>
+                      <div style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#6b7280', marginTop: '6px' }}>
                         변천 날짜는 후임 국가의 존속 시작 시점을 참조합니다.
                       </div>
                       <S.FormLabel style={{ marginTop: 12 }}>전환 성격 (선택)</S.FormLabel>
@@ -1243,16 +1261,7 @@ export function HistoricalCountryForm({
                         onChange={(e) =>
                           setTransitionScope(e.target.value as 'STATE_SUCCESSION' | 'REGIME_CHANGE' | '')
                         }
-                        style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: '#111827',
-                          background: '#fff',
-                          marginTop: 6,
-                        }}
+                        style={{ ...inlineSelectStyle, marginTop: 6 }}
                       >
                         <option value="">미지정</option>
                         <option value="STATE_SUCCESSION">국가 계승 (신라→고려 등 주권 단위 변경)</option>
@@ -1331,7 +1340,7 @@ export function HistoricalCountryForm({
             {/* 설명 */}
             <S.FormField>
               <S.FormLabel htmlFor="description">설명</S.FormLabel>
-              <S.Input
+              <FormInput
                 as="textarea"
                 id="description"
                 rows={4}
@@ -1506,7 +1515,7 @@ export function HistoricalCountryForm({
                         }}
                       >
                         <S.SelectOptionText>{option.label}</S.SelectOptionText>
-                        <span style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
+                        <span style={{ fontSize: 12, color: isDark ? '#94a3b8' : '#6b7280', lineHeight: 1.4 }}>
                           {option.desc}
                         </span>
                       </div>
@@ -1521,7 +1530,7 @@ export function HistoricalCountryForm({
                   ))}
                   {filteredStateTypeOptions.length === 0 && (
                     <S.EmptyState style={{ padding: '24px 16px' }}>
-                      <span style={{ color: '#9ca3af', fontSize: 14 }}>
+                      <span style={{ color: isDark ? '#64748b' : '#9ca3af', fontSize: 14 }}>
                         검색 결과가 없습니다.
                       </span>
                     </S.EmptyState>
@@ -1611,7 +1620,7 @@ export function HistoricalCountryForm({
                       }}
                     >
                       <S.SelectOptionText>기원전 (BC)</S.SelectOptionText>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      <span style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#6b7280' }}>
                         Before Christ - 서기 이전 시대
                       </span>
                     </div>
@@ -1645,7 +1654,7 @@ export function HistoricalCountryForm({
                       }}
                     >
                       <S.SelectOptionText>기원후 (AD)</S.SelectOptionText>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      <span style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#6b7280' }}>
                         Anno Domini - 서기 이후 시대
                       </span>
                     </div>
@@ -1673,7 +1682,7 @@ export function HistoricalCountryForm({
                       placeholder="년"
                       value={startModalYMD.y}
                       onChange={(e) => setStartModalYMD((prev) => ({ ...prev, y: e.target.value }))}
-                      style={{ width: 72, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                      style={inlineNumInputStyle(72)}
                     />
                     <input
                       type="number"
@@ -1682,7 +1691,7 @@ export function HistoricalCountryForm({
                       max={12}
                       value={startModalYMD.m}
                       onChange={(e) => setStartModalYMD((prev) => ({ ...prev, m: e.target.value }))}
-                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                      style={inlineNumInputStyle(56)}
                     />
                     <input
                       type="number"
@@ -1691,7 +1700,7 @@ export function HistoricalCountryForm({
                       max={31}
                       value={startModalYMD.d}
                       onChange={(e) => setStartModalYMD((prev) => ({ ...prev, d: e.target.value }))}
-                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                      style={inlineNumInputStyle(56)}
                     />
                   </div>
                   <S.SelectModalFooterButton type="button" onClick={handleStartDateApply}>
@@ -1747,7 +1756,7 @@ export function HistoricalCountryForm({
                       }}
                     >
                       <S.SelectOptionText>기원전 (BC)</S.SelectOptionText>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      <span style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#6b7280' }}>
                         Before Christ - 서기 이전 시대
                       </span>
                     </div>
@@ -1781,7 +1790,7 @@ export function HistoricalCountryForm({
                       }}
                     >
                       <S.SelectOptionText>기원후 (AD)</S.SelectOptionText>
-                      <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                      <span style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#6b7280' }}>
                         Anno Domini - 서기 이후 시대
                       </span>
                     </div>
@@ -1809,7 +1818,7 @@ export function HistoricalCountryForm({
                       placeholder="년"
                       value={endModalYMD.y}
                       onChange={(e) => setEndModalYMD((prev) => ({ ...prev, y: e.target.value }))}
-                      style={{ width: 72, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                      style={inlineNumInputStyle(72)}
                     />
                     <input
                       type="number"
@@ -1818,7 +1827,7 @@ export function HistoricalCountryForm({
                       max={12}
                       value={endModalYMD.m}
                       onChange={(e) => setEndModalYMD((prev) => ({ ...prev, m: e.target.value }))}
-                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                      style={inlineNumInputStyle(56)}
                     />
                     <input
                       type="number"
@@ -1827,7 +1836,7 @@ export function HistoricalCountryForm({
                       max={31}
                       value={endModalYMD.d}
                       onChange={(e) => setEndModalYMD((prev) => ({ ...prev, d: e.target.value }))}
-                      style={{ width: 56, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, textAlign: 'center', fontSize: 14 }}
+                      style={inlineNumInputStyle(56)}
                     />
                   </div>
                   <S.SelectModalFooterButton type="button" onClick={handleEndDateApply}>

@@ -19,21 +19,6 @@ import type { PersonResponseDto } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
-// 디자인 토큰
-const BRAND = {
-  primary: '#6366f1',
-  primaryLight: '#eef2ff',
-  primaryMuted: '#c7d2fe',
-  text: '#0f172a',
-  textMuted: '#64748b',
-  textSubtle: '#94a3b8',
-  surface: '#f8fafc',
-  border: '#e2e8f0',
-  borderLight: '#f1f5f9',
-  white: '#ffffff',
-  error: '#ef4444',
-}
-
 interface PersonSelectModalProps {
   persons: PersonResponseDto[]
   selectedPersonId: string
@@ -433,7 +418,7 @@ const ModalOverlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: ${Z_INDEX.MODAL_CONTENT + 50};
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
   padding: 24px;
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -444,17 +429,21 @@ const ModalOverlay = styled.div`
 `
 
 const ModalBox = styled.div`
-  background: ${BRAND.white};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#ffffff'};
+  backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(24px)' : 'none'};
   border-radius: 20px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  box-shadow: ${({ theme }) => theme.mode === 'dark'
+    ? '0 20px 60px rgba(0,0,0,0.6)'
+    : '0 20px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04)'};
   width: 100%;
   max-width: 920px;
   max-height: 82vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: ${Z_INDEX.MODAL_CONTENT + 51};
+  z-index: ${Z_INDEX.MODAL_CONTENT};
   animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 
   @keyframes slideUp {
@@ -474,15 +463,17 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 22px 28px 20px;
-  border-bottom: 1px solid ${BRAND.borderLight};
-  background: linear-gradient(180deg, #fafbff 0%, ${BRAND.white} 100%);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.mode === 'dark'
+    ? 'rgba(255,255,255,0.03)'
+    : 'linear-gradient(180deg, #fafbff 0%, #ffffff 100%)'};
 `
 
 const ModalTitle = styled.h2`
   margin: 0;
   font-size: 19px;
   font-weight: 700;
-  color: ${BRAND.text};
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.03em;
   line-height: 1.35;
 `
@@ -494,15 +485,15 @@ const ModalCloseButton = styled.button`
   width: 40px;
   height: 40px;
   border: none;
-  background: ${BRAND.surface};
-  color: ${BRAND.textMuted};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${BRAND.primaryLight};
-    color: ${BRAND.primary};
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : '#eef2ff'};
+    color: #6366f1;
   }
   &:focus-visible {
     outline: none;
@@ -522,13 +513,13 @@ const SearchWrapper = styled.div`
   .search-icon {
     position: absolute;
     left: 18px;
-    color: ${BRAND.textSubtle};
+    color: ${({ theme }) => theme.colors.text.tertiary};
     pointer-events: none;
     transition: color 0.2s ease;
   }
 
   &:focus-within .search-icon {
-    color: ${BRAND.primary};
+    color: #6366f1;
   }
 `
 
@@ -537,20 +528,20 @@ const SearchInput = styled.input`
   padding: 14px 18px 14px 48px;
   font-size: 15px;
   font-weight: 500;
-  color: ${BRAND.text};
-  background: ${BRAND.surface};
-  border: 1px solid ${BRAND.border};
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 14px;
   outline: none;
   transition: all 0.2s ease;
 
   &::placeholder {
-    color: ${BRAND.textSubtle};
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   &:focus {
-    background: ${BRAND.white};
-    border-color: ${BRAND.primary};
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
+    border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
   }
 `
@@ -570,8 +561,8 @@ const SplitModalBody = styled.div`
 `
 
 const FilterSidebar = styled.div`
-  background: ${BRAND.surface};
-  border-right: 1px solid ${BRAND.borderLight};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
   overflow-y: auto;
   padding: 20px 16px;
 
@@ -579,13 +570,13 @@ const FilterSidebar = styled.div`
     width: 5px;
   }
   &::-webkit-scrollbar-thumb {
-    background: ${BRAND.border};
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 4px;
   }
 
   @media (max-width: 768px) {
     border-right: none;
-    border-bottom: 1px solid ${BRAND.borderLight};
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     max-height: 220px;
   }
 `
@@ -596,12 +587,12 @@ const FilterSidebarHeader = styled.div`
   gap: 8px;
   padding: 0 4px 12px;
   margin-bottom: 16px;
-  border-bottom: 1px solid ${BRAND.borderLight};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   .label {
     font-size: 13px;
     font-weight: 600;
-    color: ${BRAND.text};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -612,8 +603,8 @@ const FilterBadge = styled.span`
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background: ${BRAND.primary};
-  color: ${BRAND.white};
+  background: #6366f1;
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
   border-radius: 10px;
@@ -627,7 +618,7 @@ const FilterGroup = styled.div`
 const FilterLabel = styled.label`
   font-size: 11px;
   font-weight: 600;
-  color: ${BRAND.textMuted};
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.04em;
   display: flex;
@@ -636,7 +627,7 @@ const FilterLabel = styled.label`
   margin-bottom: 8px;
 
   svg {
-    color: ${BRAND.primary};
+    color: #6366f1;
     opacity: 0.9;
   }
 `
@@ -646,26 +637,26 @@ const FilterSelect = styled.select`
   padding: 10px 12px;
   font-size: 13px;
   font-weight: 500;
-  color: ${BRAND.text};
-  background: ${BRAND.white};
-  border: 1px solid ${BRAND.border};
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: ${BRAND.primaryMuted};
+    border-color: #c7d2fe;
   }
   &:focus {
-    border-color: ${BRAND.primary};
+    border-color: #6366f1;
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
   }
 `
 
 const FilterDivider = styled.div`
   height: 1px;
-  background: ${BRAND.border};
+  background: ${({ theme }) => theme.colors.border.default};
   margin: 16px 0;
   opacity: 0.6;
 `
@@ -679,16 +670,16 @@ const ResetFiltersButton = styled.button`
   padding: 10px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: ${BRAND.primary};
-  background: ${BRAND.primaryLight};
+  color: #6366f1;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
   border: none;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${BRAND.primaryMuted};
-    color: ${BRAND.white};
+    background: #c7d2fe;
+    color: #ffffff;
   }
 `
 
@@ -700,20 +691,20 @@ const PersonsArea = styled.div`
 
 const PersonsHeader = styled.div`
   padding: 14px 28px;
-  border-bottom: 1px solid ${BRAND.borderLight};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const ResultCount = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: ${BRAND.textMuted};
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   .count {
-    color: ${BRAND.primary};
+    color: #6366f1;
     font-weight: 700;
   }
   .total {
-    color: ${BRAND.textSubtle};
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-weight: 500;
   }
 `
@@ -721,7 +712,7 @@ const ResultCount = styled.div`
 const EmptyMessage = styled.span`
   font-size: 13px;
   font-weight: 500;
-  color: ${BRAND.error};
+  color: #ef4444;
 `
 
 const PersonsList = styled.div`
@@ -736,15 +727,15 @@ const PersonsList = styled.div`
     width: 8px;
   }
   &::-webkit-scrollbar-track {
-    background: ${BRAND.borderLight};
+    background: ${({ theme }) => theme.colors.background.secondary};
     border-radius: 4px;
   }
   &::-webkit-scrollbar-thumb {
-    background: ${BRAND.border};
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 4px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: ${BRAND.textSubtle};
+    background: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -762,9 +753,9 @@ const EmptyIconWrap = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${BRAND.surface};
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 50%;
-  color: ${BRAND.textSubtle};
+  color: ${({ theme }) => theme.colors.text.tertiary};
   margin-bottom: 20px;
   opacity: 0.7;
 `
@@ -773,14 +764,14 @@ const EmptyText = styled.p`
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: ${BRAND.textMuted};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const EmptySub = styled.p`
   margin: 8px 0 0;
   font-size: 13px;
   font-weight: 500;
-  color: ${BRAND.textSubtle};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const PersonCard = styled.button<{ $selected: boolean }>`
@@ -788,10 +779,13 @@ const PersonCard = styled.button<{ $selected: boolean }>`
   display: flex;
   align-items: center;
   padding: 16px 20px;
-  background: ${({ $selected }) =>
-    $selected ? BRAND.primaryLight : BRAND.white};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : '#eef2ff'
+      : theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
   border: 1px solid
-    ${({ $selected }) => ($selected ? BRAND.primary : BRAND.borderLight)};
+    ${({ $selected, theme }) =>
+      $selected ? '#6366f1' : theme.colors.border.light};
   border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -801,14 +795,16 @@ const PersonCard = styled.button<{ $selected: boolean }>`
 
   &:hover {
     border-color: ${({ $selected }) =>
-      $selected ? BRAND.primary : BRAND.primaryMuted};
-    background: ${({ $selected }) =>
-      $selected ? BRAND.primaryLight : BRAND.surface};
+      $selected ? '#6366f1' : '#c7d2fe'};
+    background: ${({ $selected, theme }) =>
+      $selected
+        ? theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#eef2ff'
+        : theme.colors.background.secondary};
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
   }
   &:focus-visible {
     outline: none;
-    border-color: ${BRAND.primary};
+    border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
   }
 `
@@ -819,12 +815,14 @@ const PersonAvatar = styled.div<{ $selected?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${({ $selected }) =>
+  background: ${({ $selected, theme }) =>
     $selected
-      ? `linear-gradient(135deg, ${BRAND.primary} 0%, #818cf8 100%)`
-      : `linear-gradient(135deg, ${BRAND.surface} 0%, #e2e8f0 100%)`};
+      ? 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)'
+      : theme.mode === 'dark'
+        ? 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)'
+        : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'};
   border-radius: 50%;
-  color: ${({ $selected }) => ($selected ? BRAND.white : BRAND.textSubtle)};
+  color: ${({ $selected, theme }) => ($selected ? '#ffffff' : theme.colors.text.tertiary)};
   flex-shrink: 0;
   overflow: hidden;
 
@@ -854,7 +852,7 @@ const PersonNameRow = styled.div`
 const PersonName = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: ${BRAND.text};
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.03em;
   line-height: 1.3;
 `
@@ -865,8 +863,8 @@ const SelectedBadge = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${BRAND.primary};
-  color: ${BRAND.white};
+  background: #6366f1;
+  color: #ffffff;
   border-radius: 50%;
   flex-shrink: 0;
 `
@@ -884,10 +882,10 @@ const PersonMeta = styled.div`
   gap: 5px;
   font-size: 12px;
   font-weight: 500;
-  color: ${BRAND.textMuted};
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   svg {
-    color: ${BRAND.textSubtle};
+    color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
     opacity: 0.8;
   }
@@ -903,6 +901,6 @@ const PersonMeta = styled.div`
 const PersonDates = styled.div<{ $empty?: boolean }>`
   font-size: 12px;
   font-weight: 500;
-  color: ${({ $empty }) =>
-    $empty ? BRAND.textSubtle : BRAND.textMuted};
+  color: ${({ $empty, theme }) =>
+    $empty ? theme.colors.text.tertiary : theme.colors.text.secondary};
 `

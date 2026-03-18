@@ -105,9 +105,9 @@ const darkColors = {
     secondary: '#171717',
   },
   background: {
-    primary: '#171717',   // 메인 배경
+    primary: '#171717', // 메인 배경
     secondary: '#212121', // 2레벨
-    tertiary: '#2a2a2a',  // 3레벨
+    tertiary: '#2a2a2a', // 3레벨
     quaternary: '#333333', // 4레벨
   },
   white: '#171717',

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 
 import { GoogleMap } from '@/shared/ui/google-map/google-map'
+import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
 
 // Mock 데이터 import
 import {
@@ -11,7 +12,6 @@ import {
   mockAdministrativeRegions,
   mockCityDetails,
 } from '../mock'
-import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
 import * as S from './country-detail.styles'
 import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { MapRegionInfrastructureView } from './map-region-infrastructure-view'
@@ -599,7 +599,9 @@ export function MapRegionSection({
       {/* 레거시 행정구역 UI (미사용, 새 MapRegionAdministrativeView 사용) */}
       {false && viewMode === 'administrative' && (
         <section aria-label="지도 및 행정구역 (legacy)">
-          <Styled.MapRegionSectionLabel>지도 및 행정구역</Styled.MapRegionSectionLabel>
+          <Styled.MapRegionSectionLabel>
+            지도 및 행정구역
+          </Styled.MapRegionSectionLabel>
           <div
             style={{
               display: 'grid',
@@ -609,675 +611,415 @@ export function MapRegionSection({
               minHeight: 560,
             }}
           >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              height: '100%',
-            }}
-          >
             <div
               style={{
-                height: '280px',
-                background: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '16px',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
-                position: 'relative',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: '100%',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                }}
-              >
-                {country.latitude && country.longitude ? (
-                  <S.MapContainer>
-                    <GoogleMap
-                      latitude={currentMapLocation.latitude}
-                      longitude={currentMapLocation.longitude}
-                      name={currentMapLocation.name}
-                      zoom={mapLocation ? 12 : 6}
-                    />
-                  </S.MapContainer>
-                ) : (
-                  <S.MapPlaceholder>
-                    <S.MapPlaceholderText>
-                      지도 정보가 없습니다
-                    </S.MapPlaceholderText>
-                  </S.MapPlaceholder>
-                )}
-              </div>
-            </div>
-
-            {/* 행정구역 리스트 카드 — 행정조직 카드와 동일 톤 */}
-            <div
-              style={{
-                flex: '1',
-                minHeight: '0',
-                background: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '16px',
                 display: 'flex',
                 flexDirection: 'column',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
-                position: 'relative',
-                overflow: 'visible',
-                transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow =
-                  '0 8px 20px rgba(0, 0, 0, 0.06)'
-                e.currentTarget.style.borderColor = '#d1d5db'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow =
-                  '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)'
-                e.currentTarget.style.borderColor = '#e5e7eb'
+                gap: '16px',
+                height: '100%',
               }}
             >
-
-              {/* 헤더 — 행정조직 탭 톤 */}
               <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '16px 20px',
-                  paddingBottom: '12px',
-                  borderBottom: '1px solid #e5e7eb',
+                  height: '280px',
                   background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '16px',
+                  boxShadow:
+                    '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+                  position: 'relative',
                 }}
               >
                 <div
-                  style={{ display: 'flex', alignItems: 'center', gap: '12px' }}
-                >
-                  {navigation.level !== 'level1' && (
-                    <button
-                      onClick={handleBackNavigation}
-                      title="뒤로가기"
-                      type="button"
-                      style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '10px',
-                        border: '1px solid #e5e7eb',
-                        background: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#eef2ff'
-                        e.currentTarget.style.borderColor = '#6366f1'
-                        const svg = e.currentTarget.querySelector('svg')
-                        if (svg) svg.setAttribute('stroke', '#6366f1')
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#ffffff'
-                        e.currentTarget.style.borderColor = '#e5e7eb'
-                        const svg = e.currentTarget.querySelector('svg')
-                        if (svg) svg.setAttribute('stroke', '#64748b')
-                      }}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#64748b"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <line x1="19" y1="12" x2="5" y2="12" />
-                        <polyline points="12 19 5 12 12 5" />
-                      </svg>
-                    </button>
-                  )}
-                  <span style={{ fontSize: '18px' }}>🗺️</span>
-                  <h3
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      margin: 0,
-                      letterSpacing: '-0.02em',
-                    }}
-                  >
-                    {getSelectedRegionName()}
-                  </h3>
-                </div>
-                <div
                   style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: '#6366f1',
-                    background: '#eef2ff',
-                    padding: '4px 10px',
-                    borderRadius: '8px',
-                    border: '1px solid #e5e7eb',
+                    height: '100%',
+                    width: '100%',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
                   }}
                 >
-                  {filteredData.length}개
+                  {country.latitude && country.longitude ? (
+                    <S.MapContainer>
+                      <GoogleMap
+                        latitude={currentMapLocation.latitude}
+                        longitude={currentMapLocation.longitude}
+                        name={currentMapLocation.name}
+                        zoom={mapLocation ? 12 : 6}
+                      />
+                    </S.MapContainer>
+                  ) : (
+                    <S.MapPlaceholder>
+                      <S.MapPlaceholderText>
+                        지도 정보가 없습니다
+                      </S.MapPlaceholderText>
+                    </S.MapPlaceholder>
+                  )}
                 </div>
               </div>
 
-              {/* 검색 필터 — 행정조직 input 톤 */}
+              {/* 행정구역 리스트 카드 — 행정조직 카드와 동일 톤 */}
               <div
                 style={{
-                  padding: '12px 20px',
+                  flex: '1',
+                  minHeight: '0',
                   background: '#ffffff',
-                  borderBottom: '1px solid #e5e7eb',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow:
+                    '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+                  position: 'relative',
+                  overflow: 'visible',
+                  transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow =
+                    '0 8px 20px rgba(0, 0, 0, 0.06)'
+                  e.currentTarget.style.borderColor = '#d1d5db'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow =
+                    '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)'
+                  e.currentTarget.style.borderColor = '#e5e7eb'
                 }}
               >
+                {/* 헤더 — 행정조직 탭 톤 */}
                 <div
                   style={{
-                    position: 'relative',
                     display: 'flex',
                     alignItems: 'center',
-                  }}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#94a3b8"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      position: 'absolute',
-                      left: '12px',
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="행정구역 검색..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px 10px 38px',
-                      fontSize: '13px',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '10px',
-                      background: '#ffffff',
-                      color: '#0f172a',
-                      outline: 'none',
-                      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#6366f1'
-                      e.currentTarget.style.boxShadow =
-                        '0 0 0 3px rgba(99, 102, 241, 0.15)'
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e5e7eb'
-                      e.currentTarget.style.boxShadow = 'none'
-                    }}
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      style={{
-                        position: 'absolute',
-                        right: '10px',
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        background: '#e2e8f0',
-                        color: '#64748b',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        transition: 'all 0.2s',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#cbd5e1'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#e2e8f0'
-                      }}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Breadcrumb */}
-              {navigation.level !== 'level1' && (
-                <div
-                  style={{
-                    padding: '8px 20px',
-                    background: '#ffffff',
+                    justifyContent: 'space-between',
+                    padding: '16px 20px',
+                    paddingBottom: '12px',
                     borderBottom: '1px solid #e5e7eb',
+                    background: '#ffffff',
                   }}
                 >
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      flexWrap: 'wrap',
+                      gap: '12px',
                     }}
                   >
-                    {getBreadcrumbPath().map((pathItem, idx, arr) => (
-                      <div
-                        key={idx}
+                    {navigation.level !== 'level1' && (
+                      <button
+                        onClick={handleBackNavigation}
+                        title="뒤로가기"
+                        type="button"
                         style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '10px',
+                          border: '1px solid #e5e7eb',
+                          background: '#ffffff',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '6px',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#eef2ff'
+                          e.currentTarget.style.borderColor = '#6366f1'
+                          const svg = e.currentTarget.querySelector('svg')
+                          if (svg) svg.setAttribute('stroke', '#6366f1')
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#ffffff'
+                          e.currentTarget.style.borderColor = '#e5e7eb'
+                          const svg = e.currentTarget.querySelector('svg')
+                          if (svg) svg.setAttribute('stroke', '#64748b')
                         }}
                       >
-                        <span
-                          onClick={() => handleBreadcrumbClick(pathItem.level)}
-                          style={{
-                            fontSize: '11px',
-                            color:
-                              idx === arr.length - 1 ? '#4f46e5' : '#64748b',
-                            cursor:
-                              idx === arr.length - 1 ? 'default' : 'pointer',
-                            fontWeight: idx === arr.length - 1 ? 700 : 600,
-                            transition: 'color 0.2s',
-                          }}
-                          onMouseEnter={(e) => {
-                            if (idx !== arr.length - 1) {
-                              e.currentTarget.style.color = '#6366f1'
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (idx !== arr.length - 1) {
-                              e.currentTarget.style.color = '#64748b'
-                            }
-                          }}
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#64748b"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                         >
-                          {pathItem.label}
-                        </span>
-                        {idx < arr.length - 1 && (
-                          <span style={{ fontSize: '10px', color: '#cbd5e1' }}>
-                            ›
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                          <line x1="19" y1="12" x2="5" y2="12" />
+                          <polyline points="12 19 5 12 12 5" />
+                        </svg>
+                      </button>
+                    )}
+                    <span style={{ fontSize: '18px' }}>🗺️</span>
+                    <h3
+                      style={{
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        margin: 0,
+                        letterSpacing: '-0.02em',
+                      }}
+                    >
+                      {getSelectedRegionName()}
+                    </h3>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#6366f1',
+                      background: '#eef2ff',
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                    }}
+                  >
+                    {filteredData.length}개
                   </div>
                 </div>
-              )}
 
-              {/* 카테고리 필터 (Level1에서만) */}
-              {navigation.level === 'level1' && (
+                {/* 검색 필터 — 행정조직 input 톤 */}
                 <div
                   style={{
                     padding: '12px 20px',
                     background: '#ffffff',
                     borderBottom: '1px solid #e5e7eb',
-                    display: 'flex',
-                    gap: '8px',
-                    flexWrap: 'wrap',
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => {}}
+                  <div
                     style={{
-                      padding: '8px 14px',
-                      fontSize: '12px',
-                      background: '#f1f5f9',
-                      color: '#64748b',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      fontWeight: 600,
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
                     }}
                   >
-                    전체
-                  </button>
-                  {mockAdministrativeRegions.level1.map((region) => (
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#94a3b8"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        position: 'absolute',
+                        left: '12px',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="행정구역 검색..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px 10px 38px',
+                        fontSize: '13px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '10px',
+                        background: '#ffffff',
+                        color: '#0f172a',
+                        outline: 'none',
+                        transition:
+                          'border-color 0.2s ease, box-shadow 0.2s ease',
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#6366f1'
+                        e.currentTarget.style.boxShadow =
+                          '0 0 0 3px rgba(99, 102, 241, 0.15)'
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e5e7eb'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: '#e2e8f0',
+                          color: '#64748b',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#cbd5e1'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#e2e8f0'
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Breadcrumb */}
+                {navigation.level !== 'level1' && (
+                  <div
+                    style={{
+                      padding: '8px 20px',
+                      background: '#ffffff',
+                      borderBottom: '1px solid #e5e7eb',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {getBreadcrumbPath().map((pathItem, idx, arr) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          <span
+                            onClick={() =>
+                              handleBreadcrumbClick(pathItem.level)
+                            }
+                            style={{
+                              fontSize: '11px',
+                              color:
+                                idx === arr.length - 1 ? '#4f46e5' : '#64748b',
+                              cursor:
+                                idx === arr.length - 1 ? 'default' : 'pointer',
+                              fontWeight: idx === arr.length - 1 ? 700 : 600,
+                              transition: 'color 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (idx !== arr.length - 1) {
+                                e.currentTarget.style.color = '#6366f1'
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (idx !== arr.length - 1) {
+                                e.currentTarget.style.color = '#64748b'
+                              }
+                            }}
+                          >
+                            {pathItem.label}
+                          </span>
+                          {idx < arr.length - 1 && (
+                            <span
+                              style={{ fontSize: '10px', color: '#cbd5e1' }}
+                            >
+                              ›
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 카테고리 필터 (Level1에서만) */}
+                {navigation.level === 'level1' && (
+                  <div
+                    style={{
+                      padding: '12px 20px',
+                      background: '#ffffff',
+                      borderBottom: '1px solid #e5e7eb',
+                      display: 'flex',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
                     <button
                       type="button"
-                      key={region.id}
-                      onClick={() => handleLevel1Click(region.id)}
+                      onClick={() => {}}
                       style={{
                         padding: '8px 14px',
                         fontSize: '12px',
-                        background:
-                          selectedRegionId === region.id ? '#eef2ff' : '#fff',
-                        color:
-                          selectedRegionId === region.id
-                            ? '#4f46e5'
-                            : '#64748b',
-                        border: `1px solid ${selectedRegionId === region.id ? '#6366f1' : '#e5e7eb'}`,
+                        background: '#f1f5f9',
+                        color: '#64748b',
+                        border: '1px solid #e5e7eb',
                         borderRadius: '10px',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease',
                         fontWeight: 600,
-                        boxShadow:
-                          selectedRegionId === region.id
-                            ? '0 2px 8px rgba(99, 102, 241, 0.12)'
-                            : 'none',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (selectedRegionId !== region.id) {
-                          e.currentTarget.style.borderColor = '#c7d2fe'
-                          e.currentTarget.style.backgroundColor = '#f8fafc'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (selectedRegionId !== region.id) {
-                          e.currentTarget.style.borderColor = '#e5e7eb'
-                          e.currentTarget.style.backgroundColor = '#fff'
-                        }
                       }}
                     >
-                      {region.name}
+                      전체
                     </button>
-                  ))}
-                </div>
-              )}
-
-              {/* 리스트 */}
-              <div
-                style={{
-                  flex: 1,
-                  overflowY: 'auto',
-                  padding: '18px 22px',
-                  background: '#ffffff',
-                }}
-              >
-                {navigation.level === 'level1' && (
-                  <div>
-                    {mockAdministrativeRegions.level1.map((region, index) => (
-                      <div
+                    {mockAdministrativeRegions.level1.map((region) => (
+                      <button
+                        type="button"
                         key={region.id}
                         onClick={() => handleLevel1Click(region.id)}
                         style={{
-                          display: 'grid',
-                          gridTemplateColumns: '120px 1fr',
-                          gap: '14px',
-                          cursor: 'pointer',
-                          borderRadius: '14px',
-                          border:
+                          padding: '8px 14px',
+                          fontSize: '12px',
+                          background:
+                            selectedRegionId === region.id ? '#eef2ff' : '#fff',
+                          color:
                             selectedRegionId === region.id
-                              ? '1px solid #6366f1'
-                              : '1px solid #e5e7eb',
-                          background: '#ffffff',
+                              ? '#4f46e5'
+                              : '#64748b',
+                          border: `1px solid ${selectedRegionId === region.id ? '#6366f1' : '#e5e7eb'}`,
+                          borderRadius: '10px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          fontWeight: 600,
                           boxShadow:
                             selectedRegionId === region.id
-                              ? '0 2px 8px rgba(99, 102, 241, 0.15)'
-                              : '0 1px 2px rgba(0, 0, 0, 0.04)',
-                          transition: 'all 0.2s ease',
-                          overflow: 'hidden',
-                          padding: '14px',
-                          marginBottom:
-                            index < mockAdministrativeRegions.level1.length - 1
-                              ? '12px'
-                              : '0',
+                              ? '0 2px 8px rgba(99, 102, 241, 0.12)'
+                              : 'none',
                         }}
                         onMouseEnter={(e) => {
                           if (selectedRegionId !== region.id) {
                             e.currentTarget.style.borderColor = '#c7d2fe'
-                            e.currentTarget.style.boxShadow =
-                              '0 2px 8px rgba(99, 102, 241, 0.12)'
+                            e.currentTarget.style.backgroundColor = '#f8fafc'
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (selectedRegionId !== region.id) {
                             e.currentTarget.style.borderColor = '#e5e7eb'
-                            e.currentTarget.style.boxShadow =
-                              '0 1px 2px rgba(0, 0, 0, 0.04)'
+                            e.currentTarget.style.backgroundColor = '#fff'
                           }
                         }}
                       >
-                        {/* 썸네일 - 120px */}
-                        <div
-                          style={{
-                            width: '120px',
-                            height: '90px',
-                            borderRadius: '10px',
-                            background: '#eef2ff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: '1px solid #c7d2fe',
-                            position: 'relative',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <svg
-                            width="40"
-                            height="40"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="#6366f1"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            style={{ opacity: 0.5 }}
-                          >
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                            <polyline points="9 22 9 12 15 12 15 22" />
-                          </svg>
-                          <div
-                            style={{
-                              position: 'absolute',
-                              top: '6px',
-                              left: '6px',
-                              padding: '4px 10px',
-                              fontSize: '11px',
-                              background: '#ffffff',
-                              color: '#4f46e5',
-                              borderRadius: '6px',
-                              fontWeight: 700,
-                              border: '1px solid #e5e7eb',
-                              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                            }}
-                          >
-                            {region.type}
-                          </div>
-                        </div>
-
-                        {/* 내용 */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '10px',
-                            flex: 1,
-                            padding: '4px 0',
-                          }}
-                        >
-                          {/* 지역명 + 하위 행정구역 */}
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: '15px',
-                                fontWeight: 800,
-                                color: '#0f172a',
-                                lineHeight: '1.3',
-                                letterSpacing: '-0.02em',
-                              }}
-                            >
-                              {region.name}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '11px',
-                                color: '#4f46e5',
-                                fontWeight: 600,
-                                background: '#eef2ff',
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                border: '1px solid #e5e7eb',
-                              }}
-                            >
-                              {region.count}개
-                            </div>
-                          </div>
-
-                          {/* 메타 정보 그리드 */}
-                          {mockCityDetails[region.id] && (
-                            <>
-                              {/* 도지사/시장 + 정당 */}
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    flex: 1,
-                                    fontSize: '12px',
-                                    color: '#475569',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {mockCityDetails[region.id].mayor}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    fontWeight: 800,
-                                    color: '#ffffff',
-                                    background:
-                                      mockCityDetails[region.id].party ===
-                                      '국민의힘'
-                                        ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                                        : mockCityDetails[region.id].party ===
-                                            '더불어민주당'
-                                          ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
-                                          : 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
-                                    padding: '5px 12px',
-                                    borderRadius: '6px',
-                                    whiteSpace: 'nowrap',
-                                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
-                                  }}
-                                >
-                                  {mockCityDetails[region.id].party}
-                                </div>
-                              </div>
-
-                              {/* 인구 + 면적 */}
-                              <div
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: '1fr 1fr',
-                                  gap: '8px',
-                                }}
-                              >
-                                {mockCityDetails[region.id].population && (
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '6px',
-                                      padding: '6px 10px',
-                                      background: '#ffffff',
-                                      borderRadius: '8px',
-                                      border: '1px solid #e5e7eb',
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        fontSize: '10px',
-                                        color: '#64748b',
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      인구
-                                    </span>
-                                    <span
-                                      style={{
-                                        fontSize: '12px',
-                                        color: '#0f172a',
-                                        fontWeight: 700,
-                                      }}
-                                    >
-                                      {mockCityDetails[region.id].population}
-                                    </span>
-                                  </div>
-                                )}
-                                {mockCityDetails[region.id].area && (
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '6px',
-                                      padding: '6px 10px',
-                                      background: '#ffffff',
-                                      borderRadius: '8px',
-                                      border: '1px solid #e5e7eb',
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        fontSize: '10px',
-                                        color: '#64748b',
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      면적
-                                    </span>
-                                    <span
-                                      style={{
-                                        fontSize: '12px',
-                                        color: '#0f172a',
-                                        fontWeight: 700,
-                                      }}
-                                    >
-                                      {mockCityDetails[region.id].area}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                        {region.name}
+                      </button>
                     ))}
                   </div>
                 )}
 
-                {navigation.level === 'level2' && (
-                  <div>
-                    {getCurrentLevelData().map(
-                      (
-                        item: {
-                          id: string
-                          name: string
-                          population?: string
-                          area?: string
-                        },
-                        index: number,
-                      ) => (
+                {/* 리스트 */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '18px 22px',
+                    background: '#ffffff',
+                  }}
+                >
+                  {navigation.level === 'level1' && (
+                    <div>
+                      {mockAdministrativeRegions.level1.map((region, index) => (
                         <div
-                          key={item.id}
-                          onClick={() => handleLevel2Click(item)}
+                          key={region.id}
+                          onClick={() => handleLevel1Click(region.id)}
                           style={{
                             display: 'grid',
                             gridTemplateColumns: '120px 1fr',
@@ -1285,31 +1027,32 @@ export function MapRegionSection({
                             cursor: 'pointer',
                             borderRadius: '14px',
                             border:
-                              selectedCityId === item.id
+                              selectedRegionId === region.id
                                 ? '1px solid #6366f1'
                                 : '1px solid #e5e7eb',
                             background: '#ffffff',
                             boxShadow:
-                              selectedCityId === item.id
+                              selectedRegionId === region.id
                                 ? '0 2px 8px rgba(99, 102, 241, 0.15)'
                                 : '0 1px 2px rgba(0, 0, 0, 0.04)',
                             transition: 'all 0.2s ease',
                             overflow: 'hidden',
                             padding: '14px',
                             marginBottom:
-                              index < getCurrentLevelData().length - 1
+                              index <
+                              mockAdministrativeRegions.level1.length - 1
                                 ? '12px'
                                 : '0',
                           }}
                           onMouseEnter={(e) => {
-                            if (selectedCityId !== item.id) {
+                            if (selectedRegionId !== region.id) {
                               e.currentTarget.style.borderColor = '#c7d2fe'
                               e.currentTarget.style.boxShadow =
                                 '0 2px 8px rgba(99, 102, 241, 0.12)'
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (selectedCityId !== item.id) {
+                            if (selectedRegionId !== region.id) {
                               e.currentTarget.style.borderColor = '#e5e7eb'
                               e.currentTarget.style.boxShadow =
                                 '0 1px 2px rgba(0, 0, 0, 0.04)'
@@ -1331,63 +1074,324 @@ export function MapRegionSection({
                               overflow: 'hidden',
                             }}
                           >
+                            <svg
+                              width="40"
+                              height="40"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#6366f1"
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              style={{ opacity: 0.5 }}
+                            >
+                              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                              <polyline points="9 22 9 12 15 12 15 22" />
+                            </svg>
                             <div
                               style={{
-                                fontSize: '36px',
-                                filter: 'grayscale(0.2) opacity(0.7)',
+                                position: 'absolute',
+                                top: '6px',
+                                left: '6px',
+                                padding: '4px 10px',
+                                fontSize: '11px',
+                                background: '#ffffff',
+                                color: '#4f46e5',
+                                borderRadius: '6px',
+                                fontWeight: 700,
+                                border: '1px solid #e5e7eb',
+                                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
                               }}
                             >
-                              🏙️
+                              {region.type}
                             </div>
                           </div>
 
                           {/* 내용 */}
                           <div
                             style={{
-                              padding: '4px 0',
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: '8px',
+                              gap: '10px',
                               flex: 1,
+                              padding: '4px 0',
                             }}
                           >
-                            <div
-                              style={{
-                                fontSize: '14px',
-                                fontWeight: 800,
-                                color: '#0f172a',
-                                lineHeight: '1.5',
-                                letterSpacing: '-0.02em',
-                              }}
-                            >
-                              {item.name}
-                            </div>
+                            {/* 지역명 + 하위 행정구역 */}
                             <div
                               style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                paddingTop: '8px',
-                                borderTop: '1px solid #e5e7eb',
                               }}
                             >
                               <div
                                 style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
+                                  fontSize: '15px',
+                                  fontWeight: 800,
+                                  color: '#0f172a',
+                                  lineHeight: '1.3',
+                                  letterSpacing: '-0.02em',
                                 }}
                               >
-                                <span
+                                {region.name}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '11px',
+                                  color: '#4f46e5',
+                                  fontWeight: 600,
+                                  background: '#eef2ff',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #e5e7eb',
+                                }}
+                              >
+                                {region.count}개
+                              </div>
+                            </div>
+
+                            {/* 메타 정보 그리드 */}
+                            {mockCityDetails[region.id] && (
+                              <>
+                                {/* 도지사/시장 + 정당 */}
+                                <div
                                   style={{
-                                    fontSize: '11px',
-                                    color: '#64748b',
-                                    fontWeight: 500,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
                                   }}
                                 >
-                                  👥 {item.population}
-                                </span>
-                                {item.area && (
+                                  <div
+                                    style={{
+                                      flex: 1,
+                                      fontSize: '12px',
+                                      color: '#475569',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {mockCityDetails[region.id].mayor}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      fontWeight: 800,
+                                      color: '#ffffff',
+                                      background:
+                                        mockCityDetails[region.id].party ===
+                                        '국민의힘'
+                                          ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                                          : mockCityDetails[region.id].party ===
+                                              '더불어민주당'
+                                            ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                                            : 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
+                                      padding: '5px 12px',
+                                      borderRadius: '6px',
+                                      whiteSpace: 'nowrap',
+                                      boxShadow:
+                                        '0 2px 4px rgba(0, 0, 0, 0.15)',
+                                    }}
+                                  >
+                                    {mockCityDetails[region.id].party}
+                                  </div>
+                                </div>
+
+                                {/* 인구 + 면적 */}
+                                <div
+                                  style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr',
+                                    gap: '8px',
+                                  }}
+                                >
+                                  {mockCityDetails[region.id].population && (
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '6px 10px',
+                                        background: '#ffffff',
+                                        borderRadius: '8px',
+                                        border: '1px solid #e5e7eb',
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontSize: '10px',
+                                          color: '#64748b',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        인구
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: '12px',
+                                          color: '#0f172a',
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        {mockCityDetails[region.id].population}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {mockCityDetails[region.id].area && (
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '6px 10px',
+                                        background: '#ffffff',
+                                        borderRadius: '8px',
+                                        border: '1px solid #e5e7eb',
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontSize: '10px',
+                                          color: '#64748b',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        면적
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: '12px',
+                                          color: '#0f172a',
+                                          fontWeight: 700,
+                                        }}
+                                      >
+                                        {mockCityDetails[region.id].area}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {navigation.level === 'level2' && (
+                    <div>
+                      {getCurrentLevelData().map(
+                        (
+                          item: {
+                            id: string
+                            name: string
+                            population?: string
+                            area?: string
+                          },
+                          index: number,
+                        ) => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleLevel2Click(item)}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '120px 1fr',
+                              gap: '14px',
+                              cursor: 'pointer',
+                              borderRadius: '14px',
+                              border:
+                                selectedCityId === item.id
+                                  ? '1px solid #6366f1'
+                                  : '1px solid #e5e7eb',
+                              background: '#ffffff',
+                              boxShadow:
+                                selectedCityId === item.id
+                                  ? '0 2px 8px rgba(99, 102, 241, 0.15)'
+                                  : '0 1px 2px rgba(0, 0, 0, 0.04)',
+                              transition: 'all 0.2s ease',
+                              overflow: 'hidden',
+                              padding: '14px',
+                              marginBottom:
+                                index < getCurrentLevelData().length - 1
+                                  ? '12px'
+                                  : '0',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedCityId !== item.id) {
+                                e.currentTarget.style.borderColor = '#c7d2fe'
+                                e.currentTarget.style.boxShadow =
+                                  '0 2px 8px rgba(99, 102, 241, 0.12)'
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedCityId !== item.id) {
+                                e.currentTarget.style.borderColor = '#e5e7eb'
+                                e.currentTarget.style.boxShadow =
+                                  '0 1px 2px rgba(0, 0, 0, 0.04)'
+                              }
+                            }}
+                          >
+                            {/* 썸네일 - 120px */}
+                            <div
+                              style={{
+                                width: '120px',
+                                height: '90px',
+                                borderRadius: '10px',
+                                background: '#eef2ff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '1px solid #c7d2fe',
+                                position: 'relative',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: '36px',
+                                  filter: 'grayscale(0.2) opacity(0.7)',
+                                }}
+                              >
+                                🏙️
+                              </div>
+                            </div>
+
+                            {/* 내용 */}
+                            <div
+                              style={{
+                                padding: '4px 0',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                flex: 1,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: '14px',
+                                  fontWeight: 800,
+                                  color: '#0f172a',
+                                  lineHeight: '1.5',
+                                  letterSpacing: '-0.02em',
+                                }}
+                              >
+                                {item.name}
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  paddingTop: '8px',
+                                  borderTop: '1px solid #e5e7eb',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                  }}
+                                >
                                   <span
                                     style={{
                                       fontSize: '11px',
@@ -1395,88 +1399,72 @@ export function MapRegionSection({
                                       fontWeight: 500,
                                     }}
                                   >
-                                    📍 {item.area}
+                                    👥 {item.population}
                                   </span>
-                                )}
+                                  {item.area && (
+                                    <span
+                                      style={{
+                                        fontSize: '11px',
+                                        color: '#64748b',
+                                        fontWeight: 500,
+                                      }}
+                                    >
+                                      📍 {item.area}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ),
-                    )}
-                  </div>
-                )}
+                        ),
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* 우측: 선택한 지역의 상세 정보 (65%) — 행정조직 카드 톤 */}
-          <div
-            style={{
-              background: '#ffffff',
-              border: '1px solid #e5e7eb',
-              borderRadius: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
-              position: 'relative',
-              maxHeight: '800px',
-              transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.06)'
-              e.currentTarget.style.borderColor = '#d1d5db'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow =
-                '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)'
-              e.currentTarget.style.borderColor = '#e5e7eb'
-            }}
-          >
-
-            {/* Level1에서도 표시, selectedCityDetails가 있을 때도 표시 */}
-            {levelStats || navigation.level === 'level1' ? (
-              <>
-                {/* 헤더 — 행정조직 톤 */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '16px 20px',
-                    paddingBottom: '12px',
-                    borderBottom: '1px solid #e5e7eb',
-                    background: '#ffffff',
-                  }}
-                >
+            {/* 우측: 선택한 지역의 상세 정보 (65%) — 행정조직 카드 톤 */}
+            <div
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                boxShadow:
+                  '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+                position: 'relative',
+                maxHeight: '800px',
+                transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow =
+                  '0 8px 20px rgba(0, 0, 0, 0.06)'
+                e.currentTarget.style.borderColor = '#d1d5db'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow =
+                  '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)'
+                e.currentTarget.style.borderColor = '#e5e7eb'
+              }}
+            >
+              {/* Level1에서도 표시, selectedCityDetails가 있을 때도 표시 */}
+              {levelStats || navigation.level === 'level1' ? (
+                <>
+                  {/* 헤더 — 행정조직 톤 */}
                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      paddingBottom: '12px',
+                      borderBottom: '1px solid #e5e7eb',
+                      background: '#ffffff',
                     }}
                   >
-                    <h3
-                      style={{
-                        fontSize: '15px',
-                        fontWeight: 700,
-                        color: '#0f172a',
-                        margin: 0,
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      {selectedCityId
-                        ? getCurrentLevelData().find(
-                            (item: { id: string; name: string }) =>
-                              item.id === selectedCityId,
-                          )?.name || '지역 정보'
-                        : navigation.level === 'level1'
-                          ? '대한민국 행정구역'
-                          : getSelectedRegionName()}
-                    </h3>
-                  </div>
-                  {selectedCityDetails && (
                     <div
                       style={{
                         display: 'flex',
@@ -1484,118 +1472,353 @@ export function MapRegionSection({
                         gap: '8px',
                       }}
                     >
-                      <span
+                      <h3
                         style={{
-                          fontSize: '11px',
-                          color: '#64748b',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {selectedCityDetails.mayor}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '10px',
+                          fontSize: '15px',
                           fontWeight: 700,
-                          color: '#1e40af',
-                          background: '#eff6ff',
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          border: '1px solid #bfdbfe',
+                          color: '#0f172a',
+                          margin: 0,
+                          letterSpacing: '-0.02em',
                         }}
                       >
-                        {selectedCityDetails.party}
-                      </span>
+                        {selectedCityId
+                          ? getCurrentLevelData().find(
+                              (item: { id: string; name: string }) =>
+                                item.id === selectedCityId,
+                            )?.name || '지역 정보'
+                          : navigation.level === 'level1'
+                            ? '대한민국 행정구역'
+                            : getSelectedRegionName()}
+                      </h3>
                     </div>
-                  )}
-                </div>
-
-                {/* 선택된 지역의 경로 표시 (동적) — 인디고 액센트 */}
-                {selectedCityDetails && (
-                  <div
-                    style={{
-                      padding: '10px 20px',
-                      background: '#eef2ff',
-                      borderBottom: '1px solid #e5e7eb',
-                      fontSize: '12px',
-                      color: '#4f46e5',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      flexWrap: 'wrap',
-                      fontWeight: 600,
-                    }}
-                  >
-                    <span style={{ fontWeight: 800 }}>
-                      {adminSystem?.countryNameKo}
-                    </span>
-                    <span style={{ color: '#6366f1' }}>›</span>
-                    {navigation.selectedLevel1 && (
-                      <>
-                        <span style={{ fontWeight: 700 }}>
-                          {
-                            mockAdministrativeRegions.level1.find(
-                              (r) => r.id === navigation.selectedLevel1,
-                            )?.name
-                          }
+                    {selectedCityDetails && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: '#64748b',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {selectedCityDetails.mayor}
                         </span>
-                        {selectedCityId &&
-                          navigation.selectedLevel1 !== selectedCityId && (
-                            <>
-                              <span style={{ color: '#6366f1' }}>›</span>
-                              <span
-                                style={{ fontWeight: 800, color: '#4f46e5' }}
-                              >
-                                {
-                                  getCurrentLevelData().find(
-                                    (item: { id: string; name: string }) =>
-                                      item.id === selectedCityId,
-                                  )?.name
-                                }
-                              </span>
-                            </>
-                          )}
-                      </>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            color: '#1e40af',
+                            background: '#eff6ff',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid #bfdbfe',
+                          }}
+                        >
+                          {selectedCityDetails.party}
+                        </span>
+                      </div>
                     )}
                   </div>
-                )}
 
-                {/* Level1일 때는 탭 없이 행정구역 체계만 간단하게 표시 */}
-                {navigation.level === 'level1' && !selectedCityId ? (
-                  <div
-                    style={{
-                      flex: 1,
-                      overflowY: 'auto',
-                      padding: '20px',
-                      background: '#ffffff',
-                    }}
-                  >
-                    {/* 행정구역 체계 - 한 줄 요약 */}
-                    {adminSystem && (
+                  {/* 선택된 지역의 경로 표시 (동적) — 인디고 액센트 */}
+                  {selectedCityDetails && (
+                    <div
+                      style={{
+                        padding: '10px 20px',
+                        background: '#eef2ff',
+                        borderBottom: '1px solid #e5e7eb',
+                        fontSize: '12px',
+                        color: '#4f46e5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        flexWrap: 'wrap',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span style={{ fontWeight: 800 }}>
+                        {adminSystem?.countryNameKo}
+                      </span>
+                      <span style={{ color: '#6366f1' }}>›</span>
+                      {navigation.selectedLevel1 && (
+                        <>
+                          <span style={{ fontWeight: 700 }}>
+                            {
+                              mockAdministrativeRegions.level1.find(
+                                (r) => r.id === navigation.selectedLevel1,
+                              )?.name
+                            }
+                          </span>
+                          {selectedCityId &&
+                            navigation.selectedLevel1 !== selectedCityId && (
+                              <>
+                                <span style={{ color: '#6366f1' }}>›</span>
+                                <span
+                                  style={{ fontWeight: 800, color: '#4f46e5' }}
+                                >
+                                  {
+                                    getCurrentLevelData().find(
+                                      (item: { id: string; name: string }) =>
+                                        item.id === selectedCityId,
+                                    )?.name
+                                  }
+                                </span>
+                              </>
+                            )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Level1일 때는 탭 없이 행정구역 체계만 간단하게 표시 */}
+                  {navigation.level === 'level1' && !selectedCityId ? (
+                    <div
+                      style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        padding: '20px',
+                        background: '#ffffff',
+                      }}
+                    >
+                      {/* 행정구역 체계 - 한 줄 요약 */}
+                      {adminSystem && (
+                        <div
+                          style={{
+                            background: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            marginBottom: '12px',
+                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              marginBottom: '12px',
+                            }}
+                          >
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#6366f1"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <circle cx="12" cy="10" r="3" />
+                              <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z" />
+                            </svg>
+                            <span
+                              style={{
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                color: '#0f172a',
+                              }}
+                            >
+                              {adminSystem.countryNameKo} 행정구역 체계
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            {adminSystem.levels.map((level, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#64748b',
+                                  }}
+                                >
+                                  {level.name}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '13px',
+                                    fontWeight: 700,
+                                    color: '#0f172a',
+                                  }}
+                                >
+                                  {level.count.toLocaleString()}
+                                </span>
+                                {idx < adminSystem.levels.length - 1 && (
+                                  <span
+                                    style={{
+                                      fontSize: '12px',
+                                      color: '#cbd5e1',
+                                      margin: '0 4px',
+                                    }}
+                                  >
+                                    •
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 전체 통계 - 한 줄 요약 */}
                       <div
                         style={{
                           background: '#ffffff',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '12px',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '10px',
                           padding: '16px',
                           marginBottom: '12px',
-                          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
                         }}
                       >
                         <div
                           style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(4, 1fr)',
+                            gap: '12px',
+                          }}
+                        >
+                          <div style={{ textAlign: 'center' }}>
+                            <div
+                              style={{
+                                fontSize: '20px',
+                                fontWeight: 800,
+                                color: '#0f172a',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              {mockAdministrativeRegions.level1.length}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                color: '#64748b',
+                                fontWeight: 600,
+                              }}
+                            >
+                              광역시도
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'center' }}>
+                            <div
+                              style={{
+                                fontSize: '20px',
+                                fontWeight: 800,
+                                color: '#0f172a',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              {adminSystem?.levels[1]?.count.toLocaleString() ||
+                                '226'}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                color: '#64748b',
+                                fontWeight: 600,
+                              }}
+                            >
+                              시군구
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'center' }}>
+                            <div
+                              style={{
+                                fontSize: '20px',
+                                fontWeight: 800,
+                                color: '#0f172a',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              {adminSystem?.levels[2]?.count.toLocaleString() ||
+                                '3,482'}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                color: '#64748b',
+                                fontWeight: 600,
+                              }}
+                            >
+                              읍면동
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'center' }}>
+                            <div
+                              style={{
+                                fontSize: '18px',
+                                fontWeight: 800,
+                                color: '#0f172a',
+                                marginBottom: '4px',
+                              }}
+                            >
+                              51.8M
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                color: '#64748b',
+                                fontWeight: 600,
+                              }}
+                            >
+                              인구
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 안내 메시지 */}
+                      <div
+                        style={{
+                          padding: '20px',
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '10px',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            margin: '0 auto 12px',
+                            borderRadius: '50%',
+                            background: '#ffffff',
+                            border: '2px solid #e2e8f0',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '12px',
-                            marginBottom: '12px',
+                            justifyContent: 'center',
                           }}
                         >
                           <svg
-                            width="18"
-                            height="18"
+                            width="24"
+                            height="24"
                             viewBox="0 0 24 24"
                             fill="none"
-                            stroke="#6366f1"
+                            stroke="#94a3b8"
                             strokeWidth="2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -1603,592 +1826,112 @@ export function MapRegionSection({
                             <circle cx="12" cy="10" r="3" />
                             <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z" />
                           </svg>
-                          <span
-                            style={{
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              color: '#0f172a',
-                            }}
-                          >
-                            {adminSystem.countryNameKo} 행정구역 체계
-                          </span>
                         </div>
-
                         <div
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            flexWrap: 'wrap',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#475569',
+                            marginBottom: '6px',
                           }}
                         >
-                          {adminSystem.levels.map((level, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  color: '#64748b',
-                                }}
-                              >
-                                {level.name}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: '13px',
-                                  fontWeight: 700,
-                                  color: '#0f172a',
-                                }}
-                              >
-                                {level.count.toLocaleString()}
-                              </span>
-                              {idx < adminSystem.levels.length - 1 && (
-                                <span
-                                  style={{
-                                    fontSize: '12px',
-                                    color: '#cbd5e1',
-                                    margin: '0 4px',
-                                  }}
-                                >
-                                  •
-                                </span>
-                              )}
-                            </div>
-                          ))}
+                          좌측 리스트에서 지역을 선택하세요
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: '#94a3b8',
+                            fontWeight: 500,
+                          }}
+                        >
+                          광역시도를 선택하면 상세 정보를 확인할 수 있습니다
                         </div>
                       </div>
-                    )}
-
-                    {/* 전체 통계 - 한 줄 요약 */}
-                    <div
-                      style={{
-                        background: '#ffffff',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '10px',
-                        padding: '16px',
-                        marginBottom: '12px',
-                      }}
-                    >
+                    </div>
+                  ) : (
+                    <>
+                      {/* 탭 메뉴 */}
                       <div
                         style={{
                           display: 'grid',
                           gridTemplateColumns: 'repeat(4, 1fr)',
-                          gap: '12px',
-                        }}
-                      >
-                        <div style={{ textAlign: 'center' }}>
-                          <div
-                            style={{
-                              fontSize: '20px',
-                              fontWeight: 800,
-                              color: '#0f172a',
-                              marginBottom: '4px',
-                            }}
-                          >
-                            {mockAdministrativeRegions.level1.length}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              color: '#64748b',
-                              fontWeight: 600,
-                            }}
-                          >
-                            광역시도
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: 'center' }}>
-                          <div
-                            style={{
-                              fontSize: '20px',
-                              fontWeight: 800,
-                              color: '#0f172a',
-                              marginBottom: '4px',
-                            }}
-                          >
-                            {adminSystem?.levels[1]?.count.toLocaleString() ||
-                              '226'}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              color: '#64748b',
-                              fontWeight: 600,
-                            }}
-                          >
-                            시군구
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: 'center' }}>
-                          <div
-                            style={{
-                              fontSize: '20px',
-                              fontWeight: 800,
-                              color: '#0f172a',
-                              marginBottom: '4px',
-                            }}
-                          >
-                            {adminSystem?.levels[2]?.count.toLocaleString() ||
-                              '3,482'}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              color: '#64748b',
-                              fontWeight: 600,
-                            }}
-                          >
-                            읍면동
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: 'center' }}>
-                          <div
-                            style={{
-                              fontSize: '18px',
-                              fontWeight: 800,
-                              color: '#0f172a',
-                              marginBottom: '4px',
-                            }}
-                          >
-                            51.8M
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              color: '#64748b',
-                              fontWeight: 600,
-                            }}
-                          >
-                            인구
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 안내 메시지 */}
-                    <div
-                      style={{
-                        padding: '20px',
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '10px',
-                        textAlign: 'center',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          margin: '0 auto 12px',
-                          borderRadius: '50%',
+                          gap: '8px',
+                          padding: '16px 20px',
                           background: '#ffffff',
-                          border: '2px solid #e2e8f0',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
                         }}
                       >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="#94a3b8"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <circle cx="12" cy="10" r="3" />
-                          <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7z" />
-                        </svg>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          color: '#475569',
-                          marginBottom: '6px',
-                        }}
-                      >
-                        좌측 리스트에서 지역을 선택하세요
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: '#94a3b8',
-                          fontWeight: 500,
-                        }}
-                      >
-                        광역시도를 선택하면 상세 정보를 확인할 수 있습니다
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* 탭 메뉴 */}
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
-                        gap: '8px',
-                        padding: '16px 20px',
-                        background: '#ffffff',
-                      }}
-                    >
-                      {[
-                        { key: 'overview', label: '개요' },
-                        { key: 'institutions', label: '기관' },
-                        { key: 'tourism', label: '관광' },
-                        { key: 'statistics', label: '통계' },
-                      ].map((tab) => (
-                        <button
-                          key={tab.key}
-                          onClick={() => setDetailTab(tab.key as DetailTabType)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            padding: '10px 16px',
-                            border:
-                              detailTab === tab.key
-                                ? '1px solid #6366f1'
-                                : '1px solid #e5e7eb',
-                            borderRadius: '10px',
-                            background:
-                              detailTab === tab.key ? '#eef2ff' : '#ffffff',
-                            color:
-                              detailTab === tab.key ? '#4f46e5' : '#64748b',
-                            fontSize: '13px',
-                            fontWeight: detailTab === tab.key ? 700 : 600,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            boxShadow:
-                              detailTab === tab.key
-                                ? '0 2px 8px rgba(99, 102, 241, 0.12)'
-                                : 'none',
-                          }}
-                          onMouseEnter={(e) => {
-                            if (detailTab !== tab.key) {
-                              e.currentTarget.style.borderColor = '#c7d2fe'
-                              e.currentTarget.style.background = '#f8fafc'
+                        {[
+                          { key: 'overview', label: '개요' },
+                          { key: 'institutions', label: '기관' },
+                          { key: 'tourism', label: '관광' },
+                          { key: 'statistics', label: '통계' },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            onClick={() =>
+                              setDetailTab(tab.key as DetailTabType)
                             }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (detailTab !== tab.key) {
-                              e.currentTarget.style.borderColor = '#e5e7eb'
-                              e.currentTarget.style.background = '#ffffff'
-                            }
-                          }}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
-                    </div>
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              padding: '10px 16px',
+                              border:
+                                detailTab === tab.key
+                                  ? '1px solid #6366f1'
+                                  : '1px solid #e5e7eb',
+                              borderRadius: '10px',
+                              background:
+                                detailTab === tab.key ? '#eef2ff' : '#ffffff',
+                              color:
+                                detailTab === tab.key ? '#4f46e5' : '#64748b',
+                              fontSize: '13px',
+                              fontWeight: detailTab === tab.key ? 700 : 600,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              boxShadow:
+                                detailTab === tab.key
+                                  ? '0 2px 8px rgba(99, 102, 241, 0.12)'
+                                  : 'none',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (detailTab !== tab.key) {
+                                e.currentTarget.style.borderColor = '#c7d2fe'
+                                e.currentTarget.style.background = '#f8fafc'
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (detailTab !== tab.key) {
+                                e.currentTarget.style.borderColor = '#e5e7eb'
+                                e.currentTarget.style.background = '#ffffff'
+                              }
+                            }}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
 
-                    {/* 탭 컨텐츠 */}
-                    <div
-                      style={{
-                        flex: 1,
-                        overflow: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                      }}
-                    >
+                      {/* 탭 컨텐츠 */}
                       <div
                         style={{
-                          padding: '20px',
                           flex: 1,
+                          overflow: 'auto',
                           display: 'flex',
                           flexDirection: 'column',
                         }}
                       >
-                        {/* 개요 탭 */}
-                        {detailTab === 'overview' && selectedCityDetails && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '16px',
-                            }}
-                          >
-                            {/* 지역 설명 */}
-                            <div
-                              style={{
-                                background: '#ffffff',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '12px',
-                                padding: '16px',
-                                fontSize: '13px',
-                                color: '#475569',
-                                lineHeight: '1.6',
-                              }}
-                            >
-                              {getCurrentLevelData().find(
-                                (item: { id: string; name: string }) =>
-                                  item.id === selectedCityId,
-                              )?.name || ''}
-                              은(는) {adminSystem?.countryNameKo}의 주요
-                              행정구역입니다.
-                            </div>
-
-                            {/* 주요 정보 그리드 (3열) */}
-                            <div
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                gap: '12px',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  background: '#ffffff',
-                                  padding: '14px',
-                                  borderRadius: '10px',
-                                  border: '1px solid #e2e8f0',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    color: '#64748b',
-                                    marginBottom: '6px',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  도지사/시장
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '14px',
-                                    fontWeight: 700,
-                                    color: '#0f172a',
-                                    marginBottom: '4px',
-                                  }}
-                                >
-                                  {selectedCityDetails.mayor}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    fontWeight: 700,
-                                    color: '#1e40af',
-                                    background: '#eff6ff',
-                                    padding: '3px 8px',
-                                    borderRadius: '6px',
-                                    border: '1px solid #bfdbfe',
-                                    display: 'inline-block',
-                                  }}
-                                >
-                                  {selectedCityDetails.party}
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  background: '#ffffff',
-                                  padding: '14px',
-                                  borderRadius: '10px',
-                                  border: '1px solid #e2e8f0',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    color: '#64748b',
-                                    marginBottom: '6px',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  설립일
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '14px',
-                                    fontWeight: 700,
-                                    color: '#0f172a',
-                                  }}
-                                >
-                                  1995년 1월 1일
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  background: '#ffffff',
-                                  padding: '14px',
-                                  borderRadius: '10px',
-                                  border: '1px solid #e2e8f0',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    color: '#64748b',
-                                    marginBottom: '6px',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  행정구역 코드
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '14px',
-                                    fontWeight: 700,
-                                    color: '#0f172a',
-                                  }}
-                                >
-                                  {selectedCityId}
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  background: '#ffffff',
-                                  padding: '14px',
-                                  borderRadius: '10px',
-                                  border: '1px solid #e2e8f0',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    color: '#64748b',
-                                    marginBottom: '6px',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  하위 행정구역
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '14px',
-                                    fontWeight: 700,
-                                    color: '#0f172a',
-                                  }}
-                                >
-                                  {selectedCities.length > 0
-                                    ? `${selectedCities.length}개`
-                                    : '정보 없음'}
-                                </div>
-                              </div>
-                              <div
-                                style={{
-                                  background: '#ffffff',
-                                  padding: '14px',
-                                  borderRadius: '10px',
-                                  border: '1px solid #e2e8f0',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: '11px',
-                                    color: '#64748b',
-                                    marginBottom: '6px',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  인구 밀도
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: '14px',
-                                    fontWeight: 700,
-                                    color: '#0f172a',
-                                  }}
-                                >
-                                  {selectedCityDetails.population &&
-                                  selectedCityDetails.area
-                                    ? `${Math.round(
-                                        parseInt(
-                                          selectedCityDetails.population.replace(
-                                            /,/g,
-                                            '',
-                                          ),
-                                        ) /
-                                          parseFloat(
-                                            selectedCityDetails.area.replace(
-                                              'km²',
-                                              '',
-                                            ),
-                                          ),
-                                      ).toLocaleString()}명/km²`
-                                    : '정보 없음'}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 개요 탭 - 선택 없을 때 */}
-                        {detailTab === 'overview' && !selectedCityDetails && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flex: 1,
-                              textAlign: 'center',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: '80px',
-                                height: '80px',
-                                background:
-                                  'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '36px',
-                                marginBottom: '24px',
-                                border: '2px solid #bfdbfe',
-                              }}
-                            >
-                              📊
-                            </div>
-                            <h3
-                              style={{
-                                fontSize: '16px',
-                                fontWeight: 700,
-                                color: '#0f172a',
-                                margin: '0 0 12px 0',
-                                letterSpacing: '-0.02em',
-                              }}
-                            >
-                              전체 통계를 확인하세요
-                            </h3>
-                            <p
-                              style={{
-                                fontSize: '13px',
-                                color: '#64748b',
-                                lineHeight: '1.6',
-                                margin: 0,
-                                fontWeight: 500,
-                                maxWidth: '400px',
-                              }}
-                            >
-                              상단 KPI 카드에서 전체 행정구역의 집계 통계를
-                              확인하실 수 있습니다.
-                              <br />
-                              좌측에서 특정 지역을 선택하면 해당 지역의 상세
-                              정보를 볼 수 있습니다.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* 기관 탭 (대학 + 기업) */}
-                        {detailTab === 'institutions' &&
-                          selectedCityDetails && (
+                        <div
+                          style={{
+                            padding: '20px',
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                          }}
+                        >
+                          {/* 개요 탭 */}
+                          {detailTab === 'overview' && selectedCityDetails && (
                             <div
                               style={{
                                 display: 'flex',
@@ -2196,204 +1939,626 @@ export function MapRegionSection({
                                 gap: '16px',
                               }}
                             >
-                              {/* 대학 섹션 */}
-                              {selectedCityDetails.universities &&
-                                selectedCityDetails.universities.length > 0 && (
-                                  <>
-                                    <div
-                                      style={{
-                                        fontSize: '13px',
-                                        fontWeight: 700,
-                                        color: '#0f172a',
-                                        marginBottom: '8px',
-                                        paddingBottom: '8px',
-                                        borderBottom: '2px solid #e2e8f0',
-                                      }}
-                                    >
-                                      대학 (
-                                      {selectedCityDetails.universities.length})
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(2, 1fr)',
-                                        gap: '12px',
-                                      }}
-                                    >
-                                      {selectedCityDetails.universities.map(
-                                        (university, idx) => (
-                                          <div
-                                            key={idx}
-                                            style={{
-                                              background: '#ffffff',
-                                              border: '1px solid #e2e8f0',
-                                              borderRadius: '10px',
-                                              padding: '14px',
-                                              transition: 'all 0.2s',
-                                            }}
-                                            onMouseEnter={(e) => {
-                                              e.currentTarget.style.borderColor =
-                                                '#3b82f6'
-                                              e.currentTarget.style.boxShadow =
-                                                '0 4px 12px rgba(59, 130, 246, 0.1)'
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              e.currentTarget.style.borderColor =
-                                                '#e2e8f0'
-                                              e.currentTarget.style.boxShadow =
-                                                'none'
-                                            }}
-                                          >
-                                            <div
-                                              style={{
-                                                fontSize: '14px',
-                                                fontWeight: 700,
-                                                color: '#0f172a',
-                                                marginBottom: '8px',
-                                              }}
-                                            >
-                                              {university.name}
-                                            </div>
-                                            <div
-                                              style={{
-                                                display: 'flex',
-                                                gap: '8px',
-                                                fontSize: '12px',
-                                              }}
-                                            >
-                                              <span
-                                                style={{
-                                                  padding: '4px 10px',
-                                                  background: '#eff6ff',
-                                                  color: '#1e40af',
-                                                  borderRadius: '6px',
-                                                  fontWeight: 600,
-                                                  border: '1px solid #bfdbfe',
-                                                }}
-                                              >
-                                                {university.type}
-                                              </span>
-                                              <span
-                                                style={{
-                                                  padding: '4px 10px',
-                                                  background: '#f8fafc',
-                                                  color: '#64748b',
-                                                  borderRadius: '6px',
-                                                  fontWeight: 600,
-                                                }}
-                                              >
-                                                {university.students}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        ),
-                                      )}
-                                    </div>
-                                  </>
-                                )}
+                              {/* 지역 설명 */}
+                              <div
+                                style={{
+                                  background: '#ffffff',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '12px',
+                                  padding: '16px',
+                                  fontSize: '13px',
+                                  color: '#475569',
+                                  lineHeight: '1.6',
+                                }}
+                              >
+                                {getCurrentLevelData().find(
+                                  (item: { id: string; name: string }) =>
+                                    item.id === selectedCityId,
+                                )?.name || ''}
+                                은(는) {adminSystem?.countryNameKo}의 주요
+                                행정구역입니다.
+                              </div>
 
-                              {/* 기업 섹션 */}
-                              {selectedCityDetails.companies &&
-                                selectedCityDetails.companies.length > 0 && (
-                                  <>
-                                    <div
-                                      style={{
-                                        fontSize: '13px',
-                                        fontWeight: 700,
-                                        color: '#0f172a',
-                                        marginBottom: '8px',
-                                        marginTop: '8px',
-                                        paddingBottom: '8px',
-                                        borderBottom: '2px solid #e2e8f0',
-                                      }}
-                                    >
-                                      주요 기업 (
-                                      {selectedCityDetails.companies.length})
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(2, 1fr)',
-                                        gap: '12px',
-                                      }}
-                                    >
-                                      {selectedCityDetails.companies.map(
-                                        (company, idx) => (
-                                          <div
-                                            key={idx}
-                                            style={{
-                                              background: '#ffffff',
-                                              border: '1px solid #e2e8f0',
-                                              borderRadius: '10px',
-                                              padding: '14px',
-                                              transition: 'all 0.2s',
-                                            }}
-                                            onMouseEnter={(e) => {
-                                              e.currentTarget.style.borderColor =
-                                                '#3b82f6'
-                                              e.currentTarget.style.boxShadow =
-                                                '0 4px 12px rgba(59, 130, 246, 0.1)'
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              e.currentTarget.style.borderColor =
-                                                '#e2e8f0'
-                                              e.currentTarget.style.boxShadow =
-                                                'none'
-                                            }}
-                                          >
-                                            <div
-                                              style={{
-                                                fontSize: '14px',
-                                                fontWeight: 700,
-                                                color: '#0f172a',
-                                                marginBottom: '8px',
-                                              }}
-                                            >
-                                              {company.name}
-                                            </div>
-                                            <div
-                                              style={{
-                                                display: 'flex',
-                                                gap: '8px',
-                                                fontSize: '12px',
-                                              }}
-                                            >
-                                              <span
-                                                style={{
-                                                  padding: '4px 10px',
-                                                  background: '#eff6ff',
-                                                  color: '#1e40af',
-                                                  borderRadius: '6px',
-                                                  fontWeight: 600,
-                                                  border: '1px solid #bfdbfe',
-                                                }}
-                                              >
-                                                {company.sector}
-                                              </span>
-                                              <span
-                                                style={{
-                                                  padding: '4px 10px',
-                                                  background: '#f8fafc',
-                                                  color: '#64748b',
-                                                  borderRadius: '6px',
-                                                  fontWeight: 600,
-                                                }}
-                                              >
-                                                {company.employees}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        ),
-                                      )}
-                                    </div>
-                                  </>
-                                )}
+                              {/* 주요 정보 그리드 (3열) */}
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(3, 1fr)',
+                                  gap: '12px',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    background: '#ffffff',
+                                    padding: '14px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      color: '#64748b',
+                                      marginBottom: '6px',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    도지사/시장
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '14px',
+                                      fontWeight: 700,
+                                      color: '#0f172a',
+                                      marginBottom: '4px',
+                                    }}
+                                  >
+                                    {selectedCityDetails.mayor}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      color: '#1e40af',
+                                      background: '#eff6ff',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      border: '1px solid #bfdbfe',
+                                      display: 'inline-block',
+                                    }}
+                                  >
+                                    {selectedCityDetails.party}
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    background: '#ffffff',
+                                    padding: '14px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      color: '#64748b',
+                                      marginBottom: '6px',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    설립일
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '14px',
+                                      fontWeight: 700,
+                                      color: '#0f172a',
+                                    }}
+                                  >
+                                    1995년 1월 1일
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    background: '#ffffff',
+                                    padding: '14px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      color: '#64748b',
+                                      marginBottom: '6px',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    행정구역 코드
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '14px',
+                                      fontWeight: 700,
+                                      color: '#0f172a',
+                                    }}
+                                  >
+                                    {selectedCityId}
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    background: '#ffffff',
+                                    padding: '14px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      color: '#64748b',
+                                      marginBottom: '6px',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    하위 행정구역
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '14px',
+                                      fontWeight: 700,
+                                      color: '#0f172a',
+                                    }}
+                                  >
+                                    {selectedCities.length > 0
+                                      ? `${selectedCities.length}개`
+                                      : '정보 없음'}
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    background: '#ffffff',
+                                    padding: '14px',
+                                    borderRadius: '10px',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: '11px',
+                                      color: '#64748b',
+                                      marginBottom: '6px',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    인구 밀도
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: '14px',
+                                      fontWeight: 700,
+                                      color: '#0f172a',
+                                    }}
+                                  >
+                                    {selectedCityDetails.population &&
+                                    selectedCityDetails.area
+                                      ? `${Math.round(
+                                          parseInt(
+                                            selectedCityDetails.population.replace(
+                                              /,/g,
+                                              '',
+                                            ),
+                                          ) /
+                                            parseFloat(
+                                              selectedCityDetails.area.replace(
+                                                'km²',
+                                                '',
+                                              ),
+                                            ),
+                                        ).toLocaleString()}명/km²`
+                                      : '정보 없음'}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           )}
 
-                        {/* 기관 탭 - Empty */}
-                        {detailTab === 'institutions' &&
-                          !selectedCityDetails && (
+                          {/* 개요 탭 - 선택 없을 때 */}
+                          {detailTab === 'overview' && !selectedCityDetails && (
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flex: 1,
+                                textAlign: 'center',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: '80px',
+                                  height: '80px',
+                                  background:
+                                    'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                                  borderRadius: '50%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '36px',
+                                  marginBottom: '24px',
+                                  border: '2px solid #bfdbfe',
+                                }}
+                              >
+                                📊
+                              </div>
+                              <h3
+                                style={{
+                                  fontSize: '16px',
+                                  fontWeight: 700,
+                                  color: '#0f172a',
+                                  margin: '0 0 12px 0',
+                                  letterSpacing: '-0.02em',
+                                }}
+                              >
+                                전체 통계를 확인하세요
+                              </h3>
+                              <p
+                                style={{
+                                  fontSize: '13px',
+                                  color: '#64748b',
+                                  lineHeight: '1.6',
+                                  margin: 0,
+                                  fontWeight: 500,
+                                  maxWidth: '400px',
+                                }}
+                              >
+                                상단 KPI 카드에서 전체 행정구역의 집계 통계를
+                                확인하실 수 있습니다.
+                                <br />
+                                좌측에서 특정 지역을 선택하면 해당 지역의 상세
+                                정보를 볼 수 있습니다.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* 기관 탭 (대학 + 기업) */}
+                          {detailTab === 'institutions' &&
+                            selectedCityDetails && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '16px',
+                                }}
+                              >
+                                {/* 대학 섹션 */}
+                                {selectedCityDetails.universities &&
+                                  selectedCityDetails.universities.length >
+                                    0 && (
+                                    <>
+                                      <div
+                                        style={{
+                                          fontSize: '13px',
+                                          fontWeight: 700,
+                                          color: '#0f172a',
+                                          marginBottom: '8px',
+                                          paddingBottom: '8px',
+                                          borderBottom: '2px solid #e2e8f0',
+                                        }}
+                                      >
+                                        대학 (
+                                        {
+                                          selectedCityDetails.universities
+                                            .length
+                                        }
+                                        )
+                                      </div>
+                                      <div
+                                        style={{
+                                          display: 'grid',
+                                          gridTemplateColumns: 'repeat(2, 1fr)',
+                                          gap: '12px',
+                                        }}
+                                      >
+                                        {selectedCityDetails.universities.map(
+                                          (university, idx) => (
+                                            <div
+                                              key={idx}
+                                              style={{
+                                                background: '#ffffff',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '10px',
+                                                padding: '14px',
+                                                transition: 'all 0.2s',
+                                              }}
+                                              onMouseEnter={(e) => {
+                                                e.currentTarget.style.borderColor =
+                                                  '#3b82f6'
+                                                e.currentTarget.style.boxShadow =
+                                                  '0 4px 12px rgba(59, 130, 246, 0.1)'
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                e.currentTarget.style.borderColor =
+                                                  '#e2e8f0'
+                                                e.currentTarget.style.boxShadow =
+                                                  'none'
+                                              }}
+                                            >
+                                              <div
+                                                style={{
+                                                  fontSize: '14px',
+                                                  fontWeight: 700,
+                                                  color: '#0f172a',
+                                                  marginBottom: '8px',
+                                                }}
+                                              >
+                                                {university.name}
+                                              </div>
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  gap: '8px',
+                                                  fontSize: '12px',
+                                                }}
+                                              >
+                                                <span
+                                                  style={{
+                                                    padding: '4px 10px',
+                                                    background: '#eff6ff',
+                                                    color: '#1e40af',
+                                                    borderRadius: '6px',
+                                                    fontWeight: 600,
+                                                    border: '1px solid #bfdbfe',
+                                                  }}
+                                                >
+                                                  {university.type}
+                                                </span>
+                                                <span
+                                                  style={{
+                                                    padding: '4px 10px',
+                                                    background: '#f8fafc',
+                                                    color: '#64748b',
+                                                    borderRadius: '6px',
+                                                    fontWeight: 600,
+                                                  }}
+                                                >
+                                                  {university.students}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ),
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+
+                                {/* 기업 섹션 */}
+                                {selectedCityDetails.companies &&
+                                  selectedCityDetails.companies.length > 0 && (
+                                    <>
+                                      <div
+                                        style={{
+                                          fontSize: '13px',
+                                          fontWeight: 700,
+                                          color: '#0f172a',
+                                          marginBottom: '8px',
+                                          marginTop: '8px',
+                                          paddingBottom: '8px',
+                                          borderBottom: '2px solid #e2e8f0',
+                                        }}
+                                      >
+                                        주요 기업 (
+                                        {selectedCityDetails.companies.length})
+                                      </div>
+                                      <div
+                                        style={{
+                                          display: 'grid',
+                                          gridTemplateColumns: 'repeat(2, 1fr)',
+                                          gap: '12px',
+                                        }}
+                                      >
+                                        {selectedCityDetails.companies.map(
+                                          (company, idx) => (
+                                            <div
+                                              key={idx}
+                                              style={{
+                                                background: '#ffffff',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '10px',
+                                                padding: '14px',
+                                                transition: 'all 0.2s',
+                                              }}
+                                              onMouseEnter={(e) => {
+                                                e.currentTarget.style.borderColor =
+                                                  '#3b82f6'
+                                                e.currentTarget.style.boxShadow =
+                                                  '0 4px 12px rgba(59, 130, 246, 0.1)'
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                e.currentTarget.style.borderColor =
+                                                  '#e2e8f0'
+                                                e.currentTarget.style.boxShadow =
+                                                  'none'
+                                              }}
+                                            >
+                                              <div
+                                                style={{
+                                                  fontSize: '14px',
+                                                  fontWeight: 700,
+                                                  color: '#0f172a',
+                                                  marginBottom: '8px',
+                                                }}
+                                              >
+                                                {company.name}
+                                              </div>
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  gap: '8px',
+                                                  fontSize: '12px',
+                                                }}
+                                              >
+                                                <span
+                                                  style={{
+                                                    padding: '4px 10px',
+                                                    background: '#eff6ff',
+                                                    color: '#1e40af',
+                                                    borderRadius: '6px',
+                                                    fontWeight: 600,
+                                                    border: '1px solid #bfdbfe',
+                                                  }}
+                                                >
+                                                  {company.sector}
+                                                </span>
+                                                <span
+                                                  style={{
+                                                    padding: '4px 10px',
+                                                    background: '#f8fafc',
+                                                    color: '#64748b',
+                                                    borderRadius: '6px',
+                                                    fontWeight: 600,
+                                                  }}
+                                                >
+                                                  {company.employees}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ),
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                              </div>
+                            )}
+
+                          {/* 기관 탭 - Empty */}
+                          {detailTab === 'institutions' &&
+                            !selectedCityDetails && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flex: 1,
+                                  textAlign: 'center',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: '48px',
+                                    marginBottom: '16px',
+                                  }}
+                                >
+                                  🏛️
+                                </div>
+                                <h3
+                                  style={{
+                                    fontSize: '16px',
+                                    fontWeight: 700,
+                                    color: '#0f172a',
+                                    marginBottom: '8px',
+                                  }}
+                                >
+                                  지역을 선택해주세요
+                                </h3>
+                                <p
+                                  style={{
+                                    fontSize: '13px',
+                                    color: '#64748b',
+                                    margin: 0,
+                                  }}
+                                >
+                                  좌측에서 지역을 선택하면 대학, 기업 정보를
+                                  확인할 수 있습니다
+                                </p>
+                              </div>
+                            )}
+
+                          {/* 관광 탭 */}
+                          {detailTab === 'tourism' && selectedCityDetails && (
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '12px',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: '13px',
+                                  fontWeight: 700,
+                                  color: '#0f172a',
+                                  marginBottom: '8px',
+                                  paddingBottom: '8px',
+                                  borderBottom: '2px solid #e2e8f0',
+                                }}
+                              >
+                                관광 명소 (
+                                {selectedCityDetails.attractions?.length || 0})
+                              </div>
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(2, 1fr)',
+                                  gap: '12px',
+                                }}
+                              >
+                                {selectedCityDetails.attractions?.map(
+                                  (attraction, idx) => (
+                                    <div
+                                      key={idx}
+                                      style={{
+                                        background: '#ffffff',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '10px',
+                                        padding: '14px',
+                                        transition: 'all 0.2s',
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.borderColor =
+                                          '#3b82f6'
+                                        e.currentTarget.style.boxShadow =
+                                          '0 4px 12px rgba(59, 130, 246, 0.1)'
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.borderColor =
+                                          '#e2e8f0'
+                                        e.currentTarget.style.boxShadow = 'none'
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontSize: '14px',
+                                          fontWeight: 700,
+                                          color: '#0f172a',
+                                          marginBottom: '8px',
+                                        }}
+                                      >
+                                        {attraction.name}
+                                      </div>
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          gap: '8px',
+                                          fontSize: '12px',
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            padding: '4px 10px',
+                                            background: '#eff6ff',
+                                            color: '#1e40af',
+                                            borderRadius: '6px',
+                                            fontWeight: 600,
+                                            border: '1px solid #bfdbfe',
+                                          }}
+                                        >
+                                          {attraction.type}
+                                        </span>
+                                        <span
+                                          style={{
+                                            padding: '4px 10px',
+                                            background: '#f8fafc',
+                                            color: '#64748b',
+                                            borderRadius: '6px',
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          {attraction.visitors}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 관광 탭 - Empty */}
+                          {detailTab === 'tourism' && !selectedCityDetails && (
                             <div
                               style={{
                                 display: 'flex',
@@ -2410,7 +2575,7 @@ export function MapRegionSection({
                                   marginBottom: '16px',
                                 }}
                               >
-                                🏛️
+                                🎭
                               </div>
                               <h3
                                 style={{
@@ -2429,261 +2594,119 @@ export function MapRegionSection({
                                   margin: 0,
                                 }}
                               >
-                                좌측에서 지역을 선택하면 대학, 기업 정보를
-                                확인할 수 있습니다
+                                좌측에서 지역을 선택하면 관광 명소 정보를 확인할
+                                수 있습니다
                               </p>
                             </div>
                           )}
 
-                        {/* 관광 탭 */}
-                        {detailTab === 'tourism' && selectedCityDetails && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '12px',
-                            }}
-                          >
+                          {/* 통계 탭 */}
+                          {detailTab === 'statistics' && (
                             <div
                               style={{
-                                fontSize: '13px',
-                                fontWeight: 700,
-                                color: '#0f172a',
-                                marginBottom: '8px',
-                                paddingBottom: '8px',
-                                borderBottom: '2px solid #e2e8f0',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flex: 1,
+                                background: '#f8fafc',
+                                borderRadius: '12px',
+                                border: '1px solid #e2e8f0',
                               }}
                             >
-                              관광 명소 (
-                              {selectedCityDetails.attractions?.length || 0})
+                              <div
+                                style={{
+                                  fontSize: '14px',
+                                  fontWeight: 700,
+                                  color: '#0f172a',
+                                  marginBottom: '8px',
+                                }}
+                              >
+                                통계 데이터 준비 중
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#64748b',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                더 많은 통계 데이터가 곧 제공됩니다
+                              </div>
                             </div>
-                            <div
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                gap: '12px',
-                              }}
-                            >
-                              {selectedCityDetails.attractions?.map(
-                                (attraction, idx) => (
-                                  <div
-                                    key={idx}
-                                    style={{
-                                      background: '#ffffff',
-                                      border: '1px solid #e2e8f0',
-                                      borderRadius: '10px',
-                                      padding: '14px',
-                                      transition: 'all 0.2s',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.borderColor =
-                                        '#3b82f6'
-                                      e.currentTarget.style.boxShadow =
-                                        '0 4px 12px rgba(59, 130, 246, 0.1)'
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.borderColor =
-                                        '#e2e8f0'
-                                      e.currentTarget.style.boxShadow = 'none'
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        fontSize: '14px',
-                                        fontWeight: 700,
-                                        color: '#0f172a',
-                                        marginBottom: '8px',
-                                      }}
-                                    >
-                                      {attraction.name}
-                                    </div>
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        gap: '8px',
-                                        fontSize: '12px',
-                                      }}
-                                    >
-                                      <span
-                                        style={{
-                                          padding: '4px 10px',
-                                          background: '#eff6ff',
-                                          color: '#1e40af',
-                                          borderRadius: '6px',
-                                          fontWeight: 600,
-                                          border: '1px solid #bfdbfe',
-                                        }}
-                                      >
-                                        {attraction.type}
-                                      </span>
-                                      <span
-                                        style={{
-                                          padding: '4px 10px',
-                                          background: '#f8fafc',
-                                          color: '#64748b',
-                                          borderRadius: '6px',
-                                          fontWeight: 600,
-                                        }}
-                                      >
-                                        {attraction.visitors}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 관광 탭 - Empty */}
-                        {detailTab === 'tourism' && !selectedCityDetails && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flex: 1,
-                              textAlign: 'center',
-                            }}
-                          >
-                            <div
-                              style={{ fontSize: '48px', marginBottom: '16px' }}
-                            >
-                              🎭
-                            </div>
-                            <h3
-                              style={{
-                                fontSize: '16px',
-                                fontWeight: 700,
-                                color: '#0f172a',
-                                marginBottom: '8px',
-                              }}
-                            >
-                              지역을 선택해주세요
-                            </h3>
-                            <p
-                              style={{
-                                fontSize: '13px',
-                                color: '#64748b',
-                                margin: 0,
-                              }}
-                            >
-                              좌측에서 지역을 선택하면 관광 명소 정보를 확인할
-                              수 있습니다
-                            </p>
-                          </div>
-                        )}
-
-                        {/* 통계 탭 */}
-                        {detailTab === 'statistics' && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flex: 1,
-                              background: '#f8fafc',
-                              borderRadius: '12px',
-                              border: '1px solid #e2e8f0',
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: '14px',
-                                fontWeight: 700,
-                                color: '#0f172a',
-                                marginBottom: '8px',
-                              }}
-                            >
-                              통계 데이터 준비 중
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '12px',
-                                color: '#64748b',
-                                fontWeight: 500,
-                              }}
-                            >
-                              더 많은 통계 데이터가 곧 제공됩니다
-                            </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '100px 40px',
-                  textAlign: 'center',
-                  background: '#f8fafc',
-                  borderRadius: '12px',
-                  margin: '20px',
-                }}
-              >
+                    </>
+                  )}
+                </>
+              ) : (
                 <div
                   style={{
-                    width: '100px',
-                    height: '100px',
-                    background:
-                      'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                    borderRadius: '50%',
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '16px',
-                    fontWeight: 800,
-                    color: '#3b82f6',
-                    marginBottom: '28px',
-                    border: '3px solid #93c5fd',
-                    boxShadow: '0 8px 16px rgba(59, 130, 246, 0.2)',
+                    padding: '100px 40px',
+                    textAlign: 'center',
+                    background: '#f8fafc',
+                    borderRadius: '12px',
+                    margin: '20px',
                   }}
                 >
-                  행정구역
+                  <div
+                    style={{
+                      width: '100px',
+                      height: '100px',
+                      background:
+                        'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px',
+                      fontWeight: 800,
+                      color: '#3b82f6',
+                      marginBottom: '28px',
+                      border: '3px solid #93c5fd',
+                      boxShadow: '0 8px 16px rgba(59, 130, 246, 0.2)',
+                    }}
+                  >
+                    행정구역
+                  </div>
+                  <h3
+                    style={{
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      margin: '0 0 12px 0',
+                      letterSpacing: '-0.02em',
+                    }}
+                  >
+                    지역을 선택해주세요
+                  </h3>
+                  <p
+                    style={{
+                      fontSize: '14px',
+                      color: '#64748b',
+                      lineHeight: '1.6',
+                      margin: 0,
+                      fontWeight: 500,
+                    }}
+                  >
+                    좌측 목록에서 행정구역을 선택하시면
+                    <br />
+                    해당 지역의 상세 정보를 확인하실 수 있습니다
+                  </p>
                 </div>
-                <h3
-                  style={{
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    color: '#0f172a',
-                    margin: '0 0 12px 0',
-                    letterSpacing: '-0.02em',
-                  }}
-                >
-                  지역을 선택해주세요
-                </h3>
-                <p
-                  style={{
-                    fontSize: '14px',
-                    color: '#64748b',
-                    lineHeight: '1.6',
-                    margin: 0,
-                    fontWeight: 500,
-                  }}
-                >
-                  좌측 목록에서 행정구역을 선택하시면
-                  <br />
-                  해당 지역의 상세 정보를 확인하실 수 있습니다
-                </p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
         </section>
       )}
 
       {/* 자연지리 모드 — 행정구역과 동일 UI (SectionLabel, pill 필터, 카드) */}
-      {viewMode === 'nature' && (
-        <MapRegionNatureView country={country} />
-      )}
+      {viewMode === 'nature' && <MapRegionNatureView country={country} />}
       {/* 인프라 모드 — 행정구역과 동일 UI (SectionLabel, pill 필터, 카드) */}
       {viewMode === 'infrastructure' && (
         <MapRegionInfrastructureView country={country} />

@@ -1082,18 +1082,18 @@ function CountryListInner({
       {/* 국가 타입 선택 모달 - Portal로 body에 렌더링 */}
       {showAddTypeModal
         ? createPortal(
-            <>
-              <S.SelectModalOverlay
-                as={motion.div}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => setShowAddTypeModal(false)}
-              />
+            <S.SelectModalOverlay
+              as={motion.div}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              onClick={() => setShowAddTypeModal(false)}
+            >
               <S.SelectModal
                 as={motion.div}
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
               >
                 <S.SelectModalHeader>
                   <S.SelectModalTitle>등록</S.SelectModalTitle>
@@ -1167,7 +1167,7 @@ function CountryListInner({
                   </S.SelectOption>
                 </S.SelectModalContent>
               </S.SelectModal>
-            </>,
+            </S.SelectModalOverlay>,
             document.body,
           )
         : null}

@@ -3,6 +3,8 @@
  */
 import React, { useState } from 'react'
 
+import { FormInput as Input, FormTextarea as TextArea } from '@/shared/ui/form-input/form-input'
+
 import {
   FiCalendar,
   FiChevronDown,
@@ -4668,26 +4670,6 @@ const InputLabel = styled.div`
   margin-bottom: 8px;
 `
 
-const Input = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 14px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
-  border-radius: 10px;
-  outline: none;
-  transition: all 0.2s ease;
-
-  &::placeholder {
-    color: #94a3b8;
-  }
-
-  &:focus {
-    border-color: #8b5cf6;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
-  }
-`
-
 const Select = styled.select`
   width: 100%;
   padding: 12px 16px;
@@ -4739,29 +4721,6 @@ const CountrySelectButton = styled.button<{ $selected: boolean }>`
 
   &:active {
     transform: scale(0.99);
-  }
-`
-
-const TextArea = styled.textarea`
-  width: 100%;
-  padding: 14px 16px;
-  font-size: 14px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
-  border-radius: 10px;
-  outline: none;
-  resize: vertical;
-  font-family: inherit;
-  transition: all 0.2s ease;
-  line-height: 1.6;
-
-  &::placeholder {
-    color: #94a3b8;
-  }
-
-  &:focus {
-    border-color: #8b5cf6;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
   }
 `
 

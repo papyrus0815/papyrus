@@ -302,7 +302,7 @@ export function CountrySearchModal({
   )
 }
 
-// ————— 인물 등록 페이지 출생국가 모달과 동일한 스타일 —————
+// ————— 다크/라이트 테마 적용 스타일 —————
 const Modal = styled.div`
   position: fixed;
   top: 0;
@@ -310,6 +310,7 @@ const Modal = styled.div`
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -323,7 +324,15 @@ const Modal = styled.div`
 `
 
 const ModalContent = styled.div`
-  background: white;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   border-radius: 16px;
   width: 100%;
   max-width: 900px;
@@ -331,7 +340,10 @@ const ModalContent = styled.div`
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 10px 40px rgba(0,0,0,0.5)'
+      : '0 20px 60px rgba(0,0,0,0.15)'};
   z-index: ${Z_INDEX.MODAL_CONTENT + 2};
   animation: slideUp 0.25s ease-out;
   @keyframes slideUp {
@@ -345,20 +357,20 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const ModalTitle = styled.h3`
   font-size: 1.25rem;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0;
 `
 
 const ModalCloseButton = styled.button`
   background: none;
   border: none;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   padding: 0.5rem;
   display: flex;
@@ -367,8 +379,8 @@ const ModalCloseButton = styled.button`
   border-radius: 8px;
   transition: all 0.2s;
   &:hover {
-    background: #f3f4f6;
-    color: #374151;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   svg {
     font-size: 1.375rem;
@@ -385,8 +397,8 @@ const ModalBody = styled.div`
 const FilterSidebar = styled.div`
   width: 240px;
   flex-shrink: 0;
-  background: #f9fafb;
-  border-right: 1px solid #e5e7eb;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
   padding: 1.5rem 1rem;
   overflow-y: auto;
   display: flex;
@@ -399,11 +411,8 @@ const FilterSidebar = styled.div`
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 3px;
-    &:hover {
-      background: #9ca3af;
-    }
   }
 `
 
@@ -416,7 +425,7 @@ const FilterSidebarSection = styled.div`
 const FilterSidebarTitle = styled.div`
   font-size: 0.75rem;
   font-weight: 700;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.25rem;
@@ -436,9 +445,10 @@ const CountryTypeOption = styled.button<{ $active: boolean }>`
   transition: all 0.2s;
   font-size: 0.875rem;
   font-weight: 500;
-  color: ${(p) => (p.$active ? '#111827' : '#6b7280')};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
   &:hover {
-    background: #f3f4f6;
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
   span {
     flex: 1;
@@ -450,7 +460,9 @@ const RadioButton = styled.div<{ $active: boolean }>`
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  border: 2px solid ${(p) => (p.$active ? '#3b82f6' : '#d1d5db')};
+  border: 2px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.default};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -462,20 +474,23 @@ const ModalRadioDot = styled.div<{ $active: boolean }>`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: ${(p) => (p.$active ? '#3b82f6' : 'transparent')};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : 'transparent'};
   transition: all 0.2s;
-  transform: scale(${(p) => (p.$active ? 1 : 0)});
+  transform: scale(${({ $active }) => ($active ? 1 : 0)});
 `
 
 const FilterOptionButton = styled.button<{ $active: boolean }>`
   width: 100%;
   padding: 0.625rem 1rem;
-  background: ${(p) => (p.$active ? '#eff6ff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#3b82f6' : '#6b7280')};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
   border: none;
   border-radius: 8px;
   font-size: 0.875rem;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
+  font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
@@ -483,8 +498,10 @@ const FilterOptionButton = styled.button<{ $active: boolean }>`
   overflow: hidden;
   text-overflow: ellipsis;
   &:hover {
-    background: ${(p) => (p.$active ? '#dbeafe' : '#f3f4f6')};
-    color: ${(p) => (p.$active ? '#2563eb' : '#374151')};
+    background: ${({ $active, theme }) =>
+      $active ? theme.colors.activeLight : theme.colors.background.tertiary};
+    color: ${({ $active, theme }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
   }
 `
 
@@ -501,11 +518,11 @@ const SearchWrapper = styled.div`
   align-items: center;
   gap: 1rem;
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: white;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
   flex-shrink: 0;
   svg {
-    color: #9ca3af;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 1.25rem;
   }
 `
@@ -514,10 +531,11 @@ const SearchInput = styled.input`
   flex: 1;
   border: none;
   outline: none;
+  background: transparent;
   font-size: 1rem;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   &::placeholder {
-    color: #9ca3af;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -533,24 +551,24 @@ const ModalList = styled.div`
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #e5e7eb;
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 3px;
-    &:hover {
-      background: #d1d5db;
-    }
   }
 `
 
 const ModalListItem = styled.button<{ $selected?: boolean }>`
   width: 100%;
   padding: 1rem 1.125rem;
-  background: ${(p) => (p.$selected ? '#fafafa' : 'white')};
-  border: 2px solid ${(p) => (p.$selected ? '#e5e7eb' : 'transparent')};
+  background: ${({ $selected, theme }) =>
+    $selected ? theme.colors.background.secondary : 'transparent'};
+  border: 2px solid
+    ${({ $selected, theme }) =>
+      $selected ? theme.colors.border.default : 'transparent'};
   border-radius: 16px;
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #374151;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 500;
   font-size: 0.9375rem;
   display: flex;
@@ -558,8 +576,8 @@ const ModalListItem = styled.button<{ $selected?: boolean }>`
   gap: 0.875rem;
   margin-bottom: 0.625rem;
   &:hover {
-    background: ${(p) => (p.$selected ? '#f5f5f5' : '#fafafa')};
-    border-color: #e5e7eb;
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.default};
     transform: scale(1.01);
   }
   &:active {
@@ -580,7 +598,7 @@ const CountryItemContent = styled.div`
 
 const ModalListItemCheck = styled.span`
   flex-shrink: 0;
-  color: #3b82f6;
+  color: ${({ theme }) => theme.colors.primary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -599,7 +617,7 @@ const CountryFlagDefault = styled.span`
   width: 1.75rem;
   height: 1.75rem;
   flex-shrink: 0;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   opacity: 0.85;
   svg {
     display: block;
@@ -608,21 +626,22 @@ const CountryFlagDefault = styled.span`
 
 const CountryName = styled.span`
   flex: 1;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const CountryPeriod = styled.span`
   font-size: 0.8rem;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-left: auto;
   padding: 0.25rem 0.625rem;
-  background: #f3f4f6;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 6px;
 `
 
 const EmptyMessage = styled.div`
   padding: 3rem 2rem;
   text-align: center;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-size: 0.95rem;
 `
 
@@ -631,14 +650,14 @@ const ModalFooter = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem 1.25rem;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 0 0 16px 16px;
 `
 
 const ModalFooterSelectedCount = styled.span`
   font-size: 0.875rem;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 `
 
@@ -647,12 +666,12 @@ const ModalFooterCompleteButton = styled.button`
   font-size: 0.9375rem;
   font-weight: 600;
   color: white;
-  background: #4f46e5;
+  background: ${({ theme }) => theme.colors.primary};
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
   &:hover {
-    background: #4338ca;
+    background: ${({ theme }) => theme.colors.button.hover};
   }
 `

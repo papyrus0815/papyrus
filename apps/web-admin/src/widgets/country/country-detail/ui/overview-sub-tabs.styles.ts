@@ -51,7 +51,11 @@ export const TabButton = styled.button<{ $active?: boolean }>`
   background: ${({ $active, theme }) =>
     $active ? theme.colors.activeLight : 'transparent'};
   color: ${({ $active, theme }) =>
-    $active ? theme.colors.primary : theme.colors.text.secondary};
+    $active
+      ? theme.mode === 'dark'
+        ? '#ffffff'
+        : theme.colors.primary
+      : theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
   cursor: pointer;
@@ -63,7 +67,11 @@ export const TabButton = styled.button<{ $active?: boolean }>`
 
   &:hover {
     color: ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.text.primary};
+      $active
+        ? theme.mode === 'dark'
+          ? '#ffffff'
+          : theme.colors.primary
+        : theme.colors.text.primary};
     background: ${({ $active, theme }) =>
       $active ? theme.colors.activeLight : theme.colors.background.secondary};
     border-color: ${({ $active, theme }) =>

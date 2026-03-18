@@ -3,7 +3,6 @@
  */
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import styled from 'styled-components'
 import {
   useDynasties,
   useCreateDynasty,
@@ -12,42 +11,12 @@ import {
 } from '@/features/dynasty/use-dynasties.hook'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import type { Dynasty } from '@/shared/api/dynasty'
+import {
+  PillTabButton,
+  PillTabNav,
+} from '@/shared/ui/tab/tab.styles'
 
 const MAIN = '#6366f1'
-
-/* 행정조직과 동일: GovTabNav / GovTabButton */
-const GovTabNav = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  margin-bottom: 20px;
-  width: fit-content;
-  background: #f1f5f9;
-  border-radius: 20px;
-  overflow-x: auto;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`
-const GovTabButton = styled.button<{ $active?: boolean }>`
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border-radius: 14px;
-  border: none;
-  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
-  white-space: nowrap;
-  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
-  &:hover {
-    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
-    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
-  }
-`
 
 export function DynastySection() {
   const { data: dynasties = [], isLoading } = useDynasties()
@@ -189,11 +158,11 @@ export function DynastySection() {
 
       {/* 탭 + KPI — 행정조직과 동일 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <GovTabNav>
-          <GovTabButton type="button" $active>
+        <PillTabNav>
+          <PillTabButton type="button" $active>
             가문 현황
-          </GovTabButton>
-        </GovTabNav>
+          </PillTabButton>
+        </PillTabNav>
         <div
           style={{
             display: 'flex',

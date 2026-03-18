@@ -6,52 +6,19 @@ import React, { useEffect, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import { useEvents } from '@/entities/event/model'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { pathKeys } from '@/shared/router'
+import {
+  PillTabButton,
+  PillTabNav,
+} from '@/shared/ui/tab/tab.styles'
 
 import { EventCreateFormDashboard } from './event-create-form-dashboard'
 
 const MAIN = '#6366f1'
-
-const GovTabNav = styled.nav`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  margin-bottom: 20px;
-  width: fit-content;
-  background: #f1f5f9;
-  border-radius: 20px;
-  overflow-x: auto;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`
-const GovTabButton = styled.button<{ $active?: boolean }>`
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border-radius: 14px;
-  border: none;
-  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.2s ease;
-  white-space: nowrap;
-  box-shadow: ${(p) =>
-    p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
-  &:hover {
-    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
-    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
-  }
-`
 
 const Root = styled(motion.div)<{ $isForm?: boolean }>`
   display: flex;
@@ -97,6 +64,8 @@ export function EventsTimelineSection({
   onEditSuccess,
 }: EventsTimelineSectionProps) {
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const [pageSize] = useState(10000)
   const [view, setView] = useState<'list' | 'form'>(() =>
     initialFormFromSearchParams ? 'form' : 'list',
@@ -168,7 +137,7 @@ export function EventsTimelineSection({
               margin: 0,
               fontSize: 26,
               fontWeight: 800,
-              color: '#0f172a',
+              color: theme.colors.text.primary,
               letterSpacing: '-0.04em',
               lineHeight: 1.25,
             }}
@@ -179,7 +148,7 @@ export function EventsTimelineSection({
             style={{
               margin: '10px 0 0',
               fontSize: 15,
-              color: '#64748b',
+              color: theme.colors.text.secondary,
               lineHeight: 1.55,
               maxWidth: 540,
               fontWeight: 500,
@@ -201,9 +170,9 @@ export function EventsTimelineSection({
               gap: 8,
               padding: '10px 18px',
               borderRadius: 12,
-              border: '1px solid #e5e7eb',
-              background: '#fff',
-              color: '#374151',
+              border: `1px solid ${theme.colors.border.default}`,
+              background: isDark ? 'rgba(255,255,255,0.08)' : '#fff',
+              color: theme.colors.text.primary,
               cursor: 'pointer',
               fontSize: 13,
               fontWeight: 600,
@@ -231,11 +200,11 @@ export function EventsTimelineSection({
       {/* 탭 + KPI — 가문·민족과 동일 (목록일 때만) */}
       {view === 'list' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <GovTabNav>
-            <GovTabButton type="button" $active>
+          <PillTabNav>
+            <PillTabButton type="button" $active>
               전체 사건
-            </GovTabButton>
-          </GovTabNav>
+            </PillTabButton>
+          </PillTabNav>
           <div
             style={{
               display: 'flex',
@@ -243,9 +212,10 @@ export function EventsTimelineSection({
               gap: 28,
               flexWrap: 'wrap',
               padding: '20px 28px',
-              background: '#fff',
+              background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
               borderRadius: 16,
-              border: '1px solid #e5e7eb',
+              border: `1px solid ${theme.colors.border.default}`,
+              backdropFilter: isDark ? 'blur(12px)' : 'none',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -253,7 +223,7 @@ export function EventsTimelineSection({
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: '#64748b',
+                  color: theme.colors.text.secondary,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                 }}
@@ -264,7 +234,7 @@ export function EventsTimelineSection({
                 style={{
                   fontSize: 20,
                   fontWeight: 700,
-                  color: '#0f172a',
+                  color: theme.colors.text.primary,
                   letterSpacing: '-0.03em',
                 }}
               >
@@ -273,7 +243,7 @@ export function EventsTimelineSection({
                   style={{
                     fontSize: 14,
                     fontWeight: 500,
-                    color: '#64748b',
+                    color: theme.colors.text.secondary,
                     marginLeft: 2,
                   }}
                 >
@@ -300,7 +270,7 @@ export function EventsTimelineSection({
                 margin: 0,
                 fontSize: 20,
                 fontWeight: 700,
-                color: '#0f172a',
+                color: theme.colors.text.primary,
                 letterSpacing: '-0.02em',
               }}
             >
@@ -310,7 +280,7 @@ export function EventsTimelineSection({
               style={{
                 margin: '6px 0 0',
                 fontSize: 14,
-                color: '#64748b',
+                color: theme.colors.text.secondary,
                 fontWeight: 500,
               }}
             >
@@ -323,11 +293,11 @@ export function EventsTimelineSection({
               style={{
                 padding: 56,
                 textAlign: 'center',
-                color: '#6b7280',
+                color: theme.colors.text.secondary,
                 fontSize: 14,
-                background: '#f9fafb',
+                background: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
                 borderRadius: 16,
-                border: '1px solid #e5e7eb',
+                border: `1px solid ${theme.colors.border.default}`,
               }}
             >
               불러오는 중…
@@ -344,10 +314,13 @@ export function EventsTimelineSection({
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '64px 40px 72px',
-                background: '#ffffff',
+                background: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
+                backdropFilter: isDark ? 'blur(12px)' : 'none',
                 borderRadius: 20,
-                border: '1px solid #f1f5f9',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                border: `1px solid ${theme.colors.border.light}`,
+                boxShadow: isDark
+                  ? '0 1px 3px rgba(0,0,0,0.4)'
+                  : '0 1px 3px rgba(0,0,0,0.04)',
                 overflow: 'hidden',
               }}
             >
@@ -382,7 +355,7 @@ export function EventsTimelineSection({
                     margin: 0,
                     fontSize: 18,
                     fontWeight: 700,
-                    color: '#0f172a',
+                    color: theme.colors.text.primary,
                     letterSpacing: '-0.02em',
                   }}
                 >
@@ -392,18 +365,28 @@ export function EventsTimelineSection({
                   style={{
                     margin: '10px 0 0',
                     fontSize: 14,
-                    color: '#64748b',
+                    color: theme.colors.text.secondary,
                     maxWidth: 320,
                     lineHeight: 1.55,
                     fontWeight: 500,
                   }}
                 >
                   위{' '}
-                  <strong style={{ color: '#475569', fontWeight: 600 }}>
+                  <strong
+                    style={{
+                      color: theme.colors.text.primary,
+                      fontWeight: 600,
+                    }}
+                  >
                     새 사건 등록
                   </strong>{' '}
                   버튼을 눌러 첫 사건을 등록하거나,{' '}
-                  <strong style={{ color: '#475569', fontWeight: 600 }}>
+                  <strong
+                    style={{
+                      color: theme.colors.text.primary,
+                      fontWeight: 600,
+                    }}
+                  >
                     사건
                   </strong>{' '}
                   메뉴에서 연대표를 이용해 보세요.
@@ -442,13 +425,14 @@ export function EventsTimelineSection({
                       }
                       style={{
                         textAlign: 'left',
-                        background: '#fff',
+                        background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
+                        backdropFilter: isDark ? 'blur(12px)' : 'none',
                         borderRadius: 16,
                         minHeight: 160,
                         overflow: 'hidden',
                         display: 'flex',
                         flexDirection: 'column',
-                        border: '1px solid #e5e7eb',
+                        border: `1px solid ${theme.colors.border.default}`,
                         cursor: 'pointer',
                         padding: 24,
                         transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -459,7 +443,8 @@ export function EventsTimelineSection({
                           '0 4px 12px rgba(99,102,241,0.08)'
                       }}
                       onMouseOut={(e) => {
-                        e.currentTarget.style.borderColor = '#e5e7eb'
+                        e.currentTarget.style.borderColor =
+                          theme.colors.border.default
                         e.currentTarget.style.boxShadow = 'none'
                       }}
                     >
@@ -467,7 +452,7 @@ export function EventsTimelineSection({
                         style={{
                           fontSize: 16,
                           fontWeight: 700,
-                          color: '#0f172a',
+                          color: theme.colors.text.primary,
                           letterSpacing: '-0.02em',
                           lineHeight: 1.35,
                           marginBottom: 8,
@@ -478,7 +463,7 @@ export function EventsTimelineSection({
                       <div
                         style={{
                           fontSize: 13,
-                          color: '#64748b',
+                          color: theme.colors.text.secondary,
                           marginBottom: 10,
                         }}
                       >
@@ -488,7 +473,7 @@ export function EventsTimelineSection({
                         <div
                           style={{
                             fontSize: 13,
-                            color: '#64748b',
+                            color: theme.colors.text.secondary,
                             lineHeight: 1.5,
                             display: '-webkit-box',
                             WebkitLineClamp: 2,
@@ -515,9 +500,9 @@ export function EventsTimelineSection({
                 style={{
                   padding: '12px 24px',
                   borderRadius: 12,
-                  border: '1px solid #e5e7eb',
-                  background: '#fff',
-                  color: '#475569',
+                  border: `1px solid ${theme.colors.border.default}`,
+                  background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                  color: theme.colors.text.secondary,
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: isLoading ? 'wait' : 'pointer',

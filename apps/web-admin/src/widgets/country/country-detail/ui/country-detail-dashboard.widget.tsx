@@ -9,10 +9,14 @@ import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useCountryDashboardStats } from '../model/use-country-dashboard-stats'
-import * as S from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
+import * as S from './country-detail.styles'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
 import { formatRelativeTime } from '../../country-dashboard/relative-time'
+import {
+  PillTabButton,
+  PillTabNav,
+} from '@/shared/ui/tab/tab.styles'
 
 const BORDER = '#e2e8f0'
 const MUTED = '#64748b'
@@ -49,39 +53,6 @@ const DashboardRoot = styled.div`
 `
 
 /* ---------- 탭 메뉴 (/country 대시보드 톤 유지) ---------- */
-const TabBar = styled.nav`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  margin-bottom: 4px;
-  width: fit-content;
-  background: #f1f5f9;
-  border-radius: 20px;
-  overflow-x: auto;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`
-
-const TabButton = styled.button<{ $active: boolean }>`
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border-radius: 14px;
-  border: none;
-  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? 600 : 500)};
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
-  white-space: nowrap;
-  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
-  &:hover {
-    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
-    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
-  }
-`
 
 const Section = styled.section`
   display: flex;
@@ -671,8 +642,8 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
       </S.GlobalDashboardHero>
 
       {/* 탭 메뉴 */}
-      <TabBar role="tablist" aria-label="대시보드 보기 전환">
-        <TabButton
+      <PillTabNav role="tablist" aria-label="대시보드 보기 전환" style={{ marginBottom: 4 }}>
+        <PillTabButton
           type="button"
           role="tab"
           aria-selected={activeTab === 'summary'}
@@ -680,8 +651,8 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
           onClick={() => setActiveTab('summary')}
         >
           요약
-        </TabButton>
-        <TabButton
+        </PillTabButton>
+        <PillTabButton
           type="button"
           role="tab"
           aria-selected={activeTab === 'stats'}
@@ -689,8 +660,8 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
           onClick={() => setActiveTab('stats')}
         >
           통계
-        </TabButton>
-      </TabBar>
+        </PillTabButton>
+      </PillTabNav>
 
       {activeTab === 'summary' && (
         <>

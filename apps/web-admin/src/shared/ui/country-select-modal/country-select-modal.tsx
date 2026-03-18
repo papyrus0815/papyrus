@@ -2,6 +2,7 @@
  * 국가 선택 모달 컴포넌트
  */
 import React, { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -9,6 +10,7 @@ import styled from 'styled-components'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface CountrySelectModalProps {
   isOpen: boolean
@@ -178,7 +180,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
       : filteredHistoricalCountries,
   )
 
-  return (
+  return createPortal(
     <Overlay onClick={onClose}>
       <ModalContainer onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
@@ -417,7 +419,8 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
           </FooterActions>
         </ModalFooter>
       </ModalContainer>
-    </Overlay>
+    </Overlay>,
+    document.body,
   )
 }
 
@@ -439,7 +442,7 @@ const Overlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
   padding: 20px;
   animation: overlayIn 0.2s ease;
   @keyframes overlayIn {

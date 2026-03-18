@@ -1,6 +1,37 @@
 import { motion } from 'framer-motion'
 import styled, { css } from 'styled-components'
 
+// ─── 최상위 레이아웃 컨테이너 ────────────────────────────────────────────────
+
+export const DetailPaneRelative = styled.div`
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+`
+
+export const AnalyticsDashboard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: ${({ theme }) => theme.colors.background.primary};
+`
+
+export const TabContentPane = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  width: 100%;
+`
+
 // Grid Layouts (Modern Design)
 export const DashboardGrid = styled.div`
   display: grid;
@@ -512,7 +543,11 @@ export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
   border: none;
   background: transparent;
   color: ${({ $active, theme }) =>
-    $active ? theme.colors.primary : theme.colors.text.secondary};
+    $active
+      ? theme.mode === 'dark'
+        ? '#ffffff'
+        : theme.colors.primary
+      : theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
@@ -525,7 +560,8 @@ export const PersonInnerTabButton = styled.button<{ $active?: boolean }>`
     background 0.15s ease;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#ffffff' : theme.colors.primary};
     background: ${({ theme }) => theme.colors.activeLight};
   }
 
@@ -2933,3 +2969,17 @@ export const PremiumPercentageBadge = styled.div<{ positive?: boolean }>`
     stroke: ${(props) => (props.positive ? '#10b981' : '#ef4444')};
   }
 `
+
+// ─── country-dashboard.styles re-export (FSD: widgets 간 직접 참조 방지) ─────
+export {
+  GlobalDashboardHero,
+  HeroTextGroup,
+  HeroTitle,
+  HeroSubtitle,
+  BarChartList,
+  BarChartRow,
+  BarChartLabel,
+  BarChartTrack,
+  BarChartFill,
+  BarChartValue,
+} from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'

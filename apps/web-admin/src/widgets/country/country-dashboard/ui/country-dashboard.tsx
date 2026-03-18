@@ -1,6 +1,5 @@
 import React from 'react'
 
-import { AnimatePresence, motion } from 'framer-motion'
 import styled, { useTheme } from 'styled-components'
 
 import { type ContinentOption, type Country } from '@/entities/country/api'

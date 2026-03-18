@@ -431,7 +431,6 @@ const ListSectionWrap = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: ${({ theme }) => theme.colors.background.primary};
 
   @media (max-width: 768px) {
     padding: 16px 16px 40px;
@@ -448,7 +447,6 @@ const DetailViewWrap = styled.div`
   width: 100%;
   min-width: 0;
   min-height: 60vh;
-  background: ${({ theme }) => theme.colors.background.primary};
   padding: 28px 0px;
 
   @media (max-width: 768px) {

@@ -21,12 +21,6 @@ import {
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { proseHrStyles, PROSE_HR_HTML } from '@/shared/styles/prose-hr'
-import type { MentionItem } from '@/pages/events/create/mention-system'
-import {
-  MENTION_TYPE_CONFIG,
-  searchMentionEntities,
-} from '@/pages/events/create/mention-system'
 import {
   type GlossaryTermDto,
   createGlossaryTerm,
@@ -36,6 +30,14 @@ import {
   updateGlossaryTerm,
 } from '@/shared/api/glossary'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import type { MentionItem } from '@/shared/lib/mention/mention-system'
+import {
+  MENTION_TYPE_CONFIG,
+  searchMentionEntities,
+} from '@/shared/lib/mention/mention-system'
+import { PROSE_HR_HTML, proseHrStyles } from '@/shared/styles/prose-hr'
+import { Z_INDEX } from '@/shared/styles/z-index'
+import { scrollbarMixin } from '@/shared/styles/mixins'
 
 // 멘션 엔티티 props 타입
 export interface MentionExtensionProps {
@@ -52,12 +54,20 @@ const EditorContainer = styled.div`
   position: relative;
   border-radius: 20px;
   overflow: visible;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)'
+      : '0 1px 3px rgba(0, 0, 0, 0.04)'};
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(12px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(12px)' : 'none'};
   width: 100%;
 
   &:focus-within {
@@ -71,8 +81,8 @@ const Toolbar = styled.div`
   flex-wrap: wrap;
   gap: 4px;
   padding: 12px 16px;
-  background: #f1f5f9;
-  border-top: 1px solid #e5e7eb;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 0 0 20px 20px;
   overflow: visible;
   width: 100%;
@@ -93,7 +103,8 @@ const ToolbarButton = styled.button.attrs({ type: 'button' })<{
   border: none;
   border-radius: 10px;
   background: ${({ $active }) => ($active ? '#4f46e5' : 'transparent')};
-  color: ${({ $active }) => ($active ? '#fff' : '#64748b')};
+  color: ${({ $active, theme }) =>
+    $active ? '#fff' : theme.colors.text.secondary};
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -159,13 +170,13 @@ const ToolbarButton = styled.button.attrs({ type: 'button' })<{
 const ToolbarDivider = styled.div`
   width: 1px;
   height: 22px;
-  background: #e2e8f0;
+  background: ${({ theme }) => theme.colors.border.default};
   margin: 5px 4px;
   align-self: center;
 `
 
 const EditorWrapper = styled.div`
-  background: #fff;
+  background: transparent;
   position: relative;
   border-radius: 20px 20px 0 0;
   overflow: visible;
@@ -180,25 +191,25 @@ const TitleInput = styled.input`
   font-size: 36px;
   font-weight: 700;
   line-height: 1.2;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
   letter-spacing: -0.02em;
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${({ theme }) => theme.colors.border.medium};
     font-weight: 600;
   }
 
   &:focus::placeholder {
-    color: #e2e8f0;
+    color: ${({ theme }) => theme.colors.border.default};
   }
 `
 
 const TitleDivider = styled.div`
   height: 1px;
-  background: #e5e7eb;
+  background: ${({ theme }) => theme.colors.border.default};
   margin: 0 28px 8px 28px;
 `
 
@@ -209,7 +220,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     $hasTitle ? '12px 28px 16px 28px' : '16px 28px'};
   font-size: 15px;
   line-height: 1.6;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
@@ -223,7 +234,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
 
   &[contenteditable='true']:empty:before {
     content: attr(data-placeholder);
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     pointer-events: none;
     font-style: italic;
   }
@@ -242,7 +253,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     margin: 18px 0 8px 0;
     font-weight: 700;
     line-height: 1.3;
-    color: #0f172a;
+    color: ${({ theme }) => theme.colors.text.primary};
     letter-spacing: -0.02em;
 
     &:first-child {
@@ -252,17 +263,17 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
 
   h1 {
     font-size: 32px;
-    color: #4f46e5;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
   }
 
   h2 {
     font-size: 24px;
-    color: #1e293b;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   h3 {
     font-size: 20px;
-    color: #334155;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   ul,
@@ -296,7 +307,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   }
 
   a {
-    color: #4f46e5;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
     text-decoration: none;
     border-bottom: 1px solid rgba(79, 70, 229, 0.3);
     cursor: pointer;
@@ -316,9 +327,12 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     border-left: 4px solid #4f46e5;
     padding: 12px 20px;
     margin: 12px 0;
-    background: rgba(79, 70, 229, 0.04);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(79,70,229,0.1)'
+        : 'rgba(79, 70, 229, 0.04)'};
     border-radius: 0 12px 12px 0;
-    color: #475569;
+    color: ${({ theme }) => theme.colors.text.secondary};
     font-style: italic;
     position: relative;
 
@@ -335,22 +349,25 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   }
 
   code {
-    background: rgba(79, 70, 229, 0.08);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.15)'
+        : 'rgba(79, 70, 229, 0.08)'};
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 13px;
     font-family:
       'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
-    color: #4f46e5;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
     font-weight: 500;
     border: 1px solid rgba(79, 70, 229, 0.15);
   }
 
   pre {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.colors.background.secondary};
     padding: 12px;
     border-radius: 12px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
     overflow-x: auto;
     margin: 10px 0;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -358,7 +375,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     code {
       background: transparent;
       padding: 0;
-      color: #0f172a;
+      color: ${({ theme }) => theme.colors.text.primary};
       border: none;
     }
   }
@@ -383,7 +400,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     figcaption {
       margin-top: 8px;
       font-size: 13px;
-      color: #64748b;
+      color: ${({ theme }) => theme.colors.text.secondary};
       font-style: italic;
       text-align: center;
     }
@@ -439,7 +456,8 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     align-items: center;
     gap: 4px;
     background: rgba(99, 102, 241, 0.1);
-    color: #4338ca !important;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'} !important;
 
     &:hover {
       background: rgba(99, 102, 241, 0.18);
@@ -447,14 +465,16 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
 
     &[data-type='person'] {
       background: rgba(99, 102, 241, 0.1);
-      color: #4338ca !important;
+      color: ${({ theme }) =>
+        theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'} !important;
       &:hover {
         background: rgba(99, 102, 241, 0.18);
       }
     }
     &[data-type='dynasty'] {
       background: rgba(124, 58, 237, 0.1);
-      color: #6d28d9 !important;
+      color: ${({ theme }) =>
+        theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9'} !important;
       &:hover {
         background: rgba(124, 58, 237, 0.18);
       }
@@ -475,7 +495,8 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     }
     &[data-type='historicalCountry'] {
       background: rgba(139, 92, 246, 0.1);
-      color: #6d28d9 !important;
+      color: ${({ theme }) =>
+        theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9'} !important;
       &:hover {
         background: rgba(139, 92, 246, 0.18);
       }
@@ -489,8 +510,6 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     }
   }
 
-  /* 엔티티 링크 스타일 */
-  /* 용어(문구·관직 설명) 스타일 */
   .term {
     color: #0d9488;
     font-weight: 600;
@@ -569,9 +588,16 @@ const ImageCaptionModalOverlay = styled.div<{ $visible: boolean }>`
 `
 
 const ImageCaptionModal = styled.div`
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30,30,30,0.9)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
   border-radius: 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.08),
     0 1px 3px rgba(0, 0, 0, 0.04);
@@ -584,7 +610,7 @@ const ImageCaptionModal = styled.div`
 
 const ImageCaptionModalHeader = styled.div`
   padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -594,7 +620,7 @@ const ImageCaptionModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ImageCaptionModalClose = styled.button`
@@ -602,7 +628,7 @@ const ImageCaptionModalClose = styled.button`
   background: transparent;
   padding: 6px;
   cursor: pointer;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -612,7 +638,7 @@ const ImageCaptionModalClose = styled.button`
     color 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
+    background: ${({ theme }) => theme.colors.background.tertiary};
     color: #4f46e5;
   }
 `
@@ -627,11 +653,12 @@ const ImageCaptionModalContent = styled.div`
 const ImageCaptionInput = styled.input`
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   font-size: 14px;
-  color: #111827;
-  background: #fff;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   outline: none;
   transition:
     border-color 0.2s ease,
@@ -643,13 +670,13 @@ const ImageCaptionInput = styled.input`
   }
 
   &::placeholder {
-    color: #9ca3af;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
 const ImageCaptionModalFooter = styled.div`
   padding: 16px 24px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -667,7 +694,7 @@ const ImageCaptionButton = styled.button<{ $primary?: boolean }>`
     background 0.2s ease,
     color 0.2s ease;
 
-  ${({ $primary }) =>
+  ${({ $primary, theme }) =>
     $primary
       ? `
     background: #6366f1;
@@ -678,20 +705,26 @@ const ImageCaptionButton = styled.button<{ $primary?: boolean }>`
     }
   `
       : `
-    background: #fff;
-    color: #64748b;
-    border: 1px solid #e5e7eb;
+    background: ${theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
+    color: ${theme.colors.text.secondary};
+    border: 1px solid ${theme.colors.border.default};
     &:hover {
-      background: #f1f5f9;
-      color: #475569;
+      background: ${theme.colors.background.tertiary};
+      color: ${theme.colors.text.primary};
     }
   `}
 `
 
-// 색상 선택기 스타일
 const ColorPickerDropdown = styled.div`
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30,30,30,0.95)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   border-radius: 14px;
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.08),
@@ -731,10 +764,9 @@ const ColorPickerItem = styled.div<{ $color: string; $selected: boolean }>`
 
 const ColorPickerInputWrapper = styled.div`
   padding-top: 8px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
-// 컨텍스트 메뉴 스타일
 const ContextMenu = styled.div<{
   $visible: boolean
   $top: number
@@ -743,8 +775,15 @@ const ContextMenu = styled.div<{
   position: fixed;
   top: ${({ $top }) => $top}px;
   left: ${({ $left }) => $left}px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(25,25,25,0.92)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   border-radius: 12px;
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.08),
@@ -763,7 +802,7 @@ const ContextMenuItem = styled.button.attrs({ type: 'button' })`
   padding: 10px 14px;
   border: none;
   background: transparent;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   font-size: 14px;
   font-weight: 500;
   text-align: left;
@@ -779,7 +818,7 @@ const ContextMenuItem = styled.button.attrs({ type: 'button' })`
   }
 
   &:disabled {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     cursor: not-allowed;
   }
 
@@ -790,22 +829,17 @@ const ContextMenuItem = styled.button.attrs({ type: 'button' })`
   }
 `
 
-// 엔티티 링크 모달 스타일
-const EntityLinkModalOverlay = styled.div<{ $visible: boolean }>`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  z-index: 2000;
-  display: ${({ $visible }) => ($visible ? 'flex' : 'none')};
-  align-items: center;
-  justify-content: center;
-`
-
 const EntityLinkModal = styled.div`
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(25,25,25,0.92)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
   border-radius: 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.08),
     0 1px 3px rgba(0, 0, 0, 0.04);
@@ -819,7 +853,7 @@ const EntityLinkModal = styled.div`
 
 const EntityLinkModalHeader = styled.div`
   padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -829,7 +863,7 @@ const EntityLinkModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const EntityLinkModalClose = styled.button`
@@ -837,7 +871,7 @@ const EntityLinkModalClose = styled.button`
   background: transparent;
   padding: 6px;
   cursor: pointer;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -847,7 +881,7 @@ const EntityLinkModalClose = styled.button`
     color 0.2s ease;
 
   &:hover {
-    background: #f1f5f9;
+    background: ${({ theme }) => theme.colors.background.tertiary};
     color: #4f46e5;
   }
 `
@@ -864,11 +898,12 @@ const EntityLinkModalContent = styled.div`
 const EntityLinkSearchInput = styled.input`
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   font-size: 14px;
-  color: #111827;
-  background: #fff;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   outline: none;
   transition:
     border-color 0.2s ease,
@@ -880,23 +915,26 @@ const EntityLinkSearchInput = styled.input`
   }
 
   &::placeholder {
-    color: #9ca3af;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
 const EntityLinkSelectedText = styled.div`
   padding: 12px 16px;
-  background: rgba(245, 158, 11, 0.06);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245,158,11,0.08)'
+      : 'rgba(245, 158, 11, 0.06)'};
   border: 1px solid rgba(245, 158, 11, 0.2);
   border-radius: 12px;
   font-size: 13px;
-  color: #78350f;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#78350f')};
   font-weight: 500;
 
   strong {
     display: block;
     margin-bottom: 4px;
-    color: #92400e;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f59e0b' : '#92400e')};
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -911,6 +949,17 @@ const EntityLinkResultsList = styled.div`
   overflow-y: auto;
 `
 
+const EntityLinkModalOverlay = styled.div<{ $visible: boolean }>`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: ${({ $visible }) => ($visible ? 'flex' : 'none')};
+  align-items: center;
+  justify-content: center;
+`
+
 /* 용어 연결 모달 (문구·관직 설명) */
 const TermLinkModalOverlay = styled.div<{ $visible: boolean }>`
   position: fixed;
@@ -923,9 +972,16 @@ const TermLinkModalOverlay = styled.div<{ $visible: boolean }>`
   justify-content: center;
 `
 const TermLinkModal = styled.div`
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(25,25,25,0.92)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
   border-radius: 20px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   width: 90%;
   max-width: 440px;
@@ -936,7 +992,7 @@ const TermLinkModal = styled.div`
 `
 const TermLinkModalHeader = styled.div`
   padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -945,18 +1001,18 @@ const TermLinkModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 const TermLinkModalClose = styled.button`
   padding: 8px;
   border: none;
   background: none;
   cursor: pointer;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   border-radius: 10px;
   &:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 const TermLinkModalContent = styled.div`
@@ -968,14 +1024,20 @@ const TermLinkSearchInput = styled.input`
   width: 100%;
   padding: 12px 16px;
   font-size: 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   margin-bottom: 14px;
   box-sizing: border-box;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  outline: none;
   &:focus {
-    outline: none;
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 const TermLinkResultsList = styled.div`
@@ -985,32 +1047,52 @@ const TermLinkResultsList = styled.div`
 `
 const TermLinkNewSection = styled.div`
   padding-top: 14px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 const TermLinkNewLabel = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 8px;
 `
 const TermLinkNewInput = styled.input`
   width: 100%;
   padding: 10px 14px;
   font-size: 13px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   margin-bottom: 8px;
   box-sizing: border-box;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  outline: none;
+  &:focus {
+    border-color: #6366f1;
+  }
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 const TermLinkNewTextarea = styled.textarea`
   width: 100%;
   min-height: 240px;
   padding: 10px 14px;
   font-size: 13px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   resize: vertical;
   box-sizing: border-box;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  outline: none;
+  &:focus {
+    border-color: #6366f1;
+  }
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 const TermLinkNewButton = styled.button<{ $primary?: boolean }>`
   margin-top: 10px;
@@ -1018,12 +1100,23 @@ const TermLinkNewButton = styled.button<{ $primary?: boolean }>`
   font-size: 13px;
   font-weight: 600;
   border-radius: 10px;
-  border: 1px solid ${(p) => (p.$primary ? '#6366f1' : '#e5e7eb')};
-  background: ${(p) => (p.$primary ? '#6366f1' : '#fff')};
-  color: ${(p) => (p.$primary ? '#fff' : '#475569')};
+  border: 1px solid
+    ${(p) => (p.$primary ? '#6366f1' : p.theme.colors.border.default)};
+  background: ${(p) =>
+    p.$primary
+      ? '#6366f1'
+      : p.theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : '#fff'};
+  color: ${(p) => (p.$primary ? '#fff' : p.theme.colors.text.secondary)};
   cursor: pointer;
   &:hover {
-    background: ${(p) => (p.$primary ? '#4f46e5' : '#f8fafc')};
+    background: ${(p) =>
+      p.$primary ? '#4f46e5' : p.theme.colors.background.tertiary};
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 `
 
@@ -1532,7 +1625,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           e.stopImmediatePropagation()
           const delR = range.cloneRange()
           delR.collapse(true)
-          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -1)
+          ;(
+            delR as unknown as { moveStart(unit: string, count: number): void }
+          ).moveStart('character', -1)
           sel.removeAllRanges()
           sel.addRange(delR)
           document.execCommand('delete', false)
@@ -1546,7 +1641,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           e.stopImmediatePropagation()
           const delR = range.cloneRange()
           delR.collapse(true)
-          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -trimmed.length)
+          ;(
+            delR as unknown as { moveStart(unit: string, count: number): void }
+          ).moveStart('character', -trimmed.length)
           sel.removeAllRanges()
           sel.addRange(delR)
           document.execCommand('delete', false)
@@ -1583,7 +1680,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           e.preventDefault()
           const delR = range.cloneRange()
           delR.collapse(true)
-          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -1)
+          ;(
+            delR as unknown as { moveStart(unit: string, count: number): void }
+          ).moveStart('character', -1)
           sel.removeAllRanges()
           sel.addRange(delR)
           document.execCommand('delete', false)
@@ -1596,7 +1695,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           e.preventDefault()
           const delR = range.cloneRange()
           delR.collapse(true)
-          ;(delR as unknown as { moveStart(unit: string, count: number): void }).moveStart('character', -trimmed.length)
+          ;(
+            delR as unknown as { moveStart(unit: string, count: number): void }
+          ).moveStart('character', -trimmed.length)
           sel.removeAllRanges()
           sel.addRange(delR)
           document.execCommand('delete', false)
@@ -1725,7 +1826,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         setImageCaptionInput('')
         setImageCaptionModalVisible(true)
       } catch (err) {
-        const message = err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.'
+        const message =
+          err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.'
         console.error('Image upload error:', err)
         alert(message)
       }
@@ -2027,7 +2129,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const searchTermLinks = useCallback(
     async (query: string) => {
       try {
-        const params: Parameters<typeof getGlossaryTerms>[0] = { q: query || undefined }
+        const params: Parameters<typeof getGlossaryTerms>[0] = {
+          q: query || undefined,
+        }
         if (documentScope?.type === 'post') params.postId = documentScope.id
         if (documentScope?.type === 'event') params.eventId = documentScope.id
         const list = await getGlossaryTerms(params)
@@ -2203,7 +2307,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   const handleDeleteTermEdit = useCallback(async () => {
     if (!termEditId || !editorRef.current) return
-    if (!window.confirm('이 설명을 삭제할까요? 문구는 본문에 남고, 설명(툴팁)만 제거됩니다.')) return
+    if (
+      !window.confirm(
+        '이 설명을 삭제할까요? 문구는 본문에 남고, 설명(툴팁)만 제거됩니다.',
+      )
+    )
+      return
     setTermEditLoading(true)
     try {
       const span = editorRef.current.querySelector(
@@ -2745,7 +2854,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             handleOpenEntityLinkModal()
           }}
           disabled={selectedText.length === 0}
-          title={selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined}
+          title={
+            selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined
+          }
         >
           <FiLink />
           엔티티 연결
@@ -2757,7 +2868,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             handleOpenTermLinkModal()
           }}
           disabled={selectedText.length === 0}
-          title={selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined}
+          title={
+            selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined
+          }
         >
           <FiType />
           용어 연결
@@ -3292,7 +3405,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   onChange={(e) => setTermEditDesc(e.target.value)}
                   style={{ minHeight: 120 }}
                 />
-                <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    marginTop: 16,
+                    flexWrap: 'wrap',
+                  }}
+                >
                   <TermLinkNewButton
                     type="button"
                     onClick={() => {

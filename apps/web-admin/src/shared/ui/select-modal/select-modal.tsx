@@ -78,19 +78,18 @@ export function SelectModal<T = string>({
   }
 
   return createPortal(
-    <>
-      <S.SelectModalOverlay
-        as={motion.div}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        onClick={onClose}
-      />
+    <S.SelectModalOverlay
+      as={motion.div}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onClick={onClose}
+    >
       <S.SelectModal
         as={motion.div}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.2 }}
-        style={{ transform: 'translate(-50%, -50%)' }}
+        onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
         <S.SelectModalHeader>
           <S.SelectModalTitle>{title}</S.SelectModalTitle>
@@ -153,7 +152,7 @@ export function SelectModal<T = string>({
           )}
         </S.SelectModalContent>
       </S.SelectModal>
-    </>,
+    </S.SelectModalOverlay>,
     document.body,
   )
 }

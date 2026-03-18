@@ -35,8 +35,8 @@ import {
   setGlobalBgmMutedState,
   useClickSound,
 } from '@/shared/hooks/use-click-sound.hook'
-import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 
 import { TopNavBar, type TopNavItemSpec } from './top-nav.ui'
 
@@ -850,6 +850,9 @@ function useOnClickOutside<T extends HTMLElement>(
   }, [ref, handler])
 }
 
+/**
+ * 백그라운드 색 넣지마라. 전체 컨테이너에서 적용한다.
+ */
 const HeaderBar = styled.header`
   position: fixed;
   top: 0;
@@ -860,8 +863,6 @@ const HeaderBar = styled.header`
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background: ${({ theme }) => theme.colors.header.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   z-index: ${Z_INDEX.HEADER};
   box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
   transition:

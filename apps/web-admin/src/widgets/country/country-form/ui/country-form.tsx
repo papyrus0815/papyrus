@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react'
+
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { createPortal } from 'react-dom'
-import { motion } from 'framer-motion'
+import { FiBarChart2, FiInfo, FiPlusCircle } from 'react-icons/fi'
 import styled from 'styled-components'
+
+import {
+  type ContinentOption,
+  type Country,
+  type CountryFormData,
+} from '@/entities/country/api'
+import { countrySchema } from '@/entities/country/model/schema'
+import { uploadImage } from '@/shared/api/upload'
+import { FormInput } from '@/shared/ui/form-input/form-input'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
 import {
   FormHeader,
@@ -12,15 +20,12 @@ import {
   TabButton,
   TabNavigation,
 } from '@/shared/ui/register-form-layout'
-import { FiBarChart2, FiInfo, FiPlusCircle } from 'react-icons/fi'
-import { SelectModal, SelectOption } from '@/shared/ui/select-modal/select-modal'
 import {
-  type Country,
-  type ContinentOption,
-  type CountryFormData,
-} from '@/entities/country/api'
-import { countrySchema } from '@/entities/country/model/schema'
-import { uploadImage } from '@/shared/api/upload'
+  SelectModal,
+  SelectOption,
+} from '@/shared/ui/select-modal/select-modal'
+import { zodResolver } from '@hookform/resolvers/zod'
+
 import * as S from './country-form.styles'
 
 /** 모달: 역사적 국가 폼과 동일 디자인 — 섹션/필드 그리드·간격·보더 */
@@ -44,7 +49,7 @@ const CountryFormModalLayout = styled.div`
   ${S.FormSection}:not(:first-of-type) {
     margin-top: 28px;
     padding-top: 32px;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.default};
   }
   ${S.FormSectionHeader} {
     margin-bottom: 16px;
@@ -55,12 +60,12 @@ const CountryFormModalLayout = styled.div`
   ${S.FormSectionTitle} {
     font-size: 15px;
     font-weight: 600;
-    color: #111827;
+    color: ${({ theme }) => theme.colors.text.primary};
     margin: 0 0 4px 0;
   }
   ${S.FormSectionDescription} {
     font-size: 13px;
-    color: #6b7280;
+    color: ${({ theme }) => theme.colors.text.secondary};
     margin: 0;
   }
   ${S.FormRow} {
@@ -76,7 +81,7 @@ const CountryFormModalLayout = styled.div`
     gap: 24px;
     align-items: start;
     padding: 20px 0;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   }
   @media (max-width: 768px) {
     ${S.FormField} {
@@ -86,7 +91,7 @@ const CountryFormModalLayout = styled.div`
   ${S.FormLabel} {
     font-size: 13px;
     font-weight: 600;
-    color: #374151;
+    color: ${({ theme }) => theme.colors.text.primary};
     padding-top: 10px;
     margin: 0;
     grid-column: 1;
@@ -123,7 +128,7 @@ const CountryFormModalLayout = styled.div`
     gap: 24px;
     align-items: start;
     padding: 20px 0;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     min-width: 0;
   }
   ${S.FormField}[data-field='thumbnail'] ${S.FormLabel} {
@@ -148,24 +153,36 @@ const CountryFormModalLayout = styled.div`
     max-height: 96px;
     border-radius: 50%;
     overflow: hidden;
-    background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 2px dashed #cbd5e1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%)'};
+    border: 2px dashed
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
-    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    transition:
+      border-color 0.2s,
+      background 0.2s,
+      box-shadow 0.2s;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle:hover {
     border-color: #6366f1;
-    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.1)'
+        : 'linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%)'};
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle[data-has-image] {
-    background: #fff;
-    border-color: #e5e7eb;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
+    border-color: ${({ theme }) => theme.colors.border.default};
     border-style: solid;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   }
@@ -179,13 +196,13 @@ const CountryFormModalLayout = styled.div`
     object-fit: cover;
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-circle svg {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.secondary};
     width: 36px;
     height: 36px;
   }
   ${S.FormField}[data-field='thumbnail'] .thumbnail-hint {
     font-size: 12px;
-    color: #64748b;
+    color: ${({ theme }) => theme.colors.text.secondary};
     line-height: 1.4;
   }
   ${S.FormField}[data-field='thumbnail'] ${S.ErrorMessage} {
@@ -201,40 +218,30 @@ const CountryFormModalLayout = styled.div`
     }
   }
   /* 입력 필드 성격별 너비 — 들어갈 데이터 길이·인물 등록 모달 비율 고려 */
-  ${S.FormField} .input-iso { max-width: 100px; }  /* ISO 3166-1 alpha-2 (2~3자) */
-  ${S.FormField} .input-flag-emoji { max-width: 96px; }  /* 이모지 1~2자 */
+  ${S.FormField} .input-iso {
+    max-width: 100px;
+  } /* ISO 3166-1 alpha-2 (2~3자) */
+  ${S.FormField} .input-flag-emoji {
+    max-width: 96px;
+  } /* 이모지 1~2자 */
   ${S.FormField} .input-name,
-  ${S.FormField} .input-local-name { max-width: 480px; }  /* 국가명·로컬명 (인물 원어 480px 수준) */
-  ${S.FormField} .input-capital { max-width: 280px; }  /* 수도명 */
-  ${S.FormField} .input-number { max-width: 220px; }  /* 인구·면적·GDP (큰 숫자) */
+  ${S.FormField} .input-local-name {
+    max-width: 480px;
+  } /* 국가명·로컬명 (인물 원어 480px 수준) */
+  ${S.FormField} .input-capital {
+    max-width: 280px;
+  } /* 수도명 */
+  ${S.FormField} .input-number {
+    max-width: 220px;
+  } /* 인구·면적·GDP (큰 숫자) */
   ${S.FormField} .input-currency,
-  ${S.FormField} .input-language { max-width: 180px; }  /* 화폐·언어 코드 */
-  ${S.Input} {
-    width: 100%;
-    padding: 12px 16px;
-    font-size: 14px;
-    color: #111827;
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.2s ease;
-  }
-  ${S.Input}:focus {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
+  ${S.FormField} .input-language {
+    max-width: 180px;
+  } /* 화폐·언어 코드 */
   ${S.SelectButton} {
     padding: 10px 14px;
     font-size: 14px;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
     max-width: 380px;
-  }
-  ${S.SelectButton}:focus-visible {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
 
@@ -385,7 +392,9 @@ export function CountryForm({
    * 국기/썸네일 이미지 업로드 핸들러
    * - 서버에 업로드 후 thumbnailUrl에만 저장 (국기 = 썸네일, 255자 제한)
    */
-  const handleFlagImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFlagImageChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0]
     if (!file) return
     setFlagImageFile(file)
@@ -393,7 +402,10 @@ export function CountryForm({
     setImageUploading(true)
     try {
       const result = await uploadImage(file, 'countries')
-      const url = (result.url ?? '').length > 255 ? (result.url ?? '').slice(0, 255) : (result.url ?? '')
+      const url =
+        (result.url ?? '').length > 255
+          ? (result.url ?? '').slice(0, 255)
+          : (result.url ?? '')
       setValue('thumbnailUrl', url, { shouldValidate: true })
       setThumbnailPreview(result.url ?? '')
     } catch (err) {
@@ -459,7 +471,9 @@ export function CountryForm({
     setFlagImageFile(null)
     setThumbnailFile(null)
     setImageUploadError(null)
-    const input = document.getElementById('flag-image-upload') as HTMLInputElement | null
+    const input = document.getElementById(
+      'flag-image-upload',
+    ) as HTMLInputElement | null
     if (input) input.value = ''
   }
 
@@ -500,8 +514,11 @@ export function CountryForm({
 
   // ==================== JSX 렌더링 ====================
 
-  const submitLabel =
-    isSubmitting ? '처리 중...' : editing.id ? '수정 완료' : '국가 등록'
+  const submitLabel = isSubmitting
+    ? '처리 중...'
+    : editing.id
+      ? '수정 완료'
+      : '국가 등록'
 
   const formBody = (
     <S.Form id="country-form" onSubmit={handleSubmit(onSubmit)}>
@@ -570,19 +587,45 @@ export function CountryForm({
                     data-has-image={!!thumbnailPreview}
                   >
                     {thumbnailPreview ? (
-                      <img src={thumbnailPreview} alt="대표 이미지 미리보기" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                      <img
+                        src={thumbnailPreview}
+                        alt="대표 이미지 미리보기"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
                     ) : (
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect
+                          x="3"
+                          y="3"
+                          width="18"
+                          height="18"
+                          rx="2"
+                          ry="2"
+                        />
                         <circle cx="8.5" cy="8.5" r="1.5" />
                         <path d="M21 15l-5-5L5 21" />
                       </svg>
                     )}
                   </label>
-                  {imageUploading && <span style={{ fontSize: 13, color: '#64748b' }}>업로드 중…</span>}
+                  {imageUploading && (
+                    <span style={{ fontSize: 13, color: '#64748b' }}>
+                      업로드 중…
+                    </span>
+                  )}
                 </div>
                 <span className="thumbnail-hint">
-                  {thumbnailPreview ? '클릭하면 이미지를 변경할 수 있습니다' : '클릭하여 국기·상징 이미지를 넣어주세요 (선택)'}
+                  {thumbnailPreview
+                    ? '클릭하면 이미지를 변경할 수 있습니다'
+                    : '클릭하여 국기·상징 이미지를 넣어주세요 (선택)'}
                 </span>
                 <S.FileInput
                   id="flag-image-upload"
@@ -595,9 +638,34 @@ export function CountryForm({
             ) : (
               <div>
                 {thumbnailPreview && (
-                  <S.FlagImagePreview style={{ maxWidth: '100%', overflow: 'hidden', marginBottom: '12px' }}>
-                    <S.FlagImage src={thumbnailPreview} alt="국기 미리보기" onError={(e) => { e.currentTarget.style.display = 'none' }} />
-                    <button type="button" onClick={handleDeleteImage} style={{ marginTop: '8px', padding: '6px 12px', fontSize: '13px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', cursor: 'pointer' }}>
+                  <S.FlagImagePreview
+                    style={{
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    <S.FlagImage
+                      src={thumbnailPreview}
+                      alt="국기 미리보기"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleDeleteImage}
+                      style={{
+                        marginTop: '8px',
+                        padding: '6px 12px',
+                        fontSize: '13px',
+                        color: '#dc2626',
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                      }}
+                    >
                       이미지 삭제
                     </button>
                   </S.FlagImagePreview>
@@ -605,17 +673,41 @@ export function CountryForm({
                 <S.FileUploadWrapper>
                   <S.FileUploadLabel htmlFor="flag-image-upload">
                     <S.FileUploadIcon>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor" /></svg>
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <path
+                          d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
+                          fill="currentColor"
+                        />
+                      </svg>
                     </S.FileUploadIcon>
                     <S.FileUploadText>
-                      {imageUploading ? '업로드 중...' : flagImageFile ? flagImageFile.name : '이미지 파일 선택'}
+                      {imageUploading
+                        ? '업로드 중...'
+                        : flagImageFile
+                          ? flagImageFile.name
+                          : '이미지 파일 선택'}
                     </S.FileUploadText>
                   </S.FileUploadLabel>
-                  <S.FileInput id="flag-image-upload" type="file" accept="image/*" onChange={handleFlagImageChange} disabled={imageUploading} />
+                  <S.FileInput
+                    id="flag-image-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFlagImageChange}
+                    disabled={imageUploading}
+                  />
                 </S.FileUploadWrapper>
               </div>
             )}
-            {imageUploadError && <S.ErrorMessage style={{ marginTop: '8px' }}>{imageUploadError}</S.ErrorMessage>}
+            {imageUploadError && (
+              <S.ErrorMessage style={{ marginTop: '8px' }}>
+                {imageUploadError}
+              </S.ErrorMessage>
+            )}
           </S.FormField>
 
           <S.FormRow>
@@ -623,7 +715,7 @@ export function CountryForm({
               <S.FormLabel>
                 국가명 <S.RequiredStar>*</S.RequiredStar>
               </S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-name"
                 {...register('name')}
                 placeholder="대한민국"
@@ -635,7 +727,7 @@ export function CountryForm({
             </S.FormField>
             <S.FormField>
               <S.FormLabel>로컬명</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-local-name"
                 {...register('localName')}
                 placeholder="Korea"
@@ -648,7 +740,7 @@ export function CountryForm({
           </S.FormRow>
           <S.FormField>
             <S.FormLabel>공식 명칭 (풀네임)</S.FormLabel>
-            <S.Input
+            <FormInput
               {...register('fullName')}
               placeholder="예: 대한민국, 일본국, Republic of Korea"
               $error={!!errors.fullName}
@@ -660,7 +752,7 @@ export function CountryForm({
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>ISO 코드</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-iso"
                 {...register('isoCode')}
                 placeholder="KR"
@@ -674,7 +766,7 @@ export function CountryForm({
             </S.FormField>
             <S.FormField>
               <S.FormLabel>국기 이모지</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-flag-emoji"
                 {...register('flagEmoji')}
                 placeholder="🇰🇷"
@@ -688,7 +780,7 @@ export function CountryForm({
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>수도</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-capital"
                 {...register('capital')}
                 placeholder="서울"
@@ -743,7 +835,7 @@ export function CountryForm({
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>인구</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-number"
                 {...register('population', { valueAsNumber: true })}
                 type="number"
@@ -756,7 +848,7 @@ export function CountryForm({
             </S.FormField>
             <S.FormField>
               <S.FormLabel>면적 (km²)</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-number"
                 {...register('areaSqKm', { valueAsNumber: true })}
                 type="number"
@@ -771,7 +863,7 @@ export function CountryForm({
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>GDP (USD Billion)</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-number"
                 {...register('gdpUsdBn', { valueAsNumber: true })}
                 type="number"
@@ -808,7 +900,7 @@ export function CountryForm({
           <S.FormRow>
             <S.FormField>
               <S.FormLabel>화폐 ID</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-currency"
                 {...register('currencyId')}
                 placeholder="KRW"
@@ -821,7 +913,7 @@ export function CountryForm({
             </S.FormField>
             <S.FormField>
               <S.FormLabel>언어 ID</S.FormLabel>
-              <S.Input
+              <FormInput
                 className="input-language"
                 {...register('languageId')}
                 placeholder="ko"
@@ -835,7 +927,7 @@ export function CountryForm({
           </S.FormRow>
         </S.FormSection>
       )}
-      </S.Form>
+    </S.Form>
   )
 
   const continentSelectModal = (
@@ -861,9 +953,7 @@ export function CountryForm({
             {submitLabel}
           </SubmitButton>
         </FormHeader>
-        <FormSectionInner>
-          {formBody}
-        </FormSectionInner>
+        <FormSectionInner>{formBody}</FormSectionInner>
         {continentSelectModal}
       </CountryFormModalLayout>
     )
