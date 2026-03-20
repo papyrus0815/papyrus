@@ -1,61 +1,38 @@
+import * as adminDeptApi from '@api/functional/administration_departments'
+
 import { getApiConnection } from '../client'
 
-export type AdministrationDepartmentCategory = {
-  id: string
-  name: string
-  nameEn: string | null
-}
+// SDK 기반 타입 — 서버 DTO와 동일
+export type AdministrationDepartmentCategory = Awaited<
+  ReturnType<typeof adminDeptApi.categories.getCategories>
+>[number]
 
-/** API `MilitaryUnit` 요약 — 부처에 FK로 연결된 부대 */
-export type AdministrationDepartmentMilitaryUnit = {
-  id: string
-  name: string
-  unitType: string | null
-}
-
-export type AdministrationDepartment = {
-  id: string
-  name: string
-  thumbnailUrl?: string | null
-  countryId: string
-  parentId?: string | null
-  categoryId?: string | null
-  category?: AdministrationDepartmentCategory | null
-  description?: string | null
-  establishedDate?: string | null
-  abolishedDate?: string | null
-  successorId?: string | null
-  successor?: { id: string; name: string } | null
-  /** `MilitaryUnit.administrationDepartmentId` 역방향 */
-  militaryUnits?: AdministrationDepartmentMilitaryUnit[]
-  createdAt: string
-  updatedAt: string
-}
-
-export type CreateAdministrationDepartmentInput = {
-  name: string
-  countryId: string
-  parentId?: string | null
-  categoryId?: string | null
-  thumbnailUrl?: string | null
-  description?: string | null
-  establishedDate?: string | null
-  abolishedDate?: string | null
-  successorId?: string | null
-}
-
-export type UpdateAdministrationDepartmentInput = Partial<
-  Omit<CreateAdministrationDepartmentInput, 'countryId'>
+export type AdministrationDepartment = NonNullable<
+  Awaited<ReturnType<typeof adminDeptApi.getById>>
 >
 
-/** 부처별 역대 장관(재임) 한 건 */
+export type AdministrationDepartmentMilitaryUnit =
+  AdministrationDepartment['militaryUnits'][number]
+
+export type CreateAdministrationDepartmentInput = Parameters<
+  typeof adminDeptApi.create
+>[1]
+export type UpdateAdministrationDepartmentInput = Parameters<
+  typeof adminDeptApi.update
+>[2]
+
+/** Nestia에 아직 없는 `/administration-departments/:id/tenures` 응답용 (컨트롤러 `any[]`) */
 export type AdministrationDepartmentTenureItem = {
   id: string
   termNumber?: number | null
   startDate: string | null
   endDate: string | null
   title?: string | null
-  positionDefinition?: { id: string; title: string; positionType?: string } | null
+  positionDefinition?: {
+    id: string
+    title: string
+    positionType?: string
+  } | null
   person?: {
     id: string
     name: string
@@ -67,176 +44,113 @@ export type AdministrationDepartmentTenureItem = {
   historicalCountry?: { id: string; name: string } | null
 }
 
-/** 기관 계획·조율·변경 (사건처럼 시간순). 첨부는 Attachment(ownerType=ADMINISTRATION_DEPARTMENT_EVENT)로. */
+export type AdministrationDepartmentEvent = Awaited<
+  ReturnType<typeof adminDeptApi.events.getDepartmentEvents>
+>[number]
+
 export type AdministrationDepartmentEventType =
-  | 'PLAN'
-  | 'COORDINATION'
-  | 'POLICY'
-  | 'RESTRUCTURE'
-  | 'OTHER'
+  AdministrationDepartmentEvent['eventType']
 
-export type AdministrationDepartmentEvent = {
-  id: string
-  departmentId: string
-  title: string
-  description: string | null
-  startDate: string | null
-  endDate: string | null
-  eventType: AdministrationDepartmentEventType
-  background: string | null
-  aftermath: string | null
-  thumbnailUrl: string | null
-  createdAt: string
-  updatedAt: string
-}
+export type CreateAdministrationDepartmentEventInput = Parameters<
+  typeof adminDeptApi.events.createEvent
+>[1]
+export type UpdateAdministrationDepartmentEventInput = Parameters<
+  typeof adminDeptApi.events.updateEvent
+>[2]
 
-export type CreateAdministrationDepartmentEventInput = {
-  departmentId: string
-  title: string
-  description?: string | null
-  startDate?: string | null
-  endDate?: string | null
-  eventType?: AdministrationDepartmentEventType
-  background?: string | null
-  aftermath?: string | null
-  thumbnailUrl?: string | null
-}
-
-export type UpdateAdministrationDepartmentEventInput = Partial<
-  Omit<CreateAdministrationDepartmentEventInput, 'departmentId'>
->
-
-async function request<T>(
+async function fetchTenures(
   path: string,
-  options?: RequestInit & { method?: string; body?: unknown },
-): Promise<T> {
+): Promise<AdministrationDepartmentTenureItem[]> {
   const conn = getApiConnection()
   const url = `${conn.host}${path}`
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(conn.headers as Record<string, string>),
   }
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...headers, ...options?.headers },
-    method: options?.method ?? 'GET',
-    body:
-      options?.body != null
-        ? typeof options.body === 'string'
-          ? options.body
-          : JSON.stringify(options.body)
-        : undefined,
-  })
-  if (res.status === 204) return undefined as T
+  const res = await fetch(url, { method: 'GET', headers })
   if (!res.ok) {
     const text = await res.text()
     throw new Error(text || `HTTP ${res.status}`)
   }
-  if (res.headers.get('content-type')?.includes('application/json')) {
-    return res.json() as Promise<T>
-  }
-  return undefined as T
+  const list = (await res.json()) as AdministrationDepartmentTenureItem[]
+  return Array.isArray(list) ? list : []
 }
 
 export const administrationDepartmentApi = {
   getCategories: async (): Promise<AdministrationDepartmentCategory[]> => {
-    const list = await request<AdministrationDepartmentCategory[]>(
-      '/administration-departments/categories',
-    )
+    const list = await adminDeptApi.categories.getCategories(getApiConnection())
     return Array.isArray(list) ? list : []
   },
 
-  createCategory: async (data: { name: string; nameEn?: string | null }): Promise<AdministrationDepartmentCategory> => {
-    return request<AdministrationDepartmentCategory>('/administration-departments/categories', {
-      method: 'POST',
-      body: data,
-    })
+  createCategory: async (data: {
+    name: string
+    nameEn?: string | null
+  }): Promise<AdministrationDepartmentCategory> => {
+    return adminDeptApi.categories.createCategory(getApiConnection(), data)
   },
 
   updateCategory: async (
     id: string,
     data: { name?: string; nameEn?: string | null },
   ): Promise<AdministrationDepartmentCategory> => {
-    return request<AdministrationDepartmentCategory>(
-      `/administration-departments/categories/${encodeURIComponent(id)}`,
-      { method: 'PATCH', body: data },
-    )
+    return adminDeptApi.categories.updateCategory(getApiConnection(), id, data)
   },
 
   deleteCategory: async (id: string): Promise<void> => {
-    await request<void>(`/administration-departments/categories/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    })
+    await adminDeptApi.categories.deleteCategory(getApiConnection(), id)
   },
 
   getAll: async (): Promise<AdministrationDepartment[]> => {
-    const list = await request<AdministrationDepartment[]>(
-      '/administration-departments',
-    )
+    const list = await adminDeptApi.getAll(getApiConnection())
     return Array.isArray(list) ? list : []
   },
 
   getByCountryId: async (
     countryId: string,
   ): Promise<AdministrationDepartment[]> => {
-    const list = await request<AdministrationDepartment[]>(
-      `/administration-departments/country/${encodeURIComponent(countryId)}`,
+    const list = await adminDeptApi.country.getByCountryId(
+      getApiConnection(),
+      countryId,
     )
     return Array.isArray(list) ? list : []
   },
 
   getById: async (id: string): Promise<AdministrationDepartment | null> => {
-    const item = await request<AdministrationDepartment | null>(
-      `/administration-departments/${encodeURIComponent(id)}`,
-    )
-    return item ?? null
+    return adminDeptApi.getById(getApiConnection(), id)
   },
 
-  /** 부처에 연결된 직위의 역대 재임(역대 장관) 목록 */
+  /** 부처별 재임 — Nestia 미생성 엔드포인트 */
   getTenuresByDepartmentId: async (
     departmentId: string,
   ): Promise<AdministrationDepartmentTenureItem[]> => {
-    const list = await request<AdministrationDepartmentTenureItem[]>(
+    return fetchTenures(
       `/administration-departments/${encodeURIComponent(departmentId)}/tenures`,
     )
-    return Array.isArray(list) ? list : []
   },
 
   create: async (
     data: CreateAdministrationDepartmentInput,
   ): Promise<AdministrationDepartment> => {
-    return request<AdministrationDepartment>('/administration-departments', {
-      method: 'POST',
-      body: data,
-    })
+    return adminDeptApi.create(getApiConnection(), data)
   },
 
   update: async (
     id: string,
     data: UpdateAdministrationDepartmentInput,
   ): Promise<AdministrationDepartment> => {
-    return request<AdministrationDepartment>(
-      `/administration-departments/${encodeURIComponent(id)}`,
-      {
-        method: 'PATCH',
-        body: data,
-      },
-    )
+    return adminDeptApi.update(getApiConnection(), id, data)
   },
 
   delete: async (id: string): Promise<void> => {
-    await request<void>(
-      `/administration-departments/${encodeURIComponent(id)}`,
-      { method: 'DELETE' },
-    )
+    await adminDeptApi._delete(getApiConnection(), id)
   },
 
-  // 기관 계획·조율 이벤트 (사건처럼)
   getDepartmentEvents: async (
     departmentId: string,
   ): Promise<AdministrationDepartmentEvent[]> => {
-    const list = await request<AdministrationDepartmentEvent[]>(
-      `/administration-departments/${encodeURIComponent(departmentId)}/events`,
+    const list = await adminDeptApi.events.getDepartmentEvents(
+      getApiConnection(),
+      departmentId,
     )
     return Array.isArray(list) ? list : []
   },
@@ -244,26 +158,17 @@ export const administrationDepartmentApi = {
   createEvent: async (
     data: CreateAdministrationDepartmentEventInput,
   ): Promise<AdministrationDepartmentEvent> => {
-    return request<AdministrationDepartmentEvent>(
-      '/administration-departments/events',
-      { method: 'POST', body: data },
-    )
+    return adminDeptApi.events.createEvent(getApiConnection(), data)
   },
 
   updateEvent: async (
     eventId: string,
     data: UpdateAdministrationDepartmentEventInput,
   ): Promise<AdministrationDepartmentEvent> => {
-    return request<AdministrationDepartmentEvent>(
-      `/administration-departments/events/${encodeURIComponent(eventId)}`,
-      { method: 'PATCH', body: data },
-    )
+    return adminDeptApi.events.updateEvent(getApiConnection(), eventId, data)
   },
 
   deleteEvent: async (eventId: string): Promise<void> => {
-    await request<void>(
-      `/administration-departments/events/${encodeURIComponent(eventId)}`,
-      { method: 'DELETE' },
-    )
+    await adminDeptApi.events.deleteEvent(getApiConnection(), eventId)
   },
 }
