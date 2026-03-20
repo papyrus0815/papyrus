@@ -254,5 +254,7 @@ declare module 'styled-components' {
   export interface DefaultTheme {
     /** `TreatySectionWidget`에서 `ThemeProvider`로 병합 */
     ts?: TreatySectionPalette
+    /** `GovernmentInfoSection` 부처 카테고리 모달 — `ThemeProvider`로 병합 */
+    gov?: CabinetsSectionPalette
   }
 }

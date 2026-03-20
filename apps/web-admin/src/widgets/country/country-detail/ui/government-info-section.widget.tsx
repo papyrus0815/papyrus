@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 import { FiGrid, FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { ThemeProvider, useTheme } from 'styled-components'
 
 import {
   TabButton,
@@ -16,18 +16,6 @@ import type { GovernmentContentTab } from '@/features/government-info/model/gove
 import { GovernmentOrganizationsTab } from '@/features/government-info/ui/government-organizations-tab.widget'
 import { GovernmentStatisticsTab } from '@/features/government-info/ui/government-statistics-tab.widget'
 import { MinistriesTabSection } from '@/features/government-info/ui/ministries-tab-section.widget'
-import {
-  OrgEmptyState,
-  OrgListHeader,
-  OrgListHeaderCount,
-  OrgListHeaderDesc,
-  OrgListHeaderRow,
-  OrgListHeaderTitle,
-  OrgListHeaderTitleBlock,
-  OrgSearchInput,
-  OrgSearchWrap,
-  OrgToolbarRow,
-} from '@/features/government-info/ui/government-organizations-tab.styled'
 import type { AdministrationDepartmentCategory } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
@@ -59,20 +47,12 @@ export interface GovernmentInfoSectionProps {
   initialContentTab?: GovernmentContentTab
 }
 
-// 메인·액센트 컬러 (트렌디한 다색 팔레트)
-const MAIN = '#6366f1'
-const BORDER_COLOR = '#e5e7eb'
-
-/* 부처 카테고리 모달 — CountrySelectModal·HistoricalCountryFormModal 디자인 참조 */
-const BORDER_LIGHT = '#f3f4f6'
-const TEXT = '#0f172a'
-const TEXT_MUTED = '#64748b'
-const BG_MUTED = '#f8fafc'
-
+/* 부처 카테고리 모달 — `theme.gov`(CabinetsSectionPalette) + ThemeProvider */
 const CategoryModalOverlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0, 0, 0, 0.72)' : 'rgba(15, 23, 42, 0.4)'};
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
@@ -87,11 +67,12 @@ const CategoryModalBox = styled(motion.div)`
   max-height: 88vh;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: ${({ theme }) => theme.gov!.bg};
   border-radius: 16px;
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 24px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)'
+      : '0 20px 40px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06)'};
   z-index: ${Z_INDEX.MODAL_CONTENT};
   overflow: hidden;
 `
@@ -102,26 +83,26 @@ const CategoryModalHeader = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding: 24px 28px;
-  border-bottom: 1px solid ${BORDER_LIGHT};
+  border-bottom: 1px solid ${({ theme }) => theme.gov!.divider};
 `
 const CategoryModalTitle = styled.h3`
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: ${TEXT};
+  color: ${({ theme }) => theme.gov!.text};
   letter-spacing: -0.02em;
   display: flex;
   align-items: center;
   gap: 10px;
   svg {
-    color: ${TEXT_MUTED};
+    color: ${({ theme }) => theme.gov!.textMuted};
     flex-shrink: 0;
   }
 `
 const CategoryModalDesc = styled.p`
   margin: 8px 0 0 0;
   font-size: 14px;
-  color: ${TEXT_MUTED};
+  color: ${({ theme }) => theme.gov!.textMuted};
 `
 const CategoryModalCloseBtn = styled.button`
   display: flex;
@@ -132,16 +113,16 @@ const CategoryModalCloseBtn = styled.button`
   padding: 0;
   border: none;
   border-radius: 10px;
-  background: ${BG_MUTED};
-  color: ${TEXT_MUTED};
+  background: ${({ theme }) => theme.gov!.bgSubtle};
+  color: ${({ theme }) => theme.gov!.textMuted};
   cursor: pointer;
   flex-shrink: 0;
   transition:
     background 0.15s ease,
     color 0.15s ease;
   &:hover {
-    background: #e2e8f0;
-    color: ${TEXT};
+    background: ${({ theme }) => theme.gov!.cardBgHover};
+    color: ${({ theme }) => theme.gov!.text};
   }
   &:focus-visible {
     outline: none;
@@ -157,25 +138,25 @@ const CategoryModalBody = styled.div`
     width: 6px;
   }
   &::-webkit-scrollbar-track {
-    background: ${BORDER_LIGHT};
+    background: ${({ theme }) => theme.gov!.bgSubtle};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) => theme.gov!.borderMid};
     border-radius: 3px;
   }
 `
 const CategoryFormBlock = styled.div`
   margin-bottom: 24px;
   padding: 20px;
-  background: #f8fafc;
+  background: ${({ theme }) => theme.gov!.bgSubtle};
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.gov!.borderMid};
 `
 const CategorySectionTitle = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: ${TEXT_MUTED};
+  color: ${({ theme }) => theme.gov!.textMuted};
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 16px;
@@ -185,30 +166,30 @@ const CategoryFormLabel = styled.label`
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: ${TEXT};
+  color: ${({ theme }) => theme.gov!.text};
 `
 const CategoryInput = styled.input`
   width: 100%;
   padding: 14px 16px;
   margin-bottom: 16px;
   font-size: 15px;
-  color: ${TEXT};
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ theme }) => theme.gov!.text};
+  border: 1px solid ${({ theme }) => theme.gov!.inputBorder};
   border-radius: 12px;
-  background: #fff;
+  background: ${({ theme }) => theme.gov!.inputBg};
   outline: none;
   box-sizing: border-box;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.gov!.placeholderText};
   }
   &:last-of-type {
     margin-bottom: 20px;
   }
   &:focus {
-    border-color: ${MAIN};
+    border-color: ${({ theme }) => theme.gov!.accent};
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
   }
 `
@@ -222,7 +203,7 @@ const CategoryPrimaryBtn = styled.button`
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  background: ${MAIN};
+  background: ${({ theme }) => theme.gov!.accent};
   border: none;
   border-radius: 10px;
   cursor: pointer;
@@ -243,19 +224,19 @@ const CategorySecondaryBtn = styled.button`
   padding: 12px 20px;
   font-size: 14px;
   font-weight: 500;
-  color: ${TEXT_MUTED};
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ theme }) => theme.gov!.textMuted};
+  background: ${({ theme }) => theme.gov!.btnBg};
+  border: 1px solid ${({ theme }) => theme.gov!.borderMid};
   border-radius: 12px;
   cursor: pointer;
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.gov!.btnHover};
   }
 `
 const CategoryListSectionTitle = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: ${TEXT_MUTED};
+  color: ${({ theme }) => theme.gov!.textMuted};
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 12px;
@@ -275,14 +256,14 @@ const CategoryListItem = styled.li`
   padding: 14px 16px;
   gap: 12px;
   border-radius: 10px;
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  background: ${({ theme }) => theme.gov!.cardBg};
+  border: 1px solid ${({ theme }) => theme.gov!.borderMid};
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${({ theme }) => theme.gov!.cardBgHover};
+    border-color: ${({ theme }) => theme.gov!.borderEmphasis};
   }
 `
 const CategoryListItemLabel = styled.div`
@@ -290,9 +271,9 @@ const CategoryListItemLabel = styled.div`
   min-width: 0;
   font-size: 14px;
   font-weight: 600;
-  color: ${TEXT};
+  color: ${({ theme }) => theme.gov!.text};
   span {
-    color: ${TEXT_MUTED};
+    color: ${({ theme }) => theme.gov!.textMuted};
     margin-left: 6px;
     font-weight: 500;
     font-size: 13px;
@@ -307,54 +288,43 @@ const CategoryEditBtn = styled.button`
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: ${MAIN};
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ theme }) => theme.gov!.accent};
+  background: ${({ theme }) => theme.gov!.btnBg};
+  border: 1px solid ${({ theme }) => theme.gov!.borderMid};
   border-radius: 10px;
   cursor: pointer;
   &:hover {
-    background: #f8fafc;
-    border-color: rgba(99, 102, 241, 0.3);
+    background: ${({ theme }) => theme.gov!.btnHover};
+    border-color: ${({ theme }) => theme.gov!.accentBorder};
   }
 `
 const CategoryDeleteBtn = styled.button`
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: #dc2626;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  color: ${({ theme }) => theme.gov!.danger};
+  background: ${({ theme }) => theme.gov!.dangerBg};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(225,29,72,0.35)' : '#fecaca'};
   border-radius: 10px;
   cursor: pointer;
   &:hover {
-    background: #fee2e2;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(225,29,72,0.22)' : '#fee2e2'};
   }
 `
 const CategoryEmptyMessage = styled.li`
   padding: 32px 24px;
   font-size: 14px;
-  color: ${TEXT_MUTED};
-  background: #f8fafc;
+  color: ${({ theme }) => theme.gov!.textMuted};
+  background: ${({ theme }) => theme.gov!.bgSubtle};
   border-radius: 12px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed ${({ theme }) => theme.gov!.borderMid};
   text-align: center;
   line-height: 1.55;
   list-style: none;
 `
-
-const sectionLabelStyle: React.CSSProperties = {
-  marginBottom: 18,
-  fontSize: 12,
-  fontWeight: 600,
-  color: '#64748b',
-  lineHeight: 1.4,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div style={sectionLabelStyle}>{children}</div>
-}
 
 const GOV_TAB_META: Record<
   GovernmentContentTab,
@@ -403,6 +373,11 @@ export function GovernmentInfoSection({
   const cabinetsPalette = useMemo(
     () => getCabinetsSectionPalette(isDark),
     [isDark],
+  )
+  const parentTheme = useTheme()
+  const categoryModalTheme = useMemo(
+    () => ({ ...parentTheme, gov: cabinetsPalette }),
+    [parentTheme, cabinetsPalette],
   )
   const [cabinetMinistryIntent, setCabinetMinistryIntent] = useState<{
     categoryId: string
@@ -739,8 +714,9 @@ export function GovernmentInfoSection({
       )}
 
 
-      {/* 부처 카테고리 모달 */}
+      {/* 부처 카테고리 모달 — theme.gov = CabinetsSectionPalette */}
       {categoryModalOpen && (
+        <ThemeProvider theme={categoryModalTheme}>
         <CategoryModalOverlay
           role="dialog"
           aria-modal="true"
@@ -868,6 +844,7 @@ export function GovernmentInfoSection({
             </CategoryModalBody>
           </CategoryModalBox>
         </CategoryModalOverlay>
+        </ThemeProvider>
       )}
     </motion.div>
 
