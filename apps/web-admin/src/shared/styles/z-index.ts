@@ -40,6 +40,8 @@ export const Z_INDEX = {
 
   // Modal Content & Critical UI (10000+)
   MODAL_CONTENT: 10000,
+  /** 리치텍스트 에디터 컨텍스트 메뉴·중첩 오버레이 (모달 overflow/auto 위·바깥에도 보이게) */
+  RICH_TEXT_EDITOR_OVERLAY: 10100,
   TOAST: 10001,
   NOTIFICATION: 10002,
   LOADING_OVERLAY: 10003,

@@ -21,7 +21,7 @@ import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import {
   hasDefenseExtensionContent,
   parseDepartmentDescription,
-} from './ministry-department-utils'
+} from '@/shared/lib/ministry-department/ministry-department-utils'
 import * as S from './ministry-department-detail.styles'
 
 type MinistryDepartmentDetailViewProps = {
@@ -194,24 +194,31 @@ export function MinistryDepartmentDetailView({
           ) : null}
         </S.DeptProfileMeta>
         <S.DeptProfileActions>
-          <S.DeptActionBtnPrimary type="button" onClick={onAddChild}>
-            <FiPlus size={14} />
-            하위 기관 추가
-          </S.DeptActionBtnPrimary>
-          {isDefenseRelated && onRegisterMilitaryUnit ? (
-            <S.DeptActionBtnTeal type="button" onClick={onRegisterMilitaryUnit}>
-              <FiShield size={13} />
-              군부대 등록
-            </S.DeptActionBtnTeal>
-          ) : null}
-          <S.DeptActionBtn type="button" onClick={onEdit}>
-            <FiEdit2 size={14} />
-            수정
-          </S.DeptActionBtn>
-          <S.DeptActionLink type="button" onClick={onGoToPositions}>
-            <FiLayers size={15} />
-            직위 정의
-          </S.DeptActionLink>
+          <S.DeptProfileActionsRow>
+            <S.DeptActionBtnPrimary type="button" onClick={onAddChild}>
+              <FiPlus size={14} />
+              하위 기관 추가
+            </S.DeptActionBtnPrimary>
+            {isDefenseRelated && onRegisterMilitaryUnit ? (
+              <S.DeptActionBtnTeal
+                type="button"
+                onClick={onRegisterMilitaryUnit}
+              >
+                <FiShield size={13} />
+                군부대 등록
+              </S.DeptActionBtnTeal>
+            ) : null}
+          </S.DeptProfileActionsRow>
+          <S.DeptProfileActionsRow>
+            <S.DeptActionBtn type="button" onClick={onEdit}>
+              <FiEdit2 size={14} />
+              정보 수정
+            </S.DeptActionBtn>
+            <S.DeptActionBtn type="button" onClick={onGoToPositions}>
+              <FiLayers size={14} />
+              직위 정의
+            </S.DeptActionBtn>
+          </S.DeptProfileActionsRow>
         </S.DeptProfileActions>
       </S.DeptProfileBlock>
 

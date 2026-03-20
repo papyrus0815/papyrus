@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { getMapRegionSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { GoogleMap } from '@/shared/ui/google-map/google-map'
 import { SectionTabHeader } from '@/shared/ui/section-page-layout'
@@ -65,44 +66,7 @@ export function MapRegionSection({
 }: MapRegionSectionProps) {
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
-
-  // ─── 인라인 스타일용 색상 팔레트 ────────────────────────────────────────────
-  const C = {
-    bg: isDark ? '#141414' : '#ffffff',
-    bgSecondary: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
-    bgHover: isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
-    bgSelected: isDark ? 'rgba(99,106,242,0.12)' : '#eef2ff',
-    bgSelectedHover: isDark ? 'rgba(99,106,242,0.16)' : '#f8fafc',
-    border: isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb',
-    borderMedium: isDark ? 'rgba(255,255,255,0.15)' : '#d1d5db',
-    borderSelected: isDark ? 'rgba(99,106,242,0.4)' : '#6366f1',
-    text: isDark ? '#f4f4f5' : '#0f172a',
-    textSecondary: isDark ? '#a1a1aa' : '#64748b',
-    textMuted: isDark ? '#71717a' : '#94a3b8',
-    primary: '#6366f1',
-    primaryLight: isDark ? '#818cf8' : '#4f46e5',
-    badgeBg: isDark ? 'rgba(99,106,242,0.15)' : '#eef2ff',
-    badgeBorder: isDark ? 'rgba(99,106,242,0.3)' : '#c7d2fe',
-    badgeText: isDark ? '#818cf8' : '#4f46e5',
-    blueBadgeBg: isDark ? 'rgba(59,130,246,0.15)' : '#eff6ff',
-    blueBadgeBorder: isDark ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
-    blueBadgeText: isDark ? '#93c5fd' : '#1e40af',
-    divider: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
-    shadow: (a: string) =>
-      isDark ? `0 2px 8px rgba(0,0,0,${a})` : `0 2px 8px rgba(0,0,0,${a})`,
-    shadowSelected: isDark
-      ? '0 2px 8px rgba(99,102,241,0.2)'
-      : '0 2px 8px rgba(99,102,241,0.12)',
-    shadowHover: isDark
-      ? '0 4px 14px rgba(0,0,0,0.5)'
-      : '0 8px 20px rgba(0,0,0,0.06)',
-    shadowNone: isDark
-      ? '0 1px 3px rgba(0,0,0,0.25)'
-      : '0 1px 2px rgba(0,0,0,0.04)',
-    gradientBg: isDark
-      ? 'rgba(255,255,255,0.03)'
-      : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-  } as const
+  const C = getMapRegionSectionPalette(isDark)
 
   // 네비게이션 상태 관리
   const [navigation, setNavigation] = useState<NavigationState>({

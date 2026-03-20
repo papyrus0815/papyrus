@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -12,7 +12,14 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
-import styled, { keyframes } from 'styled-components'
+import styled, {
+  keyframes,
+  ThemeProvider,
+  useTheme,
+} from 'styled-components'
+
+import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
+import { useThemeStore } from '@/shared/styles/theme.store'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
@@ -29,29 +36,6 @@ import {
 } from '@/shared/api/treaty'
 import { uploadImage } from '@/shared/api/upload'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
-
-// ──────────────────────────────────────────────
-// 색상 / 상수
-// ──────────────────────────────────────────────
-
-const C = {
-  bg: '#f8fafc',
-  card: '#ffffff',
-  border: '#e2e8f0',
-  borderMid: '#cbd5e1',
-  text: '#1e293b',
-  textSub: '#475569',
-  textMuted: '#94a3b8',
-  main: '#6366f1',
-  mainLight: '#eef2ff',
-  mainHover: '#4f46e5',
-  danger: '#ef4444',
-  dangerLight: '#fef2f2',
-  success: '#10b981',
-  successLight: '#ecfdf5',
-  gold: '#f59e0b',
-  inputBg: '#f8fafc',
-}
 
 const fadeIn = keyframes`from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; }`
 
@@ -75,7 +59,7 @@ const Header = styled.div`
 const Title = styled.h2`
   font-size: 16px;
   font-weight: 700;
-  color: ${C.text};
+  color: ${({ theme }) => theme.ts!.text};
   margin: 0;
 `
 
@@ -84,7 +68,7 @@ const AddBtn = styled.button`
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: ${C.main};
+  background: ${({ theme }) => theme.ts!.main};
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -93,14 +77,14 @@ const AddBtn = styled.button`
   cursor: pointer;
   transition: background 0.15s;
   &:hover {
-    background: ${C.mainHover};
+    background: ${({ theme }) => theme.ts!.mainHover};
   }
 `
 
 const Empty = styled.div`
   text-align: center;
   padding: 60px 24px;
-  color: ${C.textMuted};
+  color: ${({ theme }) => theme.ts!.textMuted};
   font-size: 14px;
 `
 
@@ -111,8 +95,8 @@ const Grid = styled.div`
 `
 
 const Card = styled.div`
-  background: ${C.card};
-  border: 1px solid ${C.border};
+  background: ${({ theme }) => theme.ts!.card};
+  border: 1px solid ${({ theme }) => theme.ts!.border};
   border-radius: 14px;
   overflow: hidden;
   cursor: pointer;
@@ -120,7 +104,7 @@ const Card = styled.div`
     box-shadow 0.15s,
     transform 0.15s;
   &:hover {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    box-shadow: ${({ theme }) => theme.ts!.cardHoverShadow};
     transform: translateY(-2px);
   }
 `
@@ -155,7 +139,7 @@ const CardBody = styled.div`
 const CardName = styled.h3`
   font-size: 14px;
   font-weight: 700;
-  color: ${C.text};
+  color: ${({ theme }) => theme.ts!.text};
   margin: 0 0 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -164,7 +148,7 @@ const CardName = styled.h3`
 
 const CardAlias = styled.p`
   font-size: 12px;
-  color: ${C.textMuted};
+  color: ${({ theme }) => theme.ts!.textMuted};
   margin: 0 0 8px;
   white-space: nowrap;
   overflow: hidden;
@@ -180,9 +164,9 @@ const CardMeta = styled.div`
 
 const MetaChip = styled.span`
   font-size: 11px;
-  color: ${C.textSub};
-  background: ${C.bg};
-  border: 1px solid ${C.border};
+  color: ${({ theme }) => theme.ts!.textSub};
+  background: ${({ theme }) => theme.ts!.bg};
+  border: 1px solid ${({ theme }) => theme.ts!.border};
   border-radius: 6px;
   padding: 2px 7px;
 `
@@ -197,13 +181,13 @@ const SignatoryChip = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-  background: ${C.mainLight};
-  border: 1px solid #c7d2fe;
+  background: ${({ theme }) => theme.ts!.mainLight};
+  border: 1px solid ${({ theme }) => theme.ts!.signatoryChipBorder};
   border-radius: 20px;
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 500;
-  color: ${C.main};
+  color: ${({ theme }) => theme.ts!.main};
 `
 
 // ─── 상세 뷰 ───
@@ -218,19 +202,19 @@ const BackBtn = styled.button`
   gap: 5px;
   background: none;
   border: none;
-  color: ${C.textSub};
+  color: ${({ theme }) => theme.ts!.textSub};
   font-size: 13px;
   cursor: pointer;
   padding: 0;
   margin-bottom: 16px;
   &:hover {
-    color: ${C.main};
+    color: ${({ theme }) => theme.ts!.main};
   }
 `
 
 const DetailCard = styled.div`
-  background: ${C.card};
-  border: 1px solid ${C.border};
+  background: ${({ theme }) => theme.ts!.card};
+  border: 1px solid ${({ theme }) => theme.ts!.border};
   border-radius: 16px;
   overflow: hidden;
 `
@@ -278,7 +262,7 @@ const Section = styled.div`
 const SectionTitle = styled.h3`
   font-size: 13px;
   font-weight: 700;
-  color: ${C.textMuted};
+  color: ${({ theme }) => theme.ts!.textMuted};
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 12px;
@@ -294,27 +278,27 @@ const InfoGrid = styled.div`
 `
 
 const InfoItem = styled.div`
-  background: ${C.bg};
-  border: 1px solid ${C.border};
+  background: ${({ theme }) => theme.ts!.bg};
+  border: 1px solid ${({ theme }) => theme.ts!.border};
   border-radius: 10px;
   padding: 10px 12px;
 `
 
 const InfoLabel = styled.div`
   font-size: 11px;
-  color: ${C.textMuted};
+  color: ${({ theme }) => theme.ts!.textMuted};
   margin-bottom: 3px;
 `
 const InfoValue = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: ${C.text};
+  color: ${({ theme }) => theme.ts!.text};
 `
 
 const TextBlock = styled.p`
   font-size: 13px;
   line-height: 1.7;
-  color: ${C.textSub};
+  color: ${({ theme }) => theme.ts!.textSub};
   margin: 0;
   white-space: pre-wrap;
 `
@@ -326,8 +310,8 @@ const SignatoryRow = styled.div`
 `
 
 const SignatoryCard = styled.div`
-  background: ${C.bg};
-  border: 1px solid ${C.border};
+  background: ${({ theme }) => theme.ts!.bg};
+  border: 1px solid ${({ theme }) => theme.ts!.border};
   border-radius: 12px;
   padding: 12px 14px;
   min-width: 180px;
@@ -338,18 +322,18 @@ const SignatoryCard = styled.div`
 const SignatoryCountry = styled.div`
   font-size: 13px;
   font-weight: 700;
-  color: ${C.text};
+  color: ${({ theme }) => theme.ts!.text};
   margin-bottom: 4px;
 `
 
 const SignatoryPerson = styled.div`
   font-size: 12px;
-  color: ${C.textSub};
+  color: ${({ theme }) => theme.ts!.textSub};
   margin-bottom: 2px;
 `
 const SignatoryRole = styled.div`
   font-size: 11px;
-  color: ${C.textMuted};
+  color: ${({ theme }) => theme.ts!.textMuted};
 `
 const SignatoryBadge = styled.span<{ $type: TreatyParticipationType }>`
   display: inline-block;
@@ -358,22 +342,20 @@ const SignatoryBadge = styled.span<{ $type: TreatyParticipationType }>`
   padding: 1px 6px;
   border-radius: 4px;
   margin-top: 4px;
-  background: ${({ $type }) =>
-    $type === 'SIGNATORY'
-      ? C.mainLight
-      : $type === 'GUARANTOR'
-        ? '#fef3c7'
-        : $type === 'MEDIATOR'
-          ? '#dcfce7'
-          : '#f1f5f9'};
-  color: ${({ $type }) =>
-    $type === 'SIGNATORY'
-      ? C.main
-      : $type === 'GUARANTOR'
-        ? '#92400e'
-        : $type === 'MEDIATOR'
-          ? '#065f46'
-          : C.textSub};
+  background: ${({ theme, $type }) => {
+    const p = theme.ts!
+    if ($type === 'SIGNATORY') return p.mainLight
+    if ($type === 'GUARANTOR') return p.badgeGuarantorBg
+    if ($type === 'MEDIATOR') return p.badgeMediatorBg
+    return p.badgeObserverBg
+  }};
+  color: ${({ theme, $type }) => {
+    const p = theme.ts!
+    if ($type === 'SIGNATORY') return p.main
+    if ($type === 'GUARANTOR') return p.badgeGuarantorText
+    if ($type === 'MEDIATOR') return p.badgeMediatorText
+    return p.badgeObserverText
+  }};
 `
 
 const TermList = styled.div`
@@ -383,9 +365,14 @@ const TermList = styled.div`
 `
 
 const TermItem = styled.div<{ $secret?: boolean }>`
-  background: ${({ $secret }) => ($secret ? '#fef2f2' : C.bg)};
-  border: 1px solid ${({ $secret }) => ($secret ? '#fecaca' : C.border)};
-  border-left: 3px solid ${({ $secret }) => ($secret ? C.danger : C.main)};
+  background: ${({ theme, $secret }) =>
+    $secret ? theme.ts!.termSecretBg : theme.ts!.bg};
+  border: 1px solid
+    ${({ theme, $secret }) =>
+      $secret ? theme.ts!.termSecretBorder : theme.ts!.border};
+  border-left: 3px solid
+    ${({ theme, $secret }) =>
+      $secret ? theme.ts!.danger : theme.ts!.main};
   border-radius: 0 10px 10px 0;
   padding: 10px 14px;
 `
@@ -393,17 +380,17 @@ const TermItem = styled.div<{ $secret?: boolean }>`
 const TermTitle = styled.div`
   font-size: 12px;
   font-weight: 700;
-  color: ${C.text};
+  color: ${({ theme }) => theme.ts!.text};
   margin-bottom: 4px;
 `
 const TermContent = styled.div`
   font-size: 13px;
-  color: ${C.textSub};
+  color: ${({ theme }) => theme.ts!.textSub};
   line-height: 1.6;
 `
 const SecretBadge = styled.span`
   font-size: 10px;
-  color: ${C.danger};
+  color: ${({ theme }) => theme.ts!.danger};
   font-weight: 600;
   margin-left: 6px;
 `
@@ -418,7 +405,7 @@ const ImgThumb = styled.div<{ $url: string }>`
   aspect-ratio: 4/3;
   background: url(${({ $url }) => $url}) center/cover no-repeat;
   border-radius: 10px;
-  border: 1px solid ${C.border};
+  border: 1px solid ${({ theme }) => theme.ts!.border};
   position: relative;
   cursor: pointer;
   &:hover > div {
@@ -456,28 +443,43 @@ const ActionBtn = styled.button<{ $variant?: 'danger' | 'ghost' }>`
   cursor: pointer;
   transition: all 0.15s;
   border: 1px solid
-    ${({ $variant }) =>
-      $variant === 'danger'
-        ? C.danger
+    ${({ theme, $variant }) => {
+      const p = theme.ts!
+      return $variant === 'danger'
+        ? p.danger
         : $variant === 'ghost'
-          ? C.border
-          : C.main};
-  background: ${({ $variant }) =>
-    $variant === 'danger'
-      ? C.dangerLight
+          ? p.border
+          : p.main
+    }};
+  background: ${({ theme, $variant }) => {
+    const p = theme.ts!
+    return $variant === 'danger'
+      ? p.dangerLight
       : $variant === 'ghost'
-        ? C.card
-        : C.mainLight};
-  color: ${({ $variant }) =>
-    $variant === 'danger'
-      ? C.danger
+        ? p.card
+        : p.mainLight
+  }};
+  color: ${({ theme, $variant }) => {
+    const p = theme.ts!
+    return $variant === 'danger'
+      ? p.danger
       : $variant === 'ghost'
-        ? C.textSub
-        : C.main};
+        ? p.textSub
+        : p.main
+  }};
   &:hover {
-    background: ${({ $variant }) =>
-      $variant === 'danger' ? C.danger : $variant === 'ghost' ? C.bg : C.main};
-    color: ${({ $variant }) => ($variant === 'ghost' ? C.text : '#fff')};
+    background: ${({ theme, $variant }) => {
+      const p = theme.ts!
+      return $variant === 'danger'
+        ? p.danger
+        : $variant === 'ghost'
+          ? p.bg
+          : p.main
+    }};
+    color: ${({ theme, $variant }) => {
+      const p = theme.ts!
+      return $variant === 'ghost' ? p.text : '#fff'
+    }};
   }
 `
 
@@ -495,13 +497,13 @@ const Overlay = styled.div`
 `
 
 const Modal = styled.div`
-  background: ${C.card};
+  background: ${({ theme }) => theme.ts!.card};
   border-radius: 18px;
   width: 100%;
   max-width: 640px;
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  box-shadow: ${({ theme }) => theme.ts!.modalShadow};
 `
 
 const ModalHeader = styled.div`
@@ -511,14 +513,14 @@ const ModalHeader = styled.div`
   padding: 18px 20px 0;
   position: sticky;
   top: 0;
-  background: ${C.card};
+  background: ${({ theme }) => theme.ts!.card};
   z-index: 1;
 `
 
 const ModalTitle = styled.h3`
   font-size: 15px;
   font-weight: 700;
-  color: ${C.text};
+  color: ${({ theme }) => theme.ts!.text};
   margin: 0;
 `
 
@@ -526,10 +528,10 @@ const CloseBtn = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: ${C.textMuted};
+  color: ${({ theme }) => theme.ts!.textMuted};
   padding: 4px;
   &:hover {
-    color: ${C.text};
+    color: ${({ theme }) => theme.ts!.text};
   }
 `
 
@@ -548,56 +550,56 @@ const FieldLabel = styled.label`
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: ${C.textSub};
+  color: ${({ theme }) => theme.ts!.textSub};
   margin-bottom: 5px;
 `
 
 const Input = styled.input`
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid ${C.borderMid};
+  border: 1px solid ${({ theme }) => theme.ts!.borderMid};
   border-radius: 9px;
   font-size: 13px;
-  color: ${C.text};
-  background: ${C.inputBg};
+  color: ${({ theme }) => theme.ts!.text};
+  background: ${({ theme }) => theme.ts!.inputBg};
   box-sizing: border-box;
   &:focus {
     outline: none;
-    border-color: ${C.main};
-    box-shadow: 0 0 0 3px ${C.mainLight};
+    border-color: ${({ theme }) => theme.ts!.main};
+    box-shadow: 0 0 0 3px ${({ theme }) => theme.ts!.mainLight};
   }
 `
 
 const Textarea = styled.textarea`
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid ${C.borderMid};
+  border: 1px solid ${({ theme }) => theme.ts!.borderMid};
   border-radius: 9px;
   font-size: 13px;
-  color: ${C.text};
-  background: ${C.inputBg};
+  color: ${({ theme }) => theme.ts!.text};
+  background: ${({ theme }) => theme.ts!.inputBg};
   resize: vertical;
   min-height: 80px;
   box-sizing: border-box;
   &:focus {
     outline: none;
-    border-color: ${C.main};
-    box-shadow: 0 0 0 3px ${C.mainLight};
+    border-color: ${({ theme }) => theme.ts!.main};
+    box-shadow: 0 0 0 3px ${({ theme }) => theme.ts!.mainLight};
   }
 `
 
 const Select = styled.select`
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid ${C.borderMid};
+  border: 1px solid ${({ theme }) => theme.ts!.borderMid};
   border-radius: 9px;
   font-size: 13px;
-  color: ${C.text};
-  background: ${C.inputBg};
+  color: ${({ theme }) => theme.ts!.text};
+  background: ${({ theme }) => theme.ts!.inputBg};
   box-sizing: border-box;
   &:focus {
     outline: none;
-    border-color: ${C.main};
+    border-color: ${({ theme }) => theme.ts!.main};
   }
 `
 
@@ -611,9 +613,9 @@ const ModalFooter = styled.div`
 const CancelBtn = styled.button`
   padding: 9px 18px;
   border-radius: 9px;
-  border: 1px solid ${C.border};
-  background: ${C.card};
-  color: ${C.textSub};
+  border: 1px solid ${({ theme }) => theme.ts!.border};
+  background: ${({ theme }) => theme.ts!.card};
+  color: ${({ theme }) => theme.ts!.textSub};
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -623,7 +625,7 @@ const SubmitBtn = styled.button`
   padding: 9px 18px;
   border-radius: 9px;
   border: none;
-  background: ${C.main};
+  background: ${({ theme }) => theme.ts!.main};
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -633,7 +635,7 @@ const SubmitBtn = styled.button`
     cursor: not-allowed;
   }
   &:hover:not(:disabled) {
-    background: ${C.mainHover};
+    background: ${({ theme }) => theme.ts!.mainHover};
   }
 `
 
@@ -644,7 +646,7 @@ const Row2 = styled.div`
 `
 
 const Required = styled.span`
-  color: ${C.danger};
+  color: ${({ theme }) => theme.ts!.danger};
 `
 
 // ──────────────────────────────────────────────
@@ -712,19 +714,24 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
     if (detailId) qc.invalidateQueries({ queryKey: ['treaty', detailId] })
   }, [qc, countryId, historicalCountryId, detailId])
 
-  if (detailId) {
-    return (
+  const parentTheme = useTheme()
+  const { mode } = useThemeStore()
+  const treatyPalette = getTreatySectionPalette(mode === 'dark')
+  const treatyTheme = useMemo(
+    () => ({ ...parentTheme, ts: treatyPalette }),
+    [parentTheme, treatyPalette],
+  )
+
+  const inner =
+    detailId ? (
       <TreatyDetail
         treatyId={detailId}
         country={country}
         onBack={() => setDetailId(null)}
         onInvalidate={invalidate}
       />
-    )
-  }
-
-  return (
-    <Wrap>
+    ) : (
+      <Wrap>
       <Header>
         <Title>조약 · 협정 ({treaties.length})</Title>
         <AddBtn onClick={() => setCreateOpen(true)}>
@@ -760,7 +767,7 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
                   <CardMeta>
                     <MetaChip>서명 {fmtDate(t.signDate)}</MetaChip>
                     {t.violationDate && (
-                      <MetaChip style={{ color: C.danger }}>
+                      <MetaChip style={{ color: treatyPalette.danger }}>
                         파기 {fmtDate(t.violationDate)}
                       </MetaChip>
                     )}
@@ -798,7 +805,9 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
         />
       )}
     </Wrap>
-  )
+    )
+
+  return <ThemeProvider theme={treatyTheme}>{inner}</ThemeProvider>
 }
 
 // ──────────────────────────────────────────────
@@ -996,6 +1005,7 @@ const TreatyDetail: React.FC<{
   onInvalidate: () => void
 }> = ({ treatyId, country, onBack, onInvalidate }) => {
   const qc = useQueryClient()
+  const ts = useTheme().ts!
 
   const { data: treaty, isLoading } = useQuery({
     queryKey: ['treaty', treatyId],
@@ -1141,7 +1151,7 @@ const TreatyDetail: React.FC<{
                 {treaty.violationDate && (
                   <InfoItem>
                     <InfoLabel>파기일</InfoLabel>
-                    <InfoValue style={{ color: C.danger }}>
+                    <InfoValue style={{ color: ts.danger }}>
                       {fmtDate(treaty.violationDate)}
                     </InfoValue>
                   </InfoItem>
@@ -1158,10 +1168,10 @@ const TreatyDetail: React.FC<{
                   style={{
                     marginTop: 10,
                     padding: '10px 14px',
-                    background: C.dangerLight,
+                    background: ts.dangerLight,
                     borderRadius: 10,
                     fontSize: 13,
-                    color: C.danger,
+                    color: ts.danger,
                   }}
                 >
                   파기 사유: {treaty.violationReason}
@@ -1247,7 +1257,7 @@ const TreatyDetail: React.FC<{
                           background: 'none',
                           border: 'none',
                           cursor: 'pointer',
-                          color: C.textMuted,
+                          color: ts.textMuted,
                           padding: 0,
                         }}
                         title="삭제"
@@ -1294,7 +1304,7 @@ const TreatyDetail: React.FC<{
                           background: 'none',
                           border: 'none',
                           cursor: 'pointer',
-                          color: C.textMuted,
+                          color: ts.textMuted,
                           padding: 0,
                         }}
                       >
@@ -1331,7 +1341,7 @@ const TreatyDetail: React.FC<{
                             position: 'absolute',
                             top: 5,
                             left: 5,
-                            background: C.gold,
+                            background: ts.gold,
                             color: '#fff',
                             fontSize: 10,
                             fontWeight: 700,
@@ -1370,9 +1380,9 @@ const TreatyDetail: React.FC<{
                     gap: 5,
                     padding: '7px 14px',
                     borderRadius: 8,
-                    border: `1px solid ${C.border}`,
-                    background: C.card,
-                    color: C.textSub,
+                    border: `1px solid ${ts.border}`,
+                    background: ts.card,
+                    color: ts.textSub,
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: uploadingImage ? 'not-allowed' : 'pointer',
@@ -1589,6 +1599,7 @@ const AddTermModal: React.FC<{
   onClose: () => void
   onAdded: () => void
 }> = ({ treatyId, nextOrder, onClose, onAdded }) => {
+  const ts = useTheme().ts!
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [isSecret, setIsSecret] = useState(false)
@@ -1655,7 +1666,7 @@ const AddTermModal: React.FC<{
                   gap: 8,
                   cursor: 'pointer',
                   fontSize: 13,
-                  color: C.text,
+                  color: ts.text,
                 }}
               >
                 <input

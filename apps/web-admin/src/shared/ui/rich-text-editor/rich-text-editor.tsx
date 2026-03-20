@@ -4,6 +4,7 @@
  * 프로젝트 디자인 시스템에 맞춘 커스텀 스타일
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import {
   FiBold,
@@ -789,7 +790,7 @@ const ContextMenu = styled.div<{
     0 4px 20px rgba(0, 0, 0, 0.08),
     0 1px 3px rgba(0, 0, 0, 0.04);
   padding: 8px;
-  z-index: 1000;
+  z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY};
   display: ${({ $visible }) => ($visible ? 'block' : 'none')};
   min-width: 180px;
 `
@@ -2338,6 +2339,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // 마우스 우클릭 핸들러 (선택 없어도 메뉴 표시 → "문구 선택 후 사용" 안내)
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
+    // 우클릭 직전 mousedown 등으로 selection이 풀리는 브라우저 대비: 이번 시점 기준으로 다시 캡처
+    const sel = window.getSelection()
+    if (
+      sel &&
+      sel.rangeCount > 0 &&
+      editorRef.current?.contains(sel.anchorNode)
+    ) {
+      const range = sel.getRangeAt(0)
+      const text = range.toString().trim()
+      if (text.length > 0) {
+        setSelectedText(text)
+        setSelectedTextRange(range.cloneRange())
+      }
+    }
     setContextMenuPosition({ top: e.clientY, left: e.clientX })
     setContextMenuVisible(true)
   }, [])
@@ -2828,72 +2843,80 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             </>
           )
         })()}
-      {/* 컨텍스트 메뉴 */}
-      <ContextMenu
-        $visible={contextMenuVisible}
-        $top={contextMenuPosition.top}
-        $left={contextMenuPosition.left}
-      >
-        {selectedText.length === 0 ? (
-          <div
-            style={{
-              padding: '10px 14px',
-              fontSize: 12,
-              color: '#64748b',
-              borderBottom: '1px solid #e2e8f0',
-              whiteSpace: 'nowrap',
-            }}
+      {/* 컨텍스트 메뉴 — 모달(overflow:auto) 밖으로 포털해 잘림·가림 방지 */}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <ContextMenu
+            $visible={contextMenuVisible}
+            $top={contextMenuPosition.top}
+            $left={contextMenuPosition.left}
           >
-            설명·용어를 달 문구를 드래그로 선택한 뒤 메뉴를 선택하세요
-          </div>
-        ) : null}
-        <ContextMenuItem
-          onClick={() => {
-            if (selectedText.length === 0) return
-            playClickSound()
-            handleOpenEntityLinkModal()
-          }}
-          disabled={selectedText.length === 0}
-          title={
-            selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined
-          }
-        >
-          <FiLink />
-          엔티티 연결
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={() => {
-            if (selectedText.length === 0) return
-            playClickSound()
-            handleOpenTermLinkModal()
-          }}
-          disabled={selectedText.length === 0}
-          title={
-            selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined
-          }
-        >
-          <FiType />
-          용어 연결
-        </ContextMenuItem>
-        {documentScope ? (
-          <ContextMenuItem
-            onClick={() => {
-              if (selectedText.length === 0) return
-              playClickSound()
-              handleOpenExplanationModal()
-            }}
-            disabled={selectedText.length === 0}
-            title={
-              selectedText.length === 0
-                ? '먼저 문구를 선택하세요'
-                : '선택한 문구에 이 문서 전용 설명을 붙입니다'
-            }
-          >
-            <FiMessageSquare />
-            설명 넣기
-          </ContextMenuItem>
-        ) : null}
-      </ContextMenu>
+            {selectedText.length === 0 ? (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  fontSize: 12,
+                  color: '#64748b',
+                  borderBottom: '1px solid #e2e8f0',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                설명·용어를 달 문구를 드래그로 선택한 뒤 메뉴를 선택하세요
+              </div>
+            ) : null}
+            <ContextMenuItem
+              onClick={() => {
+                if (selectedText.length === 0) return
+                playClickSound()
+                handleOpenEntityLinkModal()
+              }}
+              disabled={selectedText.length === 0}
+              title={
+                selectedText.length === 0
+                  ? '먼저 문구를 선택하세요'
+                  : undefined
+              }
+            >
+              <FiLink />
+              엔티티 연결
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => {
+                if (selectedText.length === 0) return
+                playClickSound()
+                handleOpenTermLinkModal()
+              }}
+              disabled={selectedText.length === 0}
+              title={
+                selectedText.length === 0
+                  ? '먼저 문구를 선택하세요'
+                  : undefined
+              }
+            >
+              <FiType />
+              용어 연결
+            </ContextMenuItem>
+            {documentScope ? (
+              <ContextMenuItem
+                onClick={() => {
+                  if (selectedText.length === 0) return
+                  playClickSound()
+                  handleOpenExplanationModal()
+                }}
+                disabled={selectedText.length === 0}
+                title={
+                  selectedText.length === 0
+                    ? '먼저 문구를 선택하세요'
+                    : '선택한 문구에 이 문서 전용 설명을 붙입니다'
+                }
+              >
+                <FiMessageSquare />
+                설명 넣기
+              </ContextMenuItem>
+            ) : null}
+          </ContextMenu>,
+          document.body,
+        )}
 
       {/* 이미지 설명 입력 모달 */}
       <ImageCaptionModalOverlay

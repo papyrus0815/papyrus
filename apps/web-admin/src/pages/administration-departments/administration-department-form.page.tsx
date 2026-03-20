@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FiAlertCircle,
@@ -24,6 +25,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { invalidateAdministrationDepartmentQueries } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -79,6 +81,7 @@ interface HistoryEvent {
 }
 
 export const AdministrationDepartmentFormPage: React.FC = () => {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const playClickSound = useClickSound()
@@ -450,6 +453,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
           description: formData.description.trim() || null,
         })
       }
+      await invalidateAdministrationDepartmentQueries(queryClient)
       navigate('/administration-departments')
     } catch (err) {
       alert(err instanceof Error ? err.message : '저장에 실패했습니다')

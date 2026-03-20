@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiAlertCircle,
@@ -29,6 +30,11 @@ import {
   militaryUnitIconVariant,
   militaryUnitTypeLabelKo,
 } from '@/shared/lib/military-unit-type-label'
+import {
+  administrationDepartmentsAllQueryKey,
+  administrationDepartmentsByCountryQueryKey,
+  invalidateAdministrationDepartmentQueries,
+} from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import type { AdministrationDepartment } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -46,6 +52,7 @@ type DepartmentWithCountryName = AdministrationDepartment & {
 }
 
 export const AdministrationDepartmentsListPage: React.FC = () => {
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const playClickSound = useClickSound()
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,9 +71,22 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
   const [historicalCountries, setHistoricalCountries] = useState<
     HistoricalCountryResponseDto[]
   >([])
-  const [departments, setDepartments] = useState<AdministrationDepartment[]>([])
-  const [departmentsLoading, setDepartmentsLoading] = useState(false)
-  const [departmentsError, setDepartmentsError] = useState<string | null>(null)
+  const departmentsQuery = useQuery({
+    queryKey: filterCountry
+      ? administrationDepartmentsByCountryQueryKey(filterCountry)
+      : administrationDepartmentsAllQueryKey(),
+    queryFn: () =>
+      filterCountry
+        ? administrationDepartmentApi.getByCountryId(filterCountry)
+        : administrationDepartmentApi.getAll(),
+  })
+  const departments = departmentsQuery.data ?? []
+  const departmentsLoading = departmentsQuery.isPending
+  const departmentsError = departmentsQuery.error
+    ? departmentsQuery.error instanceof Error
+      ? departmentsQuery.error.message
+      : '목록을 불러오지 못했습니다'
+    : null
 
   // 국가 목록 로드
   useEffect(() => {
@@ -85,27 +105,6 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
       // ignore
     }
   }
-
-  // 행정부처 목록 로드 (전체 또는 국가별)
-  const loadDepartments = async () => {
-    setDepartmentsLoading(true)
-    setDepartmentsError(null)
-    try {
-      const list = filterCountry
-        ? await administrationDepartmentApi.getByCountryId(filterCountry)
-        : await administrationDepartmentApi.getAll()
-      setDepartments(list)
-    } catch (e) {
-      setDepartmentsError(e instanceof Error ? e.message : '목록을 불러오지 못했습니다')
-      setDepartments([])
-    } finally {
-      setDepartmentsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadDepartments()
-  }, [filterCountry])
 
   // 부처 목록 + 국가명 매핑 (표시용)
   const departmentsWithCountryName: DepartmentWithCountryName[] = React.useMemo(() => {
@@ -157,7 +156,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     try {
       await administrationDepartmentApi.delete(id)
       if (selectedDepartment === id) setSelectedDepartment(null)
-      await loadDepartments()
+      await invalidateAdministrationDepartmentQueries(queryClient)
     } catch (e) {
       alert(e instanceof Error ? e.message : '삭제에 실패했습니다')
     }

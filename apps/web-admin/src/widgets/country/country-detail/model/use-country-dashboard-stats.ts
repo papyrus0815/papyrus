@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { cityApi } from '@/shared/api/city'
 import { getAllEvents } from '@/shared/api/events'
 import { militaryUnitApi } from '@/shared/api/military-unit'
@@ -51,7 +52,7 @@ export function useCountryDashboardStats(country: UnifiedCountry | null): Countr
           enabled: Boolean(countryId && isModern),
         },
         {
-          queryKey: ['administration-departments-by-country', countryId],
+          queryKey: administrationDepartmentsByCountryQueryKey(countryId),
           queryFn: () => administrationDepartmentApi.getByCountryId(countryId),
           enabled: Boolean(countryId && isModern),
         },

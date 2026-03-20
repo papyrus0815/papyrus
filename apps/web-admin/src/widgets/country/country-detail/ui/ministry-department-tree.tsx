@@ -13,12 +13,13 @@ import {
 
 import { getUploadImageUrl } from '@/shared/api/upload'
 import type { AdministrationDepartment } from '@/shared/api/administration-department'
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
 import {
   buildForest,
   childrenOf,
   hasParentCycleInList,
-} from './ministry-department-utils'
+} from '@/shared/lib/ministry-department/ministry-department-utils'
 
 export type MinistryDepartmentTreeProps = {
   allDepartments: AdministrationDepartment[]
@@ -93,7 +94,8 @@ export function MinistryDepartmentTree({
     )
   }, [departmentsInCategory])
 
-  const rowBorder = isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9'
+  const C = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+  const rowBorder = C.divider
 
   return (
     <div
@@ -187,7 +189,7 @@ export function MinistryDepartmentTree({
           marginTop: 10,
           paddingTop: 14,
           flexShrink: 0,
-          borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : '#eef2f6'}`,
+          borderTop: `1px solid ${C.divider}`,
         }}
       >
         <button
@@ -201,9 +203,9 @@ export function MinistryDepartmentTree({
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
-            border: `1px dashed ${isDark ? 'rgba(99,102,241,0.45)' : '#c7d2fe'}`,
+            border: `1px dashed ${C.accentSecondaryBorder}`,
             borderRadius: 8,
-            background: isDark ? 'rgba(99,102,241,0.08)' : '#f5f3ff',
+            background: C.accentBg,
             color: isDark ? '#a5b4fc' : '#4338ca',
             alignSelf: 'flex-start',
           }}
@@ -225,7 +227,7 @@ export function MinistryDepartmentTree({
               border: 'none',
               borderRadius: 8,
               background: 'transparent',
-              color: isDark ? '#94a3b8' : '#64748b',
+              color: C.textMuted,
               textDecoration: 'underline',
               alignSelf: 'flex-start',
             }}
@@ -256,22 +258,17 @@ function FlatDeptRow({
   onSelectDepartment: (d: AdministrationDepartment) => void
   selectedDepartmentId?: string | null
 }) {
+  const C = getCabinetsSectionPalette(isDark)
   const [hover, setHover] = useState(false)
   const pName = parentLabel(dept.parentId)
   const cross = crossCategoryParentHint(dept)
   const selected = selectedDepartmentId === dept.id
-  const cardBorder = isDark ? 'rgba(255,255,255,0.1)' : '#e8ecf0'
+  const cardBorder = C.borderHairline
   const bg = selected
-    ? isDark
-      ? 'rgba(99,102,241,0.1)'
-      : 'rgba(99,102,241,0.06)'
+    ? C.cardBgSelected
     : hover
-      ? isDark
-        ? 'rgba(255,255,255,0.04)'
-        : '#f8fafc'
-      : isDark
-        ? 'rgba(255,255,255,0.02)'
-        : '#ffffff'
+      ? C.cardBgHover
+      : C.cardBg
 
   return (
     <button
@@ -286,7 +283,7 @@ function FlatDeptRow({
         gap: 14,
         padding: '14px 16px',
         marginBottom: 8,
-        border: `1px solid ${selected ? (isDark ? 'rgba(99,102,241,0.35)' : '#c7d2fe') : cardBorder}`,
+        border: `1px solid ${selected ? C.accentSecondaryBorder : cardBorder}`,
         borderRadius: 12,
         background: bg,
         cursor: 'pointer',
@@ -309,7 +306,7 @@ function FlatDeptRow({
             objectFit: 'cover',
             borderRadius: 10,
             flexShrink: 0,
-            border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e8ecf0'}`,
+            border: `1px solid ${C.border}`,
           }}
         />
       ) : (
@@ -318,9 +315,9 @@ function FlatDeptRow({
             width: 42,
             height: 42,
             borderRadius: 10,
-            background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+            background: C.avatarBg,
             flexShrink: 0,
-            border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e8ecf0'}`,
+            border: `1px solid ${C.border}`,
           }}
         />
       )}
@@ -329,7 +326,7 @@ function FlatDeptRow({
           style={{
             fontSize: 15,
             fontWeight: 600,
-            color: isDark ? '#f1f5f9' : '#0f172a',
+            color: C.text,
             letterSpacing: '-0.02em',
             lineHeight: 1.35,
           }}
@@ -340,7 +337,7 @@ function FlatDeptRow({
           <div
             style={{
               fontSize: 11,
-              color: isDark ? '#94a3b8' : '#64748b',
+              color: C.textMuted,
               marginTop: 4,
             }}
           >
@@ -350,7 +347,7 @@ function FlatDeptRow({
                 marginLeft: 4,
                 padding: '2px 6px',
                 borderRadius: 6,
-                background: isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9',
+                background: C.btnHover,
                 fontWeight: 600,
               }}
             >
@@ -361,7 +358,7 @@ function FlatDeptRow({
           <div
             style={{
               fontSize: 11,
-              color: isDark ? '#94a3b8' : '#64748b',
+              color: C.textMuted,
               marginTop: 4,
             }}
           >
@@ -373,7 +370,7 @@ function FlatDeptRow({
         size={18}
         style={{
           flexShrink: 0,
-          color: isDark ? '#64748b' : '#94a3b8',
+          color: C.iconColor,
           opacity: 0.55,
         }}
         aria-hidden
@@ -403,6 +400,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
     d: AdministrationDepartment,
   ) => { parentName: string; categoryLabel: string } | null
 }) {
+  const C = getCabinetsSectionPalette(isDark)
   const children = useMemo(
     () => childrenOf(dept.id, departmentsInCategory),
     [dept.id, departmentsInCategory],
@@ -416,20 +414,14 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
     (d) => d.id === dept.parentId,
   )
   const selected = selectedDepartmentId === dept.id
-  const cardEdge = isDark ? 'rgba(255,255,255,0.1)' : '#e8ecf0'
-  const cardEdgeActive = isDark ? 'rgba(99,102,241,0.38)' : '#c7d2fe'
+  const cardEdge = C.borderHairline
+  const cardEdgeActive = C.accentSecondaryBorder
   const indent = depth * 18
   const rowBg = selected
-    ? isDark
-      ? 'rgba(99,102,241,0.1)'
-      : 'rgba(99,102,241,0.06)'
+    ? C.cardBgSelected
     : rowHover
-      ? isDark
-        ? 'rgba(255,255,255,0.04)'
-        : '#f8fafc'
-      : isDark
-        ? 'rgba(255,255,255,0.02)'
-        : '#ffffff'
+      ? C.cardBgHover
+      : C.cardBg
 
   return (
     <div style={{ minWidth: 0 }}>
@@ -478,12 +470,12 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 flexShrink: 0,
                 border: 'none',
                 borderRadius: 8,
-                background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                background: C.avatarBg,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: isDark ? '#94a3b8' : '#64748b',
+                color: C.textMuted,
               }}
             >
               {expanded ? (
@@ -522,7 +514,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 objectFit: 'cover',
                 borderRadius: 10,
                 flexShrink: 0,
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e8ecf0'}`,
+                border: `1px solid ${C.border}`,
               }}
             />
           ) : (
@@ -531,9 +523,9 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 width: 40,
                 height: 40,
                 borderRadius: 10,
-                background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                background: C.avatarBg,
                 flexShrink: 0,
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e8ecf0'}`,
+                border: `1px solid ${C.border}`,
               }}
             />
           )}
@@ -542,7 +534,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
               style={{
                 fontSize: 15,
                 fontWeight: 600,
-                color: isDark ? '#f1f5f9' : '#0f172a',
+                color: C.text,
                 letterSpacing: '-0.02em',
                 lineHeight: 1.35,
               }}
@@ -553,7 +545,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
               <div
                 style={{
                   fontSize: 11,
-                  color: isDark ? '#94a3b8' : '#64748b',
+                  color: C.textMuted,
                   marginTop: 2,
                 }}
               >
@@ -563,7 +555,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                     marginLeft: 4,
                     padding: '2px 6px',
                     borderRadius: 6,
-                    background: isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9',
+                    background: C.btnHover,
                     fontWeight: 600,
                   }}
                 >
@@ -576,7 +568,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
               <div
                 style={{
                   fontSize: 11,
-                  color: isDark ? '#94a3b8' : '#64748b',
+                  color: C.textMuted,
                   marginTop: 2,
                 }}
               >
@@ -588,7 +580,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
             size={18}
             style={{
               flexShrink: 0,
-              color: isDark ? '#64748b' : '#94a3b8',
+              color: C.iconColor,
               opacity: 0.5,
             }}
             aria-hidden

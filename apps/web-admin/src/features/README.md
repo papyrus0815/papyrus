@@ -49,6 +49,12 @@ features/
   - `model/` - 4개의 상태 관리 hooks
   - `lib/` - 타입 변환, 유효성 검증, 데이터 생성 로직
 
+### government-info
+
+- **상태**: 🔄 진행 중 (모델·상수 분리 1단계)
+- **설명**: 국가 상세 행정조직 탭 타입·공통 토큰; 위젯은 점진적 분리 예정
+- **문서**: [government-info/README.md](./government-info/README.md)
+
 ## 사용 방법
 
 ```typescript

@@ -224,21 +224,27 @@ export const DeptTenureDates = styled.span`
   font-weight: 500;
 `
 
-/** 프로필 히어로 하단 — 구분선·균일한 버튼 높이 */
+/** 프로필 히어로 하단 — 1행: 확장 2행: 편집·탐색 */
 export const DeptProfileActions = styled.div`
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
   margin-top: 16px;
   padding-top: 18px;
   border-top: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e8ecf0'};
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
+`
+
+export const DeptProfileActionsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
 `
 
 const actionHeight = '36px'
@@ -318,27 +324,6 @@ export const DeptActionBtnTeal = styled.button`
   }
 `
 
-export const DeptActionLink = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: ${actionHeight};
-  padding: 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #6366f1;
-  background: transparent;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  white-space: nowrap;
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-  }
-`
 
 /* HeadTenureInfoSection 동일 */
 export const DeptInfoSection = styled.div`

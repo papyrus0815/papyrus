@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax -- 짧은 루프·콜백 변수(o, d, c 등) 유지(레거시 호환) */
 /**
  * 중앙부처 계층(parentId) 공통 유틸
  */

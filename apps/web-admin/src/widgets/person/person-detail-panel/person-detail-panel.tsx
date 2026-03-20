@@ -24,6 +24,7 @@ import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { proseHrStyles } from '@/shared/styles/prose-hr'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 
@@ -1286,17 +1287,7 @@ const BioProse = styled.div`
   padding: 0 16px;
   hr,
   .prose-hr {
-    border: none !important;
-    border-top: 1px solid
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.08)'
-          : '#e5e7eb'} !important;
-    margin: 20px 0 !important;
-    height: 0 !important;
-    padding: 0 !important;
-    background: none !important;
-    display: block !important;
+    ${proseHrStyles}
   }
 `
 
