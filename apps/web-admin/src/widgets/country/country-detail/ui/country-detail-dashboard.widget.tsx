@@ -5,23 +5,26 @@
  * - 핵심 지표, 국가 정보, 그래프
  */
 import React, { useState } from 'react'
+
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
+
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { useCountryDashboardStats } from '../model/use-country-dashboard-stats'
-import * as S from './country-detail.styles'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
-import { formatRelativeTime } from '../../country-dashboard/relative-time'
-import {
-  PillTabButton,
-  PillTabNav,
-} from '@/shared/ui/tab/tab.styles'
+import { PillTabButton, PillTabNav } from '@/shared/ui/tab/tab.styles'
+import { SectionTabHeader } from '@/shared/ui/section-page-layout'
 
-const BORDER = '#e2e8f0'
-const MUTED = '#64748b'
-const TITLE = '#0f172a'
-const MAIN = '#6366f1'
+import { formatRelativeTime } from '../../country-dashboard/relative-time'
+import { useCountryDashboardStats } from '../model/use-country-dashboard-stats'
+import * as S from './country-detail.styles'
+
+const MAIN = '#636af2'
+
+const darkBlur = css`
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+`
 
 /* 레이아웃: 일관된 간격 (24px 패딩, 20px 그리드 갭, 32px 섹션 갭) */
 const DASHBOARD_PADDING = 24
@@ -29,14 +32,13 @@ const SECTION_GAP = 32
 const GRID_GAP = 20
 const CARD_PADDING = 24
 
-/* /country 대시보드와 동일한 패딩·간격 */
+// 배경색 지정하지말것. 부모 컨테이너에서 배경색 지정함.
 const DashboardRoot = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 0;
   padding: 32px 40px 48px;
   gap: 32px;
-  background: #ffffff;
 
   @media (max-width: 1024px) {
     padding: 24px 28px 36px;
@@ -80,7 +82,7 @@ const SectionTitleText = styled.h2`
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
 
@@ -98,29 +100,52 @@ const StatsGrid = styled.div`
 `
 
 const StatCard = styled.div`
-  background: #ffffff;
-  border: 1px solid #e8ecf1;
   border-radius: 12px;
   padding: ${CARD_PADDING}px;
   display: flex;
   align-items: flex-start;
   gap: 16px;
   text-align: left;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 
-  &:hover {
-    border-color: #e2e8f0;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          ${darkBlur}
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+          &:hover {
+            border-color: rgba(99, 106, 242, 0.35);
+            box-shadow:
+              0 6px 18px rgba(0, 0, 0, 0.5),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          &:hover {
+            border-color: #e2e8f0;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+          }
+        `}
 `
 
 const StatIcon = styled.div`
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  color: ${MAIN};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 106, 242, 0.15)'
+      : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)'};
+  color: ${({ theme }) => theme.colors.primary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -134,7 +159,7 @@ const StatContent = styled.div`
 const StatLabel = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: ${MUTED};
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 8px;
@@ -143,7 +168,7 @@ const StatLabel = styled.div`
 const StatValue = styled.div`
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.03em;
   line-height: 1.2;
 `
@@ -164,23 +189,41 @@ const InfoGrid = styled.div`
 `
 
 const InfoCard = styled.div`
-  background: #ffffff;
-  border: 1px solid #e8ecf1;
   border-radius: 12px;
   padding: 18px ${CARD_PADDING}px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
-  &:hover {
-    border-color: #e2e8f0;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          ${darkBlur}
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+          &:hover {
+            border-color: rgba(99, 106, 242, 0.35);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          &:hover {
+            border-color: #e2e8f0;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+          }
+        `}
 `
 
 const InfoLabel = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: ${MUTED};
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 6px;
@@ -190,7 +233,7 @@ const InfoLabel = styled.div`
 const InfoValue = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: ${TITLE};
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.35;
   letter-spacing: -0.01em;
 `
@@ -207,37 +250,65 @@ const ChartsRow = styled.div`
 const ChartBlock = styled.div`
   padding: 20px 22px;
   border-radius: 12px;
-  border: 1px solid #e8ecf1;
-  background: #ffffff;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          ${darkBlur}
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+        `}
 `
 
 const ChartBlockTitle = styled.h3`
   margin: 0 0 14px 0;
   font-size: 14px;
   font-weight: 700;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const ChartEmpty = styled.div`
   padding: 40px 28px;
   text-align: center;
   font-size: 14px;
-  color: #94a3b8;
-  background: #ffffff;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   border-radius: 12px;
-  border: 1px dashed #e8ecf1;
   line-height: 1.5;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px dashed rgba(255, 255, 255, 0.1);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px dashed #e8ecf1;
+        `}
 `
 
 const EmptyHint = styled.p`
   margin: 0;
   padding: 16px 20px;
   font-size: 14px;
-  color: #94a3b8;
-  background: #ffffff;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   border-radius: 12px;
-  border: 1px solid #e8ecf1;
   line-height: 1.5;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+        `}
 `
 
 /* 등록 현황 + 하위 역사적 국가 나란히 */
@@ -252,17 +323,27 @@ const FeedAndHistoricalRow = styled.div`
 
 /* 등록 현황 패널 — /country 대시보드 FeedPanel과 동일 */
 const FeedPanel = styled.div`
-  background: #ffffff;
-  border: 1px solid #e8ecf1;
   border-radius: 12px;
   padding: 20px 22px;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          ${darkBlur}
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+        `}
 `
 
 const FeedPanelTitle = styled.h3`
   margin: 0 0 16px 0;
   font-size: 14px;
   font-weight: 700;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.03em;
 `
 
@@ -279,11 +360,13 @@ const FeedList = styled.ul`
     width: 6px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f1f5f9'};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.15)' : '#cbd5e1'};
     border-radius: 3px;
   }
 `
@@ -294,17 +377,32 @@ const FeedRow = styled.div`
   align-items: center;
   gap: 16px;
   padding: 14px 16px;
-  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e8ecf1;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  &:hover {
-    border-color: #e2e8f0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  }
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          &:hover {
+            background: rgba(99, 106, 242, 0.08);
+            border-color: rgba(99, 106, 242, 0.25);
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+          &:hover {
+            border-color: #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          }
+        `}
 `
 
 const FeedRowLeft = styled.div`
@@ -323,7 +421,10 @@ const FeedAvatar = styled.div`
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  background: linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(159, 122, 234, 0.2)'
+      : 'linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%)'};
   overflow: hidden;
   img {
     width: 100%;
@@ -337,7 +438,7 @@ const FeedLabel = styled.span`
   min-width: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -346,7 +447,7 @@ const FeedLabel = styled.span`
 const FeedTime = styled.span`
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 `
@@ -356,16 +457,26 @@ const FeedEmpty = styled.p`
   padding: 24px 0;
   text-align: center;
   font-size: 14px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;
 `
 
 /* 하위 역사적 국가 리스트 — FeedPanel과 동일 스타일 */
 const HistoricalListPanel = styled.div`
-  background: #ffffff;
-  border: 1px solid #e8ecf1;
   border-radius: 12px;
   padding: 20px 22px;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          ${darkBlur}
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+        `}
 `
 
 const HistoricalList = styled.ul`
@@ -381,11 +492,13 @@ const HistoricalList = styled.ul`
     width: 6px;
   }
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f1f5f9'};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.15)' : '#cbd5e1'};
     border-radius: 3px;
   }
 `
@@ -395,17 +508,32 @@ const HistoricalListItem = styled.div`
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  background: #ffffff;
   border-radius: 12px;
-  border: 1px solid #e8ecf1;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  &:hover {
-    border-color: #e2e8f0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  }
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          &:hover {
+            background: rgba(99, 106, 242, 0.08);
+            border-color: rgba(99, 106, 242, 0.25);
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e8ecf1;
+          &:hover {
+            border-color: #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          }
+        `}
 `
 
 const HistoricalListThumb = styled.div`
@@ -418,7 +546,8 @@ const HistoricalListThumb = styled.div`
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  background: #f1f5f9;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
   img {
     width: 100%;
     height: 100%;
@@ -429,7 +558,7 @@ const HistoricalListThumb = styled.div`
 const HistoricalListName = styled.span`
   font-size: 14px;
   font-weight: 500;
-  color: ${TITLE};
+  color: ${({ theme }) => theme.colors.text.primary};
   flex: 1;
   min-width: 0;
   text-align: left;
@@ -438,7 +567,7 @@ const HistoricalListName = styled.span`
 const HistoricalListDate = styled.span`
   margin-left: auto;
   font-size: 12px;
-  color: ${MUTED};
+  color: ${({ theme }) => theme.colors.text.secondary};
   flex-shrink: 0;
 `
 
@@ -493,7 +622,10 @@ const HeroFlagWrap = styled.div`
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  background: linear-gradient(135deg, #e0f2fe 0%, #e8ecf1 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'linear-gradient(135deg, #e0f2fe 0%, #e8ecf1 100%)'};
   img {
     width: 100%;
     height: 100%;
@@ -519,19 +651,46 @@ function formatArea(value: number | null | undefined): string {
 }
 
 const IconPeople = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
     <circle cx="9" cy="7" r="4" />
     <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 )
 const IconMilitary = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
   </svg>
 )
 const IconEvent = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
     <line x1="16" y1="2" x2="16" y2="6" />
     <line x1="8" y1="2" x2="8" y2="6" />
@@ -539,38 +698,94 @@ const IconEvent = () => (
   </svg>
 )
 const IconHistory = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="10" />
     <path d="M12 6v6l4 2" />
   </svg>
 )
 const IconChart = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" />
   </svg>
 )
 const IconGlobe = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="10" />
     <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
   </svg>
 )
 const IconBuilding = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01M9 18v.01" />
   </svg>
 )
 const IconCity = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
   </svg>
 )
+
+const StatUnit = styled.span`
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
 
 const DATA_LABELS = [
   { key: 'person' as const, label: '인물', icon: IconPeople },
   { key: 'military' as const, label: '군대', icon: IconMilitary },
   { key: 'event' as const, label: '주요 사건', icon: IconEvent },
-  { key: 'historical' as const, label: '연결된 역사적 국가', icon: IconHistory },
+  {
+    key: 'historical' as const,
+    label: '연결된 역사적 국가',
+    icon: IconHistory,
+  },
 ]
 
 export interface CountryDetailDashboardProps {
@@ -579,13 +794,18 @@ export interface CountryDetailDashboardProps {
 
 type DashboardTab = 'summary' | 'stats'
 
-export function CountryDetailDashboard({ country }: CountryDetailDashboardProps) {
+export function CountryDetailDashboard({
+  country,
+}: CountryDetailDashboardProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>('summary')
   const stats = useCountryDashboardStats(country)
   const isModern = country.type === 'modern'
 
   const totalRegistered =
-    stats.personCount + stats.militaryCount + stats.eventCount + stats.historicalCountryCount
+    stats.personCount +
+    stats.militaryCount +
+    stats.eventCount +
+    stats.historicalCountryCount
   const getCount = (key: (typeof DATA_LABELS)[number]['key']) => {
     switch (key) {
       case 'person':
@@ -605,7 +825,8 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
     stats.historicalCountryCount,
     1,
   )
-  const percentForBar = (count: number) => (totalRegistered > 0 ? (count / totalRegistered) * 100 : 0)
+  const percentForBar = (count: number) =>
+    totalRegistered > 0 ? (count / totalRegistered) * 100 : 0
   const relativeBarPercent = (count: number) => (count / maxCount) * 100
 
   const popNum =
@@ -616,33 +837,42 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
       : null
   const areaNum = country.areaSqKm != null ? Number(country.areaSqKm) : null
   const density =
-    popNum != null && areaNum != null && areaNum > 0 && Number.isFinite(popNum) && Number.isFinite(areaNum)
+    popNum != null &&
+    areaNum != null &&
+    areaNum > 0 &&
+    Number.isFinite(popNum) &&
+    Number.isFinite(areaNum)
       ? (popNum / areaNum).toFixed(1)
       : null
 
-  const displayName = country.fullName && country.fullName.trim() ? `${country.name} (${country.fullName})` : country.name
+  const displayName =
+    country.fullName && country.fullName.trim()
+      ? `${country.name} (${country.fullName})`
+      : country.name
 
   const navigate = useNavigate()
 
   return (
     <DashboardRoot>
       {/* 헤더: 국기 썸네일 + 제목 */}
-      <S.GlobalDashboardHero>
-        <S.HeroContent>
+      <SectionTabHeader
+        title="대시보드"
+        description={displayName}
+        leftSlot={
           <HeroFlag
             thumbnailUrl={country.thumbnailUrl}
             flagEmoji={country.flagEmoji}
             type={country.type}
           />
-          <S.HeroTextGroup>
-            <S.HeroTitle>대시보드</S.HeroTitle>
-            <S.HeroSubtitle>{displayName}</S.HeroSubtitle>
-          </S.HeroTextGroup>
-        </S.HeroContent>
-      </S.GlobalDashboardHero>
+        }
+      />
 
       {/* 탭 메뉴 */}
-      <PillTabNav role="tablist" aria-label="대시보드 보기 전환" style={{ marginBottom: 4 }}>
+      <PillTabNav
+        role="tablist"
+        aria-label="대시보드 보기 전환"
+        style={{ marginBottom: 4 }}
+      >
         <PillTabButton
           type="button"
           role="tab"
@@ -669,7 +899,9 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
           {isModern && (
             <Section>
               <SectionTitleRow>
-                <SectionTitleIcon><IconGlobe /></SectionTitleIcon>
+                <SectionTitleIcon>
+                  <IconGlobe />
+                </SectionTitleIcon>
                 <SectionTitleText>국가 정보</SectionTitleText>
               </SectionTitleRow>
               <InfoGrid>
@@ -683,19 +915,28 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
                 </InfoCard>
                 <InfoCard>
                   <InfoLabel>수도</InfoLabel>
-                  <InfoValue>{(country.capital && String(country.capital).trim()) || '—'}</InfoValue>
+                  <InfoValue>
+                    {(country.capital && String(country.capital).trim()) || '—'}
+                  </InfoValue>
                 </InfoCard>
                 <InfoCard>
                   <InfoLabel>인구 밀도</InfoLabel>
-                  <InfoValue>{density != null ? `${density} 명/km²` : '—'}</InfoValue>
+                  <InfoValue>
+                    {density != null ? `${density} 명/km²` : '—'}
+                  </InfoValue>
                 </InfoCard>
                 <InfoCard>
                   <InfoLabel>ISO 코드</InfoLabel>
-                  <InfoValue>{(country.isoCode && String(country.isoCode).trim()) || '—'}</InfoValue>
+                  <InfoValue>
+                    {(country.isoCode && String(country.isoCode).trim()) || '—'}
+                  </InfoValue>
                 </InfoCard>
                 <InfoCard>
                   <InfoLabel>현지어 명칭</InfoLabel>
-                  <InfoValue>{(country.localName && String(country.localName).trim()) || '—'}</InfoValue>
+                  <InfoValue>
+                    {(country.localName && String(country.localName).trim()) ||
+                      '—'}
+                  </InfoValue>
                 </InfoCard>
               </InfoGrid>
             </Section>
@@ -704,74 +945,89 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
           {/* 핵심 지표 — 요약 탭에서만 */}
           <Section>
             <SectionTitleRow>
-              <SectionTitleIcon><IconChart /></SectionTitleIcon>
+              <SectionTitleIcon>
+                <IconChart />
+              </SectionTitleIcon>
               <SectionTitleText>핵심 지표</SectionTitleText>
             </SectionTitleRow>
             <StatsGrid>
               <StatCard>
-                <StatIcon><IconPeople /></StatIcon>
+                <StatIcon>
+                  <IconPeople />
+                </StatIcon>
                 <StatContent>
                   <StatLabel>인물</StatLabel>
                   <StatValue>
                     {stats.isLoading ? '—' : stats.personCount}
-                    <span style={{ marginLeft: 4, fontSize: 13, fontWeight: 500, color: MUTED }}>명</span>
+                    <StatUnit>명</StatUnit>
                   </StatValue>
                 </StatContent>
               </StatCard>
               <StatCard>
-                <StatIcon><IconMilitary /></StatIcon>
+                <StatIcon>
+                  <IconMilitary />
+                </StatIcon>
                 <StatContent>
                   <StatLabel>군대</StatLabel>
                   <StatValue>
                     {stats.isLoading ? '—' : stats.militaryCount}
-                    <span style={{ marginLeft: 4, fontSize: 13, fontWeight: 500, color: MUTED }}>개</span>
+                    <StatUnit>개</StatUnit>
                   </StatValue>
                 </StatContent>
               </StatCard>
               <StatCard>
-                <StatIcon><IconEvent /></StatIcon>
+                <StatIcon>
+                  <IconEvent />
+                </StatIcon>
                 <StatContent>
                   <StatLabel>주요 사건</StatLabel>
                   <StatValue>
                     {stats.isLoading ? '—' : stats.eventCount}
-                    <span style={{ marginLeft: 4, fontSize: 13, fontWeight: 500, color: MUTED }}>건</span>
+                    <StatUnit>건</StatUnit>
                   </StatValue>
                 </StatContent>
               </StatCard>
               <StatCard>
-                <StatIcon><IconHistory /></StatIcon>
+                <StatIcon>
+                  <IconHistory />
+                </StatIcon>
                 <StatContent>
                   <StatLabel>연결된 역사적 국가</StatLabel>
                   <StatValue>
                     {stats.historicalCountryCount}
-                    <span style={{ marginLeft: 4, fontSize: 13, fontWeight: 500, color: MUTED }}>개</span>
+                    <StatUnit>개</StatUnit>
                   </StatValue>
                 </StatContent>
               </StatCard>
               <StatCard>
-                <StatIcon><IconBuilding /></StatIcon>
+                <StatIcon>
+                  <IconBuilding />
+                </StatIcon>
                 <StatContent>
                   <StatLabel>행정조직</StatLabel>
                   <StatValue>
                     {stats.isLoading ? '—' : stats.administrationCount}
-                    <span style={{ marginLeft: 4, fontSize: 13, fontWeight: 500, color: MUTED }}>개</span>
+                    <StatUnit>개</StatUnit>
                   </StatValue>
                 </StatContent>
               </StatCard>
               <StatCard>
-                <StatIcon><IconCity /></StatIcon>
+                <StatIcon>
+                  <IconCity />
+                </StatIcon>
                 <StatContent>
                   <StatLabel>지역(도시)</StatLabel>
                   <StatValue>
                     {stats.isLoading ? '—' : stats.cityCount}
-                    <span style={{ marginLeft: 4, fontSize: 13, fontWeight: 500, color: MUTED }}>개</span>
+                    <StatUnit>개</StatUnit>
                   </StatValue>
                 </StatContent>
               </StatCard>
             </StatsGrid>
             {totalRegistered === 0 && !stats.isLoading && (
               <EmptyHint>
-                등록된 인물·군대·사건·연결된 역사적 국가가 없습니다. 각 탭에서 데이터를 등록하면 여기에 집계됩니다.
+                등록된 인물·군대·사건·연결된 역사적 국가가 없습니다. 각 탭에서
+                데이터를 등록하면 여기에 집계됩니다.
               </EmptyHint>
             )}
           </Section>
@@ -779,7 +1035,9 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
           {/* 등록 현황 (최근 등록 인물) + 하위 역사적 국가 리스트 */}
           <Section>
             <SectionTitleRow>
-              <SectionTitleIcon><IconPeople /></SectionTitleIcon>
+              <SectionTitleIcon>
+                <IconPeople />
+              </SectionTitleIcon>
               <SectionTitleText>등록 현황</SectionTitleText>
             </SectionTitleRow>
             <FeedAndHistoricalRow>
@@ -794,12 +1052,17 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
                         <FeedRow
                           as="button"
                           type="button"
-                          onClick={() => navigate(pathKeys.persons.detail(p.id))}
+                          onClick={() =>
+                            navigate(pathKeys.persons.detail(p.id))
+                          }
                         >
                           <FeedRowLeft>
                             <FeedAvatar>
                               {p.profileImageUrl ? (
-                                <img src={getUploadImageUrl(p.profileImageUrl)} alt="" />
+                                <img
+                                  src={getUploadImageUrl(p.profileImageUrl)}
+                                  alt=""
+                                />
                               ) : (
                                 <span>👤</span>
                               )}
@@ -825,12 +1088,18 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
                           <HistoricalListItem
                             as="button"
                             type="button"
-                            onClick={() => navigate(pathKeys.history.countryDetail(h.id))}
+                            onClick={() =>
+                              navigate(pathKeys.history.countryDetail(h.id))
+                            }
                           >
                             <HistoricalListThumb>
-                              {(h as { thumbnailUrl?: string | null }).thumbnailUrl ? (
+                              {(h as { thumbnailUrl?: string | null })
+                                .thumbnailUrl ? (
                                 <img
-                                  src={getUploadImageUrl((h as { thumbnailUrl: string }).thumbnailUrl)}
+                                  src={getUploadImageUrl(
+                                    (h as { thumbnailUrl: string })
+                                      .thumbnailUrl,
+                                  )}
                                   alt=""
                                 />
                               ) : (
@@ -839,7 +1108,9 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
                             </HistoricalListThumb>
                             <HistoricalListName>{h.name}</HistoricalListName>
                             {formatHistoricalPeriod(h) && (
-                              <HistoricalListDate>{formatHistoricalPeriod(h)}</HistoricalListDate>
+                              <HistoricalListDate>
+                                {formatHistoricalPeriod(h)}
+                              </HistoricalListDate>
                             )}
                           </HistoricalListItem>
                         </li>
@@ -856,12 +1127,15 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
       {activeTab === 'stats' && (
         <Section>
           <SectionTitleRow>
-            <SectionTitleIcon><IconChart /></SectionTitleIcon>
+            <SectionTitleIcon>
+              <IconChart />
+            </SectionTitleIcon>
             <SectionTitleText>등록 데이터 통계</SectionTitleText>
           </SectionTitleRow>
           {totalRegistered === 0 && !stats.isLoading ? (
             <ChartEmpty>
-              등록된 데이터가 없습니다. 인물·군대·사건·연결된 역사적 국가를 등록하면 그래프에 반영됩니다.
+              등록된 데이터가 없습니다. 인물·군대·사건·연결된 역사적 국가를
+              등록하면 그래프에 반영됩니다.
             </ChartEmpty>
           ) : (
             <ChartsRow>
@@ -878,7 +1152,9 @@ export function CountryDetailDashboard({ country }: CountryDetailDashboardProps)
                           <S.BarChartFill $percent={pct} />
                         </S.BarChartTrack>
                         <S.BarChartValue>
-                          {stats.isLoading ? '—' : `${count} (${pct.toFixed(0)}%)`}
+                          {stats.isLoading
+                            ? '—'
+                            : `${count} (${pct.toFixed(0)}%)`}
                         </S.BarChartValue>
                       </S.BarChartRow>
                     )

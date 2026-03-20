@@ -9,7 +9,7 @@ export type OverviewSubTab =
   | 'government'
   | 'ethnicity'
   | 'person'
-  | 'history'
+  | 'treaty'
 
 interface OverviewSubTabsProps {
   activeSubTab: OverviewSubTab
@@ -32,12 +32,6 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             onClick={() => onSubTabChange('statistics')}
           >
             대시보드
-          </S.TabButton>
-          <S.TabButton
-            $active={activeSubTab === 'linkedHistorical'}
-            onClick={() => onSubTabChange('linkedHistorical')}
-          >
-            역사적 국가
           </S.TabButton>
           <S.TabButton
             $active={activeSubTab === 'map'}
@@ -64,10 +58,16 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             인물
           </S.TabButton>
           <S.TabButton
-            $active={activeSubTab === 'history'}
-            onClick={() => onSubTabChange('history')}
+            $active={activeSubTab === 'linkedHistorical'}
+            onClick={() => onSubTabChange('linkedHistorical')}
           >
-            역사
+            과거국가
+          </S.TabButton>
+          <S.TabButton
+            $active={activeSubTab === 'treaty'}
+            onClick={() => onSubTabChange('treaty')}
+          >
+            조약
           </S.TabButton>
         </S.TabBar>
       </S.Left>

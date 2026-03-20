@@ -103,7 +103,7 @@ export function SelectModal<T = string>({
           </S.SelectModalClose>
         </S.SelectModalHeader>
 
-        {headerExtra && <div style={{ padding: '0 24px' }}>{headerExtra}</div>}
+        {headerExtra && <S.HeaderExtraWrapper>{headerExtra}</S.HeaderExtraWrapper>}
 
         <S.SelectModalContent>
           {options.length === 0 ? (
@@ -122,21 +122,14 @@ export function SelectModal<T = string>({
                 {option.icon && (
                   <S.SelectOptionIcon>{option.icon}</S.SelectOptionIcon>
                 )}
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    flex: 1,
-                  }}
-                >
+                <S.SelectOptionBody>
                   <S.SelectOptionText>{option.label}</S.SelectOptionText>
                   {option.description && (
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                    <S.SelectOptionDescription>
                       {option.description}
-                    </span>
+                    </S.SelectOptionDescription>
                   )}
-                </div>
+                </S.SelectOptionBody>
                 {isSelected(option.value) && (
                   <S.SelectOptionCheck>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">

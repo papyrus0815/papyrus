@@ -4,6 +4,8 @@
  */
 import React, { useMemo, useState } from 'react'
 
+import { createPortal } from 'react-dom'
+
 import {
   FiBriefcase,
   FiCalendar,
@@ -177,7 +179,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     setFilterReligion('')
   }
 
-  return (
+  const modal = (
     <ModalOverlay onClick={onClose}>
       <ModalBox onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
@@ -408,6 +410,10 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
       </ModalBox>
     </ModalOverlay>
   )
+
+  if (typeof document === 'undefined') return null
+
+  return createPortal(modal, document.body)
 }
 
 // Styled Components — z-index를 상위 모달보다 높게 해 서브 모달에서도 앞에 표시

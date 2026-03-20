@@ -33,24 +33,50 @@ import { personCareerApi } from '@/shared/api/person-career'
 import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { uploadImage } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { calcAgeAtTenure, formatPersonLifespan } from '@/shared/lib/tenure-person-utils'
+import {
+  calcAgeAtTenure,
+  formatPersonLifespan,
+} from '@/shared/lib/tenure-person-utils'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import {
+  BackButton,
   DateFieldBtn,
   DateFieldsRow,
+  FieldControl,
   FieldHint,
+  FieldLabel,
+  FieldRow,
+  FormCardWrapper,
+  FormRows,
+  FormSectionInner,
   Input as RegisterInput,
+  Input,
   Required,
+  SubmitButton,
+  TabButton,
+  TabNavigation,
 } from '@/shared/ui/register-form-layout'
+import {
+  ModalBody,
+  ModalBox,
+  ModalCloseButton,
+  ModalHeader,
+  ModalOverlay,
+  ModalSubtitle,
+  ModalTitle,
+} from '@/shared/ui/modal/modal.styles'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import {
+  SelectModal,
+  type SelectOption,
+} from '@/shared/ui/select-modal/select-modal'
 
 import { LineageTree } from './lineage-tree.widget'
 
-/** 수반 등록 시 직책 선택에 사용할 관직 유형 (DB 관직 정의 필터용) */
 const HEADS_POSITION_TYPES = new Set([
   'HEAD_OF_STATE',
   'HEAD_OF_GOVERNMENT',
@@ -95,53 +121,204 @@ const HEADS_ROW_H = 380
 const HEADS_BUBBLE_W = 84
 const HEADS_THUMB = 72
 
-function HeadsTlCard({ thumbUrl, personName, titleText, range, ageAtStart, birthPlace, lifespan, regnalName, dynastyName, achievements, lineColor }: {
-  thumbUrl: string | null; personName: string; titleText: string; range: string
-  ageAtStart: number | null; birthPlace: string | null; lifespan: string | null
-  regnalName: string | null | undefined; dynastyName: string | null; achievements: any[]
-  lineColor: string; textColor: string
+function HeadsTlCard({
+  thumbUrl,
+  personName,
+  titleText,
+  range,
+  ageAtStart,
+  birthPlace,
+  lifespan,
+  regnalName,
+  dynastyName,
+  achievements,
+  lineColor,
+  isDark,
+}: {
+  thumbUrl: string | null
+  personName: string
+  titleText: string
+  range: string
+  ageAtStart: number | null
+  birthPlace: string | null
+  lifespan: string | null
+  regnalName: string | null | undefined
+  dynastyName: string | null
+  achievements: any[]
+  lineColor: string
+  textColor: string
+  isDark: boolean
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       {/* 원형 썸네일 */}
-      <div style={{
-        flexShrink: 0,
-        width: HEADS_THUMB, height: HEADS_THUMB, borderRadius: '50%',
-        overflow: 'hidden',
-        background: `${lineColor}18`,
-        border: `3px solid ${lineColor}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: `0 3px 10px ${lineColor}44`,
-      }}>
-        {thumbUrl
-          ? <img src={thumbUrl} alt={personName} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
-          : <FiUser size={26} color={lineColor} style={{ opacity: 0.3 }} />
-        }
+      <div
+        style={{
+          flexShrink: 0,
+          width: HEADS_THUMB,
+          height: HEADS_THUMB,
+          borderRadius: '50%',
+          overflow: 'hidden',
+          background: `${lineColor}18`,
+          border: `3px solid ${lineColor}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: `0 3px 10px ${lineColor}44`,
+        }}
+      >
+        {thumbUrl ? (
+          <img
+            src={thumbUrl}
+            alt={personName}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'top',
+            }}
+          />
+        ) : (
+          <FiUser size={26} color={lineColor} style={{ opacity: 0.3 }} />
+        )}
       </div>
       {/* 우측 텍스트 */}
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{personName}</div>
-        {regnalName && <div style={{ fontSize: 11, color: '#7c3aed', fontStyle: 'italic', marginTop: 1 }}>{regnalName}</div>}
-        <div style={{ fontSize: 12, color: lineColor, fontWeight: 600, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titleText}</div>
-        <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 8px' }}>
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: lineColor, background: `${lineColor}12`, borderRadius: 5, padding: '2px 9px', whiteSpace: 'nowrap' }}>{range}</span>
-          {ageAtStart != null && <span style={{ fontSize: 11, color: '#94a3b8' }}>취임 {ageAtStart}세</span>}
+        <div
+          style={{
+            fontSize: 14.5,
+            fontWeight: 800,
+            color: isDark ? '#f1f5f9' : '#0f172a',
+            letterSpacing: '-0.02em',
+            lineHeight: 1.3,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {personName}
         </div>
-        <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: '2px 8px' }}>
-          {lifespan && <span style={{ fontSize: 11, color: '#b0bac9' }}>{lifespan}</span>}
-          {birthPlace && (
-            <span style={{ fontSize: 11, color: '#b0bac9', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-              <span style={{ fontSize: 9.5, color: '#c8d0da' }}>출신</span>{birthPlace}
+        {regnalName && (
+          <div
+            style={{
+              fontSize: 11,
+              color: '#7c3aed',
+              fontStyle: 'italic',
+              marginTop: 1,
+            }}
+          >
+            {regnalName}
+          </div>
+        )}
+        <div
+          style={{
+            fontSize: 12,
+            color: lineColor,
+            fontWeight: 600,
+            marginTop: 2,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {titleText}
+        </div>
+        <div
+          style={{
+            marginTop: 5,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '3px 8px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11.5,
+              fontWeight: 700,
+              color: lineColor,
+              background: `${lineColor}12`,
+              borderRadius: 5,
+              padding: '2px 9px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {range}
+          </span>
+          {ageAtStart != null && (
+            <span
+              style={{ fontSize: 11, color: isDark ? '#64748b' : '#94a3b8' }}
+            >
+              취임 {ageAtStart}세
             </span>
           )}
-          {dynastyName && <span style={{ fontSize: 11, color: '#7c3aed' }}>가문: {dynastyName}</span>}
+        </div>
+        <div
+          style={{
+            marginTop: 4,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '2px 8px',
+          }}
+        >
+          {lifespan && (
+            <span
+              style={{ fontSize: 11, color: isDark ? '#475569' : '#b0bac9' }}
+            >
+              {lifespan}
+            </span>
+          )}
+          {birthPlace && (
+            <span
+              style={{
+                fontSize: 11,
+                color: '#b0bac9',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 2,
+              }}
+            >
+              <span style={{ fontSize: 9.5, color: '#c8d0da' }}>출신</span>
+              {birthPlace}
+            </span>
+          )}
+          {dynastyName && (
+            <span style={{ fontSize: 11, color: '#7c3aed' }}>
+              가문: {dynastyName}
+            </span>
+          )}
         </div>
         {achievements.length > 0 && (
-          <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+          <div
+            style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}
+          >
             {achievements.slice(0, 2).map((a: any) => (
-              <span key={a.id} style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 10, color: '#6d28d9', background: '#f5f3ff' }}>{a.title}</span>
+              <span
+                key={a.id}
+                style={{
+                  fontSize: 10.5,
+                  padding: '1px 7px',
+                  borderRadius: 10,
+                  color: isDark ? '#c4b5fd' : '#6d28d9',
+                  background: isDark ? 'rgba(109,40,217,0.15)' : '#f5f3ff',
+                }}
+              >
+                {a.title}
+              </span>
             ))}
-            {achievements.length > 2 && <span style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 10, color: '#94a3b8', background: '#f1f5f9' }}>+{achievements.length - 2}</span>}
+            {achievements.length > 2 && (
+              <span
+                style={{
+                  fontSize: 10.5,
+                  padding: '1px 7px',
+                  borderRadius: 10,
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  background: isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
+                }}
+              >
+                +{achievements.length - 2}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -149,12 +326,13 @@ function HeadsTlCard({ thumbUrl, personName, titleText, range, ageAtStart, birth
   )
 }
 
-
 export function HeadsOfStateSection({
   country,
   embedded,
 }: HeadsOfStateSectionProps) {
   const queryClient = useQueryClient()
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const isHistorical = country.type === 'historical'
   const [showLoading, setShowLoading] = useState(true)
   const loadStartRef = useRef<number>(Date.now())
@@ -1354,7 +1532,7 @@ export function HeadsOfStateSection({
                     style={{
                       width: '48px',
                       height: '48px',
-                      border: '4px solid #e5e7eb',
+                      border: `4px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
                       borderTopColor: '#6366f1',
                       borderRadius: '50%',
                       margin: '0 auto 16px',
@@ -1408,7 +1586,8 @@ export function HeadsOfStateSection({
                                 setSelectedLineagePositionLabel(g.label)
                               }}
                             >
-                              {toDisplayPositionLabel(g.label)} ({g.tenures.length})
+                              {toDisplayPositionLabel(g.label)} (
+                              {g.tenures.length})
                             </PositionFilterTab>
                           ))}
                         </PositionFilterTabs>
@@ -1436,14 +1615,22 @@ export function HeadsOfStateSection({
                     {/* 목록 검색창 — 목록 뷰일 때만 노출 */}
                     {listViewMode === 'list' && tenures.length > 0 && (
                       <TenureSearchWrap>
-                        <TenureSearchIcon><FiSearch size={14} /></TenureSearchIcon>
+                        <TenureSearchIcon>
+                          <FiSearch size={14} />
+                        </TenureSearchIcon>
                         <TenureSearchInput
                           type="text"
                           placeholder="이름, 직책, 연도 검색"
                           value={tenureSearchQuery}
                           onChange={(e) => setTenureSearchQuery(e.target.value)}
-                          onFocus={e => { e.currentTarget.style.borderColor = '#a5b4fc'; e.currentTarget.style.background = '#fff' }}
-                          onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc' }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.borderColor = isDark ? 'rgba(99,102,241,0.6)' : '#a5b4fc'
+                            e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : '#fff'
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'
+                            e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.06)' : '#f8fafc'
+                          }}
                         />
                         {tenureSearchQuery ? (
                           <TenureSearchClear
@@ -1454,7 +1641,18 @@ export function HeadsOfStateSection({
                             <FiX size={12} />
                           </TenureSearchClear>
                         ) : (
-                          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11, fontWeight: 600, color: '#c8d0da', pointerEvents: 'none' }}>
+                          <span
+                            style={{
+                              position: 'absolute',
+                              right: 10,
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#c8d0da',
+                              pointerEvents: 'none',
+                            }}
+                          >
                             {tenures.length}개
                           </span>
                         )}
@@ -1463,7 +1661,7 @@ export function HeadsOfStateSection({
                     {/* 보기 방식 탭 — 우측 분리 배치 */}
                     {showLineageTab && (
                       <>
-                        <div style={{ width: 1, height: 24, background: '#e2e8f0', flexShrink: 0 }} />
+                        <LineageDivider />
                         <ViewModeTabs role="tablist" aria-label="보기 방식">
                           <ViewModeTab
                             role="tab"
@@ -1482,7 +1680,7 @@ export function HeadsOfStateSection({
                             목록
                           </ViewModeTab>
                         </ViewModeTabs>
-                        <div style={{ width: 1, height: 24, background: '#e2e8f0', flexShrink: 0 }} />
+                        <LineageDivider />
                       </>
                     )}
                     <AddTenureButton
@@ -1563,207 +1761,629 @@ export function HeadsOfStateSection({
                             (g) => g.label === selectedPositionFilter,
                           )
                         : tenuresByPosition
-                      ).map(({ label, tenures: groupTenures }): React.ReactNode => {
-                        const filteredTenures = groupTenures.filter((t: any) => {
-                          if (!tenureSearchQuery.trim()) return true
-                          const q = tenureSearchQuery.trim().toLowerCase()
-                          const name = getPersonName(t.person).toLowerCase()
-                          const regnal = getRegnalNameFromNotes(t.notes)?.toLowerCase() ?? ''
-                          const title = (t.title || t.position?.title || '').toLowerCase()
-                          const startYear = t.startDate ? String(t.startDate).slice(0, 4) : ''
-                          const endYear = t.endDate ? String(t.endDate).slice(0, 4) : ''
-                          return name.includes(q) || regnal.includes(q) || title.includes(q) || startYear.includes(q) || endYear.includes(q)
-                        })
-                        if (filteredTenures.length === 0) return null
+                      )
+                        .map(
+                          ({
+                            label,
+                            tenures: groupTenures,
+                          }): React.ReactNode => {
+                            const filteredTenures = groupTenures.filter(
+                              (t: any) => {
+                                if (!tenureSearchQuery.trim()) return true
+                                const q = tenureSearchQuery.trim().toLowerCase()
+                                const name = getPersonName(
+                                  t.person,
+                                ).toLowerCase()
+                                const regnal =
+                                  getRegnalNameFromNotes(
+                                    t.notes,
+                                  )?.toLowerCase() ?? ''
+                                const title = (
+                                  t.title ||
+                                  t.position?.title ||
+                                  ''
+                                ).toLowerCase()
+                                const startYear = t.startDate
+                                  ? String(t.startDate).slice(0, 4)
+                                  : ''
+                                const endYear = t.endDate
+                                  ? String(t.endDate).slice(0, 4)
+                                  : ''
+                                return (
+                                  name.includes(q) ||
+                                  regnal.includes(q) ||
+                                  title.includes(q) ||
+                                  startYear.includes(q) ||
+                                  endYear.includes(q)
+                                )
+                              },
+                            )
+                            if (filteredTenures.length === 0) return null
 
-                        const rows: any[][] = []
-                        for (let i = 0; i < filteredTenures.length; i += HEADS_TL_ROW_SIZE) {
-                          rows.push(filteredTenures.slice(i, i + HEADS_TL_ROW_SIZE))
-                        }
-
-                        return (
-                          <div key={label} style={{ marginBottom: 24 }}>
-                            <PositionSectionTitle>
-                              {toDisplayPositionLabel(label)}{' '}
-                              <span className="count">{filteredTenures.length}명</span>
-                            </PositionSectionTitle>
-                            {/* 직책 그룹 요약 바 */}
-                            {(() => {
-                              const years = filteredTenures.flatMap((t: any) => {
-                                const s = t.startDate ? new Date(t.startDate).getFullYear() : null
-                                return s ? [s] : []
-                              })
-                              const minY = years.length ? Math.min(...years) : null
-                              const maxY = years.length ? Math.max(...years) : null
-                              return (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 20px 10px', borderBottom: '1px solid #f0f2f5', background: '#fafbfc' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                    <FiUsers size={12} color="#94a3b8" />
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{filteredTenures.length}명</span>
-                                  </div>
-                                  {minY && (
-                                    <>
-                                      <div style={{ width: 1, height: 10, background: '#e2e8f0' }} />
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                        <FiCalendar size={11} color="#94a3b8" />
-                                        <span style={{ fontSize: 12, color: '#64748b' }}>{minY} – {maxY ?? '현재'}</span>
-                                      </div>
-                                    </>
-                                  )}
-                                  <div style={{ flex: 1 }} />
-                                  <div style={{ display: 'flex', gap: 4 }}>
-                                    {HEADS_TL_ROWS.map((r, i) => (
-                                      <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: r.line }} />
-                                    ))}
-                                  </div>
-                                </div>
+                            const rows: any[][] = []
+                            for (
+                              let i = 0;
+                              i < filteredTenures.length;
+                              i += HEADS_TL_ROW_SIZE
+                            ) {
+                              rows.push(
+                                filteredTenures.slice(i, i + HEADS_TL_ROW_SIZE),
                               )
-                            })()}
+                            }
 
-                            {rows.map((rowItems, rowIdx) => {
-                              const p = HEADS_TL_ROWS[rowIdx % HEADS_TL_ROWS.length]
-                              const isReversed = rowIdx % 2 === 1
-                              const displayItems = isReversed ? [...rowItems].reverse() : rowItems
-                              const isLastRow = rowIdx === rows.length - 1
-
-                              return (
-                                <div key={rowIdx} style={{ background: '#fff', borderBottom: rowIdx < rows.length - 1 ? '1px solid #f0f2f5' : 'none' }}>
-                                  {/* 행 레이블 */}
-                                  {(() => {
-                                    const firstTerm = rowItems[0]?.regnalNumber ?? rowItems[0]?.termNumber
-                                    const lastTerm = rowItems[rowItems.length - 1]?.regnalNumber ?? rowItems[rowItems.length - 1]?.termNumber
-                                    const rangeLabel = firstTerm != null && lastTerm != null
-                                      ? firstTerm === lastTerm ? `제${firstTerm}대` : `제${firstTerm}–${lastTerm}대`
-                                      : `${rowIdx * HEADS_TL_ROW_SIZE + 1}번째 행`
-                                    return (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px 0' }}>
-                                        <div style={{ width: 4, height: 16, borderRadius: 2, background: p.line, flexShrink: 0 }} />
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: p.line, letterSpacing: '0.04em' }}>
-                                          {rangeLabel}
+                            return (
+                              <div key={label} style={{ marginBottom: 24 }}>
+                                <PositionSectionTitle>
+                                  {toDisplayPositionLabel(label)}{' '}
+                                  <span className="count">
+                                    {filteredTenures.length}명
+                                  </span>
+                                </PositionSectionTitle>
+                                {/* 직책 그룹 요약 바 */}
+                                {(() => {
+                                  const years = filteredTenures.flatMap(
+                                    (t: any) => {
+                                      const s = t.startDate
+                                        ? new Date(t.startDate).getFullYear()
+                                        : null
+                                      return s ? [s] : []
+                                    },
+                                  )
+                                  const minY = years.length
+                                    ? Math.min(...years)
+                                    : null
+                                  const maxY = years.length
+                                    ? Math.max(...years)
+                                    : null
+                                  return (
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        padding: '6px 20px 10px',
+                                        borderBottom: '1px solid #f0f2f5',
+                                        background: '#fafbfc',
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 5,
+                                        }}
+                                      >
+                                        <FiUsers size={12} color="#94a3b8" />
+                                        <span
+                                          style={{
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            color: '#334155',
+                                          }}
+                                        >
+                                          {filteredTenures.length}명
                                         </span>
-                                        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${p.line}33, transparent)` }} />
-                                        <span style={{ fontSize: 10.5, color: '#c8d0da' }}>{rowItems.length}명</span>
                                       </div>
-                                    )
-                                  })()}
-                                  <div style={{ position: 'relative', height: HEADS_ROW_H, padding: '0 20px' }}>
+                                      {minY && (
+                                        <>
+                                          <div
+                                            style={{
+                                              width: 1,
+                                              height: 10,
+                                              background: '#e2e8f0',
+                                            }}
+                                          />
+                                          <div
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 5,
+                                            }}
+                                          >
+                                            <FiCalendar
+                                              size={11}
+                                              color="#94a3b8"
+                                            />
+                                            <span
+                                              style={{
+                                                fontSize: 12,
+                                                color: '#64748b',
+                                              }}
+                                            >
+                                              {minY} – {maxY ?? '현재'}
+                                            </span>
+                                          </div>
+                                        </>
+                                      )}
+                                      <div style={{ flex: 1 }} />
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        {HEADS_TL_ROWS.map((r, i) => (
+                                          <div
+                                            key={i}
+                                            style={{
+                                              width: 8,
+                                              height: 8,
+                                              borderRadius: '50%',
+                                              background: r.line,
+                                            }}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
 
-                                    {/* 수평선 — 노드 X 기준으로 좌측 시작 */}
-                                    <div style={{
-                                      position: 'absolute',
-                                      left: 20 + HEADS_BUBBLE_W / 2,
-                                      right: 0,
-                                      top: '50%',
-                                      transform: 'translateY(-50%)',
-                                      height: 3,
-                                      background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
-                                      zIndex: 0,
-                                    }} />
+                                {rows.map((rowItems, rowIdx) => {
+                                  const p =
+                                    HEADS_TL_ROWS[rowIdx % HEADS_TL_ROWS.length]
+                                  const isReversed = rowIdx % 2 === 1
+                                  const displayItems = isReversed
+                                    ? [...rowItems].reverse()
+                                    : rowItems
+                                  const isLastRow = rowIdx === rows.length - 1
 
-                                    {/* 아이템 그리드 */}
-                                    <div style={{
-                                      display: 'grid',
-                                      gridTemplateColumns: `repeat(${HEADS_TL_ROW_SIZE}, 1fr)`,
-                                      height: '100%',
-                                      gap: '0 8px',
-                                      position: 'relative',
-                                      zIndex: 1,
-                                    }}>
-                                      {Array.from({ length: HEADS_TL_ROW_SIZE }).map((_, colIdx) => {
-                                        const t = displayItems[colIdx]
-                                        if (!t) return <div key={`e-${colIdx}`} />
-
-                                        const titleText = t.title || t.position?.title || '—'
-                                        const regnalFromNotes = getRegnalNameFromNotes(t.notes)
-                                        const lifespan = formatPersonLifespan(t.person)
-                                        const ageAtStart = calcAgeAtTenure(t.person, t.startDate)
-                                        const startYear = t.startDate ? new Date(t.startDate).getFullYear() : null
-                                        const endYear = t.endDate ? new Date(t.endDate).getFullYear() : null
-                                        const range = startYear ? `${startYear}–${endYear ?? '현재'}` : '—'
-                                        const termLabel = t.regnalNumber != null ? `${t.regnalNumber}세` : t.termNumber != null ? `제${t.termNumber}대` : null
-                                        const thumbUrl = t.person?.profileImageUrl ?? null
-                                        const personName = getPersonName(t.person)
-                                        const birthPlace = ((t.person as any)?.birthCity?.name ?? (t.person as any)?.birthAdminDivision?.name ?? (t.person as any)?.birthPlaceText ?? null) as string | null
-                                        const dynastyName = (t.person as any)?.dynasty?.name ?? null
-                                        const itemOnTop = colIdx % 2 === 0
-
+                                  return (
+                                    <div
+                                      key={rowIdx}
+                                      style={{
+                                        background: isDark ? 'rgba(255,255,255,0.02)' : '#fff',
+                                        borderBottom:
+                                          rowIdx < rows.length - 1
+                                            ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#f0f2f5'}`
+                                            : 'none',
+                                      }}
+                                    >
+                                      {/* 행 레이블 */}
+                                      {(() => {
+                                        const firstTerm =
+                                          rowItems[0]?.regnalNumber ??
+                                          rowItems[0]?.termNumber
+                                        const lastTerm =
+                                          rowItems[rowItems.length - 1]
+                                            ?.regnalNumber ??
+                                          rowItems[rowItems.length - 1]
+                                            ?.termNumber
+                                        const rangeLabel =
+                                          firstTerm != null && lastTerm != null
+                                            ? firstTerm === lastTerm
+                                              ? `제${firstTerm}대`
+                                              : `제${firstTerm}–${lastTerm}대`
+                                            : `${rowIdx * HEADS_TL_ROW_SIZE + 1}번째 행`
                                         return (
                                           <div
-                                            key={t.id}
-                                            role="button"
-                                            tabIndex={0}
                                             style={{
-                                              display: 'flex', flexDirection: 'column',
-                                              alignItems: 'flex-start', height: '100%',
-                                              cursor: 'pointer', padding: '0 4px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 8,
+                                              padding: '10px 24px 0',
                                             }}
-                                            onClick={() => { setEditingTenureId(t.id); setView('register') }}
-                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingTenureId(t.id); setView('register') } }}
                                           >
-                                            {/* 위쪽 */}
-                                            <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-end', paddingBottom: 8 }}>
-                                              {itemOnTop ? (
-                                                <div style={{ width: '100%', transition: 'transform 0.18s ease, opacity 0.15s' }}
-                                                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLDivElement).style.opacity = '0.92' }}
-                                                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.opacity = '1' }}>
-                                                  <HeadsTlCard thumbUrl={thumbUrl} personName={personName} titleText={titleText} range={range} ageAtStart={ageAtStart} birthPlace={birthPlace} lifespan={lifespan !== '생몰년 미상' ? lifespan : null} regnalName={regnalFromNotes} dynastyName={dynastyName} achievements={t.achievements ?? []} lineColor={p.line} textColor={p.textColor} />
-                                                </div>
-                                              ) : (
-                                                <div style={{
-                                                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-                                                  background: '#fff', border: `2.5px solid ${p.line}`, borderRadius: 28,
-                                                  padding: '6px 14px', minWidth: HEADS_BUBBLE_W,
-                                                  boxShadow: `0 2px 10px ${p.line}44`, textAlign: 'center',
-                                                }}>
-                                                  <span style={{ fontSize: 17, fontWeight: 900, color: p.textColor, letterSpacing: '-0.03em', lineHeight: 1.2 }}>{startYear ?? '—'}</span>
-                                                  {termLabel && <span style={{ fontSize: 10, fontWeight: 700, color: p.line, marginTop: 1 }}>{termLabel}</span>}
-                                                </div>
-                                              )}
-                                            </div>
-
-                                            {/* 수직선 + 노드 — 버블 중앙 정렬 */}
-                                            <div style={{ width: 2, height: 10, background: p.line, opacity: 0.6, marginLeft: HEADS_BUBBLE_W / 2 - 1, flexShrink: 0 }} />
-                                            <div style={{
-                                              width: 14, height: 14, borderRadius: '50%',
-                                              background: '#fff', border: `3px solid ${p.line}`,
-                                              boxShadow: `0 0 0 3px #fff`,
-                                              marginLeft: HEADS_BUBBLE_W / 2 - 7,
-                                              flexShrink: 0, zIndex: 2,
-                                            }} />
-                                            <div style={{ width: 2, height: 10, background: p.line, opacity: 0.6, marginLeft: HEADS_BUBBLE_W / 2 - 1, flexShrink: 0 }} />
-
-                                            {/* 아래쪽 */}
-                                            <div style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', paddingTop: 8 }}>
-                                              {!itemOnTop ? (
-                                                <div style={{ width: '100%', transition: 'transform 0.18s ease, opacity 0.15s' }}
-                                                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(3px)'; (e.currentTarget as HTMLDivElement).style.opacity = '0.92' }}
-                                                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.opacity = '1' }}>
-                                                  <HeadsTlCard thumbUrl={thumbUrl} personName={personName} titleText={titleText} range={range} ageAtStart={ageAtStart} birthPlace={birthPlace} lifespan={lifespan !== '생몰년 미상' ? lifespan : null} regnalName={regnalFromNotes} dynastyName={dynastyName} achievements={t.achievements ?? []} lineColor={p.line} textColor={p.textColor} />
-                                                </div>
-                                              ) : (
-                                                <div style={{
-                                                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-                                                  background: '#fff', border: `2.5px solid ${p.line}`, borderRadius: 28,
-                                                  padding: '6px 14px', minWidth: HEADS_BUBBLE_W,
-                                                  boxShadow: `0 2px 10px ${p.line}44`, textAlign: 'center',
-                                                }}>
-                                                  <span style={{ fontSize: 17, fontWeight: 900, color: p.textColor, letterSpacing: '-0.03em', lineHeight: 1.2 }}>{startYear ?? '—'}</span>
-                                                  {termLabel && <span style={{ fontSize: 10, fontWeight: 700, color: p.line, marginTop: 1 }}>{termLabel}</span>}
-                                                </div>
-                                              )}
-                                            </div>
+                                            <div
+                                              style={{
+                                                width: 4,
+                                                height: 16,
+                                                borderRadius: 2,
+                                                background: p.line,
+                                                flexShrink: 0,
+                                              }}
+                                            />
+                                            <span
+                                              style={{
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                color: p.line,
+                                                letterSpacing: '0.04em',
+                                              }}
+                                            >
+                                              {rangeLabel}
+                                            </span>
+                                            <div
+                                              style={{
+                                                flex: 1,
+                                                height: 1,
+                                                background: `linear-gradient(90deg, ${p.line}33, transparent)`,
+                                              }}
+                                            />
+                                            <span
+                                              style={{
+                                                fontSize: 10.5,
+                                                color: '#c8d0da',
+                                              }}
+                                            >
+                                              {rowItems.length}명
+                                            </span>
                                           </div>
                                         )
-                                      })}
+                                      })()}
+                                      <div
+                                        style={{
+                                          position: 'relative',
+                                          height: HEADS_ROW_H,
+                                          padding: '0 20px',
+                                        }}
+                                      >
+                                        {/* 수평선 — 노드 X 기준으로 좌측 시작 */}
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            left: 20 + HEADS_BUBBLE_W / 2,
+                                            right: 0,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            height: 3,
+                                            background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
+                                            zIndex: 0,
+                                          }}
+                                        />
+
+                                        {/* 아이템 그리드 */}
+                                        <div
+                                          style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: `repeat(${HEADS_TL_ROW_SIZE}, 1fr)`,
+                                            height: '100%',
+                                            gap: '0 8px',
+                                            position: 'relative',
+                                            zIndex: 1,
+                                          }}
+                                        >
+                                          {Array.from({
+                                            length: HEADS_TL_ROW_SIZE,
+                                          }).map((_, colIdx) => {
+                                            const t = displayItems[colIdx]
+                                            if (!t)
+                                              return <div key={`e-${colIdx}`} />
+
+                                            const titleText =
+                                              t.title ||
+                                              t.position?.title ||
+                                              '—'
+                                            const regnalFromNotes =
+                                              getRegnalNameFromNotes(t.notes)
+                                            const lifespan =
+                                              formatPersonLifespan(t.person)
+                                            const ageAtStart = calcAgeAtTenure(
+                                              t.person,
+                                              t.startDate,
+                                            )
+                                            const startYear = t.startDate
+                                              ? new Date(
+                                                  t.startDate,
+                                                ).getFullYear()
+                                              : null
+                                            const endYear = t.endDate
+                                              ? new Date(
+                                                  t.endDate,
+                                                ).getFullYear()
+                                              : null
+                                            const range = startYear
+                                              ? `${startYear}–${endYear ?? '현재'}`
+                                              : '—'
+                                            const termLabel =
+                                              t.regnalNumber != null
+                                                ? `${t.regnalNumber}세`
+                                                : t.termNumber != null
+                                                  ? `제${t.termNumber}대`
+                                                  : null
+                                            const thumbUrl =
+                                              t.person?.profileImageUrl ?? null
+                                            const personName = getPersonName(
+                                              t.person,
+                                            )
+                                            const birthPlace = ((
+                                              t.person as any
+                                            )?.birthCity?.name ??
+                                              (t.person as any)
+                                                ?.birthAdminDivision?.name ??
+                                              (t.person as any)
+                                                ?.birthPlaceText ??
+                                              null) as string | null
+                                            const dynastyName =
+                                              (t.person as any)?.dynasty
+                                                ?.name ?? null
+                                            const itemOnTop = colIdx % 2 === 0
+
+                                            return (
+                                              <div
+                                                key={t.id}
+                                                role="button"
+                                                tabIndex={0}
+                                                style={{
+                                                  display: 'flex',
+                                                  flexDirection: 'column',
+                                                  alignItems: 'flex-start',
+                                                  height: '100%',
+                                                  cursor: 'pointer',
+                                                  padding: '0 4px',
+                                                }}
+                                                onClick={() => {
+                                                  setEditingTenureId(t.id)
+                                                  setView('register')
+                                                }}
+                                                onKeyDown={(e) => {
+                                                  if (
+                                                    e.key === 'Enter' ||
+                                                    e.key === ' '
+                                                  ) {
+                                                    e.preventDefault()
+                                                    setEditingTenureId(t.id)
+                                                    setView('register')
+                                                  }
+                                                }}
+                                              >
+                                                {/* 위쪽 */}
+                                                <div
+                                                  style={{
+                                                    flex: 1,
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'flex-start',
+                                                    justifyContent: 'flex-end',
+                                                    paddingBottom: 8,
+                                                  }}
+                                                >
+                                                  {itemOnTop ? (
+                                                    <div
+                                                      style={{
+                                                        width: '100%',
+                                                        transition:
+                                                          'transform 0.18s ease, opacity 0.15s',
+                                                      }}
+                                                      onMouseEnter={(e) => {
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.transform =
+                                                          'translateY(-3px)'
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.opacity = '0.92'
+                                                      }}
+                                                      onMouseLeave={(e) => {
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.transform =
+                                                          'translateY(0)'
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.opacity = '1'
+                                                      }}
+                                                    >
+                                                      <HeadsTlCard
+                                                        thumbUrl={thumbUrl}
+                                                        personName={personName}
+                                                        titleText={titleText}
+                                                        range={range}
+                                                        ageAtStart={ageAtStart}
+                                                        birthPlace={birthPlace}
+                                                        lifespan={
+                                                          lifespan !==
+                                                          '생몰년 미상'
+                                                            ? lifespan
+                                                            : null
+                                                        }
+                                                        regnalName={
+                                                          regnalFromNotes
+                                                        }
+                                                        dynastyName={
+                                                          dynastyName
+                                                        }
+                                                        achievements={
+                                                          t.achievements ?? []
+                                                        }
+                                                        lineColor={p.line}
+                                                        textColor={p.textColor}
+                                                        isDark={isDark}
+                                                      />
+                                                    </div>
+                                                  ) : (
+                                                    <div
+                                                      style={{
+                                                        display: 'inline-flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        background: isDark
+                                                          ? 'rgba(255,255,255,0.06)'
+                                                          : '#fff',
+                                                        border: `2.5px solid ${p.line}`,
+                                                        borderRadius: 28,
+                                                        padding: '6px 14px',
+                                                        minWidth:
+                                                          HEADS_BUBBLE_W,
+                                                        boxShadow: `0 2px 10px ${p.line}44`,
+                                                        textAlign: 'center',
+                                                      }}
+                                                    >
+                                                      <span
+                                                        style={{
+                                                          fontSize: 17,
+                                                          fontWeight: 900,
+                                                          color: p.textColor,
+                                                          letterSpacing:
+                                                            '-0.03em',
+                                                          lineHeight: 1.2,
+                                                        }}
+                                                      >
+                                                        {startYear ?? '—'}
+                                                      </span>
+                                                      {termLabel && (
+                                                        <span
+                                                          style={{
+                                                            fontSize: 10,
+                                                            fontWeight: 700,
+                                                            color: p.line,
+                                                            marginTop: 1,
+                                                          }}
+                                                        >
+                                                          {termLabel}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                {/* 수직선 + 노드 — 버블 중앙 정렬 */}
+                                                <div
+                                                  style={{
+                                                    width: 2,
+                                                    height: 10,
+                                                    background: p.line,
+                                                    opacity: 0.6,
+                                                    marginLeft:
+                                                      HEADS_BUBBLE_W / 2 - 1,
+                                                    flexShrink: 0,
+                                                  }}
+                                                />
+                                                <div
+                                                  style={{
+                                                    width: 14,
+                                                    height: 14,
+                                                    borderRadius: '50%',
+                                                    background: isDark ? '#1e1e2e' : '#fff',
+                                                    border: `3px solid ${p.line}`,
+                                                    boxShadow: `0 0 0 3px ${isDark ? '#1e1e2e' : '#fff'}`,
+                                                    marginLeft:
+                                                      HEADS_BUBBLE_W / 2 - 7,
+                                                    flexShrink: 0,
+                                                    zIndex: 2,
+                                                  }}
+                                                />
+                                                <div
+                                                  style={{
+                                                    width: 2,
+                                                    height: 10,
+                                                    background: p.line,
+                                                    opacity: 0.6,
+                                                    marginLeft:
+                                                      HEADS_BUBBLE_W / 2 - 1,
+                                                    flexShrink: 0,
+                                                  }}
+                                                />
+
+                                                {/* 아래쪽 */}
+                                                <div
+                                                  style={{
+                                                    flex: 1,
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'flex-start',
+                                                    justifyContent:
+                                                      'flex-start',
+                                                    paddingTop: 8,
+                                                  }}
+                                                >
+                                                  {!itemOnTop ? (
+                                                    <div
+                                                      style={{
+                                                        width: '100%',
+                                                        transition:
+                                                          'transform 0.18s ease, opacity 0.15s',
+                                                      }}
+                                                      onMouseEnter={(e) => {
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.transform =
+                                                          'translateY(3px)'
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.opacity = '0.92'
+                                                      }}
+                                                      onMouseLeave={(e) => {
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.transform =
+                                                          'translateY(0)'
+                                                        ;(
+                                                          e.currentTarget as HTMLDivElement
+                                                        ).style.opacity = '1'
+                                                      }}
+                                                    >
+                                                      <HeadsTlCard
+                                                        thumbUrl={thumbUrl}
+                                                        personName={personName}
+                                                        titleText={titleText}
+                                                        range={range}
+                                                        ageAtStart={ageAtStart}
+                                                        birthPlace={birthPlace}
+                                                        lifespan={
+                                                          lifespan !==
+                                                          '생몰년 미상'
+                                                            ? lifespan
+                                                            : null
+                                                        }
+                                                        regnalName={
+                                                          regnalFromNotes
+                                                        }
+                                                        dynastyName={
+                                                          dynastyName
+                                                        }
+                                                        achievements={
+                                                          t.achievements ?? []
+                                                        }
+                                                        lineColor={p.line}
+                                                        textColor={p.textColor}
+                                                        isDark={isDark}
+                                                      />
+                                                    </div>
+                                                  ) : (
+                                                    <div
+                                                      style={{
+                                                        display: 'inline-flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        background: isDark
+                                                          ? 'rgba(255,255,255,0.06)'
+                                                          : '#fff',
+                                                        border: `2.5px solid ${p.line}`,
+                                                        borderRadius: 28,
+                                                        padding: '6px 14px',
+                                                        minWidth:
+                                                          HEADS_BUBBLE_W,
+                                                        boxShadow: `0 2px 10px ${p.line}44`,
+                                                        textAlign: 'center',
+                                                      }}
+                                                    >
+                                                      <span
+                                                        style={{
+                                                          fontSize: 17,
+                                                          fontWeight: 900,
+                                                          color: p.textColor,
+                                                          letterSpacing:
+                                                            '-0.03em',
+                                                          lineHeight: 1.2,
+                                                        }}
+                                                      >
+                                                        {startYear ?? '—'}
+                                                      </span>
+                                                      {termLabel && (
+                                                        <span
+                                                          style={{
+                                                            fontSize: 10,
+                                                            fontWeight: 700,
+                                                            color: p.line,
+                                                            marginTop: 1,
+                                                          }}
+                                                        >
+                                                          {termLabel}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
+                                  )
+                                })}
+                              </div>
+                            )
+                          },
                         )
-                      })
-                      .filter(Boolean)}
+                        .filter(Boolean)}
                     </>
                   )}
                 </ListWrap>
@@ -1774,7 +2394,7 @@ export function HeadsOfStateSection({
       ) : (
         <FormCardWrapper>
           <HeadsFormHeader>
-            <BackToListButton
+            <BackButton
               type="button"
               onClick={() => {
                 setEditingTenureId(null)
@@ -1783,7 +2403,7 @@ export function HeadsOfStateSection({
             >
               <FiArrowLeft size={18} />
               목록 보기
-            </BackToListButton>
+            </BackButton>
             <HeadsFormTitle>
               {editingTenureId ? '수반 수정' : '수반 등록'}
             </HeadsFormTitle>
@@ -2445,19 +3065,19 @@ export function HeadsOfStateSection({
       />
 
       {settingsModalOpen && (
-        <SettingsOverlay onClick={() => setSettingsModalOpen(false)}>
-          <SettingsCard onClick={(e) => e.stopPropagation()}>
-            <SettingsHeader>
-              <SettingsTitle>역대 수반 설정</SettingsTitle>
-              <SettingsClose
+        <ModalOverlay onClick={() => setSettingsModalOpen(false)}>
+          <ModalBox $maxWidth="460px" onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <ModalTitle>역대 수반 설정</ModalTitle>
+              <ModalCloseButton
                 type="button"
                 onClick={() => setSettingsModalOpen(false)}
                 aria-label="설정 닫기"
               >
                 <FiX size={16} />
-              </SettingsClose>
-            </SettingsHeader>
-            <SettingsBody>
+              </ModalCloseButton>
+            </ModalHeader>
+            <ModalBody>
               <SettingsItem>
                 <SettingsLabelWrap>
                   <SettingsLabel>교황 전역 표시</SettingsLabel>
@@ -2474,25 +3094,25 @@ export function HeadsOfStateSection({
                   <span />
                 </SettingsSwitch>
               </SettingsItem>
-            </SettingsBody>
-          </SettingsCard>
-        </SettingsOverlay>
+            </ModalBody>
+          </ModalBox>
+        </ModalOverlay>
       )}
 
       {cabinetModalTenureId && (
-        <CabinetMembersModalOverlay
+        <ModalOverlay
           onClick={() => setCabinetModalTenureId(null)}
         >
-          <CabinetMembersModalCard onClick={(e) => e.stopPropagation()}>
-            <CabinetMembersModalHeader>
+          <ModalBox $maxWidth="720px" $maxHeight="80vh" onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
               <div>
-                <CabinetMembersModalTitle>
+                <ModalTitle>
                   행정부 각료 현황
-                </CabinetMembersModalTitle>
-                <CabinetMembersModalDesc>
+                </ModalTitle>
+                <ModalSubtitle>
                   {selectedCabinetHeadCountry} · {selectedCabinetHeadTitle}(
                   {selectedCabinetHeadName})의 각료 구성
-                </CabinetMembersModalDesc>
+                </ModalSubtitle>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* 수반 수정 버튼 — 계보도 카드에서 접근 */}
@@ -2507,26 +3127,33 @@ export function HeadsOfStateSection({
                     }
                   }}
                   style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                    color: '#4f46e5', background: '#eef2ff',
-                    border: '1px solid #c7d2fe', borderRadius: 8, cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: '#4f46e5',
+                    background: '#eef2ff',
+                    border: '1px solid #c7d2fe',
+                    borderRadius: 8,
+                    cursor: 'pointer',
                   }}
                 >
                   <FiEdit2 size={12} />
                   수정
                 </button>
-                <CabinetMembersModalClose
+                <ModalCloseButton
                   type="button"
                   onClick={() => setCabinetModalTenureId(null)}
                   aria-label="각료 목록 닫기"
                 >
                   <FiX size={18} />
-                </CabinetMembersModalClose>
+                </ModalCloseButton>
               </div>
-            </CabinetMembersModalHeader>
+            </ModalHeader>
 
-            <CabinetMembersModalBody>
+            <ModalBody>
               <CabinetMembersSummary>
                 <CabinetMembersSummaryRow>
                   <span>수반</span>
@@ -2586,9 +3213,9 @@ export function HeadsOfStateSection({
                   ))}
                 </CabinetMembersList>
               )}
-            </CabinetMembersModalBody>
-          </CabinetMembersModalCard>
-        </CabinetMembersModalOverlay>
+            </ModalBody>
+          </ModalBox>
+        </ModalOverlay>
       )}
     </SectionOuter>
   )
@@ -2600,83 +3227,11 @@ const SectionOuter = styled.div<{ $embedded?: boolean }>`
   margin-top: ${({ $embedded }) => ($embedded ? '0' : '0')};
 `
 
-const CabinetMembersModalOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1200;
-  padding: 24px;
-`
-
-const CabinetMembersModalCard = styled.div`
-  width: min(720px, 100%);
-  max-height: min(80vh, 760px);
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.12),
-    0 1px 3px rgba(0, 0, 0, 0.04);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-`
-
-const CabinetMembersModalHeader = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
-`
-
-const CabinetMembersModalTitle = styled.h3`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-`
-
-const CabinetMembersModalDesc = styled.p`
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #64748b;
-`
-
-const CabinetMembersModalClose = styled.button`
-  width: 34px;
-  height: 34px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #64748b;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-
-  &:hover {
-    background: #f8fafc;
-    color: #334155;
-  }
-`
-
-const CabinetMembersModalBody = styled.div`
-  padding: 14px 20px 20px;
-  overflow: auto;
-  flex: 1;
-  min-height: 0;
-`
 
 const CabinetMembersSummary = styled.div`
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
   border-radius: 10px;
-  background: #f8fafc;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
   padding: 10px 12px;
   margin-bottom: 10px;
   display: flex;
@@ -2689,13 +3244,13 @@ const CabinetMembersSummaryRow = styled.div`
   justify-content: space-between;
   gap: 10px;
   font-size: 13px;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   span {
-    color: #64748b;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   strong {
-    color: #0f172a;
+    color: ${({ theme }) => theme.colors.text.primary};
     font-weight: 600;
     text-align: right;
   }
@@ -2721,13 +3276,13 @@ const CabinetMembersSummaryStats = styled.div`
 const CabinetMembersLoading = styled.div`
   padding: 24px 12px;
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CabinetMembersEmpty = styled.div`
   padding: 24px 12px;
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.6;
 `
 
@@ -2745,14 +3300,14 @@ const CabinetMembersItem = styled.li`
   flex-direction: column;
   gap: 7px;
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
   border-radius: 10px;
-  background: #ffffff;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
   font-size: 13px;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   strong {
-    color: #0f172a;
+    color: ${({ theme }) => theme.colors.text.primary};
     font-weight: 600;
   }
 
@@ -2775,9 +3330,9 @@ const CabinetMembersStatus = styled.span<{ $active: boolean }>`
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
-  border: 1px solid ${({ $active }) => ($active ? '#bbf7d0' : '#e2e8f0')};
+  border: 1px solid ${({ $active, theme }) => $active ? '#bbf7d0' : (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0')};
   color: ${({ $active }) => ($active ? '#15803d' : '#64748b')};
-  background: ${({ $active }) => ($active ? '#f0fdf4' : '#f8fafc')};
+  background: ${({ $active, theme }) => $active ? '#f0fdf4' : (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc')};
 `
 
 const CabinetMembersMetaRow = styled.div`
@@ -2788,11 +3343,11 @@ const CabinetMembersMetaRow = styled.div`
   line-height: 1.45;
 
   span {
-    color: #64748b;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 12px;
   }
   b {
-    color: #0f172a;
+    color: ${({ theme }) => theme.colors.text.primary};
     font-weight: 600;
     word-break: break-word;
   }
@@ -2817,9 +3372,27 @@ const PositionFilterTab = styled.button<{ $active?: boolean }>`
   padding: 7px 12px;
   font-size: 12px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
-  color: ${({ $active }) => ($active ? '#4338ca' : '#64748b')};
-  background: ${({ $active }) => ($active ? '#eef2ff' : 'transparent')};
-  border: 1px solid ${({ $active }) => ($active ? '#c7d2fe' : 'transparent')};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'
+      : theme.mode === 'dark'
+        ? '#94a3b8'
+        : '#64748b'};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.15)'
+        : '#eef2ff'
+      : 'transparent'};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.4)'
+          : '#c7d2fe'
+        : 'transparent'};
   border-radius: 8px;
   cursor: pointer;
   transition:
@@ -2829,21 +3402,43 @@ const PositionFilterTab = styled.button<{ $active?: boolean }>`
   white-space: nowrap;
 
   &:hover {
-    color: ${({ $active }) => ($active ? '#4338ca' : '#475569')};
-    background: ${({ $active }) => ($active ? '#eef2ff' : '#f8fafc')};
-    border-color: ${({ $active }) => ($active ? '#c7d2fe' : '#e2e8f0')};
+    color: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? '#a5b4fc'
+          : '#4338ca'
+        : theme.mode === 'dark'
+          ? '#cbd5e1'
+          : '#475569'};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.2)'
+          : '#eef2ff'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : '#f8fafc'};
+    border-color: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.5)'
+          : '#c7d2fe'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.12)'
+          : '#e2e8f0'};
   }
 `
 
 const ListWrap = styled.div<{ $lineageMode?: boolean }>`
   margin-top: 0;
-  background: ${({ $lineageMode }) => ($lineageMode ? 'transparent' : '#fff')};
-  border: ${({ $lineageMode }) =>
-    $lineageMode ? 'none' : '1px solid #e2e8f0'};
+  background: ${({ $lineageMode, theme }) =>
+    $lineageMode ? 'transparent' : (theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff')};
+  border: ${({ $lineageMode, theme }) =>
+    $lineageMode ? 'none' : `1px solid ${theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`};
   border-radius: ${({ $lineageMode }) => ($lineageMode ? '0' : '16px')};
   overflow: ${({ $lineageMode }) => ($lineageMode ? 'visible' : 'hidden')};
-  box-shadow: ${({ $lineageMode }) =>
-    $lineageMode ? 'none' : '0 1px 4px rgba(15, 23, 42, 0.04)'};
+  box-shadow: ${({ $lineageMode, theme }) =>
+    $lineageMode ? 'none' : (theme.mode === 'dark' ? '0 1px 4px rgba(0,0,0,0.3)' : '0 1px 4px rgba(15, 23, 42, 0.04)')};
 `
 
 const ListHead = styled.div`
@@ -2852,8 +3447,8 @@ const ListHead = styled.div`
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-bottom: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
   flex-wrap: wrap;
 `
 
@@ -2861,13 +3456,9 @@ const ListHeadLeft = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  flex-wrap: wrap;
   min-width: 0;
   flex: 1;
-  &::-webkit-scrollbar {
-    display: none;
-  }
 `
 
 const ViewModeTabs = styled.div`
@@ -2883,9 +3474,27 @@ const ViewModeTab = styled.button<{ $active?: boolean }>`
   padding: 6px 14px;
   font-size: 12px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
-  color: ${({ $active }) => ($active ? '#4338ca' : '#64748b')};
-  background: ${({ $active }) => ($active ? '#eef2ff' : 'transparent')};
-  border: 1px solid ${({ $active }) => ($active ? '#c7d2fe' : 'transparent')};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'
+      : theme.mode === 'dark'
+        ? '#94a3b8'
+        : '#64748b'};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.15)'
+        : '#eef2ff'
+      : 'transparent'};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.4)'
+          : '#c7d2fe'
+        : 'transparent'};
   border-radius: 7px;
   cursor: pointer;
   transition:
@@ -2894,10 +3503,38 @@ const ViewModeTab = styled.button<{ $active?: boolean }>`
     border-color 0.15s ease;
 
   &:hover {
-    color: ${({ $active }) => ($active ? '#4338ca' : '#475569')};
-    background: ${({ $active }) => ($active ? '#eef2ff' : '#f8fafc')};
-    border-color: ${({ $active }) => ($active ? '#c7d2fe' : '#e2e8f0')};
+    color: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? '#a5b4fc'
+          : '#4338ca'
+        : theme.mode === 'dark'
+          ? '#cbd5e1'
+          : '#475569'};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.2)'
+          : '#eef2ff'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : '#f8fafc'};
+    border-color: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.5)'
+          : '#c7d2fe'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.12)'
+          : '#e2e8f0'};
   }
+`
+
+const LineageDivider = styled.div`
+  width: 1px;
+  height: 24px;
+  background: ${({ theme }) => theme.colors.border.default};
+  flex-shrink: 0;
 `
 
 const LineageWrap = styled.div`
@@ -2908,11 +3545,14 @@ const LineageWrap = styled.div`
 const LineageLegend = styled.div`
   margin-bottom: 16px;
   padding: 10px 16px;
-  background: #faf5ff;
-  border: 1px solid #ede9fe;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(109,40,217,0.1)' : '#faf5ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(109,40,217,0.3)' : '#ede9fe'};
   border-radius: 10px;
   font-size: 12px;
-  color: #6d28d9;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9')};
   line-height: 1.5;
   opacity: 0.85;
 `
@@ -2921,14 +3561,14 @@ const ListTitle = styled.h2`
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   line-height: 1.3;
 
   .count {
     font-weight: 400;
     font-size: 13px;
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     margin-left: 6px;
   }
 `
@@ -2939,12 +3579,12 @@ const PositionSectionTitle = styled.h3`
   padding: 6px 20px;
   font-size: 11px;
   font-weight: 700;
-  color: #3730a3;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#3730a3'};
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: #f5f3ff;
-  border-bottom: 1px solid #ede9fe;
-  border-top: 1px solid #ede9fe;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#f5f3ff'};
+  border-bottom: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#ede9fe'};
+  border-top: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#ede9fe'};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2991,75 +3631,22 @@ const AddTenureButton = styled.button`
 const SettingsButton = styled.button`
   width: 34px;
   height: 34px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 8px;
-  background: #fff;
-  color: #64748b;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#f8fafc'};
     color: #4338ca;
     border-color: #c7d2fe;
   }
 `
 
-const SettingsOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1250;
-  padding: 20px;
-`
-
-const SettingsCard = styled.div`
-  width: min(460px, 100%);
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.12),
-    0 1px 3px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-`
-
-const SettingsHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
-`
-
-const SettingsTitle = styled.h4`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
-`
-
-const SettingsClose = styled.button`
-  width: 30px;
-  height: 30px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
-  color: #64748b;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-`
-
-const SettingsBody = styled.div`
-  padding: 14px 16px 16px;
-`
 
 const SettingsItem = styled.div`
   display: flex;
@@ -3077,12 +3664,12 @@ const SettingsLabelWrap = styled.div`
 const SettingsLabel = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SettingsHint = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const SettingsSwitch = styled.button<{ $on: boolean }>`
@@ -3115,8 +3702,8 @@ const EmptyState = styled.div`
   padding: 40px 24px;
   gap: 12px;
   text-align: center;
-  background: #f8fafc;
-  border: 1.5px dashed #e2e8f0;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+  border: 1.5px dashed ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 14px;
   margin: 16px;
 `
@@ -3127,23 +3714,23 @@ const EmptyIconWrap = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #cbd5e1;
-  background: #fff;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
 `
 
 const EmptyTitle = styled.p`
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const EmptyDesc = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   max-width: 320px;
   line-height: 1.5;
 `
@@ -3177,12 +3764,12 @@ const ItemAvatar = styled.div<{ $hasImage?: boolean }>`
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  background: ${({ $hasImage }) => ($hasImage ? '#f1f5f9' : '#eff1fe')};
+  background: ${({ $hasImage, theme }) => $hasImage ? (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9') : '#eff1fe'};
   display: flex;
   align-items: center;
   justify-content: center;
   color: #818cf8;
-  border: 1px solid ${({ $hasImage }) => ($hasImage ? '#e2e8f0' : '#e0e3fc')};
+  border: 1px solid ${({ $hasImage, theme }) => $hasImage ? (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0') : '#e0e3fc'};
 
   img {
     width: 100%;
@@ -3210,7 +3797,7 @@ const ItemRow = styled.div`
 const ItemName = styled.div`
   font-weight: 700;
   font-size: 14px;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.3;
   letter-spacing: -0.02em;
 `
@@ -3387,7 +3974,7 @@ const SubSectionTitle = styled.h4`
   margin: 0 0 20px;
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
   display: flex;
   align-items: center;
@@ -3395,53 +3982,6 @@ const SubSectionTitle = styled.h4`
   letter-spacing: -0.02em;
 `
 
-/* 행정조직 통계/중앙부처 탭과 동일 (콘텐츠 너비만, 가로 늘어나지 않음) */
-const TabNavigation = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  margin-bottom: 24px;
-  width: fit-content;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  overflow-x: auto;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`
-
-const TabButton = styled.button<{ $active?: boolean }>`
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid ${(p) => (p.$active ? '#c7d2fe' : 'transparent')};
-  background: ${(p) => (p.$active ? '#eef2ff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4338ca' : '#64748b')};
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
-  white-space: nowrap;
-
-  svg {
-    flex-shrink: 0;
-  }
-
-  &:hover {
-    color: ${(p) => (p.$active ? '#4338ca' : '#475569')};
-    background: ${(p) => (p.$active ? '#eef2ff' : '#f8fafc')};
-    border-color: ${(p) => (p.$active ? '#c7d2fe' : '#e2e8f0')};
-  }
-`
 
 const TabPanel = styled.div`
   padding-top: 0;
@@ -3674,26 +4214,15 @@ const AchievementField = styled.div`
   }
 `
 
-const FormCardWrapper = styled.div`
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  overflow: hidden;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-`
-
-/* 행정조직 부처 등록 헤더와 동일: 한 줄 (목록 보기 | 제목 | 저장) */
+/** 수반 등록 폼 헤더 (register-form-layout FormHeader 스타일 기반) */
 const HeadsFormHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 24px 28px;
-  background: #fff;
-  border-bottom: 1px solid #f3f4f6;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-wrap: wrap;
 `
 
@@ -3701,7 +4230,7 @@ const HeadsFormTitle = styled.h2`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   flex: 1;
   min-width: 0;
@@ -3712,74 +4241,6 @@ const HeadsFormTitle = styled.h2`
   }
 `
 
-const BackToListButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
-  background: transparent;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition:
-    color 0.2s ease,
-    background 0.2s ease;
-  order: 0;
-
-  &:hover {
-    background: #f1f5f9;
-    color: #475569;
-    svg {
-      transform: translateX(-2px);
-    }
-  }
-  svg {
-    flex-shrink: 0;
-    transition: transform 0.2s ease;
-  }
-`
-
-const FormSectionInner = styled.div`
-  padding: 28px 32px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-`
-
-const FormRows = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-`
-
-/* 행정조직 부처 등록 폼과 동일: grid 360px 1fr, borderBottom #f3f4f6 */
-const FieldRow = styled.div`
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 24px;
-  align-items: start;
-  padding: 20px 0;
-  border-bottom: 1px solid #f3f4f6;
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    padding: 20px 0;
-  }
-`
-
-const FieldLabel = styled.label`
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  padding-top: 10px;
-
-  @media (max-width: 768px) {
-    padding-top: 0;
-  }
-`
 
 const EventsPageCheckWrap = styled.div`
   display: flex;
@@ -3826,15 +4287,6 @@ const CheckboxRow = styled.div`
   }
 `
 
-const FieldControl = styled.div<{ $variant?: 'person' | 'datePair' }>`
-  min-width: 0;
-  max-width: ${({ $variant }) =>
-    $variant === 'person'
-      ? '360px'
-      : $variant === 'datePair'
-        ? '480px'
-        : '380px'};
-`
 
 const DatePairRow = styled.div`
   display: flex;
@@ -3844,30 +4296,6 @@ const DatePairRow = styled.div`
   > button {
     flex: 1;
     min-width: 0;
-  }
-`
-
-/* 행정조직 부처 등록 input과 동일 */
-const Input = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 14px;
-  color: #111827;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  outline: none;
-  transition: border-color 0.2s ease;
-
-  &::placeholder {
-    color: #9ca3af;
-  }
-  &:hover {
-    border-color: #d1d5db;
-  }
-  &:focus {
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
 
@@ -4005,9 +4433,9 @@ const TenureSearchInput = styled.input`
   height: 34px;
   padding: 0 32px 0 32px;
   font-size: 13px;
-  color: #1e293b;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
   border-radius: 8px;
   outline: none;
   transition:
@@ -4015,12 +4443,12 @@ const TenureSearchInput = styled.input`
     background 0.15s ease;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   &:focus {
-    border-color: #a5b4fc;
-    background: #fff;
+    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.6)' : '#a5b4fc'};
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
   }
 `
 
@@ -4034,7 +4462,7 @@ const TenureSearchClear = styled.button`
   justify-content: center;
   width: 18px;
   height: 18px;
-  background: #cbd5e1;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
   border: none;
   border-radius: 50%;
   color: #fff;
@@ -4042,7 +4470,7 @@ const TenureSearchClear = styled.button`
   padding: 0;
 
   &:hover {
-    background: #94a3b8;
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.35)' : '#94a3b8'};
   }
 `
 

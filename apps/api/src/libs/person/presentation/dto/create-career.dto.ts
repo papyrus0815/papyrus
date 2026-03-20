@@ -694,6 +694,10 @@ export class CreateGovernmentPositionTenureDto {
 
   @IsOptional()
   @IsNumber()
+  subTermNumber?: number // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
+
+  @IsOptional()
+  @IsNumber()
   regnalNumber?: number // 재위번호 (루이 14세의 "14")
 
   @IsDateString()

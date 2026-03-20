@@ -99,7 +99,7 @@ const SectionTitle = styled.h2`
   margin: 0 0 5px;
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   display: flex;
   align-items: center;
@@ -109,7 +109,7 @@ const SectionTitle = styled.h2`
 const SectionSub = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const AddBtn = styled.button`
@@ -119,16 +119,16 @@ const AddBtn = styled.button`
   padding: 9px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: #4f46e5;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : '#eef2ff'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.35)' : '#c7d2fe'};
   border-radius: 10px;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
   &:hover {
-    background: #e0e7ff;
-    border-color: #a5b4fc;
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#e0e7ff'};
+    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.55)' : '#a5b4fc'};
     box-shadow: 0 2px 8px rgba(79, 70, 229, 0.14);
   }
 `
@@ -147,12 +147,12 @@ const Card = styled.li`
   align-items: flex-start;
   gap: 14px;
   padding: 16px 18px;
-  background: #fff;
-  border: 1px solid #e9eef5;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e9eef5'};
   border-radius: 14px;
   transition: border-color 0.15s, box-shadow 0.15s;
   &:hover {
-    border-color: #c7d2fe;
+    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
     box-shadow: 0 2px 10px rgba(79, 70, 229, 0.07);
   }
 `
@@ -165,7 +165,7 @@ const CardBody = styled.div`
 const CardTitle = styled.div`
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 7px;
 `
 
@@ -199,13 +199,13 @@ const Dot = styled.span`
 
 const MetaText = styled.span`
   font-size: 12.5px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CardDesc = styled.p`
   margin: 8px 0 0;
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.65;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -230,11 +230,15 @@ const IconBtn = styled.button<{ $danger?: boolean }>`
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   transition: background 0.15s, color 0.15s;
   &:hover {
-    background: ${(p) => (p.$danger ? '#fee2e2' : '#f1f5f9')};
-    color: ${(p) => (p.$danger ? '#dc2626' : '#0f172a')};
+    background: ${(p) => p.$danger
+      ? (p.theme.mode === 'dark' ? 'rgba(220,38,38,0.15)' : '#fee2e2')
+      : (p.theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9')};
+    color: ${(p) => p.$danger
+      ? '#dc2626'
+      : (p.theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
   }
 `
 
@@ -258,9 +262,9 @@ const Textarea = styled.textarea`
   min-height: 110px;
   padding: 12px 16px;
   font-size: 14px;
-  color: #111827;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
   border-radius: 12px;
   resize: vertical;
   line-height: 1.7;
@@ -268,10 +272,10 @@ const Textarea = styled.textarea`
   outline: none;
   transition: border-color 0.2s;
   box-sizing: border-box;
-  &::placeholder { color: #9ca3af; }
-  &:hover { border-color: #d1d5db; }
+  &::placeholder { color: ${({ theme }) => theme.colors.text.tertiary}; }
+  &:hover { border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#d1d5db'}; }
   &:focus {
-    border-color: #4f46e5;
+    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.6)' : '#4f46e5'};
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
 `
@@ -283,11 +287,13 @@ const SelectTrigger = styled.button<{ $hasValue?: boolean }>`
   gap: 12px;
   width: 100%;
   max-width: 360px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
   border-radius: 12px;
   padding: 12px 16px;
-  background: #fff;
-  color: ${(p) => (p.$hasValue ? '#111827' : '#9ca3af')};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  color: ${(p) => p.$hasValue
+    ? (p.theme.mode === 'dark' ? '#f1f5f9' : '#111827')
+    : (p.theme.mode === 'dark' ? '#64748b' : '#9ca3af')};
   font-size: 14px;
   font-weight: 500;
   text-align: left;
@@ -295,12 +301,15 @@ const SelectTrigger = styled.button<{ $hasValue?: boolean }>`
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  svg { flex-shrink: 0; color: #94a3b8; }
-  &:hover { background: #fafafa; border-color: #d1d5db; }
+  svg { flex-shrink: 0; color: ${({ theme }) => theme.colors.text.tertiary}; }
+  &:hover {
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fafafa'};
+    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#d1d5db'};
+  }
   &:focus {
-    border-color: #4f46e5;
+    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.6)' : '#4f46e5'};
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-    background: #fff;
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
   }
 `
 
@@ -311,13 +320,13 @@ const CancelBtn = styled.button`
   padding: 10px 18px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
   border-radius: 12px;
   cursor: pointer;
   transition: border-color 0.2s, color 0.2s;
-  &:hover { border-color: #6366f1; color: #4f46e5; }
+  &:hover { border-color: #6366f1; color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'}; }
 `
 
 const FormActions = styled.div`
@@ -325,7 +334,7 @@ const FormActions = styled.div`
   align-items: center;
   gap: 10px;
   padding: 24px 32px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f3f4f6'};
 `
 
 const emptyForm = (

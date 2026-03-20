@@ -22,6 +22,7 @@ export function getPersonDisplayName(
   const surname = (p.surname?.trim() ?? '') || ''
   const middle = omitMiddleName ? '' : (p.middleName?.trim() ?? '') || ''
   const order = p.nameDisplayOrder === 'western' ? 'western' : 'korean'
-  const parts = order === 'western' ? [name, middle, surname] : [surname, name, middle]
+  const parts =
+    order === 'western' ? [name, middle, surname] : [surname, name, middle]
   return parts.filter(Boolean).join(' ')
 }

@@ -88,7 +88,7 @@ export const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
 `
 
-/** 인물 선택 버튼 - 행정조직 폼과 동일 (아바타 48px, 호버 #faf5ff) */
+/** 인물 선택 버튼 — 라이트/다크 테마 (register-form-layout FieldRow와 동일 맥락) */
 export const PersonSelectButton = styled.button<{ $hasValue?: boolean }>`
   width: 100%;
   max-width: 360px;
@@ -97,9 +97,19 @@ export const PersonSelectButton = styled.button<{ $hasValue?: boolean }>`
   gap: 12px;
   padding: 12px 16px;
   font-size: 14px;
-  color: ${({ $hasValue }) => ($hasValue ? '#111827' : '#9ca3af')};
-  background: #fff;
-  border: 1px solid ${BORDER_COLOR};
+  color: ${({ $hasValue, theme }) =>
+    $hasValue
+      ? theme.mode === 'dark'
+        ? theme.colors.text.primary
+        : '#111827'
+      : theme.mode === 'dark'
+        ? theme.colors.text.tertiary
+        : '#9ca3af'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : BORDER_COLOR};
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
@@ -107,9 +117,11 @@ export const PersonSelectButton = styled.button<{ $hasValue?: boolean }>`
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 
   &:hover {
-    border-color: #d1d5db;
-    background: #faf5ff;
-    color: #111827;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#d1d5db'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#faf5ff'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
     border-color: ${FOCUS_COLOR};
@@ -118,20 +130,28 @@ export const PersonSelectButton = styled.button<{ $hasValue?: boolean }>`
   svg:last-of-type {
     flex-shrink: 0;
     opacity: 0.5;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.secondary : undefined};
   }
 `
 
+/** 인물 선택 모달(PersonSelectModal) 리스트 아바타와 동일 톤 */
 export const PersonAvatar = styled.div<{ $hasImage?: boolean }>`
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: ${({ $hasImage }) =>
-    $hasImage ? 'transparent' : 'linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 100%)'};
+  background: ${({ $hasImage, theme }) =>
+    $hasImage
+      ? 'transparent'
+      : theme.mode === 'dark'
+        ? 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)'
+        : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'};
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 
   img {
     width: 100%;
@@ -139,7 +159,7 @@ export const PersonAvatar = styled.div<{ $hasImage?: boolean }>`
     object-fit: cover;
   }
   svg {
-    color: #6366f1;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -151,6 +171,7 @@ export const PersonLabel = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const DateFieldButton = styled.button<{ $hasValue?: boolean }>`

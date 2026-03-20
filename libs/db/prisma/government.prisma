@@ -150,7 +150,8 @@ model GovernmentPositionDefinition {
   category     AdministrationDepartmentCategory? @relation("CategoryPositionDefinitions", fields: [categoryId], references: [id], onDelete: SetNull)
   organization Organization?                     @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
-  tenures GovernmentPositionTenure[]
+  tenures             GovernmentPositionTenure[]
+  treatySignatories TreatySignatory[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -183,6 +184,7 @@ model Cabinet {
   headTenure    GovernmentPositionTenure  @relation("CabinetHead", fields: [headTenureId], references: [id], onDelete: Cascade)
   memberTenures GovernmentPositionTenure[] @relation("CabinetMembers")
   account       Account?                  @relation("AccountCabinets", fields: [accountId], references: [id], onDelete: SetNull)
+  treatySignatories TreatySignatory[]     @relation("TreatySignatoryCabinet")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -235,6 +237,11 @@ model GovernmentPositionTenure {
   /// 대수/회차 (예: 20 = 제20대, 100 = 제100대)
   /// NULL이면 대수 개념이 없는 직위 (예: 조선시대 관직)
   termNumber Int? @map("term_number")
+
+  /// 기수 (예: 1 → 1기, 2 → 2기)
+  /// 같은 대수에서 여러 기(期)가 존재할 때 사용 (예: 클린턴 42대 1기/2기)
+  /// NULL이면 기수 구분 없음
+  subTermNumber Int? @map("sub_term_number")
 
   /// 재위 번호 (예: 14 → "루이 14세", 1 → "제임스 1세")
   /// 주의: 같은 인물이라도 국가마다 다를 수 있음 (제임스 1세/6세)

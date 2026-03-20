@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 
-import { motion } from 'framer-motion'
-
 import { mockGovernmentData } from '../mock'
 import type {
   Agency,
@@ -84,10 +82,7 @@ export function GovernmentInfoSection() {
     : null
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3 }}
+    <div
       style={{
         display: 'flex',
         gap: '20px',
@@ -623,7 +618,7 @@ export function GovernmentInfoSection() {
           />
         </div>
       )}
-    </motion.div>
+    </div>
   )
 }
 

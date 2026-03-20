@@ -5,8 +5,8 @@
  */
 import styled from 'styled-components'
 
-import { PillTabButton, PillTabNav } from '@/shared/ui/tab/tab.styles'
 import { glassOrSolidMixin } from '@/shared/styles/mixins'
+import { PillTabButton, PillTabNav } from '@/shared/ui/tab/tab.styles'
 
 export const BORDER_COLOR = '#e5e7eb'
 export const FOCUS_COLOR = '#4f46e5'
@@ -113,7 +113,7 @@ export const TabNavigation = PillTabNav
 export const TabButton = PillTabButton
 
 export const FormSectionInner = styled.div`
-  padding: 28px 32px 32px;
+  padding: 28px 0px 32px;
   display: flex;
   flex-direction: column;
   gap: 0;

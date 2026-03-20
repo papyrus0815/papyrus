@@ -271,6 +271,7 @@ export function TenureRegisterPanel({
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
+  const [subTermNumber, setSubTermNumber] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
   const [cabinetId, setCabinetId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -425,6 +426,7 @@ export function TenureRegisterPanel({
     setEndDate(t.endDate ? (typeof t.endDate === 'string' ? t.endDate.split('T')[0] : '') : '')
     const num = t.regnalNumber ?? t.termNumber
     setRegnalNumber(num != null ? String(num) : '')
+    setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
     setShowOnEvents(t.showPositionInfo !== false)
     setCabinetId(t.cabinetId ?? t.cabinet?.id ?? null)
   }, [open, editingTenure])
@@ -451,6 +453,7 @@ export function TenureRegisterPanel({
       startDate,
       endDate: endDate || undefined,
       termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+      subTermNumber: subTermNumber.trim() ? parseInt(subTermNumber, 10) || undefined : undefined,
       regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
       showPositionInfo: showOnEvents,
       cabinetId: cabinetId || undefined,
@@ -730,6 +733,20 @@ export function TenureRegisterPanel({
                   onChange={(e) => setRegnalNumber(e.target.value)}
                   placeholder="선택"
                   title="역대 순번"
+                />
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>기수</FieldLabel>
+              <FieldControl>
+                <Input
+                  type="number"
+                  min={1}
+                  value={subTermNumber}
+                  onChange={(e) => setSubTermNumber(e.target.value)}
+                  placeholder="선택 (예: 1기→1, 2기→2)"
+                  title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
                 />
               </FieldControl>
             </FieldRow>

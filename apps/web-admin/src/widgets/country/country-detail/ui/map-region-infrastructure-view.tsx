@@ -5,14 +5,10 @@
 import { useMemo, useState } from 'react'
 
 import { GoogleMap } from '@/shared/ui/google-map/google-map'
+import { useThemeStore } from '@/shared/styles/theme.store'
 
 import { mockInfrastructureData } from '../mock'
 import * as Styled from './map-region-section.styles'
-
-const BORDER = '#e5e7eb'
-const MUTED = '#64748b'
-const TITLE = '#0f172a'
-const MAIN = '#6366f1'
 
 type InfraFilter = 'all' | 'highways' | 'railways' | 'airports' | 'ports'
 
@@ -31,6 +27,21 @@ const FILTERS: { value: InfraFilter; label: string }[] = [
 export function MapRegionInfrastructureView({
   country,
 }: MapRegionInfrastructureViewProps) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
+
+  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
+  const MUTED = isDark ? '#a1a1aa' : '#64748b'
+  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
+  const MAIN = '#6366f1'
+  const BG = isDark ? 'rgba(255,255,255,0.03)' : '#ffffff'
+  const BG_SECONDARY = isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc'
+  const BG_SELECTED = isDark ? 'rgba(99,106,242,0.12)' : '#eef2ff'
+  const PILL_BG = isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
+  const SHADOW = isDark
+    ? '0 2px 8px rgba(0,0,0,0.35)'
+    : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)'
+
   const [filter, setFilter] = useState<InfraFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -118,11 +129,11 @@ export function MapRegionInfrastructureView({
         <Styled.MapRegionSectionLabel>지도</Styled.MapRegionSectionLabel>
         <div
           style={{
-            background: '#ffffff',
+            background: BG,
             border: `1px solid ${BORDER}`,
             borderRadius: 16,
             overflow: 'hidden',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+            boxShadow: SHADOW,
             height: 320,
           }}
         >
@@ -142,7 +153,7 @@ export function MapRegionInfrastructureView({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: '#f8fafc',
+                background: BG_SECONDARY,
               }}
             >
               <span style={{ color: MUTED, fontSize: 14, fontWeight: 500 }}>
@@ -163,7 +174,7 @@ export function MapRegionInfrastructureView({
             gap: 12,
             marginBottom: 16,
             padding: '10px 14px',
-            background: '#f8fafc',
+            background: BG_SECONDARY,
             borderRadius: 12,
             border: `1px solid ${BORDER}`,
             fontSize: 13,
@@ -190,14 +201,14 @@ export function MapRegionInfrastructureView({
             alignItems: 'start',
           }}
         >
-          {/* 좌측: pill 필터 + 목록 — 높이 제한으로 리스트 스크롤 */}
+          {/* 좌측: pill 필터 + 목록 */}
           <div
             style={{
-              background: '#ffffff',
+              background: BG,
               border: `1px solid ${BORDER}`,
               borderRadius: 16,
               overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              boxShadow: SHADOW,
               display: 'flex',
               flexDirection: 'column',
               maxHeight: 1120,
@@ -208,6 +219,7 @@ export function MapRegionInfrastructureView({
               style={{
                 padding: '14px 16px',
                 borderBottom: `1px solid ${BORDER}`,
+                background: PILL_BG,
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: 6,
@@ -223,15 +235,18 @@ export function MapRegionInfrastructureView({
                     padding: '8px 14px',
                     borderRadius: 14,
                     border: 'none',
-                    background: filter === f.value ? '#ffffff' : 'transparent',
-                    color: filter === f.value ? '#4f46e5' : MUTED,
+                    background: filter === f.value
+                      ? (isDark ? 'rgba(255,255,255,0.15)' : '#ffffff')
+                      : 'transparent',
+                    color: filter === f.value
+                      ? (isDark ? '#ffffff' : '#4f46e5')
+                      : MUTED,
                     fontSize: 13,
                     fontWeight: filter === f.value ? 600 : 500,
                     cursor: 'pointer',
-                    boxShadow:
-                      filter === f.value
-                        ? '0 2px 8px rgba(79,70,229,0.12)'
-                        : 'none',
+                    boxShadow: filter === f.value
+                      ? (isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(79,70,229,0.12)')
+                      : 'none',
                   }}
                 >
                   {f.label}
@@ -274,8 +289,7 @@ export function MapRegionInfrastructureView({
                       marginBottom: 6,
                       borderRadius: 12,
                       borderLeft: `3px solid ${selectedId === item.id ? MAIN : 'transparent'}`,
-                      background:
-                        selectedId === item.id ? '#eef2ff' : '#ffffff',
+                      background: selectedId === item.id ? BG_SELECTED : BG,
                       border: `1px solid ${selectedId === item.id ? MAIN : BORDER}`,
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
@@ -303,11 +317,11 @@ export function MapRegionInfrastructureView({
           {/* 우측: 상세 */}
           <div
             style={{
-              background: '#ffffff',
+              background: BG,
               border: `1px solid ${BORDER}`,
               borderRadius: 16,
               overflow: 'auto',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              boxShadow: SHADOW,
               padding: 24,
               minHeight: 0,
             }}
@@ -331,7 +345,7 @@ export function MapRegionInfrastructureView({
                     width: 64,
                     height: 64,
                     borderRadius: '50%',
-                    background: '#f1f5f9',
+                    background: BG_SECONDARY,
                     border: `1px solid ${BORDER}`,
                     display: 'flex',
                     alignItems: 'center',
@@ -368,54 +382,41 @@ export function MapRegionInfrastructureView({
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns:
-                      'repeat(auto-fill, minmax(160px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
                     gap: 12,
                   }}
                 >
                   {selectedHighway && (
                     <>
-                      <MetaCard
-                        label="노선 번호"
-                        value={selectedHighway.number}
-                      />
-                      <MetaCard label="연장" value={selectedHighway.length} />
-                      <MetaCard label="차선" value={selectedHighway.lanes} />
-                      <MetaCard label="구간" value={selectedHighway.sections} />
-                      <MetaCard label="개통" value={selectedHighway.opening} />
+                      <MetaCard label="노선 번호" value={selectedHighway.number} isDark={isDark} />
+                      <MetaCard label="연장" value={selectedHighway.length} isDark={isDark} />
+                      <MetaCard label="차선" value={selectedHighway.lanes} isDark={isDark} />
+                      <MetaCard label="구간" value={selectedHighway.sections} isDark={isDark} />
+                      <MetaCard label="개통" value={selectedHighway.opening} isDark={isDark} />
                     </>
                   )}
                   {selectedRailway && (
                     <>
-                      <MetaCard label="유형" value={selectedRailway.type} />
-                      <MetaCard label="연장" value={selectedRailway.length} />
-                      <MetaCard
-                        label="역 수"
-                        value={selectedRailway.stations ?? '—'}
-                      />
-                      <MetaCard label="개통" value={selectedRailway.opening} />
-                      <MetaCard label="운영" value={selectedRailway.operator} />
+                      <MetaCard label="유형" value={selectedRailway.type} isDark={isDark} />
+                      <MetaCard label="연장" value={selectedRailway.length} isDark={isDark} />
+                      <MetaCard label="역 수" value={selectedRailway.stations ?? '—'} isDark={isDark} />
+                      <MetaCard label="개통" value={selectedRailway.opening} isDark={isDark} />
+                      <MetaCard label="운영" value={selectedRailway.operator} isDark={isDark} />
                     </>
                   )}
                   {selectedAirport && (
                     <>
-                      <MetaCard label="코드" value={selectedAirport.code} />
-                      <MetaCard label="유형" value={selectedAirport.type} />
-                      <MetaCard
-                        label="이용객"
-                        value={selectedAirport.passengers}
-                      />
-                      <MetaCard label="위치" value={selectedAirport.location} />
+                      <MetaCard label="코드" value={selectedAirport.code} isDark={isDark} />
+                      <MetaCard label="유형" value={selectedAirport.type} isDark={isDark} />
+                      <MetaCard label="이용객" value={selectedAirport.passengers} isDark={isDark} />
+                      <MetaCard label="위치" value={selectedAirport.location} isDark={isDark} />
                     </>
                   )}
                   {selectedPort && (
                     <>
-                      <MetaCard label="유형" value={selectedPort.type} />
-                      <MetaCard
-                        label="처리능력"
-                        value={selectedPort.capacity}
-                      />
-                      <MetaCard label="위치" value={selectedPort.location} />
+                      <MetaCard label="유형" value={selectedPort.type} isDark={isDark} />
+                      <MetaCard label="처리능력" value={selectedPort.capacity} isDark={isDark} />
+                      <MetaCard label="위치" value={selectedPort.location} isDark={isDark} />
                     </>
                   )}
                 </div>
@@ -428,12 +429,25 @@ export function MapRegionInfrastructureView({
   )
 }
 
-function MetaCard({ label, value }: { label: string; value: string }) {
+function MetaCard({
+  label,
+  value,
+  isDark,
+}: {
+  label: string
+  value: string
+  isDark: boolean
+}) {
+  const BG = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc'
+  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
+  const MUTED = isDark ? '#a1a1aa' : '#64748b'
+  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
+
   return (
     <div
       style={{
         padding: '14px 16px',
-        background: '#f8fafc',
+        background: BG,
         borderRadius: 12,
         border: `1px solid ${BORDER}`,
       }}

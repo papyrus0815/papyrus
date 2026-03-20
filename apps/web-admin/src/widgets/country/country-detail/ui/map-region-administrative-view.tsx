@@ -5,6 +5,7 @@
 import { useState, useMemo } from 'react'
 
 import { GoogleMap } from '@/shared/ui/google-map/google-map'
+import { useThemeStore } from '@/shared/styles/theme.store'
 
 import {
   administrativeSystemByCountry,
@@ -13,11 +14,6 @@ import {
   mockCityDetails,
 } from '../mock'
 import * as Styled from './map-region-section.styles'
-
-const BORDER = '#e5e7eb'
-const MUTED = '#64748b'
-const TITLE = '#0f172a'
-const MAIN = '#6366f1'
 
 type NavLevel = 'level1' | 'level2'
 
@@ -41,6 +37,23 @@ export function MapRegionAdministrativeView({
   mapLocation,
   onCityClick,
 }: MapRegionAdministrativeViewProps) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
+
+  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
+  const MUTED = isDark ? '#a1a1aa' : '#64748b'
+  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
+  const MAIN = '#6366f1'
+  const BG = isDark ? 'rgba(255,255,255,0.03)' : '#ffffff'
+  const BG_SECONDARY = isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc'
+  const BG_SELECTED = isDark ? 'rgba(99,106,242,0.12)' : '#eef2ff'
+  const BG_HOVER = isDark ? 'rgba(255,255,255,0.05)' : '#f8fafc'
+  const BADGE_BG = isDark ? 'rgba(99,106,242,0.15)' : '#eef2ff'
+  const PILL_BG = isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
+  const SHADOW = isDark
+    ? '0 2px 8px rgba(0,0,0,0.35)'
+    : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)'
+
   const [level, setLevel] = useState<NavLevel>('level1')
   const [selectedLevel1Id, setSelectedLevel1Id] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -129,16 +142,16 @@ export function MapRegionAdministrativeView({
 
   return (
     <>
-      {/* 지도 — 행정조직 섹션처럼 SectionLabel + 단일 카드 */}
+      {/* 지도 */}
       <section aria-label="지도">
         <Styled.MapRegionSectionLabel>지도</Styled.MapRegionSectionLabel>
         <div
           style={{
-            background: '#ffffff',
+            background: BG,
             border: `1px solid ${BORDER}`,
             borderRadius: 16,
             overflow: 'hidden',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+            boxShadow: SHADOW,
             height: 320,
           }}
         >
@@ -158,7 +171,7 @@ export function MapRegionAdministrativeView({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: '#f8fafc',
+                background: BG_SECONDARY,
               }}
             >
               <span style={{ color: MUTED, fontSize: 14, fontWeight: 500 }}>
@@ -169,7 +182,7 @@ export function MapRegionAdministrativeView({
         </div>
       </section>
 
-      {/* 행정구역 — SectionLabel + 2열(목록 | 상세) */}
+      {/* 행정구역 */}
       <section aria-label="행정구역">
         <Styled.MapRegionSectionLabel>행정구역</Styled.MapRegionSectionLabel>
         <div
@@ -181,13 +194,13 @@ export function MapRegionAdministrativeView({
             maxHeight: 'calc(100vh - 380px)',
           }}
         >
-          {/* 좌측: 목록 카드 — 행정조직 목록 스타일 */}
+          {/* 좌측: 목록 카드 */}
           <div
             style={{
-              background: '#ffffff',
+              background: BG,
               border: `1px solid ${BORDER}`,
               borderRadius: 16,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+              boxShadow: SHADOW,
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -213,18 +226,18 @@ export function MapRegionAdministrativeView({
                     height: 36,
                     borderRadius: 10,
                     border: `1px solid ${BORDER}`,
-                    background: '#fff',
+                    background: BG,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#eef2ff'
+                    e.currentTarget.style.background = BADGE_BG
                     e.currentTarget.style.borderColor = MAIN
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#fff'
+                    e.currentTarget.style.background = BG
                     e.currentTarget.style.borderColor = BORDER
                   }}
                 >
@@ -241,7 +254,7 @@ export function MapRegionAdministrativeView({
                   fontSize: 12,
                   fontWeight: 600,
                   color: MAIN,
-                  background: '#eef2ff',
+                  background: BADGE_BG,
                   padding: '4px 10px',
                   borderRadius: 8,
                 }}
@@ -261,7 +274,8 @@ export function MapRegionAdministrativeView({
                   fontSize: 13,
                   border: `1px solid ${BORDER}`,
                   borderRadius: 10,
-                  background: '#fff',
+                  background: BG,
+                  color: TITLE,
                   outline: 'none',
                 }}
               />
@@ -283,7 +297,7 @@ export function MapRegionAdministrativeView({
                       padding: '14px 24px',
                       border: 'none',
                       borderBottom: `1px solid ${BORDER}`,
-                      background: isSelected ? '#eef2ff' : '#fff',
+                      background: isSelected ? BG_SELECTED : BG,
                       cursor: 'pointer',
                       textAlign: 'left',
                       display: 'flex',
@@ -294,10 +308,10 @@ export function MapRegionAdministrativeView({
                       transition: 'background 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = '#f8fafc'
+                      if (!isSelected) e.currentTarget.style.background = BG_HOVER
                     }}
                     onMouseLeave={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = '#fff'
+                      if (!isSelected) e.currentTarget.style.background = BG
                     }}
                   >
                     <span style={{ fontSize: 14, fontWeight: 600, color: TITLE }}>
@@ -308,7 +322,7 @@ export function MapRegionAdministrativeView({
                         fontSize: 12,
                         fontWeight: 600,
                         color: MUTED,
-                        background: '#f1f5f9',
+                        background: PILL_BG,
                         padding: '2px 8px',
                         borderRadius: 6,
                       }}
@@ -321,13 +335,13 @@ export function MapRegionAdministrativeView({
             </div>
           </div>
 
-          {/* 우측: 상세 카드 — 행정조직 카드와 동일 톤 */}
+          {/* 우측: 상세 카드 */}
           <div
             style={{
-              background: '#ffffff',
+              background: BG,
               border: `1px solid ${BORDER}`,
               borderRadius: 16,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+              boxShadow: SHADOW,
               padding: 28,
               overflowY: 'auto',
               minHeight: 0,
@@ -390,7 +404,7 @@ export function MapRegionAdministrativeView({
                       <div
                         style={{
                           padding: 16,
-                          background: '#f8fafc',
+                          background: BG_SECONDARY,
                           borderRadius: 12,
                           border: `1px solid ${BORDER}`,
                         }}
@@ -407,7 +421,7 @@ export function MapRegionAdministrativeView({
                       <div
                         style={{
                           padding: 16,
-                          background: '#f8fafc',
+                          background: BG_SECONDARY,
                           borderRadius: 12,
                           border: `1px solid ${BORDER}`,
                         }}
@@ -424,7 +438,7 @@ export function MapRegionAdministrativeView({
                       <div
                         style={{
                           padding: 16,
-                          background: '#f8fafc',
+                          background: BG_SECONDARY,
                           borderRadius: 12,
                           border: `1px solid ${BORDER}`,
                           gridColumn: '1 / -1',
@@ -442,7 +456,7 @@ export function MapRegionAdministrativeView({
                                 fontSize: 12,
                                 fontWeight: 600,
                                 color: MAIN,
-                                background: '#eef2ff',
+                                background: BADGE_BG,
                                 padding: '2px 8px',
                                 borderRadius: 6,
                               }}

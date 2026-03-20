@@ -208,6 +208,7 @@ model Person {
   OrganizationPersonRole   OrganizationPersonRole[]   @relation("OrganizationPersonRoles")
   PoliticalPartyLeadership PoliticalPartyLeadership[] @relation("PoliticalPartyLeadership")
   GovernmentTenures        GovernmentPositionTenure[] @relation("PersonGovernmentTenure")
+  treatySignatories        TreatySignatory[]          @relation("TreatySignatoryPerson")
 
   // 🆕 정규화된 군사 사건 관계
   commandedBelligerentSides BelligerentSide[]

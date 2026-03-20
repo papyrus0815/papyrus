@@ -1462,12 +1462,14 @@ const PositionHeaderCell = styled.div`
   justify-content: flex-start;
   font-size: 13px;
   font-weight: 700;
-  color: #1e1b4b;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#1e1b4b'};
   letter-spacing: -0.02em;
   box-sizing: border-box;
   padding: 0 16px;
-  background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%);
-  border: 1px solid #ddd6fe;
+  background: ${({ theme }) => theme.mode === 'dark'
+    ? 'rgba(99,102,241,0.12)'
+    : 'linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%)'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : '#ddd6fe'};
   border-radius: 10px;
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
@@ -1524,7 +1526,7 @@ const TimelineNode = styled.span`
   border-radius: 50%;
   background: ${TIMELINE_ACCENT};
   box-shadow:
-    0 0 0 2px #fff,
+    0 0 0 2px ${({ theme }) => theme.mode === 'dark' ? '#1a1a2e' : '#fff'},
     0 0 0 4px rgba(124, 58, 237, 0.2);
   flex-shrink: 0;
 `
@@ -1554,12 +1556,12 @@ const TimelineLabelWrap = styled.span`
 const TimelineLabel = styled.span`
   font-size: 11px;
   font-weight: 700;
-  color: #4c1d95;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#a78bfa' : '#4c1d95'};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   padding: 2px 8px;
-  background: #faf5ff;
-  border: 1px solid #ddd6fe;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.15)' : '#faf5ff'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.35)' : '#ddd6fe'};
   border-radius: 999px;
   display: inline-block;
   box-shadow: 0 1px 2px rgba(124, 58, 237, 0.08);
@@ -1672,12 +1674,14 @@ const TreeCardYearBased = styled.div`
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
   padding: 14px 14px 12px;
-  background: linear-gradient(160deg, #fff 0%, #f8faff 100%);
-  border: 1.5px solid #e2e8f0;
+  background: ${({ theme }) => theme.mode === 'dark'
+    ? 'rgba(255,255,255,0.05)'
+    : 'linear-gradient(160deg, #fff 0%, #f8faff 100%)'};
+  border: 1.5px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 14px;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 4px 12px rgba(99, 102, 241, 0.04);
+  box-shadow: ${({ theme }) => theme.mode === 'dark'
+    ? '0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(99,102,241,0.08)'
+    : '0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(99,102,241,0.04)'};
   cursor: pointer;
   transition:
     box-shadow 0.2s ease,
@@ -1712,12 +1716,14 @@ const TreeCard = styled.div`
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
   padding: 14px 14px 12px;
-  background: linear-gradient(160deg, #fff 0%, #f8faff 100%);
-  border: 1.5px solid #e2e8f0;
+  background: ${({ theme }) => theme.mode === 'dark'
+    ? 'rgba(255,255,255,0.05)'
+    : 'linear-gradient(160deg, #fff 0%, #f8faff 100%)'};
+  border: 1.5px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 14px;
-  box-shadow:
-    0 1px 3px rgba(15, 23, 42, 0.06),
-    0 4px 12px rgba(99, 102, 241, 0.04);
+  box-shadow: ${({ theme }) => theme.mode === 'dark'
+    ? '0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(99,102,241,0.08)'
+    : '0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(99,102,241,0.04)'};
   cursor: pointer;
   transition:
     box-shadow 0.2s ease,
@@ -1804,11 +1810,11 @@ const TreeCardReign = styled.div`
   align-items: center;
   padding: 2px 9px;
   border-radius: 999px;
-  border: 1px solid #ddd6fe;
-  background: #f5f3ff;
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.35)' : '#ddd6fe'};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.12)' : '#f5f3ff'};
   font-size: 11px;
   font-weight: 700;
-  color: #4c1d95;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#a78bfa' : '#4c1d95'};
   margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -1818,7 +1824,7 @@ const TreeCardReign = styled.div`
 const TreeCardMainName = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
   line-height: 1.3;
   margin-bottom: 1px;
@@ -1829,7 +1835,7 @@ const TreeCardMainName = styled.div`
 const TreeCardSubName = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   margin-bottom: 6px;
   line-height: 1.4;
   max-width: 100%;
@@ -1852,18 +1858,18 @@ const TreeCardRelation = styled.div`
   gap: 4px;
   margin-top: auto;
   padding: 4px 8px;
-  background: #f8fafc;
-  border: 1px solid #e9ecef;
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e9ecef'};
   border-radius: 6px;
   font-size: 10px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
   line-height: 1.4;
 `
 
 const TreeCardRegnal = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-style: italic;
   margin-top: 0;
 `
@@ -1875,9 +1881,9 @@ const TreeCardTitle = styled.div`
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #374151;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#94a3b8' : '#374151'};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f3f4f6'};
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   border-radius: 6px;
   line-height: 1.4;
   letter-spacing: 0.01em;

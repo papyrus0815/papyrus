@@ -193,53 +193,78 @@ model EventCountryRelationNew {
 }
 
 // ========================
-// 조약
+// 조약 (독립 엔티티 — Event 종속 제거)
 // ========================
 model Treaty {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 사건 FK
-  eventId String @map("event_id") @db.Char(36)
-  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  /// 조약명
+  /// 조약명 (예: 독소 불가침 조약)
   name String @db.VarChar(200)
 
-  /// 서명일
-  signDate DateTime @map("sign_date")
-
-  /// 만료일
-  expiryDate DateTime? @map("expiry_date")
-
-  /// 위반일
-  violationDate DateTime? @map("violation_date")
+  /// 조약 별칭 (예: 몰로토프-리벤트로프 조약)
+  alias String? @db.VarChar(200)
 
   /// 조약 타입
   type TreatyType
 
-  /// 조약 조항 (JSON 배열)
-  terms Json @db.Json
+  /// 서명일
+  signDate DateTime @map("sign_date")
 
-  /// 조약 설명
-  description String? @db.Text
+  /// 발효일
+  effectiveDate DateTime? @map("effective_date")
 
-  /// 서명국 목록
+  /// 만료일
+  expiryDate DateTime? @map("expiry_date")
+
+  /// 파기/위반일
+  violationDate DateTime? @map("violation_date")
+
+  /// 파기/종료 사유
+  violationReason String? @map("violation_reason") @db.VarChar(500)
+
+  /// 서명 장소 (자유 텍스트, 상세)
+  location String? @db.VarChar(300)
+
+  /// 서명 장소 행정구역 (선택, DB 행정구역 마스터)
+  signingAdministrativeDivisionId String? @map("signing_administrative_division_id") @db.Char(36)
+  signingAdministrativeDivision     AdministrativeDivision? @relation("TreatySigningAdminDivision", fields: [signingAdministrativeDivisionId], references: [id], onDelete: SetNull)
+
+  /// 개요
+  summary String? @db.Text
+
+  /// 상세 배경
+  background String? @db.Text
+
+  /// 주요 결과/여파
+  aftermath String? @db.Text
+
+  /// 등록한 계정
+  accountId String? @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountTreaties", fields: [accountId], references: [id], onDelete: SetNull)
+
+  /// 서명국/참여국 목록
   signatories TreatySignatory[]
 
-  /// 관련된 국가 관계 목록
-  countryRelations EventCountryRelationTreaty[]
+  /// 조약 조항 목록
+  terms TreatyTerm[]
+
+  /// 이미지 목록
+  images TreatyImage[]
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([eventId], name: "idx_treaty_eventId")
+  @@index([signDate], name: "idx_treaty_signDate")
+  @@index([type], name: "idx_treaty_type")
+  @@index([accountId], name: "idx_treaty_accountId")
+  @@index([signingAdministrativeDivisionId], name: "idx_treaty_signingAdminDivId")
   @@map("treaty")
 }
 
 // ========================
-// 조약 서명국
+// 조약 서명국/참여국
 // ========================
 model TreatySignatory {
   /// PK
@@ -257,7 +282,25 @@ model TreatySignatory {
   historicalCountryId String?            @map("historical_country_id") @db.Char(36)
   historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
 
-  /// 서명일 (조약 서명일과 다를 수 있음)
+  /// 서명 인물 FK (예: 몰로토프, 리벤트로프)
+  personId String?  @map("person_id") @db.Char(36)
+  person   Person?  @relation("TreatySignatoryPerson", fields: [personId], references: [id], onDelete: SetNull)
+
+  /// 소속 행정부 FK (예: 스탈린 행정부)
+  cabinetId String?  @map("cabinet_id") @db.Char(36)
+  cabinet   Cabinet? @relation("TreatySignatoryCabinet", fields: [cabinetId], references: [id], onDelete: SetNull)
+
+  /// 서명자 역할/직책 (예: 외무인민위원, 외무장관) — 직접 입력
+  role String? @db.VarChar(200)
+
+  /// 행정부 관직 정의 (GovernmentPositionDefinition, 선택)
+  positionDefinitionId String?                       @map("position_definition_id") @db.Char(36)
+  positionDefinition   GovernmentPositionDefinition? @relation(fields: [positionDefinitionId], references: [id], onDelete: SetNull)
+
+  /// 참여 유형 (서명국, 보증국, 조정국 등)
+  participationType TreatyParticipationType @default(SIGNATORY) @map("participation_type")
+
+  /// 국가별 서명일 (조약 전체 서명일과 다를 수 있음)
   signedAt DateTime? @map("signed_at")
 
   /// 비고
@@ -268,29 +311,95 @@ model TreatySignatory {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([treatyId], name: "idx_treaty_signatory_treatyId")
+  @@index([personId], name: "idx_treaty_signatory_personId")
+  @@index([cabinetId], name: "idx_treaty_signatory_cabinetId")
+  @@index([positionDefinitionId], name: "idx_treaty_signatory_positionDefId")
   @@map("treaty_signatory")
 }
 
 // ========================
-// 관계-조약 연결 테이블
+// 조약 조항
+// ========================
+model TreatyTerm {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 조약 FK
+  treatyId String @map("treaty_id") @db.Char(36)
+  treaty   Treaty @relation(fields: [treatyId], references: [id], onDelete: Cascade)
+
+  /// 조항 순번
+  order Int @default(0)
+
+  /// 조항 제목 (선택)
+  title String? @db.VarChar(200)
+
+  /// 조항 내용
+  content String @db.Text
+
+  /// 비밀 조항 여부 (예: 독소 불가침 조약 비밀의정서)
+  isSecret Boolean @default(false) @map("is_secret")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([treatyId], name: "idx_treaty_term_treatyId")
+  @@map("treaty_term")
+}
+
+// ========================
+// 조약 이미지
+// ========================
+model TreatyImage {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 조약 FK
+  treatyId String @map("treaty_id") @db.Char(36)
+  treaty   Treaty @relation(fields: [treatyId], references: [id], onDelete: Cascade)
+
+  /// 이미지 URL
+  imageUrl String @map("image_url") @db.VarChar(1000)
+
+  /// 캡션
+  caption String? @db.VarChar(500)
+
+  /// 출처
+  source String? @db.VarChar(500)
+
+  /// 표시 순서
+  order Int @default(0)
+
+  /// 대표 이미지 여부
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([treatyId, isPrimary], name: "idx_treaty_image_treatyId_isPrimary")
+  @@map("treaty_image")
+}
+
+// ========================
+// 관계-조약 연결 테이블 (레거시 — Treaty 독립 이전 이후 FK 제거)
 // ========================
 model EventCountryRelationTreaty {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
   /// 관계 FK
-  relationId String                   @map("relation_id") @db.Char(36)
+  relationId String                  @map("relation_id") @db.Char(36)
   relation   EventCountryRelationNew @relation(fields: [relationId], references: [id], onDelete: Cascade)
 
-  /// 조약 FK
-  treatyId String @map("treaty_id") @db.Char(36)
-  treaty   Treaty @relation(fields: [treatyId], references: [id], onDelete: Cascade)
+  /// 조약 ID (문자열 보존용, FK 관계 제거)
+  treatyId String? @map("treaty_id") @db.Char(36)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([relationId, treatyId])
   @@map("event_country_relation_treaty")
 }
 

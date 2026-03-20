@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
-import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 
 import type { Ethnicity } from '@/shared/api/ethnicity'
@@ -47,9 +46,17 @@ export function EthnicitySection({
     if (!entityId) return
     setLoading(true)
     if (countryId) {
-      ethnicityApi.getAll({ countryId }).then(setList).catch(() => setList([])).finally(() => setLoading(false))
+      ethnicityApi
+        .getAll({ countryId })
+        .then(setList)
+        .catch(() => setList([]))
+        .finally(() => setLoading(false))
     } else if (historicalCountryId) {
-      ethnicityApi.getAll({ historicalCountryId }).then(setList).catch(() => setList([])).finally(() => setLoading(false))
+      ethnicityApi
+        .getAll({ historicalCountryId })
+        .then(setList)
+        .catch(() => setList([]))
+        .finally(() => setLoading(false))
     } else {
       setLoading(false)
     }
@@ -60,11 +67,14 @@ export function EthnicitySection({
   }, [countryId, historicalCountryId])
 
   const openEditModal = () => {
-    ethnicityApi.getAll().then((all) => {
-      setAllEthnicities(all)
-      setModalSelectedIds(list.map((e) => e.id))
-      setEditModalOpen(true)
-    }).catch(() => setAllEthnicities([]))
+    ethnicityApi
+      .getAll()
+      .then((all) => {
+        setAllEthnicities(all)
+        setModalSelectedIds(list.map((e) => e.id))
+        setEditModalOpen(true)
+      })
+      .catch(() => setAllEthnicities([]))
   }
 
   const handleToggleEthnicity = (id: string) => {
@@ -80,7 +90,10 @@ export function EthnicitySection({
       if (countryId) {
         await ethnicityApi.setCountryEthnicities(countryId, modalSelectedIds)
       } else if (historicalCountryId) {
-        await ethnicityApi.setHistoricalCountryEthnicities(historicalCountryId, modalSelectedIds)
+        await ethnicityApi.setHistoricalCountryEthnicities(
+          historicalCountryId,
+          modalSelectedIds,
+        )
       }
       loadList()
       setEditModalOpen(false)
@@ -93,27 +106,21 @@ export function EthnicitySection({
 
   if (!entityId) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{ padding: '36px 32px 48px' }}
-      >
-        <p style={{ color: '#64748b', fontSize: 14 }}>국가를 선택하면 구성 민족을 관리할 수 있습니다.</p>
-      </motion.div>
+      <div style={{ padding: '36px 32px 48px' }}>
+        <p style={{ color: '#64748b', fontSize: 14 }}>
+          국가를 선택하면 구성 민족을 관리할 수 있습니다.
+        </p>
+      </div>
     )
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+    <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 32,
         padding: '36px 32px 48px',
-        background: '#ffffff',
         minHeight: 'calc(100vh - 200px)',
       }}
     >
@@ -150,10 +157,18 @@ export function EthnicitySection({
               fontWeight: 500,
             }}
           >
-            이 국가의 구성 민족을 연결·관리합니다. 민족 마스터 데이터는 전체 보기에서 등록·수정할 수 있습니다.
+            이 국가의 구성 민족을 연결·관리합니다. 민족 마스터 데이터는 전체
+            보기에서 등록·수정할 수 있습니다.
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexShrink: 0,
+          }}
+        >
           <button
             type="button"
             onClick={openEditModal}
@@ -212,7 +227,8 @@ export function EthnicitySection({
               fontSize: 14,
             }}
           >
-            연결된 민족이 없습니다. &quot;구성 민족 편집&quot;에서 추가하거나, 민족 전체 관리에서 새 민족을 등록한 뒤 연결하세요.
+            연결된 민족이 없습니다. &quot;구성 민족 편집&quot;에서 추가하거나,
+            민족 전체 관리에서 새 민족을 등록한 뒤 연결하세요.
           </div>
         ) : (
           <div
@@ -250,7 +266,11 @@ export function EthnicitySection({
                     <img
                       src={getUploadImageUrl(e.thumbnailUrl)}
                       alt=""
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
                     />
                   </div>
                 ) : (
@@ -259,7 +279,8 @@ export function EthnicitySection({
                       width: 44,
                       height: 44,
                       borderRadius: 10,
-                      background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                      background:
+                        'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
                       flexShrink: 0,
                       display: 'flex',
                       alignItems: 'center',
@@ -271,11 +292,15 @@ export function EthnicitySection({
                   </div>
                 )}
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>
+                  <div
+                    style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}
+                  >
                     {e.name}
                   </div>
                   {e.nameLocal && (
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                    <div
+                      style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}
+                    >
                       {e.nameLocal}
                     </div>
                   )}
@@ -340,6 +365,6 @@ export function EthnicitySection({
           </div>
         }
       />
-    </motion.div>
+    </div>
   )
 }

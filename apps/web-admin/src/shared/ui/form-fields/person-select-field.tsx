@@ -82,7 +82,7 @@ export const PersonSelectField: React.FC<PersonSelectFieldProps> = ({
               {selectedPerson?.profileImageUrl ? (
                 <img src={selectedPerson.profileImageUrl} alt="" />
               ) : (
-                <FiUser size={22} />
+                <FiUser size={22} strokeWidth={2} />
               )}
             </PersonAvatar>
             <PersonLabel>

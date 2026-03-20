@@ -6,22 +6,22 @@ import { FiPlus, FiSettings } from 'react-icons/fi'
 import { type ContinentOption, type Country } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 
-import * as CountryDetailStyles from './country-detail.styles'
-import { LoadingOverlay } from './loading-overlay'
-import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
-import { PersonTabContent } from './person-tab-content'
 import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
+import * as CountryDetailStyles from './country-detail.styles'
 import * as CountryStyles from './country-detail.styles'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
-import { HistorySection } from './history-section.widget'
 import { LinkedHistoricalCountriesSection } from './linked-historical-countries-section.widget'
+import { TreatySectionWidget } from './treaty-section.widget'
+import { LoadingOverlay } from './loading-overlay'
 import { MapRegionSection } from './map-region-section.widget'
+import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
 import { PersonListSection } from './person-list-section.widget'
 import { PersonStatsSection } from './person-stats-section.widget'
+import { PersonTabContent } from './person-tab-content'
 
 // 목업 데이터 (지도 및 지역 탭용)
 const mockCities = [
@@ -157,8 +157,6 @@ function CountryDetailInner({
     } else if (initialDetailTab === 'persons-list') {
       setActiveSubTab('person')
       setPersonInnerTab('list')
-    } else if (initialDetailTab === 'linked-historical') {
-      setActiveSubTab('linkedHistorical')
     } else if (initialDetailTab === 'regions') {
       setActiveSubTab('map')
     } else if (initialDetailTab === 'government') {
@@ -171,8 +169,6 @@ function CountryDetailInner({
       setActiveSubTab(tab)
       if (tab === 'statistics') onDashboardView?.()
       else if (tab === 'person') onDetailTabChange?.('person')
-      else if (tab === 'linkedHistorical')
-        onDetailTabChange?.('linked-historical')
       else if (tab === 'map') onDetailTabChange?.('regions')
       else if (tab === 'government') onDetailTabChange?.('government')
     },
@@ -308,9 +304,9 @@ function CountryDetailInner({
                   <AnimatePresence initial={false} mode="wait">
                     <motion.div
                       key={activeSubTab}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
                       transition={{
                         duration: 0.32,
                         ease: [0.25, 0.1, 0.25, 1],
@@ -324,10 +320,6 @@ function CountryDetailInner({
                     >
                       {activeSubTab === 'statistics' && country && (
                         <CountryDetailDashboard country={country} />
-                      )}
-
-                      {activeSubTab === 'linkedHistorical' && country && (
-                        <LinkedHistoricalCountriesSection country={country} />
                       )}
 
                       {activeSubTab === 'map' && (
@@ -360,6 +352,14 @@ function CountryDetailInner({
 
                       {activeSubTab === 'ethnicity' && (
                         <EthnicitySection countryId={country.id} />
+                      )}
+
+                      {activeSubTab === 'linkedHistorical' && (
+                        <LinkedHistoricalCountriesSection country={country} />
+                      )}
+
+                      {activeSubTab === 'treaty' && (
+                        <TreatySectionWidget country={country} />
                       )}
 
                       {activeSubTab === 'person' && (
@@ -463,16 +463,11 @@ function CountryDetailInner({
                           )}
                         </CountryStyles.TabContentPane>
                       )}
-
-                      {activeSubTab === 'history' && (
-                        <HistorySection selectedCountry={country} />
-                      )}
                     </motion.div>
                   </AnimatePresence>
                 </motion.div>
               </motion.div>
             </CountryStyles.AnalyticsDashboard>
-
           </motion.div>
         )}
       </AnimatePresence>

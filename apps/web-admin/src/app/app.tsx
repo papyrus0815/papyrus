@@ -33,60 +33,72 @@ function ThemedToaster() {
   const border = theme.colors.border.default
   const textPrimary = theme.colors.text.primary
 
+  const toastBase = {
+    background: isDark ? 'rgba(22, 22, 24, 0.94)' : 'rgba(255, 255, 255, 0.96)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    color: textPrimary,
+    fontSize: '14px',
+    lineHeight: 1.45,
+    borderRadius: '999px',
+    padding: '14px 22px',
+    fontWeight: '600',
+    letterSpacing: '-0.02em',
+    boxShadow: isDark
+      ? `0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06)`
+      : '0 12px 40px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06)',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : border}`,
+    maxWidth: 'min(420px, calc(100vw - 32px))',
+    minWidth: '260px',
+  } as const
+
   return (
     <Toaster
-      position="top-right"
-      gutter={16}
-      containerStyle={{ top: 80, right: 20 }}
+      position="bottom-center"
+      gutter={12}
+      containerStyle={{ bottom: 28 }}
       toastOptions={{
         duration: 3500,
-        style: {
-          background: bg,
-          color: textPrimary,
-          fontSize: '14px',
-          borderRadius: '12px',
-          padding: '12px 16px',
-          fontWeight: '500',
-          boxShadow: isDark
-            ? `0 4px 12px ${theme.colors.shadow.md}`
-            : '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04)',
-          border: `1px solid ${border}`,
-          maxWidth: '400px',
-          minWidth: '280px',
-        },
+        style: toastBase,
         success: {
-          duration: 3000,
+          duration: 3200,
           style: {
-            background: bg,
-            color: isDark ? theme.colors.success : '#065f46',
-            borderLeft: `4px solid ${theme.colors.success}`,
+            ...toastBase,
+            color: isDark ? '#a7f3d0' : '#065f46',
+            border: `1px solid ${isDark ? 'rgba(16,185,129,0.35)' : 'rgba(16,185,129,0.35)'}`,
+            boxShadow: isDark
+              ? `0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(16,185,129,0.2)`
+              : `0 12px 40px rgba(16, 185, 129, 0.15), 0 4px 12px rgba(0,0,0,0.06)`,
           },
           iconTheme: {
             primary: theme.colors.success,
-            secondary: bg,
+            secondary: isDark ? 'rgba(22,22,24,0.9)' : '#ecfdf5',
           },
         },
         error: {
-          duration: 4000,
+          duration: 4200,
           style: {
-            background: bg,
-            color: isDark ? theme.colors.error : '#991b1b',
-            borderLeft: `4px solid ${theme.colors.error}`,
+            ...toastBase,
+            color: isDark ? '#fecaca' : '#991b1b',
+            border: `1px solid ${isDark ? 'rgba(239,68,68,0.35)' : 'rgba(239,68,68,0.3)'}`,
+            boxShadow: isDark
+              ? `0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(239,68,68,0.2)`
+              : `0 12px 40px rgba(239, 68, 68, 0.12), 0 4px 12px rgba(0,0,0,0.06)`,
           },
           iconTheme: {
             primary: theme.colors.error,
-            secondary: bg,
+            secondary: isDark ? 'rgba(22,22,24,0.9)' : '#fef2f2',
           },
         },
         loading: {
           style: {
-            background: bg,
-            color: isDark ? theme.colors.accent : '#1e40af',
-            borderLeft: `4px solid ${theme.colors.accent}`,
+            ...toastBase,
+            color: isDark ? '#bae6fd' : '#1e40af',
+            border: `1px solid ${isDark ? 'rgba(56,189,248,0.35)' : 'rgba(59,130,246,0.25)'}`,
           },
           iconTheme: {
             primary: theme.colors.accent,
-            secondary: bg,
+            secondary: isDark ? 'rgba(22,22,24,0.9)' : '#eff6ff',
           },
         },
       }}

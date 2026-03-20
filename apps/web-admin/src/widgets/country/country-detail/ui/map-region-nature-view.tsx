@@ -5,14 +5,10 @@
 import { useMemo, useState } from 'react'
 
 import { GoogleMap } from '@/shared/ui/google-map/google-map'
+import { useThemeStore } from '@/shared/styles/theme.store'
 
 import { mockNatureData } from '../mock'
 import * as Styled from './map-region-section.styles'
-
-const BORDER = '#e5e7eb'
-const MUTED = '#64748b'
-const TITLE = '#0f172a'
-const MAIN = '#6366f1'
 
 type NatureFilter = 'all' | 'mountains' | 'rivers' | 'lakes' | 'coasts'
 
@@ -29,6 +25,21 @@ const FILTERS: { value: NatureFilter; label: string }[] = [
 ]
 
 export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
+
+  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
+  const MUTED = isDark ? '#a1a1aa' : '#64748b'
+  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
+  const MAIN = '#6366f1'
+  const BG = isDark ? 'rgba(255,255,255,0.03)' : '#ffffff'
+  const BG_SECONDARY = isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc'
+  const BG_SELECTED = isDark ? 'rgba(99,106,242,0.12)' : '#eef2ff'
+  const PILL_BG = isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
+  const SHADOW = isDark
+    ? '0 2px 8px rgba(0,0,0,0.35)'
+    : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)'
+
   const [filter, setFilter] = useState<NatureFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -116,11 +127,11 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
         <Styled.MapRegionSectionLabel>지도</Styled.MapRegionSectionLabel>
         <div
           style={{
-            background: '#ffffff',
+            background: BG,
             border: `1px solid ${BORDER}`,
             borderRadius: 16,
             overflow: 'hidden',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+            boxShadow: SHADOW,
             height: 320,
           }}
         >
@@ -140,7 +151,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: '#f8fafc',
+                background: BG_SECONDARY,
               }}
             >
               <span style={{ color: MUTED, fontSize: 14, fontWeight: 500 }}>
@@ -153,7 +164,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
 
       <section aria-label="자연지리">
         <Styled.MapRegionSectionLabel>자연지리</Styled.MapRegionSectionLabel>
-        {/* KPI 스트립 — 행정구역과 동일 톤 */}
+        {/* KPI 스트립 */}
         <div
           style={{
             display: 'flex',
@@ -161,7 +172,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
             gap: 12,
             marginBottom: 16,
             padding: '10px 14px',
-            background: '#f8fafc',
+            background: BG_SECONDARY,
             borderRadius: 12,
             border: `1px solid ${BORDER}`,
             fontSize: 13,
@@ -188,14 +199,14 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
             alignItems: 'start',
           }}
         >
-          {/* 좌측: pill 필터 + 목록 — 높이 제한으로 리스트 스크롤 */}
+          {/* 좌측: pill 필터 + 목록 */}
           <div
             style={{
-              background: '#ffffff',
+              background: BG,
               border: `1px solid ${BORDER}`,
               borderRadius: 16,
               overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              boxShadow: SHADOW,
               display: 'flex',
               flexDirection: 'column',
               maxHeight: 1120,
@@ -206,6 +217,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
               style={{
                 padding: '14px 16px',
                 borderBottom: `1px solid ${BORDER}`,
+                background: PILL_BG,
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: 6,
@@ -221,15 +233,18 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                     padding: '8px 14px',
                     borderRadius: 14,
                     border: 'none',
-                    background: filter === f.value ? '#ffffff' : 'transparent',
-                    color: filter === f.value ? '#4f46e5' : MUTED,
+                    background: filter === f.value
+                      ? (isDark ? 'rgba(255,255,255,0.15)' : '#ffffff')
+                      : 'transparent',
+                    color: filter === f.value
+                      ? (isDark ? '#ffffff' : '#4f46e5')
+                      : MUTED,
                     fontSize: 13,
                     fontWeight: filter === f.value ? 600 : 500,
                     cursor: 'pointer',
-                    boxShadow:
-                      filter === f.value
-                        ? '0 2px 8px rgba(79,70,229,0.12)'
-                        : 'none',
+                    boxShadow: filter === f.value
+                      ? (isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(79,70,229,0.12)')
+                      : 'none',
                   }}
                 >
                   {f.label}
@@ -272,8 +287,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                       marginBottom: 6,
                       borderRadius: 12,
                       borderLeft: `3px solid ${selectedId === item.id ? MAIN : 'transparent'}`,
-                      background:
-                        selectedId === item.id ? '#eef2ff' : '#ffffff',
+                      background: selectedId === item.id ? BG_SELECTED : BG,
                       border: `1px solid ${selectedId === item.id ? MAIN : BORDER}`,
                       cursor: 'pointer',
                       transition: 'all 0.15s ease',
@@ -301,11 +315,11 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
           {/* 우측: 상세 */}
           <div
             style={{
-              background: '#ffffff',
+              background: BG,
               border: `1px solid ${BORDER}`,
               borderRadius: 16,
               overflow: 'auto',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+              boxShadow: SHADOW,
               padding: 24,
               minHeight: 0,
             }}
@@ -329,7 +343,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                     width: 64,
                     height: 64,
                     borderRadius: '50%',
-                    background: '#f1f5f9',
+                    background: BG_SECONDARY,
                     border: `1px solid ${BORDER}`,
                     display: 'flex',
                     alignItems: 'center',
@@ -366,45 +380,41 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns:
-                      'repeat(auto-fill, minmax(160px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
                     gap: 12,
                   }}
                 >
                   {selectedMountain && (
                     <>
-                      <MetaCard label="지역" value={selectedMountain.region} />
-                      <MetaCard label="높이" value={selectedMountain.height} />
-                      <MetaCard
-                        label="위치"
-                        value={selectedMountain.location}
-                      />
+                      <MetaCard label="지역" value={selectedMountain.region} isDark={isDark} />
+                      <MetaCard label="높이" value={selectedMountain.height} isDark={isDark} />
+                      <MetaCard label="위치" value={selectedMountain.location} isDark={isDark} />
                       {selectedMountain.nationalPark && (
-                        <MetaCard label="구분" value="국립공원" />
+                        <MetaCard label="구분" value="국립공원" isDark={isDark} />
                       )}
                     </>
                   )}
                   {selectedRiver && (
                     <>
-                      <MetaCard label="길이" value={selectedRiver.length} />
-                      <MetaCard label="발원" value={selectedRiver.source} />
-                      <MetaCard label="하구" value={selectedRiver.mouth} />
-                      <MetaCard label="지역" value={selectedRiver.region} />
+                      <MetaCard label="길이" value={selectedRiver.length} isDark={isDark} />
+                      <MetaCard label="발원" value={selectedRiver.source} isDark={isDark} />
+                      <MetaCard label="하구" value={selectedRiver.mouth} isDark={isDark} />
+                      <MetaCard label="지역" value={selectedRiver.region} isDark={isDark} />
                     </>
                   )}
                   {selectedLake && (
                     <>
-                      <MetaCard label="면적" value={selectedLake.area} />
-                      <MetaCard label="수심" value={selectedLake.depth} />
-                      <MetaCard label="유형" value={selectedLake.type} />
-                      <MetaCard label="지역" value={selectedLake.region} />
+                      <MetaCard label="면적" value={selectedLake.area} isDark={isDark} />
+                      <MetaCard label="수심" value={selectedLake.depth} isDark={isDark} />
+                      <MetaCard label="유형" value={selectedLake.type} isDark={isDark} />
+                      <MetaCard label="지역" value={selectedLake.region} isDark={isDark} />
                     </>
                   )}
                   {selectedCoast && (
                     <>
-                      <MetaCard label="길이" value={selectedCoast.length} />
-                      <MetaCard label="지역" value={selectedCoast.region} />
-                      <MetaCard label="유형" value={selectedCoast.type} />
+                      <MetaCard label="길이" value={selectedCoast.length} isDark={isDark} />
+                      <MetaCard label="지역" value={selectedCoast.region} isDark={isDark} />
+                      <MetaCard label="유형" value={selectedCoast.type} isDark={isDark} />
                     </>
                   )}
                 </div>
@@ -417,12 +427,25 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
   )
 }
 
-function MetaCard({ label, value }: { label: string; value: string }) {
+function MetaCard({
+  label,
+  value,
+  isDark,
+}: {
+  label: string
+  value: string
+  isDark: boolean
+}) {
+  const BG = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc'
+  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
+  const MUTED = isDark ? '#a1a1aa' : '#64748b'
+  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
+
   return (
     <div
       style={{
         padding: '14px 16px',
-        background: '#f8fafc',
+        background: BG,
         borderRadius: 12,
         border: `1px solid ${BORDER}`,
       }}

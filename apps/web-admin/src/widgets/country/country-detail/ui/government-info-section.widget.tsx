@@ -6,8 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
-import { FiGrid, FiInfo, FiPlus, FiSearch, FiX, FiAward } from 'react-icons/fi'
+import { FiAward, FiGrid, FiInfo, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
+
 import type {
   AdministrationDepartment,
   AdministrationDepartmentCategory,
@@ -31,9 +32,33 @@ import {
   uploadImage,
   validateImageFile,
 } from '@/shared/api/upload'
+import { glassCardMixin } from '@/shared/styles/mixins'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import {
+  ModalBody,
+  ModalBox,
+  ModalCloseButton,
+  ModalHeader,
+  ModalOverlay,
+  ModalSubtitle,
+  ModalTitle,
+} from '@/shared/ui/modal/modal.styles'
+import {
+  FieldControl,
+  FieldLabel,
+  FieldRow,
+  FormRows,
+  FormSectionInner,
+  TabButton,
+  TabNavigation,
+} from '@/shared/ui/register-form-layout'
+import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import {
+  SelectModal,
+  type SelectOption,
+} from '@/shared/ui/select-modal/select-modal'
 
 import { mockGovernmentData } from '../mock'
 import type { HistoricalEvent } from '../mock/types'
@@ -48,106 +73,6 @@ export type GovernmentContentTab =
   | 'cabinets'
   | 'organizations'
   | 'positions'
-
-/* 행정조직 탭 스타일 */
-const GovTabNav = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  margin-bottom: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  overflow-x: visible;
-  flex-shrink: 0;
-  min-width: 0;
-  max-width: 100%;
-  flex-wrap: wrap;
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
-  @media (max-width: 768px) {
-    padding: 0;
-  }
-`
-const GovTabButton = styled.button<{ $active?: boolean }>`
-  flex: 0 0 auto;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid ${(p) => (p.$active ? '#c7d2fe' : 'transparent')};
-  background: ${(p) => (p.$active ? '#eef2ff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4338ca' : '#64748b')};
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? '600' : '500')};
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
-  white-space: nowrap;
-  &:hover {
-    color: ${(p) => (p.$active ? '#4338ca' : '#475569')};
-    background: ${(p) => (p.$active ? '#eef2ff' : '#f8fafc')};
-    border-color: ${(p) => (p.$active ? '#c7d2fe' : '#e2e8f0')};
-  }
-
-  @media (max-width: 768px) {
-    padding: 7px 11px;
-    font-size: 12px;
-  }
-`
-
-const GovHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 4px 0 20px;
-  border-bottom: 1px solid #e9eef5;
-  flex-wrap: wrap;
-`
-
-const GovHeaderTitle = styled.h2`
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.03em;
-`
-
-const GovHeaderDesc = styled.p`
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #94a3b8;
-  line-height: 1.5;
-`
-
-const GovCategoryButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #64748b;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
-
-  &:hover {
-    color: #4338ca;
-    border-color: #c7d2fe;
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.12);
-  }
-`
 
 export interface GovernmentInfoSectionProps {
   /** 국가(현대/역사) — 행정부 탭에서 사용 */
@@ -181,7 +106,7 @@ const OrgListHeader = styled.header`
   gap: 16px;
   padding: 20px 0 20px;
   margin-bottom: 24px;
-  border-bottom: 1px solid #e9eef5;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 const OrgListHeaderRow = styled.div`
   display: flex;
@@ -199,7 +124,7 @@ const OrgListHeaderTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.03em;
   display: flex;
   align-items: baseline;
@@ -208,12 +133,12 @@ const OrgListHeaderTitle = styled.h2`
 const OrgListHeaderCount = styled.span`
   font-size: 13px;
   font-weight: 400;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 const OrgListHeaderDesc = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 `
 const OrgToolbarRow = styled.div`
@@ -232,8 +157,9 @@ const OrgSearchInput = styled.input`
   width: 100%;
   padding: 9px 14px 9px 34px;
   font-size: 13px;
-  color: #111827;
-  background: #f8fafc;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
   border: 1px solid ${BORDER_COLOR};
   border-radius: 10px;
   outline: none;
@@ -243,10 +169,11 @@ const OrgSearchInput = styled.input`
     background 0.15s ease,
     box-shadow 0.15s ease;
   &::placeholder {
-    color: #b0bac9;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   &:focus {
-    background: #fff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#fff'};
     border-color: ${MAIN};
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
   }
@@ -286,19 +213,29 @@ const OrgGrid = styled.div`
   }
 `
 const OrgCard = styled.div`
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
   border-radius: 14px;
   padding: 0;
-  border: 1px solid #e9eef5;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 1px 4px rgba(0,0,0,0.25)'
+      : '0 1px 4px rgba(0, 0, 0, 0.04)'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(12px)' : 'none'};
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.2s ease;
   overflow: hidden;
   &:hover {
-    border-color: #c7d2fe;
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.1);
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.5)' : '#c7d2fe'};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 6px 20px rgba(99,102,241,0.15)'
+        : '0 6px 20px rgba(99, 102, 241, 0.1)'};
     transform: translateY(-1px);
   }
 `
@@ -310,85 +247,22 @@ const OrgEmptyState = styled.div`
   text-align: center;
   font-size: 14px;
   font-weight: 500;
-  color: #94a3b8;
-  background: #fafbfd;
-  border: 1.5px dashed #dde3ec;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafbfd'};
+  border: 1.5px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#dde3ec'};
   border-radius: 14px;
 `
-const OrgModalOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 28px;
-`
-const OrgModalBox = styled.div`
-  background: #fff;
-  border-radius: 18px;
-  border: 1px solid #e5e7eb;
-  box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(0, 0, 0, 0.04);
+/* 행정기구 등록 모달 */
+const OrgModalBoxCustom = styled(ModalBox)`
   max-width: 720px;
-  width: 100%;
-  max-height: 90vh;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  z-index: ${Z_INDEX.MODAL_CONTENT};
 `
-const OrgModalHeader = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 22px 28px;
-  border-bottom: 1px solid #f0f4f8;
-`
-const OrgModalTitle = styled.h2`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.025em;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  svg {
-    color: #64748b;
-    flex-shrink: 0;
-  }
-`
-const OrgCloseBtn = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: none;
-  background: #f1f5f9;
-  color: #64748b;
-  border-radius: 9px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-  &:hover {
-    background: #e2e8f0;
-    color: #0f172a;
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
-  }
-`
-const OrgFormBody = styled.div`
+const OrgModalBody = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -397,11 +271,13 @@ const OrgFormBody = styled.div`
     width: 6px;
   }
   &::-webkit-scrollbar-track {
-    background: #f3f4f6;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f3f4f6'};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.15)' : '#cbd5e1'};
     border-radius: 3px;
   }
 `
@@ -409,17 +285,18 @@ const OrgFormDesc = styled.div`
   margin: 0 0 20px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
-  background: #f8fafc;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
   border-radius: 10px;
-  border-left: 3px solid #e2e8f0;
+  border-left: 3px solid ${({ theme }) => theme.colors.border.default};
   display: flex;
   align-items: flex-start;
   gap: 10px;
   svg {
     flex-shrink: 0;
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.secondary};
     margin-top: 2px;
   }
 `
@@ -430,24 +307,25 @@ const OrgLabel = styled.label`
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 8px;
 `
 const OrgInput = styled.input`
   width: 100%;
   padding: 14px 16px;
   font-size: 15px;
-  color: #0f172a;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   box-sizing: border-box;
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   outline: none;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   &:focus {
     border-color: ${MAIN};
@@ -458,10 +336,11 @@ const OrgSelect = styled.select`
   width: 100%;
   padding: 14px 16px;
   font-size: 15px;
-  color: #0f172a;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   outline: none;
   transition:
     border-color 0.2s ease,
@@ -476,12 +355,14 @@ const OrgTextArea = styled.textarea`
   min-height: 88px;
   padding: 14px 16px;
   font-size: 15px;
-  color: #0f172a;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   box-sizing: border-box;
   resize: vertical;
   outline: none;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
@@ -502,7 +383,7 @@ const OrgFormActions = styled.div`
   justify-content: flex-end;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
 `
 const OrgPrimaryBtn = styled.button`
@@ -531,17 +412,19 @@ const OrgCancelBtn = styled.button`
   padding: 12px 24px;
   font-size: 14px;
   font-weight: 500;
-  color: #64748b;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   cursor: pointer;
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
   &:hover {
-    background: #f8fafc;
-    color: #0f172a;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#f8fafc'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
     outline: none;
@@ -551,118 +434,31 @@ const OrgCancelBtn = styled.button`
 `
 
 /* 부처 카테고리 모달 — CountrySelectModal·HistoricalCountryFormModal 디자인 참조 */
-const BORDER_LIGHT = '#f3f4f6'
-const TEXT = '#0f172a'
-const TEXT_MUTED = '#64748b'
-const BG_MUTED = '#f8fafc'
 
-const CategoryModalOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 28px;
-`
-const CategoryModalBox = styled(motion.div)`
+/* 카테고리 모달 — CategoryBox는 motion 사용 */
+const CategoryBox = styled(motion.div)`
   width: 100%;
   max-width: 560px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  ${({ theme }) => glassCardMixin(theme)}
   border-radius: 16px;
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
   z-index: ${Z_INDEX.MODAL_CONTENT};
   overflow: hidden;
 `
-const CategoryModalHeader = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 24px 28px;
-  border-bottom: 1px solid ${BORDER_LIGHT};
-`
-const CategoryModalTitle = styled.h3`
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: ${TEXT};
-  letter-spacing: -0.02em;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  svg {
-    color: ${TEXT_MUTED};
-    flex-shrink: 0;
-  }
-`
-const CategoryModalDesc = styled.p`
-  margin: 8px 0 0 0;
-  font-size: 14px;
-  color: ${TEXT_MUTED};
-`
-const CategoryModalCloseBtn = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: none;
-  border-radius: 10px;
-  background: ${BG_MUTED};
-  color: ${TEXT_MUTED};
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-  &:hover {
-    background: #e2e8f0;
-    color: ${TEXT};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
-  }
-`
-const CategoryModalBody = styled.div`
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 24px 28px 28px;
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-track {
-    background: ${BORDER_LIGHT};
-    border-radius: 3px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
-  }
-`
 const CategoryFormBlock = styled.div`
+  padding: 28px;
   margin-bottom: 24px;
-  padding: 20px;
-  background: #f8fafc;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 const CategorySectionTitle = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: ${TEXT_MUTED};
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 16px;
@@ -672,24 +468,25 @@ const CategoryFormLabel = styled.label`
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: ${TEXT};
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 const CategoryInput = styled.input`
   width: 100%;
   padding: 14px 16px;
   margin-bottom: 16px;
   font-size: 15px;
-  color: ${TEXT};
+  color: ${({ theme }) => theme.colors.text.primary};
   border: 1px solid ${BORDER_COLOR};
   border-radius: 12px;
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   outline: none;
   box-sizing: border-box;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   &:last-of-type {
     margin-bottom: 20px;
@@ -730,19 +527,21 @@ const CategorySecondaryBtn = styled.button`
   padding: 12px 20px;
   font-size: 14px;
   font-weight: 500;
-  color: ${TEXT_MUTED};
-  background: #fff;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   border: 1px solid ${BORDER_COLOR};
   border-radius: 12px;
   cursor: pointer;
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#f8fafc'};
   }
 `
 const CategoryListSectionTitle = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: ${TEXT_MUTED};
+  color: ${({ theme }) => theme.colors.text.secondary};
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 12px;
@@ -762,14 +561,17 @@ const CategoryListItem = styled.li`
   padding: 14px 16px;
   gap: 12px;
   border-radius: 10px;
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
   border: 1px solid ${BORDER_COLOR};
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
   &:hover {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f8fafc'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
   }
 `
 const CategoryListItemLabel = styled.div`
@@ -777,9 +579,9 @@ const CategoryListItemLabel = styled.div`
   min-width: 0;
   font-size: 14px;
   font-weight: 600;
-  color: ${TEXT};
+  color: ${({ theme }) => theme.colors.text.primary};
   span {
-    color: ${TEXT_MUTED};
+    color: ${({ theme }) => theme.colors.text.secondary};
     margin-left: 6px;
     font-weight: 500;
     font-size: 13px;
@@ -795,12 +597,14 @@ const CategoryEditBtn = styled.button`
   font-size: 13px;
   font-weight: 600;
   color: ${MAIN};
-  background: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#fff'};
   border: 1px solid ${BORDER_COLOR};
   border-radius: 10px;
   cursor: pointer;
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#f8fafc'};
     border-color: rgba(99, 102, 241, 0.3);
   }
 `
@@ -809,42 +613,146 @@ const CategoryDeleteBtn = styled.button`
   font-size: 13px;
   font-weight: 600;
   color: #dc2626;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(220,38,38,0.1)' : '#fef2f2'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(220,38,38,0.3)' : '#fecaca'};
   border-radius: 10px;
   cursor: pointer;
   &:hover {
-    background: #fee2e2;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(220,38,38,0.18)' : '#fee2e2'};
   }
 `
 const CategoryEmptyMessage = styled.li`
   padding: 32px 24px;
   font-size: 14px;
-  color: ${TEXT_MUTED};
-  background: #f8fafc;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'};
   border-radius: 12px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   text-align: center;
   line-height: 1.55;
   list-style: none;
 `
 
-const sectionLabelStyle: React.CSSProperties = {
-  marginBottom: 18,
-  fontSize: 12,
-  fontWeight: 600,
-  color: '#64748b',
-  lineHeight: 1.4,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-}
+const SectionLabelDiv = styled.div`
+  margin-bottom: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+`
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div style={sectionLabelStyle}>{children}</div>
+  return <SectionLabelDiv>{children}</SectionLabelDiv>
 }
+
+/** 폼 행 (레이블 + 컨트롤) */
+/** 중앙부처 등록 폼 행 (200px 레이블 컬럼, FieldRow 기반) */
+const FormFieldRow = styled(FieldRow)`
+  grid-template-columns: 200px 1fr;
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`
+const FormSelectBtn = styled.button<{ $hasValue?: boolean }>`
+  width: 100%;
+  max-width: 380px;
+  padding: 12px 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
+  border-radius: 12px;
+  font-size: 14px;
+  color: ${(p) =>
+    p.$hasValue
+      ? p.theme.mode === 'dark'
+        ? '#f1f5f9'
+        : '#111827'
+      : p.theme.mode === 'dark'
+        ? '#64748b'
+        : '#9ca3af'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#d1d5db'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fafafa'};
+  }
+`
+const FormTextareaField = styled.textarea`
+  width: 100%;
+  max-width: 440px;
+  padding: 12px 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
+  border-radius: 12px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  resize: vertical;
+  min-height: 72px;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.6;
+  transition: border-color 0.15s;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.6)' : '#6366f1'};
+  }
+`
+const FormInputField = styled.input`
+  width: 100%;
+  max-width: 380px;
+  padding: 12px 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
+  border-radius: 12px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  outline: none;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.6)' : '#6366f1'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
+  }
+`
 
 /** 부처에 연결된 직위의 역대 장관(재임) 목록 — API로 조회 */
 function DepartmentTenuresBlock({ departmentId }: { departmentId: string }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const { data: tenures = [], isLoading } = useQuery({
     queryKey: ['administration-department-tenures', departmentId],
     queryFn: () =>
@@ -863,13 +771,17 @@ function DepartmentTenuresBlock({ departmentId }: { departmentId: string }) {
   }
   return (
     <div
-      style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}
+      style={{
+        marginTop: 16,
+        paddingTop: 16,
+        borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+      }}
     >
       <div
         style={{
           fontSize: 11,
           fontWeight: 600,
-          color: '#64748b',
+          color: isDark ? '#64748b' : '#64748b',
           letterSpacing: '0.05em',
           textTransform: 'uppercase',
           marginBottom: 10,
@@ -892,7 +804,7 @@ function DepartmentTenuresBlock({ departmentId }: { departmentId: string }) {
             key={t.id}
             style={{
               fontSize: 13,
-              color: '#374151',
+              color: isDark ? '#cbd5e1' : '#374151',
               display: 'flex',
               flexWrap: 'wrap',
               gap: 6,
@@ -939,6 +851,8 @@ const DEPT_EVENT_TYPE_LABEL: Record<string, string> = {
 /** 부처별 기관 사건(몇 년 몇 월 몇 일 무슨 일) — API로 조회·등록·수정·삭제 */
 function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
   const queryClient = useQueryClient()
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const { data: events = [], isLoading } = useQuery({
     queryKey: ['administration-department-events', departmentId],
     queryFn: () =>
@@ -1013,7 +927,11 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
 
   return (
     <div
-      style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}
+      style={{
+        marginTop: 16,
+        paddingTop: 16,
+        borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+      }}
     >
       <div
         style={{
@@ -1029,7 +947,7 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: '#64748b',
+            color: isDark ? '#64748b' : '#64748b',
             letterSpacing: '0.05em',
             textTransform: 'uppercase',
           }}
@@ -1084,11 +1002,11 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                   key={ev.id}
                   style={{
                     fontSize: 12,
-                    color: '#374151',
+                    color: isDark ? '#cbd5e1' : '#374151',
                     padding: '8px 10px',
-                    background: '#fff',
+                    background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
                     borderRadius: 8,
-                    border: '1px solid #e5e7eb',
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
                   }}
                 >
                   {editingEvent?.id === ev.id ? (
@@ -1107,9 +1025,13 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                         placeholder="제목"
                         style={{
                           padding: '6px 10px',
-                          border: '1px solid #e5e7eb',
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                           borderRadius: 8,
                           fontSize: 13,
+                          background: isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : '#fff',
+                          color: isDark ? '#f1f5f9' : 'inherit',
                         }}
                       />
                       <div
@@ -1126,9 +1048,13 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                           }
                           style={{
                             padding: '6px 10px',
-                            border: '1px solid #e5e7eb',
+                            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                             borderRadius: 8,
                             fontSize: 12,
+                            background: isDark
+                              ? 'rgba(255,255,255,0.06)'
+                              : '#fff',
+                            color: isDark ? '#f1f5f9' : 'inherit',
                           }}
                         />
                         <input
@@ -1142,9 +1068,13 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                           }
                           style={{
                             padding: '6px 10px',
-                            border: '1px solid #e5e7eb',
+                            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                             borderRadius: 8,
                             fontSize: 12,
+                            background: isDark
+                              ? 'rgba(255,255,255,0.06)'
+                              : '#fff',
+                            color: isDark ? '#f1f5f9' : 'inherit',
                           }}
                         />
                         <select
@@ -1158,7 +1088,7 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                           }
                           style={{
                             padding: '6px 10px',
-                            border: '1px solid #e5e7eb',
+                            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                             borderRadius: 8,
                             fontSize: 12,
                           }}
@@ -1184,10 +1114,14 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                         rows={2}
                         style={{
                           padding: '6px 10px',
-                          border: '1px solid #e5e7eb',
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                           borderRadius: 8,
                           fontSize: 12,
                           resize: 'vertical',
+                          background: isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : '#fff',
+                          color: isDark ? '#f1f5f9' : 'inherit',
                         }}
                       />
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -1222,9 +1156,12 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                           style={{
                             padding: '6px 12px',
                             fontSize: 12,
-                            border: '1px solid #e5e7eb',
+                            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                             borderRadius: 8,
-                            background: '#fff',
+                            background: isDark
+                              ? 'rgba(255,255,255,0.06)'
+                              : '#fff',
+                            color: isDark ? '#cbd5e1' : 'inherit',
                             cursor: 'pointer',
                           }}
                         >
@@ -1251,8 +1188,10 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                             fontSize: 10,
                             padding: '2px 6px',
                             borderRadius: 6,
-                            background: '#f1f5f9',
-                            color: '#64748b',
+                            background: isDark
+                              ? 'rgba(255,255,255,0.08)'
+                              : '#f1f5f9',
+                            color: isDark ? '#94a3b8' : '#64748b',
                           }}
                         >
                           {DEPT_EVENT_TYPE_LABEL[ev.eventType] ?? ev.eventType}
@@ -1263,7 +1202,7 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                           style={{
                             marginTop: 4,
                             fontSize: 11,
-                            color: '#64748b',
+                            color: isDark ? '#64748b' : '#64748b',
                             lineHeight: 1.4,
                           }}
                         >
@@ -1291,9 +1230,12 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                           style={{
                             padding: '4px 8px',
                             fontSize: 11,
-                            border: '1px solid #e2e8f0',
+                            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'}`,
                             borderRadius: 6,
-                            background: '#fff',
+                            background: isDark
+                              ? 'rgba(255,255,255,0.06)'
+                              : '#fff',
+                            color: isDark ? '#cbd5e1' : 'inherit',
                             cursor: 'pointer',
                           }}
                         >
@@ -1310,9 +1252,11 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                           style={{
                             padding: '4px 8px',
                             fontSize: 11,
-                            border: '1px solid #fecaca',
+                            border: `1px solid ${isDark ? 'rgba(220,38,38,0.4)' : '#fecaca'}`,
                             borderRadius: 6,
-                            background: '#fef2f2',
+                            background: isDark
+                              ? 'rgba(220,38,38,0.12)'
+                              : '#fef2f2',
                             color: '#dc2626',
                             cursor: 'pointer',
                           }}
@@ -1331,9 +1275,9 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
               <div
                 style={{
                   padding: 12,
-                  background: '#f8fafc',
+                  background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
                   borderRadius: 10,
-                  border: '1px dashed #e5e7eb',
+                  border: `1px dashed ${isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
                   marginTop: 8,
                 }}
               >
@@ -1347,9 +1291,11 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                     width: '100%',
                     marginBottom: 8,
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                     borderRadius: 8,
                     fontSize: 13,
+                    background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                    color: isDark ? '#f1f5f9' : 'inherit',
                   }}
                 />
                 <div
@@ -1371,9 +1317,11 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                     }
                     style={{
                       padding: '6px 10px',
-                      border: '1px solid #e5e7eb',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                       borderRadius: 8,
                       fontSize: 12,
+                      background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                      color: isDark ? '#f1f5f9' : 'inherit',
                     }}
                   />
                   <input
@@ -1387,9 +1335,11 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                     }
                     style={{
                       padding: '6px 10px',
-                      border: '1px solid #e5e7eb',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                       borderRadius: 8,
                       fontSize: 12,
+                      background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                      color: isDark ? '#f1f5f9' : 'inherit',
                     }}
                   />
                   <select
@@ -1403,9 +1353,11 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                     }
                     style={{
                       padding: '6px 10px',
-                      border: '1px solid #e5e7eb',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                       borderRadius: 8,
                       fontSize: 12,
+                      background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                      color: isDark ? '#f1f5f9' : 'inherit',
                     }}
                   >
                     {Object.entries(DEPT_EVENT_TYPE_LABEL).map(([k, v]) => (
@@ -1429,10 +1381,12 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                     width: '100%',
                     marginBottom: 8,
                     padding: '8px 12px',
-                    border: '1px solid #e5e7eb',
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                     borderRadius: 8,
                     fontSize: 12,
                     resize: 'vertical',
+                    background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                    color: isDark ? '#f1f5f9' : 'inherit',
                   }}
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -1467,9 +1421,10 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
                     style={{
                       padding: '6px 14px',
                       fontSize: 12,
-                      border: '1px solid #e5e7eb',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
                       borderRadius: 8,
-                      background: '#fff',
+                      background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                      color: isDark ? '#cbd5e1' : 'inherit',
                       cursor: 'pointer',
                     }}
                   >
@@ -1532,10 +1487,7 @@ const ORGANIZATION_SCOPE_OPTIONS: {
   { value: 'LOCAL', label: '지역/도시' },
 ]
 
-const GOV_TAB_META: Record<
-  GovernmentContentTab,
-  { label: string }
-> = {
+const GOV_TAB_META: Record<GovernmentContentTab, { label: string }> = {
   heads: {
     label: '역대 수반',
   },
@@ -1565,6 +1517,8 @@ export function GovernmentInfoSection({
   initialContentTab,
 }: GovernmentInfoSectionProps) {
   const queryClient = useQueryClient()
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const [contentTab, setContentTab] = useState<GovernmentContentTab>(
     initialContentTab ?? 'heads',
   )
@@ -1906,63 +1860,59 @@ export function GovernmentInfoSection({
   const budgetData = mockGovernmentData.ministries[0].statistics || []
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+    <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 24,
+        padding: '36px 32px 48px',
         minHeight: 'calc(100vh - 200px)',
         position: 'relative',
       }}
     >
       {/* 헤더 */}
-      <GovHeader>
-        <div>
-          <GovHeaderTitle>행정조직</GovHeaderTitle>
-          <GovHeaderDesc>
-            역대 수반, 행정부, 중앙부처, 행정기구를 관리합니다.
-          </GovHeaderDesc>
-        </div>
-        {onOpenCategoryModal && (
-          <GovCategoryButton
-            type="button"
-            onClick={onOpenCategoryModal}
-            aria-label="부처 카테고리 설정"
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+      <SectionTabHeader
+        title="행정조직"
+        description="역대 수반, 행정부, 중앙부처, 행정기구를 관리합니다."
+        rightSlot={
+          onOpenCategoryModal ? (
+            <AddButton
+              type="button"
+              onClick={onOpenCategoryModal}
+              aria-label="부처 카테고리 설정"
             >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            카테고리 설정
-          </GovCategoryButton>
-        )}
-      </GovHeader>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              카테고리 설정
+            </AddButton>
+          ) : undefined
+        }
+      />
 
       {/* 탭 내비게이션 */}
-      <GovTabNav>
+      <TabNavigation>
         {(Object.keys(GOV_TAB_META) as GovernmentContentTab[]).map((tabKey) => (
-          <GovTabButton
+          <TabButton
             key={tabKey}
             type="button"
             $active={contentTab === tabKey}
             onClick={() => setContentTab(tabKey)}
           >
             {GOV_TAB_META[tabKey].label}
-          </GovTabButton>
+          </TabButton>
         ))}
-      </GovTabNav>
+      </TabNavigation>
 
       {contentTab === 'heads' && country && (
         <section aria-label="역대 수반">
@@ -1973,13 +1923,15 @@ export function GovernmentInfoSection({
       {contentTab === 'statistics' && (
         <>
           {/* 핵심 수치 요약 */}
-          <div style={{
-            display: 'flex',
-            gap: 0,
-            borderBottom: '1px solid #e9eef5',
-            paddingBottom: 20,
-            marginBottom: 4,
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 0,
+              borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e9eef5'}`,
+              paddingBottom: 20,
+              marginBottom: 4,
+            }}
+          >
             {[
               { label: '총 인원', value: totalEmployees, unit: '명' },
               { label: '총 예산', value: totalBudget, unit: '조원' },
@@ -1993,18 +1945,46 @@ export function GovernmentInfoSection({
                   flex: '1 1 0',
                   paddingLeft: i === 0 ? 0 : 24,
                   paddingRight: i < arr.length - 1 ? 24 : 0,
-                  borderRight: i < arr.length - 1 ? '1px solid #f0f4f8' : 'none',
+                  borderRight:
+                    i < arr.length - 1
+                      ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#f0f4f8'}`
+                      : 'none',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 2,
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: isDark ? '#64748b' : '#94a3b8',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase' as const,
+                  }}
+                >
                   {kpi.label}
                 </span>
-                <span style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em', lineHeight: 1.3 }}>
+                <span
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: isDark ? '#f1f5f9' : '#0f172a',
+                    letterSpacing: '-0.03em',
+                    lineHeight: 1.3,
+                  }}
+                >
                   {kpi.value}
-                  <span style={{ fontSize: 12, fontWeight: 500, color: '#94a3b8', marginLeft: 2 }}>{kpi.unit}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: isDark ? '#475569' : '#94a3b8',
+                      marginLeft: 2,
+                    }}
+                  >
+                    {kpi.unit}
+                  </span>
                 </span>
               </div>
             ))}
@@ -2134,12 +2114,13 @@ export function GovernmentInfoSection({
             <SectionLabel>예산 추이</SectionLabel>
             <div
               style={{
-                background: '#ffffff',
-                border: '1px solid rgba(0,0,0,0.06)',
+                background: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
                 borderRadius: 24,
                 padding: 28,
-                boxShadow:
-                  '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                boxShadow: isDark
+                  ? '0 2px 8px rgba(0,0,0,0.3)'
+                  : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
               }}
             >
               <div
@@ -2156,7 +2137,7 @@ export function GovernmentInfoSection({
                   style={{
                     margin: 0,
                     fontSize: 13,
-                    color: '#78716c',
+                    color: isDark ? '#94a3b8' : '#78716c',
                     fontWeight: 500,
                   }}
                 >
@@ -2164,7 +2145,11 @@ export function GovernmentInfoSection({
                 </p>
                 {budgetData.length > 0 && (
                   <span
-                    style={{ fontSize: 12, color: '#a8a29e', fontWeight: 500 }}
+                    style={{
+                      fontSize: 12,
+                      color: isDark ? '#64748b' : '#a8a29e',
+                      fontWeight: 500,
+                    }}
                   >
                     최대 {Math.max(...budgetData.map((s) => s.budget || 0))}조원
                   </span>
@@ -2200,7 +2185,9 @@ export function GovernmentInfoSection({
                       style={{
                         width: '100%',
                         height: 1,
-                        background: 'rgba(0,0,0,0.06)',
+                        background: isDark
+                          ? 'rgba(255,255,255,0.06)'
+                          : 'rgba(0,0,0,0.06)',
                         marginLeft: 8,
                         marginRight: 8,
                       }}
@@ -2319,12 +2306,13 @@ export function GovernmentInfoSection({
               <SectionLabel>주요 사건</SectionLabel>
               <div
                 style={{
-                  background: '#ffffff',
-                  border: '1px solid rgba(0,0,0,0.06)',
+                  background: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
                   borderRadius: 24,
                   padding: 28,
-                  boxShadow:
-                    '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+                  boxShadow: isDark
+                    ? '0 2px 8px rgba(0,0,0,0.3)'
+                    : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
                 }}
               >
                 <div
@@ -2371,7 +2359,7 @@ export function GovernmentInfoSection({
                         style={{
                           fontSize: 17,
                           fontWeight: 600,
-                          color: '#1c1917',
+                          color: isDark ? '#f1f5f9' : '#1c1917',
                           margin: 0,
                           letterSpacing: '-0.02em',
                         }}
@@ -2381,7 +2369,7 @@ export function GovernmentInfoSection({
                       <p
                         style={{
                           fontSize: 13,
-                          color: '#78716c',
+                          color: isDark ? '#94a3b8' : '#78716c',
                           margin: '2px 0 0',
                         }}
                       >
@@ -2397,9 +2385,9 @@ export function GovernmentInfoSection({
                       gap: 0,
                       flexWrap: 'wrap',
                       padding: 4,
-                      background: '#f5f5f4',
+                      background: isDark ? 'rgba(255,255,255,0.06)' : '#f5f5f4',
                       borderRadius: 14,
-                      border: '1px solid rgba(0,0,0,0.06)',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
                     }}
                   >
                     {[
@@ -2439,12 +2427,18 @@ export function GovernmentInfoSection({
                           border: 'none',
                           background:
                             selectedEventType === filter.key
-                              ? '#ffffff'
+                              ? isDark
+                                ? 'rgba(255,255,255,0.1)'
+                                : '#ffffff'
                               : 'transparent',
                           color:
                             selectedEventType === filter.key
-                              ? '#1c1917'
-                              : '#57534e',
+                              ? isDark
+                                ? '#f1f5f9'
+                                : '#1c1917'
+                              : isDark
+                                ? '#94a3b8'
+                                : '#57534e',
                           fontSize: 12,
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -2459,15 +2453,20 @@ export function GovernmentInfoSection({
                         }}
                         onMouseEnter={(e) => {
                           if (selectedEventType !== filter.key) {
-                            e.currentTarget.style.background =
-                              'rgba(255,255,255,0.6)'
-                            e.currentTarget.style.color = '#1c1917'
+                            e.currentTarget.style.background = isDark
+                              ? 'rgba(255,255,255,0.08)'
+                              : 'rgba(255,255,255,0.6)'
+                            e.currentTarget.style.color = isDark
+                              ? '#f1f5f9'
+                              : '#1c1917'
                           }
                         }}
                         onMouseLeave={(e) => {
                           if (selectedEventType !== filter.key) {
                             e.currentTarget.style.background = 'transparent'
-                            e.currentTarget.style.color = '#57534e'
+                            e.currentTarget.style.color = isDark
+                              ? '#94a3b8'
+                              : '#57534e'
                           }
                         }}
                       >
@@ -2478,11 +2477,15 @@ export function GovernmentInfoSection({
                             background:
                               selectedEventType === filter.key
                                 ? MAIN
-                                : 'rgba(0,0,0,0.08)',
+                                : isDark
+                                  ? 'rgba(255,255,255,0.1)'
+                                  : 'rgba(0,0,0,0.08)',
                             color:
                               selectedEventType === filter.key
                                 ? '#ffffff'
-                                : '#57534e',
+                                : isDark
+                                  ? '#94a3b8'
+                                  : '#57534e',
                             padding: '2px 6px',
                             borderRadius: 8,
                             fontWeight: 700,
@@ -2571,7 +2574,9 @@ export function GovernmentInfoSection({
                                   width: 14,
                                   height: 14,
                                   borderRadius: '50%',
-                                  background: '#ffffff',
+                                  background: isDark
+                                    ? 'rgba(255,255,255,0.1)'
+                                    : '#ffffff',
                                   border: `3px solid ${MAIN}`,
                                   boxShadow: '0 0 0 2px rgba(0,0,0,0.08)',
                                   flexShrink: 0,
@@ -2595,23 +2600,30 @@ export function GovernmentInfoSection({
                               style={{
                                 flex: 1,
                                 minWidth: 0,
-                                background: '#ffffff',
+                                background: isDark
+                                  ? 'rgba(255,255,255,0.04)'
+                                  : '#ffffff',
                                 borderRadius: 18,
-                                border: '1px solid rgba(0,0,0,0.06)',
+                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
                                 overflow: 'hidden',
                                 transition: 'all 0.2s ease',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                                boxShadow: isDark
+                                  ? '0 2px 8px rgba(0,0,0,0.3)'
+                                  : '0 2px 8px rgba(0,0,0,0.04)',
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.boxShadow =
-                                  '0 8px 24px rgba(0,0,0,0.08)'
+                                e.currentTarget.style.boxShadow = isDark
+                                  ? '0 8px 24px rgba(0,0,0,0.4)'
+                                  : '0 8px 24px rgba(0,0,0,0.08)'
                                 e.currentTarget.style.borderColor = MAIN
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.boxShadow =
-                                  '0 2px 8px rgba(0,0,0,0.04)'
-                                e.currentTarget.style.borderColor =
-                                  'rgba(0,0,0,0.06)'
+                                e.currentTarget.style.boxShadow = isDark
+                                  ? '0 2px 8px rgba(0,0,0,0.3)'
+                                  : '0 2px 8px rgba(0,0,0,0.04)'
+                                e.currentTarget.style.borderColor = isDark
+                                  ? 'rgba(255,255,255,0.08)'
+                                  : 'rgba(0,0,0,0.06)'
                               }}
                             >
                               <div
@@ -2652,8 +2664,10 @@ export function GovernmentInfoSection({
                                         style={{
                                           fontSize: 11,
                                           fontWeight: 600,
-                                          color: '#57534e',
-                                          background: '#f5f5f4',
+                                          color: isDark ? '#94a3b8' : '#57534e',
+                                          background: isDark
+                                            ? 'rgba(255,255,255,0.08)'
+                                            : '#f5f5f4',
                                           padding: '4px 8px',
                                           borderRadius: 8,
                                         }}
@@ -2665,7 +2679,7 @@ export function GovernmentInfoSection({
                                       style={{
                                         fontSize: 10,
                                         fontWeight: 600,
-                                        color: '#78716c',
+                                        color: isDark ? '#64748b' : '#78716c',
                                         textTransform: 'uppercase',
                                         letterSpacing: '0.04em',
                                       }}
@@ -2681,7 +2695,7 @@ export function GovernmentInfoSection({
                                     style={{
                                       fontSize: 14,
                                       fontWeight: 700,
-                                      color: '#292524',
+                                      color: isDark ? '#f1f5f9' : '#292524',
                                       margin: '0 0 4px',
                                       lineHeight: 1.35,
                                     }}
@@ -2691,7 +2705,7 @@ export function GovernmentInfoSection({
                                   <p
                                     style={{
                                       fontSize: 12,
-                                      color: '#57534e',
+                                      color: isDark ? '#94a3b8' : '#57534e',
                                       lineHeight: 1.5,
                                       margin: 0,
                                       display: '-webkit-box',
@@ -2769,173 +2783,174 @@ export function GovernmentInfoSection({
                   justifyContent: 'space-between',
                   paddingBottom: 20,
                   marginBottom: 24,
-                  borderBottom: '1px solid #e9eef5',
+                  borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e9eef5'}`,
                   flexWrap: 'wrap',
                   gap: 12,
                 }}
               >
-                <div
-                  style={{ display: 'flex', alignItems: 'center', gap: 12 }}
-                >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMinistryView('list')
-                        setEditingMinistry(null)
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '8px 14px',
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#64748b',
-                        background: 'transparent',
-                        border: 'none',
-                        borderRadius: 12,
-                        cursor: 'pointer',
-                        transition: 'color 0.2s, background 0.2s',
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.color = '#475569'
-                        e.currentTarget.style.background = '#f1f5f9'
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.color = '#64748b'
-                        e.currentTarget.style.background = 'transparent'
-                      }}
-                    >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M19 12H5M12 19l-7-7 7-7" />
-                      </svg>
-                      목록으로
-                    </button>
-                    <h2
-                      style={{
-                        margin: 0,
-                        fontSize: 20,
-                        fontWeight: 700,
-                        color: '#111827',
-                        letterSpacing: '-0.025em',
-                      }}
-                    >
-                      {editingMinistry ? '부처 수정' : '부처 등록'}
-                    </h2>
-                  </div>
-                  <div
-                    style={{ display: 'flex', gap: 10, alignItems: 'center' }}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinistryView('list')
+                      setEditingMinistry(null)
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 14px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: isDark ? '#94a3b8' : '#64748b',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: 12,
+                      cursor: 'pointer',
+                      transition: 'color 0.2s, background 0.2s',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.color = isDark
+                        ? '#cbd5e1'
+                        : '#475569'
+                      e.currentTarget.style.background = isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : '#f1f5f9'
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.color = isDark
+                        ? '#94a3b8'
+                        : '#64748b'
+                      e.currentTarget.style.background = 'transparent'
+                    }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!ministryForm.name.trim()) {
-                          alert('부처명을 입력해주세요.')
-                          return
-                        }
-                        if (!ministryForm.categoryId?.trim()) {
-                          alert('카테고리를 선택해주세요.')
-                          return
-                        }
-                        const payload = {
-                          name: ministryForm.name.trim(),
-                          parentId: ministryForm.parentId || null,
-                          categoryId: ministryForm.categoryId || null,
-                          thumbnailUrl:
-                            ministryForm.thumbnailUrl.trim() || null,
-                          description: ministryForm.description.trim() || null,
-                          establishedDate:
-                            ministryForm.establishedDate.trim() || null,
-                          abolishedDate:
-                            ministryForm.abolishedDate.trim() || null,
-                          successorId: ministryForm.successorId.trim() || null,
-                        }
-                        if (editingMinistry) {
-                          administrationDepartmentApi
-                            .update(editingMinistry.id, payload)
-                            .then(() => {
-                              setMinistryView('list')
-                              setEditingMinistry(null)
-                              loadMinistries()
-                            })
-                            .catch((e) =>
-                              alert(
-                                e instanceof Error
-                                  ? e.message
-                                  : '수정에 실패했습니다',
-                              ),
-                            )
-                        } else {
-                          administrationDepartmentApi
-                            .create({
-                              ...payload,
-                              countryId: effectiveCountryId,
-                            })
-                            .then(() => {
-                              setMinistryView('list')
-                              setEditingMinistry(null)
-                              loadMinistries()
-                            })
-                            .catch((e) =>
-                              alert(
-                                e instanceof Error
-                                  ? e.message
-                                  : '등록에 실패했습니다',
-                              ),
-                            )
-                        }
-                      }}
-                      style={{
-                        padding: '12px 24px',
-                        background: MAIN,
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: 12,
-                        fontSize: 14,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
-                      }}
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     >
-                      {editingMinistry ? '저장' : '등록'}
-                    </button>
-                  </div>
+                      <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                    목록으로
+                  </button>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: isDark ? '#f1f5f9' : '#111827',
+                      letterSpacing: '-0.025em',
+                    }}
+                  >
+                    {editingMinistry ? '부처 수정' : '부처 등록'}
+                  </h2>
                 </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!ministryForm.name.trim()) {
+                        alert('부처명을 입력해주세요.')
+                        return
+                      }
+                      if (!ministryForm.categoryId?.trim()) {
+                        alert('카테고리를 선택해주세요.')
+                        return
+                      }
+                      const payload = {
+                        name: ministryForm.name.trim(),
+                        parentId: ministryForm.parentId || null,
+                        categoryId: ministryForm.categoryId || null,
+                        thumbnailUrl: ministryForm.thumbnailUrl.trim() || null,
+                        description: ministryForm.description.trim() || null,
+                        establishedDate:
+                          ministryForm.establishedDate.trim() || null,
+                        abolishedDate:
+                          ministryForm.abolishedDate.trim() || null,
+                        successorId: ministryForm.successorId.trim() || null,
+                      }
+                      if (editingMinistry) {
+                        administrationDepartmentApi
+                          .update(editingMinistry.id, payload)
+                          .then(() => {
+                            setMinistryView('list')
+                            setEditingMinistry(null)
+                            loadMinistries()
+                          })
+                          .catch((e) =>
+                            alert(
+                              e instanceof Error
+                                ? e.message
+                                : '수정에 실패했습니다',
+                            ),
+                          )
+                      } else {
+                        administrationDepartmentApi
+                          .create({
+                            ...payload,
+                            countryId: effectiveCountryId,
+                          })
+                          .then(() => {
+                            setMinistryView('list')
+                            setEditingMinistry(null)
+                            loadMinistries()
+                          })
+                          .catch((e) =>
+                            alert(
+                              e instanceof Error
+                                ? e.message
+                                : '등록에 실패했습니다',
+                            ),
+                          )
+                      }
+                    }}
+                    style={{
+                      padding: '12px 24px',
+                      background: MAIN,
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 12,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
+                    }}
+                  >
+                    {editingMinistry ? '저장' : '등록'}
+                  </button>
+                </div>
+              </div>
 
-                <input
-                  ref={thumbnailInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    e.target.value = ''
-                    try {
-                      validateImageFile(file)
-                      setThumbnailUploading(true)
-                      const res = await uploadImage(file, 'ministries')
-                      setMinistryForm((f) => ({ ...f, thumbnailUrl: res.url }))
-                    } catch (err) {
-                      alert(
-                        err instanceof Error
-                          ? err.message
-                          : '이미지 업로드에 실패했습니다.',
-                      )
-                    } finally {
-                      setThumbnailUploading(false)
-                    }
-                  }}
-                />
+              <input
+                ref={thumbnailInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  e.target.value = ''
+                  try {
+                    validateImageFile(file)
+                    setThumbnailUploading(true)
+                    const res = await uploadImage(file, 'ministries')
+                    setMinistryForm((f) => ({ ...f, thumbnailUrl: res.url }))
+                  } catch (err) {
+                    alert(
+                      err instanceof Error
+                        ? err.message
+                        : '이미지 업로드에 실패했습니다.',
+                    )
+                  } finally {
+                    setThumbnailUploading(false)
+                  }
+                }}
+              />
 
               <div
                 style={{
@@ -2944,497 +2959,326 @@ export function GovernmentInfoSection({
                   gap: 24,
                 }}
               >
+                <FormFieldRow>
+                  <FieldLabel>썸네일</FieldLabel>
                   <div
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: '360px 1fr',
-                      gap: 24,
-                      alignItems: 'start',
-                      padding: '20px 0',
-                      borderBottom: '1px solid #f3f4f6',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
                     }}
                   >
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#374151',
-                        paddingTop: 10,
-                      }}
-                    >
-                      썸네일
-                    </label>
                     <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => thumbnailInputRef.current?.click()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          thumbnailInputRef.current?.click()
+                        }
+                      }}
                       style={{
+                        width: '100%',
+                        maxWidth: 280,
+                        aspectRatio: '16/10',
+                        borderRadius: 14,
+                        border: `2px dashed ${isDark ? 'rgba(255,255,255,0.15)' : '#e5e7eb'}`,
+                        background: ministryForm.thumbnailUrl
+                          ? 'transparent'
+                          : isDark
+                            ? 'rgba(255,255,255,0.04)'
+                            : '#fafafa',
                         display: 'flex',
-                        flexDirection: 'column',
-                        gap: 8,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        cursor: thumbnailUploading ? 'wait' : 'pointer',
                       }}
                     >
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => thumbnailInputRef.current?.click()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            thumbnailInputRef.current?.click()
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          maxWidth: 280,
-                          aspectRatio: '16/10',
-                          borderRadius: 14,
-                          border: '2px dashed #e5e7eb',
-                          background: ministryForm.thumbnailUrl
-                            ? 'transparent'
-                            : '#fafafa',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          overflow: 'hidden',
-                          cursor: thumbnailUploading ? 'wait' : 'pointer',
-                        }}
-                      >
-                        {thumbnailUploading ? (
-                          <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                            업로드 중…
-                          </span>
-                        ) : ministryForm.thumbnailUrl ? (
-                          <img
-                            src={getUploadImageUrl(ministryForm.thumbnailUrl)}
-                            alt=""
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                            }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                            이미지 선택
-                          </span>
-                        )}
-                      </div>
-                      {ministryForm.thumbnailUrl && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setMinistryForm((f) => ({ ...f, thumbnailUrl: '' }))
-                          }}
+                      {thumbnailUploading ? (
+                        <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                          업로드 중…
+                        </span>
+                      ) : ministryForm.thumbnailUrl ? (
+                        <img
+                          src={getUploadImageUrl(ministryForm.thumbnailUrl)}
+                          alt=""
                           style={{
-                            alignSelf: 'flex-start',
-                            marginTop: 4,
-                            padding: '6px 12px',
-                            fontSize: 12,
-                            border: '1px solid #e2e8f0',
-                            borderRadius: 10,
-                            background: '#fff',
-                            color: '#64748b',
-                            cursor: 'pointer',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
                           }}
-                        >
-                          제거
-                        </button>
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                          이미지 선택
+                        </span>
                       )}
                     </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '360px 1fr',
-                      gap: 24,
-                      alignItems: 'start',
-                      padding: '20px 0',
-                      borderBottom: '1px solid #f3f4f6',
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#374151',
-                        paddingTop: 10,
-                      }}
-                    >
-                      부처명 <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                      }}
-                    >
-                      <input
-                        value={ministryForm.name}
-                        onChange={(e) =>
-                          setMinistryForm((f) => ({
-                            ...f,
-                            name: e.target.value,
-                          }))
-                        }
-                        placeholder="예: 기획재정부"
-                        style={{
-                          width: '100%',
-                          maxWidth: 380,
-                          padding: '12px 16px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: '#111827',
-                          background: '#fff',
-                          outline: 'none',
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '360px 1fr',
-                      gap: 24,
-                      alignItems: 'start',
-                      padding: '20px 0',
-                      borderBottom: '1px solid #f3f4f6',
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#374151',
-                        paddingTop: 10,
-                      }}
-                    >
-                      카테고리 <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                      }}
-                    >
+                    {ministryForm.thumbnailUrl && (
                       <button
                         type="button"
-                        onClick={() => setCategorySelectOpen(true)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMinistryForm((f) => ({ ...f, thumbnailUrl: '' }))
+                        }}
                         style={{
-                          width: '100%',
-                          maxWidth: 380,
-                          padding: '12px 16px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: ministryForm.categoryId
-                            ? '#111827'
-                            : '#9ca3af',
-                          background: '#fff',
-                          textAlign: 'left',
+                          alignSelf: 'flex-start',
+                          marginTop: 4,
+                          padding: '6px 12px',
+                          fontSize: 12,
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'}`,
+                          borderRadius: 10,
+                          background: isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : '#fff',
+                          color: isDark ? '#94a3b8' : '#64748b',
                           cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
                         }}
                       >
-                        <span>
-                          {ministryForm.categoryId
-                            ? (categoriesList.find(
-                                (c) => c.id === ministryForm.categoryId,
-                              )?.name ?? '')
-                            : '선택'}
-                        </span>
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
+                        제거
                       </button>
-                      <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                        같은 카테고리에 여러 부처 등록 가능 (예: 전쟁부·국방부)
+                    )}
+                  </div>
+                </FormFieldRow>
+
+                <FormFieldRow>
+                  <FieldLabel>
+                    부처명 <span style={{ color: '#ef4444' }}>*</span>
+                  </FieldLabel>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                    }}
+                  >
+                    <FormInputField
+                      value={ministryForm.name}
+                      onChange={(e) =>
+                        setMinistryForm((f) => ({
+                          ...f,
+                          name: e.target.value,
+                        }))
+                      }
+                      placeholder="예: 기획재정부"
+                    />
+                  </div>
+                </FormFieldRow>
+
+                <FormFieldRow>
+                  <FieldLabel>
+                    카테고리 <span style={{ color: '#ef4444' }}>*</span>
+                  </FieldLabel>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                    }}
+                  >
+                    <FormSelectBtn
+                      type="button"
+                      $hasValue={!!ministryForm.categoryId}
+                      onClick={() => setCategorySelectOpen(true)}
+                    >
+                      <span>
+                        {ministryForm.categoryId
+                          ? (categoriesList.find(
+                              (c) => c.id === ministryForm.categoryId,
+                            )?.name ?? '')
+                          : '선택'}
                       </span>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '360px 1fr',
-                      gap: 24,
-                      alignItems: 'start',
-                      padding: '20px 0',
-                      borderBottom: '1px solid #f3f4f6',
-                    }}
-                  >
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#374151',
-                        paddingTop: 10,
-                      }}
-                    >
-                      상위 부처
-                    </label>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setParentSelectOpen(true)}
-                        style={{
-                          width: '100%',
-                          maxWidth: 380,
-                          padding: '12px 16px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: ministryForm.parentId ? '#111827' : '#9ca3af',
-                          background: '#fff',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
                       >
-                        <span>
-                          {ministryForm.parentId
-                            ? (ministriesList.find(
-                                (d) => d.id === ministryForm.parentId,
-                              )?.name ?? '')
-                            : '선택'}
-                        </span>
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </button>
-                    </div>
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </FormSelectBtn>
+                    <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                      같은 카테고리에 여러 부처 등록 가능 (예: 전쟁부·국방부)
+                    </span>
                   </div>
+                </FormFieldRow>
 
+                <FormFieldRow>
+                  <FieldLabel>상위 부처</FieldLabel>
                   <div
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: '360px 1fr',
-                      gap: 24,
-                      alignItems: 'start',
-                      padding: '20px 0',
-                      borderBottom: '1px solid #f3f4f6',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
                     }}
                   >
-                    <label
+                    <FormSelectBtn
+                      type="button"
+                      $hasValue={!!ministryForm.parentId}
+                      onClick={() => setParentSelectOpen(true)}
+                    >
+                      <span>
+                        {ministryForm.parentId
+                          ? (ministriesList.find(
+                              (d) => d.id === ministryForm.parentId,
+                            )?.name ?? '')
+                          : '선택'}
+                      </span>
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </FormSelectBtn>
+                  </div>
+                </FormFieldRow>
+
+                <FormFieldRow>
+                  <FieldLabel>설립일 · 폐지일</FieldLabel>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      gap: 10,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setEstablishedDateModalOpen(true)}
                       style={{
+                        padding: '10px 18px',
+                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
+                        borderRadius: 12,
                         fontSize: 13,
-                        fontWeight: 600,
-                        color: '#374151',
-                        paddingTop: 10,
-                      }}
-                    >
-                      설립일 · 폐지일
-                    </label>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'row',
-                        gap: 10,
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setEstablishedDateModalOpen(true)}
-                        style={{
-                          padding: '10px 18px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 13,
-                          color: ministryForm.establishedDate
-                            ? '#111827'
+                        color: ministryForm.establishedDate
+                          ? isDark
+                            ? '#f1f5f9'
+                            : '#111827'
+                          : isDark
+                            ? '#64748b'
                             : '#9ca3af',
-                          background: ministryForm.establishedDate
-                            ? '#eff6ff'
+                        background: ministryForm.establishedDate
+                          ? isDark
+                            ? 'rgba(59,130,246,0.12)'
+                            : '#eff6ff'
+                          : isDark
+                            ? 'rgba(255,255,255,0.06)'
                             : '#fff',
-                          cursor: 'pointer',
-                          minWidth: 140,
-                        }}
-                      >
-                        {ministryForm.establishedDate
-                          ? ministryForm.establishedDate.replace(/-/g, '.')
-                          : '설립일 선택'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAbolishedDateModalOpen(true)}
-                        style={{
-                          padding: '10px 18px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 13,
-                          color: ministryForm.abolishedDate
-                            ? '#111827'
+                        cursor: 'pointer',
+                        minWidth: 140,
+                      }}
+                    >
+                      {ministryForm.establishedDate
+                        ? ministryForm.establishedDate.replace(/-/g, '.')
+                        : '설립일 선택'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAbolishedDateModalOpen(true)}
+                      style={{
+                        padding: '10px 18px',
+                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
+                        borderRadius: 12,
+                        fontSize: 13,
+                        color: ministryForm.abolishedDate
+                          ? isDark
+                            ? '#f1f5f9'
+                            : '#111827'
+                          : isDark
+                            ? '#64748b'
                             : '#9ca3af',
-                          background: ministryForm.abolishedDate
-                            ? '#fef2f2'
+                        background: ministryForm.abolishedDate
+                          ? isDark
+                            ? 'rgba(239,68,68,0.12)'
+                            : '#fef2f2'
+                          : isDark
+                            ? 'rgba(255,255,255,0.06)'
                             : '#fff',
-                          cursor: 'pointer',
-                          minWidth: 140,
-                        }}
-                      >
-                        {ministryForm.abolishedDate
-                          ? ministryForm.abolishedDate.replace(/-/g, '.')
-                          : '폐지일 선택'}
-                      </button>
-                    </div>
+                        cursor: 'pointer',
+                        minWidth: 140,
+                      }}
+                    >
+                      {ministryForm.abolishedDate
+                        ? ministryForm.abolishedDate.replace(/-/g, '.')
+                        : '폐지일 선택'}
+                    </button>
                   </div>
+                </FormFieldRow>
 
+                <FormFieldRow>
+                  <FieldLabel>후신 부처</FieldLabel>
                   <div
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: '360px 1fr',
-                      gap: 24,
-                      alignItems: 'start',
-                      padding: '20px 0',
-                      borderBottom: '1px solid #f3f4f6',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
                     }}
                   >
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#374151',
-                        paddingTop: 10,
-                      }}
+                    <FormSelectBtn
+                      type="button"
+                      $hasValue={!!ministryForm.successorId}
+                      onClick={() => setSuccessorSelectOpen(true)}
                     >
-                      후신 부처
-                    </label>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSuccessorSelectOpen(true)}
-                        style={{
-                          width: '100%',
-                          maxWidth: 380,
-                          padding: '12px 16px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: ministryForm.successorId
-                            ? '#111827'
-                            : '#9ca3af',
-                          background: '#fff',
-                          textAlign: 'left',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
+                      <span>
+                        {ministryForm.successorId
+                          ? (ministriesList.find(
+                              (d) => d.id === ministryForm.successorId,
+                            )?.name ?? '')
+                          : '선택'}
+                      </span>
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
                       >
-                        <span>
-                          {ministryForm.successorId
-                            ? (ministriesList.find(
-                                (d) => d.id === ministryForm.successorId,
-                              )?.name ?? '')
-                            : '선택'}
-                        </span>
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </button>
-                    </div>
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
+                    </FormSelectBtn>
                   </div>
+                </FormFieldRow>
 
+                <FormFieldRow>
+                  <FieldLabel>설명</FieldLabel>
                   <div
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: '360px 1fr',
-                      gap: 24,
-                      alignItems: 'start',
-                      padding: '20px 0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
                     }}
                   >
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: '#374151',
-                        paddingTop: 10,
-                      }}
-                    >
-                      설명
-                    </label>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                      }}
-                    >
-                      <textarea
-                        value={ministryForm.description}
-                        onChange={(e) =>
-                          setMinistryForm((f) => ({
-                            ...f,
-                            description: e.target.value,
-                          }))
-                        }
-                        placeholder="역할, 담당 업무 등"
-                        rows={2}
-                        style={{
-                          width: '100%',
-                          maxWidth: 440,
-                          padding: '12px 16px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: '#111827',
-                          background: '#fff',
-                          resize: 'vertical',
-                          minHeight: 72,
-                          outline: 'none',
-                        }}
-                      />
-                    </div>
+                    <FormTextareaField
+                      value={ministryForm.description}
+                      onChange={(e) =>
+                        setMinistryForm((f) => ({
+                          ...f,
+                          description: e.target.value,
+                        }))
+                      }
+                      placeholder="역할, 담당 업무 등"
+                      rows={2}
+                    />
                   </div>
-                </div>
+                </FormFieldRow>
+              </div>
 
               <DatePickerModal
                 isOpen={establishedDateModalOpen}
@@ -3533,7 +3377,7 @@ export function GovernmentInfoSection({
                       margin: 0,
                       fontSize: 20,
                       fontWeight: 700,
-                      color: '#0f172a',
+                      color: isDark ? '#f1f5f9' : '#0f172a',
                       letterSpacing: '-0.02em',
                     }}
                   >
@@ -3543,7 +3387,7 @@ export function GovernmentInfoSection({
                     style={{
                       margin: '4px 0 0',
                       fontSize: 13,
-                      color: '#64748b',
+                      color: isDark ? '#64748b' : '#64748b',
                       fontWeight: 500,
                     }}
                   >
@@ -3572,9 +3416,9 @@ export function GovernmentInfoSection({
                       alignItems: 'center',
                       gap: 8,
                       padding: '10px 16px',
-                      border: '1px solid #c7d2fe',
-                      background: '#eef2ff',
-                      color: '#4338ca',
+                      border: `1px solid ${isDark ? 'rgba(99,102,241,0.4)' : '#c7d2fe'}`,
+                      background: isDark ? 'rgba(99,102,241,0.15)' : '#eef2ff',
+                      color: isDark ? '#a5b4fc' : '#4338ca',
                       borderRadius: 10,
                       fontSize: 13,
                       fontWeight: 700,
@@ -3591,11 +3435,11 @@ export function GovernmentInfoSection({
                   style={{
                     padding: 56,
                     textAlign: 'center',
-                    color: '#6b7280',
+                    color: isDark ? '#64748b' : '#6b7280',
                     fontSize: 14,
-                    background: '#f9fafb',
+                    background: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
                     borderRadius: 16,
-                    border: '1px dashed #e5e7eb',
+                    border: `1px dashed ${isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
                   }}
                 >
                   국가를 선택하면 부처를 등록할 수 있습니다.
@@ -3605,11 +3449,11 @@ export function GovernmentInfoSection({
                   style={{
                     padding: 56,
                     textAlign: 'center',
-                    color: '#6b7280',
+                    color: isDark ? '#64748b' : '#6b7280',
                     fontSize: 14,
-                    background: '#f9fafb',
+                    background: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
                     borderRadius: 16,
-                    border: '1px solid #e5e7eb',
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
                   }}
                 >
                   불러오는 중…
@@ -3622,10 +3466,12 @@ export function GovernmentInfoSection({
                   <div
                     style={{
                       padding: '48px 32px',
-                      background: '#fff',
+                      background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
                       borderRadius: 20,
-                      border: '1px solid #e5e7eb',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+                      boxShadow: isDark
+                        ? '0 2px 8px rgba(0,0,0,0.3)'
+                        : '0 2px 8px rgba(0,0,0,0.04)',
                       textAlign: 'center',
                     }}
                   >
@@ -3650,7 +3496,7 @@ export function GovernmentInfoSection({
                         margin: '0 0 8px',
                         fontSize: 19,
                         fontWeight: 700,
-                        color: '#0f172a',
+                        color: isDark ? '#f1f5f9' : '#0f172a',
                         letterSpacing: '-0.02em',
                       }}
                     >
@@ -3660,14 +3506,15 @@ export function GovernmentInfoSection({
                       style={{
                         margin: '0 0 24px',
                         fontSize: 14,
-                        color: '#64748b',
+                        color: isDark ? '#64748b' : '#64748b',
                         lineHeight: 1.5,
                         maxWidth: 420,
                         marginLeft: 'auto',
                         marginRight: 'auto',
                       }}
                     >
-                      먼저 카테고리를 추가한 뒤, 해당 카테고리에 부처를 등록하세요.
+                      먼저 카테고리를 추가한 뒤, 해당 카테고리에 부처를
+                      등록하세요.
                     </p>
                     <button
                       type="button"
@@ -3710,14 +3557,18 @@ export function GovernmentInfoSection({
                       <div
                         key={cat.id}
                         style={{
-                          background: '#fff',
+                          background: isDark
+                            ? 'rgba(255,255,255,0.04)'
+                            : '#fff',
                           borderRadius: 14,
                           minHeight: 280,
                           overflow: 'hidden',
                           display: 'flex',
                           flexDirection: 'column',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)',
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`,
+                          boxShadow: isDark
+                            ? '0 2px 8px rgba(0,0,0,0.25)'
+                            : '0 2px 8px rgba(15, 23, 42, 0.04)',
                         }}
                       >
                         <div
@@ -3725,9 +3576,11 @@ export function GovernmentInfoSection({
                             padding: '14px 18px',
                             fontSize: 14,
                             fontWeight: 700,
-                            color: '#334155',
-                            borderBottom: '1px solid #f3f4f6',
-                            background: '#f8fafc',
+                            color: isDark ? '#cbd5e1' : '#334155',
+                            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6'}`,
+                            background: isDark
+                              ? 'rgba(255,255,255,0.04)'
+                              : '#f8fafc',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
@@ -3755,8 +3608,10 @@ export function GovernmentInfoSection({
                               borderRadius: 999,
                               fontSize: 12,
                               fontWeight: 700,
-                              color: '#475569',
-                              background: '#e2e8f0',
+                              color: isDark ? '#94a3b8' : '#475569',
+                              background: isDark
+                                ? 'rgba(255,255,255,0.1)'
+                                : '#e2e8f0',
                             }}
                           >
                             {deptsInCat.length}
@@ -3784,7 +3639,7 @@ export function GovernmentInfoSection({
                                 padding: '24px 0',
                               }}
                             >
-                                <span style={{ fontSize: 13, color: '#64748b' }}>
+                              <span style={{ fontSize: 13, color: '#64748b' }}>
                                 등록된 부처 없음
                               </span>
                               <button
@@ -3804,14 +3659,16 @@ export function GovernmentInfoSection({
                                   setMinistryView('form')
                                 }}
                                 style={{
-                                    padding: '9px 14px',
-                                    fontSize: 12,
+                                  padding: '9px 14px',
+                                  fontSize: 12,
                                   fontWeight: 600,
                                   cursor: 'pointer',
-                                    border: '1px solid #c7d2fe',
+                                  border: `1px solid ${isDark ? 'rgba(99,102,241,0.4)' : '#c7d2fe'}`,
                                   borderRadius: 10,
-                                    background: '#eef2ff',
-                                    color: '#4338ca',
+                                  background: isDark
+                                    ? 'rgba(99,102,241,0.15)'
+                                    : '#eef2ff',
+                                  color: isDark ? '#a5b4fc' : '#4338ca',
                                 }}
                               >
                                 부처 등록
@@ -3831,8 +3688,10 @@ export function GovernmentInfoSection({
                                     style={{
                                       padding: 14,
                                       borderRadius: 12,
-                                      border: '1px solid #e5e7eb',
-                                      background: '#ffffff',
+                                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+                                      background: isDark
+                                        ? 'rgba(255,255,255,0.04)'
+                                        : '#ffffff',
                                     }}
                                   >
                                     <div
@@ -3865,11 +3724,15 @@ export function GovernmentInfoSection({
                                             width: 48,
                                             height: 48,
                                             borderRadius: 8,
-                                            background: '#f1f5f9',
+                                            background: isDark
+                                              ? 'rgba(255,255,255,0.07)'
+                                              : '#f1f5f9',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            color: '#94a3b8',
+                                            color: isDark
+                                              ? '#64748b'
+                                              : '#94a3b8',
                                             fontSize: 16,
                                           }}
                                         >
@@ -3881,7 +3744,9 @@ export function GovernmentInfoSection({
                                           style={{
                                             fontSize: 15,
                                             fontWeight: 700,
-                                            color: '#0f172a',
+                                            color: isDark
+                                              ? '#f1f5f9'
+                                              : '#0f172a',
                                           }}
                                         >
                                           {dept.name}
@@ -3889,8 +3754,10 @@ export function GovernmentInfoSection({
                                         {parentName && (
                                           <div
                                             style={{
-                                            fontSize: 11,
-                                              color: '#64748b',
+                                              fontSize: 11,
+                                              color: isDark
+                                                ? '#64748b'
+                                                : '#64748b',
                                               marginTop: 4,
                                             }}
                                           >
@@ -3938,14 +3805,16 @@ export function GovernmentInfoSection({
                                           setMinistryView('form')
                                         }}
                                         style={{
-                                        padding: '7px 12px',
+                                          padding: '7px 12px',
                                           fontSize: 12,
                                           cursor: 'pointer',
-                                          border: '1px solid #e2e8f0',
-                                        borderRadius: 8,
-                                          background: '#fff',
+                                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'}`,
+                                          borderRadius: 8,
+                                          background: isDark
+                                            ? 'rgba(255,255,255,0.06)'
+                                            : '#fff',
                                           fontWeight: 600,
-                                          color: '#475569',
+                                          color: isDark ? '#cbd5e1' : '#475569',
                                         }}
                                       >
                                         수정
@@ -3966,9 +3835,11 @@ export function GovernmentInfoSection({
                                           padding: '7px 12px',
                                           fontSize: 12,
                                           cursor: 'pointer',
-                                          border: '1px solid #fecaca',
+                                          border: `1px solid ${isDark ? 'rgba(220,38,38,0.4)' : '#fecaca'}`,
                                           borderRadius: 8,
-                                          background: '#fef2f2',
+                                          background: isDark
+                                            ? 'rgba(220,38,38,0.12)'
+                                            : '#fef2f2',
                                           color: '#dc2626',
                                           fontWeight: 600,
                                         }}
@@ -4073,7 +3944,7 @@ export function GovernmentInfoSection({
                   gap: 12,
                   paddingBottom: 20,
                   marginBottom: 24,
-                  borderBottom: '1px solid #e9eef5',
+                  borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e9eef5'}`,
                   flexWrap: 'wrap',
                 }}
               >
@@ -4086,23 +3957,66 @@ export function GovernmentInfoSection({
                       setOrganizationModalError(null)
                     }}
                     style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '8px 14px', fontSize: 13, fontWeight: 600,
-                      color: '#64748b', background: 'transparent', border: 'none',
-                      borderRadius: 12, cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 14px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: isDark ? '#94a3b8' : '#64748b',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: 12,
+                      cursor: 'pointer',
                     }}
-                    onMouseOver={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#475569' }}
-                    onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b' }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = isDark
+                        ? 'rgba(255,255,255,0.08)'
+                        : '#f1f5f9'
+                      e.currentTarget.style.color = isDark
+                        ? '#cbd5e1'
+                        : '#475569'
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.color = isDark
+                        ? '#94a3b8'
+                        : '#64748b'
+                    }}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <path d="M19 12H5M12 19l-7-7 7-7" />
                     </svg>
                     목록으로
                   </button>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', letterSpacing: '-0.025em' }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: isDark ? '#f1f5f9' : '#111827',
+                      letterSpacing: '-0.025em',
+                    }}
+                  >
                     {selectedOrganization.name}
                     {selectedOrganization.shortName && (
-                      <span style={{ fontSize: 14, fontWeight: 500, color: '#94a3b8', marginLeft: 8 }}>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: '#94a3b8',
+                          marginLeft: 8,
+                        }}
+                      >
                         ({selectedOrganization.shortName})
                       </span>
                     )}
@@ -4121,10 +4035,15 @@ export function GovernmentInfoSection({
                         type: selectedOrganization.type,
                         scope: selectedOrganization.scope,
                         countryId: selectedOrganization.countryId,
-                        historicalCountryId: selectedOrganization.historicalCountryId,
+                        historicalCountryId:
+                          selectedOrganization.historicalCountryId,
                         description: selectedOrganization.description,
-                        foundedDate: selectedOrganization.foundedDate ? selectedOrganization.foundedDate.slice(0, 10) : null,
-                        dissolvedDate: selectedOrganization.dissolvedDate ? selectedOrganization.dissolvedDate.slice(0, 10) : null,
+                        foundedDate: selectedOrganization.foundedDate
+                          ? selectedOrganization.foundedDate.slice(0, 10)
+                          : null,
+                        dissolvedDate: selectedOrganization.dissolvedDate
+                          ? selectedOrganization.dissolvedDate.slice(0, 10)
+                          : null,
                         websiteUrl: selectedOrganization.websiteUrl,
                         logoUrl: selectedOrganization.logoUrl,
                         ideology: selectedOrganization.ideology,
@@ -4133,10 +4052,17 @@ export function GovernmentInfoSection({
                       setOrganizationModalOpen(true)
                     }}
                     style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '9px 16px', fontSize: 13, fontWeight: 600,
-                      color: '#475569', background: '#fff',
-                      border: '1px solid #e2e8f0', borderRadius: 10, cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '9px 16px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: isDark ? '#94a3b8' : '#475569',
+                      background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`,
+                      borderRadius: 10,
+                      cursor: 'pointer',
                     }}
                   >
                     <FiGrid size={13} />
@@ -4146,10 +4072,17 @@ export function GovernmentInfoSection({
                     type="button"
                     onClick={() => setOrgModalTab('positions')}
                     style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '9px 16px', fontSize: 13, fontWeight: 600,
-                      color: '#4f46e5', background: '#eef2ff',
-                      border: '1px solid #c7d2fe', borderRadius: 10, cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '9px 16px',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: isDark ? '#a5b4fc' : '#4f46e5',
+                      background: isDark ? 'rgba(99,102,241,0.15)' : '#eef2ff',
+                      border: `1px solid ${isDark ? 'rgba(99,102,241,0.4)' : '#c7d2fe'}`,
+                      borderRadius: 10,
+                      cursor: 'pointer',
                     }}
                   >
                     <FiAward size={13} />
@@ -4159,340 +4092,459 @@ export function GovernmentInfoSection({
               </div>
 
               {/* 조직 기본 정보 표시 */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                  gap: 16,
+                  marginBottom: 24,
+                }}
+              >
                 {[
-                  { label: '유형', value: ORGANIZATION_TYPE_LABEL[selectedOrganization.type] ?? selectedOrganization.type },
-                  { label: '설립일', value: selectedOrganization.foundedDate ? selectedOrganization.foundedDate.slice(0, 10) : '—' },
-                  { label: '해체일', value: selectedOrganization.dissolvedDate ? selectedOrganization.dissolvedDate.slice(0, 10) : '—' },
-                  { label: '로컬명', value: selectedOrganization.localName ?? '—' },
+                  {
+                    label: '유형',
+                    value:
+                      ORGANIZATION_TYPE_LABEL[selectedOrganization.type] ??
+                      selectedOrganization.type,
+                  },
+                  {
+                    label: '설립일',
+                    value: selectedOrganization.foundedDate
+                      ? selectedOrganization.foundedDate.slice(0, 10)
+                      : '—',
+                  },
+                  {
+                    label: '해체일',
+                    value: selectedOrganization.dissolvedDate
+                      ? selectedOrganization.dissolvedDate.slice(0, 10)
+                      : '—',
+                  },
+                  {
+                    label: '로컬명',
+                    value: selectedOrganization.localName ?? '—',
+                  },
                 ].map((item) => (
-                  <div key={item.label} style={{ background: '#f8fafc', borderRadius: 12, padding: '14px 16px', border: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{item.value}</div>
-                  </div>
-                ))}
-              </div>
-              {selectedOrganization.description && (
-                <div style={{ background: '#f8fafc', borderRadius: 12, padding: '16px 18px', border: '1px solid #f1f5f9', marginBottom: 24 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>설명</div>
-                  <p style={{ margin: 0, fontSize: 14, color: '#374151', lineHeight: 1.6 }}>{selectedOrganization.description}</p>
-                </div>
-              )}
-            </>
-          ) : (
-          /* ── 목록 뷰 ── */
-          <>
-          {!effectiveCountryId ? (
-            <>
-              <SectionLabel>행정기구·조직</SectionLabel>
-              <p style={{ fontSize: 14, color: '#64748b' }}>
-                현대 국가를 선택하면 해당 국가 소속 조직을 등록·조회할 수
-                있습니다.
-              </p>
-            </>
-          ) : organizationsLoading ? (
-            <>
-              <SectionLabel>행정기구·조직</SectionLabel>
-              <p style={{ fontSize: 14, color: '#64748b' }}>불러오는 중…</p>
-            </>
-          ) : (
-            <>
-              {organizationsList.length === 0 ? (
-                /* 행정부와 동일: 등록 카드만 표시 (추가 버튼 없음) */
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 24 }}
-                >
                   <div
+                    key={item.label}
                     style={{
-                      padding: '48px 32px',
-                      background: '#fff',
-                      borderRadius: 20,
-                      border: '1px solid #e5e7eb',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                      textAlign: 'center',
+                      background: isDark ? 'rgba(255,255,255,0.05)' : '#f8fafc',
+                      borderRadius: 12,
+                      padding: '14px 16px',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9'}`,
                     }}
                   >
                     <div
                       style={{
-                        width: 64,
-                        height: 64,
-                        margin: '0 auto 20px',
-                        borderRadius: 20,
-                        background:
-                          'linear-gradient(145deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: MAIN,
-                      }}
-                    >
-                      <FiPlus size={28} strokeWidth={2.5} />
-                    </div>
-                    <h3
-                      style={{
-                        margin: '0 0 8px',
-                        fontSize: 20,
-                        fontWeight: 700,
-                        color: '#0f172a',
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      등록된 조직이 없습니다
-                    </h3>
-                    <p
-                      style={{
-                        margin: '0 0 24px',
-                        fontSize: 14,
-                        color: '#64748b',
-                        lineHeight: 1.5,
-                        maxWidth: 400,
-                        marginLeft: 'auto',
-                        marginRight: 'auto',
-                      }}
-                    >
-                      만철·관동군·총독부 등 행정기구·조직을 등록하면 이 국가
-                      소속으로 관리할 수 있습니다.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingOrganization(null)
-                        setOrganizationForm({
-                          name: '',
-                          shortName: null,
-                          localName: null,
-                          type: 'GOVERNMENT_AGENCY',
-                          scope: null,
-                          countryId: effectiveCountryId,
-                          historicalCountryId: null,
-                          description: null,
-                          foundedDate: null,
-                          dissolvedDate: null,
-                          websiteUrl: null,
-                          logoUrl: null,
-                          ideology: null,
-                        })
-                        setOrganizationModalOpen(true)
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '14px 24px',
-                        fontSize: 15,
+                        fontSize: 11,
                         fontWeight: 600,
-                        color: '#fff',
-                        background: MAIN,
-                        border: 'none',
-                        borderRadius: 14,
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                        color: '#94a3b8',
+                        marginBottom: 6,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
                       }}
                     >
-                      <FiPlus size={18} /> 조직 등록
-                    </button>
+                      {item.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: isDark ? '#f1f5f9' : '#0f172a',
+                      }}
+                    >
+                      {item.value}
+                    </div>
                   </div>
+                ))}
+              </div>
+              {selectedOrganization.description && (
+                <div
+                  style={{
+                    background: isDark ? 'rgba(255,255,255,0.05)' : '#f8fafc',
+                    borderRadius: 12,
+                    padding: '16px 18px',
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9'}`,
+                    marginBottom: 24,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#94a3b8',
+                      marginBottom: 8,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    설명
+                  </div>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 14,
+                      color: isDark ? '#cbd5e1' : '#374151',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {selectedOrganization.description}
+                  </p>
                 </div>
+              )}
+            </>
+          ) : (
+            /* ── 목록 뷰 ── */
+            <>
+              {!effectiveCountryId ? (
+                <>
+                  <SectionLabel>행정기구·조직</SectionLabel>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      color: isDark ? '#64748b' : '#64748b',
+                    }}
+                  >
+                    현대 국가를 선택하면 해당 국가 소속 조직을 등록·조회할 수
+                    있습니다.
+                  </p>
+                </>
+              ) : organizationsLoading ? (
+                <>
+                  <SectionLabel>행정기구·조직</SectionLabel>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      color: isDark ? '#64748b' : '#64748b',
+                    }}
+                  >
+                    불러오는 중…
+                  </p>
+                </>
               ) : (
                 <>
-                  <OrgListHeader>
-                    <OrgListHeaderRow>
-                      <OrgListHeaderTitleBlock>
-                        <OrgListHeaderTitle>
-                          행정기구·조직
-                          <OrgListHeaderCount>
-                            {filteredOrganizationsList.length}개
-                            {organizationSearchQuery.trim()
-                              ? ` / 전체 ${organizationsList.length}개`
-                              : ''}
-                          </OrgListHeaderCount>
-                        </OrgListHeaderTitle>
-                        <OrgListHeaderDesc>
-                          이름·약칭·유형으로 검색할 수 있습니다.
-                        </OrgListHeaderDesc>
-                      </OrgListHeaderTitleBlock>
-                    </OrgListHeaderRow>
-                    <OrgToolbarRow>
-                      <OrgSearchWrap style={{ position: 'relative' }}>
-                        <span
-                          style={{
-                            position: 'absolute',
-                            left: 12,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: '#94a3b8',
-                            pointerEvents: 'none',
-                          }}
-                        >
-                          <FiSearch size={16} />
-                        </span>
-                        <OrgSearchInput
-                          type="search"
-                          placeholder="이름, 약칭, 유형 검색"
-                          value={organizationSearchQuery}
-                          onChange={(e) =>
-                            setOrganizationSearchQuery(e.target.value)
-                          }
-                          aria-label="조직 검색"
-                        />
-                      </OrgSearchWrap>
-                    </OrgToolbarRow>
-                  </OrgListHeader>
-                  {filteredOrganizationsList.length === 0 ? (
-                    <OrgEmptyState>
-                      검색 조건에 맞는 조직이 없습니다.
-                    </OrgEmptyState>
-                  ) : (
-                    <OrgGrid>
-                      {/* 행정부처럼 첫 카드: 조직 등록 카드 */}
-                      <OrgCard
-                        as="button"
-                        type="button"
-                        onClick={() => {
-                          setEditingOrganization(null)
-                          setOrganizationForm({
-                            name: '',
-                            shortName: null,
-                            localName: null,
-                            type: 'GOVERNMENT_AGENCY',
-                            scope: null,
-                            countryId: effectiveCountryId,
-                            historicalCountryId: null,
-                            description: null,
-                            foundedDate: null,
-                            dissolvedDate: null,
-                            websiteUrl: null,
-                            logoUrl: null,
-                            ideology: null,
-                          })
-                          setOrganizationModalOpen(true)
-                        }}
+                  {organizationsList.length === 0 ? (
+                    /* 행정부와 동일: 등록 카드만 표시 (추가 버튼 없음) */
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 24,
+                      }}
+                    >
+                      <div
                         style={{
-                          borderStyle: 'dashed',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          minHeight: 120,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
+                          padding: '48px 32px',
+                          background: isDark
+                            ? 'rgba(255,255,255,0.04)'
+                            : '#fff',
+                          borderRadius: 20,
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+                          boxShadow: isDark
+                            ? '0 2px 8px rgba(0,0,0,0.3)'
+                            : '0 2px 8px rgba(0,0,0,0.04)',
+                          textAlign: 'center',
                         }}
                       >
-                        <OrgCardContent
+                        <div
                           style={{
-                            width: '100%',
+                            width: 64,
+                            height: 64,
+                            margin: '0 auto 20px',
+                            borderRadius: 20,
+                            background:
+                              'linear-gradient(145deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%)',
                             display: 'flex',
-                            flexDirection: 'column',
                             alignItems: 'center',
-                            gap: 8,
+                            justifyContent: 'center',
+                            color: MAIN,
                           }}
                         >
-                          <div
-                            style={{
-                              width: 48,
-                              height: 48,
-                              borderRadius: 14,
-                              background: 'rgba(99, 102, 241, 0.1)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: MAIN,
-                            }}
-                          >
-                            <FiPlus size={24} />
-                          </div>
-                          <span
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 600,
-                              color: '#64748b',
-                            }}
-                          >
-                            조직 등록
-                          </span>
-                        </OrgCardContent>
-                      </OrgCard>
-                      {filteredOrganizationsList.map(
-                        (org: OrganizationResponseDto) => (
+                          <FiPlus size={28} strokeWidth={2.5} />
+                        </div>
+                        <h3
+                          style={{
+                            margin: '0 0 8px',
+                            fontSize: 20,
+                            fontWeight: 700,
+                            color: isDark ? '#f1f5f9' : '#0f172a',
+                            letterSpacing: '-0.02em',
+                          }}
+                        >
+                          등록된 조직이 없습니다
+                        </h3>
+                        <p
+                          style={{
+                            margin: '0 0 24px',
+                            fontSize: 14,
+                            color: isDark ? '#64748b' : '#64748b',
+                            lineHeight: 1.5,
+                            maxWidth: 400,
+                            marginLeft: 'auto',
+                            marginRight: 'auto',
+                          }}
+                        >
+                          만철·관동군·총독부 등 행정기구·조직을 등록하면 이 국가
+                          소속으로 관리할 수 있습니다.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingOrganization(null)
+                            setOrganizationForm({
+                              name: '',
+                              shortName: null,
+                              localName: null,
+                              type: 'GOVERNMENT_AGENCY',
+                              scope: null,
+                              countryId: effectiveCountryId,
+                              historicalCountryId: null,
+                              description: null,
+                              foundedDate: null,
+                              dissolvedDate: null,
+                              websiteUrl: null,
+                              logoUrl: null,
+                              ideology: null,
+                            })
+                            setOrganizationModalOpen(true)
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '14px 24px',
+                            fontSize: 15,
+                            fontWeight: 600,
+                            color: '#fff',
+                            background: MAIN,
+                            border: 'none',
+                            borderRadius: 14,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                          }}
+                        >
+                          <FiPlus size={18} /> 조직 등록
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <OrgListHeader>
+                        <OrgListHeaderRow>
+                          <OrgListHeaderTitleBlock>
+                            <OrgListHeaderTitle>
+                              행정기구·조직
+                              <OrgListHeaderCount>
+                                {filteredOrganizationsList.length}개
+                                {organizationSearchQuery.trim()
+                                  ? ` / 전체 ${organizationsList.length}개`
+                                  : ''}
+                              </OrgListHeaderCount>
+                            </OrgListHeaderTitle>
+                            <OrgListHeaderDesc>
+                              이름·약칭·유형으로 검색할 수 있습니다.
+                            </OrgListHeaderDesc>
+                          </OrgListHeaderTitleBlock>
+                        </OrgListHeaderRow>
+                        <OrgToolbarRow>
+                          <OrgSearchWrap style={{ position: 'relative' }}>
+                            <span
+                              style={{
+                                position: 'absolute',
+                                left: 12,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: '#94a3b8',
+                                pointerEvents: 'none',
+                              }}
+                            >
+                              <FiSearch size={16} />
+                            </span>
+                            <OrgSearchInput
+                              type="search"
+                              placeholder="이름, 약칭, 유형 검색"
+                              value={organizationSearchQuery}
+                              onChange={(e) =>
+                                setOrganizationSearchQuery(e.target.value)
+                              }
+                              aria-label="조직 검색"
+                            />
+                          </OrgSearchWrap>
+                        </OrgToolbarRow>
+                      </OrgListHeader>
+                      {filteredOrganizationsList.length === 0 ? (
+                        <OrgEmptyState>
+                          검색 조건에 맞는 조직이 없습니다.
+                        </OrgEmptyState>
+                      ) : (
+                        <OrgGrid>
+                          {/* 행정부처럼 첫 카드: 조직 등록 카드 */}
                           <OrgCard
-                            key={org.id}
                             as="button"
                             type="button"
                             onClick={() => {
-                              setOrgModalTab('info')
-                              setOrganizationModalError(null)
-                              setSelectedOrganization(org)
+                              setEditingOrganization(null)
+                              setOrganizationForm({
+                                name: '',
+                                shortName: null,
+                                localName: null,
+                                type: 'GOVERNMENT_AGENCY',
+                                scope: null,
+                                countryId: effectiveCountryId,
+                                historicalCountryId: null,
+                                description: null,
+                                foundedDate: null,
+                                dissolvedDate: null,
+                                websiteUrl: null,
+                                logoUrl: null,
+                                ideology: null,
+                              })
+                              setOrganizationModalOpen(true)
                             }}
-                            style={{ cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                            style={{
+                              borderStyle: 'dashed',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              minHeight: 120,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
                           >
-                            <OrgCardContent>
+                            <OrgCardContent
+                              style={{
+                                width: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: 8,
+                              }}
+                            >
                               <div
                                 style={{
+                                  width: 48,
+                                  height: 48,
+                                  borderRadius: 14,
+                                  background: 'rgba(99, 102, 241, 0.1)',
                                   display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'flex-start',
-                                  gap: 12,
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: MAIN,
                                 }}
                               >
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <h3
-                                    style={{
-                                      margin: 0,
-                                      fontSize: 16,
-                                      fontWeight: 600,
-                                      color: '#0f172a',
-                                      letterSpacing: '-0.01em',
-                                      lineHeight: 1.35,
-                                    }}
-                                  >
-                                    {org.name}
-                                  </h3>
-                                  <div
-                                    style={{
-                                      marginTop: 6,
-                                      fontSize: 13,
-                                      color: '#64748b',
-                                    }}
-                                  >
-                                    {ORGANIZATION_TYPE_LABEL[org.type] ??
-                                      org.type}
-                                    {(org.foundedDate || org.dissolvedDate) && (
-                                      <span
-                                        style={{
-                                          display: 'block',
-                                          marginTop: 4,
-                                        }}
-                                      >
-                                        {org.foundedDate &&
-                                          `설립 ${org.foundedDate.slice(0, 10)}`}
-                                        {org.foundedDate &&
-                                          org.dissolvedDate &&
-                                          ' ~ '}
-                                        {org.dissolvedDate &&
-                                          `해체 ${org.dissolvedDate.slice(0, 10)}`}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div style={{ color: '#cbd5e1', flexShrink: 0 }}>
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-                                </div>
+                                <FiPlus size={24} />
                               </div>
+                              <span
+                                style={{
+                                  fontSize: 14,
+                                  fontWeight: 600,
+                                  color: isDark ? '#94a3b8' : '#64748b',
+                                }}
+                              >
+                                조직 등록
+                              </span>
                             </OrgCardContent>
                           </OrgCard>
-                        ),
+                          {filteredOrganizationsList.map(
+                            (org: OrganizationResponseDto) => (
+                              <OrgCard
+                                key={org.id}
+                                as="button"
+                                type="button"
+                                onClick={() => {
+                                  setOrgModalTab('info')
+                                  setOrganizationModalError(null)
+                                  setSelectedOrganization(org)
+                                }}
+                                style={{
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  width: '100%',
+                                }}
+                              >
+                                <OrgCardContent>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'flex-start',
+                                      gap: 12,
+                                    }}
+                                  >
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <h3
+                                        style={{
+                                          margin: 0,
+                                          fontSize: 16,
+                                          fontWeight: 600,
+                                          color: isDark ? '#f1f5f9' : '#0f172a',
+                                          letterSpacing: '-0.01em',
+                                          lineHeight: 1.35,
+                                        }}
+                                      >
+                                        {org.name}
+                                      </h3>
+                                      <div
+                                        style={{
+                                          marginTop: 6,
+                                          fontSize: 13,
+                                          color: isDark ? '#94a3b8' : '#64748b',
+                                        }}
+                                      >
+                                        {ORGANIZATION_TYPE_LABEL[org.type] ??
+                                          org.type}
+                                        {(org.foundedDate ||
+                                          org.dissolvedDate) && (
+                                          <span
+                                            style={{
+                                              display: 'block',
+                                              marginTop: 4,
+                                            }}
+                                          >
+                                            {org.foundedDate &&
+                                              `설립 ${org.foundedDate.slice(0, 10)}`}
+                                            {org.foundedDate &&
+                                              org.dissolvedDate &&
+                                              ' ~ '}
+                                            {org.dissolvedDate &&
+                                              `해체 ${org.dissolvedDate.slice(0, 10)}`}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div
+                                      style={{
+                                        color: '#cbd5e1',
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                      >
+                                        <path d="M9 18l6-6-6-6" />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                </OrgCardContent>
+                              </OrgCard>
+                            ),
+                          )}
+                        </OrgGrid>
                       )}
-                    </OrgGrid>
+                    </>
                   )}
                 </>
               )}
             </>
           )}
-          </>
-          )}
 
           {organizationModalOpen &&
             createPortal(
-              <OrgModalOverlay
+              <ModalOverlay
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="org-modal-title"
@@ -4509,13 +4561,15 @@ export function GovernmentInfoSection({
                   transition={{ duration: 0.2 }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <OrgModalBox>
-                    <OrgModalHeader>
-                      <OrgModalTitle id="org-modal-title">
+                  <OrgModalBoxCustom>
+                    <ModalHeader>
+                      <ModalTitle id="org-modal-title">
                         <FiGrid size={24} strokeWidth={2} />
-                        {editingOrganization ? editingOrganization.name : '조직 등록'}
-                      </OrgModalTitle>
-                      <OrgCloseBtn
+                        {editingOrganization
+                          ? editingOrganization.name
+                          : '조직 등록'}
+                      </ModalTitle>
+                      <ModalCloseButton
                         type="button"
                         onClick={() => {
                           setOrganizationModalOpen(false)
@@ -4524,9 +4578,9 @@ export function GovernmentInfoSection({
                         aria-label="닫기"
                       >
                         <FiX size={22} strokeWidth={2} />
-                      </OrgCloseBtn>
-                    </OrgModalHeader>
-                    <OrgFormBody>
+                      </ModalCloseButton>
+                    </ModalHeader>
+                    <ModalBody>
                       <OrgFormDesc>
                         <FiInfo size={20} />
                         <span>
@@ -4574,8 +4628,14 @@ export function GovernmentInfoSection({
                                 body,
                               )
                               toast.success('수정되었습니다.')
-                              if (selectedOrganization?.id === editingOrganization.id) {
-                                setSelectedOrganization({ ...selectedOrganization, ...body })
+                              if (
+                                selectedOrganization?.id ===
+                                editingOrganization.id
+                              ) {
+                                setSelectedOrganization({
+                                  ...selectedOrganization,
+                                  ...body,
+                                })
                               }
                             } else {
                               await createOrganization(apiConnection, body)
@@ -4833,63 +4893,78 @@ export function GovernmentInfoSection({
                           </OrgPrimaryBtn>
                         </OrgFormActions>
                       </form>
-                    </OrgFormBody>
-                  </OrgModalBox>
+                    </ModalBody>
+                  </OrgModalBoxCustom>
                 </motion.div>
-              </OrgModalOverlay>,
+              </ModalOverlay>,
               document.body,
             )}
 
-        {/* 직위 설정 모달 */}
-        {orgModalTab === 'positions' && selectedOrganization && createPortal(
-          <OrgModalOverlay
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="org-position-modal-title"
-            onClick={() => setOrgModalTab('info')}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.2 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ width: '90vw', maxWidth: 700, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
-            >
-              <OrgModalBox style={{ maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <OrgModalHeader>
-                  <OrgModalTitle id="org-position-modal-title">
-                    <FiAward size={22} strokeWidth={2} />
-                    직위 설정 — {selectedOrganization.name}
-                  </OrgModalTitle>
-                  <OrgCloseBtn
-                    type="button"
-                    onClick={() => setOrgModalTab('info')}
-                    aria-label="닫기"
+          {/* 직위 설정 모달 */}
+          {orgModalTab === 'positions' &&
+            selectedOrganization &&
+            createPortal(
+              <ModalOverlay
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="org-position-modal-title"
+                onClick={() => setOrgModalTab('info')}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    width: '90vw',
+                    maxWidth: 700,
+                    maxHeight: '90vh',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <OrgModalBoxCustom
+                    style={{
+                      maxHeight: '90vh',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
                   >
-                    <FiX size={22} strokeWidth={2} />
-                  </OrgCloseBtn>
-                </OrgModalHeader>
-                <OrgFormBody style={{ flex: 1, overflow: 'auto' }}>
-                  <PositionDefinitionsSection
-                    fixedOrganizationId={selectedOrganization.id}
-                    fixedOrganizationName={
-                      selectedOrganization.shortName
-                        ? `${selectedOrganization.name} (${selectedOrganization.shortName})`
-                        : selectedOrganization.name
-                    }
-                  />
-                </OrgFormBody>
-              </OrgModalBox>
-            </motion.div>
-          </OrgModalOverlay>,
-          document.body,
-        )}
+                    <ModalHeader>
+                      <ModalTitle id="org-position-modal-title">
+                        <FiAward size={22} strokeWidth={2} />
+                        직위 설정 — {selectedOrganization.name}
+                      </ModalTitle>
+                      <ModalCloseButton
+                        type="button"
+                        onClick={() => setOrgModalTab('info')}
+                        aria-label="닫기"
+                      >
+                        <FiX size={22} strokeWidth={2} />
+                      </ModalCloseButton>
+                    </ModalHeader>
+                    <ModalBody style={{ flex: 1, overflow: 'auto' }}>
+                      <PositionDefinitionsSection
+                        fixedOrganizationId={selectedOrganization.id}
+                        fixedOrganizationName={
+                          selectedOrganization.shortName
+                            ? `${selectedOrganization.name} (${selectedOrganization.shortName})`
+                            : selectedOrganization.name
+                        }
+                      />
+                    </ModalBody>
+                  </OrgModalBoxCustom>
+                </motion.div>
+              </ModalOverlay>,
+              document.body,
+            )}
         </section>
       )}
 
       {/* 부처 카테고리 모달 */}
       {categoryModalOpen && (
-        <CategoryModalOverlay
+        <ModalOverlay
           role="dialog"
           aria-modal="true"
           aria-labelledby="category-modal-title"
@@ -4897,33 +4972,31 @@ export function GovernmentInfoSection({
             if (e.target === e.currentTarget) closeCategoryModal()
           }}
         >
-          <CategoryModalBox
+          <CategoryBox
             id="category-modal-title"
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
             onClick={(e) => e.stopPropagation()}
           >
-            <CategoryModalHeader>
+            <ModalHeader>
               <div>
-                <CategoryModalTitle>
+                <ModalTitle>
                   <FiGrid size={24} strokeWidth={2} />
                   부처 카테고리
-                </CategoryModalTitle>
-                <CategoryModalDesc>
-                  국방·외교 등 공통 분류 관리
-                </CategoryModalDesc>
+                </ModalTitle>
+                <ModalSubtitle>국방·외교 등 공통 분류 관리</ModalSubtitle>
               </div>
-              <CategoryModalCloseBtn
+              <ModalCloseButton
                 type="button"
                 onClick={closeCategoryModal}
                 aria-label="닫기"
               >
                 <FiX size={22} strokeWidth={2} />
-              </CategoryModalCloseBtn>
-            </CategoryModalHeader>
+              </ModalCloseButton>
+            </ModalHeader>
 
-            <CategoryModalBody>
+            <ModalBody>
               <CategoryFormBlock>
                 <CategorySectionTitle>추가 / 수정</CategorySectionTitle>
                 <CategoryFormLabel htmlFor="category-form-name">
@@ -5013,11 +5086,11 @@ export function GovernmentInfoSection({
                   ))
                 )}
               </CategoryList>
-            </CategoryModalBody>
-          </CategoryModalBox>
-        </CategoryModalOverlay>
+            </ModalBody>
+          </CategoryBox>
+        </ModalOverlay>
       )}
-    </motion.div>
+    </div>
   )
 }
 
@@ -5035,11 +5108,13 @@ function StatCard({
   value: string | number
   unit: string
 }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   return (
     <div
       style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
+        background: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+        border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
         borderRadius: 16,
         padding: 22,
         display: 'flex',
@@ -5052,13 +5127,19 @@ function StatCard({
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-2px)'
-        e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.06)'
-        e.currentTarget.style.borderColor = '#d1d5db'
+        e.currentTarget.style.boxShadow = isDark
+          ? '0 8px 20px rgba(0,0,0,0.3)'
+          : '0 8px 20px rgba(0,0,0,0.06)'
+        e.currentTarget.style.borderColor = isDark
+          ? 'rgba(255,255,255,0.15)'
+          : '#d1d5db'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)'
         e.currentTarget.style.boxShadow = 'none'
-        e.currentTarget.style.borderColor = '#e5e7eb'
+        e.currentTarget.style.borderColor = isDark
+          ? 'rgba(255,255,255,0.08)'
+          : '#e5e7eb'
       }}
     >
       <div
@@ -5066,7 +5147,7 @@ function StatCard({
           width: 44,
           height: 44,
           borderRadius: 12,
-          background: '#f3f4f6',
+          background: isDark ? 'rgba(255,255,255,0.07)' : '#f3f4f6',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -5080,7 +5161,7 @@ function StatCard({
         <div
           style={{
             fontSize: 11,
-            color: '#6b7280',
+            color: isDark ? '#64748b' : '#6b7280',
             marginBottom: 4,
             fontWeight: 600,
             letterSpacing: '0.04em',
@@ -5101,14 +5182,20 @@ function StatCard({
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: '#111827',
+              color: isDark ? '#f1f5f9' : '#111827',
               letterSpacing: '-0.03em',
               lineHeight: 1.2,
             }}
           >
             {value}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#6b7280' }}>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: isDark ? '#64748b' : '#6b7280',
+            }}
+          >
             {unit}
           </span>
         </div>
@@ -5131,11 +5218,13 @@ function OrgTypeCard({
   description: string
   examples: string[]
 }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   return (
     <div
       style={{
-        background: '#ffffff',
-        border: '1px solid #e5e7eb',
+        background: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+        border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
         borderRadius: 16,
         padding: 22,
         transition:
@@ -5143,13 +5232,19 @@ function OrgTypeCard({
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-2px)'
-        e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.06)'
-        e.currentTarget.style.borderColor = '#d1d5db'
+        e.currentTarget.style.boxShadow = isDark
+          ? '0 8px 20px rgba(0,0,0,0.3)'
+          : '0 8px 20px rgba(0,0,0,0.06)'
+        e.currentTarget.style.borderColor = isDark
+          ? 'rgba(255,255,255,0.15)'
+          : '#d1d5db'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)'
         e.currentTarget.style.boxShadow = 'none'
-        e.currentTarget.style.borderColor = '#e5e7eb'
+        e.currentTarget.style.borderColor = isDark
+          ? 'rgba(255,255,255,0.08)'
+          : '#e5e7eb'
       }}
     >
       <div
@@ -5164,7 +5259,7 @@ function OrgTypeCard({
           style={{
             fontSize: 15,
             fontWeight: 600,
-            color: '#111827',
+            color: isDark ? '#f1f5f9' : '#111827',
             margin: 0,
             letterSpacing: '-0.02em',
           }}
@@ -5191,7 +5286,7 @@ function OrgTypeCard({
       <p
         style={{
           fontSize: 13,
-          color: '#6b7280',
+          color: isDark ? '#64748b' : '#6b7280',
           marginBottom: 12,
           lineHeight: 1.45,
         }}
@@ -5204,11 +5299,11 @@ function OrgTypeCard({
             key={idx}
             style={{
               fontSize: 12,
-              color: '#374151',
+              color: isDark ? '#94a3b8' : '#374151',
               padding: '8px 12px',
-              background: '#f9fafb',
+              background: isDark ? 'rgba(255,255,255,0.04)' : '#f9fafb',
               borderRadius: 8,
-              border: '1px solid #e5e7eb',
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
             }}
           >
             • {example}

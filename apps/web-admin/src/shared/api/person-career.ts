@@ -208,6 +208,7 @@ export interface CreateGovernmentPositionTenureDto {
   historicalCountryId?: string // 역사적 국가 ID
   positionDefinitionId?: string // 직위 정의 ID (선택사항)
   termNumber?: number // 대수
+  subTermNumber?: number // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
   regnalNumber?: number // 재위번호 (서양 군주)
   startDate: string // 취임일 (필수)
   endDate?: string // 퇴임일

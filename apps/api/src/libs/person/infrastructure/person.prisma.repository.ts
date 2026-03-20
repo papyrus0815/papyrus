@@ -560,6 +560,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             termNumber: true,
+            subTermNumber: true,
             regnalNumber: true,
             startDate: true,
             endDate: true,
@@ -837,6 +838,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             termNumber: true,
+            subTermNumber: true,
             regnalNumber: true,
             positionType: true,
             title: true,
@@ -1272,6 +1274,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         }),
         positionDefinitionId: dto.positionDefinitionId ?? undefined,
         termNumber: dto.termNumber,
+        subTermNumber: dto.subTermNumber,
         regnalNumber: dto.regnalNumber,
         startDate: new Date(dto.startDate),
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
@@ -1331,6 +1334,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     }
     if (dto.positionDefinitionId !== undefined) updateData.positionDefinitionId = dto.positionDefinitionId
     if (dto.termNumber !== undefined) updateData.termNumber = dto.termNumber
+    if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
     if (dto.startDate) updateData.startDate = new Date(dto.startDate)
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null

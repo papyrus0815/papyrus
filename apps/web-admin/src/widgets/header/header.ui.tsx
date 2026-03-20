@@ -286,7 +286,7 @@ const Header: React.FC = () => {
   const menuItems: TopNavItemSpec[] = [
     {
       key: 'timeline',
-      label: '연대표',
+      label: '국가',
       icon: <FiHome size={16} />,
       onClick: () => {
         playClickSound()
@@ -316,7 +316,7 @@ const Header: React.FC = () => {
     },
     {
       key: 'post',
-      label: '글',
+      label: '포스트',
       icon: <FiFileText size={16} />,
       onClick: () => {
         playClickSound()
@@ -891,97 +891,6 @@ const RightZone = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-`
-
-const SoundController = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 20px;
-  padding: 0.375rem 0.75rem;
-  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
-    box-shadow: 0 2px 6px ${({ theme }) => theme.colors.shadow.md};
-  }
-
-  @media (max-width: 768px) {
-    padding: 0.25rem 0.5rem;
-    gap: 0.375rem;
-  }
-`
-
-const SoundButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-`
-
-const VolumeSlider = styled.input`
-  width: 80px;
-  height: 4px;
-  border-radius: 2px;
-  background: ${({ theme }) => theme.colors.border.default};
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-  cursor: pointer;
-
-  &::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: ${({ theme }) => theme.colors.text.secondary};
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  &::-webkit-slider-thumb:hover {
-    background: ${({ theme }) => theme.colors.text.primary};
-    transform: scale(1.1);
-  }
-
-  &::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: ${({ theme }) => theme.colors.text.secondary};
-    cursor: pointer;
-    border: none;
-    transition: all 0.2s ease;
-  }
-
-  &::-moz-range-thumb:hover {
-    background: ${({ theme }) => theme.colors.text.primary};
-    transform: scale(1.1);
-  }
-
-  @media (max-width: 768px) {
-    width: 60px;
-  }
 `
 
 const SettingsHeader = styled.div`

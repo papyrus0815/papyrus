@@ -118,8 +118,34 @@ enum TreatyType {
   TRADE
   /// 영토 협정
   TERRITORIAL
+  /// 평화 조약
+  PEACE
+  /// 우호 협력 조약
+  FRIENDSHIP
+  /// 군축 조약
+  DISARMAMENT
+  /// 국경 조약
+  BORDER
+  /// 비밀 조약
+  SECRET
+  /// 다자 조약 (3개국 이상)
+  MULTILATERAL
   /// 기타
   OTHER
+}
+
+/// 조약 참여 유형
+enum TreatyParticipationType {
+  /// 서명국 (주 당사국)
+  SIGNATORY
+  /// 보증국 (조약 이행 보증)
+  GUARANTOR
+  /// 조정국 (중재·협상 조율)
+  MEDIATOR
+  /// 비준국 (나중에 비준)
+  RATIFIER
+  /// 관찰국
+  OBSERVER
 }
 
 /// 동맹 가입 상태
@@ -254,7 +280,6 @@ model Event {
   // 🆕 정규화된 군사 정보
   belligerentSides      BelligerentSide[]
   eventCountryRelations EventCountryRelationNew[]
-  treaties              Treaty[]
   alliances             Alliance[]
   militaryDetailsNorm   MilitaryDetailsNorm?
   casualties            CasualtiesData[]

@@ -17,7 +17,12 @@ export const PillTabNav = styled.div`
   padding: 6px;
   margin-bottom: 20px;
   width: fit-content;
-  background: ${({ theme }) => theme.colors.background.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.05)'
+      : theme.colors.background.tertiary};
+  border: ${({ theme }) =>
+    theme.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : 'none'};
   border-radius: 20px;
   overflow-x: auto;
   &::-webkit-scrollbar {

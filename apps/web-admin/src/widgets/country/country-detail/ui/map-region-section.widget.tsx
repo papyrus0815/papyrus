@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 
-import { motion } from 'framer-motion'
-
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { GoogleMap } from '@/shared/ui/google-map/google-map'
-import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
+import { SectionTabHeader } from '@/shared/ui/section-page-layout'
 
 // Mock 데이터 import
 import {
@@ -64,6 +63,47 @@ export function MapRegionSection({
   mockCities,
   onCityClick,
 }: MapRegionSectionProps) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
+
+  // ─── 인라인 스타일용 색상 팔레트 ────────────────────────────────────────────
+  const C = {
+    bg: isDark ? '#141414' : '#ffffff',
+    bgSecondary: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+    bgHover: isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
+    bgSelected: isDark ? 'rgba(99,106,242,0.12)' : '#eef2ff',
+    bgSelectedHover: isDark ? 'rgba(99,106,242,0.16)' : '#f8fafc',
+    border: isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb',
+    borderMedium: isDark ? 'rgba(255,255,255,0.15)' : '#d1d5db',
+    borderSelected: isDark ? 'rgba(99,106,242,0.4)' : '#6366f1',
+    text: isDark ? '#f4f4f5' : '#0f172a',
+    textSecondary: isDark ? '#a1a1aa' : '#64748b',
+    textMuted: isDark ? '#71717a' : '#94a3b8',
+    primary: '#6366f1',
+    primaryLight: isDark ? '#818cf8' : '#4f46e5',
+    badgeBg: isDark ? 'rgba(99,106,242,0.15)' : '#eef2ff',
+    badgeBorder: isDark ? 'rgba(99,106,242,0.3)' : '#c7d2fe',
+    badgeText: isDark ? '#818cf8' : '#4f46e5',
+    blueBadgeBg: isDark ? 'rgba(59,130,246,0.15)' : '#eff6ff',
+    blueBadgeBorder: isDark ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
+    blueBadgeText: isDark ? '#93c5fd' : '#1e40af',
+    divider: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+    shadow: (a: string) =>
+      isDark ? `0 2px 8px rgba(0,0,0,${a})` : `0 2px 8px rgba(0,0,0,${a})`,
+    shadowSelected: isDark
+      ? '0 2px 8px rgba(99,102,241,0.2)'
+      : '0 2px 8px rgba(99,102,241,0.12)',
+    shadowHover: isDark
+      ? '0 4px 14px rgba(0,0,0,0.5)'
+      : '0 8px 20px rgba(0,0,0,0.06)',
+    shadowNone: isDark
+      ? '0 1px 3px rgba(0,0,0,0.25)'
+      : '0 1px 2px rgba(0,0,0,0.04)',
+    gradientBg: isDark
+      ? 'rgba(255,255,255,0.03)'
+      : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+  } as const
+
   // 네비게이션 상태 관리
   const [navigation, setNavigation] = useState<NavigationState>({
     level: 'level1', // 시작은 1차 행정구역 목록
@@ -448,30 +488,20 @@ export function MapRegionSection({
   const adminSystem = administrativeSystemByCountry[countryCode]
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+    <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 32,
         padding: '36px 32px 48px',
-        background: '#ffffff',
         minHeight: 'calc(100vh - 200px)',
         position: 'relative',
       }}
     >
-      <CountryStyles.GlobalDashboardHero>
-        <CountryStyles.HeroContent>
-          <CountryStyles.HeroTextGroup>
-            <CountryStyles.HeroTitle>행정구역</CountryStyles.HeroTitle>
-            <CountryStyles.HeroSubtitle>
-              행정구역, 자연 지리, 인프라를 지도와 목록으로 확인할 수 있습니다.
-            </CountryStyles.HeroSubtitle>
-          </CountryStyles.HeroTextGroup>
-        </CountryStyles.HeroContent>
-      </CountryStyles.GlobalDashboardHero>
+      <SectionTabHeader
+        title="행정구역"
+        description="행정구역, 자연 지리, 인프라를 지도와 목록으로 확인할 수 있습니다."
+      />
 
       {/* 탭 + 요약 스트립 — 행정조직과 동일 구조 (탭 위 라벨 없음, 탭 아래 KPI 스트립) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -507,9 +537,9 @@ export function MapRegionSection({
             gap: 28,
             flexWrap: 'wrap',
             padding: '20px 28px',
-            background: '#fff',
+            background: C.bg,
             borderRadius: 16,
-            border: '1px solid #e5e7eb',
+            border: `1px solid ${C.border}`,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
@@ -517,7 +547,7 @@ export function MapRegionSection({
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: '#64748b',
+                color: C.textSecondary,
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase',
               }}
@@ -528,7 +558,7 @@ export function MapRegionSection({
               style={{
                 fontSize: 20,
                 fontWeight: 700,
-                color: '#0f172a',
+                color: C.text,
                 letterSpacing: '-0.03em',
               }}
             >
@@ -545,7 +575,7 @@ export function MapRegionSection({
                 style={{
                   width: 1,
                   height: 24,
-                  background: '#e2e8f0',
+                  background: C.divider,
                   borderRadius: 1,
                 }}
               />
@@ -554,7 +584,7 @@ export function MapRegionSection({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: '#64748b',
+                    color: C.textSecondary,
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
                   }}
@@ -565,7 +595,7 @@ export function MapRegionSection({
                   style={{
                     fontSize: 20,
                     fontWeight: 700,
-                    color: '#0f172a',
+                    color: C.text,
                     letterSpacing: '-0.03em',
                   }}
                 >
@@ -574,7 +604,7 @@ export function MapRegionSection({
                     style={{
                       fontSize: 14,
                       fontWeight: 500,
-                      color: '#64748b',
+                      color: C.textSecondary,
                       marginLeft: 2,
                     }}
                   >
@@ -2711,6 +2741,6 @@ export function MapRegionSection({
       {viewMode === 'infrastructure' && (
         <MapRegionInfrastructureView country={country} />
       )}
-    </motion.div>
+    </div>
   )
 }

@@ -155,3 +155,19 @@ export const EmptyDesc = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 `
+
+export const HeaderExtraWrapper = styled.div`
+  padding: 0 24px;
+`
+
+export const SelectOptionBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+`
+
+export const SelectOptionDescription = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`

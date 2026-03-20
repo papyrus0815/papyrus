@@ -20,7 +20,6 @@ export const AnalyticsDashboard = styled.div`
   flex: 1;
   min-height: 0;
   width: 100%;
-  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 export const TabContentPane = styled.div`

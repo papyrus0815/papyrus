@@ -35,6 +35,127 @@ export const SectionRoot = styled(motion.div)`
   background: ${({ theme }) => theme.colors.background.primary};
 `
 
+// ─── SectionTabHeader (글라스 히어로 헤더) ────────────────────────────────────
+
+const TabHeaderOuter = styled.header`
+  padding: 28px 32px;
+  border-radius: 20px;
+  position: relative;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        `
+      : css`
+          background: ${theme.colors.background.primary};
+          border: 1px solid ${theme.colors.border.default};
+          box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
+        `}
+
+  @media (max-width: 768px) {
+    padding: 20px 22px;
+    border-radius: 16px;
+  }
+
+  /* 배경 오버레이 */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      ellipse at 85% 20%,
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(159, 122, 234, 0.07)'
+          : 'rgba(139, 92, 246, 0.04)'}
+        0%,
+      transparent 55%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+`
+
+const TabHeaderInner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+`
+
+const TabHeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-width: 0;
+`
+
+const TabHeaderTitle = styled.h1`
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+
+  @media (max-width: 768px) {
+    font-size: 18px;
+  }
+`
+
+const TabHeaderSubtitle = styled.p`
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
+`
+
+export interface SectionTabHeaderProps {
+  title: string
+  description: string
+  /** 왼쪽 타이틀 앞에 올 슬롯 (예: 국기 썸네일) */
+  leftSlot?: React.ReactNode
+  /** 우측 버튼 슬롯 */
+  rightSlot?: React.ReactNode
+}
+
+export function SectionTabHeader({ title, description, leftSlot, rightSlot }: SectionTabHeaderProps) {
+  return (
+    <TabHeaderOuter>
+      <TabHeaderInner>
+        <TabHeaderLeft>
+          {leftSlot}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+            <TabHeaderTitle>{title}</TabHeaderTitle>
+            <TabHeaderSubtitle>{description}</TabHeaderSubtitle>
+          </div>
+        </TabHeaderLeft>
+        {rightSlot && (
+          <div style={{ flexShrink: 0 }}>
+            {rightSlot}
+          </div>
+        )}
+      </TabHeaderInner>
+    </TabHeaderOuter>
+  )
+}
+
 const HeaderOuter = styled.header`
   padding-bottom: 24px;
   display: flex;
@@ -320,16 +441,18 @@ interface SectionPageHeaderProps {
     onClick: () => void
     ariaLabel?: string
   }
+  /** 우측 커스텀 슬롯 (addButton보다 우선) */
+  rightSlot?: React.ReactNode
 }
 
-export function SectionPageHeader({ title, description, addButton }: SectionPageHeaderProps) {
+export function SectionPageHeader({ title, description, addButton, rightSlot }: SectionPageHeaderProps) {
   return (
     <HeaderOuter>
       <div>
         <HeaderTitle>{title}</HeaderTitle>
         <HeaderDesc>{description}</HeaderDesc>
       </div>
-      {addButton && (
+      {rightSlot ?? (addButton && (
         <AddButton
           type="button"
           onClick={addButton.onClick}
@@ -338,7 +461,7 @@ export function SectionPageHeader({ title, description, addButton }: SectionPage
           <PlusIcon />
           {addButton.label}
         </AddButton>
-      )}
+      ))}
     </HeaderOuter>
   )
 }

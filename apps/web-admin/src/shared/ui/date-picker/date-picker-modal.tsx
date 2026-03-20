@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react'
 
+import { createPortal } from 'react-dom'
+
 import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -244,7 +246,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     return days
   }
 
-  return (
+  const modal = (
     <Overlay onClick={onClose}>
       <ModalContainer onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
@@ -356,6 +358,10 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       </ModalContainer>
     </Overlay>
   )
+
+  if (typeof document === 'undefined') return null
+
+  return createPortal(modal, document.body)
 }
 
 const Overlay = styled.div`

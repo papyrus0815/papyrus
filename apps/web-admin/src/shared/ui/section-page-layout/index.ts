@@ -1,5 +1,6 @@
 export {
   SectionRoot,
+  SectionTabHeader,
   SectionPageHeader,
   SectionKpiPanel,
   SectionEmptyState,
