@@ -12,7 +12,7 @@
 
 ## 다음 단계 (선택)
 
-1. **다크 팔레트 나머지** — **`MinistryDepartmentTree`** / **`department-blocks`** 등 중앙부처 하위 UI가 필요 시 동일 `CabinetsSectionPalette` 패턴으로 맞추기. 지도·조약 등은 기존처럼 `getMapRegionSectionPalette` / **`getTreatySectionPalette`**.
+1. **다크 팔레트 나머지** — **`MinistryDepartmentDetailView`**(`ministry-department-detail.styles`)는 이미 `theme.mode` 기반. 트리·**`department-blocks`**·**`ministries-tab-section`**·카테고리 탭·검색 빈 화면은 `getCabinetsSectionPalette`로 통일됨.
 2. **행정부처 관리 페이지** — `useQuery` + `administrationDepartmentsAllQueryKey` / 무효화(`invalidateAdministrationDepartmentQueries`)로 국가 상세·목록·폼 캐시 정합성 유지 (적용됨)
 
 ## 레이어

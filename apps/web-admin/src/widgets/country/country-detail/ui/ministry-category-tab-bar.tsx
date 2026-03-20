@@ -1,7 +1,10 @@
 /**
  * 중앙부처 — 카테고리 탭 (박스 없이 한 겹, 가로 스크롤)
  */
+import { useMemo } from 'react'
+
 import type { AdministrationDepartmentCategory } from '@/shared/api/administration-department'
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
 type MinistryCategoryTabBarProps = {
   categories: AdministrationDepartmentCategory[]
@@ -19,6 +22,8 @@ export function MinistryCategoryTabBar({
   onSelectCategory,
   isDark,
 }: MinistryCategoryTabBarProps) {
+  const C = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+
   return (
     <div
       style={{
@@ -27,7 +32,7 @@ export function MinistryCategoryTabBar({
         gap: 10,
         paddingBottom: 14,
         marginBottom: 4,
-        borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : '#eceff3'}`,
+        borderBottom: `1px solid ${C.divider}`,
       }}
     >
       <div
@@ -35,7 +40,7 @@ export function MinistryCategoryTabBar({
           fontSize: 12,
           fontWeight: 600,
           letterSpacing: '-0.02em',
-          color: isDark ? '#94a3b8' : '#64748b',
+          color: C.textMuted,
         }}
       >
         부처 카테고리
@@ -80,20 +85,10 @@ export function MinistryCategoryTabBar({
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 border: active
-                  ? `1px solid ${isDark ? 'rgba(129, 140, 248, 0.45)' : '#c7d2fe'}`
+                  ? `1px solid ${C.accentBorder}`
                   : '1px solid transparent',
-                background: active
-                  ? isDark
-                    ? 'rgba(99, 102, 241, 0.16)'
-                    : '#eef2ff'
-                  : 'transparent',
-                color: active
-                  ? isDark
-                    ? '#e0e7ff'
-                    : '#4338ca'
-                  : isDark
-                    ? '#94a3b8'
-                    : '#64748b',
+                background: active ? C.accentBg : 'transparent',
+                color: active ? (isDark ? '#e0e7ff' : C.accent) : C.textMuted,
                 transition:
                   'background 0.14s, border-color 0.14s, color 0.14s',
               }}
@@ -116,14 +111,12 @@ export function MinistryCategoryTabBar({
                       : 'rgba(99, 102, 241, 0.12)'
                     : isDark
                       ? 'rgba(255,255,255,0.06)'
-                      : '#f1f5f9',
+                      : C.badge,
                   color: active
                     ? isDark
                       ? '#e2e8f0'
-                      : '#4338ca'
-                    : isDark
-                      ? '#64748b'
-                      : '#94a3b8',
+                      : C.accent
+                    : C.textFaint,
                 }}
               >
                 {n}

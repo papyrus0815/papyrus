@@ -7,8 +7,6 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
-import { GOV_MAIN_COLOR as MAIN } from '../model/constants'
-
 /** 부처에 연결된 직위의 역대 장관(재임) 목록 — API로 조회 */
 export function DepartmentTenuresBlock({
   departmentId,
@@ -220,9 +218,9 @@ export function DepartmentEventsBlock({
           padding: '4px 10px',
           fontSize: 11,
           fontWeight: 600,
-          color: MAIN,
+          color: C.accent,
           background: 'transparent',
-          border: '1px solid ' + MAIN,
+          border: `1px solid ${C.accent}`,
           borderRadius: 8,
           cursor: 'pointer',
         }}
@@ -386,7 +384,7 @@ export function DepartmentEventsBlock({
                             padding: '6px 12px',
                             fontSize: 12,
                             fontWeight: 600,
-                            background: MAIN,
+                            background: C.accent,
                             color: '#fff',
                             border: 'none',
                             borderRadius: 8,
@@ -652,7 +650,7 @@ export function DepartmentEventsBlock({
                       padding: '6px 14px',
                       fontSize: 12,
                       fontWeight: 600,
-                      background: MAIN,
+                      background: C.accent,
                       color: '#fff',
                       border: 'none',
                       borderRadius: 8,
