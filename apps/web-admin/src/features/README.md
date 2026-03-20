@@ -6,11 +6,15 @@ FSD 아키텍처의 Features 레이어입니다. 비즈니스 기능 단위로 �
 
 ```
 features/
-└── event-create/           # 이벤트 생성/수정 기능
-    ├── model/              # 상태 관리 (hooks)
-    ├── lib/                # 비즈니스 로직 & 유틸리티
-    ├── ui/                 # (향후) 작은 UI 컴포넌트
-    └── README.md           # 상세 문서
+├── event-create/           # 이벤트 생성/수정 기능
+│   ├── model/              # 상태 관리 (hooks)
+│   ├── lib/                # 비즈니스 로직 & 유틸리티
+│   ├── ui/                 # (향후) 작은 UI 컴포넌트
+│   └── README.md
+└── government-info/        # 국가 상세 행정조직(국가 상세 서브탭)
+    ├── model/
+    ├── ui/
+    └── README.md
 ```
 
 ## Features vs Widgets vs Pages
@@ -51,8 +55,8 @@ features/
 
 ### government-info
 
-- **상태**: 🔄 진행 중 (모델·상수 분리 1단계)
-- **설명**: 국가 상세 행정조직 탭 타입·공통 토큰; 위젯은 점진적 분리 예정
+- **상태**: ✅ 모듈 구축 (`model`·`ui`); 국가 상세와의 연동은 **행정기구 탭**(`GovernmentOrganizationsTab`)까지 반영, 통계·중앙부처 등은 위젯 소스는 있으나 `GovernmentInfoSection` 인라인과 병행·점진 연동 가능
+- **설명**: 국가 상세 행정조직 서브탭용 타입·상수·훅·탭 위젯·부처 폼 — 최종 조합은 `widgets/country/country-detail/ui/government-info-section.widget.tsx`
 - **문서**: [government-info/README.md](./government-info/README.md)
 
 ## 사용 방법
