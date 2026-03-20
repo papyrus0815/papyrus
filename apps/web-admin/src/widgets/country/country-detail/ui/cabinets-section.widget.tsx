@@ -528,10 +528,47 @@ const TL_ROWS = [
   { line: '#10b981', textColor: '#065f46' },
   { line: '#e11d48', textColor: '#881337' },
 ]
-const TL_ROW_SIZE = 4
-const TL_ROW_H = 340 // 행 높이 고정
-const TL_BUBBLE_W = 84 // 연도 버블 너비
-const TL_THUMB = 72 // 썸네일 지름
+/** 썸네일+우측 텍스트·버블·노드 사이 여유 포함 행 높이 */
+const TL_ROW_H = 400
+const TL_BUBBLE_W = 84 // 연도 버블 최소 너비
+const TL_THUMB = 144 // 썸네일 지름 (기존 72 → 2배)
+const TL_GRID_GAP_X = 12 // 칼럼 사이
+const TL_COL_PAD_X = 4 // 칼럼 내부 좌우 (그리드 gap과 합산 여백)
+/** 노드 ↔ 위·아래 블록(썸네일/버블) — 위아래 여유 */
+const TL_NODE_EDGE_PAD = 18
+/** 타임라인 노드 ↔ 썸네일 가로 중앙 정렬(첫 칼럼 기준 수평선 시작점) */
+const TL_NODE_CENTER_X = TL_COL_PAD_X + TL_THUMB / 2
+const TL_VERT_SEG_H = 10 // 노드 위·아래 짧은 세로선
+/** 타임라인 카드 그리드만 좌측 inset (행 레이블·요약 헤더에는 적용 안 함) */
+const TL_LIST_PAD_LEFT = 100
+/** 연도·제N대 버블을 썸네일 축 대비 우측으로 */
+const TL_YEAR_BUBBLE_SHIFT_X = 28
+
+/** 행정부 표기: 「제N대 [M기] 직위 이름」 — TlItem보다 위에 두어 스코프 명확히 */
+function formatCabinetTermBadge(
+  termNum: number | null | undefined,
+  subTermNumber: number | null | undefined,
+): string | null {
+  if (termNum == null) return null
+  return subTermNumber != null
+    ? `제${termNum}대 ${subTermNumber}기`
+    : `제${termNum}대`
+}
+
+/** 스크린리더용 타임라인 셀 설명 (화면에는 대수·직위를 뱃지/별도로 표시) */
+function cabinetTimelineCellAriaLabel(
+  termNum: number | null | undefined,
+  subTermNumber: number | null | undefined,
+  posTitle: string,
+  personName: string,
+): string {
+  const term =
+    termNum != null
+      ? `제${termNum}대${subTermNumber != null ? ` ${subTermNumber}기` : ''}`
+      : ''
+  const mid = [term, posTitle].filter(Boolean).join(', ')
+  return `${mid ? `${mid}, ` : ''}${personName}, 상세 정보 보기`
+}
 
 function TlItem({
   thumbUrl,
@@ -553,8 +590,16 @@ function TlItem({
   isDark: boolean
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      {/* 원형 썸네일 */}
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 14,
+        width: '100%',
+        minWidth: 0,
+      }}
+    >
       <div
         style={{
           flexShrink: 0,
@@ -567,7 +612,7 @@ function TlItem({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: `0 3px 10px ${lineColor}44`,
+          boxShadow: `0 4px 16px ${lineColor}44`,
         }}
       >
         {thumbUrl ? (
@@ -582,50 +627,77 @@ function TlItem({
             }}
           />
         ) : (
-          <FiUser size={26} color={lineColor} style={{ opacity: 0.3 }} />
+          <FiUser size={48} color={lineColor} style={{ opacity: 0.3 }} />
         )}
       </div>
-      {/* 우측 텍스트 */}
-      <div style={{ minWidth: 0, flex: 1 }}>
+      <div
+        style={{
+          minWidth: 0,
+          flex: 1,
+          textAlign: 'left',
+        }}
+      >
         <div
           style={{
-            fontSize: 14.5,
-            fontWeight: 800,
-            color: isDark ? '#f1f5f9' : '#0f172a',
-            letterSpacing: '-0.02em',
-            lineHeight: 1.3,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {personName}
-        </div>
-        <div
-          style={{
-            fontSize: 12,
-            color: lineColor,
-            fontWeight: 600,
-            marginTop: 2,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {posTitle}
-        </div>
-        <div
-          style={{
-            marginTop: 5,
             display: 'flex',
-            flexWrap: 'wrap',
+            flexDirection: 'row',
+            flexWrap: 'nowrap',
             alignItems: 'center',
-            gap: '3px 8px',
+            gap: 10,
+            minWidth: 0,
           }}
         >
           <span
             style={{
-              fontSize: 11.5,
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: lineColor,
+              background: `${lineColor}14`,
+              border: `1px solid ${lineColor}55`,
+              borderRadius: 999,
+              padding: '3px 10px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              maxWidth: '42%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            title={posTitle}
+          >
+            {posTitle}
+          </span>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 800,
+              color: isDark ? '#f1f5f9' : '#0f172a',
+              letterSpacing: '-0.02em',
+              lineHeight: 1.45,
+              wordBreak: 'keep-all',
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+            }}
+          >
+            {personName}
+          </div>
+        </div>
+        <div
+          style={{
+            marginTop: 8,
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            gap: '6px 8px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
               fontWeight: 700,
               color: lineColor,
               background: `${lineColor}12`,
@@ -638,7 +710,7 @@ function TlItem({
           </span>
           {ageAtStart != null && (
             <span
-              style={{ fontSize: 11, color: isDark ? '#64748b' : '#94a3b8' }}
+              style={{ fontSize: 10.5, color: isDark ? '#64748b' : '#94a3b8' }}
             >
               취임 {ageAtStart}세
             </span>
@@ -647,12 +719,14 @@ function TlItem({
         {birthPlace && (
           <div
             style={{
-              marginTop: 4,
-              fontSize: 11,
+              marginTop: 6,
+              fontSize: 10.5,
               color: isDark ? '#475569' : '#b0bac9',
               display: 'flex',
               alignItems: 'center',
-              gap: 3,
+              justifyContent: 'flex-start',
+              flexWrap: 'wrap',
+              gap: 6,
             }}
           >
             <span
@@ -885,6 +959,17 @@ export function CabinetsSection({
     ? getPersonDisplayName(mentionPerson)
     : ''
 
+  /** 좁은 화면에서 타임라인 열 수 (접근성·가독성) */
+  const [timelineColumnCount, setTimelineColumnCount] = useState(4)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(max-width: 900px)')
+    const apply = () => setTimelineColumnCount(mq.matches ? 2 : 4)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
   /** 히스토리 본문 클릭 — .mention/.entity-link 인물 클릭 시 인물 모달 표시 */
   const handleHistoryProseClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
@@ -903,6 +988,35 @@ export function CabinetsSection({
       }
     }
   }, [])
+
+  const scrollToCabSection = useCallback((sectionId: string) => {
+    const el = document.getElementById(sectionId)
+    if (!el) return
+    /** 상위 패널이 overflow:auto인 경우(국가 상세 본문) window가 아니라 그 요소를 스크롤해야 함 */
+    let scrollParent: HTMLElement | null = null
+    for (let n: HTMLElement | null = el.parentElement; n; n = n.parentElement) {
+      const { overflowY } = window.getComputedStyle(n)
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        scrollParent = n
+        break
+      }
+    }
+    const pad = 14
+    if (scrollParent) {
+      const nextTop =
+        el.getBoundingClientRect().top -
+        scrollParent.getBoundingClientRect().top +
+        scrollParent.scrollTop -
+        pad
+      scrollParent.scrollTo({
+        top: Math.max(0, nextTop),
+        behavior: 'smooth',
+      })
+    } else {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
+
   /** 행정부 수정 모달 (이름 + 수반 재임 대수/직위/취임·퇴임) */
   const [editingCabinet, setEditingCabinet] = useState<any | null>(null)
   const [editingCabinetName, setEditingCabinetName] = useState('')
@@ -1828,18 +1942,37 @@ export function CabinetsSection({
   }
   if (loadingCabinets) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 200,
-          color: '#64748b',
-          fontSize: 14,
-        }}
-      >
-        불러오는 중…
-      </div>
+      <CabinetsSectionRoot>
+        <CabinetListSkeletonRoot
+          aria-busy="true"
+          aria-label="행정부 목록 불러오는 중"
+        >
+          <CabinetListSkeletonBar $w="40%" $h="18px" />
+          <CabinetListSkeletonBar $w="72%" $h="12px" />
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 12,
+              marginTop: 8,
+            }}
+          >
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+              >
+                <CabinetListSkeletonBar
+                  $h="120px"
+                  style={{ borderRadius: 14 }}
+                />
+                <CabinetListSkeletonBar $w="85%" />
+                <CabinetListSkeletonBar $w="60%" $h="10px" />
+              </div>
+            ))}
+          </div>
+        </CabinetListSkeletonRoot>
+      </CabinetsSectionRoot>
     )
   }
 
@@ -1856,275 +1989,98 @@ export function CabinetsSection({
             transition={{ duration: 0.18 }}
             style={{ padding: '0' }}
           >
-            {/* ── 툴바: 국가 필터 + 검색 + 등록 ── */}
-            <div
-              style={{
-                padding: '14px 20px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-              }}
-            >
-              {/* 국가 필터 탭 */}
+            {/* ── 툴바: 국가 필터 + 검색 + 등록 (단일 레이어, 중첩 카드 없음) ── */}
+            <CabListToolbar>
               {country.type === 'modern' &&
                 Array.isArray(country.historicalCountries) &&
                 country.historicalCountries.length > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    {[
-                      { id: '', label: '전체' },
-                      { id: countryId ?? '', label: country.name },
-                      ...country.historicalCountries.map((hc) => ({
-                        id: hc.id,
-                        label: hc.name,
-                      })),
-                    ].map((tab) => {
-                      const active = cabinetCountryFilter === tab.id
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => setCabinetCountryFilter(tab.id)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '4px 14px',
-                            fontSize: 12.5,
-                            fontWeight: active ? 700 : 500,
-                            color: active
-                              ? '#fff'
-                              : isDark
-                                ? '#94a3b8'
-                                : '#64748b',
-                            background: active
-                              ? '#6366f1'
-                              : isDark
-                                ? 'rgba(255,255,255,0.06)'
-                                : '#f8fafc',
-                            border: `1.5px solid ${active ? '#6366f1' : isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'}`,
-                            borderRadius: 20,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.13s',
-                            boxShadow: active ? '0 2px 8px #6366f144' : 'none',
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!active) {
-                              ;(
-                                e.currentTarget as HTMLButtonElement
-                              ).style.borderColor = isDark
-                                ? 'rgba(165,180,252,0.4)'
-                                : '#a5b4fc'
-                              ;(
-                                e.currentTarget as HTMLButtonElement
-                              ).style.color = isDark ? '#a5b4fc' : '#4f46e5'
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!active) {
-                              ;(
-                                e.currentTarget as HTMLButtonElement
-                              ).style.borderColor = isDark
-                                ? 'rgba(255,255,255,0.12)'
-                                : '#e2e8f0'
-                              ;(
-                                e.currentTarget as HTMLButtonElement
-                              ).style.color = isDark ? '#94a3b8' : '#64748b'
-                            }
-                          }}
-                        >
-                          {tab.label}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <>
+                    <CabListFilterSegment>
+                      <CabListFilterLabel>
+                        <FiGlobe size={14} strokeWidth={2} aria-hidden />
+                        국가·시기
+                      </CabListFilterLabel>
+                      <CabListFilterChips
+                        role="tablist"
+                        aria-label="국가·시기 필터"
+                      >
+                        {[
+                          { id: '', label: '전체' },
+                          { id: countryId ?? '', label: country.name },
+                          ...country.historicalCountries.map((hc) => ({
+                            id: hc.id,
+                            label: hc.name,
+                          })),
+                        ].map((tab) => {
+                          const active = cabinetCountryFilter === tab.id
+                          return (
+                            <CabListFilterPill
+                              key={tab.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              $active={active}
+                              onClick={() => setCabinetCountryFilter(tab.id)}
+                            >
+                              {tab.label}
+                            </CabListFilterPill>
+                          )
+                        })}
+                      </CabListFilterChips>
+                    </CabListFilterSegment>
+                    <CabListToolbarHairline aria-hidden />
+                  </>
                 )}
 
-              {/* 검색창 + 등록 버튼 */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  paddingBottom: 14,
-                  borderBottom: '1px solid #f0f2f7',
-                }}
-              >
-                {/* 검색창 */}
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <span
-                    style={{
-                      position: 'absolute',
-                      left: 12,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: '#b0bac9',
-                      display: 'flex',
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <FiSearch size={15} />
-                  </span>
-                  <input
+              <CabListControlsRow>
+                <CabListSearchBox>
+                  <CabListSearchIcon aria-hidden>
+                    <FiSearch size={16} />
+                  </CabListSearchIcon>
+                  <CabListSearchInput
                     type="text"
                     placeholder="수반명, 직위, 연도 검색"
                     value={cabinetSearchQuery}
                     onChange={(e) => setCabinetSearchQuery(e.target.value)}
-                    style={{
-                      width: '100%',
-                      height: 40,
-                      border: `1.5px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
-                      borderRadius: 10,
-                      padding: '0 36px 0 38px',
-                      fontSize: 13,
-                      color: C.text,
-                      background: isDark ? 'rgba(255,255,255,0.06)' : '#f8fafc',
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      transition: 'border-color 0.14s, background 0.14s',
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = isDark
-                        ? 'rgba(99,102,241,0.6)'
-                        : '#a5b4fc'
-                      e.currentTarget.style.background = isDark
-                        ? 'rgba(255,255,255,0.08)'
-                        : '#fff'
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = isDark
-                        ? 'rgba(255,255,255,0.12)'
-                        : '#e5e7eb'
-                      e.currentTarget.style.background = isDark
-                        ? 'rgba(255,255,255,0.06)'
-                        : '#f8fafc'
-                    }}
+                    $hasTrailing={Boolean(
+                      cabinetSearchQuery.trim() ||
+                        filteredCabinets.length > 0,
+                    )}
                   />
-                  {/* 건수 or 클리어 */}
                   {cabinetSearchQuery.trim() ? (
-                    <button
+                    <CabListSearchClearBtn
                       type="button"
+                      aria-label="검색어 지우기"
                       onClick={() => setCabinetSearchQuery('')}
-                      style={{
-                        position: 'absolute',
-                        right: 10,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: 22,
-                        height: 22,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        color: '#b0bac9',
-                        borderRadius: 5,
-                      }}
-                      onMouseEnter={(e) => {
-                        ;(
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = isDark
-                          ? 'rgba(255,255,255,0.08)'
-                          : '#f1f5f9'
-                        ;(e.currentTarget as HTMLButtonElement).style.color =
-                          isDark ? '#e2e8f0' : '#475569'
-                      }}
-                      onMouseLeave={(e) => {
-                        ;(
-                          e.currentTarget as HTMLButtonElement
-                        ).style.background = 'transparent'
-                        ;(e.currentTarget as HTMLButtonElement).style.color =
-                          '#b0bac9'
-                      }}
                     >
-                      <FiX size={13} />
-                    </button>
+                      <FiX size={14} />
+                    </CabListSearchClearBtn>
                   ) : (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        right: 12,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        color: '#c8d0da',
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      {filteredCabinets.length > 0
-                        ? `${filteredCabinets.length}개`
-                        : ''}
-                    </span>
+                    filteredCabinets.length > 0 && (
+                      <CabListSearchCount aria-hidden>
+                        {filteredCabinets.length}개
+                      </CabListSearchCount>
+                    )
                   )}
-                </div>
+                </CabListSearchBox>
 
-                {/* 정렬 표시 (간단) */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    fontSize: 11.5,
-                    color: '#94a3b8',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                >
-                  <FiClock size={13} />
+                <CabListSortBadge>
+                  <FiClock size={13} aria-hidden />
                   최신순
-                </div>
+                </CabListSortBadge>
 
-                {/* 등록 버튼 */}
-                <button
+                <CabListRegisterBtn
                   type="button"
                   onClick={() => {
                     setRegisterFlow('new')
                     setRegisterCabinetModalOpen(true)
                   }}
-                  style={{
-                    flexShrink: 0,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    padding: '0 16px',
-                    height: 40,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#fff',
-                    background: MAIN,
-                    border: 'none',
-                    borderRadius: 10,
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 8px #6366f133',
-                    transition: 'background 0.13s, box-shadow 0.13s',
-                  }}
-                  onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLButtonElement).style.background =
-                      '#4f46e5'
-                    ;(e.currentTarget as HTMLButtonElement).style.boxShadow =
-                      '0 4px 12px #6366f155'
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLButtonElement).style.background =
-                      '#6366f1'
-                    ;(e.currentTarget as HTMLButtonElement).style.boxShadow =
-                      '0 2px 8px #6366f133'
-                  }}
                 >
                   <FiPlus size={14} />
                   행정부 등록
-                </button>
-              </div>
-            </div>
+                </CabListRegisterBtn>
+              </CabListControlsRow>
+            </CabListToolbar>
             {filteredCabinets.length === 0 ? (
               <CabinetEmptyState>
                 {cabinetSearchQuery.trim() || cabinetCountryFilter ? (
@@ -2213,7 +2169,13 @@ export function CabinetsSection({
                 )}
               </CabinetEmptyState>
             ) : (
-              <div style={{ padding: '0 0 32px' }}>
+              <div
+                style={{
+                  width: '100%',
+                  padding: '0 0 32px',
+                  boxSizing: 'border-box',
+                }}
+              >
                 {/* 타임라인 요약 헤더 */}
                 {(() => {
                   const items = filteredCabinets as any[]
@@ -2231,7 +2193,7 @@ export function CabinetsSection({
                         display: 'flex',
                         alignItems: 'center',
                         gap: 12,
-                        padding: '36px 24px',
+                        padding: '36px 0',
                         borderBottom: `1px solid ${C.border}`,
                         background: 'transparent',
                       }}
@@ -2296,9 +2258,10 @@ export function CabinetsSection({
                 })()}
                 {(() => {
                   const items = filteredCabinets as any[]
+                  const cols = timelineColumnCount
                   const rows: any[][] = []
-                  for (let i = 0; i < items.length; i += TL_ROW_SIZE) {
-                    rows.push(items.slice(i, i + TL_ROW_SIZE))
+                  for (let i = 0; i < items.length; i += cols) {
+                    rows.push(items.slice(i, i + cols))
                   }
 
                   return rows.map((rowItems, rowIdx) => {
@@ -2307,8 +2270,8 @@ export function CabinetsSection({
                     const displayItems = isReversed
                       ? [...rowItems].reverse()
                       : rowItems
-                    // 노드 중앙 X = 패딩(20) + 버블너비/2
-                    const NODE_X = 20 + TL_BUBBLE_W / 2
+                    // 첫 칼럼: 썸네일(원) 가로 중앙 — 연도 버블도 동일 좌측 축에 맞춤
+                    const NODE_X = TL_NODE_CENTER_X
 
                     return (
                       <div
@@ -2338,14 +2301,14 @@ export function CabinetsSection({
                               ? firstTerm === lastTerm
                                 ? termLabel(firstTerm, firstHead?.subTermNumber)
                                 : `제${firstTerm}–${lastTerm}대`
-                              : `${rowIdx * TL_ROW_SIZE + 1}번째 행`
+                              : `${rowIdx * cols + 1}번째 행`
                           return (
                             <div
                               style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 8,
-                                padding: '10px 24px 0',
+                                padding: '12px 0 10px',
                               }}
                             >
                               <div
@@ -2386,10 +2349,10 @@ export function CabinetsSection({
                           style={{
                             position: 'relative',
                             height: TL_ROW_H,
-                            padding: '0 20px',
+                            padding: `0 0 0 ${TL_LIST_PAD_LEFT}px`,
                           }}
                         >
-                          {/* 수평선 — 노드 X 기준으로 좌측 시작 */}
+                          {/* 수평선 — 첫 노드에서 컨테이너 우측 끝까지(잘라내지 않음) */}
                           <div
                             style={{
                               position: 'absolute',
@@ -2400,6 +2363,8 @@ export function CabinetsSection({
                               height: 3,
                               background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
                               zIndex: 0,
+                              borderRadius: 2,
+                              pointerEvents: 'none',
                             }}
                           />
 
@@ -2407,135 +2372,142 @@ export function CabinetsSection({
                           <div
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: `repeat(${TL_ROW_SIZE}, 1fr)`,
+                              gridTemplateColumns: `repeat(${cols}, 1fr)`,
                               height: '100%',
-                              gap: '0 8px',
+                              gap: `0 ${TL_GRID_GAP_X}px`,
                               position: 'relative',
                               zIndex: 1,
                             }}
                           >
-                            {Array.from({ length: TL_ROW_SIZE }).map(
-                              (_, colIdx) => {
-                                const item = displayItems[colIdx]
-                                if (!item) return <div key={`e-${colIdx}`} />
+                            {Array.from({ length: cols }).map((_, colIdx) => {
+                              const item = displayItems[colIdx]
+                              if (!item) return <div key={`e-${colIdx}`} />
 
-                                const head = item.headTenure
-                                const personName = head?.person
-                                  ? getPersonName(head.person)
-                                  : '이름 없음'
-                                const posTitle =
-                                  head?.positionDefinition?.title ??
-                                  head?.title ??
-                                  '—'
-                                const termNum =
-                                  head?.termNumber ?? head?.regnalNumber
-                                const thumbUrl =
-                                  head?.person?.profileImageUrl ?? null
-                                const startYear = head?.startDate
-                                  ? new Date(head.startDate).getFullYear()
+                              const head = item.headTenure
+                              const personName = head?.person
+                                ? getPersonName(head.person)
+                                : '이름 없음'
+                              const posTitle =
+                                head?.positionDefinition?.title ??
+                                head?.title ??
+                                '—'
+                              const termNum =
+                                head?.termNumber ?? head?.regnalNumber
+                              const thumbUrl =
+                                head?.person?.profileImageUrl ?? null
+                              const startYear = head?.startDate
+                                ? new Date(head.startDate).getFullYear()
+                                : null
+                              const endYear = head?.endDate
+                                ? new Date(head.endDate).getFullYear()
+                                : null
+                              const range = startYear
+                                ? `${startYear}–${endYear ?? '현재'}`
+                                : '—'
+                              const ageAtStart =
+                                head?.person && head?.startDate
+                                  ? calcAgeAtTenure(head.person, head.startDate)
                                   : null
-                                const endYear = head?.endDate
-                                  ? new Date(head.endDate).getFullYear()
-                                  : null
-                                const range = startYear
-                                  ? `${startYear}–${endYear ?? '현재'}`
-                                  : '—'
-                                const ageAtStart =
-                                  head?.person && head?.startDate
-                                    ? calcAgeAtTenure(
-                                        head.person,
-                                        head.startDate,
-                                      )
-                                    : null
-                                const birthPlace = head?.person
-                                  ? ((head.person as any).birthCity?.name ??
-                                    (head.person as any).birthAdminDivision
-                                      ?.name ??
-                                    (head.person as any).birthPlaceText ??
-                                    null)
-                                  : null
-                                const isDeleting = deletingCabinetId === item.id
-                                // 짝수: 아이템 위 / 버블 아래, 홀수: 버블 위 / 아이템 아래
-                                const itemOnTop = colIdx % 2 === 0
+                              const birthPlace = head?.person
+                                ? ((head.person as any).birthCity?.name ??
+                                  (head.person as any).birthAdminDivision
+                                    ?.name ??
+                                  (head.person as any).birthPlaceText ??
+                                  null)
+                                : null
+                              const isDeleting = deletingCabinetId === item.id
+                              // 짝수: 아이템 위 / 버블 아래, 홀수: 버블 위 / 아이템 아래
+                              const itemOnTop = colIdx % 2 === 0
 
-                                return (
+                              const cellLabel = cabinetTimelineCellAriaLabel(
+                                termNum,
+                                head?.subTermNumber ?? null,
+                                posTitle,
+                                personName,
+                              )
+                              return (
+                                <CabinetTimelineCellBtn
+                                  key={item.id}
+                                  disabled={isDeleting}
+                                  aria-label={cellLabel}
+                                  onClick={() => {
+                                    if (!isDeleting) {
+                                      setSelectedCabinetId(item.id)
+                                      setCabinetView('detail')
+                                    }
+                                  }}
+                                >
+                                  {/* 위쪽 영역 */}
                                   <div
-                                    key={item.id}
                                     style={{
+                                      flex: 1,
+                                      width: '100%',
                                       display: 'flex',
                                       flexDirection: 'column',
-                                      alignItems: 'flex-start',
-                                      height: '100%',
-                                      cursor: isDeleting ? 'wait' : 'pointer',
-                                      padding: '0 4px',
-                                    }}
-                                    onClick={() => {
-                                      if (!isDeleting) {
-                                        setSelectedCabinetId(item.id)
-                                        setCabinetView('detail')
-                                      }
+                                      alignItems: 'stretch',
+                                      justifyContent: 'flex-end',
+                                      paddingBottom: TL_NODE_EDGE_PAD,
                                     }}
                                   >
-                                    {/* 위쪽 영역 */}
-                                    <div
-                                      style={{
-                                        flex: 1,
-                                        width: '100%',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'flex-start',
-                                        justifyContent: 'flex-end',
-                                        paddingBottom: 8,
-                                      }}
-                                    >
-                                      {itemOnTop ? (
-                                        /* 아이템 (위) */
-                                        <div
-                                          style={{
-                                            width: '100%',
-                                            transition:
-                                              'transform 0.18s ease, opacity 0.15s',
-                                          }}
-                                          onMouseEnter={(e) => {
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.transform =
-                                              'translateY(-3px)'
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.opacity = '0.92'
-                                          }}
-                                          onMouseLeave={(e) => {
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.transform = 'translateY(0)'
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.opacity = '1'
-                                          }}
-                                        >
-                                          <TlItem
-                                            thumbUrl={thumbUrl}
-                                            personName={personName}
-                                            posTitle={posTitle}
-                                            range={range}
-                                            ageAtStart={ageAtStart}
-                                            birthPlace={birthPlace}
-                                            lineColor={p.line}
-                                            isDark={isDark}
-                                          />
-                                        </div>
-                                      ) : (
-                                        /* 연도 버블 (위) */
+                                    {itemOnTop ? (
+                                      /* 아이템 (위) */
+                                      <div
+                                        style={{
+                                          width: '100%',
+                                          maxWidth: '100%',
+                                          transition:
+                                            'transform 0.18s ease, opacity 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.transform = 'translateY(-3px)'
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.opacity = '0.92'
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.transform = 'translateY(0)'
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.opacity = '1'
+                                        }}
+                                      >
+                                        <TlItem
+                                          thumbUrl={thumbUrl}
+                                          personName={personName}
+                                          posTitle={posTitle}
+                                          range={range}
+                                          ageAtStart={ageAtStart}
+                                          birthPlace={birthPlace}
+                                          lineColor={p.line}
+                                          isDark={isDark}
+                                        />
+                                      </div>
+                                    ) : (
+                                      /* 연도 버블 (위) — 썸네일과 같은 좌측 기준선 */
+                                      <div
+                                        style={{
+                                          width: '100%',
+                                          display: 'flex',
+                                          justifyContent: 'flex-start',
+                                          paddingLeft: TL_YEAR_BUBBLE_SHIFT_X,
+                                        }}
+                                      >
                                         <div
                                           style={{
                                             display: 'inline-flex',
                                             flexDirection: 'column',
                                             alignItems: 'center',
+                                            flexShrink: 0,
+                                            width: 'fit-content',
+                                            maxWidth: '100%',
                                             background: C.bg,
                                             border: `2.5px solid ${p.line}`,
                                             borderRadius: 28,
-                                            padding: '6px 14px',
+                                            padding: '8px 16px',
                                             minWidth: TL_BUBBLE_W,
                                             boxShadow: `0 2px 10px ${p.line}44`,
                                             textAlign: 'center',
@@ -2558,7 +2530,7 @@ export function CabinetsSection({
                                                 fontSize: 10,
                                                 fontWeight: 700,
                                                 color: p.line,
-                                                marginTop: 1,
+                                                marginTop: 3,
                                               }}
                                             >
                                               제{termNum}대
@@ -2568,142 +2540,168 @@ export function CabinetsSection({
                                             </span>
                                           )}
                                         </div>
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
+                                  </div>
 
-                                    {/* 수직선 + 노드 — 왼쪽 정렬 */}
+                                  {/* 수직선 + 노드 — 썸네일 너비 안에서 가운데(원 중심과 일치) */}
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      flexDirection: 'row',
+                                      justifyContent: 'flex-start',
+                                      width: '100%',
+                                      flexShrink: 0,
+                                    }}
+                                  >
                                     <div
                                       style={{
-                                        width: 2,
-                                        height: 10,
-                                        background: p.line,
-                                        opacity: 0.6,
-                                        marginLeft: TL_BUBBLE_W / 2 - 1,
+                                        width: TL_THUMB,
                                         flexShrink: 0,
-                                      }}
-                                    />
-                                    <div
-                                      style={{
-                                        width: 14,
-                                        height: 14,
-                                        borderRadius: '50%',
-                                        background: C.bg,
-                                        border: `3px solid ${p.line}`,
-                                        boxShadow: `0 0 0 3px ${C.bg}`,
-                                        marginLeft: TL_BUBBLE_W / 2 - 7,
-                                        flexShrink: 0,
-                                        zIndex: 2,
-                                      }}
-                                    />
-                                    <div
-                                      style={{
-                                        width: 2,
-                                        height: 10,
-                                        background: p.line,
-                                        opacity: 0.6,
-                                        marginLeft: TL_BUBBLE_W / 2 - 1,
-                                        flexShrink: 0,
-                                      }}
-                                    />
-
-                                    {/* 아래쪽 영역 */}
-                                    <div
-                                      style={{
-                                        flex: 1,
-                                        width: '100%',
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        alignItems: 'flex-start',
-                                        justifyContent: 'flex-start',
-                                        paddingTop: 8,
+                                        alignItems: 'center',
                                       }}
                                     >
-                                      {!itemOnTop ? (
-                                        /* 아이템 (아래) */
-                                        <div
-                                          style={{
-                                            width: '100%',
-                                            transition:
-                                              'transform 0.18s ease, opacity 0.15s',
-                                          }}
-                                          onMouseEnter={(e) => {
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.transform =
-                                              'translateY(3px)'
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.opacity = '0.92'
-                                          }}
-                                          onMouseLeave={(e) => {
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.transform = 'translateY(0)'
-                                            ;(
-                                              e.currentTarget as HTMLDivElement
-                                            ).style.opacity = '1'
-                                          }}
-                                        >
-                                          <TlItem
-                                            thumbUrl={thumbUrl}
-                                            personName={personName}
-                                            posTitle={posTitle}
-                                            range={range}
-                                            ageAtStart={ageAtStart}
-                                            birthPlace={birthPlace}
-                                            lineColor={p.line}
-                                            isDark={isDark}
-                                          />
-                                        </div>
-                                      ) : (
-                                        /* 연도 버블 (아래) */
-                                        <div
-                                          style={{
-                                            display: 'inline-flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            background: C.bg,
-                                            border: `2.5px solid ${p.line}`,
-                                            borderRadius: 28,
-                                            padding: '6px 14px',
-                                            minWidth: TL_BUBBLE_W,
-                                            boxShadow: `0 2px 10px ${p.line}44`,
-                                            textAlign: 'center',
-                                          }}
-                                        >
-                                          <span
-                                            style={{
-                                              fontSize: 17,
-                                              fontWeight: 900,
-                                              color: p.textColor,
-                                              letterSpacing: '-0.03em',
-                                              lineHeight: 1.2,
-                                            }}
-                                          >
-                                            {startYear ?? '—'}
-                                          </span>
-                                          {termNum != null && (
-                                            <span
-                                              style={{
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                color: p.line,
-                                                marginTop: 1,
-                                              }}
-                                            >
-                                              제{termNum}대
-                                              {head?.subTermNumber != null
-                                                ? ` ${head.subTermNumber}기`
-                                                : ''}
-                                            </span>
-                                          )}
-                                        </div>
-                                      )}
+                                      <div
+                                        style={{
+                                          width: 2,
+                                          height: TL_VERT_SEG_H,
+                                          background: p.line,
+                                          opacity: 0.6,
+                                        }}
+                                      />
+                                      <div
+                                        style={{
+                                          width: 14,
+                                          height: 14,
+                                          borderRadius: '50%',
+                                          background: C.bg,
+                                          border: `3px solid ${p.line}`,
+                                          boxShadow: `0 0 0 3px ${C.bg}`,
+                                          zIndex: 2,
+                                        }}
+                                      />
+                                      <div
+                                        style={{
+                                          width: 2,
+                                          height: TL_VERT_SEG_H,
+                                          background: p.line,
+                                          opacity: 0.6,
+                                        }}
+                                      />
                                     </div>
                                   </div>
-                                )
-                              },
-                            )}
+
+                                  {/* 아래쪽 영역 */}
+                                  <div
+                                    style={{
+                                      flex: 1,
+                                      width: '100%',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'stretch',
+                                      justifyContent: 'flex-start',
+                                      paddingTop: TL_NODE_EDGE_PAD,
+                                    }}
+                                  >
+                                    {!itemOnTop ? (
+                                      /* 아이템 (아래) */
+                                      <div
+                                        style={{
+                                          width: '100%',
+                                          maxWidth: '100%',
+                                          transition:
+                                            'transform 0.18s ease, opacity 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.transform = 'translateY(3px)'
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.opacity = '0.92'
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.transform = 'translateY(0)'
+                                          ;(
+                                            e.currentTarget as HTMLDivElement
+                                          ).style.opacity = '1'
+                                        }}
+                                      >
+                                        <TlItem
+                                          thumbUrl={thumbUrl}
+                                          personName={personName}
+                                          posTitle={posTitle}
+                                          range={range}
+                                          ageAtStart={ageAtStart}
+                                          birthPlace={birthPlace}
+                                          lineColor={p.line}
+                                          isDark={isDark}
+                                        />
+                                      </div>
+                                    ) : (
+                                      /* 연도 버블 (아래) — 썸네일과 같은 좌측 기준선 */
+                                      <div
+                                        style={{
+                                          width: '100%',
+                                          display: 'flex',
+                                          justifyContent: 'flex-start',
+                                          paddingLeft: TL_YEAR_BUBBLE_SHIFT_X,
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            display: 'inline-flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            flexShrink: 0,
+                                            width: 'fit-content',
+                                            maxWidth: '100%',
+                                            background: C.bg,
+                                            border: `2.5px solid ${p.line}`,
+                                            borderRadius: 28,
+                                            padding: '8px 16px',
+                                            minWidth: TL_BUBBLE_W,
+                                            boxShadow: `0 2px 10px ${p.line}44`,
+                                            textAlign: 'center',
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontSize: 17,
+                                              fontWeight: 900,
+                                              color: p.textColor,
+                                              letterSpacing: '-0.03em',
+                                              lineHeight: 1.2,
+                                            }}
+                                          >
+                                            {startYear ?? '—'}
+                                          </span>
+                                          {termNum != null && (
+                                            <span
+                                              style={{
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                color: p.line,
+                                                marginTop: 3,
+                                              }}
+                                            >
+                                              제{termNum}대
+                                              {head?.subTermNumber != null
+                                                ? ` ${head.subTermNumber}기`
+                                                : ''}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </CabinetTimelineCellBtn>
+                              )
+                            })}
                           </div>
                         </div>
                       </div>
@@ -2721,7 +2719,7 @@ export function CabinetsSection({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
-            style={{ padding: '20px 20px 40px' }}
+            style={{ padding: '8px 4px 40px 8px' }}
           >
             {hasSelectedCabinet && selectedCabinet && (
               <>
@@ -2767,14 +2765,7 @@ export function CabinetsSection({
                             })()}
                           </CabDetailBackBtn>
                         ) : (
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: '#1e293b',
-                              padding: '6px 4px',
-                            }}
-                          >
+                          <CabDetailCrumbText>
                             {(() => {
                               const h = selectedCabinet.headTenure
                               const n = h?.person
@@ -2787,7 +2778,7 @@ export function CabinetsSection({
                                   : n
                                 : '행정부 상세'
                             })()}
-                          </span>
+                          </CabDetailCrumbText>
                         )}
                       </>
                     )}
@@ -2802,16 +2793,9 @@ export function CabinetsSection({
                         return (
                           <>
                             <CabBreadcrumbSep>/</CabBreadcrumbSep>
-                            <span
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: '#1e293b',
-                                padding: '6px 4px',
-                              }}
-                            >
+                            <CabDetailCrumbText title={mn}>
                               {mn}
-                            </span>
+                            </CabDetailCrumbText>
                           </>
                         )
                       })()}
@@ -2828,10 +2812,8 @@ export function CabinetsSection({
                         if (!minister) return null
                         return (
                           <>
-                            <button
-                              type="button"
+                            <DetailToolbarGhostBtn
                               onClick={() => {
-                                // 각료 수정: 기존 각료 정보로 폼 초기화 후 등록 모달 오픈
                                 setMinisterFormPositionDefId(
                                   minister.positionDefinition?.id ?? null,
                                 )
@@ -2860,68 +2842,54 @@ export function CabinetsSection({
                                 })
                                 setPersonSelectOpen(true)
                               }}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 5,
-                                padding: '6px 12px',
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: C.textMuted,
-                                background: C.btnBg,
-                                border: `1px solid ${C.badgeBorder}`,
-                                borderRadius: 8,
-                                cursor: 'pointer',
-                              }}
                             >
                               <FiEdit2 size={12} />
                               수정
-                            </button>
+                            </DetailToolbarGhostBtn>
                           </>
                         )
                       })()}
                     {/* 행정부 삭제 버튼 (행정부 상세일 때) */}
                     {!selectedMinisterId && selectedCabinet && (
-                      <button
-                        type="button"
+                      <CabDetailDeleteBtn
                         onClick={(e) =>
                           handleDeleteCabinet(selectedCabinet.id, e)
                         }
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          padding: '6px 12px',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: '#ef4444',
-                          background: 'transparent',
-                          border: `1px solid ${isDark ? 'rgba(220,38,38,0.35)' : '#fecaca'}`,
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          transition: 'all 0.14s',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = isDark
-                            ? 'rgba(220,38,38,0.15)'
-                            : '#fff1f1'
-                          e.currentTarget.style.borderColor = isDark
-                            ? 'rgba(220,38,38,0.5)'
-                            : '#f87171'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent'
-                          e.currentTarget.style.borderColor = isDark
-                            ? 'rgba(220,38,38,0.35)'
-                            : '#fecaca'
-                        }}
                       >
                         <FiTrash2 size={12} />
                         행정부 삭제
-                      </button>
+                      </CabDetailDeleteBtn>
                     )}
                   </div>
                 </CabDetailTopBar>
+                {!selectedMinisterId && selectedCabinet && (
+                  <CabDetailAnchorNav aria-label="아래쪽 본문 구역으로 스크롤 (탭 전환 아님)">
+                    <CabDetailAnchorBtn
+                      title="이 화면 안에서 수반 프로필 위치로 스크롤합니다"
+                      onClick={() => scrollToCabSection('cab-detail-profile')}
+                    >
+                      수반
+                    </CabDetailAnchorBtn>
+                    <CabDetailAnchorBtn
+                      title="이 화면 안에서 취임·퇴임 정보 블록으로 스크롤합니다"
+                      onClick={() => scrollToCabSection('cab-detail-tenure')}
+                    >
+                      취임·퇴임
+                    </CabDetailAnchorBtn>
+                    <CabDetailAnchorBtn
+                      title="이 화면 안에서 각료 목록으로 스크롤합니다"
+                      onClick={() => scrollToCabSection('cab-detail-ministers')}
+                    >
+                      각료
+                    </CabDetailAnchorBtn>
+                    <CabDetailAnchorBtn
+                      title="이 화면 안에서 조약 섹션으로 스크롤합니다"
+                      onClick={() => scrollToCabSection('cab-detail-treaties')}
+                    >
+                      조약
+                    </CabDetailAnchorBtn>
+                  </CabDetailAnchorNav>
+                )}
                 {selectedMinisterId
                   ? /* ── 각료 상세 뷰 ── */
                     (() => {
@@ -3464,15 +3432,45 @@ export function CabinetsSection({
                       const ageAtEnd = head?.endDate
                         ? calcAgeAtEndTenure(head?.person, head?.endDate)
                         : null
+                      const termBadge = formatCabinetTermBadge(
+                        termNum,
+                        head?.subTermNumber ?? null,
+                      )
                       return (
                         <>
-                          {/* 수반 compact 프로필 */}
-                          <HeadProfileBlock>
+                          {/* 수반 프로필 — 썸네일 중앙 · 히어로형 */}
+                          <HeadProfileBlock
+                            id="cab-detail-profile"
+                            style={{ scrollMarginTop: 12 }}
+                          >
+                            <HeadProfileActions>
+                              <HeadActionBtn
+                                type="button"
+                                onClick={() =>
+                                  handleOpenEditCabinet(selectedCabinet, {
+                                    stopPropagation: () => {},
+                                    preventDefault: () => {},
+                                  } as any)
+                                }
+                              >
+                                <FiEdit2 size={12} />
+                                수정
+                              </HeadActionBtn>
+                            </HeadProfileActions>
                             <HeadProfileAvatar
+                              tabIndex={head?.person?.id ? 0 : undefined}
+                              role={head?.person?.id ? 'button' : undefined}
                               onClick={() =>
                                 head?.person?.id &&
                                 setMentionPersonId(head.person.id)
                               }
+                              onKeyDown={(e) => {
+                                if (!head?.person?.id) return
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  setMentionPersonId(head.person.id)
+                                }
+                              }}
                               style={{
                                 cursor: head?.person?.id
                                   ? 'pointer'
@@ -3497,22 +3495,23 @@ export function CabinetsSection({
                                   }}
                                 />
                               ) : (
-                                <FiUser size={28} color="#c0cad8" />
+                                <FiUser size={52} color="#c0cad8" />
                               )}
                             </HeadProfileAvatar>
                             <HeadProfileMeta>
-                              <HeadProfileNameRow>
-                                {termNum != null && (
-                                  <HeadTermBadge>
-                                    제{termNum}대
-                                    {head?.subTermNumber != null
-                                      ? ` ${head.subTermNumber}기`
-                                      : ''}
-                                  </HeadTermBadge>
+                              <HeadProfileBadgeRow>
+                                {termBadge && (
+                                  <HeadProfileDetailChipTerm>
+                                    {termBadge}
+                                  </HeadProfileDetailChipTerm>
                                 )}
-                                <HeadProfileName>{personName}</HeadProfileName>
-                              </HeadProfileNameRow>
-                              <HeadPosBadge>{posTitle}</HeadPosBadge>
+                                <HeadProfileDetailChipPosition>
+                                  {posTitle}
+                                </HeadProfileDetailChipPosition>
+                              </HeadProfileBadgeRow>
+                              <HeadProfileHeadline>
+                                {personName}
+                              </HeadProfileHeadline>
                               <HeadTenureRow>
                                 <HeadTenureDates>
                                   <FiCalendar size={10} />
@@ -3531,6 +3530,7 @@ export function CabinetsSection({
                                   </HeadTenureAge>
                                 )}
                               </HeadTenureRow>
+                              <HeadProfileDivider aria-hidden />
                               {head?.person && (
                                 <HeadLifespan>
                                   <span
@@ -3573,29 +3573,17 @@ export function CabinetsSection({
                                 ) : null
                               })()}
                             </HeadProfileMeta>
-                            <HeadProfileActions>
-                              <HeadActionBtn
-                                type="button"
-                                onClick={() =>
-                                  handleOpenEditCabinet(selectedCabinet, {
-                                    stopPropagation: () => {},
-                                    preventDefault: () => {},
-                                  } as any)
-                                }
-                              >
-                                <FiEdit2 size={12} />
-                                수정
-                              </HeadActionBtn>
-                            </HeadProfileActions>
                           </HeadProfileBlock>
 
                           {/* 취임/퇴임 정보 섹션 — 항상 표시 */}
                           <div
+                            id="cab-detail-tenure"
                             style={{
                               display: 'flex',
                               flexDirection: 'column',
                               gap: 2,
                               padding: '16px 0 8px',
+                              scrollMarginTop: 12,
                             }}
                           >
                             {/* ── 취임 정보 ── */}
@@ -4247,7 +4235,10 @@ export function CabinetsSection({
                           </HeadTenureInfoSection>
 
                           {/* 각료 목록 */}
-                          <CabDetailMinistersSection>
+                          <CabDetailMinistersSection
+                            id="cab-detail-ministers"
+                            style={{ scrollMarginTop: 12 }}
+                          >
                             <CabDetailMinistersSectionHeader>
                               <CabDetailMinistersSectionTitle>
                                 각료
@@ -4440,7 +4431,10 @@ export function CabinetsSection({
                           </CabDetailMinistersSection>
 
                           {/* 조약 섹션 */}
-                          <CabDetailMinistersSection style={{ marginTop: 24 }}>
+                          <CabDetailMinistersSection
+                            id="cab-detail-treaties"
+                            style={{ marginTop: 24, scrollMarginTop: 12 }}
+                          >
                             <CabDetailMinistersSectionHeader>
                               <FiFileText size={15} style={{ color: MAIN }} />
                               <CabDetailMinistersSectionTitle>
@@ -6249,6 +6243,304 @@ const CabinetsSectionRoot = styled.div`
   gap: 0;
 `
 
+/** 행정부 리스트 상단 — 한 겹 플랫 툴바(중첩 카드 없음) */
+const CabListToolbar = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0 20px;
+  box-sizing: border-box;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#eceff3'};
+  @media (max-width: 640px) {
+    gap: 12px;
+    padding: 4px 0 16px;
+  }
+`
+
+const CabListToolbarHairline = styled.div`
+  flex-shrink: 0;
+  height: 0;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#e8ecf0'};
+`
+
+/** 필터 라벨 + 칩 (박스 없음) */
+const CabListFilterSegment = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  @media (min-width: 720px) {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px 16px;
+  }
+`
+
+const CabListFilterLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  user-select: none;
+  svg {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
+    opacity: 0.9;
+  }
+`
+
+const CabListFilterChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  @media (max-width: 640px) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    margin: 0 -2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+`
+/** 미니멀 칩 — 비활성은 플랫, 활성만 틴트·테두리 */
+const CabListFilterPill = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: ${(p) => (p.$active ? 600 : 500)};
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: ${(p) =>
+    p.$active
+      ? p.theme.mode === 'dark'
+        ? '#e0e7ff'
+        : '#4338ca'
+      : p.theme.mode === 'dark'
+        ? '#94a3b8'
+        : '#64748b'};
+  background: ${(p) =>
+    p.$active
+      ? p.theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : '#eef2ff'
+      : 'transparent'};
+  border: 1px solid
+    ${(p) =>
+      p.$active
+        ? p.theme.mode === 'dark'
+          ? 'rgba(129, 140, 248, 0.35)'
+          : '#ddd6fe'
+        : 'transparent'};
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    border-color 0.14s ease;
+  &:hover {
+    color: ${(p) =>
+      p.$active
+        ? p.theme.mode === 'dark'
+          ? '#f1f5ff'
+          : '#3730a3'
+        : p.theme.mode === 'dark'
+          ? '#e2e8f0'
+          : '#334155'};
+    background: ${(p) =>
+      p.$active
+        ? p.theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.2)'
+          : '#e0e7ff'
+        : p.theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.05)'
+          : '#f1f5f9'};
+    border-color: ${(p) =>
+      p.$active
+        ? p.theme.mode === 'dark'
+          ? 'rgba(165, 180, 252, 0.45)'
+          : '#c4b5fd'
+        : p.theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#e2e8f0'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(129, 140, 248, 0.45)'
+          : 'rgba(99, 102, 241, 0.35)'};
+  }
+`
+const CabListControlsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+`
+const CabListSearchBox = styled.div`
+  position: relative;
+  flex: 1;
+  min-width: min(100%, 220px);
+`
+const CabListSearchIcon = styled.span`
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+`
+const CabListSearchInput = styled.input<{ $hasTrailing: boolean }>`
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : '#e2e8f0'};
+  border-radius: 10px;
+  padding: 0 ${(p) => (p.$hasTrailing ? '52px' : '14px')} 0 44px;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+  &::placeholder {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#94a3b8')};
+    font-weight: 400;
+  }
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#d1d5db'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
+  }
+  &:focus {
+    outline: none;
+    border-color: #818cf8;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.28)'
+          : 'rgba(99, 102, 241, 0.18)'};
+  }
+`
+const CabListSearchClearBtn = styled.button`
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: #94a3b8;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#475569')};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
+  }
+`
+const CabListSearchCount = styled.span`
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  pointer-events: none;
+  letter-spacing: -0.02em;
+`
+const CabListSortBadge = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  height: 38px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+  background: transparent;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  flex-shrink: 0;
+`
+const CabListRegisterBtn = styled.button`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 38px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: #6366f1;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.28);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  &:hover {
+    background: #4f46e5;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.38);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px rgba(99, 102, 241, 0.45),
+      0 2px 10px rgba(99, 102, 241, 0.28);
+  }
+`
+
 /* ── 툴바 ── */
 const CabSearchWrap = styled.div`
   position: relative;
@@ -6328,12 +6620,21 @@ const CabDetailTopBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 14px;
-  border-bottom: 1.5px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f0f2f7'};
-  margin-bottom: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  margin-bottom: 14px;
   flex-shrink: 0;
+  border-radius: 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaef'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'none'
+      : '0 1px 2px rgba(15, 23, 42, 0.04)'};
 `
 
 /* 우: 카드 열 — 상세 열리면 고정 너비 2열 그리드, 닫히면 자동채움 */
@@ -6454,18 +6755,203 @@ const CabDetailBackBtn = styled.button`
   color: #94a3b8;
   background: none;
   border: none;
+  border-radius: 8px;
   cursor: pointer;
   transition: color 0.14s;
   &:hover {
     color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
   }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+  }
 `
 const CabBreadcrumbSep = styled.span`
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 600;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
-  padding: 12px 0 8px;
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#cbd5e1'};
+  padding: 0 2px;
   user-select: none;
+  opacity: 0.9;
+`
+
+/** 상세 브레드크럼 현재 항목 — 다크 모드 대비 */
+const CabDetailCrumbText = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 4px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#1e293b')};
+  max-width: min(260px, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/** 행정부 타임라인 칸 — 키보드·포커스 지원 */
+const CabinetTimelineCellBtn = styled.button.attrs({ type: 'button' })`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  width: 100%;
+  padding: 0 ${TL_COL_PAD_X}px;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45);
+  }
+  &:disabled {
+    cursor: wait;
+    opacity: 0.85;
+  }
+`
+
+const CabinetListSkeletonRoot = styled.div`
+  padding: 24px 0 40px ${TL_LIST_PAD_LEFT}px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 280px;
+`
+
+const CabinetListSkeletonBar = styled.div<{ $w?: string; $h?: string }>`
+  height: ${(p) => p.$h ?? '14px'};
+  width: ${(p) => p.$w ?? '100%'};
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
+  animation: cabSkPulse 1.1s ease-in-out infinite;
+  @keyframes cabSkPulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+`
+
+const CabDetailAnchorNav = styled.nav`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  margin: 0 0 18px;
+  position: relative;
+  z-index: 1;
+  border-radius: 14px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#e8eaef'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f1f5f9'};
+`
+
+const CabDetailAnchorBtn = styled.button.attrs({ type: 'button' })`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#fff'};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'none'
+        : '0 1px 2px rgba(15, 23, 42, 0.06)'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
+  }
+`
+
+const DetailToolbarGhostBtn = styled.button.attrs({ type: 'button' })`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s,
+    background 0.14s;
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#94a3b8'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f8fafc'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+  }
+`
+
+const CabDetailDeleteBtn = styled.button.attrs({ type: 'button' })`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ef4444;
+  background: transparent;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.35)' : '#fecaca'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    border-color 0.14s;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.15)' : '#fff1f1'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.5)' : '#f87171'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35);
+  }
 `
 
 /* ── 각료 상세 패널 (뷰 전환 방식) ── */
@@ -6620,95 +7106,148 @@ const MinisterCardChevron = styled.span`
   flex-shrink: 0;
 `
 
-/* ── 수반 상세 compact 프로필 블록 ── */
+/* 프로필 원 지름 — 상단 걸침(반원 노출) 계산에 사용 */
+const HEAD_PROFILE_AVATAR_PX = 160
+const HEAD_PROFILE_AVATAR_RADIUS = HEAD_PROFILE_AVATAR_PX / 2
+
+/* ── 수반 상세 프로필 블록 (썸네일 중앙, 상단 테두리에 반쯤 걸침) ── */
 const HeadProfileBlock = styled.div`
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 18px;
-  padding: 18px;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+  /* 위로 반원이 나가므로 바깥 여백 + 테두리선에 원 중심이 오도록 패딩 */
+  margin-top: ${HEAD_PROFILE_AVATAR_RADIUS}px;
+  margin-bottom: 12px;
+  padding: ${HEAD_PROFILE_AVATAR_RADIUS + 24}px 24px 32px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e8ecf0'};
-  border-radius: 14px;
-  margin-bottom: 4px;
+  border-radius: 16px;
+  overflow: visible;
 `
 const HeadProfileAvatar = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  z-index: 2;
   flex-shrink: 0;
-  width: 80px;
-  height: 80px;
+  width: ${HEAD_PROFILE_AVATAR_PX}px;
+  height: ${HEAD_PROFILE_AVATAR_PX}px;
   border-radius: 50%;
   overflow: hidden;
-  border: 2px solid
+  border: 3px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.2s;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 12px 40px rgba(0,0,0,0.35)'
+      : '0 10px 32px rgba(15, 23, 42, 0.08)'};
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
   &:hover {
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.25)' : '#94a3b8'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.28)' : '#94a3b8'};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 14px 44px rgba(0,0,0,0.4)'
+        : '0 12px 36px rgba(15, 23, 42, 0.1)'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px rgba(99, 102, 241, 0.5),
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? '0 14px 44px rgba(0,0,0,0.45)'
+          : '0 12px 36px rgba(15, 23, 42, 0.12)'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(129,140,248,0.85)' : '#6366f1'};
   }
 `
 const HeadProfileMeta = styled.div`
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-`
-const HeadProfileNameRow = styled.div`
-  display: flex;
   align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 520px;
+  width: 100%;
+  min-width: 0;
 `
-const HeadTermBadge = styled.span`
-  font-size: 10.5px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+const HeadProfileBadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+`
+const HeadProfileDetailChipTerm = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: -0.01em;
+  max-width: 100%;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c4b5fd' : '#5b21b6')};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
+    theme.mode === 'dark' ? 'rgba(139, 92, 246, 0.2)' : '#ede9fe'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  border-radius: 5px;
-  padding: 2px 7px;
-  letter-spacing: 0.01em;
-  flex-shrink: 0;
+      theme.mode === 'dark' ? 'rgba(167, 139, 250, 0.35)' : '#ddd6fe'};
 `
-const HeadProfileName = styled.h3`
+const HeadProfileDetailChipPosition = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: -0.01em;
+  max-width: 100%;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#f1f5f9'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0'};
+`
+const HeadProfileHeadline = styled.h3`
   margin: 0;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 800;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
   letter-spacing: -0.03em;
-  line-height: 1.2;
+  line-height: 1.4;
+  word-break: keep-all;
+  text-align: center;
 `
-const HeadPosBadge = styled.span`
-  display: inline-block;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
+const HeadProfileDivider = styled.div`
+  width: min(360px, 100%);
+  height: 1px;
+  margin: 0;
+  flex-shrink: 0;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  border-radius: 6px;
-  padding: 2px 10px;
-  width: fit-content;
+    theme.mode === 'dark'
+      ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.14) 65%, transparent)'
+      : 'linear-gradient(90deg, transparent, #e2e8f0 35%, #e2e8f0 65%, transparent)'};
 `
 const HeadTenureRow = styled.div`
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 2px;
+  margin: 0;
 `
 const HeadTenureDates = styled.span`
   display: inline-flex;
@@ -6739,16 +7278,21 @@ const HeadTenureAge = styled.span`
 const HeadLifespan = styled.div`
   font-size: 11px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#b0bac9')};
-  margin-top: 1px;
+  margin: 0;
+  line-height: 1.55;
+  text-align: center;
 `
 const HeadProfileActions = styled.div`
-  flex-shrink: 0;
+  position: absolute;
+  top: 14px;
+  right: 14px;
   display: flex;
   flex-direction: row;
   gap: 6px;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
+  z-index: 2;
 `
 const HeadActionBtn = styled.button`
   display: inline-flex;
@@ -6776,6 +7320,10 @@ const HeadActionBtn = styled.button`
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f8fafc'};
   }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+  }
 `
 const HeadActionBtnPrimary = styled.button`
   display: inline-flex;
@@ -6797,6 +7345,12 @@ const HeadActionBtnPrimary = styled.button`
   &:hover {
     opacity: 0.88;
     box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.35),
+      0 4px 14px rgba(99, 102, 241, 0.35);
   }
 `
 
@@ -7797,8 +8351,7 @@ const TreatyFieldModeBtn = styled.button<{ $active?: boolean }>`
         ? 'rgba(99, 102, 241, 0.22)'
         : '#eef2ff'
       : 'transparent'};
-  color: ${(p) =>
-    p.$active ? '#4f46e5' : p.theme.colors.text.secondary};
+  color: ${(p) => (p.$active ? '#4f46e5' : p.theme.colors.text.secondary)};
   transition:
     background 0.15s ease,
     color 0.15s ease;
@@ -8426,17 +8979,17 @@ function TreatyLinkModal({
   const treatyFormIsDirty = () =>
     Boolean(
       name.trim() ||
-        signDate.trim() ||
-        alias.trim() ||
-        location.trim() ||
-        summary.trim() ||
-        background.trim() ||
-        aftermath.trim() ||
-        effectiveDate ||
-        expiryDate ||
-        violationDate ||
-        violationReason.trim() ||
-        signingAdministrativeDivisionId,
+      signDate.trim() ||
+      alias.trim() ||
+      location.trim() ||
+      summary.trim() ||
+      background.trim() ||
+      aftermath.trim() ||
+      effectiveDate ||
+      expiryDate ||
+      violationDate ||
+      violationReason.trim() ||
+      signingAdministrativeDivisionId,
     ) ||
     signatoryRows.some(
       (r) =>
@@ -8734,10 +9287,7 @@ function TreatyLinkModal({
             <FieldRow>
               <FieldLabel>서명 대표 직위</FieldLabel>
               <FieldControl>
-                <TreatyFieldModeRow
-                  role="group"
-                  aria-label="직위 입력 방식"
-                >
+                <TreatyFieldModeRow role="group" aria-label="직위 입력 방식">
                   <TreatyFieldModeBtn
                     type="button"
                     $active={row.positionInputMode === 'definition'}
@@ -8781,8 +9331,9 @@ function TreatyLinkModal({
                       <FiChevronDown size={18} />
                     </CabinetSelectTrigger>
                     <FieldHint>
-                      연대표·각료와 동일한 <strong>관직 정의</strong> 목록입니다.
-                      다른 표기가 필요하면 위에서 「직접 입력」을 선택하세요.
+                      연대표·각료와 동일한 <strong>관직 정의</strong>{' '}
+                      목록입니다. 다른 표기가 필요하면 위에서 「직접 입력」을
+                      선택하세요.
                     </FieldHint>
                   </>
                 ) : (
@@ -8802,8 +9353,8 @@ function TreatyLinkModal({
                       />
                     </TreatyFieldWide>
                     <FieldHint>
-                      관직 정의에 없는 당시 호칭만 적습니다. DB 직위를 쓰려면 위에서
-                      「관직 정의」를 선택하세요.
+                      관직 정의에 없는 당시 호칭만 적습니다. DB 직위를 쓰려면
+                      위에서 「관직 정의」를 선택하세요.
                     </FieldHint>
                   </>
                 )}
@@ -9103,8 +9654,8 @@ function TreatyLinkModal({
                             placeholder="예: 모스크바 크렘린궁, 외무인민위원회 청사"
                           />
                           <FieldHint>
-                            자유 서술로 저장됩니다. 행정구역 코드로 맞출 때는 위에서
-                            「행정구역 (DB)」을 선택하세요.
+                            자유 서술로 저장됩니다. 행정구역 코드로 맞출 때는
+                            위에서 「행정구역 (DB)」을 선택하세요.
                           </FieldHint>
                         </>
                       ) : (
@@ -9115,7 +9666,9 @@ function TreatyLinkModal({
                           </FieldHint>
                           <CabinetSelectTrigger
                             type="button"
-                            onClick={() => setShowSigningVenueCountryModal(true)}
+                            onClick={() =>
+                              setShowSigningVenueCountryModal(true)
+                            }
                             $hasValue={!!signingVenueCountryId}
                             style={{ marginBottom: 10 }}
                           >
@@ -9599,7 +10152,9 @@ function TreatyLinkModal({
             if (idx !== null) {
               updateRow(idx, {
                 positionDefinitionId: v || null,
-                ...(v ? { role: '', positionInputMode: 'definition' as const } : { positionInputMode: 'free' as const }),
+                ...(v
+                  ? { role: '', positionInputMode: 'definition' as const }
+                  : { positionInputMode: 'free' as const }),
               })
             }
           }}

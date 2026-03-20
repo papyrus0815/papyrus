@@ -86,9 +86,9 @@ function DashboardMenuContent({
     },
     military: {
       title: '군사',
-      desc: '군부대 정보를 관리합니다.',
-      fullPath: '/military-units/',
-      fullLabel: '전체 보기',
+      desc: '국가를 선택한 뒤 행정조직 → 중앙부처에서 국방 관련 부처를 열고「군부대 등록」으로 부대를 등록합니다.',
+      fullPath: '',
+      fullLabel: '',
     },
     administration: {
       title: '행정부',

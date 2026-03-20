@@ -373,6 +373,8 @@ model AdministrationDepartment {
   events             AdministrationDepartmentEvent[] @relation("DeptEvents")
   /// 이 부처 소속으로 등록된 재임 기록 (역대 장관 조회)
   tenures            GovernmentPositionTenure[]     @relation("TenureDepartment")
+  /// 군사 부대(MilitaryUnit)와 1:N 연결 — 국방부 산하 부대 노드가 행정 부처 트리의 동일 기관과 매핑될 때 사용
+  militaryUnits      MilitaryUnit[]                 @relation("DeptMilitaryUnits")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

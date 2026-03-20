@@ -25,6 +25,13 @@ export type AdministrationDepartmentCategoryDto = {
   nameEn: string | null
 }
 
+/** 이 부처에 `administrationDepartmentId`로 연결된 군사 부대 요약 */
+export type AdministrationDepartmentMilitaryUnitDto = {
+  id: string
+  name: string
+  unitType: string | null
+}
+
 export type AdministrationDepartmentResponseDto = {
   id: string
   name: string
@@ -38,6 +45,8 @@ export type AdministrationDepartmentResponseDto = {
   abolishedDate: string | null
   successorId: string | null
   successor: { id: string; name: string } | null
+  /** 군부대(MilitaryUnit) FK 역방향 — 국방부 등과 부대 트리 매핑 */
+  militaryUnits: AdministrationDepartmentMilitaryUnitDto[]
   createdAt: string
   updatedAt: string
 }
@@ -113,6 +122,15 @@ export class AdministrationDepartmentController {
     private readonly notificationService: NotificationService,
   ) {}
 
+  private readonly departmentInclude = {
+    category: true,
+    successor: { select: { id: true, name: true } },
+    militaryUnits: {
+      select: { id: true, name: true, unitType: true },
+      orderBy: { name: 'asc' as const },
+    },
+  } as const
+
   private toResponse(row: {
     id: string
     name: string
@@ -128,6 +146,7 @@ export class AdministrationDepartmentController {
     updatedAt: Date
     category?: { id: string; name: string; nameEn: string | null } | null
     successor?: { id: string; name: string } | null
+    militaryUnits?: Array<{ id: string; name: string; unitType: string | null }>
   }): AdministrationDepartmentResponseDto {
     return {
       id: row.id,
@@ -144,6 +163,11 @@ export class AdministrationDepartmentController {
       abolishedDate: row.abolishedDate ? row.abolishedDate.toISOString() : null,
       successorId: row.successorId ?? null,
       successor: row.successor ? { id: row.successor.id, name: row.successor.name } : null,
+      militaryUnits: (row.militaryUnits ?? []).map((u) => ({
+        id: u.id,
+        name: u.name,
+        unitType: u.unitType ?? null,
+      })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
@@ -210,7 +234,7 @@ export class AdministrationDepartmentController {
     const list = await this.prisma.administrationDepartment.findMany({
       where: countryId ? { countryId } : undefined,
       orderBy: [{ countryId: 'asc' }, { name: 'asc' }],
-      include: { category: true, successor: { select: { id: true, name: true } } },
+      include: this.departmentInclude,
     })
     return list.map((row) => this.toResponse(row))
   }
@@ -225,7 +249,7 @@ export class AdministrationDepartmentController {
     const list = await this.prisma.administrationDepartment.findMany({
       where: { countryId },
       orderBy: { name: 'asc' },
-      include: { category: true, successor: { select: { id: true, name: true } } },
+      include: this.departmentInclude,
     })
     return list.map((row) => this.toResponse(row))
   }
@@ -285,7 +309,7 @@ export class AdministrationDepartmentController {
   ): Promise<AdministrationDepartmentResponseDto | null> {
     const row = await this.prisma.administrationDepartment.findUnique({
       where: { id },
-      include: { category: true, successor: { select: { id: true, name: true } } },
+      include: this.departmentInclude,
     })
     return row ? this.toResponse(row) : null
   }
@@ -395,7 +419,7 @@ export class AdministrationDepartmentController {
         abolishedDate: body.abolishedDate ? new Date(body.abolishedDate) : undefined,
         successorId: body.successorId ?? undefined,
       },
-      include: { category: true, successor: { select: { id: true, name: true } } },
+      include: this.departmentInclude,
     })
     await this.notificationService.notifyAdministrationDepartment(
       row.name,
@@ -430,7 +454,7 @@ export class AdministrationDepartmentController {
         ...(body.abolishedDate !== undefined && { abolishedDate: body.abolishedDate ? new Date(body.abolishedDate) : null }),
         ...(body.successorId !== undefined && { successorId: body.successorId }),
       },
-      include: { category: true, successor: { select: { id: true, name: true } } },
+      include: this.departmentInclude,
     })
     await this.notificationService.notifyAdministrationDepartment(
       row.name,

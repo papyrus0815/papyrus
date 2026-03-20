@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -6,7 +6,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
-import { FiAward, FiGrid, FiInfo, FiPlus, FiSearch, FiX } from 'react-icons/fi'
+import {
+  FiAward,
+  FiBriefcase,
+  FiGrid,
+  FiInfo,
+  FiPlus,
+  FiSearch,
+  FiX,
+} from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type {
@@ -64,6 +72,20 @@ import { mockGovernmentData } from '../mock'
 import type { HistoricalEvent } from '../mock/types'
 import { CabinetsSection } from './cabinets-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
+import { MilitaryUnitFormModal } from './military-unit-form.modal'
+import { MinistryCategoryTabBar } from './ministry-category-tab-bar'
+import { MinistryDepartmentDetailView } from './ministry-department-detail.view'
+import { MinistryDepartmentTree } from './ministry-department-tree'
+import {
+  buildDepartmentDescription,
+  countDepartmentsByCategoryId,
+  countDescendantsInDepartmentTree,
+  emptyMinistryFormFields,
+  filterDepartmentsBySearchQuery,
+  isDefenseRelatedCategory,
+  ministryFormFieldsFromDepartment,
+} from './ministry-department-utils'
+import { MinistryDeptSearchEmpty } from './ministry-dept-search-empty'
 import { PositionDefinitionsSection } from './position-definitions-section.widget'
 
 export type GovernmentContentTab =
@@ -262,6 +284,22 @@ const OrgModalBoxCustom = styled(ModalBox)`
   display: flex;
   flex-direction: column;
 `
+/** 중앙부처 등록·수정 모달 */
+const MinistryFormModalBox = styled(ModalBox)`
+  max-width: 720px;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+`
+const MinistryFormModalBody = styled(ModalBody)`
+  flex: 1;
+  min-height: 0;
+  max-height: min(78vh, 720px);
+  overflow-y: auto;
+  padding: 20px 24px 28px;
+`
+
 const OrgModalBody = styled.div`
   flex: 1;
   min-height: 0;
@@ -759,7 +797,8 @@ function DepartmentTenuresBlock({ departmentId }: { departmentId: string }) {
       administrationDepartmentApi.getTenuresByDepartmentId(departmentId),
     enabled: !!departmentId,
   })
-  if (isLoading || tenures.length === 0) return null
+  if (isLoading) return null
+  if (tenures.length === 0) return null
   const formatDate = (s: string | null) =>
     s ? s.slice(0, 10).replace(/-/g, '.') : '—'
   const formatName = (
@@ -769,26 +808,8 @@ function DepartmentTenuresBlock({ departmentId }: { departmentId: string }) {
     const parts = [p.surname, p.middleName, p.name].filter(Boolean)
     return parts.join(' ') || p.name || '—'
   }
-  return (
-    <div
-      style={{
-        marginTop: 16,
-        paddingTop: 16,
-        borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: isDark ? '#64748b' : '#64748b',
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
-          marginBottom: 10,
-        }}
-      >
-        역대 장관
-      </div>
+  const listEl = (
+    <>
       <ul
         style={{
           margin: 0,
@@ -836,6 +857,30 @@ function DepartmentTenuresBlock({ departmentId }: { departmentId: string }) {
           외 {tenures.length - 8}명
         </div>
       )}
+    </>
+  )
+
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        paddingTop: 16,
+        borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: isDark ? '#64748b' : '#64748b',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          marginBottom: 10,
+        }}
+      >
+        소속 인사(재임)
+      </div>
+      {listEl}
     </div>
   )
 }
@@ -925,63 +970,43 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
     }
   }
 
-  return (
-    <div
-      style={{
-        marginTop: 16,
-        paddingTop: 16,
-        borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
-      }}
-    >
-      <div
+  const addEventButton =
+    !showAddForm && !editingEvent ? (
+      <button
+        type="button"
+        onClick={() => {
+          setShowAddForm(true)
+          setEventForm({
+            title: '',
+            startDate: null,
+            endDate: null,
+            eventType: 'OTHER',
+            description: null,
+          })
+        }}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 8,
-          marginBottom: 10,
+          padding: '4px 10px',
+          fontSize: 11,
+          fontWeight: 600,
+          color: MAIN,
+          background: 'transparent',
+          border: '1px solid ' + MAIN,
+          borderRadius: 8,
+          cursor: 'pointer',
         }}
       >
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: isDark ? '#64748b' : '#64748b',
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-          }}
-        >
-          기관 사건 (연월일·내용)
-        </div>
-        {!showAddForm && !editingEvent && (
-          <button
-            type="button"
-            onClick={() => {
-              setShowAddForm(true)
-              setEventForm({
-                title: '',
-                startDate: null,
-                endDate: null,
-                eventType: 'OTHER',
-                description: null,
-              })
-            }}
-            style={{
-              padding: '4px 10px',
-              fontSize: 11,
-              fontWeight: 600,
-              color: MAIN,
-              background: 'transparent',
-              border: '1px solid ' + MAIN,
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            + 사건 추가
-          </button>
-        )}
-      </div>
+        + 사건 추가
+      </button>
+    ) : null
+
+  const outerStyle = {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+  } as const
+
+  const eventsBody = (
+    <>
       {isLoading ? (
         <div style={{ fontSize: 12, color: '#94a3b8' }}>불러오는 중…</div>
       ) : (
@@ -1435,6 +1460,35 @@ function DepartmentEventsBlock({ departmentId }: { departmentId: string }) {
             )}
         </>
       )}
+    </>
+  )
+
+  return (
+    <div style={outerStyle}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: 10,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: isDark ? '#64748b' : '#64748b',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+          }}
+        >
+          기관 사건 (연월일·내용)
+        </div>
+        {addEventButton}
+      </div>
+      {eventsBody}
     </div>
   )
 }
@@ -1531,7 +1585,15 @@ export function GovernmentInfoSection({
   >([])
   const [ministriesLoading, setMinistriesLoading] = useState(false)
   /** 'list' = 목록, 'form' = 컨텐츠 영역에 등록/수정 화면 */
-  const [ministryView, setMinistryView] = useState<'list' | 'form'>('list')
+  const [ministryFormModalOpen, setMinistryFormModalOpen] = useState(false)
+  /** 부처 이름·카테고리 검색 */
+  const [ministrySearchQuery, setMinistrySearchQuery] = useState('')
+  /** 계층 트리 모드: 상단 탭에서 선택 중인 부처 카테고리 */
+  const [ministryTreeCategoryId, setMinistryTreeCategoryId] =
+    useState<string>('')
+  /** 목록에서 부처 선택 시 상세(행정부 패턴 — 재임·사건·편집은 상세에서만) */
+  const [ministryBrowseDepartment, setMinistryBrowseDepartment] =
+    useState<AdministrationDepartment | null>(null)
   const [editingMinistry, setEditingMinistry] =
     useState<AdministrationDepartment | null>(null)
   const [ministryForm, setMinistryForm] = useState({
@@ -1543,6 +1605,11 @@ export function GovernmentInfoSection({
     establishedDate: '',
     abolishedDate: '',
     successorId: '',
+    defenseOfficialNameEn: '',
+    defenseMissionScope: '',
+    defenseHeadquarters: '',
+    defenseOrgStructure: '',
+    defenseBudgetOrForcesNote: '',
   })
   const [categoriesList, setCategoriesList] = useState<
     AdministrationDepartmentCategory[]
@@ -1589,6 +1656,11 @@ export function GovernmentInfoSection({
   /** 행정기구 상세 뷰용 — null이면 목록, 값이 있으면 상세 뷰 */
   const [selectedOrganization, setSelectedOrganization] =
     useState<OrganizationResponseDto | null>(null)
+  /** 국가·중앙부처 컨텍스트에서 군부대 등록/수정 모달 */
+  const [militaryUnitModalOpen, setMilitaryUnitModalOpen] = useState(false)
+  const [militaryUnitEditingId, setMilitaryUnitEditingId] = useState<
+    string | null
+  >(null)
   const [organizationForm, setOrganizationForm] = useState<{
     name: string
     shortName: string | null
@@ -1619,7 +1691,7 @@ export function GovernmentInfoSection({
     ideology: null,
   })
 
-  const loadMinistries = () => {
+  const loadMinistries = useCallback(() => {
     if (!effectiveCountryId) return
     setMinistriesLoading(true)
     administrationDepartmentApi
@@ -1627,7 +1699,129 @@ export function GovernmentInfoSection({
       .then(setMinistriesList)
       .catch(() => setMinistriesList([]))
       .finally(() => setMinistriesLoading(false))
-  }
+  }, [effectiveCountryId])
+
+  const openMinistryEdit = useCallback((dept: AdministrationDepartment) => {
+    setMinistryBrowseDepartment(null)
+    setEditingMinistry(dept)
+    setMinistryForm(ministryFormFieldsFromDepartment(dept))
+    setMinistryFormModalOpen(true)
+  }, [])
+
+  const openMinistryCreateChild = useCallback(
+    (parent: AdministrationDepartment, categoryId: string) => {
+      setMinistryBrowseDepartment(null)
+      setEditingMinistry(null)
+      setMinistryForm(emptyMinistryFormFields(categoryId, parent.id))
+      setMinistryFormModalOpen(true)
+    },
+    [],
+  )
+
+  const openMinistryCreateRootInCategory = useCallback((categoryId: string) => {
+    setMinistryBrowseDepartment(null)
+    setEditingMinistry(null)
+    setMinistryForm(emptyMinistryFormFields(categoryId, ''))
+    setMinistryFormModalOpen(true)
+  }, [])
+
+  const closeMinistryFormModal = useCallback(() => {
+    setMinistryFormModalOpen(false)
+    setEditingMinistry(null)
+  }, [])
+
+  const submitMinistryForm = useCallback(() => {
+    if (!effectiveCountryId) return
+    if (!ministryForm.name.trim()) {
+      alert('부처명을 입력해주세요.')
+      return
+    }
+    if (!ministryForm.categoryId?.trim()) {
+      alert('카테고리를 선택해주세요.')
+      return
+    }
+    const cat = categoriesList.find((c) => c.id === ministryForm.categoryId)
+    const defenseCat = isDefenseRelatedCategory(cat ?? null)
+    const defensePayload = defenseCat
+      ? {
+          officialNameEn: ministryForm.defenseOfficialNameEn.trim(),
+          missionScope: ministryForm.defenseMissionScope.trim(),
+          headquarters: ministryForm.defenseHeadquarters.trim(),
+          orgStructure: ministryForm.defenseOrgStructure.trim(),
+          budgetOrForcesNote: ministryForm.defenseBudgetOrForcesNote.trim(),
+        }
+      : null
+    const descriptionCombined = buildDepartmentDescription(
+      ministryForm.description.trim(),
+      defensePayload,
+      defenseCat,
+    )
+    const payload = {
+      name: ministryForm.name.trim(),
+      parentId: ministryForm.parentId || null,
+      categoryId: ministryForm.categoryId || null,
+      thumbnailUrl: ministryForm.thumbnailUrl.trim() || null,
+      description: descriptionCombined || null,
+      establishedDate: ministryForm.establishedDate.trim() || null,
+      abolishedDate: ministryForm.abolishedDate.trim() || null,
+      successorId: ministryForm.successorId.trim() || null,
+    }
+    if (editingMinistry) {
+      administrationDepartmentApi
+        .update(editingMinistry.id, payload)
+        .then(() => {
+          closeMinistryFormModal()
+          loadMinistries()
+        })
+        .catch((e) =>
+          alert(e instanceof Error ? e.message : '수정에 실패했습니다'),
+        )
+    } else {
+      administrationDepartmentApi
+        .create({
+          ...payload,
+          countryId: effectiveCountryId,
+        })
+        .then(() => {
+          closeMinistryFormModal()
+          loadMinistries()
+        })
+        .catch((e) =>
+          alert(e instanceof Error ? e.message : '등록에 실패했습니다'),
+        )
+    }
+  }, [
+    effectiveCountryId,
+    ministryForm,
+    editingMinistry,
+    categoriesList,
+    loadMinistries,
+    closeMinistryFormModal,
+  ])
+
+  const handleMinistryDelete = useCallback(
+    (dept: AdministrationDepartment) => {
+      const sub = countDescendantsInDepartmentTree(dept.id, ministriesList)
+      const msg =
+        sub > 0
+          ? `"${dept.name}"을(를) 삭제하면 하위 기관 ${sub}개도 함께 삭제됩니다. 계속하시겠습니까?`
+          : `"${dept.name}" 부처를 삭제하시겠습니까?`
+      if (confirm(msg)) {
+        void administrationDepartmentApi.delete(dept.id).then(() => {
+          setMinistryBrowseDepartment((prev) =>
+            prev?.id === dept.id ? null : prev,
+          )
+          loadMinistries()
+        })
+      }
+    },
+    [ministriesList, loadMinistries],
+  )
+
+  const ministryCategoryDeptCounts = useMemo(
+    () => countDepartmentsByCategoryId(ministriesList),
+    [ministriesList],
+  )
 
   useEffect(() => {
     if (contentTab === 'ministries') {
@@ -1637,7 +1831,40 @@ export function GovernmentInfoSection({
         .catch(() => setCategoriesList([]))
       if (effectiveCountryId) loadMinistries()
     }
-  }, [contentTab, effectiveCountryId])
+  }, [contentTab, effectiveCountryId, loadMinistries])
+
+  useEffect(() => {
+    if (!categoriesList.length) return
+    setMinistryTreeCategoryId((prev) => {
+      if (prev && categoriesList.some((c) => c.id === prev)) return prev
+      return categoriesList[0].id
+    })
+  }, [categoriesList])
+
+  useEffect(() => {
+    setMinistryBrowseDepartment(null)
+  }, [ministryTreeCategoryId])
+
+  useEffect(() => {
+    if (!ministryBrowseDepartment) return
+    if (!ministriesList.some((d) => d.id === ministryBrowseDepartment.id)) {
+      setMinistryBrowseDepartment(null)
+    }
+  }, [ministriesList, ministryBrowseDepartment])
+
+  const ministryBrowseResolved = useMemo(() => {
+    if (!ministryBrowseDepartment) return null
+    return (
+      ministriesList.find((d) => d.id === ministryBrowseDepartment.id) ??
+      ministryBrowseDepartment
+    )
+  }, [ministriesList, ministryBrowseDepartment])
+
+  /** 목록(탭·검색) 툴바 — 부처 상세일 때는 숨김 */
+  const showMinistryListToolbar = useMemo(
+    () => !(ministryBrowseResolved && !ministryFormModalOpen),
+    [ministryBrowseResolved, ministryFormModalOpen],
+  )
 
   const { data: organizationsList = [], isLoading: organizationsLoading } =
     useQuery({
@@ -2777,598 +3004,21 @@ export function GovernmentInfoSection({
 
       {contentTab === 'ministries' && (
         <section aria-label="중앙부처 현황">
-          {effectiveCountryId && ministryView === 'form' ? (
-            <>
+          {showMinistryListToolbar ? (
+            <div
+              style={{
+                marginBottom: 18,
+                paddingBottom: 18,
+                borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : '#eceff3'}`,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}
+            >
               <div
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingBottom: 20,
-                  marginBottom: 24,
-                  borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e9eef5'}`,
-                  flexWrap: 'wrap',
-                  gap: 12,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMinistryView('list')
-                      setEditingMinistry(null)
-                    }}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 14px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: isDark ? '#94a3b8' : '#64748b',
-                      background: 'transparent',
-                      border: 'none',
-                      borderRadius: 12,
-                      cursor: 'pointer',
-                      transition: 'color 0.2s, background 0.2s',
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.color = isDark
-                        ? '#cbd5e1'
-                        : '#475569'
-                      e.currentTarget.style.background = isDark
-                        ? 'rgba(255,255,255,0.08)'
-                        : '#f1f5f9'
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.color = isDark
-                        ? '#94a3b8'
-                        : '#64748b'
-                      e.currentTarget.style.background = 'transparent'
-                    }}
-                  >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M19 12H5M12 19l-7-7 7-7" />
-                    </svg>
-                    목록으로
-                  </button>
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: isDark ? '#f1f5f9' : '#111827',
-                      letterSpacing: '-0.025em',
-                    }}
-                  >
-                    {editingMinistry ? '부처 수정' : '부처 등록'}
-                  </h2>
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!ministryForm.name.trim()) {
-                        alert('부처명을 입력해주세요.')
-                        return
-                      }
-                      if (!ministryForm.categoryId?.trim()) {
-                        alert('카테고리를 선택해주세요.')
-                        return
-                      }
-                      const payload = {
-                        name: ministryForm.name.trim(),
-                        parentId: ministryForm.parentId || null,
-                        categoryId: ministryForm.categoryId || null,
-                        thumbnailUrl: ministryForm.thumbnailUrl.trim() || null,
-                        description: ministryForm.description.trim() || null,
-                        establishedDate:
-                          ministryForm.establishedDate.trim() || null,
-                        abolishedDate:
-                          ministryForm.abolishedDate.trim() || null,
-                        successorId: ministryForm.successorId.trim() || null,
-                      }
-                      if (editingMinistry) {
-                        administrationDepartmentApi
-                          .update(editingMinistry.id, payload)
-                          .then(() => {
-                            setMinistryView('list')
-                            setEditingMinistry(null)
-                            loadMinistries()
-                          })
-                          .catch((e) =>
-                            alert(
-                              e instanceof Error
-                                ? e.message
-                                : '수정에 실패했습니다',
-                            ),
-                          )
-                      } else {
-                        administrationDepartmentApi
-                          .create({
-                            ...payload,
-                            countryId: effectiveCountryId,
-                          })
-                          .then(() => {
-                            setMinistryView('list')
-                            setEditingMinistry(null)
-                            loadMinistries()
-                          })
-                          .catch((e) =>
-                            alert(
-                              e instanceof Error
-                                ? e.message
-                                : '등록에 실패했습니다',
-                            ),
-                          )
-                      }
-                    }}
-                    style={{
-                      padding: '12px 24px',
-                      background: MAIN,
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 12,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
-                    }}
-                  >
-                    {editingMinistry ? '저장' : '등록'}
-                  </button>
-                </div>
-              </div>
-
-              <input
-                ref={thumbnailInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  e.target.value = ''
-                  try {
-                    validateImageFile(file)
-                    setThumbnailUploading(true)
-                    const res = await uploadImage(file, 'ministries')
-                    setMinistryForm((f) => ({ ...f, thumbnailUrl: res.url }))
-                  } catch (err) {
-                    alert(
-                      err instanceof Error
-                        ? err.message
-                        : '이미지 업로드에 실패했습니다.',
-                    )
-                  } finally {
-                    setThumbnailUploading(false)
-                  }
-                }}
-              />
-
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 24,
-                }}
-              >
-                <FormFieldRow>
-                  <FieldLabel>썸네일</FieldLabel>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                    }}
-                  >
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => thumbnailInputRef.current?.click()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          thumbnailInputRef.current?.click()
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        maxWidth: 280,
-                        aspectRatio: '16/10',
-                        borderRadius: 14,
-                        border: `2px dashed ${isDark ? 'rgba(255,255,255,0.15)' : '#e5e7eb'}`,
-                        background: ministryForm.thumbnailUrl
-                          ? 'transparent'
-                          : isDark
-                            ? 'rgba(255,255,255,0.04)'
-                            : '#fafafa',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        cursor: thumbnailUploading ? 'wait' : 'pointer',
-                      }}
-                    >
-                      {thumbnailUploading ? (
-                        <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                          업로드 중…
-                        </span>
-                      ) : ministryForm.thumbnailUrl ? (
-                        <img
-                          src={getUploadImageUrl(ministryForm.thumbnailUrl)}
-                          alt=""
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      ) : (
-                        <span style={{ fontSize: 13, color: '#94a3b8' }}>
-                          이미지 선택
-                        </span>
-                      )}
-                    </div>
-                    {ministryForm.thumbnailUrl && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setMinistryForm((f) => ({ ...f, thumbnailUrl: '' }))
-                        }}
-                        style={{
-                          alignSelf: 'flex-start',
-                          marginTop: 4,
-                          padding: '6px 12px',
-                          fontSize: 12,
-                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'}`,
-                          borderRadius: 10,
-                          background: isDark
-                            ? 'rgba(255,255,255,0.06)'
-                            : '#fff',
-                          color: isDark ? '#94a3b8' : '#64748b',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        제거
-                      </button>
-                    )}
-                  </div>
-                </FormFieldRow>
-
-                <FormFieldRow>
-                  <FieldLabel>
-                    부처명 <span style={{ color: '#ef4444' }}>*</span>
-                  </FieldLabel>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <FormInputField
-                      value={ministryForm.name}
-                      onChange={(e) =>
-                        setMinistryForm((f) => ({
-                          ...f,
-                          name: e.target.value,
-                        }))
-                      }
-                      placeholder="예: 기획재정부"
-                    />
-                  </div>
-                </FormFieldRow>
-
-                <FormFieldRow>
-                  <FieldLabel>
-                    카테고리 <span style={{ color: '#ef4444' }}>*</span>
-                  </FieldLabel>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <FormSelectBtn
-                      type="button"
-                      $hasValue={!!ministryForm.categoryId}
-                      onClick={() => setCategorySelectOpen(true)}
-                    >
-                      <span>
-                        {ministryForm.categoryId
-                          ? (categoriesList.find(
-                              (c) => c.id === ministryForm.categoryId,
-                            )?.name ?? '')
-                          : '선택'}
-                      </span>
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
-                      >
-                        <path d="M6 9l6 6 6-6" />
-                      </svg>
-                    </FormSelectBtn>
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                      같은 카테고리에 여러 부처 등록 가능 (예: 전쟁부·국방부)
-                    </span>
-                  </div>
-                </FormFieldRow>
-
-                <FormFieldRow>
-                  <FieldLabel>상위 부처</FieldLabel>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <FormSelectBtn
-                      type="button"
-                      $hasValue={!!ministryForm.parentId}
-                      onClick={() => setParentSelectOpen(true)}
-                    >
-                      <span>
-                        {ministryForm.parentId
-                          ? (ministriesList.find(
-                              (d) => d.id === ministryForm.parentId,
-                            )?.name ?? '')
-                          : '선택'}
-                      </span>
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
-                      >
-                        <path d="M6 9l6 6 6-6" />
-                      </svg>
-                    </FormSelectBtn>
-                  </div>
-                </FormFieldRow>
-
-                <FormFieldRow>
-                  <FieldLabel>설립일 · 폐지일</FieldLabel>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      gap: 10,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setEstablishedDateModalOpen(true)}
-                      style={{
-                        padding: '10px 18px',
-                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
-                        borderRadius: 12,
-                        fontSize: 13,
-                        color: ministryForm.establishedDate
-                          ? isDark
-                            ? '#f1f5f9'
-                            : '#111827'
-                          : isDark
-                            ? '#64748b'
-                            : '#9ca3af',
-                        background: ministryForm.establishedDate
-                          ? isDark
-                            ? 'rgba(59,130,246,0.12)'
-                            : '#eff6ff'
-                          : isDark
-                            ? 'rgba(255,255,255,0.06)'
-                            : '#fff',
-                        cursor: 'pointer',
-                        minWidth: 140,
-                      }}
-                    >
-                      {ministryForm.establishedDate
-                        ? ministryForm.establishedDate.replace(/-/g, '.')
-                        : '설립일 선택'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAbolishedDateModalOpen(true)}
-                      style={{
-                        padding: '10px 18px',
-                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
-                        borderRadius: 12,
-                        fontSize: 13,
-                        color: ministryForm.abolishedDate
-                          ? isDark
-                            ? '#f1f5f9'
-                            : '#111827'
-                          : isDark
-                            ? '#64748b'
-                            : '#9ca3af',
-                        background: ministryForm.abolishedDate
-                          ? isDark
-                            ? 'rgba(239,68,68,0.12)'
-                            : '#fef2f2'
-                          : isDark
-                            ? 'rgba(255,255,255,0.06)'
-                            : '#fff',
-                        cursor: 'pointer',
-                        minWidth: 140,
-                      }}
-                    >
-                      {ministryForm.abolishedDate
-                        ? ministryForm.abolishedDate.replace(/-/g, '.')
-                        : '폐지일 선택'}
-                    </button>
-                  </div>
-                </FormFieldRow>
-
-                <FormFieldRow>
-                  <FieldLabel>후신 부처</FieldLabel>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <FormSelectBtn
-                      type="button"
-                      $hasValue={!!ministryForm.successorId}
-                      onClick={() => setSuccessorSelectOpen(true)}
-                    >
-                      <span>
-                        {ministryForm.successorId
-                          ? (ministriesList.find(
-                              (d) => d.id === ministryForm.successorId,
-                            )?.name ?? '')
-                          : '선택'}
-                      </span>
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        style={{ flexShrink: 0, marginLeft: 8, opacity: 0.5 }}
-                      >
-                        <path d="M6 9l6 6 6-6" />
-                      </svg>
-                    </FormSelectBtn>
-                  </div>
-                </FormFieldRow>
-
-                <FormFieldRow>
-                  <FieldLabel>설명</FieldLabel>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <FormTextareaField
-                      value={ministryForm.description}
-                      onChange={(e) =>
-                        setMinistryForm((f) => ({
-                          ...f,
-                          description: e.target.value,
-                        }))
-                      }
-                      placeholder="역할, 담당 업무 등"
-                      rows={2}
-                    />
-                  </div>
-                </FormFieldRow>
-              </div>
-
-              <DatePickerModal
-                isOpen={establishedDateModalOpen}
-                onClose={() => setEstablishedDateModalOpen(false)}
-                onSelect={(date) => {
-                  setMinistryForm((f) => ({ ...f, establishedDate: date }))
-                  setEstablishedDateModalOpen(false)
-                  setAbolishedDateModalOpen(true)
-                }}
-                initialDate={ministryForm.establishedDate || undefined}
-                title="설립일 선택"
-              />
-              <DatePickerModal
-                isOpen={abolishedDateModalOpen}
-                onClose={() => setAbolishedDateModalOpen(false)}
-                onSelect={(date) => {
-                  setMinistryForm((f) => ({ ...f, abolishedDate: date }))
-                  setAbolishedDateModalOpen(false)
-                }}
-                initialDate={ministryForm.abolishedDate || undefined}
-                title="폐지일 선택"
-              />
-              <SelectModal
-                isOpen={categorySelectOpen}
-                onClose={() => setCategorySelectOpen(false)}
-                title="카테고리 선택"
-                options={
-                  categoriesList.map((c) => ({
-                    value: c.id,
-                    label: `${c.name}${c.nameEn ? ` (${c.nameEn})` : ''}`,
-                  })) as SelectOption[]
-                }
-                selectedValue={ministryForm.categoryId || undefined}
-                onSelect={(id) => {
-                  setMinistryForm((f) => ({ ...f, categoryId: id }))
-                  setCategorySelectOpen(false)
-                }}
-              />
-              <SelectModal
-                isOpen={parentSelectOpen}
-                onClose={() => setParentSelectOpen(false)}
-                title="상위 부처 선택"
-                options={
-                  [
-                    { value: '', label: '없음' },
-                    ...ministriesList
-                      .filter(
-                        (d) => !editingMinistry || d.id !== editingMinistry.id,
-                      )
-                      .map((d) => ({ value: d.id, label: d.name })),
-                  ] as SelectOption[]
-                }
-                selectedValue={ministryForm.parentId}
-                onSelect={(id) => {
-                  setMinistryForm((f) => ({ ...f, parentId: id }))
-                  setParentSelectOpen(false)
-                }}
-              />
-              <SelectModal
-                isOpen={successorSelectOpen}
-                onClose={() => setSuccessorSelectOpen(false)}
-                title="후신 부처 선택"
-                options={
-                  [
-                    { value: '', label: '없음' },
-                    ...ministriesList
-                      .filter(
-                        (d) => !editingMinistry || d.id !== editingMinistry.id,
-                      )
-                      .map((d) => ({ value: d.id, label: d.name })),
-                  ] as SelectOption[]
-                }
-                selectedValue={ministryForm.successorId}
-                onSelect={(id) => {
-                  setMinistryForm((f) => ({ ...f, successorId: id }))
-                  setSuccessorSelectOpen(false)
-                }}
-              />
-            </>
-          ) : (
-            /* 목록 — 카테고리별 대형 카드, 모던 톤 */
-            <>
-              <div
-                style={{
-                  marginBottom: 20,
-                  display: 'flex',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   justifyContent: 'space-between',
                   gap: 12,
                   flexWrap: 'wrap',
@@ -3381,253 +3031,327 @@ export function GovernmentInfoSection({
                       fontSize: 20,
                       fontWeight: 700,
                       color: isDark ? '#f1f5f9' : '#0f172a',
-                      letterSpacing: '-0.02em',
+                      letterSpacing: '-0.03em',
                     }}
                   >
-                    중앙부처 현황
+                    중앙부처
                   </h3>
                   <p
                     style={{
-                      margin: '4px 0 0',
+                      margin: '6px 0 0',
                       fontSize: 13,
-                      color: isDark ? '#64748b' : '#64748b',
-                      fontWeight: 500,
+                      color: isDark ? '#94a3b8' : '#64748b',
+                      lineHeight: 1.45,
+                      maxWidth: 520,
                     }}
                   >
-                    카테고리별 부처를 한눈에 관리합니다.
+                    카테고리 선택 → 목록에서 부처 클릭 → 상세에서
+                    재임·사건·편집.
                   </p>
                 </div>
-                {effectiveCountryId && (
+                {effectiveCountryId ? (
                   <button
                     type="button"
                     onClick={() => {
+                      setMinistryBrowseDepartment(null)
                       setEditingMinistry(null)
-                      setMinistryForm({
-                        name: '',
-                        parentId: '',
-                        categoryId: '',
-                        thumbnailUrl: '',
-                        description: '',
-                        establishedDate: '',
-                        abolishedDate: '',
-                        successorId: '',
-                      })
-                      setMinistryView('form')
+                      setMinistryForm(emptyMinistryFormFields('', ''))
+                      setMinistryFormModalOpen(true)
                     }}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 8,
                       padding: '10px 16px',
-                      border: `1px solid ${isDark ? 'rgba(99,102,241,0.4)' : '#c7d2fe'}`,
-                      background: isDark ? 'rgba(99,102,241,0.15)' : '#eef2ff',
-                      color: isDark ? '#a5b4fc' : '#4338ca',
+                      border: 'none',
+                      background: MAIN,
+                      color: '#fff',
                       borderRadius: 10,
                       fontSize: 13,
-                      fontWeight: 700,
+                      fontWeight: 600,
                       cursor: 'pointer',
+                      flexShrink: 0,
+                      boxShadow: '0 2px 10px rgba(99, 102, 241, 0.28)',
                     }}
                   >
                     <FiPlus size={16} />
                     부처 등록
                   </button>
-                )}
+                ) : null}
               </div>
-              {!effectiveCountryId ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : '#e2e8f0'}`,
+                  background: isDark ? 'rgba(255,255,255,0.03)' : '#fafbfc',
+                }}
+              >
+                <FiSearch
+                  size={18}
+                  style={{
+                    color: isDark ? '#94a3b8' : '#64748b',
+                    flexShrink: 0,
+                  }}
+                  aria-hidden
+                />
+                <input
+                  type="search"
+                  value={ministrySearchQuery}
+                  onChange={(e) => setMinistrySearchQuery(e.target.value)}
+                  placeholder="부처명·카테고리 검색…"
+                  aria-label="부처 이름 검색"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: '4px 2px',
+                    fontSize: 14,
+                    border: 'none',
+                    background: 'transparent',
+                    color: isDark ? '#f1f5f9' : '#0f172a',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+          {!effectiveCountryId ? (
+            <div
+              style={{
+                padding: 56,
+                textAlign: 'center',
+                color: isDark ? '#64748b' : '#6b7280',
+                fontSize: 14,
+                background: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
+                borderRadius: 16,
+                border: `1px dashed ${isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
+              }}
+            >
+              국가를 선택하면 부처를 등록할 수 있습니다.
+            </div>
+          ) : ministriesLoading ? (
+            <div
+              style={{
+                padding: 56,
+                textAlign: 'center',
+                color: isDark ? '#64748b' : '#6b7280',
+                fontSize: 14,
+                background: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
+                borderRadius: 16,
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+              }}
+            >
+              불러오는 중…
+            </div>
+          ) : categoriesList.length === 0 ? (
+            /* 카테고리가 없으면 행정부처럼 등록 유도 카드 1개 표시 (중앙부처 화면에 아무것도 안 나오는 문제 해결) */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div
+                style={{
+                  padding: '48px 32px',
+                  background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+                  borderRadius: 20,
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+                  boxShadow: isDark
+                    ? '0 2px 8px rgba(0,0,0,0.3)'
+                    : '0 2px 8px rgba(0,0,0,0.04)',
+                  textAlign: 'center',
+                }}
+              >
                 <div
                   style={{
-                    padding: 56,
-                    textAlign: 'center',
-                    color: isDark ? '#64748b' : '#6b7280',
-                    fontSize: 14,
-                    background: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
-                    borderRadius: 16,
-                    border: `1px dashed ${isDark ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
+                    width: 64,
+                    height: 64,
+                    margin: '0 auto 20px',
+                    borderRadius: 20,
+                    background:
+                      'linear-gradient(145deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: MAIN,
                   }}
                 >
-                  국가를 선택하면 부처를 등록할 수 있습니다.
+                  <FiPlus size={28} strokeWidth={2.5} />
                 </div>
-              ) : ministriesLoading ? (
-                <div
+                <h3
                   style={{
-                    padding: 56,
-                    textAlign: 'center',
-                    color: isDark ? '#64748b' : '#6b7280',
-                    fontSize: 14,
-                    background: isDark ? 'rgba(255,255,255,0.03)' : '#f9fafb',
-                    borderRadius: 16,
-                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
+                    margin: '0 0 8px',
+                    fontSize: 19,
+                    fontWeight: 700,
+                    color: isDark ? '#f1f5f9' : '#0f172a',
+                    letterSpacing: '-0.02em',
                   }}
                 >
-                  불러오는 중…
-                </div>
-              ) : categoriesList.length === 0 ? (
-                /* 카테고리가 없으면 행정부처럼 등록 유도 카드 1개 표시 (중앙부처 화면에 아무것도 안 나오는 문제 해결) */
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 24 }}
+                  등록된 부처 카테고리가 없습니다
+                </h3>
+                <p
+                  style={{
+                    margin: '0 0 24px',
+                    fontSize: 14,
+                    color: isDark ? '#64748b' : '#64748b',
+                    lineHeight: 1.5,
+                    maxWidth: 420,
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                  }}
                 >
-                  <div
-                    style={{
-                      padding: '48px 32px',
-                      background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
-                      borderRadius: 20,
-                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
-                      boxShadow: isDark
-                        ? '0 2px 8px rgba(0,0,0,0.3)'
-                        : '0 2px 8px rgba(0,0,0,0.04)',
-                      textAlign: 'center',
+                  먼저 카테고리를 추가한 뒤, 해당 카테고리에 부처를 등록하세요.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    openCategoryModal()
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '14px 24px',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: '#fff',
+                    background: MAIN,
+                    border: 'none',
+                    borderRadius: 14,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                  }}
+                >
+                  <FiGrid size={16} /> 카테고리 관리
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}
+            >
+              {ministryBrowseResolved && !ministryFormModalOpen ? (
+                <motion.div
+                  key="ministry-detail"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{
+                    padding: '0',
+                    minHeight: 280,
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <MinistryDepartmentDetailView
+                    department={ministryBrowseResolved}
+                    isDark={isDark}
+                    categoryLabel={
+                      categoriesList.find(
+                        (c) => c.id === ministryBrowseResolved.categoryId,
+                      )?.name ?? null
+                    }
+                    isDefenseRelated={(() => {
+                      const c = categoriesList.find(
+                        (x) => x.id === ministryBrowseResolved.categoryId,
+                      )
+                      const ko = c?.name ?? ''
+                      const en = c?.nameEn ?? ''
+                      return (
+                        /국방|군사|국군|전쟁|합참/i.test(ko) ||
+                        /defense|military|armed|forces|war/i.test(en)
+                      )
+                    })()}
+                    onRegisterMilitaryUnit={
+                      effectiveCountryId
+                        ? () => {
+                            setMilitaryUnitEditingId(null)
+                            setMilitaryUnitModalOpen(true)
+                          }
+                        : undefined
+                    }
+                    onEditMilitaryUnit={(unitId) => {
+                      setMilitaryUnitEditingId(unitId)
+                      setMilitaryUnitModalOpen(true)
                     }}
-                  >
-                    <div
-                      style={{
-                        width: 64,
-                        height: 64,
-                        margin: '0 auto 20px',
-                        borderRadius: 20,
-                        background:
-                          'linear-gradient(145deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: MAIN,
-                      }}
-                    >
-                      <FiPlus size={28} strokeWidth={2.5} />
-                    </div>
-                    <h3
-                      style={{
-                        margin: '0 0 8px',
-                        fontSize: 19,
-                        fontWeight: 700,
-                        color: isDark ? '#f1f5f9' : '#0f172a',
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      등록된 부처 카테고리가 없습니다
-                    </h3>
-                    <p
-                      style={{
-                        margin: '0 0 24px',
-                        fontSize: 14,
-                        color: isDark ? '#64748b' : '#64748b',
-                        lineHeight: 1.5,
-                        maxWidth: 420,
-                        marginLeft: 'auto',
-                        marginRight: 'auto',
-                      }}
-                    >
-                      먼저 카테고리를 추가한 뒤, 해당 카테고리에 부처를
-                      등록하세요.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openCategoryModal()
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '14px 24px',
-                        fontSize: 15,
-                        fontWeight: 600,
-                        color: '#fff',
-                        background: MAIN,
-                        border: 'none',
-                        borderRadius: 14,
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                      }}
-                    >
-                      <FiGrid size={16} /> 카테고리 관리
-                    </button>
-                  </div>
-                </div>
+                    onBack={() => {
+                      setMinistrySearchQuery('')
+                      setMinistryBrowseDepartment(null)
+                    }}
+                    onEdit={() => openMinistryEdit(ministryBrowseResolved)}
+                    onDelete={() =>
+                      handleMinistryDelete(ministryBrowseResolved)
+                    }
+                    onAddChild={() =>
+                      openMinistryCreateChild(
+                        ministryBrowseResolved,
+                        ministryBrowseResolved.categoryId ?? '',
+                      )
+                    }
+                    onGoToPositions={() => {
+                      setMinistrySearchQuery('')
+                      setMinistryBrowseDepartment(null)
+                      setContentTab('positions')
+                    }}
+                    tenuresSlot={
+                      <DepartmentTenuresBlock
+                        departmentId={ministryBrowseResolved.id}
+                      />
+                    }
+                    eventsSlot={
+                      <DepartmentEventsBlock
+                        departmentId={ministryBrowseResolved.id}
+                      />
+                    }
+                  />
+                </motion.div>
               ) : (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                      'repeat(auto-fill, minmax(360px, 1fr))',
-                    gap: 16,
-                  }}
-                >
-                  {categoriesList.map((cat) => {
+                <>
+                  <MinistryCategoryTabBar
+                    categories={categoriesList}
+                    counts={ministryCategoryDeptCounts}
+                    selectedCategoryId={ministryTreeCategoryId}
+                    onSelectCategory={setMinistryTreeCategoryId}
+                    isDark={isDark}
+                  />
+                  {(() => {
+                    const cat =
+                      categoriesList.find(
+                        (c) => c.id === ministryTreeCategoryId,
+                      ) ?? categoriesList[0]
+                    if (!cat) return null
                     const deptsInCat = ministriesList.filter(
                       (d) => d.categoryId === cat.id,
                     )
+                    const deptsInCatFiltered = filterDepartmentsBySearchQuery(
+                      deptsInCat,
+                      ministrySearchQuery,
+                    )
                     return (
                       <div
-                        key={cat.id}
+                        role="tabpanel"
+                        id={`ministry-cat-panel-${cat.id}`}
+                        aria-labelledby={`ministry-cat-tab-${cat.id}`}
                         style={{
-                          background: isDark
-                            ? 'rgba(255,255,255,0.04)'
-                            : '#fff',
-                          borderRadius: 14,
-                          minHeight: 280,
-                          overflow: 'hidden',
+                          minHeight: 260,
+                          maxHeight: 'min(70vh, 680px)',
                           display: 'flex',
                           flexDirection: 'column',
-                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`,
-                          boxShadow: isDark
-                            ? '0 2px 8px rgba(0,0,0,0.25)'
-                            : '0 2px 8px rgba(15, 23, 42, 0.04)',
+                          paddingTop: 4,
                         }}
                       >
                         <div
                           style={{
-                            padding: '14px 18px',
-                            fontSize: 14,
-                            fontWeight: 700,
-                            color: isDark ? '#cbd5e1' : '#334155',
-                            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6'}`,
-                            background: isDark
-                              ? 'rgba(255,255,255,0.04)'
-                              : '#f8fafc',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 10,
-                          }}
-                        >
-                          <span>
-                            {cat.name}
-                            {cat.nameEn && (
-                              <span
-                                style={{
-                                  fontWeight: 500,
-                                  color: '#94a3b8',
-                                  marginLeft: 6,
-                                  fontSize: 12,
-                                }}
-                              >
-                                {cat.nameEn}
-                              </span>
-                            )}
-                          </span>
-                          <span
-                            style={{
-                              padding: '2px 8px',
-                              borderRadius: 999,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: isDark ? '#94a3b8' : '#475569',
-                              background: isDark
-                                ? 'rgba(255,255,255,0.1)'
-                                : '#e2e8f0',
-                            }}
-                          >
-                            {deptsInCat.length}
-                          </span>
-                        </div>
-                        <div
-                          style={{
                             flex: 1,
-                            padding: '14px 16px',
+                            minHeight: 0,
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: 12,
+                            gap: 0,
                             overflowY: 'auto',
+                            WebkitOverflowScrolling: 'touch',
                           }}
                         >
                           {deptsInCat.length === 0 ? (
@@ -3638,264 +3362,816 @@ export function GovernmentInfoSection({
                                 flexDirection: 'column',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: 14,
-                                padding: '24px 0',
+                                gap: 18,
+                                padding: '40px 20px 48px',
+                                textAlign: 'center',
                               }}
                             >
-                              <span style={{ fontSize: 13, color: '#64748b' }}>
-                                등록된 부처 없음
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingMinistry(null)
-                                  setMinistryForm({
-                                    name: '',
-                                    parentId: '',
-                                    categoryId: cat.id,
-                                    thumbnailUrl: '',
-                                    description: '',
-                                    establishedDate: '',
-                                    abolishedDate: '',
-                                    successorId: '',
-                                  })
-                                  setMinistryView('form')
-                                }}
+                              <div
                                 style={{
-                                  padding: '9px 14px',
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  border: `1px solid ${isDark ? 'rgba(99,102,241,0.4)' : '#c7d2fe'}`,
-                                  borderRadius: 10,
+                                  width: 72,
+                                  height: 72,
+                                  borderRadius: 22,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
                                   background: isDark
-                                    ? 'rgba(99,102,241,0.15)'
-                                    : '#eef2ff',
-                                  color: isDark ? '#a5b4fc' : '#4338ca',
+                                    ? 'linear-gradient(145deg, rgba(99,102,241,0.22), rgba(99,102,241,0.08))'
+                                    : 'linear-gradient(145deg, #eef2ff, #f5f3ff)',
+                                  color: isDark ? '#a5b4fc' : MAIN,
+                                  boxShadow: isDark
+                                    ? 'inset 0 1px 0 rgba(255,255,255,0.06)'
+                                    : '0 8px 24px rgba(99, 102, 241, 0.12)',
+                                }}
+                                aria-hidden
+                              >
+                                <FiBriefcase size={30} strokeWidth={1.75} />
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 8,
+                                  maxWidth: 320,
                                 }}
                               >
+                                <span
+                                  style={{
+                                    fontSize: 16,
+                                    fontWeight: 700,
+                                    letterSpacing: '-0.03em',
+                                    color: isDark ? '#f1f5f9' : '#0f172a',
+                                  }}
+                                >
+                                  등록된 부처가 없습니다
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 13,
+                                    lineHeight: 1.55,
+                                    color: isDark ? '#94a3b8' : '#64748b',
+                                  }}
+                                >
+                                  이 카테고리에 첫 부처를 등록하면 목록과 계층이
+                                  여기에 표시됩니다.
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openMinistryCreateRootInCategory(cat.id)
+                                }
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  padding: '11px 20px',
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  border: 'none',
+                                  borderRadius: 12,
+                                  background: MAIN,
+                                  color: '#fff',
+                                  boxShadow:
+                                    '0 4px 14px rgba(99, 102, 241, 0.35)',
+                                }}
+                              >
+                                <FiPlus size={16} strokeWidth={2.25} />
                                 부처 등록
                               </button>
                             </div>
+                          ) : deptsInCatFiltered.length === 0 ? (
+                            <MinistryDeptSearchEmpty
+                              isDark={isDark}
+                              onClearSearch={() => setMinistrySearchQuery('')}
+                            />
                           ) : (
-                            <>
-                              {deptsInCat.map((dept) => {
-                                const parentName = dept.parentId
-                                  ? (ministriesList.find(
-                                      (d) => d.id === dept.parentId,
-                                    )?.name ?? '-')
-                                  : null
-                                return (
-                                  <div
-                                    key={dept.id}
-                                    style={{
-                                      padding: 14,
-                                      borderRadius: 12,
-                                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'}`,
-                                      background: isDark
-                                        ? 'rgba(255,255,255,0.04)'
-                                        : '#ffffff',
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        gap: 14,
-                                        alignItems: 'flex-start',
-                                      }}
-                                    >
-                                      {dept.thumbnailUrl ? (
-                                        <img
-                                          src={getUploadImageUrl(
-                                            dept.thumbnailUrl,
-                                          )}
-                                          alt=""
-                                          style={{
-                                            width: 48,
-                                            height: 48,
-                                            objectFit: 'cover',
-                                            borderRadius: 8,
-                                          }}
-                                          onError={(e) => {
-                                            e.currentTarget.style.display =
-                                              'none'
-                                          }}
-                                        />
-                                      ) : (
-                                        <div
-                                          style={{
-                                            width: 48,
-                                            height: 48,
-                                            borderRadius: 8,
-                                            background: isDark
-                                              ? 'rgba(255,255,255,0.07)'
-                                              : '#f1f5f9',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: isDark
-                                              ? '#64748b'
-                                              : '#94a3b8',
-                                            fontSize: 16,
-                                          }}
-                                        >
-                                          —
-                                        </div>
-                                      )}
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div
-                                          style={{
-                                            fontSize: 15,
-                                            fontWeight: 700,
-                                            color: isDark
-                                              ? '#f1f5f9'
-                                              : '#0f172a',
-                                          }}
-                                        >
-                                          {dept.name}
-                                        </div>
-                                        {parentName && (
-                                          <div
-                                            style={{
-                                              fontSize: 11,
-                                              color: isDark
-                                                ? '#64748b'
-                                                : '#64748b',
-                                              marginTop: 4,
-                                            }}
-                                          >
-                                            상위: {parentName}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <DepartmentTenuresBlock
-                                      departmentId={dept.id}
-                                    />
-                                    <DepartmentEventsBlock
-                                      departmentId={dept.id}
-                                    />
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        gap: 8,
-                                        marginTop: 12,
-                                      }}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setEditingMinistry(dept)
-                                          setMinistryForm({
-                                            name: dept.name,
-                                            parentId: dept.parentId ?? '',
-                                            categoryId: dept.categoryId ?? '',
-                                            thumbnailUrl:
-                                              dept.thumbnailUrl ?? '',
-                                            description: dept.description ?? '',
-                                            establishedDate:
-                                              dept.establishedDate
-                                                ? dept.establishedDate.slice(
-                                                    0,
-                                                    10,
-                                                  )
-                                                : '',
-                                            abolishedDate: dept.abolishedDate
-                                              ? dept.abolishedDate.slice(0, 10)
-                                              : '',
-                                            successorId: dept.successorId ?? '',
-                                          })
-                                          setMinistryView('form')
-                                        }}
-                                        style={{
-                                          padding: '7px 12px',
-                                          fontSize: 12,
-                                          cursor: 'pointer',
-                                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'}`,
-                                          borderRadius: 8,
-                                          background: isDark
-                                            ? 'rgba(255,255,255,0.06)'
-                                            : '#fff',
-                                          fontWeight: 600,
-                                          color: isDark ? '#cbd5e1' : '#475569',
-                                        }}
-                                      >
-                                        수정
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (
-                                            confirm(
-                                              `"${dept.name}" 부처를 삭제하시겠습니까?`,
-                                            )
-                                          )
-                                            administrationDepartmentApi
-                                              .delete(dept.id)
-                                              .then(loadMinistries)
-                                        }}
-                                        style={{
-                                          padding: '7px 12px',
-                                          fontSize: 12,
-                                          cursor: 'pointer',
-                                          border: `1px solid ${isDark ? 'rgba(220,38,38,0.4)' : '#fecaca'}`,
-                                          borderRadius: 8,
-                                          background: isDark
-                                            ? 'rgba(220,38,38,0.12)'
-                                            : '#fef2f2',
-                                          color: '#dc2626',
-                                          fontWeight: 600,
-                                        }}
-                                      >
-                                        삭제
-                                      </button>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingMinistry(null)
-                                  setMinistryForm({
-                                    name: '',
-                                    parentId: '',
-                                    categoryId: cat.id,
-                                    thumbnailUrl: '',
-                                    description: '',
-                                    establishedDate: '',
-                                    abolishedDate: '',
-                                    successorId: '',
-                                  })
-                                  setMinistryView('form')
-                                }}
-                                style={{
-                                  padding: '8px 12px',
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  border: '1px dashed #cbd5e1',
-                                  borderRadius: 8,
-                                  background: 'transparent',
-                                  color: '#64748b',
-                                  alignSelf: 'flex-start',
-                                }}
-                              >
-                                부처 추가
-                              </button>
-                            </>
+                            <MinistryDepartmentTree
+                              allDepartments={ministriesList}
+                              departmentsInCategory={deptsInCatFiltered}
+                              isDark={isDark}
+                              selectedDepartmentId={
+                                ministryBrowseDepartment?.id
+                              }
+                              onSelectDepartment={(d) =>
+                                setMinistryBrowseDepartment(d)
+                              }
+                              onAddRoot={() =>
+                                openMinistryCreateRootInCategory(cat.id)
+                              }
+                              onGoToPositionDefinitions={() =>
+                                setContentTab('positions')
+                              }
+                            />
                           )}
                         </div>
                       </div>
                     )
-                  })}
-                </div>
+                  })()}
+                </>
               )}
-            </>
+            </div>
           )}
         </section>
       )}
 
+      {contentTab === 'ministries' &&
+        effectiveCountryId &&
+        ministryFormModalOpen &&
+        createPortal(
+          <>
+            <ModalOverlay
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ministry-form-modal-title"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeMinistryFormModal()
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MinistryFormModalBox>
+                  <ModalHeader>
+                    <ModalTitle id="ministry-form-modal-title">
+                      {editingMinistry ? '부처 수정' : '부처 등록'}
+                    </ModalTitle>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={submitMinistryForm}
+                        style={{
+                          padding: '10px 20px',
+                          background: MAIN,
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 10,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(99,102,241,0.25)',
+                        }}
+                      >
+                        {editingMinistry ? '저장' : '등록'}
+                      </button>
+                      <ModalCloseButton
+                        type="button"
+                        onClick={closeMinistryFormModal}
+                        aria-label="닫기"
+                      >
+                        <FiX size={22} strokeWidth={2} />
+                      </ModalCloseButton>
+                    </div>
+                  </ModalHeader>
+                  <MinistryFormModalBody>
+                    <input
+                      ref={thumbnailInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        e.target.value = ''
+                        try {
+                          validateImageFile(file)
+                          setThumbnailUploading(true)
+                          const res = await uploadImage(file, 'ministries')
+                          setMinistryForm((f) => ({
+                            ...f,
+                            thumbnailUrl: res.url,
+                          }))
+                        } catch (err) {
+                          alert(
+                            err instanceof Error
+                              ? err.message
+                              : '이미지 업로드에 실패했습니다.',
+                          )
+                        } finally {
+                          setThumbnailUploading(false)
+                        }
+                      }}
+                    />
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 24,
+                      }}
+                    >
+                      <FormFieldRow>
+                        <FieldLabel>썸네일</FieldLabel>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                          }}
+                        >
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => thumbnailInputRef.current?.click()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                thumbnailInputRef.current?.click()
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              maxWidth: 280,
+                              aspectRatio: '16/10',
+                              borderRadius: 14,
+                              border: `2px dashed ${isDark ? 'rgba(255,255,255,0.15)' : '#e5e7eb'}`,
+                              background: ministryForm.thumbnailUrl
+                                ? 'transparent'
+                                : isDark
+                                  ? 'rgba(255,255,255,0.04)'
+                                  : '#fafafa',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                              cursor: thumbnailUploading ? 'wait' : 'pointer',
+                            }}
+                          >
+                            {thumbnailUploading ? (
+                              <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                                업로드 중…
+                              </span>
+                            ) : ministryForm.thumbnailUrl ? (
+                              <img
+                                src={getUploadImageUrl(
+                                  ministryForm.thumbnailUrl,
+                                )}
+                                alt=""
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                }}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none'
+                                }}
+                              />
+                            ) : (
+                              <span style={{ fontSize: 13, color: '#94a3b8' }}>
+                                이미지 선택
+                              </span>
+                            )}
+                          </div>
+                          {ministryForm.thumbnailUrl && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setMinistryForm((f) => ({
+                                  ...f,
+                                  thumbnailUrl: '',
+                                }))
+                              }}
+                              style={{
+                                alignSelf: 'flex-start',
+                                marginTop: 4,
+                                padding: '6px 12px',
+                                fontSize: 12,
+                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'}`,
+                                borderRadius: 10,
+                                background: isDark
+                                  ? 'rgba(255,255,255,0.06)'
+                                  : '#fff',
+                                color: isDark ? '#94a3b8' : '#64748b',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              제거
+                            </button>
+                          )}
+                        </div>
+                      </FormFieldRow>
+
+                      <FormFieldRow>
+                        <FieldLabel>
+                          부처명 <span style={{ color: '#ef4444' }}>*</span>
+                        </FieldLabel>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                          }}
+                        >
+                          <FormInputField
+                            value={ministryForm.name}
+                            onChange={(e) =>
+                              setMinistryForm((f) => ({
+                                ...f,
+                                name: e.target.value,
+                              }))
+                            }
+                            placeholder="예: 기획재정부"
+                          />
+                        </div>
+                      </FormFieldRow>
+
+                      <FormFieldRow>
+                        <FieldLabel>
+                          카테고리 <span style={{ color: '#ef4444' }}>*</span>
+                        </FieldLabel>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                          }}
+                        >
+                          <FormSelectBtn
+                            type="button"
+                            $hasValue={!!ministryForm.categoryId}
+                            onClick={() => setCategorySelectOpen(true)}
+                          >
+                            <span>
+                              {ministryForm.categoryId
+                                ? (categoriesList.find(
+                                    (c) => c.id === ministryForm.categoryId,
+                                  )?.name ?? '')
+                                : '선택'}
+                            </span>
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              style={{
+                                flexShrink: 0,
+                                marginLeft: 8,
+                                opacity: 0.5,
+                              }}
+                            >
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </FormSelectBtn>
+                          <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                            같은 카테고리에 여러 부처 등록 가능 (예:
+                            전쟁부·국방부)
+                          </span>
+                        </div>
+                      </FormFieldRow>
+
+                      <FormFieldRow>
+                        <FieldLabel>상위 부처</FieldLabel>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                          }}
+                        >
+                          <FormSelectBtn
+                            type="button"
+                            $hasValue={!!ministryForm.parentId}
+                            onClick={() => setParentSelectOpen(true)}
+                          >
+                            <span>
+                              {ministryForm.parentId
+                                ? (ministriesList.find(
+                                    (d) => d.id === ministryForm.parentId,
+                                  )?.name ?? '')
+                                : '선택'}
+                            </span>
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              style={{
+                                flexShrink: 0,
+                                marginLeft: 8,
+                                opacity: 0.5,
+                              }}
+                            >
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </FormSelectBtn>
+                        </div>
+                      </FormFieldRow>
+
+                      <FormFieldRow>
+                        <FieldLabel>설립일 · 폐지일</FieldLabel>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'row',
+                            gap: 10,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setEstablishedDateModalOpen(true)}
+                            style={{
+                              padding: '10px 18px',
+                              border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
+                              borderRadius: 12,
+                              fontSize: 13,
+                              color: ministryForm.establishedDate
+                                ? isDark
+                                  ? '#f1f5f9'
+                                  : '#111827'
+                                : isDark
+                                  ? '#64748b'
+                                  : '#9ca3af',
+                              background: ministryForm.establishedDate
+                                ? isDark
+                                  ? 'rgba(59,130,246,0.12)'
+                                  : '#eff6ff'
+                                : isDark
+                                  ? 'rgba(255,255,255,0.06)'
+                                  : '#fff',
+                              cursor: 'pointer',
+                              minWidth: 140,
+                            }}
+                          >
+                            {ministryForm.establishedDate
+                              ? ministryForm.establishedDate.replace(/-/g, '.')
+                              : '설립일 선택'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAbolishedDateModalOpen(true)}
+                            style={{
+                              padding: '10px 18px',
+                              border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#e5e7eb'}`,
+                              borderRadius: 12,
+                              fontSize: 13,
+                              color: ministryForm.abolishedDate
+                                ? isDark
+                                  ? '#f1f5f9'
+                                  : '#111827'
+                                : isDark
+                                  ? '#64748b'
+                                  : '#9ca3af',
+                              background: ministryForm.abolishedDate
+                                ? isDark
+                                  ? 'rgba(239,68,68,0.12)'
+                                  : '#fef2f2'
+                                : isDark
+                                  ? 'rgba(255,255,255,0.06)'
+                                  : '#fff',
+                              cursor: 'pointer',
+                              minWidth: 140,
+                            }}
+                          >
+                            {ministryForm.abolishedDate
+                              ? ministryForm.abolishedDate.replace(/-/g, '.')
+                              : '폐지일 선택'}
+                          </button>
+                        </div>
+                      </FormFieldRow>
+
+                      <FormFieldRow>
+                        <FieldLabel>후신 부처</FieldLabel>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                          }}
+                        >
+                          <FormSelectBtn
+                            type="button"
+                            $hasValue={!!ministryForm.successorId}
+                            onClick={() => setSuccessorSelectOpen(true)}
+                          >
+                            <span>
+                              {ministryForm.successorId
+                                ? (ministriesList.find(
+                                    (d) => d.id === ministryForm.successorId,
+                                  )?.name ?? '')
+                                : '선택'}
+                            </span>
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              style={{
+                                flexShrink: 0,
+                                marginLeft: 8,
+                                opacity: 0.5,
+                              }}
+                            >
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </FormSelectBtn>
+                        </div>
+                      </FormFieldRow>
+
+                      <FormFieldRow>
+                        <FieldLabel>설명</FieldLabel>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                          }}
+                        >
+                          <FormTextareaField
+                            value={ministryForm.description}
+                            onChange={(e) =>
+                              setMinistryForm((f) => ({
+                                ...f,
+                                description: e.target.value,
+                              }))
+                            }
+                            placeholder="역할, 담당 업무 등"
+                            rows={2}
+                          />
+                        </div>
+                      </FormFieldRow>
+
+                      {isDefenseRelatedCategory(
+                        categoriesList.find(
+                          (c) => c.id === ministryForm.categoryId,
+                        ) ?? null,
+                      ) ? (
+                        <>
+                          <div
+                            style={{
+                              marginTop: 8,
+                              paddingTop: 22,
+                              borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e9eef5'}`,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                marginBottom: 18,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 15,
+                                  fontWeight: 700,
+                                  color: isDark ? '#e2e8f0' : '#0f172a',
+                                  letterSpacing: '-0.02em',
+                                }}
+                              >
+                                국방·군사 기관 추가 정보
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.04em',
+                                  textTransform: 'uppercase',
+                                  color: isDark ? '#a5b4fc' : '#4338ca',
+                                  padding: '4px 10px',
+                                  borderRadius: 8,
+                                  background: isDark
+                                    ? 'rgba(99,102,241,0.15)'
+                                    : '#eef2ff',
+                                  border: `1px solid ${isDark ? 'rgba(165,180,252,0.25)' : '#c7d2fe'}`,
+                                }}
+                              >
+                                선택
+                              </span>
+                            </div>
+                            <p
+                              style={{
+                                margin: '0 0 18px',
+                                fontSize: 12.5,
+                                color: isDark ? '#94a3b8' : '#64748b',
+                                lineHeight: 1.55,
+                              }}
+                            >
+                              영문 명칭, 관할, 본부, 지휘체계 등을 나누어 적으면
+                              상세 화면에서 카드로 정리되어 보입니다. 저장 시
+                              설명 필드에 함께 기록됩니다.
+                            </p>
+                          </div>
+
+                          <FormFieldRow>
+                            <FieldLabel>영문·공식 명칭</FieldLabel>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6,
+                              }}
+                            >
+                              <FormInputField
+                                value={ministryForm.defenseOfficialNameEn}
+                                onChange={(e) =>
+                                  setMinistryForm((f) => ({
+                                    ...f,
+                                    defenseOfficialNameEn: e.target.value,
+                                  }))
+                                }
+                                placeholder="e.g. Ministry of National Defense"
+                              />
+                            </div>
+                          </FormFieldRow>
+
+                          <FormFieldRow>
+                            <FieldLabel>주요 임무·관할</FieldLabel>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6,
+                              }}
+                            >
+                              <FormTextareaField
+                                value={ministryForm.defenseMissionScope}
+                                onChange={(e) =>
+                                  setMinistryForm((f) => ({
+                                    ...f,
+                                    defenseMissionScope: e.target.value,
+                                  }))
+                                }
+                                placeholder="국방 정책 수립, 군 통수, 예산·전력 등"
+                                rows={3}
+                              />
+                            </div>
+                          </FormFieldRow>
+
+                          <FormFieldRow>
+                            <FieldLabel>본부·주요 거점</FieldLabel>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6,
+                              }}
+                            >
+                              <FormTextareaField
+                                value={ministryForm.defenseHeadquarters}
+                                onChange={(e) =>
+                                  setMinistryForm((f) => ({
+                                    ...f,
+                                    defenseHeadquarters: e.target.value,
+                                  }))
+                                }
+                                placeholder="예: 서울 용산, 세종 등"
+                                rows={2}
+                              />
+                            </div>
+                          </FormFieldRow>
+
+                          <FormFieldRow>
+                            <FieldLabel>지휘·산하 구조</FieldLabel>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6,
+                              }}
+                            >
+                              <FormTextareaField
+                                value={ministryForm.defenseOrgStructure}
+                                onChange={(e) =>
+                                  setMinistryForm((f) => ({
+                                    ...f,
+                                    defenseOrgStructure: e.target.value,
+                                  }))
+                                }
+                                placeholder="합참, 육·해·공군 본부, 국직 부대 등 관계"
+                                rows={3}
+                              />
+                            </div>
+                          </FormFieldRow>
+
+                          <FormFieldRow>
+                            <FieldLabel>국방비·병력·기타 참고</FieldLabel>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6,
+                              }}
+                            >
+                              <FormTextareaField
+                                value={ministryForm.defenseBudgetOrForcesNote}
+                                onChange={(e) =>
+                                  setMinistryForm((f) => ({
+                                    ...f,
+                                    defenseBudgetOrForcesNote: e.target.value,
+                                  }))
+                                }
+                                placeholder="공개 가능한 수준의 참고 수치·비고"
+                                rows={2}
+                              />
+                            </div>
+                          </FormFieldRow>
+                        </>
+                      ) : null}
+                    </div>
+                  </MinistryFormModalBody>
+                </MinistryFormModalBox>
+              </motion.div>
+            </ModalOverlay>
+            <DatePickerModal
+              isOpen={establishedDateModalOpen}
+              onClose={() => setEstablishedDateModalOpen(false)}
+              onSelect={(date) => {
+                setMinistryForm((f) => ({ ...f, establishedDate: date }))
+                setEstablishedDateModalOpen(false)
+                setAbolishedDateModalOpen(true)
+              }}
+              initialDate={ministryForm.establishedDate || undefined}
+              title="설립일 선택"
+            />
+            <DatePickerModal
+              isOpen={abolishedDateModalOpen}
+              onClose={() => setAbolishedDateModalOpen(false)}
+              onSelect={(date) => {
+                setMinistryForm((f) => ({ ...f, abolishedDate: date }))
+                setAbolishedDateModalOpen(false)
+              }}
+              initialDate={ministryForm.abolishedDate || undefined}
+              title="폐지일 선택"
+            />
+            <SelectModal
+              isOpen={categorySelectOpen}
+              onClose={() => setCategorySelectOpen(false)}
+              title="카테고리 선택"
+              options={
+                categoriesList.map((c) => ({
+                  value: c.id,
+                  label: `${c.name}${c.nameEn ? ` (${c.nameEn})` : ''}`,
+                })) as SelectOption[]
+              }
+              selectedValue={ministryForm.categoryId || undefined}
+              onSelect={(id) => {
+                setMinistryForm((f) => ({ ...f, categoryId: id }))
+                setCategorySelectOpen(false)
+              }}
+            />
+            <SelectModal
+              isOpen={parentSelectOpen}
+              onClose={() => setParentSelectOpen(false)}
+              title="상위 부처 선택"
+              options={
+                [
+                  { value: '', label: '없음' },
+                  ...ministriesList
+                    .filter(
+                      (d) => !editingMinistry || d.id !== editingMinistry.id,
+                    )
+                    .map((d) => ({ value: d.id, label: d.name })),
+                ] as SelectOption[]
+              }
+              selectedValue={ministryForm.parentId}
+              onSelect={(id) => {
+                setMinistryForm((f) => ({ ...f, parentId: id }))
+                setParentSelectOpen(false)
+              }}
+            />
+            <SelectModal
+              isOpen={successorSelectOpen}
+              onClose={() => setSuccessorSelectOpen(false)}
+              title="후신 부처 선택"
+              options={
+                [
+                  { value: '', label: '없음' },
+                  ...ministriesList
+                    .filter(
+                      (d) => !editingMinistry || d.id !== editingMinistry.id,
+                    )
+                    .map((d) => ({ value: d.id, label: d.name })),
+                ] as SelectOption[]
+              }
+              selectedValue={ministryForm.successorId}
+              onSelect={(id) => {
+                setMinistryForm((f) => ({ ...f, successorId: id }))
+                setSuccessorSelectOpen(false)
+              }}
+            />
+          </>,
+          document.body,
+        )}
       {contentTab === 'positions' && country && (
         <section aria-label="직위 정의(관직)">
           <PositionDefinitionsSection />
@@ -3916,18 +4192,9 @@ export function GovernmentInfoSection({
             country={country}
             onOpenMinistriesTab={(categoryId) => {
               setContentTab('ministries')
-              setMinistryView('form')
               setEditingMinistry(null)
-              setMinistryForm({
-                name: '',
-                parentId: '',
-                categoryId: categoryId ?? '',
-                thumbnailUrl: '',
-                description: '',
-                establishedDate: '',
-                abolishedDate: '',
-                successorId: '',
-              })
+              setMinistryForm(emptyMinistryFormFields(categoryId ?? '', ''))
+              setMinistryFormModalOpen(true)
             }}
           />
         </section>
@@ -5093,6 +5360,24 @@ export function GovernmentInfoSection({
           </CategoryBox>
         </ModalOverlay>
       )}
+
+      <MilitaryUnitFormModal
+        isOpen={militaryUnitModalOpen}
+        onClose={() => {
+          setMilitaryUnitModalOpen(false)
+          setMilitaryUnitEditingId(null)
+        }}
+        onSaved={() => {
+          loadMinistries()
+        }}
+        defaultCountryId={effectiveCountryId ?? null}
+        defaultAdministrationDepartmentId={ministryBrowseResolved?.id ?? null}
+        editingUnitId={militaryUnitEditingId}
+        lockCountryAndDepartment={
+          !militaryUnitEditingId &&
+          Boolean(effectiveCountryId && ministryBrowseResolved?.id)
+        }
+      />
     </div>
   )
 }

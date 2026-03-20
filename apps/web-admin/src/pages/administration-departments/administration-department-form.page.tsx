@@ -94,7 +94,6 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     parentId: '',
     parentName: '',
     description: '',
-    hasMilitaryUnits: false,
   })
 
   // 역대 장관 관리
@@ -648,34 +647,19 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
                     </FormGroup>
 
                     <FormGroup>
-                      <CheckboxCard>
-                        <CheckboxIcon $checked={formData.hasMilitaryUnits}>
-                          {formData.hasMilitaryUnits ? (
-                            <FiCheck size={20} />
-                          ) : (
-                            <FiShield size={20} />
-                          )}
-                        </CheckboxIcon>
-                        <CheckboxContent>
-                          <CheckboxLabel>
-                            <input
-                              type="checkbox"
-                              checked={formData.hasMilitaryUnits}
-                              onChange={(e) => {
-                                playClickSound()
-                                setFormData({
-                                  ...formData,
-                                  hasMilitaryUnits: e.target.checked,
-                                })
-                              }}
-                            />
-                            <span>군부대 관할 부처</span>
-                          </CheckboxLabel>
-                          <CheckboxHint>
-                            이 부처가 군부대를 관할하는 경우 체크하세요
-                          </CheckboxHint>
-                        </CheckboxContent>
-                      </CheckboxCard>
+                      <Hint style={{ lineHeight: 1.6 }}>
+                        <FiShield
+                          size={16}
+                          style={{
+                            verticalAlign: 'text-bottom',
+                            marginRight: 6,
+                          }}
+                        />
+                        군부대와의 연결은 <strong>군부대</strong> 데이터에서
+                        해당 행정 부처를 지정(
+                        <code style={{ fontSize: 12 }}>administrationDepartmentId</code>
+                        )하면 자동으로 반영됩니다.
+                      </Hint>
                     </FormGroup>
                   </FormGrid>
                 </FormContent>

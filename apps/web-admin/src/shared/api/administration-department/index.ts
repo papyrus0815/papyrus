@@ -6,6 +6,13 @@ export type AdministrationDepartmentCategory = {
   nameEn: string | null
 }
 
+/** API `MilitaryUnit` 요약 — 부처에 FK로 연결된 부대 */
+export type AdministrationDepartmentMilitaryUnit = {
+  id: string
+  name: string
+  unitType: string | null
+}
+
 export type AdministrationDepartment = {
   id: string
   name: string
@@ -19,6 +26,8 @@ export type AdministrationDepartment = {
   abolishedDate?: string | null
   successorId?: string | null
   successor?: { id: string; name: string } | null
+  /** `MilitaryUnit.administrationDepartmentId` 역방향 */
+  militaryUnits?: AdministrationDepartmentMilitaryUnit[]
   createdAt: string
   updatedAt: string
 }

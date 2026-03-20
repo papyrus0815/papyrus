@@ -21,8 +21,14 @@ import {
   FiAward,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
+
+import { pathKeys } from '@/shared/router'
 import styled from 'styled-components'
 
+import {
+  militaryUnitIconVariant,
+  militaryUnitTypeLabelKo,
+} from '@/shared/lib/military-unit-type-label'
 import type { AdministrationDepartment } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -115,42 +121,6 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
       countryName: byCountryId[d.countryId] ?? d.countryId,
     }))
   }, [departments, modernCountries, historicalCountries])
-
-  // 국방부 산하 군부대 목록 (임시 데이터)
-  const militaryUnits = [
-    {
-      id: 'mu-1',
-      name: '육군본부',
-      type: 'army',
-      commander: '김육군 대장',
-      established: '1948.08.15',
-      personnel: '약 50만명',
-    },
-    {
-      id: 'mu-2',
-      name: '해군본부',
-      type: 'navy',
-      commander: '이해군 대장',
-      established: '1945.11.11',
-      personnel: '약 7만명',
-    },
-    {
-      id: 'mu-3',
-      name: '공군본부',
-      type: 'air-force',
-      commander: '박공군 대장',
-      established: '1949.10.01',
-      personnel: '약 6.5만명',
-    },
-    {
-      id: 'mu-4',
-      name: '해병대사령부',
-      type: 'marines',
-      commander: '최해병 중장',
-      established: '1949.04.15',
-      personnel: '약 2.9만명',
-    },
-  ]
 
   const uniqueCountries = Array.from(
     new Set(
@@ -844,70 +814,92 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                           </HierarchySection>
                         </DetailCard>
 
-                        {/* 관할 군부대 (국방부인 경우에만 표시) */}
-                        {selectedDept.hasMilitaryUnits && (
+                        {/* 관할 군부대 — DB: MilitaryUnit.administrationDepartmentId */}
+                        {(selectedDept.militaryUnits?.length ?? 0) > 0 && (
                           <DetailCard>
                             <CardSectionTitle>
                               <FiShield size={16} />
-                              관할 군부대 ({militaryUnits.length}개)
+                              연결된 군부대 (
+                              {selectedDept.militaryUnits?.length ?? 0}개)
                             </CardSectionTitle>
                             <MilitaryUnitsSection>
                               <MilitaryUnitsGrid>
-                                {militaryUnits.map((unit) => (
-                                  <MilitaryUnitCard key={unit.id}>
-                                    <MilitaryUnitHeader>
-                                      <MilitaryUnitIcon $type={unit.type}>
-                                        <FiShield size={20} />
-                                      </MilitaryUnitIcon>
-                                      <MilitaryUnitInfo>
-                                        <MilitaryUnitName>
-                                          {unit.name}
-                                        </MilitaryUnitName>
-                                        <MilitaryUnitMeta>
-                                          {unit.type === 'army' && '육군'}
-                                          {unit.type === 'navy' && '해군'}
-                                          {unit.type === 'air-force' && '공군'}
-                                          {unit.type === 'marines' && '해병대'}
-                                        </MilitaryUnitMeta>
-                                      </MilitaryUnitInfo>
-                                    </MilitaryUnitHeader>
-                                    <MilitaryUnitDetails>
-                                      <MilitaryUnitDetailRow>
-                                        <MilitaryUnitDetailLabel>
-                                          지휘관
-                                        </MilitaryUnitDetailLabel>
-                                        <MilitaryUnitDetailValue>
-                                          {unit.commander}
-                                        </MilitaryUnitDetailValue>
-                                      </MilitaryUnitDetailRow>
-                                      <MilitaryUnitDetailRow>
-                                        <MilitaryUnitDetailLabel>
-                                          창설일
-                                        </MilitaryUnitDetailLabel>
-                                        <MilitaryUnitDetailValue>
-                                          {unit.established}
-                                        </MilitaryUnitDetailValue>
-                                      </MilitaryUnitDetailRow>
-                                      <MilitaryUnitDetailRow>
-                                        <MilitaryUnitDetailLabel>
-                                          병력
-                                        </MilitaryUnitDetailLabel>
-                                        <MilitaryUnitDetailValue>
-                                          {unit.personnel}
-                                        </MilitaryUnitDetailValue>
-                                      </MilitaryUnitDetailRow>
-                                    </MilitaryUnitDetails>
-                                  </MilitaryUnitCard>
-                                ))}
+                                {(selectedDept.militaryUnits ?? []).map(
+                                  (unit) => {
+                                    const iconKey = militaryUnitIconVariant(
+                                      unit.unitType,
+                                    )
+                                    return (
+                                      <MilitaryUnitCard
+                                        key={unit.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => {
+                                          playClickSound()
+                                          navigate(
+                                            pathKeys.history.countryGovernment(
+                                              selectedDept.countryId,
+                                            ),
+                                          )
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (
+                                            e.key === 'Enter' ||
+                                            e.key === ' '
+                                          ) {
+                                            e.preventDefault()
+                                            navigate(
+                                              pathKeys.history.countryGovernment(
+                                                selectedDept.countryId,
+                                              ),
+                                            )
+                                          }
+                                        }}
+                                      >
+                                        <MilitaryUnitHeader>
+                                          <MilitaryUnitIcon $type={iconKey}>
+                                            <FiShield size={20} />
+                                          </MilitaryUnitIcon>
+                                          <MilitaryUnitInfo>
+                                            <MilitaryUnitName>
+                                              {unit.name}
+                                            </MilitaryUnitName>
+                                            <MilitaryUnitMeta>
+                                              {militaryUnitTypeLabelKo(
+                                                unit.unitType,
+                                              )}
+                                            </MilitaryUnitMeta>
+                                          </MilitaryUnitInfo>
+                                        </MilitaryUnitHeader>
+                                        <MilitaryUnitDetails>
+                                          <MilitaryUnitDetailRow>
+                                            <MilitaryUnitDetailLabel>
+                                              부대 ID
+                                            </MilitaryUnitDetailLabel>
+                                            <MilitaryUnitDetailValue
+                                              style={{
+                                                fontFamily: 'monospace',
+                                                fontSize: 12,
+                                              }}
+                                            >
+                                              {unit.id}
+                                            </MilitaryUnitDetailValue>
+                                          </MilitaryUnitDetailRow>
+                                        </MilitaryUnitDetails>
+                                      </MilitaryUnitCard>
+                                    )
+                                  },
+                                )}
                               </MilitaryUnitsGrid>
                               <InfoBox>
                                 <FiAlertCircle size={16} />
                                 <InfoBoxContent>
-                                  <InfoBoxTitle>군부대 연결</InfoBoxTitle>
-                                  <InfoBoxText>
-                                    이 부처는 군부대를 관할합니다. 각 군부대
-                                    카드를 클릭하면 상세 정보를 확인할 수
-                                    있습니다.
+                                <InfoBoxTitle>군부대 연결</InfoBoxTitle>
+                                <InfoBoxText>
+                                    부대는 국가 상세 → 행정조직 → 중앙부처에서
+                                    해당 부처를 연「군부대 등록」으로 추가하면
+                                    여기에 표시됩니다. 카드를 누르면 그 국가의
+                                    행정조직 화면으로 이동합니다.
                                   </InfoBoxText>
                                 </InfoBoxContent>
                               </InfoBox>

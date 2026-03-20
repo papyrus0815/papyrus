@@ -237,6 +237,18 @@ enum MilitaryUnitType {
   OTHER
 }
 
+/// 군종(육·해·공·해병 등) — 부대 메타데이터
+enum MilitaryBranch {
+  ARMY
+  NAVY
+  AIR_FORCE
+  MARINE_CORPS
+  COAST_GUARD
+  SPACE_FORCE
+  JOINT
+  OTHER
+}
+
 // ========================
 // Weapon Models (무기 관련 모델)
 // ========================
@@ -515,6 +527,10 @@ model NavalVessel {
   /// 기타 특징 (예: 스텔스, 이지스)
   features    String? @db.VarChar(255)
 
+  /// 배속 군부대(함대·전대·기지 등) — 함이 어느 부대 소속인지
+  militaryUnitId String?       @map("military_unit_id") @db.Char(36)
+  militaryUnit   MilitaryUnit? @relation(fields: [militaryUnitId], references: [id], onDelete: SetNull)
+
   // --- 관계 필드
   /// 소속 국가
   country         Country?                @relation(fields: [countryId], references: [id], onDelete: SetNull)
@@ -528,6 +544,7 @@ model NavalVessel {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId])
+  @@index([militaryUnitId], name: "idx_naval_vessel_military_unit_id")
   @@map("naval_vessels")
 }
 
@@ -720,20 +737,50 @@ model MilitaryUnit {
   /// 상위 부대의 외래 키 (자기 참조)
   parentUnitId String? @map("parent_unit_id") @db.Char(36)
 
+  /// 행정 부처/기관(중앙부처 UI)과의 선택적 연결 — 국방부·합참 등 노드와 군사 부대 트리를 동일 기관으로 엮을 때
+  administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
+
+  /// 군종 (육군·해군·공군 등)
+  branch MilitaryBranch? @map("branch")
+
+  /// 별칭·약칭
+  nickname String? @db.VarChar(200)
+  /// 표어·모토
+  motto    String? @db.VarChar(500)
+  /// 주둔지·본부·거점 (자유 서술)
+  garrison String? @db.VarChar(500)
+  /// 병력·정원 (자유 서술, 예: "약 1만 명")
+  strength String? @db.VarChar(200)
+  /// 휘장·식별표지 이미지 URL
+  insigniaUrl String? @map("insignia_url") @db.VarChar(500)
+  /// 주요 임무
+  primaryMission String? @map("primary_mission") @db.Text
+  /// 관할 구역·임무
+  jurisdiction     String? @db.Text
+  /// 주요 전투·작전 이력
+  notableBattles String? @map("notable_battles") @db.Text
+  /// 훈장·표창 등
+  honors         String? @db.Text
+
   /// 부대에 대한 상세 설명
   description String? @db.Text
 
   // --- 관계 필드
   /// 소속 국가
-  country    Country?                 @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  country                  Country?                  @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 연결된 행정 부처(국방부 본부, 군 참모부 등)
+  administrationDepartment AdministrationDepartment? @relation("DeptMilitaryUnits", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
   /// 상위 부대
-  parentUnit MilitaryUnit?            @relation("UnitHierarchy", fields: [parentUnitId], references: [id], onDelete: SetNull)
+  parentUnit               MilitaryUnit?             @relation("UnitHierarchy", fields: [parentUnitId], references: [id], onDelete: SetNull)
   /// 하위 부대들
-  subUnits   MilitaryUnit[]           @relation("UnitHierarchy")
+  subUnits                 MilitaryUnit[]            @relation("UnitHierarchy")
   /// 지휘관 기록
-  commanders MilitaryUnitCommander[]
+  commanders               MilitaryUnitCommander[]
   /// 참전 기록
-  wars       WarHistoryMilitaryUnit[]
+  wars                     WarHistoryMilitaryUnit[]
+
+  /// 이 부대(함대·전대 등)에 배속된 함선 — 해군 ORBAT
+  assignedNavalVessels NavalVessel[]
 
   // 🆕 정규화된 군사 사건 관계
   sideDeployedUnits    SideDeployedUnit[]
@@ -745,6 +792,8 @@ model MilitaryUnit {
 
   @@index([countryId])
   @@index([parentUnitId])
+  @@index([administrationDepartmentId], name: "idx_military_unit_adminDeptId")
+  @@index([branch], name: "idx_military_unit_branch")
   @@map("military_units")
 }
 
@@ -768,6 +817,8 @@ model MilitaryUnitCommander {
   startDate DateTime? @map("start_date")
   /// 지휘 종료일
   endDate   DateTime? @map("end_date")
+  /// 지휘 임기 차수 (제N대 등)
+  termNumber Int?     @map("term_number")
   /// 비고
   notes     String?   @db.Text
 

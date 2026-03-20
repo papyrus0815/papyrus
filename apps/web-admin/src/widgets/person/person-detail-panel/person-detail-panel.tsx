@@ -1311,6 +1311,23 @@ const BioContent = styled.div`
   & p:last-child {
     margin-bottom: 0;
   }
+  /* 전역 * { padding:0 } 때문에 목록 들여쓰기가 사라짐 — 에디터(EditorContent)와 동일하게 복원 */
+  & ul,
+  & ol {
+    margin: 8px 0;
+    padding-left: 28px;
+    list-style-position: outside;
+  }
+  & ul {
+    list-style-type: disc;
+  }
+  & ol {
+    list-style-type: decimal;
+  }
+  & li {
+    margin: 4px 0;
+    line-height: 1.55;
+  }
 `
 
 const BioEditActions = styled.div`
