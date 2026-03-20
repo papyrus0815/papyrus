@@ -3363,8 +3363,17 @@ const PositionFilterTabs = styled.div`
   flex-wrap: nowrap;
   overflow-x: auto;
   max-width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   &::-webkit-scrollbar {
-    display: none;
+    height: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15, 23, 42, 0.18)'};
   }
 `
 

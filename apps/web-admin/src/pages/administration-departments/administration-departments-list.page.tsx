@@ -1539,8 +1539,11 @@ const RightPanel = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
   max-height: calc(100vh - 200px);
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
 
   &::-webkit-scrollbar {
@@ -1619,7 +1622,7 @@ const IconActionButton = styled.button<{ $danger?: boolean }>`
   }
 `
 
-// 탭 네비게이션
+// 탭 네비게이션 — 좁은 우측 패널에서 flex:1 압축으로 잘리지 않게 가로 스크롤
 const TabNavigation = styled.div`
   display: flex;
   gap: 8px;
@@ -1628,10 +1631,26 @@ const TabNavigation = styled.div`
   border: 1px solid rgba(20, 19, 34, 0.08);
   border-radius: 20px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.2);
+  }
 `
 
 const TabButton = styled.button<{ $active: boolean }>`
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1646,6 +1665,7 @@ const TabButton = styled.button<{ $active: boolean }>`
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 
   svg {
     flex-shrink: 0;

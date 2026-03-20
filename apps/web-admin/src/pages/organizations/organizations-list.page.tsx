@@ -263,9 +263,22 @@ const DetailTabBar = styled.div`
   background: #fff;
   border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  &::-webkit-scrollbar {
+    height: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.15);
+  }
 `
 
 const DetailTabBtn = styled.button<{ $active?: boolean }>`
+  flex: 0 0 auto;
   padding: 12px 16px;
   font-size: 13px;
   font-weight: ${(p) => (p.$active ? 700 : 500)};

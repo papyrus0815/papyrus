@@ -27,6 +27,7 @@ export const TabContentPane = styled.div`
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   padding: 0;
   width: 100%;
 `

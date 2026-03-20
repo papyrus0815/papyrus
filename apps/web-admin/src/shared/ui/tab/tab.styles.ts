@@ -14,9 +14,16 @@ export const PillTabNav = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px;
+  /* 세로로 글자가 잘리지 않도록 여유 확보 (한글/굵은 글꼴 대비) */
+  padding: 10px 10px 12px;
   margin-bottom: 20px;
-  width: fit-content;
+  min-height: 52px;
+  box-sizing: border-box;
+  /* 부모(overflow:hidden 카드 등) 안에서 너비를 넘지 않게 하고, 탭이 많을 때 가로 스크롤 */
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-self: stretch;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.05)'
@@ -24,20 +31,34 @@ export const PillTabNav = styled.div`
   border: ${({ theme }) =>
     theme.mode === 'dark' ? '1px solid rgba(255,255,255,0.08)' : 'none'};
   border-radius: 20px;
+  /* 가로만 스크롤 — overflow-y: hidden 은 한글 글리프 상·하단이 잘리는 원인이 됨 */
   overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: manipulation;
   &::-webkit-scrollbar {
-    display: none;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.2)'
+        : 'rgba(15, 23, 42, 0.2)'};
   }
 `
 
 /** Pill형 탭 버튼 */
 export const PillTabButton = styled.button<{ $active?: boolean }>`
   flex: 0 0 auto;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 18px;
+  padding: 11px 18px;
+  min-height: 40px;
+  box-sizing: border-box;
   border-radius: 14px;
   border: none;
   background: ${({ $active, theme }) =>
@@ -54,6 +75,7 @@ export const PillTabButton = styled.button<{ $active?: boolean }>`
       : theme.colors.text.secondary};
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? '600' : '500')};
+  line-height: 1.45;
   cursor: pointer;
   transition:
     color 0.15s ease,

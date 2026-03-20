@@ -1868,6 +1868,9 @@ export function GovernmentInfoSection({
         padding: '36px 32px 48px',
         minHeight: 'calc(100vh - 200px)',
         position: 'relative',
+        width: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
       }}
     >
       {/* 헤더 */}

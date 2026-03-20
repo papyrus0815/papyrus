@@ -82,7 +82,11 @@ export interface PositionDefinitionsSectionProps {
 }
 
 /* ─── 스타일 ─── */
-const Section = styled.section``
+const Section = styled.section`
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+`
 
 const SectionHead = styled.div`
   display: flex;
