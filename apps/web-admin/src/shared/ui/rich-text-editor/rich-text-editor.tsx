@@ -4,6 +4,7 @@
  * 프로젝트 디자인 시스템에 맞춘 커스텀 스타일
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+
 import { createPortal } from 'react-dom'
 
 import {
@@ -37,9 +38,9 @@ import {
   searchMentionEntities,
 } from '@/shared/lib/mention/mention-system'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
+import { scrollbarMixin } from '@/shared/styles/mixins'
 import { PROSE_HR_HTML, proseHrStyles } from '@/shared/styles/prose-hr'
 import { Z_INDEX } from '@/shared/styles/z-index'
-import { scrollbarMixin } from '@/shared/styles/mixins'
 
 // 멘션 엔티티 props 타입
 export interface MentionExtensionProps {
@@ -1566,7 +1567,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const handleContentChange = useCallback(() => {
     if (!editorRef.current) return
 
-    const html = editorRef.current.innerHTML
+    const html = sanitizeRichTextHtml(editorRef.current.innerHTML)
     onChange(html)
     updateFormatState()
     requestAnimationFrame(scrollCursorIntoView)
@@ -1741,11 +1742,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         let n: Node | null = range.startContainer
         if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
         const block = n instanceof Element ? n.closest('li') : null
-        if (
-          !block ||
-          !root.contains(block) ||
-          !block.closest('ul, ol')
-        ) {
+        if (!block || !root.contains(block) || !block.closest('ul, ol')) {
           return
         }
         e.preventDefault()
@@ -1816,7 +1813,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
       }
     },
-    [applyFormat, tryConvertListOnSpace, handleContentChange, updateFormatState],
+    [
+      applyFormat,
+      tryConvertListOnSpace,
+      handleContentChange,
+      updateFormatState,
+    ],
   )
 
   // 이미지 업로드
@@ -2562,6 +2564,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={isBold}
           title="굵게 (Ctrl+B)"
+          aria-label="굵게 (Ctrl+B)"
+          aria-pressed={isBold}
         >
           <FiBold />
         </ToolbarButton>
@@ -2573,6 +2577,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={isItalic}
           title="기울임 (Ctrl+I)"
+          aria-label="기울임 (Ctrl+I)"
+          aria-pressed={isItalic}
         >
           <FiItalic />
         </ToolbarButton>
@@ -2584,6 +2590,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={isStrike}
           title="취소선"
+          aria-label="취소선"
+          aria-pressed={isStrike}
         >
           <FiMinus />
         </ToolbarButton>
@@ -2596,6 +2604,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={currentHeading === 1}
           title="제목 1"
+          aria-label="제목 1"
+          aria-pressed={currentHeading === 1}
         >
           <FiType />
           <span style={{ fontSize: '10px', marginLeft: '2px' }}>1</span>
@@ -2608,6 +2618,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={currentHeading === 2}
           title="제목 2"
+          aria-label="제목 2"
+          aria-pressed={currentHeading === 2}
         >
           <FiType />
           <span style={{ fontSize: '10px', marginLeft: '2px' }}>2</span>
@@ -2620,6 +2632,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={currentHeading === 3}
           title="제목 3"
+          aria-label="제목 3"
+          aria-pressed={currentHeading === 3}
         >
           <FiType />
           <span style={{ fontSize: '10px', marginLeft: '2px' }}>3</span>
@@ -2633,6 +2647,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={isBulletList}
           title="순서 없는 목록"
+          aria-label="순서 없는 목록"
+          aria-pressed={isBulletList}
         >
           <FiList />
         </ToolbarButton>
@@ -2644,6 +2660,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={isOrderedList}
           title="순서 있는 목록"
+          aria-label="순서 있는 목록"
+          aria-pressed={isOrderedList}
         >
           <FiList style={{ transform: 'rotate(90deg)' }} />
         </ToolbarButton>
@@ -2655,6 +2673,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             handleSetLink()
           }}
           title="링크 삽입/편집"
+          aria-label="링크 삽입/편집"
         >
           <FiLink />
         </ToolbarButton>
@@ -2666,6 +2685,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           disabled={selectedText.length === 0}
           title="엔티티 연결 (문구 선택 후 클릭)"
+          aria-label="엔티티 연결 (문구 선택 후 클릭)"
           style={{
             background:
               selectedText.length > 0 ? 'rgba(245, 158, 11, 0.08)' : undefined,
@@ -2685,6 +2705,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           disabled={selectedText.length === 0}
           title="용어 연결 (문구 선택 후 클릭)"
+          aria-label="용어 연결 (문구 선택 후 클릭)"
         >
           <FiType />
         </ToolbarButton>
@@ -2697,6 +2718,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             }}
             disabled={selectedText.length === 0}
             title="설명 넣기 (설명을 달 문구를 선택한 뒤 클릭)"
+            aria-label="설명 넣기 (설명을 달 문구를 선택한 뒤 클릭)"
           >
             <FiMessageSquare />
           </ToolbarButton>
@@ -2709,6 +2731,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           disabled={!onImageUpload}
           title="이미지 삽입"
+          aria-label="이미지 삽입"
         >
           <FiImage />
         </ToolbarButton>
@@ -2721,6 +2744,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           $active={isCode}
           title="인라인 코드"
+          aria-label="인라인 코드"
+          aria-pressed={isCode}
         >
           <FiCode />
         </ToolbarButton>
@@ -2735,6 +2760,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               setColorPickerVisible(!colorPickerVisible)
             }}
             title="텍스트 색상"
+            aria-label="텍스트 색상"
+            aria-expanded={colorPickerVisible}
+            aria-haspopup="true"
             style={{
               background: colorPickerVisible
                 ? 'rgba(79, 70, 229, 0.1)'
@@ -2774,6 +2802,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             handleContentChange()
           }}
           title="수평선 삽입"
+          aria-label="수평선 삽입"
         >
           <FiMoreHorizontal />
         </ToolbarButton>
@@ -2908,9 +2937,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               }}
               disabled={selectedText.length === 0}
               title={
-                selectedText.length === 0
-                  ? '먼저 문구를 선택하세요'
-                  : undefined
+                selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined
               }
             >
               <FiLink />
@@ -2924,9 +2951,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               }}
               disabled={selectedText.length === 0}
               title={
-                selectedText.length === 0
-                  ? '먼저 문구를 선택하세요'
-                  : undefined
+                selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined
               }
             >
               <FiType />

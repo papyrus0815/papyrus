@@ -6,7 +6,22 @@ import type { Config } from 'dompurify'
  * 붙여넣기·외부에서 주입된 value 로드 시 XSS 완화용.
  */
 const RICH_TEXT_PURIFY_CONFIG: Config = {
-  ADD_TAGS: ['figure', 'figcaption', 'img', 'hr'],
+  ADD_TAGS: [
+    'figure',
+    'figcaption',
+    'img',
+    'hr',
+    'table',
+    'thead',
+    'tbody',
+    'tfoot',
+    'tr',
+    'th',
+    'td',
+    'caption',
+    'colgroup',
+    'col',
+  ],
   ADD_ATTR: [
     'href',
     'target',
@@ -28,6 +43,15 @@ const RICH_TEXT_PURIFY_CONFIG: Config = {
     'data-type',
     'id',
     'role',
+    'colspan',
+    'rowspan',
+    'scope',
+    'abbr',
+    'headers',
+    'align',
+    'valign',
+    'border',
+    'span',
   ],
   ALLOW_ARIA_ATTR: true,
 }
