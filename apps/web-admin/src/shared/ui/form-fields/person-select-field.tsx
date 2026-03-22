@@ -26,6 +26,8 @@ export interface PersonSelectFieldProps {
   required?: boolean
   /** 라벨 아래·컨트롤 아래에 표시할 설명 (통일된 스타일) */
   hint?: string
+  /** 인물 목록 로딩 등으로 선택 비활성화 */
+  disabled?: boolean
   value: string
   selectedPerson: Pick<
     PersonResponseDto,
@@ -57,6 +59,7 @@ export const PersonSelectField: React.FC<PersonSelectFieldProps> = ({
   label = '인물',
   required = false,
   hint,
+  disabled = false,
   value,
   selectedPerson,
   persons,
@@ -75,7 +78,8 @@ export const PersonSelectField: React.FC<PersonSelectFieldProps> = ({
         <FieldControl $variant="person">
           <PersonSelectButton
             type="button"
-            onClick={() => onModalOpenChange(true)}
+            disabled={disabled}
+            onClick={() => !disabled && onModalOpenChange(true)}
             $hasValue={!!value}
           >
             <PersonAvatar $hasImage={!!selectedPerson?.profileImageUrl}>

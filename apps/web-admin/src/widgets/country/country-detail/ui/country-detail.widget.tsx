@@ -21,7 +21,7 @@ import { MapRegionSection } from './map-region-section.widget'
 import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
 import { PersonListSection } from './person-list-section.widget'
 import { PersonStatsSection } from './person-stats-section.widget'
-import { PersonTabContent } from './person-tab-content'
+import { CountryElectionsSection } from './country-elections-section.widget'
 
 // 목업 데이터 (지도 및 지역 탭용)
 const mockCities = [
@@ -77,6 +77,7 @@ export interface CountryDetailProps {
     | 'linked-historical'
     | 'regions'
     | 'government'
+    | 'elections'
   onDetailTabChange?: (
     tab:
       | 'person'
@@ -85,6 +86,7 @@ export interface CountryDetailProps {
       | 'linked-historical'
       | 'regions'
       | 'government'
+      | 'elections'
       | null,
   ) => void
   /** 인물 탭 내 하위 탭(통계/리스트) 클릭 시 URL 갱신 (?tab=). 역대 수반은 행정조직 탭에서. */
@@ -161,6 +163,8 @@ function CountryDetailInner({
       setActiveSubTab('map')
     } else if (initialDetailTab === 'government') {
       setActiveSubTab('government')
+    } else if (initialDetailTab === 'elections') {
+      setActiveSubTab('elections')
     }
   }, [initialDetailTab])
 
@@ -171,6 +175,7 @@ function CountryDetailInner({
       else if (tab === 'person') onDetailTabChange?.('person')
       else if (tab === 'map') onDetailTabChange?.('regions')
       else if (tab === 'government') onDetailTabChange?.('government')
+      else if (tab === 'elections') onDetailTabChange?.('elections')
     },
     [onDashboardView, onDetailTabChange],
   )
@@ -360,6 +365,12 @@ function CountryDetailInner({
 
                       {activeSubTab === 'treaty' && (
                         <TreatySectionWidget country={country} />
+                      )}
+
+                      {activeSubTab === 'elections' && (
+                        <CountryStyles.TabContentPane>
+                          <CountryElectionsSection countryId={country.id} />
+                        </CountryStyles.TabContentPane>
                       )}
 
                       {activeSubTab === 'person' && (

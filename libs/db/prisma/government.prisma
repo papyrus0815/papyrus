@@ -185,6 +185,8 @@ model Cabinet {
   memberTenures GovernmentPositionTenure[] @relation("CabinetMembers")
   account       Account?                  @relation("AccountCabinets", fields: [accountId], references: [id], onDelete: SetNull)
   treatySignatories TreatySignatory[]     @relation("TreatySignatoryCabinet")
+  /// 연정·여당 등 이 행정부를 지지한 정당(행정부 단위 기록)
+  politicalParties CabinetPoliticalParty[] @relation("CabinetPoliticalParties")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -290,6 +292,10 @@ model GovernmentPositionTenure {
   /// 재임 기간 중 업적·한일 (사건과 별도 개념)
   achievements       TenureAchievement[]           @relation("TenureAchievements")
   administrationDepartment AdministrationDepartment? @relation("TenureDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
+
+  /// 이 공직 임기가 특정 선거의 당선으로 시작된 경우(대통령·국회의원 등). 1:1.
+  electionCandidacyId String? @unique @map("election_candidacy_id") @db.Char(36)
+  electionCandidacy   ElectionCandidacy? @relation("TenureFromElectionCandidacy", fields: [electionCandidacyId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

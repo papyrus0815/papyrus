@@ -1,0 +1,391 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                         ELECTION & VOTING DOMAIN                             ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 선거 단위(Election) · 선거구(ElectoralDistrict) · 후보(ElectionCandidacy) · 집계(ElectionResult)
+/// + 국민투표/다중 선택안(ElectionBallotOption / ElectionBallotOptionResult)
+/// + 정당 일반 소속(PoliticalPartyMembership) — 지도부(PoliticalPartyLeadership)와 별개
+/// + 행정부(Cabinet)와 정당의 연정·여당 관계(CabinetPoliticalParty)
+///
+/// 연결 원칙:
+/// - 인물(Person)은 후보(Candidacy)·당원(Membership)·재임(Tenure)으로 각각 다른 행에 표현
+/// - 당선으로 임기가 생기면 GovernmentPositionTenure.electionCandidacyId로 후보와 1:1 연결(선택)
+/// - 행정부는 Cabinet + Tenure로 유지; 여당/연정은 CabinetPoliticalParty로 표현
+
+// ========================
+// Enums
+// ========================
+
+/// 선거·투표 단위의 성격
+enum ElectionType {
+  /// 대통령·총리 등 단일 직 직선
+  PRESIDENTIAL_OR_HEAD
+  /// 국회·의회 소선거구(지역구) 의원
+  PARLIAMENTARY_CONSTITUENCY
+  /// 비례대표(정당 득표 비율 등)
+  PARLIAMENTARY_PROPORTIONAL
+  /// 지방선거(지사·시장·지의원 등)
+  LOCAL
+  /// 보궐·중간선거
+  BY_ELECTION
+  /// 경선·예비선거
+  PRIMARY
+  /// 국민투표·개헌·다중 안건(후보가 아닌 선택지)
+  REFERENDUM_OR_PLEBISCITE
+  /// 기타
+  OTHER
+}
+
+/// 선거 진행 상태(선택)
+enum ElectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  FINALIZED
+  CANCELLED
+}
+
+/// 후보 지명 방식
+enum CandidacyNominationType {
+  /// 정당 공천
+  PARTY_NOMINATION
+  /// 무소속
+  INDEPENDENT
+  /// 속기·입후보 등
+  WRITE_IN
+  /// 비례 명부·정당 단위(특정 행에서 personId가 null일 수 있음)
+  PARTY_LIST_ONLY
+  /// 기타
+  OTHER
+}
+
+/// 내각에 대한 정당의 역할(연정·여당 등)
+enum CabinetPartyRole {
+  /// 집권·주도 여당
+  LEADING
+  /// 연정 파트너
+  COALITION_PARTNER
+  /// 소수 여당·입각 합의 등(기록용)
+  SUPPORTING_MINOR
+  /// 기타
+  OTHER
+}
+
+// ========================
+// ElectoralDistrict (선거구)
+// ========================
+/// 국회 지역구, 시·도 구역 등. 행정구역과 선택적으로 연결.
+model ElectoralDistrict {
+  id String @id @default(uuid()) @db.Char(36)
+
+  countryId           String? @map("country_id") @db.Char(36)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 표시명 (예: 서울 종로구, 제1선거구)
+  name String @db.VarChar(200)
+
+  /// 공식 부호·코드 (예: 11010)
+  code String? @db.VarChar(50)
+
+  /// 상위 선거구(재편·하위 구획)
+  parentId String? @map("parent_id") @db.Char(36)
+
+  /// 대응 행정구역(있으면)
+  administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
+
+  notes String? @db.Text
+
+  country              Country?               @relation("ElectoralDistrictCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry    HistoricalCountry?   @relation("ElectoralDistrictHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  parent               ElectoralDistrict?   @relation("ElectoralDistrictHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children             ElectoralDistrict[]    @relation("ElectoralDistrictHierarchy")
+  administrativeDivision AdministrativeDivision? @relation("ElectoralDistrictAdminDiv", fields: [administrativeDivisionId], references: [id], onDelete: SetNull)
+
+  candidacies ElectionCandidacy[] @relation("CandidacyDistrict")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_electoral_district_countryId")
+  @@index([historicalCountryId], name: "idx_electoral_district_histCountryId")
+  @@index([parentId], name: "idx_electoral_district_parentId")
+  @@index([administrativeDivisionId], name: "idx_electoral_district_adminDivId")
+  @@map("electoral_district")
+}
+
+// ========================
+// Election
+// ========================
+model Election {
+  id String @id @default(uuid()) @db.Char(36)
+
+  countryId           String? @map("country_id") @db.Char(36)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 선거 공식 명칭
+  name String @db.VarChar(250)
+
+  /// 짧은 표기
+  shortName String? @map("short_name") @db.VarChar(120)
+
+  electionType ElectionType @map("election_type")
+  status       ElectionStatus @default(SCHEDULED)
+
+  /// 주 투표일
+  pollDate DateTime @map("poll_date")
+
+  /// 기간이 긴 투표·개표(선택)
+  pollEndDate DateTime? @map("poll_end_date")
+
+  /// 특정 광역·기초 단위에만 적용되는 선거(선택)
+  scopeAdministrativeDivisionId String? @map("scope_administrative_division_id") @db.Char(36)
+
+  description String? @db.Text
+  notes       String? @db.Text
+
+  /// 계정별 월드/시나리오 구분(선택)
+  accountId String? @map("account_id") @db.Char(36)
+
+  extra Json?
+
+  country           Country?             @relation("ElectionCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry?   @relation("ElectionHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  scopeAdminDivision AdministrativeDivision? @relation("ElectionScopeAdminDiv", fields: [scopeAdministrativeDivisionId], references: [id], onDelete: SetNull)
+  account           Account?             @relation("AccountElections", fields: [accountId], references: [id], onDelete: SetNull)
+
+  candidacies    ElectionCandidacy[]
+  ballotOptions  ElectionBallotOption[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_election_countryId")
+  @@index([historicalCountryId], name: "idx_election_histCountryId")
+  @@index([pollDate], name: "idx_election_pollDate")
+  @@index([electionType], name: "idx_election_type")
+  @@index([accountId], name: "idx_election_accountId")
+  @@map("election")
+}
+
+// ========================
+// ElectionCandidacy (후보 / 비례 정당 행)
+// ========================
+/// 한 선거에서의 후보 단위. 지역구 의원은 electoralDistrictId로 구분.
+/// 비례 명부에서 특정 순번만 기록할 때 personId 없이 partyId+listRank만 둘 수 있음.
+model ElectionCandidacy {
+  id String @id @default(uuid()) @db.Char(36)
+
+  electionId String @map("election_id") @db.Char(36)
+
+  /// 후보 인물(무소속·정당 공천 공통). 비례 정당 전용 행이면 null
+  personId String? @map("person_id") @db.Char(36)
+
+  /// 공천 정당(무소속이면 null)
+  partyId String? @map("party_id") @db.Char(36)
+
+  electoralDistrictId String? @map("electoral_district_id") @db.Char(36)
+
+  nominationType CandidacyNominationType @map("nomination_type")
+
+  /// 기표지 표기 순서
+  ballotOrder Int? @map("ballot_order")
+
+  /// 비례대표 명부 순번
+  listRank Int? @map("list_rank")
+
+  withdrawnDate DateTime? @map("withdrawn_date")
+  notes         String?   @db.Text
+
+  election           Election           @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  person             Person?            @relation("ElectionCandidacies", fields: [personId], references: [id], onDelete: SetNull)
+  party              PoliticalParty?    @relation("ElectionCandidacyParty", fields: [partyId], references: [id], onDelete: SetNull)
+  electoralDistrict  ElectoralDistrict? @relation("CandidacyDistrict", fields: [electoralDistrictId], references: [id], onDelete: SetNull)
+
+  /// 이 후보(당선)로 시작된 공직 재임 — 최대 1건
+  resultingTenure GovernmentPositionTenure? @relation("TenureFromElectionCandidacy")
+
+  result ElectionResult?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([electionId], name: "idx_election_candidacy_electionId")
+  @@index([personId], name: "idx_election_candidacy_personId")
+  @@index([partyId], name: "idx_election_candidacy_partyId")
+  @@index([electoralDistrictId], name: "idx_election_candidacy_districtId")
+  @@map("election_candidacy")
+}
+
+// ========================
+// ElectionResult (득표 집계)
+// ========================
+model ElectionResult {
+  id String @id @default(uuid()) @db.Char(36)
+
+  candidacyId String @unique @map("candidacy_id") @db.Char(36)
+
+  /// 득표수(미상이면 null)
+  votes BigInt?
+
+  /// 득표율 0~100
+  voteSharePercent Decimal? @map("vote_share_percent") @db.Decimal(9, 6)
+
+  /// 동일 선거구·선거 내 순위
+  resultRank Int? @map("result_rank")
+
+  /// 당선 여부
+  elected Boolean @default(false)
+
+  /// 확보 의석 수(비례·다선거구용, 선택)
+  seatsWon Int? @map("seats_won")
+
+  notes String? @db.Text
+
+  candidacy ElectionCandidacy @relation(fields: [candidacyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([elected], name: "idx_election_result_elected")
+  @@map("election_result")
+}
+
+// ========================
+// ElectionBallotOption / Result (국민투표·다중 안)
+// ========================
+/// 인물 후보가 아닌 투표 선택지(찬반, 복수 개헌안 등)
+model ElectionBallotOption {
+  id String @id @default(uuid()) @db.Char(36)
+
+  electionId String @map("election_id") @db.Char(36)
+
+  label     String  @db.VarChar(500)
+  shortLabel String? @map("short_label") @db.VarChar(120)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  notes String? @db.Text
+
+  election Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  result   ElectionBallotOptionResult?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([electionId], name: "idx_ballot_option_electionId")
+  @@map("election_ballot_option")
+}
+
+model ElectionBallotOptionResult {
+  id String @id @default(uuid()) @db.Char(36)
+
+  ballotOptionId String @unique @map("ballot_option_id") @db.Char(36)
+
+  votes BigInt?
+
+  voteSharePercent Decimal? @map("vote_share_percent") @db.Decimal(9, 6)
+
+  notes String? @db.Text
+
+  ballotOption ElectionBallotOption @relation(fields: [ballotOptionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("election_ballot_option_result")
+}
+
+/// 당원 소속 역할의 공통 분류 (국가·정당과 무관하게 직책 유형을 통일)
+enum PartyMembershipRoleCategory {
+  /// 일반 당원·평당원
+  GENERAL_MEMBER
+  /// 지도부·상위 당직 맥락
+  LEADERSHIP
+  /// 국회·지방의회 등 의회 당직
+  PARLIAMENTARY
+  /// 시·도당·지역 조직
+  LOCAL_ORGANIZATION
+  /// 청년·여성 등 산하기구·계파
+  WING_ORGAN
+  /// 정책·연구·당직·사무
+  POLICY_STAFF
+  /// 고문·자문·명예
+  HONORARY
+  /// 기타·미분류
+  OTHER
+}
+
+/// 역할 분류가 지도부(LEADERSHIP)일 때 상대적 위계 (직함 문자열과 별도로 ‘최고인지’ 구분)
+enum PartyMembershipLeadershipTier {
+  /// 최고 책임·1인 (대표·총재 등)
+  TOP
+  /// 2인·상임·최고위 간부
+  SECOND
+  /// 상급 지도·간부
+  SENIOR
+  /// 일반 지도·간부
+  ORDINARY
+  /// 초급·후보 단계
+  JUNIOR
+  /// 미표기
+  UNSPECIFIED
+}
+
+// ========================
+// PoliticalPartyMembership (일반 당원·소속)
+// ========================
+/// 당대표 등 공식 직책은 PoliticalPartyLeadership 사용. 여기서는 소속·기간만 기록.
+model PoliticalPartyMembership {
+  id String @id @default(uuid()) @db.Char(36)
+
+  personId String @map("person_id") @db.Char(36)
+  partyId  String @map("party_id") @db.Char(36)
+
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  /// 역할 분류 (국가 공통 직책 유형)
+  roleCategory PartyMembershipRoleCategory @default(OTHER) @map("role_category")
+
+  /// 지도부(LEADERSHIP)일 때만 의미 있는 위계. 그 외 분류에서는 null
+  leadershipTier PartyMembershipLeadershipTier? @map("leadership_tier")
+
+  /// 직함·세부 표기 (예: 청년위원장, 당원번호 등)
+  roleTitle String? @map("role_title") @db.VarChar(120)
+
+  notes String? @db.Text
+
+  person Person         @relation("PoliticalPartyMemberships", fields: [personId], references: [id], onDelete: Cascade)
+  party  PoliticalParty @relation("PartyMemberships", fields: [partyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_party_membership_personId")
+  @@index([partyId], name: "idx_party_membership_partyId")
+  @@index([startDate], name: "idx_party_membership_startDate")
+  @@map("political_party_membership")
+}
+
+// ========================
+// CabinetPoliticalParty (내각 — 정당)
+// ========================
+model CabinetPoliticalParty {
+  id String @id @default(uuid()) @db.Char(36)
+
+  cabinetId String @map("cabinet_id") @db.Char(36)
+  partyId   String @map("party_id") @db.Char(36)
+
+  role CabinetPartyRole
+
+  /// 연정 순서·비중 메모(선택)
+  notes String? @db.Text
+
+  cabinet Cabinet        @relation("CabinetPoliticalParties", fields: [cabinetId], references: [id], onDelete: Cascade)
+  party   PoliticalParty @relation("CabinetPartyAffiliations", fields: [partyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([cabinetId, partyId], name: "uniq_cabinet_party")
+  @@index([partyId], name: "idx_cabinet_party_partyId")
+  @@map("cabinet_political_party")
+}

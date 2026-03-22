@@ -8,108 +8,19 @@ import { createPortal } from 'react-dom'
 
 import { useQueryClient } from '@tanstack/react-query'
 
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
-import styled from 'styled-components'
 
 import { personKeys } from '@/entities/person/api'
-import { Z_INDEX } from '@/shared/styles/z-index'
+import {
+  PersonRegisterModalBox,
+  PersonRegisterModalCloseBtn,
+  PersonRegisterModalFormScroll,
+  PersonRegisterModalHeader,
+  PersonRegisterModalOverlay,
+  PersonRegisterModalTitle,
+} from '@/shared/ui/person-register-modal/person-register-modal-shell'
 import { PersonRegisterView } from '@/shared/ui/person-register-modal/person-register-view'
-
-const Overlay = styled(motion.div)`
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.38);
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  backdrop-filter: blur(10px);
-`
-
-const ModalBox = styled(motion.div)`
-  width: min(1200px, 96vw);
-  max-height: min(92vh, 1200px);
-  min-height: 560px;
-  border-radius: 22px;
-  z-index: ${Z_INDEX.MODAL_CONTENT};
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? `
-    background: rgba(20, 20, 20, 0.92);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  `
-      : `
-    background: #ffffff;
-    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.2);
-  `}
-`
-
-const ModalHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
-  flex-shrink: 0;
-`
-
-const ModalTitle = styled.h2`
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.025em;
-`
-
-const CloseBtn = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    color 0.2s;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f3f4f6'};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const FormScroll = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
-    border-radius: 3px;
-  }
-`
 
 export interface PersonRegisterViewModalProps {
   isOpen: boolean
@@ -141,7 +52,7 @@ export function PersonRegisterViewModal({
   const content = (
     <AnimatePresence>
       {isOpen && (
-        <Overlay
+        <PersonRegisterModalOverlay
           key="person-register-modal"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -151,22 +62,26 @@ export function PersonRegisterViewModal({
           aria-modal="true"
           aria-labelledby="person-register-modal-title"
         >
-          <ModalBox
+          <PersonRegisterModalBox
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <ModalHeader>
-              <ModalTitle id="person-register-modal-title">
+            <PersonRegisterModalHeader>
+              <PersonRegisterModalTitle id="person-register-modal-title">
                 {title ?? (editPersonId ? '인물 수정' : '인물 등록')}
-              </ModalTitle>
-              <CloseBtn type="button" onClick={onClose} aria-label="닫기">
+              </PersonRegisterModalTitle>
+              <PersonRegisterModalCloseBtn
+                type="button"
+                onClick={onClose}
+                aria-label="닫기"
+              >
                 <FiX size={20} />
-              </CloseBtn>
-            </ModalHeader>
-            <FormScroll>
+              </PersonRegisterModalCloseBtn>
+            </PersonRegisterModalHeader>
+            <PersonRegisterModalFormScroll>
               <PersonRegisterView
                 initialCountryId={initialCountryId}
                 editPersonId={editPersonId ?? undefined}
@@ -174,9 +89,9 @@ export function PersonRegisterViewModal({
                 onSuccess={handleSuccess}
                 embedInCard={false}
               />
-            </FormScroll>
-          </ModalBox>
-        </Overlay>
+            </PersonRegisterModalFormScroll>
+          </PersonRegisterModalBox>
+        </PersonRegisterModalOverlay>
       )}
     </AnimatePresence>
   )

@@ -94,6 +94,8 @@ model Country {
   Organizations             Organization[]                   @relation("OrganizationCountry")
   organizationMemberships   OrganizationCountryMembership[]  @relation("OrgMembershipCountry")
   PoliticalParty            PoliticalParty[]                 @relation("PoliticalPartyCountry")
+  electoralDistricts      ElectoralDistrict[]              @relation("ElectoralDistrictCountry")
+  elections                 Election[]                       @relation("ElectionCountry")
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
   eventCountryRelations     EventCountryRelation[]
 
@@ -254,6 +256,10 @@ model AdministrativeDivision {
 
   /// 이 행정구역을 서명 장소 DB로 둔 조약
   treatiesSignedHere Treaty[] @relation("TreatySigningAdminDivision")
+
+  /// 선거구·선거 적용 범위와 연결
+  electoralDistricts ElectoralDistrict[] @relation("ElectoralDistrictAdminDiv")
+  electionsInScope   Election[]          @relation("ElectionScopeAdminDiv")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

@@ -1903,7 +1903,7 @@ export const HistoryCardDeleteBtn = styled.button`
   right: 34px;
   top: 50%;
   transform: translateY(-50%);
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 24px;
@@ -1914,13 +1914,21 @@ export const HistoryCardDeleteBtn = styled.button`
   cursor: pointer;
   border-radius: 6px;
   padding: 0;
+  opacity: 0.4;
   transition:
+    opacity 0.12s,
     background 0.12s,
     color 0.12s;
   &:hover {
+    opacity: 1;
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(225,29,72,0.15)' : '#fff0f3'};
     color: #be123c;
+  }
+  &:focus-visible {
+    opacity: 1;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
   }
 `
 export const HistoryCard = styled.div`
@@ -1944,7 +1952,7 @@ export const HistoryCard = styled.div`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
   }
   &:hover ${HistoryCardDeleteBtn} {
-    display: flex;
+    opacity: 1;
   }
 `
 export const HistoryCardTitle = styled.div`
@@ -2004,6 +2012,10 @@ export const MinisterProfileAvatar = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
+  }
 `
 export const MinisterProfileMeta = styled.div`
   flex: 1;
@@ -2138,11 +2150,17 @@ export const HistoryArticleBackBtn = styled.button`
   background: none;
   font-family: ${NYT_FONT};
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
   cursor: pointer;
   transition: color 0.15s;
   &:hover {
     color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+  }
+  &:focus-visible {
+    outline: none;
+    border-radius: 4px;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
   }
 `
 export const HistoryArticleDeleteBtn = styled.button`
@@ -2153,7 +2171,8 @@ export const HistoryArticleDeleteBtn = styled.button`
   border: none;
   background: none;
   font-size: 12px;
-  color: #e11d48;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#fb7185' : '#e11d48'};
   cursor: pointer;
   border-radius: 6px;
   transition:
@@ -2162,7 +2181,12 @@ export const HistoryArticleDeleteBtn = styled.button`
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(225,29,72,0.15)' : '#fff0f3'};
-    color: #be123c;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#fda4af' : '#be123c'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
   }
 `
 export const HistoryArticleEditBtn = styled.button`
@@ -2237,7 +2261,8 @@ export const HistoryMetaInput = styled.input`
   outline: none;
   transition: border-color 0.15s;
   &:focus {
-    border-color: #64748b;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#818cf8' : '#6366f1'};
   }
 `
 export const HistoryMetaDateRow = styled.div`
@@ -2259,7 +2284,8 @@ export const HistoryMetaDateInput = styled.input`
   outline: none;
   transition: border-color 0.15s;
   &:focus {
-    border-color: #64748b;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#818cf8' : '#6366f1'};
   }
 `
 /* 본문 영역: 가운데 정렬, max-width 680px */
@@ -2291,7 +2317,8 @@ export const HistoryArticleHeadline = styled.h2`
 export const HistoryArticleByline = styled.p`
   font-family: ${NYT_FONT};
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
   margin: 6px 0 0;
   line-height: 1.5;
   font-weight: 500;

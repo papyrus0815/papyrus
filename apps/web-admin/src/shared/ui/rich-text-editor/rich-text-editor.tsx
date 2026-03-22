@@ -1727,6 +1727,37 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // 키 입력 핸들러 (스페이스 */- 목록 변환 + Ctrl+B 등)
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // 순서 있는/없는 목록 안에서 Tab → 중첩 들여쓰기(iOS 메모·메모앱과 유사), Shift+Tab → 내어쓰기
+      if (e.key === 'Tab') {
+        const native = e.nativeEvent as KeyboardEvent
+        if (native.isComposing) return
+        const root = editorRef.current
+        if (!root) return
+        const sel = window.getSelection()
+        if (!sel?.rangeCount) return
+        const range = sel.getRangeAt(0)
+        let n: Node | null = range.startContainer
+        if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
+        const block = n instanceof Element ? n.closest('li') : null
+        if (
+          !block ||
+          !root.contains(block) ||
+          !block.closest('ul, ol')
+        ) {
+          return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        try {
+          document.execCommand(e.shiftKey ? 'outdent' : 'indent', false)
+        } catch {
+          /* noop */
+        }
+        handleContentChange()
+        updateFormatState()
+        return
+      }
+
       if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
         if (tryConvertListOnSpace(e)) return
       }
@@ -1783,7 +1814,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
       }
     },
-    [applyFormat, tryConvertListOnSpace, handleContentChange],
+    [applyFormat, tryConvertListOnSpace, handleContentChange, updateFormatState],
   )
 
   // 이미지 업로드

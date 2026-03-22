@@ -27,6 +27,7 @@ export const UPLOAD_IMAGE_CATEGORIES = [
   'persons',
   'events',
   'ministries',
+  'political-parties',
   'attachments',
 ] as const
 export type UploadImageCategory = (typeof UPLOAD_IMAGE_CATEGORIES)[number]

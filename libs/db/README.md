@@ -65,6 +65,8 @@ country.prisma →
 vi libs/db/prisma/country.prisma
 ```
 
+`apps/api/prisma/schema.prisma`는 병합 결과물이므로 **직접 편집하지 말고**, 아래 `db:build`로 `libs/db/prisma`에서 생성합니다.
+
 ### 2. 스키마 빌드 및 마이그레이션
 
 ```bash

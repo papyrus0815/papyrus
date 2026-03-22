@@ -13,12 +13,14 @@ import {
   FiBriefcase,
   FiCalendar,
   FiEdit2,
+  FiFlag,
   FiInfo,
   FiPlus,
   FiUsers,
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
 import { updatePerson } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
@@ -27,8 +29,19 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { proseHrStyles } from '@/shared/styles/prose-hr'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
+import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
+import {
+  PersonPoliticsSection,
+  type ElectionCandidacyDetail,
+} from '@/widgets/person/person-politics-section/person-politics-section'
 
-type TabType = 'overview' | 'genealogy' | 'activities' | 'events' | 'works'
+type TabType =
+  | 'overview'
+  | 'genealogy'
+  | 'politics'
+  | 'activities'
+  | 'events'
+  | 'works'
 
 /** "YYYY년 M월 D일" 형식 (월·일 없으면 년만) */
 function formatDateKo(
@@ -383,9 +396,12 @@ export function PersonDetailPanel({
       </KpiStrip>
 
       {/* 탭 네비게이션 */}
-      <TabNav>
+      <TabNav role="tablist" aria-label="인물 상세 구역">
         <TabBtn
           type="button"
+          role="tab"
+          id="person-detail-tab-overview"
+          aria-selected={activeTab === 'overview'}
           $active={activeTab === 'overview'}
           onClick={() => {
             playClickSound()
@@ -397,6 +413,9 @@ export function PersonDetailPanel({
         </TabBtn>
         <TabBtn
           type="button"
+          role="tab"
+          id="person-detail-tab-genealogy"
+          aria-selected={activeTab === 'genealogy'}
           $active={activeTab === 'genealogy'}
           onClick={() => {
             playClickSound()
@@ -408,6 +427,23 @@ export function PersonDetailPanel({
         </TabBtn>
         <TabBtn
           type="button"
+          role="tab"
+          id="person-detail-tab-politics"
+          aria-selected={activeTab === 'politics'}
+          $active={activeTab === 'politics'}
+          onClick={() => {
+            playClickSound()
+            setActiveTab('politics')
+          }}
+        >
+          <FiFlag size={14} />
+          정치·선거
+        </TabBtn>
+        <TabBtn
+          type="button"
+          role="tab"
+          id="person-detail-tab-activities"
+          aria-selected={activeTab === 'activities'}
           $active={activeTab === 'activities'}
           onClick={() => {
             playClickSound()
@@ -419,6 +455,9 @@ export function PersonDetailPanel({
         </TabBtn>
         <TabBtn
           type="button"
+          role="tab"
+          id="person-detail-tab-events"
+          aria-selected={activeTab === 'events'}
           $active={activeTab === 'events'}
           onClick={() => {
             playClickSound()
@@ -430,6 +469,9 @@ export function PersonDetailPanel({
         </TabBtn>
         <TabBtn
           type="button"
+          role="tab"
+          id="person-detail-tab-works"
+          aria-selected={activeTab === 'works'}
           $active={activeTab === 'works'}
           onClick={() => {
             playClickSound()
@@ -447,6 +489,9 @@ export function PersonDetailPanel({
           {activeTab === 'overview' && (
             <TabContent
               key="overview"
+              role="tabpanel"
+              id="person-detail-panel-overview"
+              aria-labelledby="person-detail-tab-overview"
               as={motion.div}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -580,6 +625,17 @@ export function PersonDetailPanel({
                 tenureId={editingTenureId ?? undefined}
               />
 
+              <PersonHumanRelationshipsSection
+                personId={person.id}
+                relationships={
+                  (
+                    person as {
+                      humanRelationships?: PersonHumanRelationshipItem[]
+                    }
+                  ).humanRelationships
+                }
+              />
+
               <section aria-label="전기">
                 <BioSectionLabelRow>
                   <BioSectionLabel>전기</BioSectionLabel>
@@ -685,6 +741,9 @@ export function PersonDetailPanel({
           {activeTab === 'genealogy' && (
             <TabContent
               key="genealogy"
+              role="tabpanel"
+              id="person-detail-panel-genealogy"
+              aria-labelledby="person-detail-tab-genealogy"
               as={motion.div}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -752,9 +811,46 @@ export function PersonDetailPanel({
             </TabContent>
           )}
 
+          {activeTab === 'politics' && (
+            <TabContent
+              key="politics"
+              role="tabpanel"
+              id="person-detail-panel-politics"
+              aria-labelledby="person-detail-tab-politics"
+              as={motion.div}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <PersonPoliticsSection
+                personId={person.id}
+                countryId={person.countryId ?? null}
+                variant="tab"
+                partyMemberships={
+                  (
+                    person as {
+                      partyMemberships?: import('@/shared/api/election').PartyMembershipRow[]
+                    }
+                  ).partyMemberships
+                }
+                electionCandidacies={
+                  (
+                    person as {
+                      electionCandidacies?: ElectionCandidacyDetail[]
+                    }
+                  ).electionCandidacies
+                }
+              />
+            </TabContent>
+          )}
+
           {activeTab === 'activities' && (
             <TabContent
               key="activities"
+              role="tabpanel"
+              id="person-detail-panel-activities"
+              aria-labelledby="person-detail-tab-activities"
               as={motion.div}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -862,6 +958,9 @@ export function PersonDetailPanel({
           {activeTab === 'events' && (
             <TabContent
               key="events"
+              role="tabpanel"
+              id="person-detail-panel-events"
+              aria-labelledby="person-detail-tab-events"
               as={motion.div}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -895,6 +994,9 @@ export function PersonDetailPanel({
           {activeTab === 'works' && (
             <TabContent
               key="works"
+              role="tabpanel"
+              id="person-detail-panel-works"
+              aria-labelledby="person-detail-tab-works"
               as={motion.div}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1459,7 +1561,9 @@ const TabNav = styled.nav`
   max-width: 100%;
   min-width: 0;
   border-radius: 13px;
-  overflow-x: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 
   ${({ theme }) =>
     theme.mode === 'dark'

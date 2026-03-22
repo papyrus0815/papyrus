@@ -47,6 +47,9 @@ export const pathKeys = {
     /** 국가 상세 내 행정조직 탭 고유 URL */
     countryGovernment: (countryId: string) =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/government`,
+    /** 국가 상세 내 선거·투표 탭 고유 URL */
+    countryElections: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/elections`,
     /** 국가 상세 내 연대표(전체 사건) 탭 고유 URL. form=create 시 사건 등록 폼 표시 */
     countryEvents: (countryId: string, form?: 'create') =>
       form === 'create'

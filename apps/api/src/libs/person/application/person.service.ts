@@ -1,5 +1,5 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { AttachmentOwner, EventMethod } from '@prisma/client'
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
+import { AttachmentOwner, EventMethod, PersonHumanRelationshipType } from '@prisma/client'
 import {
   IPersonRepository,
   CreatePersonData,
@@ -39,6 +39,8 @@ import {
   PersonEducationResponseDto,
   PersonAwardResponseDto,
   AllCareersResponseDto,
+  CreatePersonHumanRelationshipDto,
+  UpdatePersonHumanRelationshipDto,
 } from '../presentation/dto'
 
 /**
@@ -512,5 +514,284 @@ export class PersonService {
   async findAllCareers(personId: string): Promise<AllCareersResponseDto> {
     await this.findById(personId) // 존재 여부 확인
     return this.personRepository.findAllCareers(personId)
+  }
+
+  private mapHumanRelationshipRow(
+    rel: {
+      id: string
+      relationshipType: PersonHumanRelationshipType
+      affinityLevel: number
+      startDate: Date | null
+      endDate: Date | null
+      note: string | null
+      fromPersonId: string
+      toPersonId: string
+      fromPerson: { id: string; name: string; surname: string | null; nameDisplayOrder: string | null; birthDate: Date | null; deathDate: Date | null }
+      toPerson: { id: string; name: string; surname: string | null; nameDisplayOrder: string | null; birthDate: Date | null; deathDate: Date | null }
+    },
+    subjectPersonId: string,
+  ) {
+    const other = rel.fromPersonId === subjectPersonId ? rel.toPerson : rel.fromPerson
+    const mentorPerspective =
+      rel.relationshipType === PersonHumanRelationshipType.MENTOR
+        ? rel.fromPersonId === subjectPersonId
+          ? ('MENTOR' as const)
+          : ('STUDENT' as const)
+        : null
+    return {
+      id: rel.id,
+      relationshipType: rel.relationshipType,
+      affinityLevel: rel.affinityLevel,
+      startDate: rel.startDate?.toISOString() ?? null,
+      endDate: rel.endDate?.toISOString() ?? null,
+      note: rel.note,
+      fromPersonId: rel.fromPersonId,
+      toPersonId: rel.toPersonId,
+      otherPerson: this.serializePersonBrief(other),
+      mentorPerspective,
+    }
+  }
+
+  private serializePersonBrief(p: {
+    id: string
+    name: string
+    surname: string | null
+    nameDisplayOrder: string | null
+    birthDate: Date | null
+    deathDate: Date | null
+  }) {
+    return {
+      id: p.id,
+      name: p.name,
+      surname: p.surname,
+      nameDisplayOrder: p.nameDisplayOrder,
+      birthDate: p.birthDate?.toISOString() ?? null,
+      deathDate: p.deathDate?.toISOString() ?? null,
+    }
+  }
+
+  /**
+   * 인물이 참여한 인간관계 목록 (from/to 모두 조회)
+   */
+  async findHumanRelationships(personId: string, accountId?: string) {
+    await this.findById(personId, accountId)
+    const rows = await this.prisma.personHumanRelationship.findMany({
+      where: {
+        OR: [{ fromPersonId: personId }, { toPersonId: personId }],
+      },
+      include: {
+        fromPerson: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            nameDisplayOrder: true,
+            birthDate: true,
+            deathDate: true,
+          },
+        },
+        toPerson: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            nameDisplayOrder: true,
+            birthDate: true,
+            deathDate: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+    return rows.map((r) => this.mapHumanRelationshipRow(r, personId))
+  }
+
+  private async resolveHumanRelationshipEndpoints(
+    subjectPersonId: string,
+    relatedPersonId: string,
+    relationshipType: PersonHumanRelationshipType,
+    subjectIsMentor: boolean | undefined,
+  ): Promise<{ fromPersonId: string; toPersonId: string }> {
+    if (subjectPersonId === relatedPersonId) {
+      throw new BadRequestException('같은 인물끼리는 관계를 설정할 수 없습니다.')
+    }
+    if (relationshipType === PersonHumanRelationshipType.MENTOR) {
+      const mentorFirst = subjectIsMentor !== false
+      return mentorFirst
+        ? { fromPersonId: subjectPersonId, toPersonId: relatedPersonId }
+        : { fromPersonId: relatedPersonId, toPersonId: subjectPersonId }
+    }
+    // GENERAL: 방향 없음 — UUID 문자열 오름차순으로 정규화
+    const [a, b] =
+      subjectPersonId < relatedPersonId
+        ? [subjectPersonId, relatedPersonId]
+        : [relatedPersonId, subjectPersonId]
+    return { fromPersonId: a, toPersonId: b }
+  }
+
+  async createHumanRelationship(
+    subjectPersonId: string,
+    dto: CreatePersonHumanRelationshipDto,
+    accountId?: string,
+  ) {
+    await this.findById(subjectPersonId, accountId)
+    await this.findById(dto.relatedPersonId, accountId)
+    const { fromPersonId, toPersonId } = await this.resolveHumanRelationshipEndpoints(
+      subjectPersonId,
+      dto.relatedPersonId,
+      dto.relationshipType,
+      dto.subjectIsMentor,
+    )
+    try {
+      const created = await this.prisma.personHumanRelationship.create({
+        data: {
+          fromPersonId,
+          toPersonId,
+          relationshipType: dto.relationshipType,
+          affinityLevel: dto.affinityLevel,
+          startDate: dto.startDate ? new Date(dto.startDate) : null,
+          endDate: dto.endDate ? new Date(dto.endDate) : null,
+          note: dto.note ?? null,
+        },
+        include: {
+          fromPerson: {
+            select: {
+              id: true,
+              name: true,
+              surname: true,
+              nameDisplayOrder: true,
+              birthDate: true,
+              deathDate: true,
+            },
+          },
+          toPerson: {
+            select: {
+              id: true,
+              name: true,
+              surname: true,
+              nameDisplayOrder: true,
+              birthDate: true,
+              deathDate: true,
+            },
+          },
+        },
+      })
+      return this.mapHumanRelationshipRow(created, subjectPersonId)
+    } catch (e: unknown) {
+      const code = e && typeof e === 'object' && 'code' in e ? (e as { code?: string }).code : undefined
+      if (code === 'P2002') {
+        throw new BadRequestException('이미 같은 유형의 관계가 있습니다.')
+      }
+      throw e
+    }
+  }
+
+  async updateHumanRelationship(
+    subjectPersonId: string,
+    relationshipId: string,
+    dto: UpdatePersonHumanRelationshipDto,
+    accountId?: string,
+  ) {
+    await this.findById(subjectPersonId, accountId)
+    const existing = await this.prisma.personHumanRelationship.findUnique({
+      where: { id: relationshipId },
+      include: {
+        fromPerson: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            nameDisplayOrder: true,
+            birthDate: true,
+            deathDate: true,
+          },
+        },
+        toPerson: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            nameDisplayOrder: true,
+            birthDate: true,
+            deathDate: true,
+          },
+        },
+      },
+    })
+    if (!existing) {
+      throw new NotFoundException(`인간관계를 찾을 수 없습니다 (ID: ${relationshipId})`)
+    }
+    if (existing.fromPersonId !== subjectPersonId && existing.toPersonId !== subjectPersonId) {
+      throw new ForbiddenException('이 인물과 연결된 관계만 수정할 수 있습니다.')
+    }
+    const relatedId =
+      existing.fromPersonId === subjectPersonId ? existing.toPersonId : existing.fromPersonId
+    const nextType = dto.relationshipType ?? existing.relationshipType
+    const { fromPersonId, toPersonId } = await this.resolveHumanRelationshipEndpoints(
+      subjectPersonId,
+      relatedId,
+      nextType,
+      dto.subjectIsMentor ?? (nextType === PersonHumanRelationshipType.MENTOR
+        ? existing.fromPersonId === subjectPersonId
+        : undefined),
+    )
+    try {
+      const updated = await this.prisma.personHumanRelationship.update({
+        where: { id: relationshipId },
+        data: {
+          fromPersonId,
+          toPersonId,
+          relationshipType: dto.relationshipType ?? undefined,
+          affinityLevel: dto.affinityLevel ?? undefined,
+          startDate:
+            dto.startDate === undefined ? undefined : dto.startDate ? new Date(dto.startDate) : null,
+          endDate: dto.endDate === undefined ? undefined : dto.endDate ? new Date(dto.endDate) : null,
+          note: dto.note === undefined ? undefined : dto.note,
+        },
+        include: {
+          fromPerson: {
+            select: {
+              id: true,
+              name: true,
+              surname: true,
+              nameDisplayOrder: true,
+              birthDate: true,
+              deathDate: true,
+            },
+          },
+          toPerson: {
+            select: {
+              id: true,
+              name: true,
+              surname: true,
+              nameDisplayOrder: true,
+              birthDate: true,
+              deathDate: true,
+            },
+          },
+        },
+      })
+      return this.mapHumanRelationshipRow(updated, subjectPersonId)
+    } catch (e: unknown) {
+      const code = e && typeof e === 'object' && 'code' in e ? (e as { code?: string }).code : undefined
+      if (code === 'P2002') {
+        throw new BadRequestException('같은 쌍·유형의 관계가 이미 있습니다.')
+      }
+      throw e
+    }
+  }
+
+  async deleteHumanRelationship(subjectPersonId: string, relationshipId: string, accountId?: string) {
+    await this.findById(subjectPersonId, accountId)
+    const existing = await this.prisma.personHumanRelationship.findUnique({
+      where: { id: relationshipId },
+    })
+    if (!existing) {
+      throw new NotFoundException(`인간관계를 찾을 수 없습니다 (ID: ${relationshipId})`)
+    }
+    if (existing.fromPersonId !== subjectPersonId && existing.toPersonId !== subjectPersonId) {
+      throw new ForbiddenException('이 인물과 연결된 관계만 삭제할 수 있습니다.')
+    }
+    await this.prisma.personHumanRelationship.delete({ where: { id: relationshipId } })
   }
 }

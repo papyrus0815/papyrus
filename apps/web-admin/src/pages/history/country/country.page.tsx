@@ -161,6 +161,9 @@ export default function CountryPage() {
   /** 행정조직 탭 전용 URL 여부 (/history/country/:id/government) */
   const isGovernmentUrl =
     /\/history\/country\/[^/]+\/government\/?$/.test(location.pathname)
+  /** 선거·투표 탭 전용 URL 여부 (/history/country/:id/elections) */
+  const isElectionsUrl =
+    /\/history\/country\/[^/]+\/elections\/?$/.test(location.pathname)
   /** 대시보드 탭 전용 URL 여부 (/history/country/:id/dashboard) */
   const isDashboardUrl = /\/history\/country\/[^/]+\/dashboard\/?$/.test(location.pathname)
   /** 연대표(전체 사건) 탭 전용 URL 여부 (/history/country/:id/events) */
@@ -692,7 +695,17 @@ export default function CountryPage() {
 
   /** 상세 패널 내 탭 변경 시 URL 연동 (인물·역대 수반·인물 리스트·역사적 국가·행정구역·행정조직 등) */
   const handleDetailTabChange = useCallback(
-    (tab: 'person' | 'heads' | 'persons-list' | 'linked-historical' | 'regions' | 'government' | null) => {
+    (
+      tab:
+        | 'person'
+        | 'heads'
+        | 'persons-list'
+        | 'linked-historical'
+        | 'regions'
+        | 'government'
+        | 'elections'
+        | null,
+    ) => {
       if (!selectedId) return
       if (tab === 'person') navigate(pathKeys.history.countryPersons(selectedId))
       else if (tab === 'heads') navigate(pathKeys.history.countryGovernment(selectedId))
@@ -700,6 +713,7 @@ export default function CountryPage() {
       else if (tab === 'linked-historical') navigate(pathKeys.history.countryHistorical(selectedId))
       else if (tab === 'regions') navigate(pathKeys.history.countryRegions(selectedId))
       else if (tab === 'government') navigate(pathKeys.history.countryGovernment(selectedId))
+      else if (tab === 'elections') navigate(pathKeys.history.countryElections(selectedId))
       else navigate(pathKeys.history.countryDetail(selectedId))
     },
     [navigate, selectedId],
@@ -1182,7 +1196,9 @@ export default function CountryPage() {
                                 ? 'regions'
                                 : isGovernmentUrl
                                   ? 'government'
-                                  : undefined
+                                  : isElectionsUrl
+                                    ? 'elections'
+                                    : undefined
                     }
                     onDetailTabChange={handleDetailTabChange}
                     onPersonInnerTabChange={handlePersonInnerTabChange}

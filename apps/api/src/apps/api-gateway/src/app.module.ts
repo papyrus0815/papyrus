@@ -25,6 +25,7 @@ import { AdministrationDepartmentModule } from '../../../libs/administration-dep
 import { EthnicityModule } from '../../../libs/ethnicity/ethnicity.module'
 import { GlossaryModule } from '../../../libs/glossary/glossary.module'
 import { TreatyModule } from '../../../libs/treaty/treaty.module'
+import { ElectionModule } from '../../../libs/election/election.module'
 
 import {
   AppConfigModule,
@@ -64,6 +65,7 @@ import {
     EthnicityModule,
     GlossaryModule,
     TreatyModule,
+    ElectionModule,
     HealthModule,
   ],
   controllers: [AppController],

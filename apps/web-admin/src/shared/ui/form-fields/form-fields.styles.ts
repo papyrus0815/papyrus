@@ -127,6 +127,11 @@ export const PersonSelectButton = styled.button<{ $hasValue?: boolean }>`
     border-color: ${FOCUS_COLOR};
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
   }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    pointer-events: none;
+  }
   svg:last-of-type {
     flex-shrink: 0;
     opacity: 0.5;

@@ -6,7 +6,7 @@
 /// 주요 기능:
 /// - 정당(PoliticalParty): 정치적 집단
 ///   • 이념, 강령, 정치적 스펙트럼
-///   • 당 색깔과 상징, 로고 관리
+///   • 상징, 로고 관리
 ///   • 설립과 해산, 합당과 분당
 ///   • 지역적 기반과 지지층
 /// 
@@ -85,9 +85,6 @@ model PoliticalParty {
   /// 이념 스펙트럼(요약)
   position PoliticalPosition?
 
-  /// 정당 컬러(HEX)
-  color String? @db.VarChar(7)
-
   /// 설명/개요
   description String? @db.Text
 
@@ -95,9 +92,8 @@ model PoliticalParty {
   foundedDate   DateTime? @map("founded_date")
   dissolvedDate DateTime? @map("dissolved_date")
 
-  /// 웹사이트/로고
-  websiteUrl String? @map("website_url") @db.VarChar(255)
-  logoUrl    String? @map("logo_url") @db.VarChar(255)
+  /// 로고
+  logoUrl String? @map("logo_url") @db.VarChar(255)
 
   /// 본부 소재 도시
   headquartersCityId String? @map("headquarters_city_id") @db.Char(36)
@@ -117,6 +113,12 @@ model PoliticalParty {
   aliases      PoliticalPartyAlias[]
   leaderships  PoliticalPartyLeadership[]
   affiliations PoliticalPartyOrganization[]
+  /// 일반 당원·소속 기간
+  memberships PoliticalPartyMembership[] @relation("PartyMemberships")
+  /// 선거 후보(공천 정당)
+  electionCandidacies ElectionCandidacy[] @relation("ElectionCandidacyParty")
+  /// 내각과의 연정·여당 관계
+  cabinetAffiliations CabinetPoliticalParty[] @relation("CabinetPartyAffiliations")
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")

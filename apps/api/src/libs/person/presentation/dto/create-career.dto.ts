@@ -736,4 +736,9 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsString()
   administrationDepartmentId?: string | null
+
+  /** 당선된 선거 후보(ElectionCandidacy)와 연결 — 이 임기가 해당 선거로 시작된 경우 */
+  @IsOptional()
+  @IsString()
+  electionCandidacyId?: string | null
 }

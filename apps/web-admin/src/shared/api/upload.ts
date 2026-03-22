@@ -74,6 +74,7 @@ export type UploadImageCategory =
   | 'persons'
   | 'events'
   | 'ministries'
+  | 'political-parties'
   | 'attachments'
 
 /**

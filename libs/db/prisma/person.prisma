@@ -41,6 +41,14 @@ enum NameDisplayOrder {
   western
 }
 
+/// 인물 간 인간관계 유형
+/// - MENTOR: 스승(from) → 제자(to), 친밀도는 그 관계의 가까움
+/// - GENERAL: 일반 관계(친밀도 1~5로만 표현), 저장 시 인물 ID 오름차순으로 정규화
+enum PersonHumanRelationshipType {
+  MENTOR
+  GENERAL
+}
+
 /// 인물-국가 관계의 유형
 enum PersonCountryAffiliationType {
   /// 출생지
@@ -176,6 +184,11 @@ model Person {
   spouseRelationsAsPerson PersonSpouse[]   @relation("PersonAsPerson")
   spouseRelationsAsSpouse PersonSpouse[]   @relation("PersonAsSpouse")
 
+  /// 인물 간 인간관계 (from 쪽)
+  personHumanRelationshipsFrom PersonHumanRelationship[] @relation("PersonHumanRelFrom")
+  /// 인물 간 인간관계 (to 쪽)
+  personHumanRelationshipsTo   PersonHumanRelationship[] @relation("PersonHumanRelTo")
+
   // 새로운 국가 관계
   countryAffiliations PersonCountryAffiliation[]
 
@@ -207,6 +220,10 @@ model Person {
   Book                     Book[]
   OrganizationPersonRole   OrganizationPersonRole[]   @relation("OrganizationPersonRoles")
   PoliticalPartyLeadership PoliticalPartyLeadership[] @relation("PoliticalPartyLeadership")
+  /// 정당 일반 소속(당원·기간). 지도부는 PoliticalPartyLeadership.
+  politicalPartyMemberships PoliticalPartyMembership[] @relation("PoliticalPartyMemberships")
+  /// 선거 후보 이력
+  electionCandidacies ElectionCandidacy[] @relation("ElectionCandidacies")
   GovernmentTenures        GovernmentPositionTenure[] @relation("PersonGovernmentTenure")
   treatySignatories        TreatySignatory[]          @relation("TreatySignatoryPerson")
 
@@ -256,6 +273,38 @@ model PersonSpouse {
   @@index([spouseId], name: "idx_person_spouse_spouseId")
   @@unique([personId, spouseId], name: "person_spouse_person_id_spouse_id_key")
   @@map("person_spouse")
+}
+
+// ========================
+// PersonHumanRelationship (인물 간 인간관계)
+// ========================
+/// 멘토(MENTOR): fromPersonId = 스승, toPersonId = 제자
+/// 그 외(ALLY, ENEMY 등): 인물 ID 오름차순으로 from/to 정규화해 중복 방지
+model PersonHumanRelationship {
+  id String @id @default(uuid()) @db.Char(36)
+
+  fromPersonId String @map("from_person_id") @db.Char(36)
+  toPersonId   String @map("to_person_id") @db.Char(36)
+
+  relationshipType PersonHumanRelationshipType @map("relationship_type")
+
+  /// 친밀도 1(매우 낮음) ~ 5(매우 높음)
+  affinityLevel Int @map("affinity_level")
+
+  startDate DateTime? @map("start_date") @db.DateTime(3)
+  endDate   DateTime? @map("end_date") @db.DateTime(3)
+  note      String?   @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  fromPerson Person @relation("PersonHumanRelFrom", fields: [fromPersonId], references: [id], onDelete: Cascade)
+  toPerson   Person @relation("PersonHumanRelTo", fields: [toPersonId], references: [id], onDelete: Cascade)
+
+  @@index([fromPersonId], name: "idx_person_human_rel_from")
+  @@index([toPersonId], name: "idx_person_human_rel_to")
+  @@unique([fromPersonId, toPersonId, relationshipType], name: "person_human_rel_pair_type_key")
+  @@map("person_human_relationship")
 }
 
 // ========================

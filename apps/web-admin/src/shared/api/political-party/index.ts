@@ -1,4 +1,4 @@
-import { apiConnection } from '../client'
+import { getPoliticalParties as fetchParties, type PoliticalPartyRow } from '../election'
 
 export type PoliticalPosition =
   | 'FAR_LEFT'
@@ -8,23 +8,18 @@ export type PoliticalPosition =
   | 'CENTER_RIGHT'
   | 'RIGHT'
   | 'FAR_RIGHT'
+  | 'BIG_TENT'
 
-export type PoliticalParty = {
-  id: string
-  name: string
-  shortName?: string | null
+export type PoliticalParty = PoliticalPartyRow & {
   localName?: string | null
   ideology?: string | null
   position?: PoliticalPosition | null
-  color?: string | null
   description?: string | null
   foundedDate?: string | null
   dissolvedDate?: string | null
-  websiteUrl?: string | null
   logoUrl?: string | null
-  countryId?: string | null
-  createdAt: string
-  updatedAt: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type CreatePoliticalPartyInput = {
@@ -33,38 +28,81 @@ export type CreatePoliticalPartyInput = {
   localName?: string | null
   ideology?: string | null
   position?: PoliticalPosition | null
-  color?: string | null
   description?: string | null
   foundedDate?: string | null
   dissolvedDate?: string | null
-  websiteUrl?: string | null
   logoUrl?: string | null
   countryId?: string | null
+  /** 역사적 국가 맥락의 정당 (현대 국가와 배타적으로 쓰는 경우가 많음) */
+  historicalCountryId?: string | null
 }
 
 export type UpdatePoliticalPartyInput = Partial<CreatePoliticalPartyInput>
 
-// API 엔드포인트가 없으므로 임시로 빈 배열 반환
+import { getApiConnection } from '../client'
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const conn = getApiConnection()
+  const base = conn.host.replace(/\/$/, '')
+  const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
+  const headers = new Headers()
+  headers.set('Content-Type', 'application/json')
+  if (conn.headers) {
+    for (const [headerKey, headerValue] of Object.entries(conn.headers)) {
+      if (headerValue != null && headerValue !== '')
+        headers.set(headerKey, String(headerValue))
+    }
+  }
+  const fetchFn = conn.fetch ?? fetch
+  const res = await fetchFn(url, {
+    ...init,
+    headers,
+    credentials: conn.options?.credentials ?? 'include',
+  })
+  if (!res.ok) {
+    let msg = res.statusText
+    try {
+      const body = await res.text()
+      if (body) msg = body
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg)
+  }
+  if (res.status === 204) return undefined as T
+  return res.json() as Promise<T>
+}
+
 export const politicalPartyApi = {
-  getAll: async () => {
-    return []
+  getAll: async (params?: { countryId?: string; historicalCountryId?: string }) => {
+    return fetchParties(params) as Promise<PoliticalParty[]>
   },
 
   getByCountryId: async (countryId: string) => {
-    return []
+    return fetchParties({ countryId }) as Promise<PoliticalParty[]>
   },
 
   getById: async (id: string) => {
-    return null
+    return requestJson<PoliticalParty>(`/political-parties/${encodeURIComponent(id)}`)
   },
 
-  create: async (_data: CreatePoliticalPartyInput) => {
-    return null
+  create: async (data: CreatePoliticalPartyInput) => {
+    return requestJson<PoliticalParty>('/political-parties', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   },
 
-  update: async (_id: string, _data: UpdatePoliticalPartyInput) => {
-    return null
+  update: async (id: string, data: UpdatePoliticalPartyInput) => {
+    return requestJson<PoliticalParty>(`/political-parties/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
   },
 
-  delete: async (_id: string) => {},
+  delete: async (id: string) => {
+    await requestJson<void>(`/political-parties/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  },
 }

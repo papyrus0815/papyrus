@@ -780,6 +780,48 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
         },
+        politicalPartyMemberships: {
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            roleCategory: true,
+            leadershipTier: true,
+            roleTitle: true,
+            notes: true,
+            party: {
+              select: {
+                id: true,
+                name: true,
+                shortName: true,
+              },
+            },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        electionCandidacies: {
+          select: {
+            id: true,
+            nominationType: true,
+            ballotOrder: true,
+            listRank: true,
+            withdrawnDate: true,
+            notes: true,
+            party: { select: { id: true, name: true, shortName: true } },
+            electoralDistrict: { select: { id: true, name: true, code: true } },
+            election: {
+              select: {
+                id: true,
+                name: true,
+                shortName: true,
+                pollDate: true,
+                electionType: true,
+              },
+            },
+            result: true,
+          },
+          orderBy: { id: Prisma.SortOrder.desc },
+        },
         MilitaryUnitCommander: {
           select: {
             id: true,
@@ -870,6 +912,12 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: {
                 id: true,
                 name: true,
+              },
+            },
+            electionCandidacy: {
+              select: {
+                id: true,
+                election: { select: { id: true, name: true, pollDate: true } },
               },
             },
           },
@@ -1285,6 +1333,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         priority: dto.priority,
         cabinetId: dto.cabinetId ?? undefined,
         administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
+        electionCandidacyId: dto.electionCandidacyId ?? undefined,
         ...(accountId != null && { accountId }),
       },
       include: {
@@ -1293,6 +1342,12 @@ export class PersonPrismaRepository implements IPersonRepository {
         historicalCountry: true,
         person: true,
         cabinet: { include: { headTenure: { include: { person: true } } } },
+        electionCandidacy: {
+          select: {
+            id: true,
+            election: { select: { id: true, name: true, pollDate: true } },
+          },
+        },
       },
     })
     
@@ -1346,6 +1401,8 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.cabinetId !== undefined) updateData.cabinetId = dto.cabinetId || null
     if (dto.administrationDepartmentId !== undefined)
       updateData.administrationDepartmentId = dto.administrationDepartmentId || null
+    if (dto.electionCandidacyId !== undefined)
+      updateData.electionCandidacyId = dto.electionCandidacyId || null
 
     const tenure = await this.prisma.governmentPositionTenure.update({
       where: { id },
@@ -1356,6 +1413,12 @@ export class PersonPrismaRepository implements IPersonRepository {
         historicalCountry: true,
         person: true,
         cabinet: { include: { headTenure: { include: { person: true } } } },
+        electionCandidacy: {
+          select: {
+            id: true,
+            election: { select: { id: true, name: true, pollDate: true } },
+          },
+        },
       },
     })
 
@@ -1971,6 +2034,12 @@ export class PersonPrismaRepository implements IPersonRepository {
         country: true,
         historicalCountry: true,
         achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+        electionCandidacy: {
+          select: {
+            id: true,
+            election: { select: { id: true, name: true, pollDate: true } },
+          },
+        },
       },
       orderBy: { startDate: 'desc' },
     })

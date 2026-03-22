@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
-import { TypedBody, TypedParam, TypedRoute } from '@nestia/core'
 import { PersonService } from '../application/person.service'
 import { 
   CreatePersonDto, 
@@ -43,6 +42,8 @@ import {
   MedicalCareerResponseDto,
   PersonEducationResponseDto,
   PersonAwardResponseDto,
+  CreatePersonHumanRelationshipDto,
+  UpdatePersonHumanRelationshipDto,
 } from './dto'
 
 /**
@@ -121,6 +122,50 @@ export class PersonController {
   }
 
   /**
+   * 인물 간 인간관계 목록 (멘토·친밀도 등)
+   */
+  @Get(':id/human-relationships')
+  async getHumanRelationships(@Param('id') id: string, @Request() req: any) {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findHumanRelationships(id, accountId)
+  }
+
+  /**
+   * 인간관계 추가 (MENTOR: body.subjectIsMentor=false면 경로 인물이 제자)
+   */
+  @Post(':id/human-relationships')
+  async createHumanRelationship(
+    @Param('id') id: string,
+    @Body() dto: CreatePersonHumanRelationshipDto,
+    @Request() req: any,
+  ) {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.createHumanRelationship(id, dto, accountId)
+  }
+
+  @Put(':personId/human-relationships/:relationshipId')
+  async updateHumanRelationship(
+    @Param('personId') personId: string,
+    @Param('relationshipId') relationshipId: string,
+    @Body() dto: UpdatePersonHumanRelationshipDto,
+    @Request() req: any,
+  ) {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.updateHumanRelationship(personId, relationshipId, dto, accountId)
+  }
+
+  @Delete(':personId/human-relationships/:relationshipId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteHumanRelationship(
+    @Param('personId') personId: string,
+    @Param('relationshipId') relationshipId: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.personService.deleteHumanRelationship(personId, relationshipId, accountId)
+  }
+
+  /**
    * ID로 인물 상세 조회 (본인 등록분만)
    */
   @Get(':id/detail')
@@ -164,11 +209,14 @@ export class PersonController {
     books: any[]
     organizationRoles: any[]
     partyLeaderships: any[]
+    partyMemberships: any[]
+    electionCandidacies: any[]
     militaryCommands: any[]
     events: any[]
     governmentPositions: any[]
     spouseRelations: any[]
     spouse: any
+    humanRelationships: any[]
     isBirthDateUnknown: boolean
     isDeathDateUnknown: boolean
     isAlive: boolean
@@ -177,6 +225,7 @@ export class PersonController {
   }> {
     const accountId = req.user?.id ?? req.user?.sub
     const person: any = await this.personService.findByIdWithRelations(id, accountId)
+    const humanRelationships = await this.personService.findHumanRelationships(id, accountId)
 
     // 부모와 자녀 중복 제거
     const childrenMap = new Map()
@@ -250,6 +299,8 @@ export class PersonController {
       books: person.Book || [],
       organizationRoles: person.OrganizationPersonRole || [],
       partyLeaderships: person.PoliticalPartyLeadership || [],
+      partyMemberships: serializeBigInt(person.politicalPartyMemberships || []),
+      electionCandidacies: serializeBigInt(person.electionCandidacies || []),
       militaryCommands: person.MilitaryUnitCommander || [],
       events: person.PersonEvent || [],
       governmentPositions: person.GovernmentTenures || [],
@@ -261,6 +312,7 @@ export class PersonController {
         spouse: rel.spouse,
       })),
       spouse: person.spouseRelationsAsPerson?.[0]?.spouse ?? null,
+      humanRelationships,
       isBirthDateUnknown: person.isBirthDateUnknown ?? false,
       isDeathDateUnknown: person.isDeathDateUnknown ?? false,
       isAlive: person.isAlive ?? false,
