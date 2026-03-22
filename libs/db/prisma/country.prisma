@@ -356,8 +356,8 @@ model AdministrationDepartment {
   /// 썸네일 이미지 URL
   thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
 
-  /// 일반 설명 (소개, 연혁 등)
-  description String?
+  /// 일반 설명 (소개, 연혁 등 — 리치 텍스트·긴 소개 허용)
+  description String? @db.Text
 
   /// 설립/설치일 (기관이 언제 만들어졌는지)
   establishedDate DateTime? @map("established_date")
