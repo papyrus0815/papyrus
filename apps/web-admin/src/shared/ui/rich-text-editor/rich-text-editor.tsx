@@ -36,6 +36,7 @@ import {
   MENTION_TYPE_CONFIG,
   searchMentionEntities,
 } from '@/shared/lib/mention/mention-system'
+import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { PROSE_HR_HTML, proseHrStyles } from '@/shared/styles/prose-hr'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { scrollbarMixin } from '@/shared/styles/mixins'
@@ -1224,7 +1225,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   useEffect(() => {
     if (editorRef.current) {
       const currentContent = editorRef.current.innerHTML
-      const newContent = value || ''
+      const newContent = sanitizeRichTextHtml(value || '')
 
       // 값이 실제로 변경되었을 때만 업데이트 (무한 루프 방지)
       if (currentContent !== newContent) {
@@ -1262,22 +1263,23 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // 텍스트 선택 감지
   useEffect(() => {
     const handleSelectionChange = () => {
+      const editor = editorRef.current
+      if (!editor) return
       const selection = window.getSelection()
       if (!selection || selection.rangeCount === 0) return
 
       const range = selection.getRangeAt(0)
+      if (!editor.contains(range.commonAncestorContainer)) return
+
       const text = range.toString().trim()
 
-      // 에디터 내부에서 선택했는지 확인
-      if (editorRef.current?.contains(range.commonAncestorContainer)) {
-        if (text.length > 0) {
-          setSelectedText(text)
-          setSelectedTextRange(range.cloneRange())
-        } else {
-          setSelectedText('')
-          setSelectedTextRange(null)
-          setContextMenuVisible(false)
-        }
+      if (text.length > 0) {
+        setSelectedText(text)
+        setSelectedTextRange(range.cloneRange())
+      } else {
+        setSelectedText('')
+        setSelectedTextRange(null)
+        setContextMenuVisible(false)
       }
     }
 
@@ -1585,7 +1587,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           const span = el as HTMLElement
           span.removeAttribute('style')
         })
-        const cleanedHtml = temp.innerHTML
+        const cleanedHtml = sanitizeRichTextHtml(temp.innerHTML)
         document.execCommand('insertHTML', false, cleanedHtml)
         handleContentChange()
       }
@@ -2536,6 +2538,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <EditorContent
           ref={editorRef}
           contentEditable
+          role="textbox"
+          aria-multiline="true"
+          aria-label={placeholder}
           data-placeholder={placeholder}
           onBeforeInput={handleBeforeInput}
           onInput={handleContentChange}
