@@ -46,7 +46,10 @@ import { getAllCountries } from '@/shared/api/countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
-import { personCareerApi } from '@/shared/api/person-career'
+import {
+  type GovernmentCabinetTenureItem,
+  personCareerApi,
+} from '@/shared/api/person-career'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import {
@@ -104,11 +107,18 @@ import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { SidePanel } from '@/shared/ui/side-panel'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
+import { CabinetDetailChrome } from './cabinet-detail-chrome.widget'
+import { CabinetMinisterCards } from './cabinet-minister-cards.widget'
 import {
   TlItem,
   cabinetTimelineCellAriaLabel,
   formatCabinetTermBadge,
 } from './cabinets-section-timeline'
+import {
+  CABINET_QS,
+  MINISTER_QS,
+  useCabinetSectionUrlSync,
+} from './cabinets-section-url-sync'
 import {
   HEAD_POSITION_TYPES,
   CABINET_SECTION_MAIN as MAIN,
@@ -133,6 +143,7 @@ import {
   calcTenureDuration,
   formatDate,
   getPersonName,
+  stripHtmlToPlain,
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 import { RegisterCabinetModal } from './register-cabinet-modal'
@@ -149,6 +160,8 @@ export function CabinetsSection({
   onOpenMinistriesTab,
 }: CabinetsSectionProps) {
   const queryClient = useQueryClient()
+  const { searchParams, pushCabinetParams, lastPushedKeyRef } =
+    useCabinetSectionUrlSync()
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
   const C = getCabinetsSectionPalette(isDark)
@@ -352,6 +365,9 @@ export function CabinetsSection({
   const [selectedTreatyId, setSelectedTreatyId] = useState<string | null>(null)
   const [showTreatyLinkModal, setShowTreatyLinkModal] = useState(false)
 
+  const cabDetailBackBtnRef = useRef<HTMLButtonElement>(null)
+  const cabinetViewPrevRef = useRef<'list' | 'detail'>(cabinetView)
+
   const { data: cabinets = [], isLoading: loadingCabinets } = useQuery({
     queryKey: ['cabinets-by-country', countryId, historicalCountryId],
     queryFn: () =>
@@ -433,7 +449,7 @@ export function CabinetsSection({
     return { minY: Math.min(...years), maxY: Math.max(...years) }
   }, [filteredCabinets])
 
-  const isMinisterMatched = (t: any) => {
+  const isMinisterMatched = (t: GovernmentCabinetTenureItem) => {
     const q = ministerSearchQuery.trim().toLowerCase()
     if (!q) return true
     const personName = getPersonName(t.person)
@@ -455,7 +471,10 @@ export function CabinetsSection({
   /** 선택한 정권의 각료 — 부처 그리드에 채우기 위함 */
   const effectiveCountryIdForDept =
     country.type === 'historical' ? undefined : country.id
-  const { data: selectedCabinetMinisters = [] } = useQuery({
+  const {
+    data: selectedCabinetMinisters = [],
+    isPending: loadingCabinetMinisters,
+  } = useQuery({
     queryKey: ['cabinet-tenures', selectedCabinetId],
     queryFn: () =>
       selectedCabinetId
@@ -977,6 +996,7 @@ export function CabinetsSection({
       if (selectedCabinetId === cabinetId) {
         setSelectedCabinetId(null)
         setCabinetView('list')
+        pushCabinetParams(null, null)
       }
       queryClient.invalidateQueries({
         queryKey: ['cabinets-by-country', countryId, historicalCountryId],
@@ -997,8 +1017,8 @@ export function CabinetsSection({
     }
   }
 
-  const handleOpenEditCabinet = (c: any, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleOpenEditCabinet = (c: any, e?: React.MouseEvent) => {
+    e?.stopPropagation()
     const head = c.headTenure
     setEditingCabinet(c)
     setEditingCabinetName(c.name ?? '')
@@ -1202,14 +1222,31 @@ export function CabinetsSection({
   )
   const hasSelectedCabinet = Boolean(selectedCabinetId && selectedCabinet)
 
-  const historyTargetTenure = useMemo(() => {
+  useEffect(() => {
+    let cancelRaf: (() => void) | undefined
+    if (
+      cabinetView === 'detail' &&
+      cabinetViewPrevRef.current === 'list' &&
+      hasSelectedCabinet
+    ) {
+      const id = requestAnimationFrame(() =>
+        cabDetailBackBtnRef.current?.focus(),
+      )
+      cancelRaf = () => cancelAnimationFrame(id)
+    }
+    cabinetViewPrevRef.current = cabinetView
+    return cancelRaf
+  }, [cabinetView, hasSelectedCabinet])
+
+  const historyTargetTenure = useMemo((): GovernmentCabinetTenureItem | null => {
     if (!historyTargetTenureId) return null
-    const fromMinisters = (selectedCabinetMinisters as any[]).find(
-      (t: any) => t.id === historyTargetTenureId,
+    const fromMinisters = selectedCabinetMinisters.find(
+      (t) => t.id === historyTargetTenureId,
     )
     if (fromMinisters) return fromMinisters
     const head = selectedCabinet?.headTenure
-    if (head?.id === historyTargetTenureId) return head
+    if (head?.id === historyTargetTenureId)
+      return head as GovernmentCabinetTenureItem
     return null
   }, [selectedCabinetMinisters, selectedCabinet, historyTargetTenureId])
 
@@ -1226,19 +1263,75 @@ export function CabinetsSection({
     }
   }, [historyTargetTenureId, historyTargetTenure])
 
-  const visibleSelectedCabinetMinisters = (
-    selectedCabinetMinisters as any[]
-  ).filter((t: any) => isMinisterMatched(t))
+  const visibleSelectedCabinetMinisters = selectedCabinetMinisters.filter(
+    (t) => isMinisterMatched(t),
+  )
   const sortedVisibleMinisters = useMemo(
     () =>
-      [...visibleSelectedCabinetMinisters].sort((a: any, b: any) => {
+      [...visibleSelectedCabinetMinisters].sort((a, b) => {
         const aTime = a?.startDate ? new Date(a.startDate).getTime() : 0
         const bTime = b?.startDate ? new Date(b.startDate).getTime() : 0
         return bTime - aTime
       }),
     [visibleSelectedCabinetMinisters],
   )
-  const getMinisterDepartmentName = (t: any) => {
+
+  useEffect(() => {
+    const cab = searchParams.get(CABINET_QS)
+    const min = searchParams.get(MINISTER_QS)
+    const key = `${cab ?? ''}\t${min ?? ''}`
+    if (key === lastPushedKeyRef.current) {
+      lastPushedKeyRef.current = null
+      return
+    }
+
+    if (loadingCabinets) return
+
+    if (!cab) {
+      setCabinetView('list')
+      setSelectedCabinetId(null)
+      setSelectedMinisterId(null)
+      setSelectedHeadHistoryId(null)
+      setSelectedHistoryId(null)
+      setSelectedTreatyId(null)
+      return
+    }
+
+    if (!sortedCabinets.some((c: any) => c.id === cab)) {
+      setCabinetView('list')
+      setSelectedCabinetId(null)
+      setSelectedMinisterId(null)
+      setSelectedHeadHistoryId(null)
+      setSelectedHistoryId(null)
+      setSelectedTreatyId(null)
+      pushCabinetParams(null, null, { replace: true })
+      return
+    }
+
+    setSelectedCabinetId(cab)
+    setCabinetView('detail')
+
+    if (!min) {
+      setSelectedMinisterId(null)
+      setSelectedHistoryId(null)
+      return
+    }
+
+    if (loadingCabinetMinisters) return
+    const ok = selectedCabinetMinisters.some((t) => t.id === min)
+    if (ok) setSelectedMinisterId(min)
+    else setSelectedMinisterId(null)
+  }, [
+    loadingCabinets,
+    loadingCabinetMinisters,
+    searchParams,
+    sortedCabinets,
+    selectedCabinetMinisters,
+    lastPushedKeyRef,
+    pushCabinetParams,
+  ])
+
+  const getMinisterDepartmentName = (t: GovernmentCabinetTenureItem) => {
     const depId = t?.positionDefinition?.administrationDepartmentId
     if (!depId) return '미연결'
     const dep = (ministriesForCabinet as any[]).find((d: any) => d.id === depId)
@@ -1549,7 +1642,11 @@ export function CabinetsSection({
                         )}
                         <div style={{ flex: 1 }} />
                         <div
-                          style={{ display: 'flex', gap: 4, alignItems: 'center' }}
+                          style={{
+                            display: 'flex',
+                            gap: 4,
+                            alignItems: 'center',
+                          }}
                           title="행마다 반복되는 구분 색(4색 순환)"
                           aria-label="행 구분 색 범례"
                         >
@@ -1577,9 +1674,10 @@ export function CabinetsSection({
                           fontWeight: 500,
                         }}
                       >
-                        색 띠는 <strong style={{ color: C.text }}>행 구분</strong>
-                        용입니다. 짝수 행은 왼쪽→오른쪽, 홀수 행은 오른쪽→왼쪽으로
-                        시간이 이어집니다.
+                        색 띠는{' '}
+                        <strong style={{ color: C.text }}>행 구분</strong>
+                        용입니다. 짝수 행은 왼쪽→오른쪽, 홀수 행은
+                        오른쪽→왼쪽으로 시간이 이어집니다.
                       </p>
                     </div>
                     <div
@@ -1804,6 +1902,9 @@ export function CabinetsSection({
                                             if (!isDeleting) {
                                               setSelectedCabinetId(item.id)
                                               setCabinetView('detail')
+                                              pushCabinetParams(item.id, null, {
+                                                replace: false,
+                                              })
                                             }
                                           }}
                                         >
@@ -2104,206 +2205,35 @@ export function CabinetsSection({
           >
             {hasSelectedCabinet && selectedCabinet && (
               <>
-                <CabS.CabDetailTopBar>
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                  >
-                    <CabS.CabDetailBackBtn
-                      type="button"
-                      onClick={() => {
-                        setCabinetView('list')
-                        setSelectedCabinetId(null)
-                        setSelectedMinisterId(null)
-                        setSelectedHeadHistoryId(null)
-                      }}
-                    >
-                      <FiChevronLeft size={14} />
-                      행정부 목록
-                    </CabS.CabDetailBackBtn>
-                    {/* 현재 선택된 행정부명 (브레드크럼) */}
-                    {selectedCabinet && (
-                      <>
-                        <CabS.CabBreadcrumbSep>/</CabS.CabBreadcrumbSep>
-                        {selectedMinisterId ? (
-                          <CabS.CabDetailBackBtn
-                            type="button"
-                            onClick={() => {
-                              setSelectedMinisterId(null)
-                              setSelectedHistoryId(null)
-                              setSelectedHeadHistoryId(null)
-                              setEditingHistoryContent(false)
-                            }}
-                          >
-                            {(() => {
-                              const h = selectedCabinet.headTenure
-                              const n = h?.person
-                                ? getPersonName(h.person)
-                                : null
-                              const t = h?.termNumber ?? h?.regnalNumber
-                              return n
-                                ? t != null
-                                  ? `제${t}대${h?.subTermNumber != null ? ` ${h.subTermNumber}기` : ''} ${n}`
-                                  : n
-                                : '행정부 상세'
-                            })()}
-                          </CabS.CabDetailBackBtn>
-                        ) : (
-                          <CabS.CabDetailCrumbText>
-                            {(() => {
-                              const h = selectedCabinet.headTenure
-                              const n = h?.person
-                                ? getPersonName(h.person)
-                                : null
-                              const t = h?.termNumber ?? h?.regnalNumber
-                              return n
-                                ? t != null
-                                  ? `제${t}대${h?.subTermNumber != null ? ` ${h.subTermNumber}기` : ''} ${n}`
-                                  : n
-                                : '행정부 상세'
-                            })()}
-                          </CabS.CabDetailCrumbText>
-                        )}
-                      </>
-                    )}
-                    {/* 각료 선택 시 각료명 표시 */}
-                    {selectedMinisterId &&
-                      (() => {
-                        const m = sortedVisibleMinisters.find(
-                          (t: any) => t.id === selectedMinisterId,
-                        )
-                        const mn = m?.person ? getPersonName(m.person) : null
-                        if (!mn) return null
-                        return (
-                          <>
-                            <CabS.CabBreadcrumbSep>/</CabS.CabBreadcrumbSep>
-                            <CabS.CabDetailCrumbText title={mn}>
-                              {mn}
-                            </CabS.CabDetailCrumbText>
-                          </>
-                        )
-                      })()}
-                  </div>
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                  >
-                    {/* 각료 상세에서 편집/삭제 버튼 */}
-                    {selectedMinisterId &&
-                      (() => {
-                        const minister = sortedVisibleMinisters.find(
-                          (t: any) => t.id === selectedMinisterId,
-                        )
-                        if (!minister) return null
-                        return (
-                          <>
-                            <CabS.DetailToolbarGhostBtn
-                              onClick={() => {
-                                setMinisterFormPositionDefId(
-                                  minister.positionDefinition?.id ?? null,
-                                )
-                                setMinisterFormTitle(minister.title ?? '')
-                                setMinisterFormStartDate(
-                                  minister.startDate
-                                    ? minister.startDate.slice(0, 10)
-                                    : '',
-                                )
-                                setMinisterFormEndDate(
-                                  minister.endDate
-                                    ? minister.endDate.slice(0, 10)
-                                    : '',
-                                )
-                                setMinisterFormTermNumber(
-                                  minister.termNumber != null
-                                    ? String(minister.termNumber)
-                                    : '',
-                                )
-                                setMinisterFormDeptId(
-                                  minister.administrationDepartmentId ?? null,
-                                )
-                                setAddMinisterCabinet({
-                                  ...selectedCabinet,
-                                  _editingTenureId: minister.id,
-                                })
-                                setPersonSelectOpen(true)
-                              }}
-                            >
-                              <FiEdit2 size={12} />
-                              수정
-                            </CabS.DetailToolbarGhostBtn>
-                          </>
-                        )
-                      })()}
-                    {/* 행정부 삭제 버튼 (행정부 상세일 때) */}
-                    {!selectedMinisterId && selectedCabinet && (
-                      <CabS.CabDetailDeleteBtn
-                        onClick={(e) =>
-                          handleDeleteCabinet(selectedCabinet.id, e)
-                        }
-                      >
-                        <FiTrash2 size={12} />
-                        행정부 삭제
-                      </CabS.CabDetailDeleteBtn>
-                    )}
-                  </div>
-                </CabS.CabDetailTopBar>
-                {!selectedMinisterId && selectedCabinet && (
-                  <CabS.CabDetailAnchorNav aria-label="아래쪽 본문 구역으로 스크롤 (탭 전환 아님)">
-                    <CabS.CabDetailAnchorBtn
-                      title="이 화면 안에서 수반 프로필 위치로 스크롤합니다"
-                      onClick={() => scrollToCabSection('cab-detail-profile')}
-                    >
-                      수반
-                    </CabS.CabDetailAnchorBtn>
-                    {!selectedHeadHistoryId && (
-                      <>
-                        <CabS.CabDetailAnchorBtn
-                          title="이 화면 안에서 취임·퇴임 정보 블록으로 스크롤합니다"
-                          onClick={() =>
-                            scrollToCabSection('cab-detail-tenure')
-                          }
-                        >
-                          취임·퇴임
-                        </CabS.CabDetailAnchorBtn>
-                        <CabS.CabDetailAnchorBtn
-                          title="이 화면 안에서 각료 목록으로 스크롤합니다"
-                          onClick={() =>
-                            scrollToCabSection('cab-detail-ministers')
-                          }
-                        >
-                          각료
-                        </CabS.CabDetailAnchorBtn>
-                        <CabS.CabDetailAnchorBtn
-                          title="이 화면 안에서 조약 섹션으로 스크롤합니다"
-                          onClick={() =>
-                            scrollToCabSection('cab-detail-treaties')
-                          }
-                        >
-                          조약
-                        </CabS.CabDetailAnchorBtn>
-                      </>
-                    )}
-                  </CabS.CabDetailAnchorNav>
-                )}
-                {!selectedMinisterId &&
-                  selectedCabinet &&
-                  selectedHeadHistoryId && (
-                    <p
-                      style={{
-                        margin: '0 0 10px',
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: C.textMuted,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      히스토리 읽기 중 — 목록으로 돌아가면 취임·퇴임·각료·조약이
-                      다시 표시됩니다.
-                    </p>
-                  )}
+                <CabinetDetailChrome
+                  cabDetailBackBtnRef={cabDetailBackBtnRef}
+                  selectedCabinet={selectedCabinet}
+                  selectedMinisterId={selectedMinisterId}
+                  selectedHeadHistoryId={selectedHeadHistoryId}
+                  sortedVisibleMinisters={sortedVisibleMinisters}
+                  pushCabinetParams={pushCabinetParams}
+                  setCabinetView={setCabinetView}
+                  setSelectedCabinetId={setSelectedCabinetId}
+                  setSelectedMinisterId={setSelectedMinisterId}
+                  setSelectedHeadHistoryId={setSelectedHeadHistoryId}
+                  setSelectedHistoryId={setSelectedHistoryId}
+                  setEditingHistoryContent={setEditingHistoryContent}
+                  setMinisterFormPositionDefId={setMinisterFormPositionDefId}
+                  setMinisterFormTitle={setMinisterFormTitle}
+                  setMinisterFormStartDate={setMinisterFormStartDate}
+                  setMinisterFormEndDate={setMinisterFormEndDate}
+                  setMinisterFormTermNumber={setMinisterFormTermNumber}
+                  setMinisterFormDeptId={setMinisterFormDeptId}
+                  setAddMinisterCabinet={setAddMinisterCabinet}
+                  setPersonSelectOpen={setPersonSelectOpen}
+                  handleDeleteCabinet={handleDeleteCabinet}
+                  scrollToCabSection={scrollToCabSection}
+                />
                 {selectedMinisterId
                   ? /* ── 각료 상세 뷰 ── */
                     (() => {
                       const minister = sortedVisibleMinisters.find(
-                        (t: any) => t.id === selectedMinisterId,
+                        (t) => t.id === selectedMinisterId,
                       )
                       if (!minister) return null
                       const achievementCount = Array.isArray(
@@ -2329,11 +2259,14 @@ export function CabinetsSection({
                         minister.endDate,
                       )
                       const ageAtStart = calcAgeAtTenure(
-                        minister.person,
+                        minister.person ?? null,
                         minister.startDate,
                       )
                       const ageAtEnd = minister.endDate
-                        ? calcAgeAtEndTenure(minister.person, minister.endDate)
+                        ? calcAgeAtEndTenure(
+                            minister.person ?? null,
+                            minister.endDate,
+                          )
                         : null
                       return (
                         <>
@@ -2368,7 +2301,7 @@ export function CabinetsSection({
                                   }}
                                 />
                               ) : (
-                                <FiUser size={28} color="#c0cad8" />
+                                <FiUser size={28} color={C.iconColor} />
                               )}
                             </CabS.MinisterProfileAvatar>
                             <CabS.MinisterProfileMeta>
@@ -2408,7 +2341,7 @@ export function CabinetsSection({
                                   <span
                                     style={{
                                       fontWeight: 700,
-                                      color: '#94a3b8',
+                                      color: C.slate400,
                                       marginRight: 4,
                                       fontSize: 10,
                                       textTransform: 'uppercase',
@@ -2431,7 +2364,7 @@ export function CabinetsSection({
                                     <span
                                       style={{
                                         fontWeight: 700,
-                                        color: '#94a3b8',
+                                        color: C.slate400,
                                         marginRight: 4,
                                         fontSize: 10,
                                         textTransform: 'uppercase',
@@ -2521,7 +2454,7 @@ export function CabinetsSection({
                                             />
                                             <span
                                               style={{
-                                                color: '#c0cad8',
+                                                color: C.textFaint,
                                                 fontSize: 13,
                                               }}
                                             >
@@ -2705,7 +2638,7 @@ export function CabinetsSection({
                                       >
                                         <CabS.HistoryArticleProse
                                           dangerouslySetInnerHTML={{
-                                            __html: selAch.description,
+                                            __html: selAch.description ?? '',
                                           }}
                                         />
                                       </div>
@@ -2757,7 +2690,8 @@ export function CabinetsSection({
                                 </CabS.ProfileEmptyNote>
                               ) : (
                                 <CabS.HistoryCardList>
-                                  {minister.achievements.map((ach: any) => (
+                                  {(minister.achievements ?? []).map(
+                                    (ach: any) => (
                                     <CabS.HistoryCard
                                       key={ach.id}
                                       onClick={() =>
@@ -2780,15 +2714,10 @@ export function CabinetsSection({
                                       )}
                                       {ach.description && (
                                         <CabS.HistoryCardExcerpt>
-                                          {ach.description
-                                            .replace(/<[^>]+>/g, '')
-                                            .trim()
-                                            .slice(0, 80)}
-                                          {ach.description
-                                            .replace(/<[^>]+>/g, '')
-                                            .trim().length > 80
-                                            ? '…'
-                                            : ''}
+                                          {stripHtmlToPlain(
+                                            ach.description,
+                                            80,
+                                          )}
                                         </CabS.HistoryCardExcerpt>
                                       )}
                                       <CabS.HistoryCardChevron>
@@ -2893,7 +2822,7 @@ export function CabinetsSection({
                                     }}
                                   />
                                 ) : (
-                                  <FiUser size={28} color="#c0cad8" />
+                                  <FiUser size={28} color={C.iconColor} />
                                 )}
                               </CabS.MinisterProfileAvatar>
                               <CabS.MinisterProfileMeta>
@@ -2945,10 +2874,7 @@ export function CabinetsSection({
                                 <CabS.HeadActionBtn
                                   type="button"
                                   onClick={() =>
-                                    handleOpenEditCabinet(selectedCabinet, {
-                                      stopPropagation: () => {},
-                                      preventDefault: () => {},
-                                    } as any)
+                                    handleOpenEditCabinet(selectedCabinet)
                                   }
                                 >
                                   <FiEdit2 size={12} />
@@ -2993,7 +2919,7 @@ export function CabinetsSection({
                                     }}
                                   />
                                 ) : (
-                                  <FiUser size={52} color="#c0cad8" />
+                                  <FiUser size={52} color={C.iconColor} />
                                 )}
                               </CabS.HeadProfileAvatar>
                               <CabS.HeadProfileMeta>
@@ -3034,7 +2960,7 @@ export function CabinetsSection({
                                     <span
                                       style={{
                                         fontWeight: 700,
-                                        color: '#94a3b8',
+                                        color: C.slate400,
                                         marginRight: 4,
                                         fontSize: 10,
                                         textTransform: 'uppercase',
@@ -3057,7 +2983,7 @@ export function CabinetsSection({
                                       <span
                                         style={{
                                           fontWeight: 700,
-                                          color: '#94a3b8',
+                                          color: C.slate400,
                                           marginRight: 4,
                                           fontSize: 10,
                                           textTransform: 'uppercase',
@@ -3227,7 +3153,7 @@ export function CabinetsSection({
                                             display: 'block',
                                             fontSize: 11,
                                             fontWeight: 700,
-                                            color: '#94a3b8',
+                                            color: C.slate400,
                                             marginBottom: 4,
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em',
@@ -3270,7 +3196,7 @@ export function CabinetsSection({
                                             display: 'block',
                                             fontSize: 11,
                                             fontWeight: 700,
-                                            color: '#94a3b8',
+                                            color: C.slate400,
                                             marginBottom: 4,
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em',
@@ -3334,7 +3260,7 @@ export function CabinetsSection({
                                       style={{
                                         margin: '2px 0 0',
                                         fontSize: 12,
-                                        color: '#c0cad8',
+                                        color: C.textFaint,
                                       }}
                                     >
                                       — 등록된 정보 없음
@@ -3487,7 +3413,7 @@ export function CabinetsSection({
                                             display: 'block',
                                             fontSize: 11,
                                             fontWeight: 700,
-                                            color: '#94a3b8',
+                                            color: C.slate400,
                                             marginBottom: 4,
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em',
@@ -3528,7 +3454,7 @@ export function CabinetsSection({
                                             display: 'block',
                                             fontSize: 11,
                                             fontWeight: 700,
-                                            color: '#94a3b8',
+                                            color: C.slate400,
                                             marginBottom: 4,
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.05em',
@@ -3594,7 +3520,7 @@ export function CabinetsSection({
                                       style={{
                                         margin: '2px 0 0',
                                         fontSize: 12,
-                                        color: '#c0cad8',
+                                        color: C.textFaint,
                                       }}
                                     >
                                       — 등록된 정보 없음
@@ -3680,7 +3606,7 @@ export function CabinetsSection({
                                               />
                                               <span
                                                 style={{
-                                                  color: '#c0cad8',
+                                                  color: C.textFaint,
                                                   fontSize: 13,
                                                 }}
                                               >
@@ -3954,15 +3880,10 @@ export function CabinetsSection({
                                         )}
                                         {ach.description && (
                                           <CabS.HistoryCardExcerpt>
-                                            {ach.description
-                                              .replace(/<[^>]+>/g, '')
-                                              .trim()
-                                              .slice(0, 80)}
-                                            {ach.description
-                                              .replace(/<[^>]+>/g, '')
-                                              .trim().length > 80
-                                              ? '…'
-                                              : ''}
+                                            {stripHtmlToPlain(
+                                              ach.description,
+                                              80,
+                                            )}
                                           </CabS.HistoryCardExcerpt>
                                         )}
                                         <CabS.HistoryCardChevron>
@@ -3985,25 +3906,13 @@ export function CabinetsSection({
                                     ))}
                                   </CabS.HistoryCardList>
                                 ) : (
-                                  <div
-                                    style={{
-                                      padding: '20px 0',
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      alignItems: 'center',
-                                      gap: 10,
-                                    }}
-                                  >
-                                    <p
-                                      style={{
-                                        margin: 0,
-                                        fontSize: 12,
-                                        color: C.textMuted,
-                                        fontStyle: 'italic',
-                                      }}
+                                  <CabS.CabDetailEmptyStack $padding="20px 0">
+                                    <CabS.CabDetailEmptyText
+                                      $fontSize="12px"
+                                      $muted
                                     >
                                       등록된 재임 히스토리가 없습니다.
-                                    </p>
+                                    </CabS.CabDetailEmptyText>
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -4026,7 +3935,7 @@ export function CabinetsSection({
                                       <FiPlus size={12} />
                                       등록
                                     </button>
-                                  </div>
+                                  </CabS.CabDetailEmptyStack>
                                 )}
                               </>
                             )}
@@ -4046,7 +3955,9 @@ export function CabinetsSection({
                                   <CabS.CabResultCount
                                     style={{ marginLeft: 6 }}
                                   >
-                                    {sortedVisibleMinisters.length}명
+                                    {loadingCabinetMinisters
+                                      ? '…'
+                                      : `${sortedVisibleMinisters.length}명`}
                                   </CabS.CabResultCount>
                                   <div style={{ flex: 1 }} />
                                   {/* 검색창 — 6명 초과일 때만 표시, 추가 버튼 왼쪽 */}
@@ -4081,44 +3992,8 @@ export function CabinetsSection({
                                       )}
                                     </CabS.CabSearchWrap>
                                   )}
-                                  {sortedVisibleMinisters.length > 0 && (
-                                    <CabS.HeadActionBtnPrimary
-                                      type="button"
-                                      onClick={() =>
-                                        handleAddMinister(selectedCabinet)
-                                      }
-                                    >
-                                      <FiPlus size={13} />
-                                      각료 추가
-                                    </CabS.HeadActionBtnPrimary>
-                                  )}
-                                </CabS.CabDetailMinistersSectionHeader>
-
-                                {sortedVisibleMinisters.length === 0 ? (
-                                  ministerSearchQuery.trim() ? (
-                                    <CabS.EmptyStateBox>
-                                      검색 결과가 없습니다.
-                                    </CabS.EmptyStateBox>
-                                  ) : (
-                                    <div
-                                      style={{
-                                        padding: '32px 0',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                      }}
-                                    >
-                                      <p
-                                        style={{
-                                          margin: 0,
-                                          fontSize: 13,
-                                          color: '#b0bac9',
-                                          fontStyle: 'italic',
-                                        }}
-                                      >
-                                        등록된 각료가 없습니다.
-                                      </p>
+                                  {!loadingCabinetMinisters &&
+                                    sortedVisibleMinisters.length > 0 && (
                                       <CabS.HeadActionBtnPrimary
                                         type="button"
                                         onClick={() =>
@@ -4128,120 +4003,57 @@ export function CabinetsSection({
                                         <FiPlus size={13} />
                                         각료 추가
                                       </CabS.HeadActionBtnPrimary>
-                                    </div>
+                                    )}
+                                </CabS.CabDetailMinistersSectionHeader>
+
+                                {loadingCabinetMinisters ? (
+                                  <CabS.CabMinistersLoadingBox
+                                    aria-busy="true"
+                                    aria-live="polite"
+                                  >
+                                    각료 불러오는 중…
+                                  </CabS.CabMinistersLoadingBox>
+                                ) : sortedVisibleMinisters.length === 0 ? (
+                                  ministerSearchQuery.trim() ? (
+                                    <CabS.EmptyStateBox>
+                                      검색 결과가 없습니다.
+                                    </CabS.EmptyStateBox>
+                                  ) : (
+                                    <CabS.CabDetailEmptyStack $padding="32px 0">
+                                      <CabS.CabDetailEmptyText>
+                                        등록된 각료가 없습니다.
+                                      </CabS.CabDetailEmptyText>
+                                      <CabS.HeadActionBtnPrimary
+                                        type="button"
+                                        onClick={() =>
+                                          handleAddMinister(selectedCabinet)
+                                        }
+                                      >
+                                        <FiPlus size={13} />
+                                        각료 추가
+                                      </CabS.HeadActionBtnPrimary>
+                                    </CabS.CabDetailEmptyStack>
                                   )
                                 ) : (
-                                  <CabS.MinisterCardGrid>
-                                    {sortedVisibleMinisters.map((t: any) => {
-                                      const mThumb =
-                                        t.person?.profileImageUrl ?? null
-                                      const mName = getPersonName(t.person)
-                                      const mPos =
-                                        t.positionDefinition?.title ??
-                                        t.title ??
-                                        '—'
-                                      const mStartFull = t.startDate
-                                        ? formatDate(t.startDate)
-                                        : '—'
-                                      const mEndFull = t.endDate
-                                        ? formatDate(t.endDate)
-                                        : '현재'
-                                      const mDuration = calcTenureDuration(
-                                        t.startDate,
-                                        t.endDate,
+                                  <CabinetMinisterCards
+                                    selectedMinisterId={selectedMinisterId}
+                                    ministers={sortedVisibleMinisters}
+                                    onSelectMinister={(tenureId) => {
+                                      setSelectedHeadHistoryId(null)
+                                      setSelectedMinisterId(tenureId)
+                                      pushCabinetParams(
+                                        selectedCabinet.id,
+                                        tenureId,
+                                        { replace: true },
                                       )
-                                      const mAge = calcAgeAtTenure(
-                                        t.person,
-                                        t.startDate,
-                                      )
-                                      const mAchCount = Array.isArray(
-                                        t.achievements,
-                                      )
-                                        ? t.achievements.length
-                                        : 0
-                                      return (
-                                        <CabS.MinisterCard
-                                          key={t.id}
-                                          $selected={
-                                            selectedMinisterId === t.id
-                                          }
-                                          onClick={() => {
-                                            setSelectedHeadHistoryId(null)
-                                            setSelectedMinisterId(t.id)
-                                          }}
-                                        >
-                                          <CabS.MinisterCardThumb
-                                            onClick={(e) => {
-                                              if (t.person?.id) {
-                                                e.stopPropagation()
-                                                setMentionPersonId(t.person.id)
-                                              }
-                                            }}
-                                            style={{
-                                              cursor: t.person?.id
-                                                ? 'pointer'
-                                                : 'default',
-                                            }}
-                                            title={
-                                              t.person?.id
-                                                ? `${mName} 인물 정보 보기`
-                                                : undefined
-                                            }
-                                          >
-                                            {mThumb ? (
-                                              <CabS.MinisterCardThumbImg
-                                                src={mThumb}
-                                                alt={mName}
-                                              />
-                                            ) : (
-                                              <CabS.MinisterCardThumbPlaceholder>
-                                                <FiUser size={18} />
-                                              </CabS.MinisterCardThumbPlaceholder>
-                                            )}
-                                            {mAchCount > 0 && (
-                                              <CabS.MinisterCardBadge>
-                                                {mAchCount}
-                                              </CabS.MinisterCardBadge>
-                                            )}
-                                          </CabS.MinisterCardThumb>
-                                          <CabS.MinisterCardInfo>
-                                            <CabS.MinisterCardName>
-                                              {mName}
-                                            </CabS.MinisterCardName>
-                                            <CabS.MinisterCardPos>
-                                              {mPos}
-                                            </CabS.MinisterCardPos>
-                                            <CabS.MinisterCardRange>
-                                              {mStartFull} – {mEndFull}
-                                              {mDuration && (
-                                                <span
-                                                  style={{
-                                                    color: '#b0bac9',
-                                                    fontSize: 10.5,
-                                                  }}
-                                                >
-                                                  ({mDuration})
-                                                </span>
-                                              )}
-                                              {mAge != null && (
-                                                <CabS.MinisterCardAge>
-                                                  취임 {mAge}세
-                                                </CabS.MinisterCardAge>
-                                              )}
-                                            </CabS.MinisterCardRange>
-                                          </CabS.MinisterCardInfo>
-                                          <CabS.MinisterCardChevron>
-                                            <FiChevronRight size={14} />
-                                          </CabS.MinisterCardChevron>
-                                        </CabS.MinisterCard>
-                                      )
-                                    })}
-                                  </CabS.MinisterCardGrid>
+                                    }}
+                                    onMentionPerson={setMentionPersonId}
+                                  />
                                 )}
                               </CabS.CabDetailMinistersSection>
 
                               {/* 조약 섹션 */}
-                              <CabS.CabDetailMinistersSection
+                              <CabS.CabDetailSubSection
                                 id="cab-detail-treaties"
                                 style={{ marginTop: 24, scrollMarginTop: 12 }}
                               >
@@ -4273,29 +4085,14 @@ export function CabinetsSection({
                                     불러오는 중…
                                   </CabS.EmptyStateBox>
                                 ) : cabinetTreaties.length === 0 ? (
-                                  <div
-                                    style={{
-                                      padding: '28px 0',
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      alignItems: 'center',
-                                      gap: 10,
-                                    }}
-                                  >
+                                  <CabS.CabDetailEmptyStack>
                                     <FiFileText
                                       size={32}
-                                      style={{ color: '#b0bac9' }}
+                                      style={{ color: C.placeholderText }}
                                     />
-                                    <p
-                                      style={{
-                                        margin: 0,
-                                        fontSize: 13,
-                                        color: '#b0bac9',
-                                        fontStyle: 'italic',
-                                      }}
-                                    >
+                                    <CabS.CabDetailEmptyText>
                                       연결된 조약이 없습니다.
-                                    </p>
+                                    </CabS.CabDetailEmptyText>
                                     <CabS.HeadActionBtnPrimary
                                       type="button"
                                       onClick={() =>
@@ -4305,16 +4102,9 @@ export function CabinetsSection({
                                       <FiLink size={13} />
                                       조약 연결
                                     </CabS.HeadActionBtnPrimary>
-                                  </div>
+                                  </CabS.CabDetailEmptyStack>
                                 ) : (
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      flexDirection: 'column',
-                                      gap: 8,
-                                      marginTop: 10,
-                                    }}
-                                  >
+                                  <CabS.CabDetailTreatyList>
                                     {cabinetTreaties.map((treaty) => {
                                       const signatory =
                                         treaty.signatories?.find(
@@ -4324,123 +4114,54 @@ export function CabinetsSection({
                                       const isExpanded =
                                         selectedTreatyId === treaty.id
                                       return (
-                                        <div
+                                        <CabS.CabDetailTreatyCard
                                           key={treaty.id}
-                                          style={{
-                                            border: `1.5px solid ${isExpanded ? MAIN : C.borderHairline}`,
-                                            borderRadius: 10,
-                                            overflow: 'hidden',
-                                            background: C.treatyRowBg,
-                                            transition: 'border-color 0.15s',
-                                          }}
+                                          $expanded={isExpanded}
+                                          $accent={MAIN}
+                                          $borderIdle={C.borderHairline}
                                         >
-                                          <button
-                                            type="button"
-                                            style={{
-                                              width: '100%',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: 10,
-                                              padding: '10px 14px',
-                                              background: 'transparent',
-                                              border: 'none',
-                                              cursor: 'pointer',
-                                              textAlign: 'left',
-                                            }}
+                                          <CabS.CabDetailTreatyCardBtn
                                             onClick={() =>
                                               setSelectedTreatyId(
                                                 isExpanded ? null : treaty.id,
                                               )
                                             }
                                           >
-                                            <span
-                                              style={{
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                color: '#fff',
-                                                background: MAIN,
-                                                borderRadius: 4,
-                                                padding: '2px 7px',
-                                                whiteSpace: 'nowrap',
-                                                flexShrink: 0,
-                                              }}
+                                            <CabS.CabDetailTreatyTypeChip
+                                              $accent={MAIN}
                                             >
                                               {TREATY_TYPE_LABELS[
                                                 treaty.type
                                               ] ?? treaty.type}
-                                            </span>
-                                            <span
-                                              style={{
-                                                flex: 1,
-                                                fontSize: 13.5,
-                                                fontWeight: 600,
-                                                color: C.treatyTitleText,
-                                              }}
-                                            >
+                                            </CabS.CabDetailTreatyTypeChip>
+                                            <CabS.CabDetailTreatyTitleCell>
                                               {treaty.name}
                                               {treaty.alias && (
-                                                <span
-                                                  style={{
-                                                    fontSize: 11.5,
-                                                    fontWeight: 400,
-                                                    color: C.slate400,
-                                                    marginLeft: 6,
-                                                  }}
-                                                >
+                                                <CabS.CabDetailTreatyAlias>
                                                   ({treaty.alias})
-                                                </span>
+                                                </CabS.CabDetailTreatyAlias>
                                               )}
-                                            </span>
-                                            <span
-                                              style={{
-                                                fontSize: 11.5,
-                                                color: C.slate400,
-                                                whiteSpace: 'nowrap',
-                                              }}
-                                            >
+                                            </CabS.CabDetailTreatyTitleCell>
+                                            <CabS.CabDetailTreatyYearCell>
                                               {treaty.signDate
                                                 ? new Date(
                                                     treaty.signDate,
                                                   ).getFullYear()
                                                 : '—'}
-                                            </span>
-                                            <FiChevronDown
-                                              size={14}
-                                              style={{
-                                                color: C.slate400,
-                                                transform: isExpanded
-                                                  ? 'rotate(180deg)'
-                                                  : 'none',
-                                                transition: 'transform 0.2s',
-                                              }}
-                                            />
-                                          </button>
+                                            </CabS.CabDetailTreatyYearCell>
+                                            <CabS.CabDetailTreatyChevronWrap
+                                              $expanded={isExpanded}
+                                            >
+                                              <FiChevronDown size={14} />
+                                            </CabS.CabDetailTreatyChevronWrap>
+                                          </CabS.CabDetailTreatyCardBtn>
 
                                           {isExpanded && (
-                                            <div
-                                              style={{
-                                                padding: '0 14px 12px',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: 6,
-                                              }}
-                                            >
-                                              {/* 참여 정보 */}
+                                            <CabS.CabDetailTreatyExpandedPanel>
                                               {signatory && (
-                                                <div
-                                                  style={{
-                                                    display: 'flex',
-                                                    gap: 8,
-                                                    flexWrap: 'wrap',
-                                                  }}
-                                                >
+                                                <CabS.CabDetailTreatySignatoryRow>
                                                   {signatory.person && (
-                                                    <span
-                                                      style={{
-                                                        fontSize: 12,
-                                                        color: C.textMuted,
-                                                      }}
-                                                    >
+                                                    <CabS.CabDetailTreatyMetaText>
                                                       서명자:{' '}
                                                       <strong>
                                                         {[
@@ -4451,27 +4172,17 @@ export function CabinetsSection({
                                                           .filter(Boolean)
                                                           .join(' ')}
                                                       </strong>
-                                                    </span>
+                                                    </CabS.CabDetailTreatyMetaText>
                                                   )}
                                                   {signatory.role && (
-                                                    <span
-                                                      style={{
-                                                        fontSize: 12,
-                                                        color: C.textMuted,
-                                                      }}
-                                                    >
+                                                    <CabS.CabDetailTreatyMetaText>
                                                       직책:{' '}
                                                       <strong>
                                                         {signatory.role}
                                                       </strong>
-                                                    </span>
+                                                    </CabS.CabDetailTreatyMetaText>
                                                   )}
-                                                  <span
-                                                    style={{
-                                                      fontSize: 12,
-                                                      color: C.textMuted,
-                                                    }}
-                                                  >
+                                                  <CabS.CabDetailTreatyMetaText>
                                                     참여유형:{' '}
                                                     <strong>
                                                       {TREATY_PARTICIPATION_LABELS[
@@ -4480,64 +4191,40 @@ export function CabinetsSection({
                                                       ] ??
                                                         signatory.participationType}
                                                     </strong>
-                                                  </span>
-                                                </div>
+                                                  </CabS.CabDetailTreatyMetaText>
+                                                </CabS.CabDetailTreatySignatoryRow>
                                               )}
                                               {treaty.summary && (
-                                                <p
-                                                  style={{
-                                                    margin: 0,
-                                                    fontSize: 12.5,
-                                                    color: C.textMuted,
-                                                    lineHeight: 1.6,
-                                                  }}
-                                                >
+                                                <CabS.CabDetailTreatySummaryPara>
                                                   {treaty.summary}
-                                                </p>
+                                                </CabS.CabDetailTreatySummaryPara>
                                               )}
-                                              {/* 참여국 목록 */}
                                               {treaty.signatories &&
                                                 treaty.signatories.length >
                                                   0 && (
-                                                  <div
-                                                    style={{
-                                                      display: 'flex',
-                                                      gap: 6,
-                                                      flexWrap: 'wrap',
-                                                      marginTop: 4,
-                                                    }}
-                                                  >
+                                                  <CabS.CabDetailTreatyPillRow>
                                                     {treaty.signatories.map(
                                                       (s) => (
-                                                        <span
+                                                        <CabS.CabDetailTreatyCountryPill
                                                           key={s.id}
-                                                          style={{
-                                                            fontSize: 11,
-                                                            padding: '2px 8px',
-                                                            borderRadius: 12,
-                                                            background:
-                                                              C.signatoryPillBg,
-                                                            color:
-                                                              C.signatoryPillText,
-                                                          }}
                                                         >
                                                           {s.country?.name ??
                                                             s.historicalCountry
                                                               ?.name ??
                                                             '미상'}
-                                                        </span>
+                                                        </CabS.CabDetailTreatyCountryPill>
                                                       ),
                                                     )}
-                                                  </div>
+                                                  </CabS.CabDetailTreatyPillRow>
                                                 )}
-                                            </div>
+                                            </CabS.CabDetailTreatyExpandedPanel>
                                           )}
-                                        </div>
+                                        </CabS.CabDetailTreatyCard>
                                       )
                                     })}
-                                  </div>
+                                  </CabS.CabDetailTreatyList>
                                 )}
-                              </CabS.CabDetailMinistersSection>
+                              </CabS.CabDetailSubSection>
                             </>
                           )}
                         </>

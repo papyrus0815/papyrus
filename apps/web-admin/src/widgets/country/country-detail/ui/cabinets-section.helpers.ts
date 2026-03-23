@@ -5,7 +5,7 @@ export function getPersonName(person: {
   surname?: string | null
   middleName?: string | null
   nameDisplayOrder?: string | null
-} | null): string {
+} | null | undefined): string {
   if (!person) return '—'
   return getPersonDisplayName(
     {
@@ -17,6 +17,25 @@ export function getPersonName(person: {
     },
     true,
   )
+}
+
+/** 수반 재임 기준 상단 브레드크럼: 「제N대 [M기] 이름」 또는 이름만 / 없으면 「행정부 상세」 */
+export function formatCabinetHeadBreadcrumbLabel(
+  headTenure: {
+    person?: Parameters<typeof getPersonName>[0]
+    termNumber?: number | null
+    regnalNumber?: number | null
+    subTermNumber?: number | null
+  } | null | undefined,
+): string {
+  if (!headTenure) return '행정부 상세'
+  const n = headTenure.person ? getPersonName(headTenure.person) : null
+  const t = headTenure.termNumber ?? headTenure.regnalNumber
+  if (!n) return '행정부 상세'
+  if (t == null) return n
+  const sub =
+    headTenure.subTermNumber != null ? ` ${headTenure.subTermNumber}기` : ''
+  return `제${t}대${sub} ${n}`
 }
 
 /** 퇴임일 기준 나이 계산 (birthDate/birthYear 기반) */
@@ -59,6 +78,16 @@ export function formatDate(
   const m = String(date.getMonth() + 1).padStart(2, '0')
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}.${m}.${d}`
+}
+
+/** 리치텍스트 HTML을 평문으로 줄여 카드 요약 등에 사용 */
+export function stripHtmlToPlain(html: string, maxLen: number): string {
+  const plain = html
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (plain.length <= maxLen) return plain
+  return `${plain.slice(0, maxLen)}…`
 }
 
 export const APPOINTMENT_METHOD_LABEL: Record<string, string> = {

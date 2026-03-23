@@ -1597,140 +1597,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [handleContentChange],
   )
 
-  const handleContentChangeRef = useRef(handleContentChange)
-  const updateFormatStateRef = useRef(updateFormatState)
-  useEffect(() => {
-    handleContentChangeRef.current = handleContentChange
-    updateFormatStateRef.current = updateFormatState
-  }, [handleContentChange, updateFormatState])
-
-  // * / - + 스페이스 → 순서 없는 목록. 캡처 단계에서 먼저 처리해 다른 핸들러에 가로채이지 않도록
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== ' ' || e.ctrlKey || e.metaKey) return
-      const el = editorRef.current
-      if (!el || !el.contains(document.activeElement)) return
-
-      const sel = window.getSelection()
-      if (!sel || sel.rangeCount === 0) return
-      const range = sel.getRangeAt(0)
-      if (!range.collapsed || !el.contains(range.startContainer)) return
-
-      try {
-        const r = range.cloneRange()
-        r.setStart(el, 0)
-        r.setEnd(range.startContainer, range.startOffset)
-        const full = r.toString()
-        const lastLine = full.split(/\r?\n/).pop() ?? ''
-        const trimmed = lastLine.trim()
-
-        if (trimmed === '*' || trimmed === '-') {
-          e.preventDefault()
-          e.stopImmediatePropagation()
-          const delR = range.cloneRange()
-          delR.collapse(true)
-          ;(
-            delR as unknown as { moveStart(unit: string, count: number): void }
-          ).moveStart('character', -1)
-          sel.removeAllRanges()
-          sel.addRange(delR)
-          document.execCommand('delete', false)
-          document.execCommand('insertUnorderedList', false)
-          handleContentChangeRef.current()
-          updateFormatStateRef.current()
-          return
-        }
-        if (/^\d+\.\s*$/.test(trimmed) || /^\d+\.$/.test(trimmed)) {
-          e.preventDefault()
-          e.stopImmediatePropagation()
-          const delR = range.cloneRange()
-          delR.collapse(true)
-          ;(
-            delR as unknown as { moveStart(unit: string, count: number): void }
-          ).moveStart('character', -trimmed.length)
-          sel.removeAllRanges()
-          sel.addRange(delR)
-          document.execCommand('delete', false)
-          document.execCommand('insertOrderedList', false)
-          handleContentChangeRef.current()
-          updateFormatStateRef.current()
-        }
-      } catch {
-        /* noop */
-      }
-    }
-    document.addEventListener('keydown', handler, true)
-    return () => document.removeEventListener('keydown', handler, true)
-  }, [])
-
-  const tryConvertListOnSpace = useCallback(
-    (e: React.SyntheticEvent) => {
-      const el = editorRef.current
-      if (!el) return false
-      const sel = window.getSelection()
-      if (!sel || sel.rangeCount === 0) return false
-      const range = sel.getRangeAt(0)
-      if (!range.collapsed || !el.contains(range.startContainer)) return false
-
-      try {
-        const r = range.cloneRange()
-        r.setStart(el, 0)
-        r.setEnd(range.startContainer, range.startOffset)
-        const full = r.toString()
-        const lastLine = full.split(/\r?\n/).pop() ?? ''
-        const trimmed = lastLine.trim()
-
-        if (trimmed === '*' || trimmed === '-') {
-          e.preventDefault()
-          const delR = range.cloneRange()
-          delR.collapse(true)
-          ;(
-            delR as unknown as { moveStart(unit: string, count: number): void }
-          ).moveStart('character', -1)
-          sel.removeAllRanges()
-          sel.addRange(delR)
-          document.execCommand('delete', false)
-          document.execCommand('insertUnorderedList', false)
-          handleContentChange()
-          updateFormatState()
-          return true
-        }
-        if (/^\d+\.\s*$/.test(trimmed) || /^\d+\.$/.test(trimmed)) {
-          e.preventDefault()
-          const delR = range.cloneRange()
-          delR.collapse(true)
-          ;(
-            delR as unknown as { moveStart(unit: string, count: number): void }
-          ).moveStart('character', -trimmed.length)
-          sel.removeAllRanges()
-          sel.addRange(delR)
-          document.execCommand('delete', false)
-          document.execCommand('insertOrderedList', false)
-          handleContentChange()
-          updateFormatState()
-          return true
-        }
-      } catch {
-        /* noop */
-      }
-      return false
-    },
-    [handleContentChange, updateFormatState],
-  )
-
-  const handleBeforeInput = useCallback(
-    (e: React.FormEvent<HTMLDivElement>) => {
-      const ev = e.nativeEvent as InputEvent
-      if (ev.inputType !== 'insertText' || ev.data !== ' ') return
-      tryConvertListOnSpace(e)
-    },
-    [tryConvertListOnSpace],
-  )
-
-  // 키 입력 핸들러 (스페이스 */- 목록 변환 + Ctrl+B 등)
+  // 키 입력 핸들러 (Tab 들여쓰기, Ctrl+B 등)
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // 순서 있는/없는 목록 안에서 Tab → 중첩 들여쓰기(iOS 메모·메모앱과 유사), Shift+Tab → 내어쓰기
+      // Tab: 목록 안에서 들여쓰기 / Shift+Tab: 내어쓰기
       if (e.key === 'Tab') {
         const native = e.nativeEvent as KeyboardEvent
         if (native.isComposing) return
@@ -1739,10 +1609,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         const sel = window.getSelection()
         if (!sel?.rangeCount) return
         const range = sel.getRangeAt(0)
-        let n: Node | null = range.startContainer
-        if (n.nodeType === Node.TEXT_NODE) n = n.parentElement
-        const block = n instanceof Element ? n.closest('li') : null
-        if (!block || !root.contains(block) || !block.closest('ul, ol')) {
+        let startNode: Node | null = range.startContainer
+        if (startNode.nodeType === Node.TEXT_NODE)
+          startNode = startNode.parentElement
+        const listItem =
+          startNode instanceof Element ? startNode.closest('li') : null
+
+        if (
+          !listItem ||
+          !root.contains(listItem) ||
+          !listItem.closest('ul, ol')
+        ) {
           return
         }
         e.preventDefault()
@@ -1755,10 +1632,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         handleContentChange()
         updateFormatState()
         return
-      }
-
-      if (e.key === ' ' && !e.ctrlKey && !e.metaKey) {
-        if (tryConvertListOnSpace(e)) return
       }
 
       // prose-hr div 안에서 Enter 시 복제 방지: 다음 빈 단락으로 이동
@@ -1813,12 +1686,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         }
       }
     },
-    [
-      applyFormat,
-      tryConvertListOnSpace,
-      handleContentChange,
-      updateFormatState,
-    ],
+    [applyFormat, handleContentChange, updateFormatState],
   )
 
   // 이미지 업로드
@@ -2544,7 +2412,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           aria-multiline="true"
           aria-label={placeholder}
           data-placeholder={placeholder}
-          onBeforeInput={handleBeforeInput}
           onInput={handleContentChange}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}

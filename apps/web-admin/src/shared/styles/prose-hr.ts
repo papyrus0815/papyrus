@@ -9,7 +9,7 @@ export const proseHrStyles = css`
   border-top: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.08)'
+        ? 'rgba(255, 255, 255, 0.14)'
         : '#e5e7eb'} !important;
   margin: 24px 0 !important;
   height: 0 !important;

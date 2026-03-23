@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
+import { proseHrStyles } from '@/shared/styles/prose-hr'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import {
@@ -962,7 +963,8 @@ export const CabSearchClear = styled.button`
 export const CabResultCount = styled.span`
   font-size: 12px;
   font-weight: 600;
-  color: #b0bac9;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
   white-space: nowrap;
 `
 
@@ -988,11 +990,36 @@ export const CabDetailTopBar = styled.div`
   border-radius: 16px;
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e8eaef'};
+      getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+    getCabinetsSectionPalette(theme.mode === 'dark').bgSubtle};
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.04)'};
+`
+
+export const CabDetailTopBarRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+`
+
+export const CabDetailTopBarActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`
+
+/** 히스토리 전체화면 읽기 시 본문 상단 안내 */
+export const CabDetailHistoryHint = styled.p`
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
 `
 
 /* 우: 카드 열 — 상세 열리면 고정 너비 2열 그리드, 닫히면 자동채움 */
@@ -1082,6 +1109,8 @@ export const CabDetailMinistersSection = styled.div`
   gap: 10px;
   padding: 20px 0 28px;
 `
+/** 조약 등 각료 외 블록 — 레이아웃은 동일, 의미만 구분 */
+export const CabDetailSubSection = CabDetailMinistersSection
 export const CabDetailMinistersSectionHeader = styled.div`
   display: flex;
   align-items: center;
@@ -1092,7 +1121,8 @@ export const CabDetailMinistersSectionTitle = styled.h4`
   margin: 0;
   font-size: 13px;
   font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#374151')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').sectionHeading};
   letter-spacing: -0.01em;
 `
 
@@ -1110,26 +1140,29 @@ export const CabDetailBackBtn = styled.button`
   padding: 6px 4px;
   font-size: 12px;
   font-weight: 500;
-  color: #94a3b8;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   background: none;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   transition: color 0.14s;
   &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+    color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').sectionLabelTint};
   }
   &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+    color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').sectionLabelTint};
   }
 `
 export const CabBreadcrumbSep = styled.span`
   font-size: 10px;
   font-weight: 600;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.22)' : '#cbd5e1'};
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
   padding: 0 2px;
   user-select: none;
   opacity: 0.9;
@@ -1140,7 +1173,8 @@ export const CabDetailCrumbText = styled.span`
   font-size: 12px;
   font-weight: 600;
   padding: 6px 4px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#1e293b')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
   max-width: min(260px, 42vw);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1224,7 +1258,8 @@ export const CabDetailAnchorBtn = styled.button.attrs({ type: 'button' })`
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   background: none;
   border: none;
   border-radius: 0;
@@ -1233,10 +1268,11 @@ export const CabDetailAnchorBtn = styled.button.attrs({ type: 'button' })`
   text-decoration: none;
   text-underline-offset: 5px;
   &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#0f172a')};
+    color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').text};
     text-decoration: underline;
     text-decoration-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(129, 140, 248, 0.85)' : '#6366f1'};
+      getCabinetsSectionPalette(theme.mode === 'dark').accent};
   }
   &:focus-visible {
     outline: none;
@@ -1384,7 +1420,8 @@ export const MinisterCardThumbPlaceholder = styled.div`
   border: 1.5px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e9edf5'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#c0cad8')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').iconColor};
 `
 export const MinisterCardInfo = styled.div`
   flex: 1;
@@ -1396,7 +1433,8 @@ export const MinisterCardInfo = styled.div`
 export const MinisterCardName = styled.span`
   font-size: 13px;
   font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').text};
   letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
@@ -1404,15 +1442,24 @@ export const MinisterCardName = styled.span`
 `
 export const MinisterCardPos = styled.span`
   font-size: 11px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `
+/** 각료 카드 내 재임 기간 괄호 보조 텍스트 */
+export const CabMinisterCardDurationHint = styled.span`
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').placeholderText};
+  font-size: 10.5px;
+`
+
 export const MinisterCardRange = styled.div`
   font-size: 11px;
-  color: #94a3b8;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1423,13 +1470,15 @@ export const MinisterCardAge = styled.span`
   font-size: 10px;
   font-weight: 600;
   color: #fff;
-  background: #6366f1;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').accent};
   border-radius: 4px;
   padding: 1px 5px;
 `
 export const MinisterCardLifespan = styled.div`
   font-size: 10.5px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#b0bac9')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').placeholderText};
 `
 export const MinisterCardBadge = styled.span`
   position: absolute;
@@ -1452,7 +1501,7 @@ export const MinisterCardBadge = styled.span`
 `
 export const MinisterCardChevron = styled.span`
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#dde1ea'};
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
   flex-shrink: 0;
 `
 
@@ -1604,7 +1653,8 @@ export const HeadTenureDates = styled.span`
   align-items: center;
   gap: 4px;
   font-size: 11.5px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   font-weight: 500;
 `
 export const HeadTenureDuration = styled.span`
@@ -1627,7 +1677,8 @@ export const HeadTenureAge = styled.span`
 `
 export const HeadLifespan = styled.div`
   font-size: 11px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#b0bac9')};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').placeholderText};
   margin: 0;
   line-height: 1.55;
   text-align: center;
@@ -1714,7 +1765,8 @@ export const ProfileSection = styled.div`
 export const ProfileSectionLabel = styled.div`
   font-size: 10.5px;
   font-weight: 700;
-  color: #b0bac9;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
   text-transform: uppercase;
   letter-spacing: 0.08em;
   display: flex;
@@ -1723,8 +1775,9 @@ export const ProfileSectionLabel = styled.div`
 `
 export const ProfileSectionCount = styled.span`
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f0f2f7'};
-  color: #94a3b8;
+    getCabinetsSectionPalette(theme.mode === 'dark').badge};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   font-size: 10px;
   font-weight: 700;
   border-radius: 10px;
@@ -1752,10 +1805,169 @@ export const EmptyStateBox = styled.div`
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   line-height: 1.6;
   text-align: center;
 `
+
+export const CabDetailEmptyStack = styled.div<{ $padding?: string }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: ${(p) => p.$padding ?? '28px 0'};
+`
+
+export const CabDetailEmptyText = styled.p<{
+  $fontSize?: string
+  $muted?: boolean
+}>`
+  margin: 0;
+  font-size: ${(p) => p.$fontSize ?? '13px'};
+  font-style: italic;
+  color: ${({ theme, $muted }) =>
+    $muted
+      ? getCabinetsSectionPalette(theme.mode === 'dark').textMuted
+      : getCabinetsSectionPalette(theme.mode === 'dark').placeholderText};
+`
+
+export const CabMinistersLoadingBox = styled.div`
+  padding: 24px 20px;
+  border-radius: 14px;
+  border: 1px dashed
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
+  font-size: 13px;
+  text-align: center;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').bgSubtle};
+`
+
+/* ── 행정부 상세: 체결 조약 목록 ── */
+export const CabDetailTreatyList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+`
+
+export const CabDetailTreatyCard = styled.div<{
+  $expanded: boolean
+  $accent: string
+  $borderIdle: string
+}>`
+  border: 1.5px solid
+    ${(p) => (p.$expanded ? p.$accent : p.$borderIdle)};
+  border-radius: 10px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyRowBg};
+  transition: border-color 0.15s;
+`
+
+export const CabDetailTreatyCardBtn = styled.button.attrs({ type: 'button' })`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+`
+
+export const CabDetailTreatyTypeChip = styled.span<{ $accent: string }>`
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: ${(p) => p.$accent};
+  border-radius: 4px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+`
+
+export const CabDetailTreatyTitleCell = styled.span`
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
+`
+
+export const CabDetailTreatyAlias = styled.span`
+  font-size: 11.5px;
+  font-weight: 400;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').slate400};
+  margin-left: 6px;
+`
+
+export const CabDetailTreatyYearCell = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').slate400};
+  white-space: nowrap;
+`
+
+export const CabDetailTreatyChevronWrap = styled.span<{ $expanded: boolean }>`
+  display: inline-flex;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').slate400};
+  transform: ${(p) => (p.$expanded ? 'rotate(180deg)' : 'none')};
+  transition: transform 0.2s;
+`
+
+export const CabDetailTreatyExpandedPanel = styled.div`
+  padding: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+export const CabDetailTreatySignatoryRow = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+export const CabDetailTreatyMetaText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+`
+
+export const CabDetailTreatySummaryPara = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  line-height: 1.6;
+`
+
+export const CabDetailTreatyPillRow = styled.div`
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+`
+
+export const CabDetailTreatyCountryPill = styled.span`
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').signatoryPillBg};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').signatoryPillText};
+`
+
 /** `CabListPanel` 안 빈 상태 — 패널과 이중 카드 느낌 줄이기: 배경 없음·얇은 점선만 */
 export const CabinetEmptyState = styled.div`
   display: flex;
@@ -2379,7 +2591,7 @@ export const HistoryArticleDivider = styled.hr`
   border: none;
   border-top: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
+      getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
   margin: 14px 20px 18px;
 `
 export const HistoryArticleEditorWrap = styled.div`
@@ -2430,15 +2642,19 @@ export const HistoryArticleSaveBtn = styled.button<{ $isRegister?: boolean }>`
     cursor: not-allowed;
   }
 `
+/** RichTextEditor 본문(EditorContent)과 동일한 타이포·간격 — 수평선은 hr + .prose-hr 모두 지원 */
 export const HistoryArticleProse = styled.div`
-  font-family: ${NYT_FONT};
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
   font-size: 15px;
-  line-height: 1.75;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#1e293b')};
+  line-height: 1.6;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').text};
   word-break: break-word;
 
   p {
-    margin: 0 0 1.1em;
+    margin: 0 0 8px 0;
   }
   p:last-child {
     margin-bottom: 0;
@@ -2449,42 +2665,121 @@ export const HistoryArticleProse = styled.div`
   em {
     font-style: italic;
   }
-  ul,
-  ol {
-    margin: 10px 0;
-    padding-left: 24px;
-  }
-  li {
-    margin-bottom: 5px;
-  }
   h1,
   h2,
   h3 {
+    margin: 18px 0 8px 0;
     font-weight: 700;
+    line-height: 1.3;
     letter-spacing: -0.02em;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
-    margin: 1.3em 0 0.45em;
+    color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').text};
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+  h1 {
+    font-size: 32px;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#818cf8' : '#4f46e5'};
+  }
+  h2 {
+    font-size: 24px;
+  }
+  h3 {
+    font-size: 20px;
+  }
+  ul,
+  ol {
+    margin: 8px 0;
+    padding-left: 28px;
+  }
+  li {
+    margin: 4px 0;
+    line-height: 1.55;
   }
   blockquote {
-    margin: 18px 0;
-    padding: 10px 18px;
-    border-left: 3px solid
-      ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255,255,255,0.15)' : '#e5e7eb'};
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
+    border-left: 4px solid #4f46e5;
+    padding: 12px 20px;
+    margin: 12px 0;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(79,70,229,0.1)'
+        : 'rgba(79, 70, 229, 0.04)'};
+    border-radius: 0 12px 12px 0;
+    color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
     font-style: italic;
+    position: relative;
+    &::before {
+      content: '"';
+      position: absolute;
+      top: 8px;
+      left: 12px;
+      font-size: 48px;
+      color: rgba(79, 70, 229, 0.12);
+      font-family: Georgia, serif;
+      line-height: 1;
+    }
   }
-  hr {
-    border: none;
-    border-top: 1px solid
+  hr,
+  .prose-hr {
+    ${proseHrStyles}
+  }
+  a {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
+    text-decoration: none;
+    border-bottom: 1px solid rgba(79, 70, 229, 0.3);
+    cursor: pointer;
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease;
+    font-weight: 500;
+    &:hover {
+      color: #4338ca;
+      border-bottom-color: #4f46e5;
+      background: rgba(79, 70, 229, 0.04);
+    }
+  }
+  code {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.15)'
+        : 'rgba(79, 70, 229, 0.08)'};
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family:
+      'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
+    font-weight: 500;
+    border: 1px solid rgba(79, 70, 229, 0.15);
+  }
+  pre {
+    background: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').bgSubtle};
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid
       ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-    margin: 20px 0;
+        getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+    overflow-x: auto;
+    margin: 10px 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    code {
+      background: transparent;
+      padding: 0;
+      color: ${({ theme }) =>
+        getCabinetsSectionPalette(theme.mode === 'dark').text};
+      border: none;
+    }
   }
   img {
     max-width: 100%;
-    border-radius: 8px;
-    margin: 14px 0;
+    border-radius: 12px;
+    margin: 10px 0;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    display: block;
   }
 
   .mention,
@@ -2502,7 +2797,8 @@ export const HistoryArticleProse = styled.div`
     text-underline-offset: 2px;
   }
   .term {
-    color: #0f766e;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#2dd4bf' : '#0f766e'};
     cursor: pointer;
     padding: 0 2px;
     border-radius: 3px;
@@ -2511,13 +2807,14 @@ export const HistoryArticleProse = styled.div`
       color 0.15s;
   }
   .term:hover {
-    background: rgba(15, 118, 110, 0.08);
+    background: rgba(15, 118, 110, 0.12);
   }
 `
 export const HistoryArticleEmpty = styled.p`
   font-family: ${NYT_FONT};
   font-size: 14px;
-  color: #94a3b8;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   margin: 0;
   padding: 6px 0 16px;
 `

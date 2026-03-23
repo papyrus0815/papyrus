@@ -310,6 +310,46 @@ export interface CreatePersonAwardDto {
   images?: CareerImageDto[]
 }
 
+/** 재임 한일·업적 (행정부 각료 상세 등) */
+export type GovernmentTenureAchievementItem = {
+  id: string
+  title?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  description?: string | null
+}
+
+/**
+ * 행정부 소속 재임 1건
+ * GET /government-positions/cabinets/:cabinetId/tenures
+ */
+export type GovernmentCabinetTenureItem = {
+  id: string
+  title?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  person?: {
+    id: string
+    name?: string | null
+    surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
+    profileImageUrl?: string | null
+    birthDate?: string | null
+    birthYear?: number | null
+    birthEra?: string | null
+    deathEra?: string | null
+    deathDate?: string | null
+    deathYear?: number | null
+  } | null
+  positionDefinition?: {
+    id: string
+    title: string
+    administrationDepartmentId?: string | null
+  } | null
+  achievements?: GovernmentTenureAchievementItem[]
+}
+
 /**
  * Person Career API
  */
@@ -580,7 +620,9 @@ export const personCareerApi = {
    * 행정부 ID로 소속 각료(재임) 목록
    * GET /government-positions/cabinets/:cabinetId/tenures
    */
-  getTenuresByCabinetId: async (cabinetId: string) => {
+  getTenuresByCabinetId: async (
+    cabinetId: string,
+  ): Promise<GovernmentCabinetTenureItem[]> => {
     const response = await apiClient.get(
       `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/tenures`,
     )
