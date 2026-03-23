@@ -2150,8 +2150,7 @@ export const HistoryArticleBackBtn = styled.button`
   background: none;
   font-family: ${NYT_FONT};
   font-size: 12px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
   cursor: pointer;
   transition: color 0.15s;
   &:hover {
@@ -2171,8 +2170,7 @@ export const HistoryArticleDeleteBtn = styled.button`
   border: none;
   background: none;
   font-size: 12px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#fb7185' : '#e11d48'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#e11d48')};
   cursor: pointer;
   border-radius: 6px;
   transition:
@@ -2181,8 +2179,7 @@ export const HistoryArticleDeleteBtn = styled.button`
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(225,29,72,0.15)' : '#fff0f3'};
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#fda4af' : '#be123c'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fda4af' : '#be123c')};
   }
   &:focus-visible {
     outline: none;
@@ -2317,8 +2314,7 @@ export const HistoryArticleHeadline = styled.h2`
 export const HistoryArticleByline = styled.p`
   font-family: ${NYT_FONT};
   font-size: 12px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
   margin: 6px 0 0;
   line-height: 1.5;
   font-weight: 500;
@@ -2535,7 +2531,9 @@ export const HeadTenureInfoBadgeRow = styled.div`
   flex-wrap: wrap;
   gap: 8px;
 `
-export const HeadTenureInfoBadge = styled.div<{ $type?: 'appointment' | 'end' }>`
+export const HeadTenureInfoBadge = styled.div<{
+  $type?: 'appointment' | 'end'
+}>`
   display: inline-flex;
   align-items: center;
   gap: 5px;

@@ -16,7 +16,6 @@ export const PillTabNav = styled.div`
   gap: 6px;
   /* 세로로 글자가 잘리지 않도록 여유 확보 (한글/굵은 글꼴 대비) */
   padding: 10px 10px 12px;
-  margin-bottom: 20px;
   min-height: 52px;
   box-sizing: border-box;
   /* 부모(overflow:hidden 카드 등) 안에서 너비를 넘지 않게 하고, 탭이 많을 때 가로 스크롤 */

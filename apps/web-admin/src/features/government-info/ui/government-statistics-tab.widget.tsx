@@ -3,21 +3,15 @@ import type { ReactNode } from 'react'
 
 import styled from 'styled-components'
 
-import {
-  type CabinetsSectionPalette,
-  getCabinetsSectionPalette,
-} from '@/shared/styles/country-detail-palette'
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { mockGovernmentData } from '@/widgets/country/country-detail/mock'
-import type {
-  HistoricalEvent,
-  StatisticsData,
-} from '@/widgets/country/country-detail/mock/types'
 
 import {
   GOV_ACCENT as ACCENT,
   GOV_MAIN_COLOR as MAIN,
 } from '../model/constants'
+import { useGovernmentStatisticsMockData } from '../model/use-government-statistics-mock'
 
 const SectionLabelDiv = styled.div`
   margin-bottom: 18px;
@@ -33,46 +27,24 @@ function SectionLabel({ children }: { children: ReactNode }) {
   return <SectionLabelDiv>{children}</SectionLabelDiv>
 }
 
-export type GovernmentStatisticsTabProps = {
-  palette: CabinetsSectionPalette
-  isDark: boolean
-  totalEmployees: string
-  totalBudget: string
-  totalOrganizations: number
-  totalMinistries: number
-  totalConstitutional: number
-  totalAgencies: number
-  totalLocal: number
-  budgetData: StatisticsData[]
-  filteredEvents: (HistoricalEvent & { orgName: string; orgType: string })[]
-  eventCounts: {
-    all: number
-    establishment: number
-    reform: number
-    achievement: number
-    crisis: number
-    merger: number
-  }
-  selectedEventType: string
-  onSelectedEventTypeChange: (key: string) => void
-}
-
-export function GovernmentStatisticsTab({
-  palette,
-  isDark,
-  totalEmployees,
-  totalBudget,
-  totalOrganizations,
-  totalMinistries,
-  totalConstitutional,
-  totalAgencies,
-  totalLocal,
-  budgetData,
-  filteredEvents,
-  eventCounts,
-  selectedEventType,
-  onSelectedEventTypeChange,
-}: GovernmentStatisticsTabProps) {
+/** props 없음 — mock 통계·필터 상태는 `useGovernmentStatisticsMockData`에서 처리 */
+export function GovernmentStatisticsTab() {
+  const isDark = useThemeStore((state) => state.mode === 'dark')
+  const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+  const {
+    totalEmployees,
+    totalBudget,
+    totalOrganizations,
+    totalMinistries,
+    totalConstitutional,
+    totalAgencies,
+    totalLocal,
+    budgetData,
+    filteredEvents,
+    eventCounts,
+    selectedEventType,
+    onSelectedEventTypeChange,
+  } = useGovernmentStatisticsMockData()
   return (
     <>
       {/* 핵심 수치 요약 */}
@@ -99,7 +71,9 @@ export function GovernmentStatisticsTab({
               paddingLeft: kpiIndex === 0 ? 0 : 24,
               paddingRight: kpiIndex < kpiRow.length - 1 ? 24 : 0,
               borderRight:
-                    kpiIndex < kpiRow.length - 1 ? `1px solid ${palette.divider}` : 'none',
+                kpiIndex < kpiRow.length - 1
+                  ? `1px solid ${palette.divider}`
+                  : 'none',
               display: 'flex',
               flexDirection: 'column',
               gap: 2,
@@ -302,7 +276,7 @@ export function GovernmentStatisticsTab({
                   fontWeight: 500,
                 }}
               >
-                최대 {Math.max(...budgetData.map((s) => s.budget || 0))}조원
+                최대 {Math.max(...budgetData.map((row) => row.budget || 0))}조원
               </span>
             )}
           </div>
@@ -345,16 +319,14 @@ export function GovernmentStatisticsTab({
             </div>
             {budgetData.map((stat, budgetIndex) => {
               const maxBudget = Math.max(
-                ...budgetData.map((s) => s.budget || 0),
+                ...budgetData.map((row) => row.budget || 0),
                 1,
               )
               const height = maxBudget
                 ? ((stat.budget || 0) / maxBudget) * 200
                 : 0
               const prevBudget =
-                budgetIndex > 0
-                  ? budgetData[budgetIndex - 1].budget || 0
-                  : 0
+                budgetIndex > 0 ? budgetData[budgetIndex - 1].budget || 0 : 0
               const currBudget = stat.budget || 0
               const isUp = currBudget > prevBudget
               const pctChange = prevBudget
@@ -393,17 +365,16 @@ export function GovernmentStatisticsTab({
                       transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                     }}
                     onMouseEnter={(mouseEvent) => {
-                          mouseEvent.currentTarget.style.transform =
-                            'translateY(-4px)'
-                          mouseEvent.currentTarget.style.boxShadow =
-                            '0 8px 24px rgba(99, 102, 241, 0.35)'
-                        }}
-                        onMouseLeave={(mouseEvent) => {
-                          mouseEvent.currentTarget.style.transform =
-                            'translateY(0)'
-                          mouseEvent.currentTarget.style.boxShadow =
-                            '0 2px 12px rgba(99, 102, 241, 0.25)'
-                        }}
+                      mouseEvent.currentTarget.style.transform =
+                        'translateY(-4px)'
+                      mouseEvent.currentTarget.style.boxShadow =
+                        '0 8px 24px rgba(99, 102, 241, 0.35)'
+                    }}
+                    onMouseLeave={(mouseEvent) => {
+                      mouseEvent.currentTarget.style.transform = 'translateY(0)'
+                      mouseEvent.currentTarget.style.boxShadow =
+                        '0 2px 12px rgba(99, 102, 241, 0.25)'
+                    }}
                   >
                     {stat.budget}조
                   </div>
@@ -424,7 +395,7 @@ export function GovernmentStatisticsTab({
                     >
                       {stat.year}
                     </span>
-                        {budgetIndex > 0 && prevBudget > 0 && (
+                    {budgetIndex > 0 && prevBudget > 0 && (
                       <span
                         style={{
                           fontSize: 11,
@@ -597,22 +568,22 @@ export function GovernmentStatisticsTab({
                           ? '0 1px 3px rgba(0,0,0,0.08)'
                           : 'none',
                     }}
-                        onMouseEnter={(mouseEvent) => {
-                          if (selectedEventType !== filter.key) {
-                            mouseEvent.currentTarget.style.background = isDark
-                              ? palette.btnHover
-                              : 'rgba(255,255,255,0.6)'
-                            mouseEvent.currentTarget.style.color = palette.text
-                          }
-                        }}
-                        onMouseLeave={(mouseEvent) => {
-                          if (selectedEventType !== filter.key) {
-                            mouseEvent.currentTarget.style.background =
-                              'transparent'
-                            mouseEvent.currentTarget.style.color =
-                              palette.warmFilterIdle
-                          }
-                        }}
+                    onMouseEnter={(mouseEvent) => {
+                      if (selectedEventType !== filter.key) {
+                        mouseEvent.currentTarget.style.background = isDark
+                          ? palette.btnHover
+                          : 'rgba(255,255,255,0.6)'
+                        mouseEvent.currentTarget.style.color = palette.text
+                      }
+                    }}
+                    onMouseLeave={(mouseEvent) => {
+                      if (selectedEventType !== filter.key) {
+                        mouseEvent.currentTarget.style.background =
+                          'transparent'
+                        mouseEvent.currentTarget.style.color =
+                          palette.warmFilterIdle
+                      }
+                    }}
                   >
                     {filter.label}
                     <span
@@ -687,7 +658,7 @@ export function GovernmentStatisticsTab({
                     const imageUrl =
                       eventWithImages.images?.[0] ??
                       mockGovernmentData.ministries.find(
-                        (m) => m.name === event.orgName,
+                        (ministry) => ministry.name === event.orgName,
                       )?.images?.[0]
                     return (
                       <div
@@ -749,19 +720,19 @@ export function GovernmentStatisticsTab({
                               ? '0 2px 8px rgba(0,0,0,0.3)'
                               : '0 2px 8px rgba(0,0,0,0.04)',
                           }}
-                              onMouseEnter={(mouseEvent) => {
-                                mouseEvent.currentTarget.style.boxShadow = isDark
-                                  ? '0 8px 24px rgba(0,0,0,0.4)'
-                                  : '0 8px 24px rgba(0,0,0,0.08)'
-                                mouseEvent.currentTarget.style.borderColor = MAIN
-                              }}
-                              onMouseLeave={(mouseEvent) => {
-                                mouseEvent.currentTarget.style.boxShadow = isDark
-                                  ? '0 2px 8px rgba(0,0,0,0.3)'
-                                  : '0 2px 8px rgba(0,0,0,0.04)'
-                                mouseEvent.currentTarget.style.borderColor =
-                                  palette.border
-                              }}
+                          onMouseEnter={(mouseEvent) => {
+                            mouseEvent.currentTarget.style.boxShadow = isDark
+                              ? '0 8px 24px rgba(0,0,0,0.4)'
+                              : '0 8px 24px rgba(0,0,0,0.08)'
+                            mouseEvent.currentTarget.style.borderColor = MAIN
+                          }}
+                          onMouseLeave={(mouseEvent) => {
+                            mouseEvent.currentTarget.style.boxShadow = isDark
+                              ? '0 2px 8px rgba(0,0,0,0.3)'
+                              : '0 2px 8px rgba(0,0,0,0.04)'
+                            mouseEvent.currentTarget.style.borderColor =
+                              palette.border
+                          }}
                         >
                           <div
                             style={{
@@ -926,10 +897,7 @@ function StatCard({
 }) {
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
-  const cardPalette = useMemo(
-    () => getCabinetsSectionPalette(isDark),
-    [isDark],
-  )
+  const cardPalette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   return (
     <div
       style={{
@@ -1036,10 +1004,7 @@ function OrgTypeCard({
 }) {
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
-  const cardPalette = useMemo(
-    () => getCabinetsSectionPalette(isDark),
-    [isDark],
-  )
+  const cardPalette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   return (
     <div
       style={{
@@ -1115,7 +1080,9 @@ function OrgTypeCard({
             key={exampleIndex}
             style={{
               fontSize: 12,
-              color: isDark ? cardPalette.textMuted : cardPalette.sectionLabelTint,
+              color: isDark
+                ? cardPalette.textMuted
+                : cardPalette.sectionLabelTint,
               padding: '8px 12px',
               background: cardPalette.bgMuted,
               borderRadius: 8,

@@ -1989,7 +1989,6 @@ export function CabinetsSection({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
-            style={{ padding: '8px 4px 40px 8px' }}
           >
             {hasSelectedCabinet && selectedCabinet && (
               <>
@@ -2965,824 +2964,934 @@ export function CabinetsSection({
 
                           {!selectedHeadHistoryId && (
                             <>
-                          {/* 취임/퇴임 정보 섹션 — 수반 히스토리 상세 시에는 숨김(각료 상세와 동일하게 프로필+히스토리만) */}
-                          <div
-                            id="cab-detail-tenure"
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 2,
-                              padding: '16px 0 8px',
-                              scrollMarginTop: 12,
-                            }}
-                          >
-                            {/* ── 취임 정보 ── */}
-                            <CabS.HeadTenureInfoSection $accent="mint">
+                              {/* 취임/퇴임 정보 섹션 — 수반 히스토리 상세 시에는 숨김(각료 상세와 동일하게 프로필+히스토리만) */}
                               <div
+                                id="cab-detail-tenure"
                                 style={{
                                   display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  marginBottom:
-                                    !!editingTenureInfo &&
-                                    editingTenureInfo.cabinetId ===
-                                      selectedCabinet.id &&
-                                    editingTenureInfo.mode === 'appointment'
-                                      ? 10
-                                      : 0,
+                                  flexDirection: 'column',
+                                  gap: 2,
+                                  padding: '16px 0 8px',
+                                  scrollMarginTop: 12,
                                 }}
                               >
-                                <span
-                                  style={{
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    color: C.sectionLabelTint,
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                  }}
-                                >
-                                  <span
+                                {/* ── 취임 정보 ── */}
+                                <CabS.HeadTenureInfoSection $accent="mint">
+                                  <div
                                     style={{
-                                      width: 6,
-                                      height: 6,
-                                      borderRadius: '50%',
-                                      background: '#6ee7b7',
-                                      flexShrink: 0,
-                                      display: 'inline-block',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      marginBottom:
+                                        !!editingTenureInfo &&
+                                        editingTenureInfo.cabinetId ===
+                                          selectedCabinet.id &&
+                                        editingTenureInfo.mode === 'appointment'
+                                          ? 10
+                                          : 0,
                                     }}
-                                  />
-                                  취임 정보
-                                </span>
-                                {!!editingTenureInfo &&
-                                editingTenureInfo.cabinetId ===
-                                  selectedCabinet.id &&
-                                editingTenureInfo.mode === 'appointment' ? (
-                                  <div style={{ display: 'flex', gap: 6 }}>
-                                    <button
-                                      type="button"
-                                      disabled={tenureInfoSubmitting}
-                                      onClick={() =>
-                                        handleSaveTenureInfoInline(
-                                          selectedCabinet.id,
-                                          head.id,
-                                        )
-                                      }
+                                  >
+                                    <span
                                       style={{
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        color: C.sectionLabelTint,
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: 4,
-                                        padding: '4px 12px',
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        color: '#fff',
-                                        background: '#6366f1',
-                                        border: 'none',
-                                        borderRadius: 7,
-                                        cursor: 'pointer',
+                                        gap: 5,
                                       }}
                                     >
-                                      {tenureInfoSubmitting
-                                        ? '저장 중…'
-                                        : '저장'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingTenureInfo(null)}
-                                      style={{
-                                        padding: '4px 10px',
-                                        fontSize: 11.5,
-                                        fontWeight: 600,
-                                        color: C.slate400,
-                                        background: 'transparent',
-                                        border: `1px solid ${C.borderHairline12}`,
-                                        borderRadius: 7,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      취소
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingAppointmentMethod(
-                                        head?.appointmentMethod ?? '',
-                                      )
-                                      setEditingNotes(head?.notes ?? '')
-                                      setEditingTenureInfo({
-                                        cabinetId: selectedCabinet.id,
-                                        mode: 'appointment',
-                                      })
-                                    }}
-                                    style={{
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      color: C.chipActionColor,
-                                      background: 'transparent',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      padding: '4px 8px',
-                                      borderRadius: 6,
-                                    }}
-                                  >
-                                    <FiPlus size={12} />
-                                    {head?.appointmentMethod || head?.notes
-                                      ? '수정'
-                                      : '등록'}
-                                  </button>
-                                )}
-                              </div>
-                              {!!editingTenureInfo &&
-                              editingTenureInfo.cabinetId ===
-                                selectedCabinet.id &&
-                              editingTenureInfo.mode === 'appointment' ? (
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 10,
-                                  }}
-                                >
-                                  <div>
-                                    <label
-                                      style={{
-                                        display: 'block',
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: '#94a3b8',
-                                        marginBottom: 4,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.05em',
-                                      }}
-                                    >
-                                      임명 방식
-                                    </label>
-                                    <select
-                                      value={editingAppointmentMethod}
-                                      onChange={(e) =>
-                                        setEditingAppointmentMethod(
-                                          e.target.value,
-                                        )
-                                      }
-                                      style={{
-                                        maxWidth: 280,
-                                        width: '100%',
-                                        padding: '8px 10px',
-                                        fontSize: 13,
-                                        border: `1.5px solid ${C.badgeBorder}`,
-                                        borderRadius: 8,
-                                        background: C.inputBg,
-                                        color: C.text,
-                                        outline: 'none',
-                                      }}
-                                    >
-                                      <option value="">선택 안 함</option>
-                                      {Object.entries(
-                                        APPOINTMENT_METHOD_LABEL,
-                                      ).map(([k, v]) => (
-                                        <option key={k} value={k}>
-                                          {v}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label
-                                      style={{
-                                        display: 'block',
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: '#94a3b8',
-                                        marginBottom: 4,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.05em',
-                                      }}
-                                    >
-                                      취임 배경 / 비고
-                                    </label>
-                                    <textarea
-                                      value={editingNotes}
-                                      onChange={(e) =>
-                                        setEditingNotes(e.target.value)
-                                      }
-                                      rows={3}
-                                      placeholder="취임 배경, 특이 사항 등"
-                                      style={{
-                                        maxWidth: 500,
-                                        height: 200,
-                                        width: '100%',
-                                        padding: '8px 10px',
-                                        fontSize: 13,
-                                        resize: 'vertical',
-                                        border: `1.5px solid ${C.badgeBorder}`,
-                                        borderRadius: 8,
-                                        background: C.inputBg,
-                                        color: C.text,
-                                        outline: 'none',
-                                        fontFamily: 'inherit',
-                                        lineHeight: 1.6,
-                                        boxSizing: 'border-box',
-                                        display: 'block',
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              ) : head?.appointmentMethod || head?.notes ? (
-                                <>
-                                  <CabS.HeadTenureInfoBadge
-                                    $type="appointment"
-                                    style={{ width: 'fit-content' }}
-                                  >
-                                    <CabS.HeadTenureInfoBadgeLabel>
-                                      임명
-                                    </CabS.HeadTenureInfoBadgeLabel>
-                                    {APPOINTMENT_METHOD_LABEL[
-                                      head.appointmentMethod
-                                    ] ?? head.appointmentMethod}
-                                  </CabS.HeadTenureInfoBadge>
-                                  {head.notes && (
-                                    <CabS.HeadTenureInfoRow $block>
-                                      <CabS.HeadTenureInfoLabel>
-                                        취임 배경 / 비고
-                                      </CabS.HeadTenureInfoLabel>
-                                      <CabS.HeadTenureInfoText>
-                                        {head.notes}
-                                      </CabS.HeadTenureInfoText>
-                                    </CabS.HeadTenureInfoRow>
-                                  )}
-                                </>
-                              ) : (
-                                <p
-                                  style={{
-                                    margin: '2px 0 0',
-                                    fontSize: 12,
-                                    color: '#c0cad8',
-                                  }}
-                                >
-                                  — 등록된 정보 없음
-                                </p>
-                              )}
-                            </CabS.HeadTenureInfoSection>
-
-                            {/* 구분선 */}
-
-                            {/* ── 퇴임 정보 ── */}
-                            <CabS.HeadTenureInfoSection $accent="rose">
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  marginBottom:
-                                    !!editingTenureInfo &&
+                                      <span
+                                        style={{
+                                          width: 6,
+                                          height: 6,
+                                          borderRadius: '50%',
+                                          background: '#6ee7b7',
+                                          flexShrink: 0,
+                                          display: 'inline-block',
+                                        }}
+                                      />
+                                      취임 정보
+                                    </span>
+                                    {!!editingTenureInfo &&
                                     editingTenureInfo.cabinetId ===
                                       selectedCabinet.id &&
-                                    editingTenureInfo.mode === 'end'
-                                      ? 10
-                                      : 0,
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    color: C.sectionLabelTint,
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                  }}
-                                >
-                                  <span
-                                    style={{
-                                      width: 6,
-                                      height: 6,
-                                      borderRadius: '50%',
-                                      background: '#fca5a5',
-                                      flexShrink: 0,
-                                      display: 'inline-block',
-                                    }}
-                                  />
-                                  퇴임 정보
-                                </span>
-                                {!!editingTenureInfo &&
-                                editingTenureInfo.cabinetId ===
-                                  selectedCabinet.id &&
-                                editingTenureInfo.mode === 'end' ? (
-                                  <div style={{ display: 'flex', gap: 6 }}>
-                                    <button
-                                      type="button"
-                                      disabled={tenureInfoSubmitting}
-                                      onClick={() =>
-                                        handleSaveTenureInfoInline(
-                                          selectedCabinet.id,
-                                          head.id,
-                                        )
-                                      }
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        padding: '4px 12px',
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        color: '#fff',
-                                        background: '#6366f1',
-                                        border: 'none',
-                                        borderRadius: 7,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      {tenureInfoSubmitting
-                                        ? '저장 중…'
-                                        : '저장'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingTenureInfo(null)}
-                                      style={{
-                                        padding: '4px 10px',
-                                        fontSize: 11.5,
-                                        fontWeight: 600,
-                                        color: C.slate400,
-                                        background: 'transparent',
-                                        border: `1px solid ${C.borderHairline12}`,
-                                        borderRadius: 7,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      취소
-                                    </button>
+                                    editingTenureInfo.mode === 'appointment' ? (
+                                      <div style={{ display: 'flex', gap: 6 }}>
+                                        <button
+                                          type="button"
+                                          disabled={tenureInfoSubmitting}
+                                          onClick={() =>
+                                            handleSaveTenureInfoInline(
+                                              selectedCabinet.id,
+                                              head.id,
+                                            )
+                                          }
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            padding: '4px 12px',
+                                            fontSize: 11.5,
+                                            fontWeight: 700,
+                                            color: '#fff',
+                                            background: '#6366f1',
+                                            border: 'none',
+                                            borderRadius: 7,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          {tenureInfoSubmitting
+                                            ? '저장 중…'
+                                            : '저장'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setEditingTenureInfo(null)
+                                          }
+                                          style={{
+                                            padding: '4px 10px',
+                                            fontSize: 11.5,
+                                            fontWeight: 600,
+                                            color: C.slate400,
+                                            background: 'transparent',
+                                            border: `1px solid ${C.borderHairline12}`,
+                                            borderRadius: 7,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          취소
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingAppointmentMethod(
+                                            head?.appointmentMethod ?? '',
+                                          )
+                                          setEditingNotes(head?.notes ?? '')
+                                          setEditingTenureInfo({
+                                            cabinetId: selectedCabinet.id,
+                                            mode: 'appointment',
+                                          })
+                                        }}
+                                        style={{
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                          color: C.chipActionColor,
+                                          background: 'transparent',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: 4,
+                                          padding: '4px 8px',
+                                          borderRadius: 6,
+                                        }}
+                                      >
+                                        <FiPlus size={12} />
+                                        {head?.appointmentMethod || head?.notes
+                                          ? '수정'
+                                          : '등록'}
+                                      </button>
+                                    )}
                                   </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingEndReason(head?.endReason ?? '')
-                                      setEditingEndReasonDetail(
-                                        head?.endReasonDetail ?? '',
-                                      )
-                                      setEditingTenureInfo({
-                                        cabinetId: selectedCabinet.id,
-                                        mode: 'end',
-                                      })
-                                    }}
-                                    style={{
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      color: C.chipActionColor,
-                                      background: 'transparent',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      padding: '4px 8px',
-                                      borderRadius: 6,
-                                    }}
-                                  >
-                                    <FiPlus size={12} />
-                                    {head?.endReason || head?.endReasonDetail
-                                      ? '수정'
-                                      : '등록'}
-                                  </button>
-                                )}
-                              </div>
-                              {!!editingTenureInfo &&
-                              editingTenureInfo.cabinetId ===
-                                selectedCabinet.id &&
-                              editingTenureInfo.mode === 'end' ? (
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 10,
-                                  }}
-                                >
-                                  <div>
-                                    <label
+                                  {!!editingTenureInfo &&
+                                  editingTenureInfo.cabinetId ===
+                                    selectedCabinet.id &&
+                                  editingTenureInfo.mode === 'appointment' ? (
+                                    <div
                                       style={{
-                                        display: 'block',
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: '#94a3b8',
-                                        marginBottom: 4,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.05em',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 10,
                                       }}
                                     >
-                                      퇴임 사유
-                                    </label>
-                                    <select
-                                      value={editingEndReason}
-                                      onChange={(e) =>
-                                        setEditingEndReason(e.target.value)
-                                      }
-                                      style={{
-                                        maxWidth: 280,
-                                        width: '100%',
-                                        padding: '8px 10px',
-                                        fontSize: 13,
-                                        border: `1.5px solid ${C.badgeBorder}`,
-                                        borderRadius: 8,
-                                        background: C.inputBg,
-                                        color: C.text,
-                                        outline: 'none',
-                                      }}
-                                    >
-                                      <option value="">선택 안 함</option>
-                                      {Object.entries(END_REASON_LABEL).map(
-                                        ([k, v]) => (
-                                          <option key={k} value={k}>
-                                            {v}
-                                          </option>
-                                        ),
+                                      <div>
+                                        <label
+                                          style={{
+                                            display: 'block',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: '#94a3b8',
+                                            marginBottom: 4,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                          }}
+                                        >
+                                          임명 방식
+                                        </label>
+                                        <select
+                                          value={editingAppointmentMethod}
+                                          onChange={(e) =>
+                                            setEditingAppointmentMethod(
+                                              e.target.value,
+                                            )
+                                          }
+                                          style={{
+                                            maxWidth: 280,
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            fontSize: 13,
+                                            border: `1.5px solid ${C.badgeBorder}`,
+                                            borderRadius: 8,
+                                            background: C.inputBg,
+                                            color: C.text,
+                                            outline: 'none',
+                                          }}
+                                        >
+                                          <option value="">선택 안 함</option>
+                                          {Object.entries(
+                                            APPOINTMENT_METHOD_LABEL,
+                                          ).map(([k, v]) => (
+                                            <option key={k} value={k}>
+                                              {v}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label
+                                          style={{
+                                            display: 'block',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: '#94a3b8',
+                                            marginBottom: 4,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                          }}
+                                        >
+                                          취임 배경 / 비고
+                                        </label>
+                                        <textarea
+                                          value={editingNotes}
+                                          onChange={(e) =>
+                                            setEditingNotes(e.target.value)
+                                          }
+                                          rows={3}
+                                          placeholder="취임 배경, 특이 사항 등"
+                                          style={{
+                                            maxWidth: 500,
+                                            height: 200,
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            fontSize: 13,
+                                            resize: 'vertical',
+                                            border: `1.5px solid ${C.badgeBorder}`,
+                                            borderRadius: 8,
+                                            background: C.inputBg,
+                                            color: C.text,
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                            lineHeight: 1.6,
+                                            boxSizing: 'border-box',
+                                            display: 'block',
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : head?.appointmentMethod || head?.notes ? (
+                                    <>
+                                      <CabS.HeadTenureInfoBadge
+                                        $type="appointment"
+                                        style={{ width: 'fit-content' }}
+                                      >
+                                        <CabS.HeadTenureInfoBadgeLabel>
+                                          임명
+                                        </CabS.HeadTenureInfoBadgeLabel>
+                                        {APPOINTMENT_METHOD_LABEL[
+                                          head.appointmentMethod
+                                        ] ?? head.appointmentMethod}
+                                      </CabS.HeadTenureInfoBadge>
+                                      {head.notes && (
+                                        <CabS.HeadTenureInfoRow $block>
+                                          <CabS.HeadTenureInfoLabel>
+                                            취임 배경 / 비고
+                                          </CabS.HeadTenureInfoLabel>
+                                          <CabS.HeadTenureInfoText>
+                                            {head.notes}
+                                          </CabS.HeadTenureInfoText>
+                                        </CabS.HeadTenureInfoRow>
                                       )}
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label
+                                    </>
+                                  ) : (
+                                    <p
                                       style={{
-                                        display: 'block',
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: '#94a3b8',
-                                        marginBottom: 4,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.05em',
+                                        margin: '2px 0 0',
+                                        fontSize: 12,
+                                        color: '#c0cad8',
                                       }}
                                     >
-                                      퇴임 상세
-                                    </label>
-                                    <textarea
-                                      value={editingEndReasonDetail}
-                                      onChange={(e) =>
-                                        setEditingEndReasonDetail(
-                                          e.target.value,
-                                        )
-                                      }
-                                      rows={3}
-                                      placeholder="퇴임 경위, 상세 내용 등"
-                                      style={{
-                                        maxWidth: 500,
-                                        height: 200,
-                                        width: '100%',
-                                        padding: '8px 10px',
-                                        fontSize: 13,
-                                        resize: 'vertical',
-                                        border: `1.5px solid ${C.badgeBorder}`,
-                                        borderRadius: 8,
-                                        background: C.inputBg,
-                                        color: C.text,
-                                        outline: 'none',
-                                        fontFamily: 'inherit',
-                                        lineHeight: 1.6,
-                                        boxSizing: 'border-box',
-                                        display: 'block',
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              ) : head?.endReason || head?.endReasonDetail ? (
-                                <>
-                                  <CabS.HeadTenureInfoBadge
-                                    $type="end"
-                                    style={{ width: 'fit-content' }}
-                                  >
-                                    <CabS.HeadTenureInfoBadgeLabel>
-                                      퇴임
-                                    </CabS.HeadTenureInfoBadgeLabel>
-                                    {END_REASON_LABEL[head.endReason] ??
-                                      head.endReason}
-                                  </CabS.HeadTenureInfoBadge>
-                                  {head.endReasonDetail && (
-                                    <CabS.HeadTenureInfoRow $block>
-                                      <CabS.HeadTenureInfoLabel>
-                                        퇴임 상세
-                                      </CabS.HeadTenureInfoLabel>
-                                      <CabS.HeadTenureInfoText>
-                                        {head.endReasonDetail}
-                                      </CabS.HeadTenureInfoText>
-                                    </CabS.HeadTenureInfoRow>
+                                      — 등록된 정보 없음
+                                    </p>
                                   )}
-                                </>
-                              ) : (
-                                <p
-                                  style={{
-                                    margin: '2px 0 0',
-                                    fontSize: 12,
-                                    color: '#c0cad8',
-                                  }}
-                                >
-                                  — 등록된 정보 없음
-                                </p>
-                              )}
-                            </CabS.HeadTenureInfoSection>
-                          </div>
-                          {/* end tenure info container */}
+                                </CabS.HeadTenureInfoSection>
+
+                                {/* 구분선 */}
+
+                                {/* ── 퇴임 정보 ── */}
+                                <CabS.HeadTenureInfoSection $accent="rose">
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      marginBottom:
+                                        !!editingTenureInfo &&
+                                        editingTenureInfo.cabinetId ===
+                                          selectedCabinet.id &&
+                                        editingTenureInfo.mode === 'end'
+                                          ? 10
+                                          : 0,
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        color: C.sectionLabelTint,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 5,
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          width: 6,
+                                          height: 6,
+                                          borderRadius: '50%',
+                                          background: '#fca5a5',
+                                          flexShrink: 0,
+                                          display: 'inline-block',
+                                        }}
+                                      />
+                                      퇴임 정보
+                                    </span>
+                                    {!!editingTenureInfo &&
+                                    editingTenureInfo.cabinetId ===
+                                      selectedCabinet.id &&
+                                    editingTenureInfo.mode === 'end' ? (
+                                      <div style={{ display: 'flex', gap: 6 }}>
+                                        <button
+                                          type="button"
+                                          disabled={tenureInfoSubmitting}
+                                          onClick={() =>
+                                            handleSaveTenureInfoInline(
+                                              selectedCabinet.id,
+                                              head.id,
+                                            )
+                                          }
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            padding: '4px 12px',
+                                            fontSize: 11.5,
+                                            fontWeight: 700,
+                                            color: '#fff',
+                                            background: '#6366f1',
+                                            border: 'none',
+                                            borderRadius: 7,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          {tenureInfoSubmitting
+                                            ? '저장 중…'
+                                            : '저장'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setEditingTenureInfo(null)
+                                          }
+                                          style={{
+                                            padding: '4px 10px',
+                                            fontSize: 11.5,
+                                            fontWeight: 600,
+                                            color: C.slate400,
+                                            background: 'transparent',
+                                            border: `1px solid ${C.borderHairline12}`,
+                                            borderRadius: 7,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          취소
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingEndReason(
+                                            head?.endReason ?? '',
+                                          )
+                                          setEditingEndReasonDetail(
+                                            head?.endReasonDetail ?? '',
+                                          )
+                                          setEditingTenureInfo({
+                                            cabinetId: selectedCabinet.id,
+                                            mode: 'end',
+                                          })
+                                        }}
+                                        style={{
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                          color: C.chipActionColor,
+                                          background: 'transparent',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: 4,
+                                          padding: '4px 8px',
+                                          borderRadius: 6,
+                                        }}
+                                      >
+                                        <FiPlus size={12} />
+                                        {head?.endReason ||
+                                        head?.endReasonDetail
+                                          ? '수정'
+                                          : '등록'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {!!editingTenureInfo &&
+                                  editingTenureInfo.cabinetId ===
+                                    selectedCabinet.id &&
+                                  editingTenureInfo.mode === 'end' ? (
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 10,
+                                      }}
+                                    >
+                                      <div>
+                                        <label
+                                          style={{
+                                            display: 'block',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: '#94a3b8',
+                                            marginBottom: 4,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                          }}
+                                        >
+                                          퇴임 사유
+                                        </label>
+                                        <select
+                                          value={editingEndReason}
+                                          onChange={(e) =>
+                                            setEditingEndReason(e.target.value)
+                                          }
+                                          style={{
+                                            maxWidth: 280,
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            fontSize: 13,
+                                            border: `1.5px solid ${C.badgeBorder}`,
+                                            borderRadius: 8,
+                                            background: C.inputBg,
+                                            color: C.text,
+                                            outline: 'none',
+                                          }}
+                                        >
+                                          <option value="">선택 안 함</option>
+                                          {Object.entries(END_REASON_LABEL).map(
+                                            ([k, v]) => (
+                                              <option key={k} value={k}>
+                                                {v}
+                                              </option>
+                                            ),
+                                          )}
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label
+                                          style={{
+                                            display: 'block',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: '#94a3b8',
+                                            marginBottom: 4,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.05em',
+                                          }}
+                                        >
+                                          퇴임 상세
+                                        </label>
+                                        <textarea
+                                          value={editingEndReasonDetail}
+                                          onChange={(e) =>
+                                            setEditingEndReasonDetail(
+                                              e.target.value,
+                                            )
+                                          }
+                                          rows={3}
+                                          placeholder="퇴임 경위, 상세 내용 등"
+                                          style={{
+                                            maxWidth: 500,
+                                            height: 200,
+                                            width: '100%',
+                                            padding: '8px 10px',
+                                            fontSize: 13,
+                                            resize: 'vertical',
+                                            border: `1.5px solid ${C.badgeBorder}`,
+                                            borderRadius: 8,
+                                            background: C.inputBg,
+                                            color: C.text,
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                            lineHeight: 1.6,
+                                            boxSizing: 'border-box',
+                                            display: 'block',
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : head?.endReason ||
+                                    head?.endReasonDetail ? (
+                                    <>
+                                      <CabS.HeadTenureInfoBadge
+                                        $type="end"
+                                        style={{ width: 'fit-content' }}
+                                      >
+                                        <CabS.HeadTenureInfoBadgeLabel>
+                                          퇴임
+                                        </CabS.HeadTenureInfoBadgeLabel>
+                                        {END_REASON_LABEL[head.endReason] ??
+                                          head.endReason}
+                                      </CabS.HeadTenureInfoBadge>
+                                      {head.endReasonDetail && (
+                                        <CabS.HeadTenureInfoRow $block>
+                                          <CabS.HeadTenureInfoLabel>
+                                            퇴임 상세
+                                          </CabS.HeadTenureInfoLabel>
+                                          <CabS.HeadTenureInfoText>
+                                            {head.endReasonDetail}
+                                          </CabS.HeadTenureInfoText>
+                                        </CabS.HeadTenureInfoRow>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <p
+                                      style={{
+                                        margin: '2px 0 0',
+                                        fontSize: 12,
+                                        color: '#c0cad8',
+                                      }}
+                                    >
+                                      — 등록된 정보 없음
+                                    </p>
+                                  )}
+                                </CabS.HeadTenureInfoSection>
+                              </div>
+                              {/* end tenure info container */}
                             </>
                           )}
 
                           {/* 수반 재임 히스토리 — 각료와 동일: 목록 영역만 상세 전환 */}
                           <CabS.HeadTenureInfoSection>
-                          {selectedHeadHistoryId ? (
-                            (() => {
-                              const selAch = Array.isArray(
-                                head.achievements,
-                              )
-                                ? head.achievements.find(
-                                    (a: any) => a.id === selectedHeadHistoryId,
-                                  )
-                                : null
-                              if (!selAch) return null
-                              if (!head?.id) return null
-                              const achStartDate = selAch.startDate
-                                ? formatDate(selAch.startDate)
-                                : null
-                              const achEndDate = selAch.endDate
-                                ? formatDate(selAch.endDate)
-                                : null
-                              const hasContent = !!selAch.description?.trim()
-                              return (
-                                <CabS.HistoryArticleWrap>
-                                  <CabS.HistoryArticleTopBar>
-                                    <CabS.HistoryArticleBackBtn
-                                      type="button"
-                                      onClick={() => {
-                                        setSelectedHeadHistoryId(null)
-                                        setEditingHistoryContent(false)
-                                        setEditingHistoryMeta(false)
-                                      }}
-                                    >
-                                      <FiChevronLeft size={13} />
-                                      재임 히스토리 목록
-                                    </CabS.HistoryArticleBackBtn>
-                                    <CabS.HistoryArticleDeleteBtn
-                                      type="button"
-                                      onClick={() =>
-                                        deleteMinisterHistoryDirect(
-                                          head.id,
-                                          selAch.id,
-                                        )
-                                      }
-                                    >
-                                      <FiTrash2 size={13} />
-                                      삭제
-                                    </CabS.HistoryArticleDeleteBtn>
-                                  </CabS.HistoryArticleTopBar>
+                            {selectedHeadHistoryId ? (
+                              (() => {
+                                const selAch = Array.isArray(head.achievements)
+                                  ? head.achievements.find(
+                                      (a: any) =>
+                                        a.id === selectedHeadHistoryId,
+                                    )
+                                  : null
+                                if (!selAch) return null
+                                if (!head?.id) return null
+                                const achStartDate = selAch.startDate
+                                  ? formatDate(selAch.startDate)
+                                  : null
+                                const achEndDate = selAch.endDate
+                                  ? formatDate(selAch.endDate)
+                                  : null
+                                const hasContent = !!selAch.description?.trim()
+                                return (
+                                  <CabS.HistoryArticleWrap>
+                                    <CabS.HistoryArticleTopBar>
+                                      <CabS.HistoryArticleBackBtn
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedHeadHistoryId(null)
+                                          setEditingHistoryContent(false)
+                                          setEditingHistoryMeta(false)
+                                        }}
+                                      >
+                                        <FiChevronLeft size={13} />
+                                        재임 히스토리 목록
+                                      </CabS.HistoryArticleBackBtn>
+                                      <CabS.HistoryArticleDeleteBtn
+                                        type="button"
+                                        onClick={() =>
+                                          deleteMinisterHistoryDirect(
+                                            head.id,
+                                            selAch.id,
+                                          )
+                                        }
+                                      >
+                                        <FiTrash2 size={13} />
+                                        삭제
+                                      </CabS.HistoryArticleDeleteBtn>
+                                    </CabS.HistoryArticleTopBar>
 
-                                  {/* 제목/날짜 영역: 100% width, 별도 수정 버튼 */}
-                                  <CabS.HistoryArticleMetaSection>
-                                    {editingHistoryMeta ? (
-                                      <>
-                                        <CabS.HistoryMetaForm>
-                                          <CabS.HistoryMetaInput
-                                            type="text"
-                                            value={historyMetaTitle}
-                                            onChange={(e) =>
-                                              setHistoryMetaTitle(
-                                                e.target.value,
-                                              )
-                                            }
-                                            placeholder="히스토리 제목"
-                                          />
-                                          <CabS.HistoryMetaDateRow>
-                                            <CabS.HistoryMetaDateInput
-                                              type="date"
-                                              value={historyMetaStartDate}
+                                    {/* 제목/날짜 영역: 100% width, 별도 수정 버튼 */}
+                                    <CabS.HistoryArticleMetaSection>
+                                      {editingHistoryMeta ? (
+                                        <>
+                                          <CabS.HistoryMetaForm>
+                                            <CabS.HistoryMetaInput
+                                              type="text"
+                                              value={historyMetaTitle}
                                               onChange={(e) =>
-                                                setHistoryMetaStartDate(
+                                                setHistoryMetaTitle(
                                                   e.target.value,
                                                 )
                                               }
+                                              placeholder="히스토리 제목"
                                             />
-                                            <span
-                                              style={{
-                                                color: '#c0cad8',
-                                                fontSize: 13,
+                                            <CabS.HistoryMetaDateRow>
+                                              <CabS.HistoryMetaDateInput
+                                                type="date"
+                                                value={historyMetaStartDate}
+                                                onChange={(e) =>
+                                                  setHistoryMetaStartDate(
+                                                    e.target.value,
+                                                  )
+                                                }
+                                              />
+                                              <span
+                                                style={{
+                                                  color: '#c0cad8',
+                                                  fontSize: 13,
+                                                }}
+                                              >
+                                                –
+                                              </span>
+                                              <CabS.HistoryMetaDateInput
+                                                type="date"
+                                                value={historyMetaEndDate}
+                                                onChange={(e) =>
+                                                  setHistoryMetaEndDate(
+                                                    e.target.value,
+                                                  )
+                                                }
+                                              />
+                                            </CabS.HistoryMetaDateRow>
+                                          </CabS.HistoryMetaForm>
+                                          <CabS.HistoryArticleEditActions
+                                            style={{ marginTop: 12 }}
+                                          >
+                                            <CabS.HistoryArticleCancelBtn
+                                              type="button"
+                                              onClick={() =>
+                                                setEditingHistoryMeta(false)
+                                              }
+                                              disabled={historyMetaSaving}
+                                            >
+                                              취소
+                                            </CabS.HistoryArticleCancelBtn>
+                                            <CabS.HistoryArticleSaveBtn
+                                              type="button"
+                                              onClick={() =>
+                                                saveHistoryMeta(
+                                                  head.id,
+                                                  selAch.id,
+                                                )
+                                              }
+                                              disabled={
+                                                historyMetaSaving ||
+                                                !historyMetaTitle.trim()
+                                              }
+                                              $isRegister={false}
+                                            >
+                                              {historyMetaSaving
+                                                ? '저장 중…'
+                                                : '저장'}
+                                            </CabS.HistoryArticleSaveBtn>
+                                          </CabS.HistoryArticleEditActions>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CabS.HistoryHeadlineRow>
+                                            <CabS.HistoryArticleHeadline>
+                                              {selAch.title}
+                                            </CabS.HistoryArticleHeadline>
+                                            <CabS.HistoryMetaEditBtn
+                                              type="button"
+                                              onClick={() => {
+                                                setHistoryMetaTitle(
+                                                  selAch.title ?? '',
+                                                )
+                                                setHistoryMetaStartDate(
+                                                  selAch.startDate
+                                                    ? String(
+                                                        selAch.startDate,
+                                                      ).slice(0, 10)
+                                                    : '',
+                                                )
+                                                setHistoryMetaEndDate(
+                                                  selAch.endDate
+                                                    ? String(
+                                                        selAch.endDate,
+                                                      ).slice(0, 10)
+                                                    : '',
+                                                )
+                                                setEditingHistoryMeta(true)
                                               }}
                                             >
-                                              –
-                                            </span>
-                                            <CabS.HistoryMetaDateInput
-                                              type="date"
-                                              value={historyMetaEndDate}
-                                              onChange={(e) =>
-                                                setHistoryMetaEndDate(
-                                                  e.target.value,
+                                              <FiEdit2 size={11} />
+                                            </CabS.HistoryMetaEditBtn>
+                                          </CabS.HistoryHeadlineRow>
+                                          {(achStartDate || achEndDate) && (
+                                            <CabS.HistoryArticleByline>
+                                              {achStartDate && (
+                                                <span>{achStartDate}</span>
+                                              )}
+                                              {achStartDate && achEndDate && (
+                                                <span> – </span>
+                                              )}
+                                              {achEndDate && (
+                                                <span>{achEndDate}</span>
+                                              )}
+                                            </CabS.HistoryArticleByline>
+                                          )}
+                                        </>
+                                      )}
+                                    </CabS.HistoryArticleMetaSection>
+
+                                    <CabS.HistoryArticleDivider />
+
+                                    {/* 본문 영역: max-width 680px 가운데 */}
+                                    <CabS.HistoryArticleInner>
+                                      <CabS.HistoryArticleContentBar>
+                                        {!editingHistoryContent && (
+                                          <CabS.HistoryArticleEditBtn
+                                            type="button"
+                                            style={{ marginLeft: 'auto' }}
+                                            onClick={() => {
+                                              setHistoryDraftContent(
+                                                selAch.description ?? '',
+                                              )
+                                              setEditingHistoryContent(true)
+                                            }}
+                                          >
+                                            <FiEdit2 size={13} />
+                                            {hasContent ? '수정' : '추가'}
+                                          </CabS.HistoryArticleEditBtn>
+                                        )}
+                                      </CabS.HistoryArticleContentBar>
+
+                                      {editingHistoryContent ? (
+                                        <>
+                                          <CabS.HistoryArticleEditorWrap>
+                                            <RichTextEditor
+                                              value={historyDraftContent}
+                                              onChange={setHistoryDraftContent}
+                                              showTitle={false}
+                                              placeholder={
+                                                hasContent
+                                                  ? '본문을 수정하세요.'
+                                                  : '본문 내용을 입력하세요.'
+                                              }
+                                              onImageUpload={async (file) => {
+                                                const result =
+                                                  await uploadImage(
+                                                    file,
+                                                    'persons',
+                                                  )
+                                                return (
+                                                  getUploadImageUrl(
+                                                    result.url,
+                                                  ) ||
+                                                  (result.url ?? '')
+                                                )
+                                              }}
+                                            />
+                                          </CabS.HistoryArticleEditorWrap>
+                                          <CabS.HistoryArticleEditActions>
+                                            <CabS.HistoryArticleCancelBtn
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingHistoryContent(false)
+                                                setHistoryDraftContent('')
+                                              }}
+                                              disabled={historyContentSaving}
+                                            >
+                                              취소
+                                            </CabS.HistoryArticleCancelBtn>
+                                            <CabS.HistoryArticleSaveBtn
+                                              type="button"
+                                              onClick={() =>
+                                                saveHistoryDescription(
+                                                  head.id,
+                                                  selAch.id,
+                                                  historyDraftContent,
                                                 )
                                               }
-                                            />
-                                          </CabS.HistoryMetaDateRow>
-                                        </CabS.HistoryMetaForm>
-                                        <CabS.HistoryArticleEditActions
-                                          style={{ marginTop: 12 }}
+                                              disabled={historyContentSaving}
+                                              $isRegister={!hasContent}
+                                            >
+                                              {historyContentSaving
+                                                ? hasContent
+                                                  ? '저장 중…'
+                                                  : '등록 중…'
+                                                : hasContent
+                                                  ? '저장'
+                                                  : '등록'}
+                                            </CabS.HistoryArticleSaveBtn>
+                                          </CabS.HistoryArticleEditActions>
+                                        </>
+                                      ) : hasContent ? (
+                                        <div
+                                          onClick={handleHistoryProseClick}
+                                          role="presentation"
                                         >
-                                          <CabS.HistoryArticleCancelBtn
-                                            type="button"
-                                            onClick={() =>
-                                              setEditingHistoryMeta(false)
-                                            }
-                                            disabled={historyMetaSaving}
-                                          >
-                                            취소
-                                          </CabS.HistoryArticleCancelBtn>
-                                          <CabS.HistoryArticleSaveBtn
-                                            type="button"
-                                            onClick={() =>
-                                              saveHistoryMeta(
-                                                head.id,
-                                                selAch.id,
-                                              )
-                                            }
-                                            disabled={
-                                              historyMetaSaving ||
-                                              !historyMetaTitle.trim()
-                                            }
-                                            $isRegister={false}
-                                          >
-                                            {historyMetaSaving
-                                              ? '저장 중…'
-                                              : '저장'}
-                                          </CabS.HistoryArticleSaveBtn>
-                                        </CabS.HistoryArticleEditActions>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <CabS.HistoryHeadlineRow>
-                                          <CabS.HistoryArticleHeadline>
-                                            {selAch.title}
-                                          </CabS.HistoryArticleHeadline>
-                                          <CabS.HistoryMetaEditBtn
-                                            type="button"
-                                            onClick={() => {
-                                              setHistoryMetaTitle(
-                                                selAch.title ?? '',
-                                              )
-                                              setHistoryMetaStartDate(
-                                                selAch.startDate
-                                                  ? String(
-                                                      selAch.startDate,
-                                                    ).slice(0, 10)
-                                                  : '',
-                                              )
-                                              setHistoryMetaEndDate(
-                                                selAch.endDate
-                                                  ? String(
-                                                      selAch.endDate,
-                                                    ).slice(0, 10)
-                                                  : '',
-                                              )
-                                              setEditingHistoryMeta(true)
-                                            }}
-                                          >
-                                            <FiEdit2 size={11} />
-                                          </CabS.HistoryMetaEditBtn>
-                                        </CabS.HistoryHeadlineRow>
-                                        {(achStartDate || achEndDate) && (
-                                          <CabS.HistoryArticleByline>
-                                            {achStartDate && (
-                                              <span>{achStartDate}</span>
-                                            )}
-                                            {achStartDate && achEndDate && (
-                                              <span> – </span>
-                                            )}
-                                            {achEndDate && (
-                                              <span>{achEndDate}</span>
-                                            )}
-                                          </CabS.HistoryArticleByline>
-                                        )}
-                                      </>
-                                    )}
-                                  </CabS.HistoryArticleMetaSection>
-
-                                  <CabS.HistoryArticleDivider />
-
-                                  {/* 본문 영역: max-width 680px 가운데 */}
-                                  <CabS.HistoryArticleInner>
-                                    <CabS.HistoryArticleContentBar>
-                                      {!editingHistoryContent && (
-                                        <CabS.HistoryArticleEditBtn
-                                          type="button"
-                                          style={{ marginLeft: 'auto' }}
-                                          onClick={() => {
-                                            setHistoryDraftContent(
-                                              selAch.description ?? '',
-                                            )
-                                            setEditingHistoryContent(true)
-                                          }}
-                                        >
-                                          <FiEdit2 size={13} />
-                                          {hasContent ? '수정' : '추가'}
-                                        </CabS.HistoryArticleEditBtn>
-                                      )}
-                                    </CabS.HistoryArticleContentBar>
-
-                                    {editingHistoryContent ? (
-                                      <>
-                                        <CabS.HistoryArticleEditorWrap>
-                                          <RichTextEditor
-                                            value={historyDraftContent}
-                                            onChange={setHistoryDraftContent}
-                                            showTitle={false}
-                                            placeholder={
-                                              hasContent
-                                                ? '본문을 수정하세요.'
-                                                : '본문 내용을 입력하세요.'
-                                            }
-                                            onImageUpload={async (file) => {
-                                              const result = await uploadImage(
-                                                file,
-                                                'persons',
-                                              )
-                                              return (
-                                                getUploadImageUrl(result.url) ||
-                                                (result.url ?? '')
-                                              )
+                                          <CabS.HistoryArticleProse
+                                            dangerouslySetInnerHTML={{
+                                              __html: selAch.description,
                                             }}
                                           />
-                                        </CabS.HistoryArticleEditorWrap>
-                                        <CabS.HistoryArticleEditActions>
-                                          <CabS.HistoryArticleCancelBtn
-                                            type="button"
-                                            onClick={() => {
-                                              setEditingHistoryContent(false)
-                                              setHistoryDraftContent('')
-                                            }}
-                                            disabled={historyContentSaving}
-                                          >
-                                            취소
-                                          </CabS.HistoryArticleCancelBtn>
-                                          <CabS.HistoryArticleSaveBtn
-                                            type="button"
-                                            onClick={() =>
-                                              saveHistoryDescription(
-                                                head.id,
-                                                selAch.id,
-                                                historyDraftContent,
-                                              )
-                                            }
-                                            disabled={historyContentSaving}
-                                            $isRegister={!hasContent}
-                                          >
-                                            {historyContentSaving
-                                              ? hasContent
-                                                ? '저장 중…'
-                                                : '등록 중…'
-                                              : hasContent
-                                                ? '저장'
-                                                : '등록'}
-                                          </CabS.HistoryArticleSaveBtn>
-                                        </CabS.HistoryArticleEditActions>
-                                      </>
-                                    ) : hasContent ? (
-                                      <div
-                                        onClick={handleHistoryProseClick}
-                                        role="presentation"
-                                      >
-                                        <CabS.HistoryArticleProse
-                                          dangerouslySetInnerHTML={{
-                                            __html: selAch.description,
-                                          }}
-                                        />
-                                      </div>
-                                    ) : (
-                                      <CabS.HistoryArticleEmpty>
-                                        본문 내용이 없습니다.
-                                      </CabS.HistoryArticleEmpty>
-                                    )}
-                                  </CabS.HistoryArticleInner>
-                                </CabS.HistoryArticleWrap>
-                              )
-                            })()
-                          ) : (
-                            <>
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                }}
-                              >
-                                <span
+                                        </div>
+                                      ) : (
+                                        <CabS.HistoryArticleEmpty>
+                                          본문 내용이 없습니다.
+                                        </CabS.HistoryArticleEmpty>
+                                      )}
+                                    </CabS.HistoryArticleInner>
+                                  </CabS.HistoryArticleWrap>
+                                )
+                              })()
+                            ) : (
+                              <>
+                                <div
                                   style={{
-                                    fontSize: 13,
-                                    fontWeight: 700,
-                                    color: C.sectionHeading,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
                                   }}
                                 >
-                                  재임 히스토리
+                                  <span
+                                    style={{
+                                      fontSize: 13,
+                                      fontWeight: 700,
+                                      color: C.sectionHeading,
+                                    }}
+                                  >
+                                    재임 히스토리
+                                    {Array.isArray(head?.achievements) &&
+                                    head.achievements.length > 0
+                                      ? ` (${head.achievements.length})`
+                                      : ''}
+                                  </span>
                                   {Array.isArray(head?.achievements) &&
-                                  head.achievements.length > 0
-                                    ? ` (${head.achievements.length})`
-                                    : ''}
-                                </span>
+                                    head.achievements.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openMinisterHistoryModal(head)
+                                        }
+                                        style={{
+                                          fontSize: 12,
+                                          fontWeight: 600,
+                                          color: C.chipActionColor,
+                                          background: 'transparent',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: 4,
+                                          padding: '4px 8px',
+                                          borderRadius: 6,
+                                        }}
+                                      >
+                                        <FiPlus size={12} />
+                                        추가
+                                      </button>
+                                    )}
+                                </div>
                                 {Array.isArray(head?.achievements) &&
-                                  head.achievements.length > 0 && (
+                                head.achievements.length > 0 ? (
+                                  <CabS.HistoryCardList>
+                                    {head.achievements.map((ach: any) => (
+                                      <CabS.HistoryCard
+                                        key={ach.id}
+                                        onClick={() =>
+                                          setSelectedHeadHistoryId(ach.id)
+                                        }
+                                      >
+                                        <CabS.HistoryCardTitle>
+                                          {ach.title}
+                                        </CabS.HistoryCardTitle>
+                                        {(ach.startDate || ach.endDate) && (
+                                          <CabS.HistoryCardMeta>
+                                            {ach.startDate
+                                              ? formatDate(ach.startDate)
+                                              : '—'}
+                                            {' – '}
+                                            {ach.endDate
+                                              ? formatDate(ach.endDate)
+                                              : '현재'}
+                                          </CabS.HistoryCardMeta>
+                                        )}
+                                        {ach.description && (
+                                          <CabS.HistoryCardExcerpt>
+                                            {ach.description
+                                              .replace(/<[^>]+>/g, '')
+                                              .trim()
+                                              .slice(0, 80)}
+                                            {ach.description
+                                              .replace(/<[^>]+>/g, '')
+                                              .trim().length > 80
+                                              ? '…'
+                                              : ''}
+                                          </CabS.HistoryCardExcerpt>
+                                        )}
+                                        <CabS.HistoryCardChevron>
+                                          <FiChevronRight size={13} />
+                                        </CabS.HistoryCardChevron>
+                                        <CabS.HistoryCardDeleteBtn
+                                          type="button"
+                                          title="삭제"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            deleteMinisterHistoryDirect(
+                                              head.id,
+                                              ach.id,
+                                            )
+                                          }}
+                                        >
+                                          <FiTrash2 size={12} />
+                                        </CabS.HistoryCardDeleteBtn>
+                                      </CabS.HistoryCard>
+                                    ))}
+                                  </CabS.HistoryCardList>
+                                ) : (
+                                  <div
+                                    style={{
+                                      padding: '20px 0',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                    }}
+                                  >
+                                    <p
+                                      style={{
+                                        margin: 0,
+                                        fontSize: 12,
+                                        color: C.textMuted,
+                                        fontStyle: 'italic',
+                                      }}
+                                    >
+                                      등록된 재임 히스토리가 없습니다.
+                                    </p>
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -3792,608 +3901,532 @@ export function CabinetsSection({
                                         fontSize: 12,
                                         fontWeight: 600,
                                         color: C.chipActionColor,
-                                        background: 'transparent',
-                                        border: 'none',
+                                        background: C.chipActionBg,
+                                        border: `1px solid ${C.chipActionBorder}`,
+                                        borderRadius: 8,
                                         cursor: 'pointer',
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: 4,
-                                        padding: '4px 8px',
-                                        borderRadius: 6,
+                                        padding: '6px 14px',
                                       }}
                                     >
                                       <FiPlus size={12} />
-                                      추가
+                                      등록
                                     </button>
-                                  )}
-                              </div>
-                              {Array.isArray(head?.achievements) &&
-                              head.achievements.length > 0 ? (
-                                <CabS.HistoryCardList>
-                                  {head.achievements.map((ach: any) => (
-                                    <CabS.HistoryCard
-                                      key={ach.id}
-                                      onClick={() =>
-                                        setSelectedHeadHistoryId(ach.id)
-                                      }
-                                    >
-                                      <CabS.HistoryCardTitle>
-                                        {ach.title}
-                                      </CabS.HistoryCardTitle>
-                                      {(ach.startDate || ach.endDate) && (
-                                        <CabS.HistoryCardMeta>
-                                          {ach.startDate
-                                            ? formatDate(ach.startDate)
-                                            : '—'}
-                                          {' – '}
-                                          {ach.endDate
-                                            ? formatDate(ach.endDate)
-                                            : '현재'}
-                                        </CabS.HistoryCardMeta>
-                                      )}
-                                      {ach.description && (
-                                        <CabS.HistoryCardExcerpt>
-                                          {ach.description
-                                            .replace(/<[^>]+>/g, '')
-                                            .trim()
-                                            .slice(0, 80)}
-                                          {ach.description
-                                            .replace(/<[^>]+>/g, '')
-                                            .trim().length > 80
-                                            ? '…'
-                                            : ''}
-                                        </CabS.HistoryCardExcerpt>
-                                      )}
-                                      <CabS.HistoryCardChevron>
-                                        <FiChevronRight size={13} />
-                                      </CabS.HistoryCardChevron>
-                                      <CabS.HistoryCardDeleteBtn
-                                        type="button"
-                                        title="삭제"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          deleteMinisterHistoryDirect(
-                                            head.id,
-                                            ach.id,
-                                          )
-                                        }}
-                                      >
-                                        <FiTrash2 size={12} />
-                                      </CabS.HistoryCardDeleteBtn>
-                                    </CabS.HistoryCard>
-                                  ))}
-                                </CabS.HistoryCardList>
-                              ) : (
-                                <div
-                                  style={{
-                                    padding: '20px 0',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                  }}
-                                >
-                                  <p
-                                    style={{
-                                      margin: 0,
-                                      fontSize: 12,
-                                      color: C.textMuted,
-                                      fontStyle: 'italic',
-                                    }}
-                                  >
-                                    등록된 재임 히스토리가 없습니다.
-                                  </p>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      openMinisterHistoryModal(head)
-                                    }
-                                    style={{
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      color: C.chipActionColor,
-                                      background: C.chipActionBg,
-                                      border: `1px solid ${C.chipActionBorder}`,
-                                      borderRadius: 8,
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      padding: '6px 14px',
-                                    }}
-                                  >
-                                    <FiPlus size={12} />
-                                    등록
-                                  </button>
-                                </div>
-                              )}
-                            </>
-                          )}
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </CabS.HeadTenureInfoSection>
 
                           {!selectedHeadHistoryId && (
-                          <>
-                          {/* 각료 목록 */}
-                          <CabS.CabDetailMinistersSection
-                            id="cab-detail-ministers"
-                            style={{ scrollMarginTop: 12 }}
-                          >
-                            <CabS.CabDetailMinistersSectionHeader>
-                              <CabS.CabDetailMinistersSectionTitle>
-                                각료
-                              </CabS.CabDetailMinistersSectionTitle>
-                              <CabS.CabResultCount style={{ marginLeft: 6 }}>
-                                {sortedVisibleMinisters.length}명
-                              </CabS.CabResultCount>
-                              <div style={{ flex: 1 }} />
-                              {/* 검색창 — 6명 초과일 때만 표시, 추가 버튼 왼쪽 */}
-                              {sortedVisibleMinisters.length > 5 && (
-                                <CabS.CabSearchWrap
-                                  style={{ maxWidth: 180, margin: '0 8px 0 0' }}
-                                >
-                                  <CabS.CabSearchIcon>
-                                    <FiSearch size={14} />
-                                  </CabS.CabSearchIcon>
-                                  <CabS.CabSearchInput
-                                    type="text"
-                                    placeholder="각료명, 직위..."
-                                    value={ministerSearchQuery}
-                                    onChange={(e) =>
-                                      setMinisterSearchQuery(e.target.value)
-                                    }
-                                    style={{ height: 32, fontSize: 12 }}
-                                  />
-                                  {ministerSearchQuery.trim() && (
-                                    <CabS.CabSearchClear
-                                      type="button"
-                                      onClick={() => setMinisterSearchQuery('')}
-                                    >
-                                      <FiX size={12} />
-                                    </CabS.CabSearchClear>
-                                  )}
-                                </CabS.CabSearchWrap>
-                              )}
-                              {sortedVisibleMinisters.length > 0 && (
-                                <CabS.HeadActionBtnPrimary
-                                  type="button"
-                                  onClick={() =>
-                                    handleAddMinister(selectedCabinet)
-                                  }
-                                >
-                                  <FiPlus size={13} />
-                                  각료 추가
-                                </CabS.HeadActionBtnPrimary>
-                              )}
-                            </CabS.CabDetailMinistersSectionHeader>
-
-                            {sortedVisibleMinisters.length === 0 ? (
-                              ministerSearchQuery.trim() ? (
-                                <CabS.EmptyStateBox>
-                                  검색 결과가 없습니다.
-                                </CabS.EmptyStateBox>
-                              ) : (
-                                <div
-                                  style={{
-                                    padding: '32px 0',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: 12,
-                                  }}
-                                >
-                                  <p
-                                    style={{
-                                      margin: 0,
-                                      fontSize: 13,
-                                      color: '#b0bac9',
-                                      fontStyle: 'italic',
-                                    }}
+                            <>
+                              {/* 각료 목록 */}
+                              <CabS.CabDetailMinistersSection
+                                id="cab-detail-ministers"
+                                style={{ scrollMarginTop: 12 }}
+                              >
+                                <CabS.CabDetailMinistersSectionHeader>
+                                  <CabS.CabDetailMinistersSectionTitle>
+                                    각료
+                                  </CabS.CabDetailMinistersSectionTitle>
+                                  <CabS.CabResultCount
+                                    style={{ marginLeft: 6 }}
                                   >
-                                    등록된 각료가 없습니다.
-                                  </p>
+                                    {sortedVisibleMinisters.length}명
+                                  </CabS.CabResultCount>
+                                  <div style={{ flex: 1 }} />
+                                  {/* 검색창 — 6명 초과일 때만 표시, 추가 버튼 왼쪽 */}
+                                  {sortedVisibleMinisters.length > 5 && (
+                                    <CabS.CabSearchWrap
+                                      style={{
+                                        maxWidth: 180,
+                                        margin: '0 8px 0 0',
+                                      }}
+                                    >
+                                      <CabS.CabSearchIcon>
+                                        <FiSearch size={14} />
+                                      </CabS.CabSearchIcon>
+                                      <CabS.CabSearchInput
+                                        type="text"
+                                        placeholder="각료명, 직위..."
+                                        value={ministerSearchQuery}
+                                        onChange={(e) =>
+                                          setMinisterSearchQuery(e.target.value)
+                                        }
+                                        style={{ height: 32, fontSize: 12 }}
+                                      />
+                                      {ministerSearchQuery.trim() && (
+                                        <CabS.CabSearchClear
+                                          type="button"
+                                          onClick={() =>
+                                            setMinisterSearchQuery('')
+                                          }
+                                        >
+                                          <FiX size={12} />
+                                        </CabS.CabSearchClear>
+                                      )}
+                                    </CabS.CabSearchWrap>
+                                  )}
+                                  {sortedVisibleMinisters.length > 0 && (
+                                    <CabS.HeadActionBtnPrimary
+                                      type="button"
+                                      onClick={() =>
+                                        handleAddMinister(selectedCabinet)
+                                      }
+                                    >
+                                      <FiPlus size={13} />
+                                      각료 추가
+                                    </CabS.HeadActionBtnPrimary>
+                                  )}
+                                </CabS.CabDetailMinistersSectionHeader>
+
+                                {sortedVisibleMinisters.length === 0 ? (
+                                  ministerSearchQuery.trim() ? (
+                                    <CabS.EmptyStateBox>
+                                      검색 결과가 없습니다.
+                                    </CabS.EmptyStateBox>
+                                  ) : (
+                                    <div
+                                      style={{
+                                        padding: '32px 0',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: 12,
+                                      }}
+                                    >
+                                      <p
+                                        style={{
+                                          margin: 0,
+                                          fontSize: 13,
+                                          color: '#b0bac9',
+                                          fontStyle: 'italic',
+                                        }}
+                                      >
+                                        등록된 각료가 없습니다.
+                                      </p>
+                                      <CabS.HeadActionBtnPrimary
+                                        type="button"
+                                        onClick={() =>
+                                          handleAddMinister(selectedCabinet)
+                                        }
+                                      >
+                                        <FiPlus size={13} />
+                                        각료 추가
+                                      </CabS.HeadActionBtnPrimary>
+                                    </div>
+                                  )
+                                ) : (
+                                  <CabS.MinisterCardGrid>
+                                    {sortedVisibleMinisters.map((t: any) => {
+                                      const mThumb =
+                                        t.person?.profileImageUrl ?? null
+                                      const mName = getPersonName(t.person)
+                                      const mPos =
+                                        t.positionDefinition?.title ??
+                                        t.title ??
+                                        '—'
+                                      const mStartFull = t.startDate
+                                        ? formatDate(t.startDate)
+                                        : '—'
+                                      const mEndFull = t.endDate
+                                        ? formatDate(t.endDate)
+                                        : '현재'
+                                      const mDuration = calcTenureDuration(
+                                        t.startDate,
+                                        t.endDate,
+                                      )
+                                      const mAge = calcAgeAtTenure(
+                                        t.person,
+                                        t.startDate,
+                                      )
+                                      const mAchCount = Array.isArray(
+                                        t.achievements,
+                                      )
+                                        ? t.achievements.length
+                                        : 0
+                                      return (
+                                        <CabS.MinisterCard
+                                          key={t.id}
+                                          $selected={
+                                            selectedMinisterId === t.id
+                                          }
+                                          onClick={() => {
+                                            setSelectedHeadHistoryId(null)
+                                            setSelectedMinisterId(t.id)
+                                          }}
+                                        >
+                                          <CabS.MinisterCardThumb
+                                            onClick={(e) => {
+                                              if (t.person?.id) {
+                                                e.stopPropagation()
+                                                setMentionPersonId(t.person.id)
+                                              }
+                                            }}
+                                            style={{
+                                              cursor: t.person?.id
+                                                ? 'pointer'
+                                                : 'default',
+                                            }}
+                                            title={
+                                              t.person?.id
+                                                ? `${mName} 인물 정보 보기`
+                                                : undefined
+                                            }
+                                          >
+                                            {mThumb ? (
+                                              <CabS.MinisterCardThumbImg
+                                                src={mThumb}
+                                                alt={mName}
+                                              />
+                                            ) : (
+                                              <CabS.MinisterCardThumbPlaceholder>
+                                                <FiUser size={18} />
+                                              </CabS.MinisterCardThumbPlaceholder>
+                                            )}
+                                            {mAchCount > 0 && (
+                                              <CabS.MinisterCardBadge>
+                                                {mAchCount}
+                                              </CabS.MinisterCardBadge>
+                                            )}
+                                          </CabS.MinisterCardThumb>
+                                          <CabS.MinisterCardInfo>
+                                            <CabS.MinisterCardName>
+                                              {mName}
+                                            </CabS.MinisterCardName>
+                                            <CabS.MinisterCardPos>
+                                              {mPos}
+                                            </CabS.MinisterCardPos>
+                                            <CabS.MinisterCardRange>
+                                              {mStartFull} – {mEndFull}
+                                              {mDuration && (
+                                                <span
+                                                  style={{
+                                                    color: '#b0bac9',
+                                                    fontSize: 10.5,
+                                                  }}
+                                                >
+                                                  ({mDuration})
+                                                </span>
+                                              )}
+                                              {mAge != null && (
+                                                <CabS.MinisterCardAge>
+                                                  취임 {mAge}세
+                                                </CabS.MinisterCardAge>
+                                              )}
+                                            </CabS.MinisterCardRange>
+                                          </CabS.MinisterCardInfo>
+                                          <CabS.MinisterCardChevron>
+                                            <FiChevronRight size={14} />
+                                          </CabS.MinisterCardChevron>
+                                        </CabS.MinisterCard>
+                                      )
+                                    })}
+                                  </CabS.MinisterCardGrid>
+                                )}
+                              </CabS.CabDetailMinistersSection>
+
+                              {/* 조약 섹션 */}
+                              <CabS.CabDetailMinistersSection
+                                id="cab-detail-treaties"
+                                style={{ marginTop: 24, scrollMarginTop: 12 }}
+                              >
+                                <CabS.CabDetailMinistersSectionHeader>
+                                  <FiFileText
+                                    size={15}
+                                    style={{ color: MAIN }}
+                                  />
+                                  <CabS.CabDetailMinistersSectionTitle>
+                                    체결 조약
+                                  </CabS.CabDetailMinistersSectionTitle>
+                                  <CabS.CabResultCount
+                                    style={{ marginLeft: 6 }}
+                                  >
+                                    {cabinetTreaties.length}건
+                                  </CabS.CabResultCount>
+                                  <div style={{ flex: 1 }} />
                                   <CabS.HeadActionBtnPrimary
                                     type="button"
-                                    onClick={() =>
-                                      handleAddMinister(selectedCabinet)
-                                    }
+                                    onClick={() => setShowTreatyLinkModal(true)}
                                   >
-                                    <FiPlus size={13} />
-                                    각료 추가
+                                    <FiLink size={13} />
+                                    조약 연결
                                   </CabS.HeadActionBtnPrimary>
-                                </div>
-                              )
-                            ) : (
-                              <CabS.MinisterCardGrid>
-                                {sortedVisibleMinisters.map((t: any) => {
-                                  const mThumb =
-                                    t.person?.profileImageUrl ?? null
-                                  const mName = getPersonName(t.person)
-                                  const mPos =
-                                    t.positionDefinition?.title ??
-                                    t.title ??
-                                    '—'
-                                  const mStartFull = t.startDate
-                                    ? formatDate(t.startDate)
-                                    : '—'
-                                  const mEndFull = t.endDate
-                                    ? formatDate(t.endDate)
-                                    : '현재'
-                                  const mDuration = calcTenureDuration(
-                                    t.startDate,
-                                    t.endDate,
-                                  )
-                                  const mAge = calcAgeAtTenure(
-                                    t.person,
-                                    t.startDate,
-                                  )
-                                  const mAchCount = Array.isArray(
-                                    t.achievements,
-                                  )
-                                    ? t.achievements.length
-                                    : 0
-                                  return (
-                                    <CabS.MinisterCard
-                                      key={t.id}
-                                      $selected={selectedMinisterId === t.id}
-                                      onClick={() => {
-                                        setSelectedHeadHistoryId(null)
-                                        setSelectedMinisterId(t.id)
+                                </CabS.CabDetailMinistersSectionHeader>
+
+                                {loadingCabinetTreaties ? (
+                                  <CabS.EmptyStateBox>
+                                    불러오는 중…
+                                  </CabS.EmptyStateBox>
+                                ) : cabinetTreaties.length === 0 ? (
+                                  <div
+                                    style={{
+                                      padding: '28px 0',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'center',
+                                      gap: 10,
+                                    }}
+                                  >
+                                    <FiFileText
+                                      size={32}
+                                      style={{ color: '#b0bac9' }}
+                                    />
+                                    <p
+                                      style={{
+                                        margin: 0,
+                                        fontSize: 13,
+                                        color: '#b0bac9',
+                                        fontStyle: 'italic',
                                       }}
                                     >
-                                      <CabS.MinisterCardThumb
-                                        onClick={(e) => {
-                                          if (t.person?.id) {
-                                            e.stopPropagation()
-                                            setMentionPersonId(t.person.id)
-                                          }
-                                        }}
-                                        style={{
-                                          cursor: t.person?.id
-                                            ? 'pointer'
-                                            : 'default',
-                                        }}
-                                        title={
-                                          t.person?.id
-                                            ? `${mName} 인물 정보 보기`
-                                            : undefined
-                                        }
-                                      >
-                                        {mThumb ? (
-                                          <CabS.MinisterCardThumbImg
-                                            src={mThumb}
-                                            alt={mName}
-                                          />
-                                        ) : (
-                                          <CabS.MinisterCardThumbPlaceholder>
-                                            <FiUser size={18} />
-                                          </CabS.MinisterCardThumbPlaceholder>
-                                        )}
-                                        {mAchCount > 0 && (
-                                          <CabS.MinisterCardBadge>
-                                            {mAchCount}
-                                          </CabS.MinisterCardBadge>
-                                        )}
-                                      </CabS.MinisterCardThumb>
-                                      <CabS.MinisterCardInfo>
-                                        <CabS.MinisterCardName>
-                                          {mName}
-                                        </CabS.MinisterCardName>
-                                        <CabS.MinisterCardPos>
-                                          {mPos}
-                                        </CabS.MinisterCardPos>
-                                        <CabS.MinisterCardRange>
-                                          {mStartFull} – {mEndFull}
-                                          {mDuration && (
+                                      연결된 조약이 없습니다.
+                                    </p>
+                                    <CabS.HeadActionBtnPrimary
+                                      type="button"
+                                      onClick={() =>
+                                        setShowTreatyLinkModal(true)
+                                      }
+                                    >
+                                      <FiLink size={13} />
+                                      조약 연결
+                                    </CabS.HeadActionBtnPrimary>
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: 8,
+                                      marginTop: 10,
+                                    }}
+                                  >
+                                    {cabinetTreaties.map((treaty) => {
+                                      const signatory =
+                                        treaty.signatories?.find(
+                                          (s) =>
+                                            s.cabinetId === selectedCabinetId,
+                                        )
+                                      const isExpanded =
+                                        selectedTreatyId === treaty.id
+                                      return (
+                                        <div
+                                          key={treaty.id}
+                                          style={{
+                                            border: `1.5px solid ${isExpanded ? MAIN : C.borderHairline}`,
+                                            borderRadius: 10,
+                                            overflow: 'hidden',
+                                            background: C.treatyRowBg,
+                                            transition: 'border-color 0.15s',
+                                          }}
+                                        >
+                                          <button
+                                            type="button"
+                                            style={{
+                                              width: '100%',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 10,
+                                              padding: '10px 14px',
+                                              background: 'transparent',
+                                              border: 'none',
+                                              cursor: 'pointer',
+                                              textAlign: 'left',
+                                            }}
+                                            onClick={() =>
+                                              setSelectedTreatyId(
+                                                isExpanded ? null : treaty.id,
+                                              )
+                                            }
+                                          >
                                             <span
                                               style={{
-                                                color: '#b0bac9',
-                                                fontSize: 10.5,
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                color: '#fff',
+                                                background: MAIN,
+                                                borderRadius: 4,
+                                                padding: '2px 7px',
+                                                whiteSpace: 'nowrap',
+                                                flexShrink: 0,
                                               }}
                                             >
-                                              ({mDuration})
+                                              {TREATY_TYPE_LABELS[
+                                                treaty.type
+                                              ] ?? treaty.type}
                                             </span>
-                                          )}
-                                          {mAge != null && (
-                                            <CabS.MinisterCardAge>
-                                              취임 {mAge}세
-                                            </CabS.MinisterCardAge>
-                                          )}
-                                        </CabS.MinisterCardRange>
-                                      </CabS.MinisterCardInfo>
-                                      <CabS.MinisterCardChevron>
-                                        <FiChevronRight size={14} />
-                                      </CabS.MinisterCardChevron>
-                                    </CabS.MinisterCard>
-                                  )
-                                })}
-                              </CabS.MinisterCardGrid>
-                            )}
-                          </CabS.CabDetailMinistersSection>
-
-                          {/* 조약 섹션 */}
-                          <CabS.CabDetailMinistersSection
-                            id="cab-detail-treaties"
-                            style={{ marginTop: 24, scrollMarginTop: 12 }}
-                          >
-                            <CabS.CabDetailMinistersSectionHeader>
-                              <FiFileText size={15} style={{ color: MAIN }} />
-                              <CabS.CabDetailMinistersSectionTitle>
-                                체결 조약
-                              </CabS.CabDetailMinistersSectionTitle>
-                              <CabS.CabResultCount style={{ marginLeft: 6 }}>
-                                {cabinetTreaties.length}건
-                              </CabS.CabResultCount>
-                              <div style={{ flex: 1 }} />
-                              <CabS.HeadActionBtnPrimary
-                                type="button"
-                                onClick={() => setShowTreatyLinkModal(true)}
-                              >
-                                <FiLink size={13} />
-                                조약 연결
-                              </CabS.HeadActionBtnPrimary>
-                            </CabS.CabDetailMinistersSectionHeader>
-
-                            {loadingCabinetTreaties ? (
-                              <CabS.EmptyStateBox>
-                                불러오는 중…
-                              </CabS.EmptyStateBox>
-                            ) : cabinetTreaties.length === 0 ? (
-                              <div
-                                style={{
-                                  padding: '28px 0',
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  gap: 10,
-                                }}
-                              >
-                                <FiFileText
-                                  size={32}
-                                  style={{ color: '#b0bac9' }}
-                                />
-                                <p
-                                  style={{
-                                    margin: 0,
-                                    fontSize: 13,
-                                    color: '#b0bac9',
-                                    fontStyle: 'italic',
-                                  }}
-                                >
-                                  연결된 조약이 없습니다.
-                                </p>
-                                <CabS.HeadActionBtnPrimary
-                                  type="button"
-                                  onClick={() => setShowTreatyLinkModal(true)}
-                                >
-                                  <FiLink size={13} />
-                                  조약 연결
-                                </CabS.HeadActionBtnPrimary>
-                              </div>
-                            ) : (
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: 8,
-                                  marginTop: 10,
-                                }}
-                              >
-                                {cabinetTreaties.map((treaty) => {
-                                  const signatory = treaty.signatories?.find(
-                                    (s) => s.cabinetId === selectedCabinetId,
-                                  )
-                                  const isExpanded =
-                                    selectedTreatyId === treaty.id
-                                  return (
-                                    <div
-                                      key={treaty.id}
-                                      style={{
-                                        border: `1.5px solid ${isExpanded ? MAIN : C.borderHairline}`,
-                                        borderRadius: 10,
-                                        overflow: 'hidden',
-                                        background: C.treatyRowBg,
-                                        transition: 'border-color 0.15s',
-                                      }}
-                                    >
-                                      <button
-                                        type="button"
-                                        style={{
-                                          width: '100%',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: 10,
-                                          padding: '10px 14px',
-                                          background: 'transparent',
-                                          border: 'none',
-                                          cursor: 'pointer',
-                                          textAlign: 'left',
-                                        }}
-                                        onClick={() =>
-                                          setSelectedTreatyId(
-                                            isExpanded ? null : treaty.id,
-                                          )
-                                        }
-                                      >
-                                        <span
-                                          style={{
-                                            fontSize: 10,
-                                            fontWeight: 700,
-                                            color: '#fff',
-                                            background: MAIN,
-                                            borderRadius: 4,
-                                            padding: '2px 7px',
-                                            whiteSpace: 'nowrap',
-                                            flexShrink: 0,
-                                          }}
-                                        >
-                                          {TREATY_TYPE_LABELS[treaty.type] ??
-                                            treaty.type}
-                                        </span>
-                                        <span
-                                          style={{
-                                            flex: 1,
-                                            fontSize: 13.5,
-                                            fontWeight: 600,
-                                            color: C.treatyTitleText,
-                                          }}
-                                        >
-                                          {treaty.name}
-                                          {treaty.alias && (
+                                            <span
+                                              style={{
+                                                flex: 1,
+                                                fontSize: 13.5,
+                                                fontWeight: 600,
+                                                color: C.treatyTitleText,
+                                              }}
+                                            >
+                                              {treaty.name}
+                                              {treaty.alias && (
+                                                <span
+                                                  style={{
+                                                    fontSize: 11.5,
+                                                    fontWeight: 400,
+                                                    color: C.slate400,
+                                                    marginLeft: 6,
+                                                  }}
+                                                >
+                                                  ({treaty.alias})
+                                                </span>
+                                              )}
+                                            </span>
                                             <span
                                               style={{
                                                 fontSize: 11.5,
-                                                fontWeight: 400,
                                                 color: C.slate400,
-                                                marginLeft: 6,
+                                                whiteSpace: 'nowrap',
                                               }}
                                             >
-                                              ({treaty.alias})
+                                              {treaty.signDate
+                                                ? new Date(
+                                                    treaty.signDate,
+                                                  ).getFullYear()
+                                                : '—'}
                                             </span>
-                                          )}
-                                        </span>
-                                        <span
-                                          style={{
-                                            fontSize: 11.5,
-                                            color: C.slate400,
-                                            whiteSpace: 'nowrap',
-                                          }}
-                                        >
-                                          {treaty.signDate
-                                            ? new Date(
-                                                treaty.signDate,
-                                              ).getFullYear()
-                                            : '—'}
-                                        </span>
-                                        <FiChevronDown
-                                          size={14}
-                                          style={{
-                                            color: C.slate400,
-                                            transform: isExpanded
-                                              ? 'rotate(180deg)'
-                                              : 'none',
-                                            transition: 'transform 0.2s',
-                                          }}
-                                        />
-                                      </button>
+                                            <FiChevronDown
+                                              size={14}
+                                              style={{
+                                                color: C.slate400,
+                                                transform: isExpanded
+                                                  ? 'rotate(180deg)'
+                                                  : 'none',
+                                                transition: 'transform 0.2s',
+                                              }}
+                                            />
+                                          </button>
 
-                                      {isExpanded && (
-                                        <div
-                                          style={{
-                                            padding: '0 14px 12px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: 6,
-                                          }}
-                                        >
-                                          {/* 참여 정보 */}
-                                          {signatory && (
+                                          {isExpanded && (
                                             <div
                                               style={{
+                                                padding: '0 14px 12px',
                                                 display: 'flex',
-                                                gap: 8,
-                                                flexWrap: 'wrap',
+                                                flexDirection: 'column',
+                                                gap: 6,
                                               }}
                                             >
-                                              {signatory.person && (
-                                                <span
+                                              {/* 참여 정보 */}
+                                              {signatory && (
+                                                <div
                                                   style={{
-                                                    fontSize: 12,
-                                                    color: C.textMuted,
+                                                    display: 'flex',
+                                                    gap: 8,
+                                                    flexWrap: 'wrap',
                                                   }}
                                                 >
-                                                  서명자:{' '}
-                                                  <strong>
-                                                    {[
-                                                      signatory.person.name,
-                                                      signatory.person.surname,
-                                                    ]
-                                                      .filter(Boolean)
-                                                      .join(' ')}
-                                                  </strong>
-                                                </span>
-                                              )}
-                                              {signatory.role && (
-                                                <span
-                                                  style={{
-                                                    fontSize: 12,
-                                                    color: C.textMuted,
-                                                  }}
-                                                >
-                                                  직책:{' '}
-                                                  <strong>
-                                                    {signatory.role}
-                                                  </strong>
-                                                </span>
-                                              )}
-                                              <span
-                                                style={{
-                                                  fontSize: 12,
-                                                  color: C.textMuted,
-                                                }}
-                                              >
-                                                참여유형:{' '}
-                                                <strong>
-                                                  {TREATY_PARTICIPATION_LABELS[
-                                                    signatory.participationType
-                                                  ] ??
-                                                    signatory.participationType}
-                                                </strong>
-                                              </span>
-                                            </div>
-                                          )}
-                                          {treaty.summary && (
-                                            <p
-                                              style={{
-                                                margin: 0,
-                                                fontSize: 12.5,
-                                                color: C.textMuted,
-                                                lineHeight: 1.6,
-                                              }}
-                                            >
-                                              {treaty.summary}
-                                            </p>
-                                          )}
-                                          {/* 참여국 목록 */}
-                                          {treaty.signatories &&
-                                            treaty.signatories.length > 0 && (
-                                              <div
-                                                style={{
-                                                  display: 'flex',
-                                                  gap: 6,
-                                                  flexWrap: 'wrap',
-                                                  marginTop: 4,
-                                                }}
-                                              >
-                                                {treaty.signatories.map((s) => (
+                                                  {signatory.person && (
+                                                    <span
+                                                      style={{
+                                                        fontSize: 12,
+                                                        color: C.textMuted,
+                                                      }}
+                                                    >
+                                                      서명자:{' '}
+                                                      <strong>
+                                                        {[
+                                                          signatory.person.name,
+                                                          signatory.person
+                                                            .surname,
+                                                        ]
+                                                          .filter(Boolean)
+                                                          .join(' ')}
+                                                      </strong>
+                                                    </span>
+                                                  )}
+                                                  {signatory.role && (
+                                                    <span
+                                                      style={{
+                                                        fontSize: 12,
+                                                        color: C.textMuted,
+                                                      }}
+                                                    >
+                                                      직책:{' '}
+                                                      <strong>
+                                                        {signatory.role}
+                                                      </strong>
+                                                    </span>
+                                                  )}
                                                   <span
-                                                    key={s.id}
                                                     style={{
-                                                      fontSize: 11,
-                                                      padding: '2px 8px',
-                                                      borderRadius: 12,
-                                                      background:
-                                                        C.signatoryPillBg,
-                                                      color:
-                                                        C.signatoryPillText,
+                                                      fontSize: 12,
+                                                      color: C.textMuted,
                                                     }}
                                                   >
-                                                    {s.country?.name ??
-                                                      s.historicalCountry
-                                                        ?.name ??
-                                                      '미상'}
+                                                    참여유형:{' '}
+                                                    <strong>
+                                                      {TREATY_PARTICIPATION_LABELS[
+                                                        signatory
+                                                          .participationType
+                                                      ] ??
+                                                        signatory.participationType}
+                                                    </strong>
                                                   </span>
-                                                ))}
-                                              </div>
-                                            )}
+                                                </div>
+                                              )}
+                                              {treaty.summary && (
+                                                <p
+                                                  style={{
+                                                    margin: 0,
+                                                    fontSize: 12.5,
+                                                    color: C.textMuted,
+                                                    lineHeight: 1.6,
+                                                  }}
+                                                >
+                                                  {treaty.summary}
+                                                </p>
+                                              )}
+                                              {/* 참여국 목록 */}
+                                              {treaty.signatories &&
+                                                treaty.signatories.length >
+                                                  0 && (
+                                                  <div
+                                                    style={{
+                                                      display: 'flex',
+                                                      gap: 6,
+                                                      flexWrap: 'wrap',
+                                                      marginTop: 4,
+                                                    }}
+                                                  >
+                                                    {treaty.signatories.map(
+                                                      (s) => (
+                                                        <span
+                                                          key={s.id}
+                                                          style={{
+                                                            fontSize: 11,
+                                                            padding: '2px 8px',
+                                                            borderRadius: 12,
+                                                            background:
+                                                              C.signatoryPillBg,
+                                                            color:
+                                                              C.signatoryPillText,
+                                                          }}
+                                                        >
+                                                          {s.country?.name ??
+                                                            s.historicalCountry
+                                                              ?.name ??
+                                                            '미상'}
+                                                        </span>
+                                                      ),
+                                                    )}
+                                                  </div>
+                                                )}
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </CabS.CabDetailMinistersSection>
-                          </>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </CabS.CabDetailMinistersSection>
+                            </>
                           )}
                         </>
                       )
