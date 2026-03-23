@@ -38,7 +38,7 @@ description = "의존성 설치"
 run = "npm install"
 
 [tasks.dev]
-description = "개발 서버 시작 (API + Web Admin + Web User)"
+description = "개발 서버 시작 (API + Web Admin)"
 run = "npm run dev"
 
 [tasks."dev:api"]
@@ -48,10 +48,6 @@ run = "npm run serve:api"
 [tasks."dev:admin"]
 description = "Web Admin만 시작"
 run = "npm run serve:web-admin"
-
-[tasks."dev:user"]
-description = "Web User만 시작"
-run = "npm run serve:web-user"
 
 [tasks."dev:all"]
 description = "모든 서비스 동시 시작"

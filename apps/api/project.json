@@ -27,7 +27,7 @@
           "JWT_SECRET": "dev-jwt-secret-key-not-for-production-use-only",
           "JWT_EXPIRES_IN": "15m",
           "JWT_REFRESH_EXPIRES_IN": "7d",
-          "APP_ORIGINS": "https://app.civilization.zone,https://app.civilization.local,http://localhost:4200,http://127.0.0.1:4200",
+          "APP_ORIGINS": "https://app.civilization.zone,https://app.civilization.local,http://localhost:3000,http://127.0.0.1:3000",
           "CORS_ORIGIN": "*",
           "UPLOAD_PATH": "./uploads",
           "MAX_FILE_SIZE": "10485760",

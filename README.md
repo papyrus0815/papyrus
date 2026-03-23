@@ -56,7 +56,6 @@ papyrus/
 ├── apps/
 │   ├── api/              # NestJS API 서버
 │   ├── web-admin/        # 관리자 웹 애플리케이션
-│   ├── web-user/         # 사용자 웹 애플리케이션
 │   └── service-manager/  # Electron 서비스 관리자
 │
 ├── libs/
@@ -129,19 +128,17 @@ npm run db:generate
 ### 4. 개발 서버 실행
 
 ```bash
-# 전체 개발 서버 실행 (API + Admin + User)
+# 전체 개발 서버 실행 (API + Admin)
 npm run dev:all
 
 # 또는 개별 실행
 npm run serve:api          # API 서버
 npm run serve:web-admin    # 관리자 웹
-npm run serve:web-user     # 사용자 웹
 ```
 
 ### 접속 주소
 - API: http://localhost:8000
-- Admin Web: http://localhost:4200
-- User Web: http://localhost:3000
+- Admin Web: http://localhost:3000
 
 ## 💻 개발 가이드
 
@@ -190,7 +187,6 @@ npm run dev              # 통합 개발 환경 실행
 npm run dev:nginx        # Nginx 포함 개발 환경
 npm run serve:api        # API 서버만 실행
 npm run serve:web-admin  # 관리자 웹만 실행
-npm run serve:web-user   # 사용자 웹만 실행
 ```
 
 ### 빌드

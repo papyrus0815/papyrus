@@ -125,15 +125,6 @@ async function createServices(): Promise<Service[]> {
       canControl: true,
       url: getUrlFromEnv(env, 'app'),
     },
-    {
-      id: 'web-user',
-      name: '사용자 애플리케이션',
-      icon: '👥',
-      type: 'web-user',
-      port: getPortFromEnv(env, ENV_KEYS.WEB_USER_PORT),
-      canControl: true,
-      url: getUrlFromEnv(env, 'user'),
-    },
   ]
 }
 
@@ -201,14 +192,17 @@ async function renderServices(): Promise<void> {
  */
 function getServicePort(serviceId: string): number | null {
   if (!window.cachedStatus?.papyrusServer) return null
-  const ps = window.cachedStatus.papyrusServer as ServiceStatusMap['papyrusServer']
+  const ps = window.cachedStatus
+    .papyrusServer as ServiceStatusMap['papyrusServer']
   switch (serviceId) {
     case 'api':
-      return ps?.apiServer?.isRunning && ps.apiServer.port != null ? ps.apiServer.port : null
+      return ps?.apiServer?.isRunning && ps.apiServer.port != null
+        ? ps.apiServer.port
+        : null
     case 'web-admin':
-      return ps?.webAdminServer?.isRunning && ps.webAdminServer.port != null ? ps.webAdminServer.port : null
-    case 'web-user':
-      return ps?.webUserServer?.isRunning && ps.webUserServer.port != null ? ps.webUserServer.port : null
+      return ps?.webAdminServer?.isRunning && ps.webAdminServer.port != null
+        ? ps.webAdminServer.port
+        : null
     default:
       return null
   }
@@ -217,7 +211,9 @@ function getServicePort(serviceId: string): number | null {
 /**
  * 실행 중일 때 로컬 주소와 네트워크 주소(전역 IP) 반환. 중지 시 null
  */
-function getServiceAddress(serviceId: string): { local: string; network?: string } | null {
+function getServiceAddress(
+  serviceId: string,
+): { local: string; network?: string } | null {
   const port = getServicePort(serviceId)
   if (port == null) return null
   const local = `http://127.0.0.1:${port}`
@@ -257,10 +253,6 @@ function getServiceStatus(serviceId: string): ServiceStatus {
         : SERVICE_STATUS.STOPPED
     case 'web-admin':
       return status.papyrusServer?.webAdminServer?.isRunning
-        ? SERVICE_STATUS.RUNNING
-        : SERVICE_STATUS.STOPPED
-    case 'web-user':
-      return status.papyrusServer?.webUserServer?.isRunning
         ? SERVICE_STATUS.RUNNING
         : SERVICE_STATUS.STOPPED
     default:
@@ -311,7 +303,6 @@ const SERVICE_API_MAP: Record<string, () => Promise<void>> = {
   docker: () => window.electronAPI.startDocker(),
   api: () => window.electronAPI.startApi(),
   'web-admin': () => window.electronAPI.startWebAdmin(),
-  'web-user': () => window.electronAPI.startWebUser(),
 }
 
 /**
@@ -362,7 +353,6 @@ const SERVICE_STOP_API_MAP: Record<string, () => Promise<void>> = {
   docker: () => window.electronAPI.stopDocker(),
   api: () => window.electronAPI.stopApi(),
   'web-admin': () => window.electronAPI.stopWebAdmin(),
-  'web-user': () => window.electronAPI.stopWebUser(),
 }
 
 /**
@@ -471,7 +461,12 @@ async function restartServers(): Promise<void> {
     console.log('🔄 서버 재시작 시작...')
     const success = await window.electronAPI.restart()
     handleApiResult(
-      { success, message: success ? '서버가 재시작되었습니다.' : '재시작에 실패했습니다.' },
+      {
+        success,
+        message: success
+          ? '서버가 재시작되었습니다.'
+          : '재시작에 실패했습니다.',
+      },
       '✅ 서버 재시작 완료',
       '❌ 서버 재시작 실패',
     )

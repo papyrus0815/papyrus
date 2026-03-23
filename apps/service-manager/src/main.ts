@@ -99,13 +99,15 @@ function createWindow() {
   // TypeScript로 변환되었으므로 개발/프로덕션 모두 dist/renderer/index.html 사용
   // (개발 모드에서도 TypeScript 컴파일이 필요함)
   const htmlPath = path.join(__dirname, 'renderer', 'index.html')
-  
+
   // dist/renderer/index.html이 없으면 빌드 필요
   if (!fs.existsSync(htmlPath)) {
-    console.error('❌ dist/renderer/index.html이 없습니다. 빌드를 실행하세요: npm run build')
+    console.error(
+      '❌ dist/renderer/index.html이 없습니다. 빌드를 실행하세요: npm run build',
+    )
     console.error('   또는 개발 모드: npm run dev (자동으로 빌드 후 실행)')
   }
-  
+
   console.log(`📄 Loading HTML from: ${htmlPath}`)
   mainWindow.loadFile(htmlPath)
 
@@ -171,18 +173,18 @@ function createTray() {
       height: size,
       data: Buffer.alloc(size * size * 4),
     }
-    
+
     // 중앙에 작은 원 그리기
     const centerX = size / 2
     const centerY = size / 2
     const radius = 4
-    
+
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         const dx = x - centerX
         const dy = y - centerY
         const distance = Math.sqrt(dx * dx + dy * dy)
-        
+
         const idx = (y * size + x) * 4
         if (distance <= radius) {
           // 원 안쪽 - 흰색
@@ -199,7 +201,7 @@ function createTray() {
         }
       }
     }
-    
+
     icon = nativeImage.createFromBuffer(canvas.data, {
       width: size,
       height: size,
@@ -208,7 +210,7 @@ function createTray() {
 
   tray = new Tray(icon)
   tray.setToolTip('Papyrus Service Manager')
-  
+
   // macOS 메뉴바에 잘 보이도록 템플릿 이미지로 설정
   if (icon && !icon.isEmpty()) {
     icon.setTemplateImage(true)
@@ -246,9 +248,6 @@ async function updateTrayMenu() {
     const mysqlStatus = status.docker.containers.mysql ? '✅' : '❌'
     const nginxStatus = status.docker.containers.nginx ? '✅' : '❌'
     const webAdminStatus = status.papyrusServer.webAdminServer.isRunning
-      ? '✅'
-      : '❌'
-    const webUserStatus = status.papyrusServer.webUserServer.isRunning
       ? '✅'
       : '❌'
     const apiStatus = status.papyrusServer.apiServer.isRunning ? '✅' : '❌'
@@ -309,17 +308,6 @@ async function updateTrayMenu() {
         },
       },
       {
-        label: `  ${webUserStatus} 사용자 웹 (포트: 4200)`,
-        type: 'normal',
-        click: () => {
-          if (status.papyrusServer.webUserServer.isRunning) {
-            require('electron').shell.openExternal(
-              'https://user.civilization.zone',
-            )
-          }
-        },
-      },
-      {
         label: `  ${apiStatus} API 서버 (포트: 8000)`,
         type: 'normal',
         enabled: false,
@@ -354,8 +342,7 @@ async function updateTrayMenu() {
         type: 'normal',
         enabled:
           status.papyrusServer.apiServer.isRunning ||
-          status.papyrusServer.webAdminServer.isRunning ||
-          status.papyrusServer.webUserServer.isRunning,
+          status.papyrusServer.webAdminServer.isRunning,
         click: async () => {
           await serviceManager.stopAll()
           updateTrayMenu()
@@ -675,23 +662,6 @@ function registerIpcHandlers() {
   ipcMain.handle('service:stopWebAdmin', async () => {
     console.log('🛑 [IPC] 관리자 웹 서버 중지 요청')
     return await serviceManager.papyrusServerManager.stopWebAdminServer()
-  })
-
-  // 사용자 웹 서버 제어
-  ipcMain.handle('service:startWebUser', async () => {
-    const projectRoot =
-      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
-    console.log(
-      `🚀 [IPC] 사용자 웹 서버 시작 요청 (프로젝트 경로: ${projectRoot})`,
-    )
-    return await serviceManager.papyrusServerManager.startWebUserServer(
-      projectRoot,
-    )
-  })
-
-  ipcMain.handle('service:stopWebUser', async () => {
-    console.log('🛑 [IPC] 사용자 웹 서버 중지 요청')
-    return await serviceManager.papyrusServerManager.stopWebUserServer()
   })
 
   // 웹 열기

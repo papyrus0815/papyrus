@@ -44,11 +44,6 @@ export interface PapyrusServerStatus {
     port: number
     url: string
   }
-  webUserServer: {
-    isRunning: boolean
-    port: number
-    url: string
-  }
   apiServer: {
     isRunning: boolean
     port: number
@@ -61,14 +56,11 @@ export class PapyrusServerManager {
   private static instance: PapyrusServerManager
   private apiProcess: ChildProcess | null = null
   private webAdminProcess: ChildProcess | null = null
-  private webUserProcess: ChildProcess | null = null
   private readonly webAdminPort: number = 3000
-  private readonly webUserPort: number = 4200
   private readonly apiPort: number = 8000
   private projectRoot: string = '/Users/yendoo/dev/papyrus'
   private apiLogBuffer: LineBuffer = new LineBuffer()
   private webAdminLogBuffer: LineBuffer = new LineBuffer()
-  private webUserLogBuffer: LineBuffer = new LineBuffer()
 
   private constructor() {}
 
@@ -106,38 +98,6 @@ export class PapyrusServerManager {
     // 2. HTTP 응답이 없으면 프로세스 체크 (시작 중일 수 있음)
     // exitCode !== null 이면 종료된 것
     if (this.webAdminProcess && this.webAdminProcess.exitCode === null) {
-      return true
-    }
-
-    return false
-  }
-
-  /**
-   * 사용자 웹 서버(Vite) 상태 확인
-   * 포트 응답 우선, 프로세스는 보조 수단
-   */
-  async isWebUserServerRunning(): Promise<boolean> {
-    // 1. 먼저 HTTP로 실제 서버 응답 확인 (가장 정확)
-    const httpCheck = await new Promise<boolean>((resolve) => {
-      const req = http.get(`http://localhost:${this.webUserPort}`, (res) => {
-        resolve(res.statusCode === 200 || res.statusCode === 304)
-      })
-
-      req.on('error', () => resolve(false))
-      req.setTimeout(2000, () => {
-        req.destroy()
-        resolve(false)
-      })
-    })
-
-    // HTTP 응답이 있으면 확실히 실행 중
-    if (httpCheck) {
-      return true
-    }
-
-    // 2. HTTP 응답이 없으면 프로세스 체크 (시작 중일 수 있음)
-    // exitCode !== null 이면 종료된 것
-    if (this.webUserProcess && this.webUserProcess.exitCode === null) {
       return true
     }
 
@@ -206,7 +166,6 @@ export class PapyrusServerManager {
     // HTTP 응답 여부로 실제 실행 상태 확인
     // (Service Manager 외부에서 시작된 경우에도 올바르게 감지)
     const webAdminRunning = await this.isWebAdminServerRunning()
-    const webUserRunning = await this.isWebUserServerRunning()
     const apiRunning = await this.isApiServerRunning()
 
     return {
@@ -215,17 +174,12 @@ export class PapyrusServerManager {
         port: this.webAdminPort,
         url: `http://localhost:${this.webAdminPort}`,
       },
-      webUserServer: {
-        isRunning: webUserRunning,
-        port: this.webUserPort,
-        url: `http://localhost:${this.webUserPort}`,
-      },
       apiServer: {
         isRunning: apiRunning,
         port: this.apiPort,
         healthCheckUrl: `http://localhost:${this.apiPort}/health`,
       },
-      allReady: webAdminRunning && webUserRunning && apiRunning,
+      allReady: webAdminRunning && apiRunning,
     }
   }
 
@@ -506,89 +460,6 @@ export class PapyrusServerManager {
   }
 
   /**
-   * 사용자 웹 서버(Vite) 시작 (오버로드)
-   */
-  async startWebUserServer(projectRoot?: string): Promise<boolean> {
-    const root = projectRoot || this.projectRoot
-    try {
-      console.log('👥 사용자 웹 서버 시작 중...')
-      console.log(`   📂 프로젝트 경로: ${root}`)
-      console.log(`   🚀 실행 명령: npm run serve:web-user`)
-
-      if (this.webUserProcess) {
-        console.log('⚠️ 사용자 웹 프로세스가 이미 존재합니다')
-        await this.stopWebUserServer()
-      }
-
-      this.webUserProcess = spawn('npm', ['run', 'serve:web-user'], {
-        cwd: root,
-        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
-        detached: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          PATH:
-            process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-          WEB_USER_BIND_HOST: '0.0.0.0',
-          WEB_USER_PORT: '4200',
-          NODE_ENV: 'development',
-        },
-      })
-
-      this.webUserProcess.stdout?.on('data', (data) => {
-        const lines = this.webUserLogBuffer.add(data.toString())
-        lines.forEach((line) => {
-          const cleanLine = stripAnsiCodes(line)
-          if (cleanLine.trim()) {
-            console.log(`[WEB-USER] ${cleanLine}`)
-          }
-        })
-      })
-
-      this.webUserProcess.stderr?.on('data', (data) => {
-        const lines = this.webUserLogBuffer.add(data.toString())
-        lines.forEach((line) => {
-          const cleanLine = stripAnsiCodes(line)
-          // Vite 프록시 에러는 필터링 (API 서버 미실행 시 발생)
-          if (
-            cleanLine.trim() &&
-            !cleanLine.includes('http proxy error') &&
-            !cleanLine.includes('ECONNREFUSED')
-          ) {
-            console.error(`[WEB-USER] ${cleanLine}`)
-          }
-        })
-      })
-
-      this.webUserProcess.on('error', (error) => {
-        console.error(`[사용자 웹 Process Error] ${error.message}`)
-      })
-
-      this.webUserProcess.on('exit', (code, signal) => {
-        console.log(
-          `🛑 사용자 웹 프로세스 종료됨 (코드: ${code}, 신호: ${signal})`,
-        )
-        this.webUserProcess = null
-      })
-
-      console.log(`   ⏳ 사용자 웹 서버 PID: ${this.webUserProcess.pid}`)
-      console.log(`   ⏳ 준비 대기 중... (최대 30초)`)
-
-      await this.waitForWebUser(30)
-
-      return true
-    } catch (error: any) {
-      console.error('❌ 사용자 웹 서버 시작 실패:', error.message)
-      console.error('   스택:', error.stack)
-
-      return false
-    }
-  }
-
-  /**
-   * 관리자 웹 서버 중지
-   */
-  /**
    * 관리자 웹 서버 중지
    */
   async stopWebAdminServer(): Promise<boolean> {
@@ -633,50 +504,6 @@ export class PapyrusServerManager {
   }
 
   /**
-   * 사용자 웹 서버 중지
-   */
-  async stopWebUserServer(): Promise<boolean> {
-    try {
-      console.log('🛑 사용자 웹 서버 중지 중...')
-
-      if (this.webUserProcess) {
-        return new Promise((resolve) => {
-          if (!this.webUserProcess) {
-            resolve(true)
-            return
-          }
-
-          this.webUserProcess.kill('SIGTERM')
-
-          const forceKillTimeout = setTimeout(() => {
-            if (this.webUserProcess) {
-              this.webUserProcess.kill('SIGKILL')
-            }
-          }, 3000)
-
-          this.webUserProcess.once('exit', async () => {
-            clearTimeout(forceKillTimeout)
-            this.webUserProcess = null
-
-            // 포트를 사용 중인 프로세스도 강제 종료
-            await this.killProcessOnPort(this.webUserPort)
-
-            console.log('✅ 사용자 웹 서버 중지 완료')
-            resolve(true)
-          })
-        })
-      } else {
-        await this.killProcessOnPort(this.webUserPort)
-        console.log('✅ 사용자 웹 서버 중지 완료')
-        return true
-      }
-    } catch (error: any) {
-      console.error('❌ 사용자 웹 서버 중지 실패:', error.message)
-      return false
-    }
-  }
-
-  /**
    * 관리자 웹 서버가 준비될 때까지 대기
    */
   private async waitForWebAdmin(timeoutSeconds: number): Promise<void> {
@@ -700,29 +527,6 @@ export class PapyrusServerManager {
   }
 
   /**
-   * 사용자 웹 서버가 준비될 때까지 대기
-   */
-  private async waitForWebUser(timeoutSeconds: number): Promise<void> {
-    console.log('⏳ 사용자 웹 서버 준비 대기 중...')
-    const startTime = Date.now()
-    const timeout = timeoutSeconds * 1000
-
-    while (Date.now() - startTime < timeout) {
-      const isRunning = await this.isWebUserServerRunning()
-
-      if (isRunning) {
-        console.log('✅ 사용자 웹 서버 준비 완료!')
-
-        return
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-    }
-
-    console.warn('⚠️ 사용자 웹 서버 준비 시간 초과')
-  }
-
-  /**
    * API 서버 로그 가져오기
    */
   async getApiServerLogs(): Promise<string> {
@@ -740,16 +544,6 @@ export class PapyrusServerManager {
       return '로그가 없습니다. 관리자 웹 서버가 실행 중이지 않습니다.'
     }
     return '관리자 웹 서버 로그는 콘솔에서 확인하세요.'
-  }
-
-  /**
-   * 사용자 웹 서버 로그 가져오기
-   */
-  async getWebUserServerLogs(): Promise<string> {
-    if (!this.webUserProcess || !this.webUserProcess.stdout) {
-      return '로그가 없습니다. 사용자 웹 서버가 실행 중이지 않습니다.'
-    }
-    return '사용자 웹 서버 로그는 콘솔에서 확인하세요.'
   }
 
   /**
@@ -866,7 +660,7 @@ export class PapyrusServerManager {
   }
 
   /**
-   * Web(관리자/사용자 웹) 빌드
+   * Web(관리자 웹) 빌드
    */
   async buildWeb(projectRoot?: string): Promise<boolean> {
     const root = projectRoot || this.projectRoot

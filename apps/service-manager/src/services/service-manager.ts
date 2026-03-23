@@ -2,7 +2,6 @@
  * Service Manager
  * 모든 서비스를 통합 관리하는 서비스
  */
-
 import * as os from 'os'
 
 import { DockerManager, DockerStatus } from './docker-manager'
@@ -52,8 +51,7 @@ export class ServiceManager {
 
     // 프로젝트 루트 자동 감지
     this.projectRoot =
-      process.env.PAPYRUS_PROJECT_ROOT ||
-      '/Users/yendoo/dev/papyrus'
+      process.env.PAPYRUS_PROJECT_ROOT || '/Users/yendoo/dev/papyrus'
     console.log('📁 프로젝트 루트:', this.projectRoot)
   }
 
@@ -78,7 +76,6 @@ export class ServiceManager {
       docker.isRunning &&
       docker.containers.mysql &&
       papyrusServer.webAdminServer.isRunning &&
-      papyrusServer.webUserServer.isRunning &&
       papyrusServer.apiServer.isRunning
 
     const localIp = getLocalNetworkIp()
@@ -101,7 +98,7 @@ export class ServiceManager {
       console.log('└─────────────────────────────────────────────────────┘\n')
 
       // 1. Docker 확인
-      console.log('  [1/5] Docker 설치 확인...')
+      console.log('  [1/4] Docker 설치 확인...')
       const isDockerInstalled = await this.dockerManager.isDockerInstalled()
       if (!isDockerInstalled) {
         throw new Error('Docker가 설치되지 않았습니다')
@@ -109,15 +106,17 @@ export class ServiceManager {
       console.log('        ✅ Docker 설치됨')
 
       // 2. Docker Desktop 실행 및 컨테이너 시작
-      console.log('\n  [2/5] Docker Desktop 실행 및 컨테이너 시작...')
-      const dockerStarted = await this.dockerManager.startDocker(this.projectRoot)
+      console.log('\n  [2/4] Docker Desktop 실행 및 컨테이너 시작...')
+      const dockerStarted = await this.dockerManager.startDocker(
+        this.projectRoot,
+      )
       if (!dockerStarted) {
         throw new Error('Docker Desktop 실행에 실패했습니다')
       }
       console.log('        ✅ Docker Desktop 및 컨테이너 실행 중')
 
       // 3. API 서버 시작
-      console.log('\n  [3/5] Papyrus API 서버 시작...')
+      console.log('\n  [3/4] Papyrus API 서버 시작...')
       const apiRunning = await this.papyrusServerManager.isApiServerRunning()
       if (!apiRunning) {
         console.log('        🚀 API 서버 시작 중... (최대 60초 소요)')
@@ -131,13 +130,13 @@ export class ServiceManager {
       console.log('        ✅ API 서버 실행 중 (포트: 8000)')
 
       // 4. 관리자 웹 서버 시작
-      console.log('\n  [4/5] 관리자 웹 서버 시작...')
-      const webAdminRunning = await this.papyrusServerManager.isWebAdminServerRunning()
+      console.log('\n  [4/4] 관리자 웹 서버 시작...')
+      const webAdminRunning =
+        await this.papyrusServerManager.isWebAdminServerRunning()
       if (!webAdminRunning) {
         console.log('        🌐 관리자 웹 서버 시작 중... (최대 30초 소요)')
-        const webAdminStarted = await this.papyrusServerManager.startWebAdminServer(
-          this.projectRoot,
-        )
+        const webAdminStarted =
+          await this.papyrusServerManager.startWebAdminServer(this.projectRoot)
         if (!webAdminStarted) {
           console.warn('        ⚠️  관리자 웹 서버 시작에 실패했습니다')
         } else {
@@ -147,28 +146,10 @@ export class ServiceManager {
         console.log('        ✅ 관리자 웹 서버 실행 중 (포트: 3000)')
       }
 
-      // 5. 사용자 웹 서버 시작
-      console.log('\n  [5/5] 사용자 웹 서버 시작...')
-      const webUserRunning = await this.papyrusServerManager.isWebUserServerRunning()
-      if (!webUserRunning) {
-        console.log('        👥 사용자 웹 서버 시작 중... (최대 30초 소요)')
-        const webUserStarted = await this.papyrusServerManager.startWebUserServer(
-          this.projectRoot,
-        )
-        if (!webUserStarted) {
-          console.warn('        ⚠️  사용자 웹 서버 시작에 실패했습니다')
-        } else {
-          console.log('        ✅ 사용자 웹 서버 실행 중 (포트: 4200)')
-        }
-      } else {
-        console.log('        ✅ 사용자 웹 서버 실행 중 (포트: 4200)')
-      }
-
       console.log('\n┌─────────────────────────────────────────────────────┐')
       console.log('│  🎉 모든 서비스가 시작되었습니다!                  │')
       console.log('├─────────────────────────────────────────────────────┤')
       console.log('│  🔧 관리자 웹: http://localhost:3000               │')
-      console.log('│  👥 사용자 웹: https://user.civilization.zone      │')
       console.log('│  🎮 API 서버: http://localhost:8000                │')
       console.log('└─────────────────────────────────────────────────────┘\n')
 
@@ -196,7 +177,6 @@ export class ServiceManager {
 
       // 웹 서버들 중지
       await this.papyrusServerManager.stopWebAdminServer()
-      await this.papyrusServerManager.stopWebUserServer()
 
       // Docker 컨테이너는 유지 (다른 프로젝트에서 사용 가능)
       console.log('ℹ️ Docker 컨테이너는 유지됩니다')
@@ -535,24 +515,39 @@ export class ServiceManager {
   /**
    * 로그 파일 목록 조회
    */
-  async getLogFiles(): Promise<Array<{ category: string; files: Array<{ name: string; path: string; size: number; mtime: string }> }>> {
+  async getLogFiles(): Promise<
+    Array<{
+      category: string
+      files: Array<{ name: string; path: string; size: number; mtime: string }>
+    }>
+  > {
     const fs = await import('fs')
     const path = await import('path')
-    
+
     const logsDir = path.join(this.projectRoot, 'logs')
-    const categories = ['prisma/build', 'prisma/validate', 'prisma/generate', 'prisma/migrate', 'seed']
-    const result: Array<{ category: string; files: Array<{ name: string; path: string; size: number; mtime: string }> }> = []
+    const categories = [
+      'prisma/build',
+      'prisma/validate',
+      'prisma/generate',
+      'prisma/migrate',
+      'seed',
+    ]
+    const result: Array<{
+      category: string
+      files: Array<{ name: string; path: string; size: number; mtime: string }>
+    }> = []
 
     for (const category of categories) {
       const categoryPath = path.join(logsDir, category)
-      
+
       if (!fs.existsSync(categoryPath)) {
         continue
       }
 
-      const files = fs.readdirSync(categoryPath)
-        .filter(file => file.endsWith('.log'))
-        .map(file => {
+      const files = fs
+        .readdirSync(categoryPath)
+        .filter((file) => file.endsWith('.log'))
+        .map((file) => {
           const filePath = path.join(categoryPath, file)
           const stats = fs.statSync(filePath)
           return {
@@ -562,7 +557,9 @@ export class ServiceManager {
             mtime: stats.mtime.toISOString(),
           }
         })
-        .sort((a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime()) // 최신순
+        .sort(
+          (a, b) => new Date(b.mtime).getTime() - new Date(a.mtime).getTime(),
+        ) // 최신순
 
       if (files.length > 0) {
         result.push({
@@ -580,7 +577,7 @@ export class ServiceManager {
    */
   async readLogFile(filePath: string): Promise<string> {
     const fs = await import('fs')
-    
+
     try {
       return fs.readFileSync(filePath, 'utf-8')
     } catch (error: any) {

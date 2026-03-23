@@ -17,14 +17,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 관리자 웹 서버 제어
     startWebAdmin: () => ipcRenderer.invoke('service:startWebAdmin'),
     stopWebAdmin: () => ipcRenderer.invoke('service:stopWebAdmin'),
-    // 사용자 웹 서버 제어
-    startWebUser: () => ipcRenderer.invoke('service:startWebUser'),
-    stopWebUser: () => ipcRenderer.invoke('service:stopWebUser'),
     // 로그 조회
     getContainerLogs: (containerName) => ipcRenderer.invoke('service:getContainerLogs', containerName),
     getApiLogs: () => ipcRenderer.invoke('service:getApiLogs'),
     getWebAdminLogs: () => ipcRenderer.invoke('service:getWebAdminLogs'),
-    getWebUserLogs: () => ipcRenderer.invoke('service:getWebUserLogs'),
     // 실시간 콘솔 로그
     onConsoleLog: (callback) => {
         ipcRenderer.on('console:log', (_event, log) => callback(log));

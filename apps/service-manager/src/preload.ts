@@ -23,16 +23,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startWebAdmin: () => ipcRenderer.invoke('service:startWebAdmin'),
   stopWebAdmin: () => ipcRenderer.invoke('service:stopWebAdmin'),
 
-  // 사용자 웹 서버 제어
-  startWebUser: () => ipcRenderer.invoke('service:startWebUser'),
-  stopWebUser: () => ipcRenderer.invoke('service:stopWebUser'),
-
   // 로그 조회
   getContainerLogs: (containerName: string) =>
     ipcRenderer.invoke('service:getContainerLogs', containerName),
   getApiLogs: () => ipcRenderer.invoke('service:getApiLogs'),
   getWebAdminLogs: () => ipcRenderer.invoke('service:getWebAdminLogs'),
-  getWebUserLogs: () => ipcRenderer.invoke('service:getWebUserLogs'),
 
   // 실시간 콘솔 로그
   onConsoleLog: (callback: (log: string) => void) => {
@@ -101,7 +96,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getMigrationStatus: () => ipcRenderer.invoke('prisma:getMigrationStatus'),
     startStudio: () => ipcRenderer.invoke('prisma:startStudio'),
     stopStudio: () => ipcRenderer.invoke('prisma:stopStudio'),
-    runSeed: (environment?: string) => ipcRenderer.invoke('prisma:runSeed', environment),
+    runSeed: (environment?: string) =>
+      ipcRenderer.invoke('prisma:runSeed', environment),
     getSeedFiles: () => ipcRenderer.invoke('prisma:getSeedFiles'),
     getStatus: () => ipcRenderer.invoke('prisma:getStatus'),
   },
@@ -144,8 +140,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     restoreNestiaConfigBackup: (projectName: string) =>
       ipcRenderer.invoke('nx:restoreNestiaConfigBackup', projectName),
     readNxJson: () => ipcRenderer.invoke('nx:readNxJson'),
-    saveNxJson: (content: any) =>
-      ipcRenderer.invoke('nx:saveNxJson', content),
+    saveNxJson: (content: any) => ipcRenderer.invoke('nx:saveNxJson', content),
     restoreNxJsonBackup: () => ipcRenderer.invoke('nx:restoreNxJsonBackup'),
   },
 })
@@ -165,12 +160,9 @@ declare global {
       stopApi: () => Promise<void>
       startWebAdmin: () => Promise<void>
       stopWebAdmin: () => Promise<void>
-      startWebUser: () => Promise<void>
-      stopWebUser: () => Promise<void>
       getContainerLogs: (containerName: string) => Promise<string>
       getApiLogs: () => Promise<string>
       getWebAdminLogs: () => Promise<string>
-      getWebUserLogs: () => Promise<string>
       onConsoleLog: (callback: (log: string) => void) => void
       openWeb: () => Promise<void>
       openExternal: (url: string) => Promise<void>
@@ -213,7 +205,9 @@ declare global {
         getMigrationStatus: () => Promise<{ success: boolean; message: string }>
         startStudio: () => Promise<{ success: boolean; message: string }>
         stopStudio: () => Promise<{ success: boolean; message: string }>
-        runSeed: (environment?: string) => Promise<{ success: boolean; message: string }>
+        runSeed: (
+          environment?: string,
+        ) => Promise<{ success: boolean; message: string }>
         getSeedFiles: () => Promise<Array<{ name: string; path: string }>>
         getStatus: () => Promise<{
           schemaValid: boolean
@@ -270,8 +264,13 @@ declare global {
           projectName: string,
         ) => Promise<{ success: boolean; message: string }>
         readNxJson: () => Promise<any>
-        saveNxJson: (content: any) => Promise<{ success: boolean; message: string }>
-        restoreNxJsonBackup: () => Promise<{ success: boolean; message: string }>
+        saveNxJson: (
+          content: any,
+        ) => Promise<{ success: boolean; message: string }>
+        restoreNxJsonBackup: () => Promise<{
+          success: boolean
+          message: string
+        }>
       }
     }
   }

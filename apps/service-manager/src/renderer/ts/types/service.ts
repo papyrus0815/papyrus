@@ -6,7 +6,7 @@ export interface Service {
   id: string
   name: string
   icon: string
-  type: 'docker' | 'container' | 'api' | 'web-admin' | 'web-user'
+  type: 'docker' | 'container' | 'api' | 'web-admin'
   port?: number
   canControl: boolean
   url?: string
@@ -31,11 +31,6 @@ export interface ServiceStatusMap {
       healthCheckUrl?: string
     }
     webAdminServer?: {
-      isRunning?: boolean
-      port?: number
-      url?: string
-    }
-    webUserServer?: {
       isRunning?: boolean
       port?: number
       url?: string
