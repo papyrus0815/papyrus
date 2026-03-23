@@ -3,7 +3,14 @@
  * 수반 재임별 행정부 등록·조회, 각료 추가.
  * 정권 선택 시 아래에 중앙부처 스타일 그리드로 해당 정권의 부처별 각료 표시(전자: 카테고리만, 사용자 등록 부처).
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -401,6 +408,30 @@ export function CabinetsSection({
       )
     })
   }, [sortedCabinets, cabinetSearchQuery, cabinetCountryFilter, countryId])
+
+  /** 타임라인 그리드 행(열 수만큼 슬라이스) — 한 번만 계산 */
+  const cabinetTimelineRows = useMemo(() => {
+    const cols = timelineColumnCount
+    const list = filteredCabinets
+    const rows: any[][] = []
+    for (let i = 0; i < list.length; i += cols) {
+      rows.push(list.slice(i, i + cols))
+    }
+    return rows
+  }, [filteredCabinets, timelineColumnCount])
+
+  /** 요약 헤더 연도 범위 */
+  const cabinetTimelineYearRange = useMemo(() => {
+    const years = filteredCabinets.flatMap((c) => {
+      const s = c.headTenure?.startDate
+        ? new Date(c.headTenure.startDate).getFullYear()
+        : null
+      return s != null ? [s] : []
+    })
+    if (years.length === 0)
+      return { minY: null as number | null, maxY: null as number | null }
+    return { minY: Math.min(...years), maxY: Math.max(...years) }
+  }, [filteredCabinets])
 
   const isMinisterMatched = (t: any) => {
     const q = ministerSearchQuery.trim().toLowerCase()
@@ -1457,560 +1488,606 @@ export function CabinetsSection({
                       boxSizing: 'border-box',
                     }}
                   >
-                    {/* 타임라인 요약 헤더 */}
-                    {(() => {
-                      const items = filteredCabinets as any[]
-                      const years = items.flatMap((c) => {
-                        const s = c.headTenure?.startDate
-                          ? new Date(c.headTenure.startDate).getFullYear()
-                          : null
-                        return s ? [s] : []
-                      })
-                      const minY = years.length ? Math.min(...years) : null
-                      const maxY = years.length ? Math.max(...years) : null
-                      return (
+                    {/* 타임라인 요약 헤더 + 인포 범례 */}
+                    <div
+                      style={{
+                        borderBottom: `1px solid ${C.border}`,
+                        background: 'transparent',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '36px 0 10px',
+                        }}
+                      >
                         <div
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 12,
-                            padding: '36px 0',
-                            borderBottom: `1px solid ${C.border}`,
-                            background: 'transparent',
+                            gap: 6,
                           }}
                         >
-                          <div
+                          <FiUsers size={13} color={C.iconColor} />
+                          <span
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: C.text,
                             }}
                           >
-                            <FiUsers size={13} color="#94a3b8" />
-                            <span
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 700,
-                                color: C.text,
-                              }}
-                            >
-                              {items.length}개 행정부
-                            </span>
-                          </div>
-                          {minY && (
-                            <>
-                              <div
-                                style={{
-                                  width: 1,
-                                  height: 12,
-                                  background: C.borderMid,
-                                }}
-                              />
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                }}
-                              >
-                                <FiCalendar size={12} color="#94a3b8" />
-                                <span
-                                  style={{ fontSize: 12, color: C.textMuted }}
-                                >
-                                  {minY} – {maxY ?? '현재'}
-                                </span>
-                              </div>
-                            </>
-                          )}
-                          <div style={{ flex: 1 }} />
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            {TL_ROWS.map((r, i) => (
-                              <div
-                                key={i}
-                                style={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  background: r.line,
-                                }}
-                              />
-                            ))}
-                          </div>
+                            {filteredCabinets.length}개 행정부
+                          </span>
                         </div>
-                      )
-                    })()}
-                    {(() => {
-                      const items = filteredCabinets as any[]
-                      const cols = timelineColumnCount
-                      const rows: any[][] = []
-                      for (let i = 0; i < items.length; i += cols) {
-                        rows.push(items.slice(i, i + cols))
-                      }
-
-                      return rows.map((rowItems, rowIdx) => {
-                        const p = TL_ROWS[rowIdx % TL_ROWS.length]
-                        const isReversed = rowIdx % 2 === 1
-                        const displayItems = isReversed
-                          ? [...rowItems].reverse()
-                          : rowItems
-                        // 첫 칼럼: 썸네일(원) 가로 중앙 — 연도 버블도 동일 좌측 축에 맞춤
-                        const NODE_X = TL_NODE_CENTER_X
-
-                        return (
-                          <div
-                            key={rowIdx}
-                            style={{
-                              background: 'transparent',
-                              borderBottom:
-                                rowIdx < rows.length - 1
-                                  ? `1px solid ${C.border}`
-                                  : 'none',
-                            }}
-                          >
-                            {/* 행 레이블 */}
-                            {(() => {
-                              const firstHead = rowItems[0]?.headTenure
-                              const lastHead =
-                                rowItems[rowItems.length - 1]?.headTenure
-                              const firstTerm =
-                                firstHead?.termNumber ?? firstHead?.regnalNumber
-                              const lastTerm =
-                                lastHead?.termNumber ?? lastHead?.regnalNumber
-                              // 기수 포함 레이블 생성
-                              const termLabel = (
-                                t: number,
-                                sub?: number | null,
-                              ) =>
-                                sub != null ? `제${t}대 ${sub}기` : `제${t}대`
-                              const rangeLabel =
-                                firstTerm != null && lastTerm != null
-                                  ? firstTerm === lastTerm
-                                    ? termLabel(
-                                        firstTerm,
-                                        firstHead?.subTermNumber,
-                                      )
-                                    : `제${firstTerm}–${lastTerm}대`
-                                  : `${rowIdx * cols + 1}번째 행`
-                              return (
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    padding: '12px 0 10px',
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      width: 4,
-                                      height: 16,
-                                      borderRadius: 2,
-                                      background: p.line,
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      color: p.line,
-                                      letterSpacing: '0.04em',
-                                    }}
-                                  >
-                                    {rangeLabel}
-                                  </span>
-                                  <div
-                                    style={{
-                                      flex: 1,
-                                      height: 1,
-                                      background: `linear-gradient(90deg, ${p.line}33, transparent)`,
-                                    }}
-                                  />
-                                  <span
-                                    style={{ fontSize: 10.5, color: '#c8d0da' }}
-                                  >
-                                    {rowItems.length}명
-                                  </span>
-                                </div>
-                              )
-                            })()}
+                        {cabinetTimelineYearRange.minY != null && (
+                          <>
                             <div
                               style={{
-                                position: 'relative',
-                                height: TL_ROW_H,
-                                padding: `0 0 0 ${TL_LIST_PAD_LEFT}px`,
+                                width: 1,
+                                height: 12,
+                                background: C.borderMid,
+                              }}
+                            />
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
                               }}
                             >
-                              {/* 수평선 — 첫 노드에서 컨테이너 우측 끝까지(잘라내지 않음) */}
+                              <FiCalendar size={12} color={C.iconColor} />
+                              <span
+                                style={{ fontSize: 12, color: C.textMuted }}
+                              >
+                                {cabinetTimelineYearRange.minY} –{' '}
+                                {cabinetTimelineYearRange.maxY ?? '현재'}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        <div style={{ flex: 1 }} />
+                        <div
+                          style={{ display: 'flex', gap: 4, alignItems: 'center' }}
+                          title="행마다 반복되는 구분 색(4색 순환)"
+                          aria-label="행 구분 색 범례"
+                        >
+                          {TL_ROWS.map((r, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                background: r.line,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <p
+                        role="note"
+                        style={{
+                          margin: 0,
+                          padding: '0 0 18px',
+                          fontSize: 11,
+                          lineHeight: 1.55,
+                          color: C.textMuted,
+                          fontWeight: 500,
+                        }}
+                      >
+                        색 띠는 <strong style={{ color: C.text }}>행 구분</strong>
+                        용입니다. 짝수 행은 왼쪽→오른쪽, 홀수 행은 오른쪽→왼쪽으로
+                        시간이 이어집니다.
+                      </p>
+                    </div>
+                    <div
+                      role="region"
+                      aria-label="역대 행정부 타임라인"
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(140px, 220px) 1fr',
+                        gap: '0 12px',
+                        alignItems: 'start',
+                        /* 요약 헤더의 border-bottom과 첫 행 썸네일 사이 간격 */
+                        paddingTop: 24,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                        }}
+                      >
+                        {cabinetTimelineRows.map((rowItems, rowIdx) => {
+                          const p = TL_ROWS[rowIdx % TL_ROWS.length]
+                          const firstHead = rowItems[0]?.headTenure
+                          const lastHead =
+                            rowItems[rowItems.length - 1]?.headTenure
+                          const firstTerm =
+                            firstHead?.termNumber ?? firstHead?.regnalNumber
+                          const lastTerm =
+                            lastHead?.termNumber ?? lastHead?.regnalNumber
+                          const termLabel = (t: number, sub?: number | null) =>
+                            sub != null ? `제${t}대 ${sub}기` : `제${t}대`
+                          const rangeLabel =
+                            firstTerm != null && lastTerm != null
+                              ? firstTerm === lastTerm
+                                ? termLabel(firstTerm, firstHead?.subTermNumber)
+                                : `제${firstTerm}–${lastTerm}대`
+                              : `${rowIdx * timelineColumnCount + 1}번째 행`
+                          return (
+                            <Fragment key={`cab-tl-l-${rowIdx}`}>
                               <div
+                                title={
+                                  rowIdx % 2 === 0
+                                    ? '이 행의 시간 순서: 왼쪽 → 오른쪽'
+                                    : '이 행의 시간 순서: 오른쪽 → 왼쪽'
+                                }
                                 style={{
-                                  position: 'absolute',
-                                  left: NODE_X,
-                                  right: 0,
-                                  top: '50%',
-                                  transform: 'translateY(-50%)',
-                                  height: 3,
-                                  background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
-                                  zIndex: 0,
-                                  borderRadius: 2,
-                                  pointerEvents: 'none',
-                                }}
-                              />
-
-                              {/* 아이템 그리드 */}
-                              <div
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                                  height: '100%',
-                                  gap: `0 ${TL_GRID_GAP_X}px`,
-                                  position: 'relative',
-                                  zIndex: 1,
+                                  minHeight: TL_ROW_H,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  paddingRight: 4,
                                 }}
                               >
-                                {Array.from({ length: cols }).map(
-                                  (_, colIdx) => {
-                                    const item = displayItems[colIdx]
-                                    if (!item)
-                                      return <div key={`e-${colIdx}`} />
+                                <div
+                                  style={{
+                                    width: 4,
+                                    height: 16,
+                                    borderRadius: 2,
+                                    background: p.line,
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {rowIdx % 2 === 0 ? (
+                                  <FiChevronRight
+                                    size={12}
+                                    color={p.line}
+                                    style={{ opacity: 0.8, flexShrink: 0 }}
+                                    aria-hidden
+                                  />
+                                ) : (
+                                  <FiChevronLeft
+                                    size={12}
+                                    color={p.line}
+                                    style={{ opacity: 0.8, flexShrink: 0 }}
+                                    aria-hidden
+                                  />
+                                )}
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    color: p.line,
+                                    letterSpacing: '0.04em',
+                                  }}
+                                >
+                                  {rangeLabel}
+                                </span>
+                                <div
+                                  style={{
+                                    flex: 1,
+                                    height: 1,
+                                    background: `linear-gradient(90deg, ${p.line}33, transparent)`,
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    fontSize: 10.5,
+                                    color: C.textFaint,
+                                  }}
+                                >
+                                  {rowItems.length}명
+                                </span>
+                              </div>
+                            </Fragment>
+                          )
+                        })}
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          minWidth: 0,
+                        }}
+                      >
+                        {cabinetTimelineRows.map((rowItems, rowIdx) => {
+                          const cols = timelineColumnCount
+                          const p = TL_ROWS[rowIdx % TL_ROWS.length]
+                          const isReversed = rowIdx % 2 === 1
+                          const displayItems = isReversed
+                            ? [...rowItems].reverse()
+                            : rowItems
+                          const NODE_X = TL_NODE_CENTER_X
 
-                                    const head = item.headTenure
-                                    const personName = head?.person
-                                      ? getPersonName(head.person)
-                                      : '이름 없음'
-                                    const posTitle =
-                                      head?.positionDefinition?.title ??
-                                      head?.title ??
-                                      '—'
-                                    const termNum =
-                                      head?.termNumber ?? head?.regnalNumber
-                                    const thumbUrl =
-                                      head?.person?.profileImageUrl ?? null
-                                    const startYear = head?.startDate
-                                      ? new Date(head.startDate).getFullYear()
-                                      : null
-                                    const endYear = head?.endDate
-                                      ? new Date(head.endDate).getFullYear()
-                                      : null
-                                    const range = startYear
-                                      ? `${startYear}–${endYear ?? '현재'}`
-                                      : '—'
-                                    const ageAtStart =
-                                      head?.person && head?.startDate
-                                        ? calcAgeAtTenure(
-                                            head.person,
-                                            head.startDate,
-                                          )
+                          return (
+                            <Fragment key={`cab-tl-t-${rowIdx}`}>
+                              <div
+                                style={{
+                                  position: 'relative',
+                                  height: TL_ROW_H,
+                                  padding: `0 0 0 ${TL_LIST_PAD_LEFT}px`,
+                                }}
+                              >
+                                {/* 수평선 — 첫 노드에서 컨테이너 우측 끝까지(잘라내지 않음) */}
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    left: NODE_X,
+                                    right: 0,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    height: 3,
+                                    background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
+                                    zIndex: 0,
+                                    borderRadius: 2,
+                                    pointerEvents: 'none',
+                                  }}
+                                />
+
+                                {/* 아이템 그리드 */}
+                                <div
+                                  style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                                    height: '100%',
+                                    gap: `0 ${TL_GRID_GAP_X}px`,
+                                    position: 'relative',
+                                    zIndex: 1,
+                                  }}
+                                >
+                                  {Array.from({ length: cols }).map(
+                                    (_, colIdx) => {
+                                      const item = displayItems[colIdx]
+                                      if (!item)
+                                        return (
+                                          <div
+                                            key={`e-${colIdx}`}
+                                            aria-hidden
+                                          />
+                                        )
+
+                                      const head = item.headTenure
+                                      const personName = head?.person
+                                        ? getPersonName(head.person)
+                                        : '이름 없음'
+                                      const posTitle =
+                                        head?.positionDefinition?.title ??
+                                        head?.title ??
+                                        '—'
+                                      const termNum =
+                                        head?.termNumber ?? head?.regnalNumber
+                                      const thumbUrl =
+                                        head?.person?.profileImageUrl ?? null
+                                      const startYear = head?.startDate
+                                        ? new Date(head.startDate).getFullYear()
                                         : null
-                                    const birthPlace = head?.person
-                                      ? ((head.person as any).birthCity?.name ??
-                                        (head.person as any).birthAdminDivision
-                                          ?.name ??
-                                        (head.person as any).birthPlaceText ??
-                                        null)
-                                      : null
-                                    const isDeleting =
-                                      deletingCabinetId === item.id
-                                    // 짝수: 아이템 위 / 버블 아래, 홀수: 버블 위 / 아이템 아래
-                                    const itemOnTop = colIdx % 2 === 0
+                                      const range = head?.startDate
+                                        ? `${formatDate(head.startDate)} – ${head?.endDate ? formatDate(head.endDate) : '현재'}`
+                                        : '—'
+                                      const ageAtStart =
+                                        head?.person && head?.startDate
+                                          ? calcAgeAtTenure(
+                                              head.person,
+                                              head.startDate,
+                                            )
+                                          : null
+                                      const birthPlace = head?.person
+                                        ? ((head.person as any).birthCity
+                                            ?.name ??
+                                          (head.person as any)
+                                            .birthAdminDivision?.name ??
+                                          (head.person as any).birthPlaceText ??
+                                          null)
+                                        : null
+                                      const isDeleting =
+                                        deletingCabinetId === item.id
+                                      // 짝수: 아이템 위 / 버블 아래, 홀수: 버블 위 / 아이템 아래
+                                      const itemOnTop = colIdx % 2 === 0
 
-                                    const cellLabel =
-                                      cabinetTimelineCellAriaLabel(
-                                        termNum,
-                                        head?.subTermNumber ?? null,
-                                        posTitle,
-                                        personName,
-                                      )
-                                    return (
-                                      <CabS.CabinetTimelineCellBtn
-                                        key={item.id}
-                                        disabled={isDeleting}
-                                        aria-label={cellLabel}
-                                        onClick={() => {
-                                          if (!isDeleting) {
-                                            setSelectedCabinetId(item.id)
-                                            setCabinetView('detail')
-                                          }
-                                        }}
-                                      >
-                                        {/* 위쪽 영역 */}
-                                        <div
-                                          style={{
-                                            flex: 1,
-                                            width: '100%',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'stretch',
-                                            justifyContent: 'flex-end',
-                                            paddingBottom: TL_NODE_EDGE_PAD,
+                                      const cellLabel =
+                                        cabinetTimelineCellAriaLabel(
+                                          termNum,
+                                          head?.subTermNumber ?? null,
+                                          posTitle,
+                                          personName,
+                                        )
+                                      return (
+                                        <CabS.CabinetTimelineCellBtn
+                                          key={item.id}
+                                          disabled={isDeleting}
+                                          aria-label={cellLabel}
+                                          onClick={() => {
+                                            if (!isDeleting) {
+                                              setSelectedCabinetId(item.id)
+                                              setCabinetView('detail')
+                                            }
                                           }}
                                         >
-                                          {itemOnTop ? (
-                                            /* 아이템 (위) */
-                                            <div
-                                              style={{
-                                                width: '100%',
-                                                maxWidth: '100%',
-                                                transition:
-                                                  'transform 0.18s ease, opacity 0.15s',
-                                              }}
-                                              onMouseEnter={(e) => {
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.transform =
-                                                  'translateY(-3px)'
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.opacity = '0.92'
-                                              }}
-                                              onMouseLeave={(e) => {
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.transform =
-                                                  'translateY(0)'
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.opacity = '1'
-                                              }}
-                                            >
-                                              <TlItem
-                                                thumbUrl={thumbUrl}
-                                                personName={personName}
-                                                posTitle={posTitle}
-                                                range={range}
-                                                ageAtStart={ageAtStart}
-                                                birthPlace={birthPlace}
-                                                lineColor={p.line}
-                                                isDark={isDark}
-                                              />
-                                            </div>
-                                          ) : (
-                                            /* 연도 버블 (위) — 썸네일과 같은 좌측 기준선 */
-                                            <div
-                                              style={{
-                                                width: '100%',
-                                                display: 'flex',
-                                                justifyContent: 'flex-start',
-                                                paddingLeft:
-                                                  TL_YEAR_BUBBLE_SHIFT_X,
-                                              }}
-                                            >
-                                              <div
-                                                style={{
-                                                  display: 'inline-flex',
-                                                  flexDirection: 'column',
-                                                  alignItems: 'center',
-                                                  flexShrink: 0,
-                                                  width: 'fit-content',
-                                                  maxWidth: '100%',
-                                                  background: C.bg,
-                                                  border: `2.5px solid ${p.line}`,
-                                                  borderRadius: 28,
-                                                  padding: '8px 16px',
-                                                  minWidth: TL_BUBBLE_W,
-                                                  boxShadow: `0 2px 10px ${p.line}44`,
-                                                  textAlign: 'center',
-                                                }}
-                                              >
-                                                <span
-                                                  style={{
-                                                    fontSize: 17,
-                                                    fontWeight: 900,
-                                                    color: p.textColor,
-                                                    letterSpacing: '-0.03em',
-                                                    lineHeight: 1.2,
-                                                  }}
-                                                >
-                                                  {startYear ?? '—'}
-                                                </span>
-                                                {termNum != null && (
-                                                  <span
-                                                    style={{
-                                                      fontSize: 10,
-                                                      fontWeight: 700,
-                                                      color: p.line,
-                                                      marginTop: 3,
-                                                    }}
-                                                  >
-                                                    제{termNum}대
-                                                    {head?.subTermNumber != null
-                                                      ? ` ${head.subTermNumber}기`
-                                                      : ''}
-                                                  </span>
-                                                )}
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        {/* 수직선 + 노드 — 썸네일 너비 안에서 가운데(원 중심과 일치) */}
-                                        <div
-                                          style={{
-                                            display: 'flex',
-                                            flexDirection: 'row',
-                                            justifyContent: 'flex-start',
-                                            width: '100%',
-                                            flexShrink: 0,
-                                          }}
-                                        >
+                                          {/* 위쪽 영역 */}
                                           <div
                                             style={{
-                                              width: TL_THUMB,
-                                              flexShrink: 0,
+                                              flex: 1,
+                                              width: '100%',
                                               display: 'flex',
                                               flexDirection: 'column',
-                                              alignItems: 'center',
+                                              alignItems: 'stretch',
+                                              justifyContent: 'flex-end',
+                                              paddingBottom: TL_NODE_EDGE_PAD,
+                                            }}
+                                          >
+                                            {itemOnTop ? (
+                                              /* 아이템 (위) */
+                                              <div
+                                                style={{
+                                                  width: '100%',
+                                                  maxWidth: '100%',
+                                                  transition:
+                                                    'transform 0.18s ease, opacity 0.15s',
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.transform =
+                                                    'translateY(-3px)'
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.opacity = '0.92'
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.transform =
+                                                    'translateY(0)'
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.opacity = '1'
+                                                }}
+                                              >
+                                                <TlItem
+                                                  thumbUrl={thumbUrl}
+                                                  personName={personName}
+                                                  posTitle={posTitle}
+                                                  range={range}
+                                                  ageAtStart={ageAtStart}
+                                                  birthPlace={birthPlace}
+                                                  lineColor={p.line}
+                                                  isDark={isDark}
+                                                />
+                                              </div>
+                                            ) : (
+                                              /* 연도 버블 (위) — 썸네일과 같은 좌측 기준선 */
+                                              <div
+                                                style={{
+                                                  width: '100%',
+                                                  display: 'flex',
+                                                  justifyContent: 'flex-start',
+                                                  paddingLeft:
+                                                    TL_YEAR_BUBBLE_SHIFT_X,
+                                                }}
+                                              >
+                                                <div
+                                                  style={{
+                                                    display: 'inline-flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    flexShrink: 0,
+                                                    width: 'fit-content',
+                                                    maxWidth: '100%',
+                                                    background: C.bg,
+                                                    border: `2.5px solid ${p.line}`,
+                                                    borderRadius: 28,
+                                                    padding: '8px 16px',
+                                                    minWidth: TL_BUBBLE_W,
+                                                    boxShadow: `0 2px 10px ${p.line}44`,
+                                                    textAlign: 'center',
+                                                  }}
+                                                >
+                                                  <span
+                                                    style={{
+                                                      fontSize: 17,
+                                                      fontWeight: 900,
+                                                      color: p.textColor,
+                                                      letterSpacing: '-0.03em',
+                                                      lineHeight: 1.2,
+                                                    }}
+                                                  >
+                                                    {startYear ?? '—'}
+                                                  </span>
+                                                  {termNum != null && (
+                                                    <span
+                                                      style={{
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        color: p.line,
+                                                        marginTop: 3,
+                                                      }}
+                                                    >
+                                                      제{termNum}대
+                                                      {head?.subTermNumber !=
+                                                      null
+                                                        ? ` ${head.subTermNumber}기`
+                                                        : ''}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+
+                                          {/* 수직선 + 노드 — 썸네일 너비 안에서 가운데(원 중심과 일치) */}
+                                          <div
+                                            style={{
+                                              display: 'flex',
+                                              flexDirection: 'row',
+                                              justifyContent: 'flex-start',
+                                              width: '100%',
+                                              flexShrink: 0,
                                             }}
                                           >
                                             <div
                                               style={{
-                                                width: 2,
-                                                height: TL_VERT_SEG_H,
-                                                background: p.line,
-                                                opacity: 0.6,
-                                              }}
-                                            />
-                                            <div
-                                              style={{
-                                                width: 14,
-                                                height: 14,
-                                                borderRadius: '50%',
-                                                background: C.bg,
-                                                border: `3px solid ${p.line}`,
-                                                boxShadow: `0 0 0 3px ${C.bg}`,
-                                                zIndex: 2,
-                                              }}
-                                            />
-                                            <div
-                                              style={{
-                                                width: 2,
-                                                height: TL_VERT_SEG_H,
-                                                background: p.line,
-                                                opacity: 0.6,
-                                              }}
-                                            />
-                                          </div>
-                                        </div>
-
-                                        {/* 아래쪽 영역 */}
-                                        <div
-                                          style={{
-                                            flex: 1,
-                                            width: '100%',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'stretch',
-                                            justifyContent: 'flex-start',
-                                            paddingTop: TL_NODE_EDGE_PAD,
-                                          }}
-                                        >
-                                          {!itemOnTop ? (
-                                            /* 아이템 (아래) */
-                                            <div
-                                              style={{
-                                                width: '100%',
-                                                maxWidth: '100%',
-                                                transition:
-                                                  'transform 0.18s ease, opacity 0.15s',
-                                              }}
-                                              onMouseEnter={(e) => {
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.transform =
-                                                  'translateY(3px)'
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.opacity = '0.92'
-                                              }}
-                                              onMouseLeave={(e) => {
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.transform =
-                                                  'translateY(0)'
-                                                ;(
-                                                  e.currentTarget as HTMLDivElement
-                                                ).style.opacity = '1'
-                                              }}
-                                            >
-                                              <TlItem
-                                                thumbUrl={thumbUrl}
-                                                personName={personName}
-                                                posTitle={posTitle}
-                                                range={range}
-                                                ageAtStart={ageAtStart}
-                                                birthPlace={birthPlace}
-                                                lineColor={p.line}
-                                                isDark={isDark}
-                                              />
-                                            </div>
-                                          ) : (
-                                            /* 연도 버블 (아래) — 썸네일과 같은 좌측 기준선 */
-                                            <div
-                                              style={{
-                                                width: '100%',
+                                                width: TL_THUMB,
+                                                flexShrink: 0,
                                                 display: 'flex',
-                                                justifyContent: 'flex-start',
-                                                paddingLeft:
-                                                  TL_YEAR_BUBBLE_SHIFT_X,
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
                                               }}
                                             >
                                               <div
                                                 style={{
-                                                  display: 'inline-flex',
-                                                  flexDirection: 'column',
-                                                  alignItems: 'center',
-                                                  flexShrink: 0,
-                                                  width: 'fit-content',
-                                                  maxWidth: '100%',
+                                                  width: 2,
+                                                  height: TL_VERT_SEG_H,
+                                                  background: p.line,
+                                                  opacity: 0.6,
+                                                }}
+                                              />
+                                              <div
+                                                style={{
+                                                  width: 14,
+                                                  height: 14,
+                                                  borderRadius: '50%',
                                                   background: C.bg,
-                                                  border: `2.5px solid ${p.line}`,
-                                                  borderRadius: 28,
-                                                  padding: '8px 16px',
-                                                  minWidth: TL_BUBBLE_W,
-                                                  boxShadow: `0 2px 10px ${p.line}44`,
-                                                  textAlign: 'center',
+                                                  border: `3px solid ${p.line}`,
+                                                  boxShadow: `0 0 0 3px ${C.bg}`,
+                                                  zIndex: 2,
+                                                }}
+                                              />
+                                              <div
+                                                style={{
+                                                  width: 2,
+                                                  height: TL_VERT_SEG_H,
+                                                  background: p.line,
+                                                  opacity: 0.6,
+                                                }}
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* 아래쪽 영역 */}
+                                          <div
+                                            style={{
+                                              flex: 1,
+                                              width: '100%',
+                                              display: 'flex',
+                                              flexDirection: 'column',
+                                              alignItems: 'stretch',
+                                              justifyContent: 'flex-start',
+                                              paddingTop: TL_NODE_EDGE_PAD,
+                                            }}
+                                          >
+                                            {!itemOnTop ? (
+                                              /* 아이템 (아래) */
+                                              <div
+                                                style={{
+                                                  width: '100%',
+                                                  maxWidth: '100%',
+                                                  transition:
+                                                    'transform 0.18s ease, opacity 0.15s',
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.transform =
+                                                    'translateY(3px)'
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.opacity = '0.92'
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.transform =
+                                                    'translateY(0)'
+                                                  ;(
+                                                    e.currentTarget as HTMLDivElement
+                                                  ).style.opacity = '1'
                                                 }}
                                               >
-                                                <span
+                                                <TlItem
+                                                  thumbUrl={thumbUrl}
+                                                  personName={personName}
+                                                  posTitle={posTitle}
+                                                  range={range}
+                                                  ageAtStart={ageAtStart}
+                                                  birthPlace={birthPlace}
+                                                  lineColor={p.line}
+                                                  isDark={isDark}
+                                                />
+                                              </div>
+                                            ) : (
+                                              /* 연도 버블 (아래) — 썸네일과 같은 좌측 기준선 */
+                                              <div
+                                                style={{
+                                                  width: '100%',
+                                                  display: 'flex',
+                                                  justifyContent: 'flex-start',
+                                                  paddingLeft:
+                                                    TL_YEAR_BUBBLE_SHIFT_X,
+                                                }}
+                                              >
+                                                <div
                                                   style={{
-                                                    fontSize: 17,
-                                                    fontWeight: 900,
-                                                    color: p.textColor,
-                                                    letterSpacing: '-0.03em',
-                                                    lineHeight: 1.2,
+                                                    display: 'inline-flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    flexShrink: 0,
+                                                    width: 'fit-content',
+                                                    maxWidth: '100%',
+                                                    background: C.bg,
+                                                    border: `2.5px solid ${p.line}`,
+                                                    borderRadius: 28,
+                                                    padding: '8px 16px',
+                                                    minWidth: TL_BUBBLE_W,
+                                                    boxShadow: `0 2px 10px ${p.line}44`,
+                                                    textAlign: 'center',
                                                   }}
                                                 >
-                                                  {startYear ?? '—'}
-                                                </span>
-                                                {termNum != null && (
                                                   <span
                                                     style={{
-                                                      fontSize: 10,
-                                                      fontWeight: 700,
-                                                      color: p.line,
-                                                      marginTop: 3,
+                                                      fontSize: 17,
+                                                      fontWeight: 900,
+                                                      color: p.textColor,
+                                                      letterSpacing: '-0.03em',
+                                                      lineHeight: 1.2,
                                                     }}
                                                   >
-                                                    제{termNum}대
-                                                    {head?.subTermNumber != null
-                                                      ? ` ${head.subTermNumber}기`
-                                                      : ''}
+                                                    {startYear ?? '—'}
                                                   </span>
-                                                )}
+                                                  {termNum != null && (
+                                                    <span
+                                                      style={{
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        color: p.line,
+                                                        marginTop: 3,
+                                                      }}
+                                                    >
+                                                      제{termNum}대
+                                                      {head?.subTermNumber !=
+                                                      null
+                                                        ? ` ${head.subTermNumber}기`
+                                                        : ''}
+                                                    </span>
+                                                  )}
+                                                </div>
                                               </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </CabS.CabinetTimelineCellBtn>
-                                    )
-                                  },
-                                )}
+                                            )}
+                                          </div>
+                                        </CabS.CabinetTimelineCellBtn>
+                                      )
+                                    },
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        )
-                      })
-                    })()}
+                            </Fragment>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </CabS.CabListBody>
               )}

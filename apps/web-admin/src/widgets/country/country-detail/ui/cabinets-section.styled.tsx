@@ -614,10 +614,10 @@ export const CabListBody = styled.div.attrs({
   border: 1px solid
     ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
   box-sizing: border-box;
-  padding: 16px 16px 24px;
+  padding: 20px 16px 24px;
   @media (max-width: 640px) {
     border-radius: 12px;
-    padding: 12px 12px 20px;
+    padding: 16px 12px 20px;
   }
 `
 

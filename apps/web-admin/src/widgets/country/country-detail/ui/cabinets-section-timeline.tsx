@@ -164,7 +164,9 @@ export function TlItem({
               background: `${lineColor}12`,
               borderRadius: 5,
               padding: '2px 9px',
-              whiteSpace: 'nowrap',
+              whiteSpace: 'normal',
+              wordBreak: 'keep-all',
+              lineHeight: 1.35,
             }}
           >
             {range}

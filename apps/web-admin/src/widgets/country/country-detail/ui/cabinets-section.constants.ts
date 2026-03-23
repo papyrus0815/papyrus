@@ -3,7 +3,10 @@ export const CABINET_SECTION_MAIN = '#6366f1'
 export const CABINET_SECTION_MAIN_HOVER = '#4f46e5'
 
 /** 수반 재임 등록 시 HEAD 계열 */
-export const HEAD_POSITION_TYPES = new Set(['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'])
+export const HEAD_POSITION_TYPES = new Set([
+  'HEAD_OF_STATE',
+  'HEAD_OF_GOVERNMENT',
+])
 
 /** 각료 등록 시 선택 가능한 직위 타입 (수반·의원 등 제외) */
 export const MINISTER_POSITION_TYPES = new Set([
@@ -21,8 +24,8 @@ export const TL_ROW_H = 400
 export const TL_BUBBLE_W = 84
 export const TL_THUMB = 144
 export const TL_GRID_GAP_X = 12
-export const TL_NODE_EDGE_PAD = 18
-export const TL_VERT_SEG_H = 10
+export const TL_NODE_EDGE_PAD = 28
+export const TL_VERT_SEG_H = 14
 export const TL_YEAR_BUBBLE_SHIFT_X = 28
 export const TL_NODE_CENTER_X = TL_COL_PAD_X + TL_THUMB / 2
 

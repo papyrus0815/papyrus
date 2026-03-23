@@ -54,11 +54,11 @@ export function formatDate(
 ): string {
   if (!value) return '—'
   const date = typeof value === 'string' ? new Date(value) : value
-  return date.toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  if (Number.isNaN(date.getTime())) return '—'
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}.${m}.${d}`
 }
 
 export const APPOINTMENT_METHOD_LABEL: Record<string, string> = {
