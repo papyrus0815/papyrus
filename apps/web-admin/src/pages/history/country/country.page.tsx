@@ -1096,6 +1096,7 @@ export default function CountryPage() {
           />
 
           <S.DetailPane>
+            <S.DetailPaneScrollBody>
             <AnimatePresence initial={false}>
               {activeTab === 'dashboard' ? (
                 <motion.div
@@ -1224,6 +1225,7 @@ export default function CountryPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </S.DetailPaneScrollBody>
           </S.DetailPane>
         </S.MainGrid>
 

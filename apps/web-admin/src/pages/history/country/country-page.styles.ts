@@ -92,7 +92,9 @@ export const KpiCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -101,7 +103,8 @@ export const KpiCard = styled.div`
           backdrop-filter: blur(16px) saturate(160%);
           -webkit-backdrop-filter: blur(16px) saturate(160%);
           border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35),
+          box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.35),
             inset 0 1px 0 rgba(255, 255, 255, 0.06);
         `
       : css`
@@ -516,7 +519,9 @@ export const MobileTabButton = styled.button<{ $active?: boolean }>`
   border: none;
   border-radius: 12px;
   background: ${({ $active, theme }) =>
-    $active ? theme.colors.gradient.primary : theme.colors.background.secondary};
+    $active
+      ? theme.colors.gradient.primary
+      : theme.colors.background.secondary};
   color: ${({ $active, theme }) =>
     $active ? '#fff' : theme.colors.text.primary};
   font-size: 14px;
@@ -879,10 +884,14 @@ export const OverviewSubTabButton = styled.button<{ $active?: boolean }>`
           }
         `
       : css`
-          background: ${$active ? theme.colors.background.primary : 'transparent'};
+          background: ${$active
+            ? theme.colors.background.primary
+            : 'transparent'};
           color: ${$active ? theme.colors.active : theme.colors.text.secondary};
           font-weight: ${$active ? '600' : '500'};
-          box-shadow: ${$active ? `0 2px 8px ${theme.colors.shadow.sm}` : 'none'};
+          box-shadow: ${$active
+            ? `0 2px 8px ${theme.colors.shadow.sm}`
+            : 'none'};
 
           &:hover {
             color: ${$active ? theme.colors.active : theme.colors.text.primary};
@@ -945,7 +954,9 @@ export const CollapsedListButton = styled.button`
         : theme.colors.background.secondary};
     color: ${({ theme }) => theme.colors.primary};
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.4)' : theme.colors.activeLight};
+      theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.4)'
+        : theme.colors.activeLight};
   }
 `
 
@@ -959,8 +970,19 @@ export const DetailPane = styled.div`
   min-height: 0;
   overflow-y: auto;
   border-left: none;
-
   @media (max-width: 1024px) {
     display: none;
+  }
+`
+
+/** DetailPane 안 스크롤 콘텐츠 — 하단 여백이 스크롤 끝까지 반영됨 */
+export const DetailPaneScrollBody = styled.div`
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 40px;
+  flex: 0 0 auto;
+  min-height: min-content;
+  @media (max-width: 640px) {
+    padding-bottom: 32px;
   }
 `

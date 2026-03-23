@@ -4,6 +4,7 @@
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import {
@@ -548,20 +549,75 @@ export const CabinetsSectionRoot = styled.div`
   gap: 0;
 `
 
-/** 행정부 리스트 상단 — 한 겹 플랫 툴바(중첩 카드 없음) */
+/** 리스트 뷰 루트 — 필터 블록·목록 블록 세로 배치 */
+export const CabListPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 16px;
+  @media (max-width: 640px) {
+    gap: 12px;
+  }
+`
+
+/** 필터·검색·등록 */
+export const CabListToolbarShell = styled.div.attrs({
+  role: 'region',
+  'aria-label': '행정부 검색 및 필터',
+})`
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').btnBg};
+  border: 1px solid
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
+  box-sizing: border-box;
+  @media (max-width: 640px) {
+    border-radius: 12px;
+  }
+`
+
+/** `CabListToolbarShell` 내부 툴바 */
 export const CabListToolbar = styled.div`
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 6px 0 20px;
+  padding: 14px 16px 16px;
   box-sizing: border-box;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#eceff3'};
   @media (max-width: 640px) {
     gap: 12px;
-    padding: 4px 0 16px;
+    padding: 12px 14px 14px;
+  }
+`
+
+/** 타임라인·빈 상태 */
+export const CabListBody = styled.div.attrs({
+  role: 'region',
+  'aria-label': '행정부 목록',
+})`
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').cardBg};
+  border: 1px solid
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+  box-sizing: border-box;
+  padding: 16px 16px 24px;
+  @media (max-width: 640px) {
+    border-radius: 12px;
+    padding: 12px 12px 20px;
   }
 `
 
@@ -571,8 +627,7 @@ export const CabListToolbarHairline = styled.div`
   margin: 0;
   border: 0;
   border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#e8ecf0'};
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
 `
 
 /** 필터 라벨 + 칩 (박스 없음) */
@@ -1701,21 +1756,21 @@ export const EmptyStateBox = styled.div`
   line-height: 1.6;
   text-align: center;
 `
+/** `CabListPanel` 안 빈 상태 — 패널과 이중 카드 느낌 줄이기: 배경 없음·얇은 점선만 */
 export const CabinetEmptyState = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 52px 32px;
-  margin: 12px 16px;
+  padding: 40px 20px;
+  margin: 8px 0 0;
   text-align: center;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
-  border: 1.5px dashed
+  background: transparent;
+  border: 1px dashed
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  border-radius: 16px;
+      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
+  border-radius: 12px;
 `
 export const CabinetEmptyIconWrap = styled.div`
   width: 52px;
@@ -1725,11 +1780,12 @@ export const CabinetEmptyIconWrap = styled.div`
   justify-content: center;
   border-radius: 12px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
+    getCabinetsSectionPalette(theme.mode === 'dark').accentBg};
   border: 1.5px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#c7d2fe'};
-  color: #6366f1;
+      getCabinetsSectionPalette(theme.mode === 'dark').accentBorder};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').accent};
   margin-bottom: 4px;
 `
 export const CabinetEmptyTitle = styled.p`
