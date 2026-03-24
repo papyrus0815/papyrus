@@ -108,6 +108,7 @@ import { SidePanel } from '@/shared/ui/side-panel'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
 import { CabinetDetailChrome } from './cabinet-detail-chrome.widget'
+import { CabinetPoliticalPartiesBlock } from './cabinet-political-parties-block.widget'
 import { CabinetMinisterCards } from './cabinet-minister-cards.widget'
 import {
   TlItem,
@@ -2998,6 +2999,15 @@ export function CabinetsSection({
                                 })()}
                               </CabS.HeadProfileMeta>
                             </CabS.HeadProfileBlock>
+                          )}
+
+                          {!selectedHeadHistoryId && selectedCabinet?.id && (
+                            <CabinetPoliticalPartiesBlock
+                              cabinetId={selectedCabinet.id}
+                              countryId={countryId}
+                              historicalCountryId={historicalCountryId}
+                              isDark={isDark}
+                            />
                           )}
 
                           {!selectedHeadHistoryId && (

@@ -35,3 +35,11 @@ export const TL_ROWS = [
   { line: '#10b981', textColor: '#065f46' },
   { line: '#e11d48', textColor: '#881337' },
 ] as const
+
+/** 행정부–정당 연결 역할 (`CabinetPartyRole`) */
+export const CABINET_PARTY_ROLE_OPTIONS = [
+  { value: 'LEADING', label: '집권·주도' },
+  { value: 'COALITION_PARTNER', label: '연정' },
+  { value: 'SUPPORTING_MINOR', label: '소수 여당·지지' },
+  { value: 'OTHER', label: '기타' },
+] as const

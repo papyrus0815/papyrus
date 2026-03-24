@@ -26,16 +26,27 @@ import { serializeElectionBigInt } from '../election-serialize.util'
 export class CabinetPoliticalPartyController {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * `PersonRepository`의 행정부 접근 규칙과 동일:
+   * - `Cabinet.accountId`가 null이면(레거시·공용) 로그인 사용자는 접근 가능
+   * - 값이 있으면 현재 계정과 일치할 때만 허용
+   */
   private async ensureCabinetAccess(cabinetId: string, req: Request) {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     if (!accountId) throw new UnauthorizedException()
-    const cabinet = await this.prisma.cabinet.findFirst({
-      where: { id: cabinetId, accountId },
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      select: { id: true, accountId: true },
     })
     if (!cabinet) {
       throw new NotFoundException('행정부를 찾을 수 없거나 권한이 없습니다.')
     }
-    return cabinet
+    if (
+      cabinet.accountId != null &&
+      cabinet.accountId !== String(accountId)
+    ) {
+      throw new NotFoundException('행정부를 찾을 수 없거나 권한이 없습니다.')
+    }
   }
 
   @Get(':cabinetId/political-parties')

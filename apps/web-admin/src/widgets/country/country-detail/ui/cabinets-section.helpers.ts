@@ -1,5 +1,7 @@
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
+import { CABINET_PARTY_ROLE_OPTIONS } from './cabinets-section.constants'
+
 export function getPersonName(person: {
   name?: string | null
   surname?: string | null
@@ -142,4 +144,11 @@ export function calcTenureDuration(
   if (months > 0) parts.push(`${months}개월`)
   if (days > 0 || parts.length === 0) parts.push(`${days}일`)
   return parts.join(' ')
+}
+
+export function labelCabinetPartyRole(role: string): string {
+  return (
+    CABINET_PARTY_ROLE_OPTIONS.find((option) => option.value === role)?.label ??
+    role
+  )
 }

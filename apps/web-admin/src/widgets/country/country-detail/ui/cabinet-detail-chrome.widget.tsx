@@ -212,6 +212,12 @@ export function CabinetDetailChrome({
           {!selectedHeadHistoryId && (
             <>
               <CabS.CabDetailAnchorBtn
+                title="이 화면 안에서 집권·연정 정당 블록으로 스크롤합니다"
+                onClick={() => scrollToCabSection('cab-detail-parties')}
+              >
+                정당
+              </CabS.CabDetailAnchorBtn>
+              <CabS.CabDetailAnchorBtn
                 title="이 화면 안에서 취임·퇴임 정보 블록으로 스크롤합니다"
                 onClick={() => scrollToCabSection('cab-detail-tenure')}
               >

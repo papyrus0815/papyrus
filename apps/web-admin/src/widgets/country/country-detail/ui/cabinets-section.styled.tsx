@@ -1755,6 +1755,21 @@ export const HeadActionBtnPrimary = styled.button`
   }
 `
 
+/** 집권·연정 정당 헤더용 — 각료/조약 헤더보다 한 단계 작게 */
+export const CabDetailPartyToolbarBtn = styled(HeadActionBtnPrimary)`
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 4px;
+  border-radius: 8px;
+  box-shadow: none;
+  & svg {
+    width: 12px;
+    height: 12px;
+  }
+`
+
 /* ── 구 배너 스타일 (미사용, 참조용) ── */
 export const ProfileSection = styled.div`
   padding: 20px 0 0;
@@ -1844,6 +1859,160 @@ export const CabMinistersLoadingBox = styled.div`
     getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   background: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').bgSubtle};
+`
+
+/* ── 행정부 상세: 집권·연정 정당 (보조 메타 — 시각적 비중·여백 축소) ── */
+export const CabDetailPartySubSection = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 8px;
+  margin-top: 12px;
+  scroll-margin-top: 12px;
+`
+
+export const CabDetailPartySectionTitle = styled.h4`
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').sectionHeading};
+  letter-spacing: -0.01em;
+`
+
+export const CabDetailPartyCount = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
+  margin-left: 4px;
+  white-space: nowrap;
+`
+
+export const CabDetailPartyLoading = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  padding: 2px 0 0;
+`
+
+export const CabDetailPartyEmpty = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 2px;
+  text-align: center;
+`
+
+export const CabDetailPartyEmptyHint = styled.span`
+  font-size: 11px;
+  line-height: 1.4;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  max-width: 260px;
+`
+
+export const CabDetailPartyEmptyIconWrap = styled.span`
+  display: inline-flex;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').placeholderText};
+  opacity: 0.9;
+`
+
+export const CabDetailPartyList = styled.ul`
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+`
+
+export const CabDetailPartyRow = styled.li`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0 5px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 1px;
+  }
+`
+
+export const CabDetailPartyRowMain = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+`
+
+export const CabDetailPartyName = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const CabDetailPartyRoleChip = styled.span`
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: ${MAIN};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.32)'
+        : 'rgba(99, 102, 241, 0.22)'};
+`
+
+export const CabDetailPartyNotes = styled.span`
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  word-break: break-word;
+`
+
+export const CabDetailPartyRemoveBtn = styled.button.attrs({ type: 'button' })`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+    color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').danger};
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
 `
 
 /* ── 행정부 상세: 체결 조약 목록 ── */
