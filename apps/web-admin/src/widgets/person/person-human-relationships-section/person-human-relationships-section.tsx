@@ -3,6 +3,7 @@
  * 친밀도(일반)와 멘토·스승–제자를 목록·추가 진입에서 분리합니다.
  */
 import { type KeyboardEvent, useCallback, useMemo, useState } from 'react'
+
 import { createPortal } from 'react-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -31,8 +32,8 @@ import {
 } from '@/shared/api/person-human-relationships'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { FormTextarea } from '@/shared/ui/form-input/form-input'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
+import { FormTextarea } from '@/shared/ui/form-input/form-input'
 import {
   PersonRegisterModalBox,
   PersonRegisterModalCloseBtn,
@@ -648,7 +649,7 @@ export function PersonHumanRelationshipsSection({
                                   setNewNote(event.target.value)
                                 }
                                 placeholder="기억해둘 메모 (선택)"
-                                rows={3}
+                                rows={15}
                               />
                             </FieldControl>
                           </FieldRow>
@@ -664,92 +665,93 @@ export function PersonHumanRelationshipsSection({
         document.body,
       )}
       <Root>
-      <HeaderRow>
-        <TitleBlock>
-          <HeaderIconBadge aria-hidden>
-            <FiUsers size={20} strokeWidth={2} />
-          </HeaderIconBadge>
-          <TitleText>
-            <SectionTitle>인간관계</SectionTitle>
-            <SectionDesc>
-              <strong>친밀도(일반)</strong>과 <strong>멘토 · 스승–제자</strong>
-              는 서로 다른 관계로 구분됩니다. 아래에서도 목록이 나뉩니다.
-            </SectionDesc>
-          </TitleText>
-        </TitleBlock>
-        <HeaderActionGroup>
-          <HeaderBtn
-            type="button"
-            onClick={() => openCreateModal('GENERAL')}
-            aria-label="친밀도 일반 관계 추가"
-          >
-            일반 · 친밀도
-          </HeaderBtn>
-          <HeaderBtn
-            type="button"
-            $tone="violet"
-            onClick={() => openCreateModal('MENTOR')}
-            aria-label="멘토 스승 제자 관계 추가"
-          >
-            멘토
-          </HeaderBtn>
-        </HeaderActionGroup>
-      </HeaderRow>
+        <HeaderRow>
+          <TitleBlock>
+            <HeaderIconBadge aria-hidden>
+              <FiUsers size={20} strokeWidth={2} />
+            </HeaderIconBadge>
+            <TitleText>
+              <SectionTitle>인간관계</SectionTitle>
+              <SectionDesc>
+                <strong>친밀도(일반)</strong>과{' '}
+                <strong>멘토 · 스승–제자</strong>는 서로 다른 관계로 구분됩니다.
+                아래에서도 목록이 나뉩니다.
+              </SectionDesc>
+            </TitleText>
+          </TitleBlock>
+          <HeaderActionGroup>
+            <HeaderBtn
+              type="button"
+              onClick={() => openCreateModal('GENERAL')}
+              aria-label="친밀도 일반 관계 추가"
+            >
+              일반 · 친밀도
+            </HeaderBtn>
+            <HeaderBtn
+              type="button"
+              $tone="violet"
+              onClick={() => openCreateModal('MENTOR')}
+              aria-label="멘토 스승 제자 관계 추가"
+            >
+              멘토
+            </HeaderBtn>
+          </HeaderActionGroup>
+        </HeaderRow>
 
-      <RelListStack>
-        <RelSubsection $tone="rose">
-          <RelSubsectionHead>
-            <RelSubsectionTitle>친밀도 · 일반 관계</RelSubsectionTitle>
-            <RelSubsectionCount>
-              {generalRelationships.length}
-            </RelSubsectionCount>
-          </RelSubsectionHead>
-          {generalRelationships.length === 0 ? (
-            <RelSubsectionEmpty>
-              <RelEmptyTitle>등록된 관계가 없습니다</RelEmptyTitle>
-              <RelEmptyText>
-                상단의 <strong>일반 · 친밀도</strong>로 상대와 친밀도를
-                추가할 수 있습니다.
-              </RelEmptyText>
-            </RelSubsectionEmpty>
-          ) : (
-            <RelSubsectionBody>
-              <RelList>
-                {generalRelationships.map((rel) =>
-                  renderRelationshipCard(rel),
-                )}
-              </RelList>
-            </RelSubsectionBody>
-          )}
-        </RelSubsection>
+        <RelListStack>
+          <RelSubsection $tone="rose">
+            <RelSubsectionHead>
+              <RelSubsectionTitle>친밀도 · 일반 관계</RelSubsectionTitle>
+              <RelSubsectionCount>
+                {generalRelationships.length}
+              </RelSubsectionCount>
+            </RelSubsectionHead>
+            {generalRelationships.length === 0 ? (
+              <RelSubsectionEmpty>
+                <RelEmptyTitle>등록된 관계가 없습니다</RelEmptyTitle>
+                <RelEmptyText>
+                  상단의 <strong>일반 · 친밀도</strong>로 상대와 친밀도를 추가할
+                  수 있습니다.
+                </RelEmptyText>
+              </RelSubsectionEmpty>
+            ) : (
+              <RelSubsectionBody>
+                <RelList>
+                  {generalRelationships.map((rel) =>
+                    renderRelationshipCard(rel),
+                  )}
+                </RelList>
+              </RelSubsectionBody>
+            )}
+          </RelSubsection>
 
-        <RelSubsection $tone="violet">
-          <RelSubsectionHead>
-            <RelSubsectionTitle>멘토 · 스승–제자</RelSubsectionTitle>
-            <RelSubsectionCount>
-              {mentorRelationships.length}
-            </RelSubsectionCount>
-          </RelSubsectionHead>
-          {mentorRelationships.length === 0 ? (
-            <RelSubsectionEmpty>
-              <RelEmptyTitle>등록된 관계가 없습니다</RelEmptyTitle>
-              <RelEmptyText>
-                상단의 <strong>멘토</strong>로 스승·제자 관계를 추가할 수
-                있습니다.
-              </RelEmptyText>
-            </RelSubsectionEmpty>
-          ) : (
-            <RelSubsectionBody>
-              <RelList>
-                {mentorRelationships.map((rel) =>
-                  renderRelationshipCard(rel),
-                )}
-              </RelList>
-            </RelSubsectionBody>
-          )}
-        </RelSubsection>
-      </RelListStack>
-    </Root>
+          <RelSubsection $tone="violet">
+            <RelSubsectionHead>
+              <RelSubsectionTitle>멘토 · 스승–제자</RelSubsectionTitle>
+              <RelSubsectionCount>
+                {mentorRelationships.length}
+              </RelSubsectionCount>
+            </RelSubsectionHead>
+            {mentorRelationships.length === 0 ? (
+              <RelSubsectionEmpty>
+                <RelEmptyTitle>등록된 관계가 없습니다</RelEmptyTitle>
+                <RelEmptyText>
+                  상단의 <strong>멘토</strong>로 스승·제자 관계를 추가할 수
+                  있습니다.
+                </RelEmptyText>
+              </RelSubsectionEmpty>
+            ) : (
+              <RelSubsectionBody>
+                <RelList>
+                  {mentorRelationships.map((rel) =>
+                    renderRelationshipCard(rel),
+                  )}
+                </RelList>
+              </RelSubsectionBody>
+            )}
+          </RelSubsection>
+        </RelListStack>
+      </Root>
     </>
   )
 }
@@ -979,9 +981,7 @@ const HeaderBtn = styled.button<{
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#cbd5e1'};
     background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : '#f8fafc'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
   }
 `
 
@@ -1455,13 +1455,13 @@ const RelCard = styled.li<{ $variant: 'mentor' | 'general' }>`
         `}
   box-shadow: inset 3px 0 0 0
     ${({ $variant, theme }) =>
-      $variant === 'mentor'
-        ? theme.mode === 'dark'
-          ? 'rgba(167, 139, 250, 0.45)'
-          : 'rgba(139, 92, 246, 0.32)'
-        : theme.mode === 'dark'
-          ? 'rgba(251, 113, 133, 0.42)'
-          : 'rgba(244, 63, 94, 0.3)'};
+    $variant === 'mentor'
+      ? theme.mode === 'dark'
+        ? 'rgba(167, 139, 250, 0.45)'
+        : 'rgba(139, 92, 246, 0.32)'
+      : theme.mode === 'dark'
+        ? 'rgba(251, 113, 133, 0.42)'
+        : 'rgba(244, 63, 94, 0.3)'};
   &:hover {
     box-shadow:
       inset 3px 0 0 0

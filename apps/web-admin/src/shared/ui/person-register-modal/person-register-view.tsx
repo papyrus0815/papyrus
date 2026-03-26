@@ -12,6 +12,7 @@ import {
   FiChevronDown,
   FiGlobe,
   FiInfo,
+  FiTrash2,
   FiUsers,
 } from 'react-icons/fi'
 import styled, { useTheme } from 'styled-components'
@@ -39,6 +40,7 @@ import {
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { FormInput } from '@/shared/ui/form-input/form-input'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   PlaceSelect as PlaceAutocomplete,
@@ -61,7 +63,6 @@ import {
   TabButton,
   TabNavigation,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
-import { FormInput } from '@/shared/ui/form-input/form-input'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import {
   SelectModal,
@@ -347,7 +348,18 @@ export function PersonRegisterView({
   const [activeTab, setActiveTab] = useState<
     'basic' | 'affiliation' | 'family'
   >('basic')
-  const [thumbnailUploading, setThumbnailUploading] = useState(false)
+  /** 썸네일 파일은 등록·저장 시에만 업로드. 미리보기용 blob URL */
+  const [pendingThumbnailFile, setPendingThumbnailFile] = useState<File | null>(
+    null,
+  )
+  const [thumbnailObjectUrl, setThumbnailObjectUrl] = useState<string | null>(
+    null,
+  )
+  /** 수정 시 서버에 있던 썸네일을 저장 시 제거 */
+  const [thumbnailMarkedForRemoval, setThumbnailMarkedForRemoval] =
+    useState(false)
+  /** 제출 중 이미지 업로드 단계(버튼 문구용) */
+  const [uploadingThumbnail, setUploadingThumbnail] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -394,8 +406,17 @@ export function PersonRegisterView({
   }, [initialCountryId])
 
   useEffect(() => {
+    return () => {
+      if (thumbnailObjectUrl) URL.revokeObjectURL(thumbnailObjectUrl)
+    }
+  }, [thumbnailObjectUrl])
+
+  useEffect(() => {
     if (!editPersonId) return
     let cancelled = false
+    setPendingThumbnailFile(null)
+    setThumbnailObjectUrl(null)
+    setThumbnailMarkedForRemoval(false)
     getPersonDetailById(editPersonId)
       .then((p: any) => {
         if (cancelled || !p) return
@@ -595,24 +616,36 @@ export function PersonRegisterView({
     setShowDeathDateModal(false)
   }
 
-  const handleThumbnailChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
     try {
       validateImageFile(file)
-      setThumbnailUploading(true)
-      const res = await uploadImage(file, 'persons')
-      setProfileImageUrl(res.url)
-      toast.success('썸네일이 등록되었습니다.')
+      setThumbnailObjectUrl(URL.createObjectURL(file))
+      setPendingThumbnailFile(file)
+      setThumbnailMarkedForRemoval(false)
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.',
+        err instanceof Error ? err.message : '이미지를 선택할 수 없습니다.',
       )
-    } finally {
-      setThumbnailUploading(false)
+    }
+  }
+
+  /** 로컬에서만 고른 미업로드 파일이면 취소, 서버/저장 예정 이미지만 있으면 삭제 예약 */
+  const handleRemoveThumbnail = () => {
+    if (pendingThumbnailFile) {
+      setThumbnailObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+      setPendingThumbnailFile(null)
+      setThumbnailMarkedForRemoval(false)
+      return
+    }
+    if (profileImageUrl.trim()) {
+      setProfileImageUrl('')
+      if (isEditMode) setThumbnailMarkedForRemoval(true)
     }
   }
 
@@ -678,7 +711,18 @@ export function PersonRegisterView({
     return true
   }
 
-  const buildPayload = (): CreatePersonInput => {
+  const buildPayload = (
+    uploadedProfileUrl?: string,
+    options?: { clearProfileImage?: boolean },
+  ): CreatePersonInput => {
+    let profileImageField: string | null | undefined
+    if (uploadedProfileUrl !== undefined) {
+      profileImageField = uploadedProfileUrl.trim() || undefined
+    } else if (options?.clearProfileImage && isEditMode) {
+      profileImageField = null
+    } else {
+      profileImageField = profileImageUrl.trim() || undefined
+    }
     const input: CreatePersonInput = {
       name: name.trim(),
       surname: surname.trim() || undefined,
@@ -690,7 +734,10 @@ export function PersonRegisterView({
       middleNameMeaning: middleNameMeaning.trim() || null,
       gender: gender || null,
       biography: biography.trim() || undefined,
-      profileImageUrl: profileImageUrl.trim() || undefined,
+      profileImageUrl:
+        profileImageField === null
+          ? (null as unknown as CreatePersonInput['profileImageUrl'])
+          : profileImageField || undefined,
       regnalName: regnalName.trim() || undefined,
       templeName: templeName.trim() || undefined,
       posthumousName: posthumousName.trim() || undefined,
@@ -742,30 +789,61 @@ export function PersonRegisterView({
     e.preventDefault()
     if (!validate()) return
     setIsSubmitting(true)
+    let profileImageUploadedThisSubmit = false
     try {
+      let uploadedProfileUrl: string | undefined
+      if (pendingThumbnailFile) {
+        setUploadingThumbnail(true)
+        try {
+          const res = await uploadImage(pendingThumbnailFile, 'persons')
+          uploadedProfileUrl = res.url
+          profileImageUploadedThisSubmit = true
+          setProfileImageUrl(res.url)
+          setThumbnailObjectUrl(null)
+          setPendingThumbnailFile(null)
+          setThumbnailMarkedForRemoval(false)
+        } finally {
+          setUploadingThumbnail(false)
+        }
+      }
+      const clearProfileImage =
+        isEditMode &&
+        thumbnailMarkedForRemoval &&
+        uploadedProfileUrl === undefined
+      const payload = buildPayload(uploadedProfileUrl, {
+        clearProfileImage,
+      })
+      const createPayload =
+        payload.profileImageUrl === null
+          ? { ...payload, profileImageUrl: undefined }
+          : payload
       if (isEditMode && editPersonId) {
-        await updatePerson(editPersonId, buildPayload())
+        await updatePerson(editPersonId, payload)
         toast.success('인물 정보가 수정되었습니다.')
         onSuccess?.(editPersonId)
         onCancel()
       } else {
-        const created = await createPerson(buildPayload())
+        const created = await createPerson(createPayload)
         const personId = (created as any)?.id ?? (created as any)?.data?.id
         toast.success('인물이 등록되었습니다.')
         onSuccess?.(personId)
         onCancel()
       }
     } catch (err: any) {
-      setError(
+      const base =
         err?.message ??
-          (isEditMode ? '수정에 실패했습니다.' : '등록에 실패했습니다.'),
-      )
-      toast.error(
-        err?.message ??
-          (isEditMode ? '수정에 실패했습니다.' : '등록에 실패했습니다.'),
-      )
+        (isEditMode ? '수정에 실패했습니다.' : '등록에 실패했습니다.')
+      const extra =
+        profileImageUploadedThisSubmit
+          ? isEditMode
+            ? ' 이미지는 업로드되었습니다. 저장을 다시 시도해 주세요.'
+            : ' 이미지는 업로드되었습니다. 등록을 다시 시도해 주세요.'
+          : ''
+      setError(base + extra)
+      toast.error(base + extra)
     } finally {
       setIsSubmitting(false)
+      setUploadingThumbnail(false)
     }
   }
 
@@ -783,13 +861,15 @@ export function PersonRegisterView({
           form="person-register-form"
           disabled={isSubmitting}
         >
-          {isSubmitting
-            ? isEditMode
-              ? '저장 중…'
-              : '등록 중…'
-            : isEditMode
-              ? '저장'
-              : '등록'}
+          {uploadingThumbnail
+            ? '이미지 업로드 중…'
+            : isSubmitting
+              ? isEditMode
+                ? '저장 중…'
+                : '등록 중…'
+              : isEditMode
+                ? '저장'
+                : '등록'}
         </SubmitButton>
       </FormHeader>
       <form id="person-register-form" onSubmit={handleSubmit}>
@@ -826,15 +906,21 @@ export function PersonRegisterView({
                 <FieldLabel>썸네일</FieldLabel>
                 <FieldControl>
                   <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 12,
+                    }}
                   >
                     <ThumbnailPreview
                       htmlFor="person-thumbnail-upload"
-                      $hasImage={!!profileImageUrl}
+                      $hasImage={!!(thumbnailObjectUrl || profileImageUrl)}
                     >
-                      {profileImageUrl ? (
+                      {thumbnailObjectUrl || profileImageUrl ? (
                         <img
                           src={
+                            thumbnailObjectUrl ||
                             getUploadImageUrl(profileImageUrl) ||
                             profileImageUrl
                           }
@@ -846,22 +932,56 @@ export function PersonRegisterView({
                         </svg>
                       )}
                     </ThumbnailPreview>
-                    {thumbnailUploading && (
-                      <span
+                    <span
+                      id="person-thumbnail-hint"
+                      style={{
+                        fontSize: 12,
+                        color: isDark ? '#94a3b8' : '#64748b',
+                        maxWidth: 220,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {pendingThumbnailFile
+                        ? '저장 시 서버에 업로드됩니다.'
+                        : '등록·저장 시 업로드됩니다.'}
+                    </span>
+                    {(thumbnailObjectUrl || profileImageUrl.trim()) && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveThumbnail}
+                        disabled={isSubmitting}
+                        aria-label={
+                          pendingThumbnailFile
+                            ? '선택한 이미지 취소'
+                            : '썸네일 제거'
+                        }
                         style={{
-                          fontSize: 13,
-                          color: isDark ? '#94a3b8' : '#64748b',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '6px 10px',
+                          fontSize: 12,
+                          color: isDark ? '#f87171' : '#b91c1c',
+                          background: isDark
+                            ? 'rgba(248,113,113,0.12)'
+                            : '#fef2f2',
+                          border: `1px solid ${isDark ? 'rgba(248,113,113,0.35)' : '#fecaca'}`,
+                          borderRadius: 8,
+                          cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                          opacity: isSubmitting ? 0.6 : 1,
                         }}
                       >
-                        업로드 중…
-                      </span>
+                        <FiTrash2 size={14} />
+                        {pendingThumbnailFile ? '선택 취소' : '썸네일 제거'}
+                      </button>
                     )}
                     <ThumbnailUploadInput
                       id="person-thumbnail-upload"
                       type="file"
                       accept="image/*"
                       onChange={handleThumbnailChange}
-                      disabled={thumbnailUploading}
+                      disabled={isSubmitting}
+                      aria-describedby="person-thumbnail-hint"
                     />
                   </div>
                 </FieldControl>

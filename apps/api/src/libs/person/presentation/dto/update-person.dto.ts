@@ -146,11 +146,12 @@ export class UpdatePersonDto {
   biography?: string
 
   /**
-   * 프로필 이미지 URL (선택)
+   * 프로필 이미지 URL (선택). null이면 저장된 썸네일 삭제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  profileImageUrl?: string
+  profileImageUrl?: string | null
 
   /**
    * 이벤트 목록에 생몰년 표시 여부

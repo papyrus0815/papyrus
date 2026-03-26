@@ -105,7 +105,7 @@ export interface UpdatePersonData {
   isAlive?: boolean
   gender?: string
   biography?: string
-  profileImageUrl?: string
+  profileImageUrl?: string | null
   showLifespanOnEventList?: boolean
   // 왕/군주 관련 필드
   regnalName?: string
