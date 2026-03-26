@@ -103,6 +103,7 @@ export const EventCreatePageRefactored: React.FC<
     dbCategories,
     availableMilitaryUnits,
     availableEvents,
+    availablePoliticalParties,
     isLoading: isLoadingEntities,
   } = useFormEntities()
 
@@ -1163,6 +1164,8 @@ export const EventCreatePageRefactored: React.FC<
               availableCountries={availableCountries}
               availableHistoricalCountries={availableHistoricalCountries}
               availableMilitaryUnits={availableMilitaryUnits}
+              availablePoliticalParties={availablePoliticalParties}
+              mentionEntitiesLoading={isLoadingEntities}
               playClickSound={playClickSound}
               eventTitle={title}
               eventStartDate={startDate}

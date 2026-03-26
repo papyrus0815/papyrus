@@ -24,6 +24,9 @@ export interface PoliticalPartyRegisterViewModalProps {
   title: string
   /** 스크롤 영역 상단 안내 (인물 등록 모달 FormDesc와 동일 역할) */
   description?: string
+  /** 모달 박스 min-height (`PersonRegisterModalBox` 기본 560px보다 크게 쓸 때) */
+  modalMinHeight?: string
+  modalMaxWidth?: string
   children: React.ReactNode
 }
 
@@ -32,6 +35,8 @@ export function PoliticalPartyRegisterViewModal({
   onClose,
   title,
   description,
+  modalMinHeight,
+  modalMaxWidth,
   children,
 }: PoliticalPartyRegisterViewModalProps) {
   const content = (
@@ -48,6 +53,8 @@ export function PoliticalPartyRegisterViewModal({
           aria-labelledby="political-party-register-modal-title"
         >
           <PersonRegisterModalBox
+            $minHeight={modalMinHeight}
+            $maxWidth={modalMaxWidth}
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}

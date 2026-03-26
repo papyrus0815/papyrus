@@ -9,6 +9,7 @@ import {
   FiBriefcase,
   FiCoffee,
   FiFileText,
+  FiFlag,
   FiGlobe,
   FiHeart,
   FiHome,
@@ -25,6 +26,7 @@ import {
 } from 'react-icons/fi'
 
 import type { CountryResponseDto } from '@/shared/api/countries'
+import type { PoliticalPartyRow } from '@/shared/api/election'
 import type { EventResponseDto } from '@/shared/api/events'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import type { MilitaryUnit } from '@/shared/api/military-unit'
@@ -60,6 +62,7 @@ export type MentionEntityType =
   | 'document'
   | 'treaty'
   | 'law'
+  | 'politicalParty'
 
 // 통합 멘션 아이템 타입
 export interface MentionItem {
@@ -357,11 +360,26 @@ export const MENTION_TYPE_CONFIG: Record<
     getSubtitle: (item: unknown) =>
       (item as { enactedDate?: string }).enactedDate || undefined,
   },
+  politicalParty: {
+    label: '정당',
+    icon: FiFlag,
+    color: '#0ea5e9',
+    searchFields: ['name', 'shortName'],
+    getName: (item: unknown) => (item as PoliticalPartyRow).name ?? '',
+    getSubtitle: (item: unknown) => {
+      const p = item as PoliticalPartyRow
+      const s = p.shortName?.trim()
+      return s || undefined
+    },
+  },
 }
 
 /**
  * 검색어로 엔티티 검색
  */
+const ENTITY_SEARCH_MATCH_LIMIT = 10 /** 검색어 있을 때 타입당 최대 건수 (기존 5에서 확대) */
+const ENTITY_BROWSE_PER_TYPE = 5 /** 검색어 없을 때 타입당 샘플 (기존 3에서 확대) */
+
 export function searchMentionEntities(
   searchTerm: string,
   entities: {
@@ -372,13 +390,14 @@ export function searchMentionEntities(
     cities?: Array<{ id: string; name: string; [key: string]: unknown }>
     militaryUnits?: MilitaryUnit[]
     dynasties?: Array<{ id: string; name: string; description?: string; [key: string]: unknown }>
+    politicalParties?: PoliticalPartyRow[]
   },
 ): MentionItem[] {
   const results: MentionItem[] = []
   const normalizedSearch = searchTerm.toLowerCase().trim()
   const shouldShowAll = !normalizedSearch
 
-  const push = (type: MentionEntityType, items: unknown[], limit: number) => {
+  const push = (type: MentionEntityType, items: unknown[], browseLimit: number) => {
     ;(items as unknown[])
       .filter((item) =>
         shouldShowAll
@@ -390,7 +409,10 @@ export function searchMentionEntities(
                 .includes(normalizedSearch),
             ),
       )
-      .slice(0, shouldShowAll ? limit : 5)
+      .slice(
+        0,
+        shouldShowAll ? browseLimit : ENTITY_SEARCH_MATCH_LIMIT,
+      )
       .forEach((item) => {
         results.push({
           type,
@@ -404,12 +426,15 @@ export function searchMentionEntities(
       })
   }
 
-  if (entities.persons) push('person', entities.persons, 3)
-  if (entities.events) push('event', entities.events, 3)
-  if (entities.countries) push('country', entities.countries, 3)
-  if (entities.historicalCountries) push('historicalCountry', entities.historicalCountries, 3)
-  if (entities.militaryUnits) push('militaryUnit', entities.militaryUnits, 3)
-  if (entities.dynasties) push('dynasty', entities.dynasties, 3)
+  if (entities.persons) push('person', entities.persons, ENTITY_BROWSE_PER_TYPE)
+  if (entities.events) push('event', entities.events, ENTITY_BROWSE_PER_TYPE)
+  if (entities.countries) push('country', entities.countries, ENTITY_BROWSE_PER_TYPE)
+  if (entities.historicalCountries)
+    push('historicalCountry', entities.historicalCountries, ENTITY_BROWSE_PER_TYPE)
+  if (entities.militaryUnits) push('militaryUnit', entities.militaryUnits, ENTITY_BROWSE_PER_TYPE)
+  if (entities.dynasties) push('dynasty', entities.dynasties, ENTITY_BROWSE_PER_TYPE)
+  if (entities.politicalParties)
+    push('politicalParty', entities.politicalParties, ENTITY_BROWSE_PER_TYPE)
 
   return results
 }

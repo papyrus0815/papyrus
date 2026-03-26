@@ -39,6 +39,8 @@ export type CabinetDetailChromeProps = {
   setAddMinisterCabinet: (cab: unknown) => void
   setPersonSelectOpen: (open: boolean) => void
   handleDeleteCabinet: (cabinetId: string, e: React.MouseEvent) => void
+  /** 행정부 메타·수반 재임 수정 모달 (상단 툴바) */
+  onEditCabinet?: () => void
   scrollToCabSection: (sectionId: string) => void
 }
 
@@ -64,6 +66,7 @@ export function CabinetDetailChrome({
   setAddMinisterCabinet,
   setPersonSelectOpen,
   handleDeleteCabinet,
+  onEditCabinet,
   scrollToCabSection,
 }: CabinetDetailChromeProps) {
   return (
@@ -129,7 +132,10 @@ export function CabinetDetailChrome({
               )
             })()}
         </CabS.CabDetailTopBarRow>
-        <CabS.CabDetailTopBarActions>
+        <CabS.CabDetailTopBarActions
+          role="group"
+          aria-label="행정부·각료 작업"
+        >
           {selectedMinisterId &&
             (() => {
               const minister = (
@@ -185,18 +191,24 @@ export function CabinetDetailChrome({
                       setPersonSelectOpen(true)
                     }}
                   >
-                    <FiEdit2 size={12} />
-                    수정
+                    <FiEdit2 size={14} />
+                    각료 수정
                   </CabS.DetailToolbarGhostBtn>
                 </>
               )
             })()}
+          {!selectedMinisterId && selectedCabinet && onEditCabinet ? (
+            <CabS.DetailToolbarGhostBtn onClick={() => onEditCabinet()}>
+              <FiEdit2 size={14} />
+              행정부 수정
+            </CabS.DetailToolbarGhostBtn>
+          ) : null}
           {!selectedMinisterId && selectedCabinet && (
             <CabS.CabDetailDeleteBtn
               onClick={(e) => handleDeleteCabinet(selectedCabinet.id, e)}
             >
-              <FiTrash2 size={12} />
-              행정부 삭제
+              <FiTrash2 size={14} />
+              삭제
             </CabS.CabDetailDeleteBtn>
           )}
         </CabS.CabDetailTopBarActions>

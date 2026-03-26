@@ -161,9 +161,11 @@ export default function CountryPage() {
   /** 행정조직 탭 전용 URL 여부 (/history/country/:id/government) */
   const isGovernmentUrl =
     /\/history\/country\/[^/]+\/government\/?$/.test(location.pathname)
-  /** 선거·투표 탭 전용 URL 여부 (/history/country/:id/elections) */
+  /** 선거·투표 탭 전용 URL (/history/country/:id/elections, …/elections/party/:partyId) */
   const isElectionsUrl =
-    /\/history\/country\/[^/]+\/elections\/?$/.test(location.pathname)
+    /\/history\/country\/[^/]+\/elections(\/party\/[^/?#]+)?\/?$/.test(
+      location.pathname,
+    )
   /** 대시보드 탭 전용 URL 여부 (/history/country/:id/dashboard) */
   const isDashboardUrl = /\/history\/country\/[^/]+\/dashboard\/?$/.test(location.pathname)
   /** 연대표(전체 사건) 탭 전용 URL 여부 (/history/country/:id/events) */

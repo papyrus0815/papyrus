@@ -3,6 +3,7 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'react-router-dom'
 import { FiCalendar, FiChevronDown, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
 import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
@@ -225,6 +226,7 @@ export interface CountryElectionsSectionProps {
 }
 
 export function CountryElectionsSection({ countryId }: CountryElectionsSectionProps) {
+  const { partyId: electionPartyId } = useParams<{ partyId?: string }>()
   const queryClient = useQueryClient()
   const { data: persons = [] } = usePersons()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -410,8 +412,12 @@ export function CountryElectionsSection({ countryId }: CountryElectionsSectionPr
         </ToolbarPrimaryBtn>
       </SectionHeaderRow>
 
-      <CountryPoliticalPartiesBlock countryId={countryId} />
+      <CountryPoliticalPartiesBlock
+        countryId={countryId}
+        selectedPartyId={electionPartyId ?? null}
+      />
 
+      {!electionPartyId ? (
       <SplitMainRow>
         <ListColumn>
           {listLoading ? (
@@ -493,6 +499,7 @@ export function CountryElectionsSection({ countryId }: CountryElectionsSectionPr
           )}
         </DetailColumn>
       </SplitMainRow>
+      ) : null}
 
       {electionModal && (
         <ElectionFormModal

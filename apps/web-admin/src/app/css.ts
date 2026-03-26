@@ -44,9 +44,9 @@ body {
     color: inherit;
   }
 
+  /* color-scheme: app.tsx에서 document.documentElement와 테마 동기화 (다크에서 네이티브 select 배경 등) */
   html {
     scroll-behavior: smooth;
-    color-scheme: light;
   }
 
 

@@ -6,6 +6,7 @@ import styled from 'styled-components'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { proseHrStyles } from '@/shared/styles/prose-hr'
+import { richTextReadonlyMediaAndTablesCss } from '@/shared/styles/rich-text-readonly-content'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import {
@@ -14,6 +15,7 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { FieldControl } from '@/shared/ui/register-form-layout'
 
 import {
@@ -1284,26 +1286,27 @@ export const CabDetailAnchorBtn = styled.button.attrs({ type: 'button' })`
 export const DetailToolbarGhostBtn = styled.button.attrs({ type: 'button' })`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : '#fff'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  border-radius: 8px;
+      theme.mode === 'dark' ? 'rgba(129, 140, 250, 0.35)' : '#c7d2fe'};
+  border-radius: 10px;
   cursor: pointer;
   transition:
     border-color 0.14s,
-    background 0.14s;
+    background 0.14s,
+    color 0.14s;
   &:hover {
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#94a3b8'};
+      theme.mode === 'dark' ? 'rgba(165, 180, 252, 0.55)' : '#818cf8'};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f8fafc'};
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.18)' : '#eef2ff'};
   }
   &:focus-visible {
     outline: none;
@@ -1314,25 +1317,29 @@ export const DetailToolbarGhostBtn = styled.button.attrs({ type: 'button' })`
 export const CabDetailDeleteBtn = styled.button.attrs({ type: 'button' })`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #ef4444;
-  background: transparent;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#fca5a5' : '#dc2626'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'transparent' : '#fff'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.35)' : '#fecaca'};
-  border-radius: 8px;
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.4)' : '#fecaca'};
+  border-radius: 10px;
   cursor: pointer;
   transition:
     background 0.14s,
-    border-color 0.14s;
+    border-color 0.14s,
+    color 0.14s;
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.15)' : '#fff1f1'};
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.15)' : '#fff1f2'};
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.5)' : '#f87171'};
+      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.55)' : '#f87171'};
+    color: #ef4444;
   }
   &:focus-visible {
     outline: none;
@@ -2812,7 +2819,7 @@ export const HistoryArticleSaveBtn = styled.button<{ $isRegister?: boolean }>`
   }
 `
 /** RichTextEditor 본문(EditorContent)과 동일한 타이포·간격 — 수평선은 hr + .prose-hr 모두 지원 */
-export const HistoryArticleProse = styled.div`
+export const HistoryArticleProse = styled(RichTextReadView)`
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
@@ -2943,13 +2950,7 @@ export const HistoryArticleProse = styled.div`
       border: none;
     }
   }
-  img {
-    max-width: 100%;
-    border-radius: 12px;
-    margin: 10px 0;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
-    display: block;
-  }
+  ${richTextReadonlyMediaAndTablesCss}
 
   .mention,
   .entity-link {

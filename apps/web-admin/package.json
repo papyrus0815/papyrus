@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "cross-env CI=true NODE_OPTIONS=--disable-warning=ExperimentalWarning npx jest --config jest.config.ts --no-watchman"
   },
   "devDependencies": {
     "@types/node": "^24.7.0",

@@ -237,10 +237,13 @@ export class PersonController {
     )
     const children = Array.from(childrenMap.values())
 
-    // BigInt를 문자열로 변환하는 헬퍼 함수
+    // BigInt → 문자열, Date → ISO (그대로 두면 Date가 `{}`로 직렬화되어 클라이언트에서 날짜가 사라짐)
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
       if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) {
+        return Number.isNaN(obj.getTime()) ? null : obj.toISOString()
+      }
       if (Array.isArray(obj)) return obj.map(serializeBigInt)
       if (typeof obj === 'object') {
         const result: any = {}

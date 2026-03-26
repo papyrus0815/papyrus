@@ -1,7 +1,9 @@
 /**
  * 인물 상세 패널 (리스트 페이지 우측 컨텐츠 영역)
  */
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+
+import { useNavigate } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -17,6 +19,7 @@ import {
   FiInfo,
   FiPlus,
   FiUsers,
+  FiX,
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
@@ -25,9 +28,17 @@ import { updatePerson } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import {
+  useRichTextProseClick,
+  useRichTextTooltipEscape,
+  type RichTextDynastyTooltipState,
+  type RichTextTermTooltipState,
+} from '@/shared/hooks/use-rich-text-prose-click'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { proseHrStyles } from '@/shared/styles/prose-hr'
+import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { Z_INDEX } from '@/shared/styles/z-index'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
 import {
@@ -120,6 +131,11 @@ interface PersonDetailPanelProps {
   hideHeaderActions?: boolean
   /** true면 수반 등록·직책 수정 버튼 숨김 (모달에서 정보만 볼 때) */
   embedInModal?: boolean
+  /**
+   * embedInModal일 때 필수에 가깝게: 전기 인물 링크 클릭 시 부모 모달 스택만 갱신
+   * (자식 패널에서 또 모달을 열지 않음)
+   */
+  onLinkedPersonClick?: (personId: string) => void
 }
 
 export function PersonDetailPanel({
@@ -129,15 +145,23 @@ export function PersonDetailPanel({
   closeLabel = '닫기',
   hideHeaderActions = false,
   embedInModal = false,
+  onLinkedPersonClick,
 }: PersonDetailPanelProps) {
   const playClickSound = useClickSound()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
   const [editingBiography, setEditingBiography] = useState(false)
   const [biographyDraft, setBiographyDraft] = useState('')
   const [savingBiography, setSavingBiography] = useState(false)
+  /** 루트 패널: 전기 인물 링크 → 모달 스택(같은 오버레이에서 인물 전환, 중첩 모달 방지) */
+  const [personLinkStack, setPersonLinkStack] = useState<string[]>([])
+  const [termTooltip, setTermTooltip] =
+    useState<RichTextTermTooltipState | null>(null)
+  const [dynastyTooltip, setDynastyTooltip] =
+    useState<RichTextDynastyTooltipState | null>(null)
 
   const {
     data: person,
@@ -148,6 +172,43 @@ export function PersonDetailPanel({
     queryFn: () => getPersonDetailById(personId),
     enabled: !!personId,
   })
+
+  const modalTopId =
+    !embedInModal && personLinkStack.length > 0
+      ? personLinkStack[personLinkStack.length - 1]
+      : null
+
+  const { data: modalTopPerson } = useQuery({
+    queryKey: ['person-detail', modalTopId],
+    queryFn: () => getPersonDetailById(modalTopId!),
+    enabled: !!modalTopId,
+  })
+  const modalTopPersonName = modalTopPerson
+    ? getPersonDisplayName(modalTopPerson)
+    : ''
+
+  const pushPersonToModalStack = useCallback((id: string) => {
+    setPersonLinkStack((prev) => [...prev, id])
+  }, [])
+
+  const { handleProseClick: handleBioProseClick } = useRichTextProseClick({
+    navigate,
+    samePersonId: personId,
+    onPersonClick: embedInModal
+      ? (id) => {
+          onLinkedPersonClick?.(id)
+        }
+      : pushPersonToModalStack,
+    setTermTooltip,
+    setDynastyTooltip,
+  })
+
+  useRichTextTooltipEscape(
+    !!termTooltip,
+    !!dynastyTooltip,
+    () => setTermTooltip(null),
+    () => setDynastyTooltip(null),
+  )
 
   if (isLoading) {
     return (
@@ -259,6 +320,7 @@ export function PersonDetailPanel({
   })()
 
   return (
+    <>
     <PanelRoot
       $embed={embedInModal}
       as={motion.div}
@@ -715,13 +777,10 @@ export function PersonDetailPanel({
                 ) : person.biography ? (
                   <SectionCardBio>
                     <BioProse>
-                      {person.biography.trimStart().startsWith('<') ||
-                      /<br\s*\/?>/i.test(person.biography) ? (
-                        <BioContent
-                          dangerouslySetInnerHTML={{
-                            __html: person.biography,
-                          }}
-                        />
+                      {isLikelyRichTextHtml(person.biography) ? (
+                        <div onClick={handleBioProseClick} role="presentation">
+                          <BioContent html={person.biography ?? ''} />
+                        </div>
                       ) : (
                         <BioText>{person.biography}</BioText>
                       )}
@@ -1025,8 +1084,316 @@ export function PersonDetailPanel({
         </AnimatePresence>
       </TabContentArea>
     </PanelRoot>
+
+      <AnimatePresence>
+        {!embedInModal && personLinkStack.length > 0 && modalTopId && (
+          <BioMentionModalOverlay
+            key="bio-mention-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            onClick={() => setPersonLinkStack([])}
+            role="presentation"
+          >
+            <BioMentionModalPanel
+              key={`bio-mention-${modalTopId}`}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <BioMentionModalHeader>
+                {personLinkStack.length > 1 && (
+                  <BioMentionModalBack
+                    type="button"
+                    onClick={() =>
+                      setPersonLinkStack((stack) => stack.slice(0, -1))
+                    }
+                    aria-label="이전 인물"
+                  >
+                    <FiArrowLeft size={18} strokeWidth={2.25} />
+                    이전
+                  </BioMentionModalBack>
+                )}
+                <BioMentionModalTitle title={modalTopPersonName}>
+                  {modalTopPersonName || '인물'}
+                </BioMentionModalTitle>
+                <BioMentionModalClose
+                  type="button"
+                  onClick={() => setPersonLinkStack([])}
+                  aria-label="닫기"
+                >
+                  <FiX size={20} strokeWidth={2.5} />
+                </BioMentionModalClose>
+              </BioMentionModalHeader>
+              <BioMentionModalBody>
+                <PersonDetailPanel
+                  personId={modalTopId}
+                  onClose={() => setPersonLinkStack([])}
+                  onEdit={() => setPersonLinkStack([])}
+                  hideHeaderActions
+                  embedInModal
+                  onLinkedPersonClick={pushPersonToModalStack}
+                />
+              </BioMentionModalBody>
+            </BioMentionModalPanel>
+          </BioMentionModalOverlay>
+        )}
+      </AnimatePresence>
+
+      {termTooltip && (
+        <BioTermTooltipOverlay
+          role="presentation"
+          onClick={() => setTermTooltip(null)}
+        >
+          <BioTermTooltipPopover
+            $x={termTooltip.x}
+            $y={termTooltip.y}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <strong>{termTooltip.name}</strong>
+            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {termTooltip.description === null
+                ? ' 로딩…'
+                : termTooltip.description || '(설명 없음)'}
+            </span>
+          </BioTermTooltipPopover>
+        </BioTermTooltipOverlay>
+      )}
+
+      {dynastyTooltip && (
+        <BioTermTooltipOverlay
+          role="presentation"
+          onClick={() => setDynastyTooltip(null)}
+        >
+          <BioDynastyTooltipPopover
+            $x={dynastyTooltip.x}
+            $y={dynastyTooltip.y}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <strong>가문 · {dynastyTooltip.name}</strong>
+            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {dynastyTooltip.description === null
+                ? ' 로딩…'
+                : dynastyTooltip.description || '(설명 없음)'}
+            </span>
+          </BioDynastyTooltipPopover>
+        </BioTermTooltipOverlay>
+      )}
+    </>
   )
 }
+
+const BioMentionModalOverlay = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  box-sizing: border-box;
+`
+
+const BioMentionModalPanel = styled(motion.div)`
+  position: relative;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30,30,30,0.92)' : '#ffffff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  border: ${({ theme }) =>
+    theme.mode === 'dark' ? '1px solid rgba(255,255,255,0.1)' : 'none'};
+  border-radius: 24px;
+  box-shadow:
+    0 32px 64px -16px rgba(0, 0, 0, 0.2),
+    0 16px 32px -16px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 740px;
+  height: 68vh;
+  min-height: 400px;
+  max-height: 78vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: ${Z_INDEX.MODAL_CONTENT};
+`
+
+const BioMentionModalHeader = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 16px 20px 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafbfc'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const BioMentionModalBack = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  transition: color 0.15s ease, background 0.15s ease;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+  }
+`
+
+const BioMentionModalTitle = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const BioMentionModalClose = styled.button`
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
+  border-radius: 50%;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+  }
+  &:active {
+    transform: scale(0.97);
+  }
+`
+
+const BioMentionModalBody = styled.div`
+  overflow: auto;
+  flex: 1;
+  min-height: 280px;
+  padding: 20px 24px 32px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
+    border-radius: 4px;
+  }
+`
+
+const BioTermTooltipOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
+  background: transparent;
+`
+
+const BioTermTooltipPopover = styled.div<{ $x: number; $y: number }>`
+  position: fixed;
+  left: ${({ $x }) => $x}px;
+  top: ${({ $y }) => $y}px;
+  transform: translate(12px, 12px);
+  max-width: 360px;
+  padding: 14px 18px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 30, 30, 0.96)' : '#fff'};
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  z-index: ${Z_INDEX.MODAL_CONTENT};
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.primary};
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #0d9488;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
+
+const BioDynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
+  position: fixed;
+  left: ${({ $x }) => $x}px;
+  top: ${({ $y }) => $y}px;
+  transform: translate(12px, 12px);
+  max-width: 360px;
+  padding: 14px 18px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 30, 30, 0.96)' : '#fff'};
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  z-index: ${Z_INDEX.MODAL_CONTENT};
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.primary};
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #6d28d9;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
 
 const PanelRoot = styled.div<{ $embed?: boolean }>`
   display: flex;
@@ -1387,24 +1754,19 @@ const BioProse = styled.div`
   max-width: 680px;
   margin: 0 auto;
   padding: 0 16px;
-  hr,
-  .prose-hr {
-    ${proseHrStyles}
-  }
 `
 
-const BioContent = styled.div`
+/** 전기: 공통 RichTextReadView + 인물 패널만 살짝 좁은 타이포 */
+const BioContent = styled(RichTextReadView)`
   font-size: 14.5px;
   line-height: 1.8;
   word-break: break-word;
-  color: ${({ theme }) => theme.colors.text.primary};
   & p {
     margin: 0 0 0.75em;
   }
   & p:last-child {
     margin-bottom: 0;
   }
-  /* 전역 * { padding:0 } 때문에 목록 들여쓰기가 사라짐 — 에디터(EditorContent)와 동일하게 복원 */
   & ul,
   & ol {
     margin: 8px 0;

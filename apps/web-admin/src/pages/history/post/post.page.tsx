@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -12,9 +13,14 @@ import {
 import { PostForm } from './components/post-form'
 import type { PostItem } from '@/shared/api/post'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
-import { getGlossaryTermById } from '@/shared/api/glossary'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
+import {
+  useRichTextProseClick,
+  useRichTextTooltipEscape,
+  type RichTextTermTooltipState,
+} from '@/shared/hooks/use-rich-text-prose-click'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { useFormEntities } from '@/entities/event-form/model'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
@@ -32,6 +38,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export default function PostPage() {
+  const navigate = useNavigate()
   const { data, isLoading } = usePostList({ pageSize: 100 })
   const deletePost = useDeletePost()
   const updatePost = useUpdatePost()
@@ -40,13 +47,8 @@ export default function PostPage() {
   const [editingContent, setEditingContent] = useState(false)
   const [draftContent, setDraftContent] = useState('')
   const [mentionPersonId, setMentionPersonId] = useState<string | null>(null)
-  const [termTooltip, setTermTooltip] = useState<{
-    termId: string
-    name: string
-    description: string | null
-    x: number
-    y: number
-  } | null>(null)
+  const [termTooltip, setTermTooltip] =
+    useState<RichTextTermTooltipState | null>(null)
   const {
     availablePersons,
     availableCountries,
@@ -54,6 +56,8 @@ export default function PostPage() {
     availableEvents,
     availableMilitaryUnits,
     availableDynasties,
+    availablePoliticalParties,
+    isLoading: entitiesLoading,
     refetch: refetchEntities,
   } = useFormEntities()
   const { data: mentionPerson } = useQuery({
@@ -73,6 +77,7 @@ export default function PostPage() {
       historicalCountries: availableHistoricalCountries,
       militaryUnits: availableMilitaryUnits ?? [],
       dynasties: availableDynasties ?? [],
+      politicalParties: availablePoliticalParties ?? [],
     }),
     [
       availablePersons,
@@ -81,6 +86,7 @@ export default function PostPage() {
       availableHistoricalCountries,
       availableMilitaryUnits,
       availableDynasties,
+      availablePoliticalParties,
     ],
   )
 
@@ -135,8 +141,8 @@ export default function PostPage() {
 
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return '—'
-    const d = new Date(dateStr)
-    return d.toLocaleDateString('ko-KR', {
+    const parsedDate = new Date(dateStr)
+    return parsedDate.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -180,60 +186,18 @@ export default function PostPage() {
     )
   }, [selectedPost, draftContent, updatePost])
 
-  useEffect(() => {
-    if (!termTooltip) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setTermTooltip(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [termTooltip])
+  const { handleProseClick: handleDetailProseClick } = useRichTextProseClick({
+    navigate,
+    onPersonClick: setMentionPersonId,
+    setTermTooltip,
+  })
 
-  const handleDetailProseClick = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement
-    // 인물: .mention (기존) 또는 .entity-link (엔티티 연결)
-    const personMentionEl = target.closest('.mention[data-type="person"]')
-    const personLinkEl = target.closest('.entity-link[data-entity-type="person"]')
-    const personEl = personMentionEl ?? personLinkEl
-    if (personEl) {
-      const id =
-        personEl.getAttribute('data-id') ??
-        personEl.getAttribute('data-entity-id')
-      if (id) {
-        e.preventDefault()
-        setMentionPersonId(id)
-      }
-      return
-    }
-    const termEl = target.closest('.term')
-    if (!termEl) return
-    const termId = termEl.getAttribute('data-term-id')
-    const name =
-      termEl.getAttribute('data-term-name') || termEl.textContent || ''
-    if (termId) {
-      e.preventDefault()
-      setTermTooltip({
-        termId,
-        name,
-        description: null,
-        x: e.clientX,
-        y: e.clientY,
-      })
-      getGlossaryTermById(termId)
-        .then((t) => {
-          setTermTooltip((prev) =>
-            prev ? { ...prev, description: t.description ?? null } : null,
-          )
-        })
-        .catch(() => {
-          setTermTooltip((prev) =>
-            prev
-              ? { ...prev, description: '(설명을 불러올 수 없습니다)' }
-              : null,
-          )
-        })
-    }
-  }, [])
+  useRichTextTooltipEscape(
+    !!termTooltip,
+    false,
+    () => setTermTooltip(null),
+    () => {},
+  )
 
   // 상세 영역: 전체 사건 상세(dashboard-event-detail)와 동일 — 섹션 + 수정 시 인라인 에디터
   if (view === 'detail' && selectedPost) {
@@ -304,6 +268,7 @@ export default function PostPage() {
                   onChange={setDraftContent}
                   placeholder={selectedPost.content?.trim() ? '본문을 수정하세요.' : '본문 내용을 입력하세요.'}
                   mentionEntities={mentionEntities}
+                  mentionEntitiesLoading={entitiesLoading}
                   onEntityModalOpen={refetchEntities}
                   documentScope={selectedPost ? { type: 'post', id: selectedPost.id } : undefined}
                   onImageUpload={async (file) => {
@@ -338,7 +303,10 @@ export default function PostPage() {
             </>
           ) : (
             <div onClick={handleDetailProseClick} role="presentation">
-              <DetailProse dangerouslySetInnerHTML={{ __html: selectedPost.content || '' }} />
+              <PostDetailRichText
+                html={selectedPost.content || ''}
+                hideWhenEmpty={false}
+              />
             </div>
           )}
         </DetailSection>
@@ -380,6 +348,7 @@ export default function PostPage() {
                     onEdit={() => setMentionPersonId(null)}
                     hideHeaderActions
                     embedInModal
+                    onLinkedPersonClick={setMentionPersonId}
                   />
                 </MentionModalBody>
               </MentionModalPanel>
@@ -463,16 +432,18 @@ export default function PostPage() {
           <PillTabButton type="button" $active={statusFilter === ''} onClick={() => setStatusFilter('')}>
             전체
           </PillTabButton>
-          {(['PUBLISHED', 'DRAFT', 'PENDING_REVIEW'] as const).map((s) => (
-            <PillTabButton
-              key={s}
-              type="button"
-              $active={statusFilter === s}
-              onClick={() => setStatusFilter(s)}
-            >
-              {STATUS_LABEL[s] ?? s}
-            </PillTabButton>
-          ))}
+          {(['PUBLISHED', 'DRAFT', 'PENDING_REVIEW'] as const).map(
+            (statusCode) => (
+              <PillTabButton
+                key={statusCode}
+                type="button"
+                $active={statusFilter === statusCode}
+                onClick={() => setStatusFilter(statusCode)}
+              >
+                {STATUS_LABEL[statusCode] ?? statusCode}
+              </PillTabButton>
+            ),
+          )}
         </PillTabNav>
         <KpiBox>
           <div className="kpi-inner">
@@ -749,65 +720,8 @@ const SectionSaveBtn = styled.button<{ $isRegister?: boolean }>`
   }
 `
 
-const DetailProse = styled.div`
+const PostDetailRichText = styled(RichTextReadView)`
   font-family: ${DetailSansFamily};
-  font-size: 15px;
-  line-height: 1.7;
-  color: #111827;
-  white-space: pre-wrap;
-  word-break: break-word;
-
-  p {
-    margin: 0 0 1em;
-  }
-  p:last-child {
-    margin-bottom: 0;
-  }
-  strong {
-    font-weight: 700;
-  }
-  /* 에디터와 동일: 순서 없음/있음 목록 들여쓰기 */
-  ul,
-  ol {
-    margin: 12px 0;
-    padding-left: 28px;
-  }
-  /* 엔티티 연결: 색만으로 구분, 심플하게 */
-  .mention,
-  .entity-link {
-    color: #2563eb;
-    text-decoration: none;
-    cursor: pointer;
-    border-radius: 2px;
-    transition: color 0.15s ease;
-  }
-  .mention:hover,
-  .entity-link:hover {
-    color: #1d4ed8;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-  /* 설명이 달린 문구 — 기본은 색만, 호버 시 구분되게 */
-  .term {
-    color: #0f766e;
-    cursor: pointer;
-    padding: 0 2px;
-    border-radius: 3px;
-    transition: color 0.15s ease, background 0.15s ease;
-  }
-  .term:hover {
-    color: #0d9488;
-    background: rgba(13, 148, 136, 0.1);
-  }
-
-  /* 에디터(RichTextEditor)와 동일한 수평선 */
-  hr {
-    border: none;
-    border-top: 1px solid #e5e7eb;
-    margin: 24px 0;
-    height: 1px;
-    display: block;
-  }
 `
 
 const TermTooltipOverlay = styled.div`

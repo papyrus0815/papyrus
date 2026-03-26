@@ -187,9 +187,11 @@ export default function App() {
   }
 
   // 테마 변경 시 body에 data-theme 속성 + 배경색 동기화
+  // html color-scheme: 네이티브 select/checkbox 등이 다크 테마에서 흰 배경으로 고정되는 것 방지
   useEffect(() => {
     document.body.setAttribute('data-theme', mode)
     document.body.style.backgroundColor = getTheme(mode).colors.background.primary
+    document.documentElement.style.colorScheme = mode === 'dark' ? 'dark' : 'light'
   }, [mode])
 
   // 전역 focus 에러 방지

@@ -31,10 +31,12 @@ const RICH_TEXT_PURIFY_CONFIG: Config = {
     'width',
     'height',
     'alt',
+    'title',
     'src',
     'data-entity-type',
     'data-entity-id',
     'data-entity-name',
+    'data-entity-country-id',
     'data-term-id',
     'data-term-name',
     'data-resizable',
@@ -56,6 +58,7 @@ const RICH_TEXT_PURIFY_CONFIG: Config = {
   ALLOW_ARIA_ATTR: true,
 }
 
+/** 에디터·붙여넣기·읽기 전용 뷰 공통 — 뷰에서도 동일하게 호출해 마크업을 허용 목록으로 맞춤 */
 export function sanitizeRichTextHtml(html: string): string {
   const trimmed = html?.trim() ?? ''
   if (trimmed === '') return ''

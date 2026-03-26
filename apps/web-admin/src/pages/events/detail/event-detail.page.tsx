@@ -21,6 +21,7 @@ import styled from 'styled-components'
 
 import { getEventById } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
 import { EventHierarchyNode, EventMapMarker } from '../create/events.types'
 import type { HistoricalEvent } from '../create/events.types'
@@ -369,19 +370,11 @@ export const EventDetailPage: React.FC = () => {
           <NarrativeGrid id="context">
             <NarrativeCard>
               <CardTitle>배경 (Event.background)</CardTitle>
-              <CardBody
-                dangerouslySetInnerHTML={{
-                  __html: selectedEvent.background || '',
-                }}
-              />
+              <NarrativeRichText html={selectedEvent.background || ''} />
             </NarrativeCard>
             <NarrativeCard>
               <CardTitle>여파 (Event.aftermath)</CardTitle>
-              <CardBody
-                dangerouslySetInnerHTML={{
-                  __html: selectedEvent.aftermath || '',
-                }}
-              />
+              <NarrativeRichText html={selectedEvent.aftermath || ''} />
             </NarrativeCard>
           </NarrativeGrid>
 
@@ -1298,22 +1291,11 @@ const CardTitle = styled.h3`
   font-size: 16px;
 `
 
-const CardBody = styled.div`
+/** 배경/여파 — RichTextReadView + 이벤트 상세 페이지 톤 */
+const NarrativeRichText = styled(RichTextReadView)`
   margin: 0;
   line-height: 1.6;
   color: #4a4f5f;
-
-  /* Quill 에디터 스타일 */
-  img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    margin: 12px 0;
-  }
-
-  p {
-    margin: 0 0 12px 0;
-  }
 
   h1,
   h2,
@@ -1322,37 +1304,8 @@ const CardBody = styled.div`
     font-weight: 600;
   }
 
-  ul,
-  ol {
-    margin: 8px 0;
-    padding-left: 1.5em;
-    list-style-position: outside;
-  }
-  ul {
-    list-style-type: disc;
-  }
-  ol {
-    list-style-type: decimal;
-  }
-  li {
-    margin: 0.25em 0;
-    display: list-item;
-  }
   li p {
     margin: 0;
-  }
-
-  a {
-    color: #6366f1;
-    text-decoration: underline;
-  }
-
-  blockquote {
-    border-left: 4px solid #6366f1;
-    padding-left: 16px;
-    margin: 12px 0;
-    color: #64748b;
-    font-style: italic;
   }
 `
 

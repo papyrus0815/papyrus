@@ -4,13 +4,19 @@
  * 프로젝트 디자인 시스템에 맞춘 커스텀 스타일
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'react-hot-toast'
 
 import { createPortal } from 'react-dom'
 
 import {
   FiBold,
+  FiChevronDown,
+  FiChevronLeft,
+  FiChevronRight,
+  FiChevronUp,
   FiCode,
   FiDroplet,
+  FiGrid,
   FiImage,
   FiItalic,
   FiLink,
@@ -18,11 +24,16 @@ import {
   FiMessageSquare,
   FiMinus,
   FiMoreHorizontal,
+  FiTrash2,
   FiType,
   FiX,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import {
+  fetchEntityLinkSearch,
+  mapEntityLinkRowsToMentionItems,
+} from '@/shared/api/entity-link-search'
 import {
   type GlossaryTermDto,
   createGlossaryTerm,
@@ -50,6 +61,8 @@ export interface MentionExtensionProps {
   historicalCountries?: unknown[]
   militaryUnits?: unknown[]
   dynasties?: unknown[]
+  /** 정당 (선거·투표 등록 정당) — 국가 상세 정당 상세로 이동 시 `countryId` 필요 */
+  politicalParties?: unknown[]
 }
 
 /* 행정조직 폼 스타일: 테두리 #e5e7eb, 포커스 인디고 */
@@ -116,13 +129,14 @@ const ToolbarButton = styled.button.attrs({ type: 'button' })<{
   position: relative;
   user-select: none;
 
-  &:hover {
+  &:not(:disabled):hover {
     background: ${({ $active }) =>
       $active ? '#4338ca' : 'rgba(79, 70, 229, 0.1)'};
     color: ${({ $active }) => ($active ? '#fff' : '#4f46e5')};
   }
 
-  &:hover::after {
+  /* 비활성(예: onImageUpload 없음)일 때는 호버 툴팁·배경 없음 — 금지 커서만으로 혼동 줄임 */
+  &:not(:disabled):hover::after {
     content: attr(title);
     position: absolute;
     bottom: calc(100% + 8px);
@@ -527,6 +541,37 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     }
   }
 
+  /* iOS 메모 스타일 표 */
+  table.rich-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 14px;
+    line-height: 1.45;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.14)' : '#e5e7eb'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 1px 0 rgba(255,255,255,0.06) inset'
+        : '0 1px 2px rgba(15, 23, 42, 0.04)'};
+  }
+
+  table.rich-table td,
+  table.rich-table th {
+    border: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e8e8ed'};
+    padding: 8px 10px;
+    min-width: 40px;
+    min-height: 36px;
+    vertical-align: top;
+  }
+
   .entity-link {
     background: linear-gradient(
       135deg,
@@ -578,14 +623,14 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   }
 `
 
-// 이미지 설명 입력 모달 스타일
-const ImageCaptionModalOverlay = styled.div<{ $visible: boolean }>`
+// 이미지 설명 입력 모달 스타일 (body 포털 — EditorContainer의 backdrop-filter가 fixed 기준을 바꾸는 것 방지)
+const ImageCaptionModalOverlay = styled.div`
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
-  z-index: 2000;
-  display: ${({ $visible }) => ($visible ? 'flex' : 'none')};
+  z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY};
+  display: flex;
   align-items: center;
   justify-content: center;
 `
@@ -770,6 +815,63 @@ const ColorPickerInputWrapper = styled.div`
   border-top: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
+const TableInsertPopover = styled.div`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 30, 30, 0.96)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e5e7eb'};
+  border-radius: 14px;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 12px 14px 10px;
+  min-width: auto;
+`
+
+const TableInsertGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(8, 12px);
+  grid-template-rows: repeat(8, 12px);
+  gap: 3px;
+  margin-bottom: 8px;
+`
+
+const TableInsertCell = styled.button.attrs({ type: 'button' })<{
+  $inSelection: boolean
+}>`
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background 0.1s ease,
+    transform 0.1s ease;
+  background: ${({ $inSelection, theme }) =>
+    $inSelection
+      ? theme.mode === 'dark'
+        ? 'rgba(249, 115, 22, 0.85)'
+        : '#f97316'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.12)'
+        : '#e8e8ed'};
+
+  &:hover {
+    transform: scale(1.08);
+    filter: brightness(1.05);
+  }
+`
+
+const TableInsertHint = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-align: center;
+  letter-spacing: 0.02em;
+`
+
 const ContextMenu = styled.div<{
   $visible: boolean
   $top: number
@@ -952,25 +1054,25 @@ const EntityLinkResultsList = styled.div`
   overflow-y: auto;
 `
 
-const EntityLinkModalOverlay = styled.div<{ $visible: boolean }>`
+const EntityLinkModalOverlay = styled.div`
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
-  z-index: 2000;
-  display: ${({ $visible }) => ($visible ? 'flex' : 'none')};
+  z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY};
+  display: flex;
   align-items: center;
   justify-content: center;
 `
 
 /* 용어 연결 모달 (문구·관직 설명) */
-const TermLinkModalOverlay = styled.div<{ $visible: boolean }>`
+const TermLinkModalOverlay = styled.div`
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
-  z-index: 2000;
-  display: ${({ $visible }) => ($visible ? 'flex' : 'none')};
+  z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY};
+  display: flex;
   align-items: center;
   justify-content: center;
 `
@@ -1128,6 +1230,155 @@ export type DocumentScope =
   | { type: 'post'; id: string }
   | { type: 'event'; id: string }
 
+const TABLE_GRID_MAX = 8
+
+function getTableCellFromSelection(editor: HTMLElement): HTMLTableCellElement | null {
+  const sel = window.getSelection()
+  if (!sel?.rangeCount) return null
+  const range = sel.getRangeAt(0)
+  let node: Node | null = range.commonAncestorContainer
+  if (node.nodeType === Node.TEXT_NODE) node = node.parentElement
+  while (node && node !== editor) {
+    const name = node.nodeName
+    if (name === 'TD' || name === 'TH') return node as HTMLTableCellElement
+    node = node.parentNode
+  }
+  return null
+}
+
+function focusTableCell(cell: HTMLTableCellElement) {
+  if (!cell.textContent?.trim() && cell.childNodes.length === 0) {
+    cell.innerHTML = '<br>'
+  }
+  const range = document.createRange()
+  const first = cell.firstChild
+  if (first) {
+    range.setStart(first, 0)
+  } else {
+    range.setStart(cell, 0)
+  }
+  range.collapse(true)
+  const sel = window.getSelection()
+  if (sel) {
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }
+}
+
+function getOrderedTableCells(table: HTMLTableElement): HTMLTableCellElement[] {
+  const out: HTMLTableCellElement[] = []
+  table.querySelectorAll('tr').forEach((tableRow) => {
+    Array.from(tableRow.cells).forEach((tableCell) => out.push(tableCell))
+  })
+  return out
+}
+
+function insertRichTableAtSelection(
+  editor: HTMLElement,
+  rows: number,
+  cols: number,
+): void {
+  const table = document.createElement('table')
+  table.className = 'rich-table'
+  const tbody = document.createElement('tbody')
+  for (let rowIdx = 0; rowIdx < rows; rowIdx++) {
+    const tr = document.createElement('tr')
+    for (let colIdx = 0; colIdx < cols; colIdx++) {
+      const td = document.createElement('td')
+      td.innerHTML = '<br>'
+      tr.appendChild(td)
+    }
+    tbody.appendChild(tr)
+  }
+  table.appendChild(tbody)
+  const p = document.createElement('p')
+  p.innerHTML = '<br>'
+  const sel = window.getSelection()
+  if (!sel?.rangeCount) {
+    editor.appendChild(table)
+    table.after(p)
+    const first = table.querySelector('td')
+    if (first) focusTableCell(first as HTMLTableCellElement)
+    return
+  }
+  const range = sel.getRangeAt(0)
+  if (!editor.contains(range.commonAncestorContainer)) {
+    editor.appendChild(table)
+    table.after(p)
+    const first = table.querySelector('td')
+    if (first) focusTableCell(first as HTMLTableCellElement)
+    return
+  }
+  range.deleteContents()
+  range.insertNode(table)
+  table.after(p)
+  const firstTd = table.querySelector('td')
+  if (firstTd) focusTableCell(firstTd as HTMLTableCellElement)
+}
+
+function richTableAddRowAbove(cell: HTMLTableCellElement) {
+  const tr = cell.parentElement as HTMLTableRowElement
+  const colCount = tr.cells.length
+  const newTr = document.createElement('tr')
+  for (let colIdx = 0; colIdx < colCount; colIdx++) {
+    const td = document.createElement('td')
+    td.innerHTML = '<br>'
+    newTr.appendChild(td)
+  }
+  tr.before(newTr)
+}
+
+function richTableAddRowBelow(cell: HTMLTableCellElement) {
+  const tr = cell.parentElement as HTMLTableRowElement
+  const colCount = tr.cells.length
+  const newTr = document.createElement('tr')
+  for (let colIdx = 0; colIdx < colCount; colIdx++) {
+    const td = document.createElement('td')
+    td.innerHTML = '<br>'
+    newTr.appendChild(td)
+  }
+  tr.after(newTr)
+}
+
+function richTableAddColumnLeft(cell: HTMLTableCellElement) {
+  const idx = cell.cellIndex
+  const table = cell.closest('table')!
+  table.querySelectorAll('tr').forEach((tableRow) => {
+    const td = document.createElement('td')
+    td.innerHTML = '<br>'
+    const ref = tableRow.cells[idx]
+    if (ref) ref.before(td)
+  })
+}
+
+function richTableAddColumnRight(cell: HTMLTableCellElement) {
+  const idx = cell.cellIndex
+  const table = cell.closest('table')!
+  table.querySelectorAll('tr').forEach((tableRow) => {
+    const td = document.createElement('td')
+    td.innerHTML = '<br>'
+    const ref = tableRow.cells[idx]
+    if (ref) ref.after(td)
+  })
+}
+
+function richTableDeleteRow(cell: HTMLTableCellElement) {
+  const tr = cell.parentElement as HTMLTableRowElement
+  const tbody = tr.parentElement!
+  if (tbody.querySelectorAll('tr').length <= 1) return
+  tr.remove()
+}
+
+function richTableDeleteColumn(cell: HTMLTableCellElement) {
+  const idx = cell.cellIndex
+  const table = cell.closest('table')!
+  const firstRow = table.querySelector('tr')
+  if (!firstRow || firstRow.cells.length <= 1) return
+  table.querySelectorAll('tr').forEach((tableRow) => {
+    if (tableRow.cells[idx]) tableRow.deleteCell(idx)
+  })
+}
+
 interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
@@ -1136,6 +1387,15 @@ interface RichTextEditorProps {
   mentionEntities?: MentionExtensionProps
   /** 엔티티 연결 모달을 열 때 호출 (부모에서 엔티티 목록을 서버에서 다시 불러올 때 사용) */
   onEntityModalOpen?: () => void
+  /** `useFormEntities` 등에서 목록 로딩 중이면 모달에 안내 표시 */
+  mentionEntitiesLoading?: boolean
+  /**
+   * true(기본): `GET /entity-link-search`로 서버 검색(디바운스). 실패 시 `mentionEntities`로 폴백.
+   * false: 예전처럼 클라이언트 목록만 사용.
+   */
+  entityLinkRemote?: boolean
+  /** 정당 검색 한정(선거 탭 등) — 서버에 `countryId`로 전달 */
+  entityLinkCountryId?: string
   title?: string
   onTitleChange?: (title: string) => void
   titlePlaceholder?: string
@@ -1151,6 +1411,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   onImageUpload,
   mentionEntities,
   onEntityModalOpen,
+  mentionEntitiesLoading = false,
+  entityLinkRemote = true,
+  entityLinkCountryId,
   title = '',
   onTitleChange,
   titlePlaceholder = '제목 없음',
@@ -1171,6 +1434,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [colorPickerVisible, setColorPickerVisible] = useState(false)
   const colorPickerButtonRef = useRef<HTMLButtonElement>(null)
 
+  /** iOS 메모 스타일 표: 격자 삽입 + 셀 안 커서 감지 */
+  const [tablePickerVisible, setTablePickerVisible] = useState(false)
+  const [tablePickerHover, setTablePickerHover] = useState({ row: 0, col: 0 })
+  const tablePickerButtonRef = useRef<HTMLButtonElement>(null)
+  const [cursorInTable, setCursorInTable] = useState(false)
+
   // title prop이 변경되면 내부 상태 업데이트
   useEffect(() => {
     setInternalTitle(title)
@@ -1180,6 +1449,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [entityLinkModalVisible, setEntityLinkModalVisible] = useState(false)
   const [entityLinkQuery, setEntityLinkQuery] = useState('')
   const [entityLinkResults, setEntityLinkResults] = useState<MentionItem[]>([])
+  const [entityLinkRemoteLoading, setEntityLinkRemoteLoading] =
+    useState(false)
   const [entityLinkSelectedIndex, setEntityLinkSelectedIndex] = useState(0)
   const [selectedTextRange, setSelectedTextRange] = useState<Range | null>(null)
   const [selectedText, setSelectedText] = useState('')
@@ -1462,7 +1733,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!editorRef.current) return
 
     const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return
+    if (!selection || selection.rangeCount === 0) {
+      setCursorInTable(false)
+      return
+    }
 
     const range = selection.getRangeAt(0)
     const node = range.commonAncestorContainer
@@ -1475,7 +1749,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       element = node as HTMLElement
     }
 
-    if (!element) return
+    if (!element) {
+      setCursorInTable(false)
+      return
+    }
 
     // Bold 체크
     setIsBold(
@@ -1528,6 +1805,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     } else {
       setCurrentColor('#000000')
     }
+
+    setCursorInTable(
+      editorRef.current.contains(element) &&
+        element.closest('td, th') !== null,
+    )
   }, [])
 
   // 포맷 적용
@@ -1557,7 +1839,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         : (node as HTMLElement)
     if (el)
       el.scrollIntoView({
-        block: 'center',
+        /* center면 긴 본문에서 표 삽입·편집 시 뷰가 가운데로 점프함 — 필요한 만큼만 스크롤 */
+        block: 'nearest',
         inline: 'nearest',
         behavior: 'smooth',
       })
@@ -1573,26 +1856,48 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     requestAnimationFrame(scrollCursorIntoView)
   }, [onChange, updateFormatState, scrollCursorIntoView])
 
-  // 붙여넣기 시 위아래 간격 정규화 (복사한 글자 줄간격 맞추기)
+  // 붙여넣기: 외부 웹 등에서 복사한 HTML 서식은 넣지 않고 평문만 삽입 (같은 에디터 내 복사도 동일)
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
       const clipboardData = e.clipboardData
-      const html = clipboardData.getData('text/html')
-      if (html) {
-        e.preventDefault()
-        const temp = document.createElement('div')
-        temp.innerHTML = html
-        // 블록 요소에서 style 제거 → 에디터 CSS(line-height, margin)가 적용되도록
-        const blockSelectors = 'p, div, h1, h2, h3, h4, li, blockquote'
-        temp.querySelectorAll(blockSelectors).forEach((el) => {
-          const span = el as HTMLElement
-          span.removeAttribute('style')
-        })
-        const cleanedHtml = sanitizeRichTextHtml(temp.innerHTML)
-        document.execCommand('insertHTML', false, cleanedHtml)
-        handleContentChange()
+      // 클립보드에 파일(스크린샷·이미지 등)이 있으면 브라우저 기본 붙여넣기 유지
+      if (clipboardData.files && clipboardData.files.length > 0) {
+        return
       }
-      // text/html 없으면 기본 동작(텍스트 붙여넣기) 유지
+
+      let text = clipboardData.getData('text/plain')
+      if (text == null) text = ''
+      if (!text.trim()) {
+        const html = clipboardData.getData('text/html')
+        if (html) {
+          const temp = document.createElement('div')
+          temp.innerHTML = html
+          text = temp.textContent || temp.innerText || ''
+        }
+      }
+
+      e.preventDefault()
+      if (!text) {
+        handleContentChange()
+        return
+      }
+
+      try {
+        document.execCommand('insertText', false, text)
+      } catch {
+        const sel = window.getSelection()
+        if (sel?.rangeCount) {
+          const range = sel.getRangeAt(0)
+          range.deleteContents()
+          const node = document.createTextNode(text)
+          range.insertNode(node)
+          range.setStartAfter(node)
+          range.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(range)
+        }
+      }
+      handleContentChange()
     },
     [handleContentChange],
   )
@@ -1600,7 +1905,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // 키 입력 핸들러 (Tab 들여쓰기, Ctrl+B 등)
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      // Tab: 목록 안에서 들여쓰기 / Shift+Tab: 내어쓰기
+      // Tab: 표 안에서는 셀 이동(마지막 셀에서 Tab → 행 추가), 목록 안에서는 들여쓰기
       if (e.key === 'Tab') {
         const native = e.nativeEvent as KeyboardEvent
         if (native.isComposing) return
@@ -1612,8 +1917,41 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         let startNode: Node | null = range.startContainer
         if (startNode.nodeType === Node.TEXT_NODE)
           startNode = startNode.parentElement
+        const cell =
+          startNode instanceof Element
+            ? (startNode.closest('td, th') as HTMLTableCellElement | null)
+            : null
+
+        if (cell && root.contains(cell)) {
+          e.preventDefault()
+          e.stopPropagation()
+          const table = cell.closest('table') as HTMLTableElement | null
+          if (!table) return
+          const cellsOrdered = getOrderedTableCells(table)
+          const idx = cellsOrdered.indexOf(cell)
+          if (idx < 0) return
+          if (e.shiftKey) {
+            if (idx > 0) focusTableCell(cellsOrdered[idx - 1])
+          } else if (idx < cellsOrdered.length - 1) {
+            focusTableCell(cellsOrdered[idx + 1])
+          } else {
+            richTableAddRowBelow(cell)
+            const newTr = cell.parentElement?.nextElementSibling as
+              | HTMLTableRowElement
+              | undefined
+            const firstCell = newTr?.cells[0]
+            if (firstCell) focusTableCell(firstCell as HTMLTableCellElement)
+          }
+          handleContentChange()
+          updateFormatState()
+          return
+        }
+
+        let listNode: Node | null = range.startContainer
+        if (listNode.nodeType === Node.TEXT_NODE)
+          listNode = listNode.parentElement
         const listItem =
-          startNode instanceof Element ? startNode.closest('li') : null
+          listNode instanceof Element ? listNode.closest('li') : null
 
         if (
           !listItem ||
@@ -1743,10 +2081,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!pendingImageUrl || !editorRef.current) return
 
     const caption = imageCaptionInput.trim()
+    const editor = editorRef.current
+    editor.focus()
 
-    editorRef.current.focus()
-
-    // 이미지 컨테이너 생성
+    // 이미지 컨테이너 생성 (직렬화 후 insertHTML로 삽입 — insertNode는 <p> 안에 figure+figcaption
+    // 을 넣을 때 WebKit에서 DOM이 깨지고, 이후 innerHTML/sanitize 시 이미지가 사라질 수 있음)
     const imageContainer = document.createElement('figure')
     imageContainer.style.margin = '10px 0'
     imageContainer.style.textAlign = 'center'
@@ -1759,16 +2098,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     img.style.cursor = 'pointer'
     img.style.userSelect = 'none'
     img.setAttribute('contenteditable', 'false')
-    img.setAttribute('draggable', 'false') // 드래그 앤 드롭 방지
-
-    // 이미지 드래그 이벤트 방지
-    img.addEventListener('dragstart', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      return false
-    })
-
-    // 이미지 크기 조절을 위한 속성 추가
+    img.setAttribute('draggable', 'false')
     img.setAttribute('data-resizable', 'true')
     img.style.maxWidth = '100%'
     img.style.height = 'auto'
@@ -1777,7 +2107,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     imageContainer.appendChild(img)
 
-    // 설명이 있으면 추가
     if (caption) {
       const figcaption = document.createElement('figcaption')
       figcaption.style.marginTop = '8px'
@@ -1789,79 +2118,81 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       imageContainer.appendChild(figcaption)
     }
 
-    // 저장된 커서 위치에 이미지 삽입
-    let insertRange: Range | null = null
+    const holder = document.createElement('div')
+    holder.appendChild(imageContainer)
+    const sanitized = sanitizeRichTextHtml(holder.innerHTML)
+    if (!sanitized.trim()) {
+      console.warn('RichTextEditor: image HTML was removed by sanitize')
+      return
+    }
 
-    if (savedImageInsertRangeRef.current) {
-      // 저장된 커서 위치 사용
-      insertRange = savedImageInsertRangeRef.current
-    } else {
-      // 저장된 위치가 없으면 현재 커서 위치 사용
+    const savedRange = savedImageInsertRangeRef.current
+    let insertRange: Range | null = null
+    if (savedRange) {
+      try {
+        insertRange = savedRange.cloneRange()
+      } catch {
+        insertRange = null
+      }
+    }
+    if (!insertRange) {
       const selection = window.getSelection()
       if (selection && selection.rangeCount > 0) {
-        insertRange = selection.getRangeAt(0)
+        try {
+          insertRange = selection.getRangeAt(0).cloneRange()
+        } catch {
+          insertRange = null
+        }
       }
     }
 
-    if (insertRange) {
-      // 저장된 또는 현재 커서 위치에 이미지 삽입
-      try {
-        insertRange.insertNode(imageContainer)
+    savedImageInsertRangeRef.current = null
 
-        // 이미지 컨테이너 뒤에 빈 텍스트 노드 추가 (커서 위치용)
-        const spaceText = document.createTextNode('\u200B') // Zero-width space
-        const parent = imageContainer.parentNode
-        if (parent) {
-          parent.insertBefore(spaceText, imageContainer.nextSibling)
-        }
-
-        // 커서를 빈 텍스트 노드로 이동
-        const newRange = document.createRange()
-        newRange.setStart(spaceText, 0)
-        newRange.collapse(true)
-        const selection = window.getSelection()
-        if (selection) {
-          selection.removeAllRanges()
-          selection.addRange(newRange)
-        }
-      } catch {
-        // Range가 유효하지 않으면 에디터 끝에 추가
-        editorRef.current.appendChild(imageContainer)
-        const spaceText = document.createTextNode('\u200B')
-        editorRef.current.appendChild(spaceText)
-        const newRange = document.createRange()
-        newRange.setStart(spaceText, 0)
-        newRange.collapse(true)
-        const selection = window.getSelection()
-        if (selection) {
-          selection.removeAllRanges()
-          selection.addRange(newRange)
-        }
-      }
-    } else {
-      // 선택이 없으면 에디터 끝에 추가
-      editorRef.current.appendChild(imageContainer)
-
-      // 이미지 컨테이너 뒤에 빈 텍스트 노드 추가
+    const moveCaretAfter = (node: Node) => {
       const spaceText = document.createTextNode('\u200B')
-      editorRef.current.appendChild(spaceText)
-
-      // 커서를 빈 텍스트 노드로 이동
+      node.parentNode?.insertBefore(spaceText, node.nextSibling)
       const newRange = document.createRange()
       newRange.setStart(spaceText, 0)
       newRange.collapse(true)
-      const newSelection = window.getSelection()
-      if (newSelection) {
-        newSelection.removeAllRanges()
-        newSelection.addRange(newRange)
+      const selection = window.getSelection()
+      if (selection) {
+        selection.removeAllRanges()
+        selection.addRange(newRange)
       }
     }
 
-    // 저장된 커서 위치 초기화
-    savedImageInsertRangeRef.current = null
+    const figureCountBefore = editor.querySelectorAll('figure').length
 
-    // 모든 포맷 제거 (이탤리체, 정렬 등)
-    document.execCommand('removeFormat', false)
+    try {
+      if (
+        insertRange &&
+        editor.contains(insertRange.commonAncestorContainer)
+      ) {
+        const selection = window.getSelection()
+        if (selection) {
+          selection.removeAllRanges()
+          selection.addRange(insertRange)
+        }
+        const ok = document.execCommand('insertHTML', false, sanitized)
+        if (!ok) {
+          editor.insertAdjacentHTML('beforeend', sanitized)
+        }
+        const figuresAfter = editor.querySelectorAll('figure')
+        const newFig = figuresAfter[figureCountBefore]
+        if (newFig && editor.contains(newFig)) moveCaretAfter(newFig)
+      } else {
+        editor.insertAdjacentHTML('beforeend', sanitized)
+        const figuresAfter = editor.querySelectorAll('figure')
+        const newFig = figuresAfter[figureCountBefore]
+        if (newFig) moveCaretAfter(newFig)
+      }
+    } catch (err) {
+      console.warn('RichTextEditor: insertHTML failed, appending', err)
+      editor.insertAdjacentHTML('beforeend', sanitized)
+      const figuresAfter = editor.querySelectorAll('figure')
+      const newFig = figuresAfter[figureCountBefore]
+      if (newFig) moveCaretAfter(newFig)
+    }
 
     // 포맷 상태 업데이트
     updateFormatState()
@@ -1876,7 +2207,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (editorRef.current) {
       editorRef.current.focus()
     }
-  }, [pendingImageUrl, imageCaptionInput, handleContentChange])
+  }, [pendingImageUrl, imageCaptionInput, handleContentChange, updateFormatState])
 
   // 이미지 설명 모달 닫기
   const handleImageCaptionCancel = useCallback(() => {
@@ -1885,14 +2216,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     setPendingImageUrl(null)
   }, [])
 
-  // 엔티티 링크 검색
-  const searchEntityLinks = useCallback(
+  const entityLinkUsable = Boolean(mentionEntities) || entityLinkRemote
+
+  /** 클라이언트에 넘긴 목록만으로 검색 (폴백·빈 검색어 샘플) */
+  const runClientEntitySearch = useCallback(
     (query: string) => {
       if (!mentionEntities) {
         setEntityLinkResults([])
+        setEntityLinkSelectedIndex(0)
         return
       }
-
       const results = searchMentionEntities(query, {
         persons: mentionEntities.persons as never[],
         events: mentionEntities.events as never[],
@@ -1900,8 +2233,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         historicalCountries: mentionEntities.historicalCountries as never[],
         militaryUnits: mentionEntities.militaryUnits as never[],
         dynasties: mentionEntities.dynasties as never[],
+        politicalParties: mentionEntities.politicalParties as never[],
       })
-
       setEntityLinkResults(results.slice(0, 30))
       setEntityLinkSelectedIndex(0)
     },
@@ -1911,22 +2244,83 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // 엔티티 링크 모달 열기 (열 때 부모에 알려 서버에서 엔티티 다시 불러오기)
   const handleOpenEntityLinkModal = useCallback(() => {
     setContextMenuVisible(false)
+    if (!entityLinkUsable) {
+      toast.error(
+        '이 편집기에서는 엔티티 연결을 쓸 수 없습니다. 서버 검색을 켜거나(기본) 인물·사건 목록을 넘겨 주세요.',
+      )
+      return
+    }
     onEntityModalOpen?.()
     setEntityLinkModalVisible(true)
     setEntityLinkQuery('')
-    searchEntityLinks('')
-  }, [searchEntityLinks, onEntityModalOpen])
+  }, [entityLinkUsable, onEntityModalOpen])
 
-  // 모달이 열린 상태에서 mentionEntities가 갱신되면(예: 부모 refetch 완료) 검색 결과 다시 표시
+  /** 원격 검색 + 클라이언트 폴백 */
   useEffect(() => {
-    if (entityLinkModalVisible) {
-      searchEntityLinks(entityLinkQuery)
+    if (!entityLinkModalVisible) return
+
+    if (!entityLinkRemote) {
+      runClientEntitySearch(entityLinkQuery)
+      return
+    }
+
+    const q = entityLinkQuery.trim()
+    if (q.length === 0) {
+      if (mentionEntities) {
+        runClientEntitySearch('')
+      } else {
+        setEntityLinkResults([])
+        setEntityLinkSelectedIndex(0)
+      }
+      setEntityLinkRemoteLoading(false)
+      return
+    }
+
+    setEntityLinkRemoteLoading(true)
+    const ac = new AbortController()
+    const t = window.setTimeout(() => {
+      fetchEntityLinkSearch({
+        q,
+        countryId: entityLinkCountryId,
+        signal: ac.signal,
+      })
+        .then((rows) => {
+          setEntityLinkResults(
+            mapEntityLinkRowsToMentionItems(rows).slice(0, 40),
+          )
+          setEntityLinkSelectedIndex(0)
+        })
+        .catch((err: unknown) => {
+          const aborted =
+            (err instanceof DOMException && err.name === 'AbortError') ||
+            (typeof err === 'object' &&
+              err !== null &&
+              'name' in err &&
+              (err as { name: string }).name === 'AbortError')
+          if (aborted) return
+          toast.error(
+            '서버 검색에 실패했습니다. 로컬 목록으로 다시 시도합니다.',
+          )
+          if (mentionEntities) {
+            runClientEntitySearch(entityLinkQuery)
+          } else {
+            setEntityLinkResults([])
+            setEntityLinkSelectedIndex(0)
+          }
+        })
+        .finally(() => setEntityLinkRemoteLoading(false))
+    }, 280)
+    return () => {
+      window.clearTimeout(t)
+      ac.abort()
     }
   }, [
     entityLinkModalVisible,
+    entityLinkRemote,
     entityLinkQuery,
+    entityLinkCountryId,
     mentionEntities,
-    searchEntityLinks,
+    runClientEntitySearch,
   ])
 
   // 엔티티 링크 모달 닫기
@@ -1949,6 +2343,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       entitySpan.setAttribute('data-entity-type', item.type)
       entitySpan.setAttribute('data-entity-id', item.id)
       entitySpan.setAttribute('data-entity-name', item.name)
+      const partyCountryId = (item.data as { countryId?: string | null } | null)
+        ?.countryId
+      if (item.type === 'politicalParty' && partyCountryId) {
+        entitySpan.setAttribute('data-entity-country-id', String(partyCountryId))
+      }
       entitySpan.setAttribute(
         'title',
         `${item.name} (${MENTION_TYPE_CONFIG[item.type]?.label || item.type})`,
@@ -1986,15 +2385,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             // 다시 한 번 커서 위치 확인
             const sel = window.getSelection()
             if (sel && sel.rangeCount > 0) {
-              const r = sel.getRangeAt(0)
+              const range = sel.getRangeAt(0)
               // 엔티티 링크 내부에 있는지 확인
-              let node = r.startContainer
-              if (node.nodeType === Node.TEXT_NODE) {
-                node = node.parentElement || node
+              let walkNode: Node | HTMLElement | null = range.startContainer
+              if (walkNode.nodeType === Node.TEXT_NODE) {
+                walkNode = walkNode.parentElement || walkNode
               }
-              if ((node as HTMLElement).closest?.('.entity-link')) {
+              if ((walkNode as HTMLElement).closest?.('.entity-link')) {
                 // 엔티티 링크 내부에 있으면 밖으로 이동
-                const entityLink = (node as HTMLElement).closest('.entity-link')
+                const entityLink = (walkNode as HTMLElement).closest(
+                  '.entity-link',
+                )
                 if (entityLink && entityLink.nextSibling) {
                   const moveRange = document.createRange()
                   if (entityLink.nextSibling.nodeType === Node.TEXT_NODE) {
@@ -2033,9 +2434,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const searchTermLinks = useCallback(
     async (query: string) => {
       try {
-        const params: Parameters<typeof getGlossaryTerms>[0] = {
-          q: query || undefined,
-        }
+        const params: Parameters<typeof getGlossaryTerms>[0] = {}
+        if (query) params['q'] = query
         if (documentScope?.type === 'post') params.postId = documentScope.id
         if (documentScope?.type === 'event') params.eventId = documentScope.id
         const list = await getGlossaryTerms(params)
@@ -2384,6 +2784,68 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [handleContentChange, updateFormatState],
   )
 
+  const confirmInsertTable = useCallback(
+    (rows: number, cols: number) => {
+      if (!editorRef.current) return
+      editorRef.current.focus()
+      insertRichTableAtSelection(editorRef.current, rows, cols)
+      setTablePickerVisible(false)
+      setTablePickerHover({ row: 0, col: 0 })
+      handleContentChange()
+      updateFormatState()
+    },
+    [handleContentChange, updateFormatState],
+  )
+
+  const runTableOp = useCallback(
+    (fn: (cell: HTMLTableCellElement) => void) => {
+      if (!editorRef.current) return
+      const cell = getTableCellFromSelection(editorRef.current)
+      if (!cell) return
+      editorRef.current.focus()
+      fn(cell)
+      handleContentChange()
+      updateFormatState()
+    },
+    [handleContentChange, updateFormatState],
+  )
+
+  const handleDeleteRichTable = useCallback(() => {
+    if (!editorRef.current) return
+    const cell = getTableCellFromSelection(editorRef.current)
+    if (!cell) return
+    if (!window.confirm('표를 삭제할까요?')) return
+    editorRef.current.focus()
+    const table = cell.closest('table')
+    if (!table?.parentNode) return
+    const parent = table.parentNode
+    const nextSibling = table.nextSibling
+    table.remove()
+    const p = document.createElement('p')
+    p.innerHTML = '<br>'
+    if (nextSibling) parent.insertBefore(p, nextSibling)
+    else parent.appendChild(p)
+    const range = document.createRange()
+    range.setStart(p, 0)
+    range.collapse(true)
+    const sel = window.getSelection()
+    if (sel) {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    handleContentChange()
+    updateFormatState()
+  }, [handleContentChange, updateFormatState])
+
+  useEffect(() => {
+    if (!tablePickerVisible) return
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setTablePickerVisible(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [tablePickerVisible])
+
   return (
     <EditorContainer>
       <EditorWrapper>
@@ -2550,14 +3012,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             playClickSound()
             if (selectedText.length > 0) handleOpenEntityLinkModal()
           }}
-          disabled={selectedText.length === 0}
-          title="엔티티 연결 (문구 선택 후 클릭)"
+          disabled={selectedText.length === 0 || !entityLinkUsable}
+          title={
+            !entityLinkUsable
+              ? '엔티티 연결 불가: 서버 검색이 꺼져 있고 로컬 목록도 없습니다'
+              : '엔티티 연결 (문구 선택 후 클릭)'
+          }
           aria-label="엔티티 연결 (문구 선택 후 클릭)"
           style={{
             background:
-              selectedText.length > 0 ? 'rgba(245, 158, 11, 0.08)' : undefined,
+              selectedText.length > 0 && entityLinkUsable
+                ? 'rgba(245, 158, 11, 0.08)'
+                : undefined,
             border:
-              selectedText.length > 0
+              selectedText.length > 0 && entityLinkUsable
                 ? '1px solid rgba(245, 158, 11, 0.25)'
                 : undefined,
           }}
@@ -2603,6 +3071,113 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <FiImage />
         </ToolbarButton>
         <ToolbarDivider />
+        <div style={{ position: 'relative' }}>
+          <ToolbarButton
+            ref={tablePickerButtonRef}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation()
+              playClickSound()
+              setColorPickerVisible(false)
+              setTablePickerHover({ row: 0, col: 0 })
+              setTablePickerVisible((wasOpen) => !wasOpen)
+            }}
+            title="표 삽입 (격자에서 크기 선택)"
+            aria-label="표 삽입"
+            aria-expanded={tablePickerVisible}
+            aria-haspopup="grid"
+            style={{
+              background: tablePickerVisible
+                ? 'rgba(249, 115, 22, 0.14)'
+                : undefined,
+            }}
+          >
+            <FiGrid />
+          </ToolbarButton>
+        </div>
+        {cursorInTable ? (
+          <>
+            <ToolbarDivider />
+            <ToolbarButton
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                playClickSound()
+                runTableOp(richTableAddRowAbove)
+              }}
+              title="행 위에 삽입"
+              aria-label="행 위에 삽입"
+            >
+              <FiChevronUp />
+            </ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                playClickSound()
+                runTableOp(richTableAddRowBelow)
+              }}
+              title="행 아래에 삽입"
+              aria-label="행 아래에 삽입"
+            >
+              <FiChevronDown />
+            </ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                playClickSound()
+                runTableOp(richTableAddColumnLeft)
+              }}
+              title="열 왼쪽에 삽입"
+              aria-label="열 왼쪽에 삽입"
+            >
+              <FiChevronLeft />
+            </ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                playClickSound()
+                runTableOp(richTableAddColumnRight)
+              }}
+              title="열 오른쪽에 삽입"
+              aria-label="열 오른쪽에 삽입"
+            >
+              <FiChevronRight />
+            </ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                playClickSound()
+                runTableOp(richTableDeleteRow)
+              }}
+              title="이 행 삭제"
+              aria-label="이 행 삭제"
+            >
+              <FiMinus />
+            </ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                playClickSound()
+                runTableOp(richTableDeleteColumn)
+              }}
+              title="이 열 삭제"
+              aria-label="이 열 삭제"
+            >
+              <FiMinus style={{ transform: 'rotate(90deg)' }} />
+            </ToolbarButton>
+            <ToolbarButton
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                playClickSound()
+                handleDeleteRichTable()
+              }}
+              title="표 전체 삭제"
+              aria-label="표 전체 삭제"
+            >
+              <FiTrash2 />
+            </ToolbarButton>
+          </>
+        ) : null}
+        <ToolbarDivider />
         <ToolbarButton
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
@@ -2624,6 +3199,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             onClick={(e) => {
               e.stopPropagation()
               playClickSound()
+              setTablePickerVisible(false)
               setColorPickerVisible(!colorPickerVisible)
             }}
             title="텍스트 색상"
@@ -2644,6 +3220,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             playClickSound()
+            setTablePickerVisible(false)
             if (!editorRef.current) return
             editorRef.current.focus()
             // HR 삽입 후 커서가 prose-hr div 안에 남아 Enter 시 복제되는 문제 방지
@@ -2775,6 +3352,67 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             </>
           )
         })()}
+      {/* 표 삽입 격자 (iOS 메모 스타일) — Portal로 body에 렌더링 */}
+      {tablePickerVisible &&
+        tablePickerButtonRef.current &&
+        (() => {
+          const rect = tablePickerButtonRef.current!.getBoundingClientRect()
+          return (
+            <>
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 99998,
+                  background: 'transparent',
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setTablePickerVisible(false)
+                }}
+              />
+              <div
+                style={{
+                  position: 'fixed',
+                  top: `${rect.bottom + window.scrollY + 8}px`,
+                  left: `${rect.left + window.scrollX}px`,
+                  zIndex: 99999,
+                }}
+              >
+                <TableInsertPopover>
+                  <TableInsertGrid>
+                    {Array.from(
+                      { length: TABLE_GRID_MAX * TABLE_GRID_MAX },
+                      (_, gridIdx) => {
+                        const row = Math.floor(gridIdx / TABLE_GRID_MAX)
+                        const col = gridIdx % TABLE_GRID_MAX
+                        return (
+                          <TableInsertCell
+                            key={gridIdx}
+                            $inSelection={
+                              row <= tablePickerHover.row &&
+                              col <= tablePickerHover.col
+                            }
+                            onMouseEnter={() =>
+                              setTablePickerHover({ row, col })
+                            }
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() =>
+                              confirmInsertTable(row + 1, col + 1)
+                            }
+                          />
+                        )
+                      },
+                    )}
+                  </TableInsertGrid>
+                  <TableInsertHint>
+                    {tablePickerHover.row + 1} × {tablePickerHover.col + 1}
+                  </TableInsertHint>
+                </TableInsertPopover>
+              </div>
+            </>
+          )
+        })()}
       {/* 컨텍스트 메뉴 — 모달(overflow:auto) 밖으로 포털해 잘림·가림 방지 */}
       {typeof document !== 'undefined' &&
         createPortal(
@@ -2802,9 +3440,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 playClickSound()
                 handleOpenEntityLinkModal()
               }}
-              disabled={selectedText.length === 0}
+              disabled={selectedText.length === 0 || !entityLinkUsable}
               title={
-                selectedText.length === 0 ? '먼저 문구를 선택하세요' : undefined
+                selectedText.length === 0
+                  ? '먼저 문구를 선택하세요'
+                  : !entityLinkUsable
+                    ? '엔티티 연결을 쓸 수 없습니다'
+                    : undefined
               }
             >
               <FiLink />
@@ -2846,64 +3488,66 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           document.body,
         )}
 
-      {/* 이미지 설명 입력 모달 */}
-      <ImageCaptionModalOverlay
-        $visible={imageCaptionModalVisible}
-        onClick={handleImageCaptionCancel}
-      >
-        <ImageCaptionModal onClick={(e) => e.stopPropagation()}>
-          <ImageCaptionModalHeader>
-            <ImageCaptionModalTitle>이미지 설명 추가</ImageCaptionModalTitle>
-            <ImageCaptionModalClose onClick={handleImageCaptionCancel}>
-              <FiX size={20} />
-            </ImageCaptionModalClose>
-          </ImageCaptionModalHeader>
-          <ImageCaptionModalContent>
-            <ImageCaptionInput
-              ref={imageCaptionInputRef}
-              type="text"
-              placeholder="이미지 설명을 입력하세요 (선택사항)"
-              value={imageCaptionInput}
-              onChange={(e) => setImageCaptionInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleImageCaptionConfirm()
-                } else if (e.key === 'Escape') {
-                  e.preventDefault()
-                  handleImageCaptionCancel()
-                }
-              }}
-            />
-          </ImageCaptionModalContent>
-          <ImageCaptionModalFooter>
-            <ImageCaptionButton
-              onClick={() => {
-                playClickSound()
-                handleImageCaptionCancel()
-              }}
-            >
-              취소
-            </ImageCaptionButton>
-            <ImageCaptionButton
-              $primary
-              onClick={() => {
-                playClickSound()
-                handleImageCaptionConfirm()
-              }}
-            >
-              확인
-            </ImageCaptionButton>
-          </ImageCaptionModalFooter>
-        </ImageCaptionModal>
-      </ImageCaptionModalOverlay>
+      {/* 이미지 설명 입력 모달 — body 포털 (에디터 글래스 박스가 fixed 뷰포트를 깨뜨리는 것 방지) */}
+      {imageCaptionModalVisible &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <ImageCaptionModalOverlay onClick={handleImageCaptionCancel}>
+            <ImageCaptionModal onClick={(e) => e.stopPropagation()}>
+              <ImageCaptionModalHeader>
+                <ImageCaptionModalTitle>이미지 설명 추가</ImageCaptionModalTitle>
+                <ImageCaptionModalClose onClick={handleImageCaptionCancel}>
+                  <FiX size={20} />
+                </ImageCaptionModalClose>
+              </ImageCaptionModalHeader>
+              <ImageCaptionModalContent>
+                <ImageCaptionInput
+                  ref={imageCaptionInputRef}
+                  type="text"
+                  placeholder="이미지 설명을 입력하세요 (선택사항)"
+                  value={imageCaptionInput}
+                  onChange={(e) => setImageCaptionInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleImageCaptionConfirm()
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      handleImageCaptionCancel()
+                    }
+                  }}
+                />
+              </ImageCaptionModalContent>
+              <ImageCaptionModalFooter>
+                <ImageCaptionButton
+                  onClick={() => {
+                    playClickSound()
+                    handleImageCaptionCancel()
+                  }}
+                >
+                  취소
+                </ImageCaptionButton>
+                <ImageCaptionButton
+                  $primary
+                  onClick={() => {
+                    playClickSound()
+                    handleImageCaptionConfirm()
+                  }}
+                >
+                  확인
+                </ImageCaptionButton>
+              </ImageCaptionModalFooter>
+            </ImageCaptionModal>
+          </ImageCaptionModalOverlay>,
+          document.body,
+        )}
 
       {/* 엔티티 링크 모달 */}
-      <EntityLinkModalOverlay
-        $visible={entityLinkModalVisible}
-        onClick={handleCloseEntityLinkModal}
-      >
-        <EntityLinkModal onClick={(e) => e.stopPropagation()}>
+      {entityLinkModalVisible &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <EntityLinkModalOverlay onClick={handleCloseEntityLinkModal}>
+            <EntityLinkModal onClick={(e) => e.stopPropagation()}>
           <EntityLinkModalHeader>
             <EntityLinkModalTitle>엔티티 연결</EntityLinkModalTitle>
             <EntityLinkModalClose onClick={handleCloseEntityLinkModal}>
@@ -2917,12 +3561,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
             <EntityLinkSearchInput
               type="text"
-              placeholder="연결할 엔티티 검색 (인물, 사건, 국가 등...)"
+              placeholder="연결할 엔티티 검색 (인물, 사건, 국가, 정당 등)"
               value={entityLinkQuery}
               onChange={(e) => {
-                const query = e.target.value
-                setEntityLinkQuery(query)
-                searchEntityLinks(query)
+                setEntityLinkQuery(e.target.value)
               }}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') {
@@ -2949,8 +3591,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             />
 
             <EntityLinkResultsList>
-              {entityLinkQuery.trim() === '' &&
-              entityLinkResults.length === 0 ? (
+              {mentionEntitiesLoading || entityLinkRemoteLoading ? (
                 <div
                   style={{
                     padding: '24px',
@@ -2959,16 +3600,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                     fontSize: '13px',
                   }}
                 >
-                  검색어를 입력하여 연결할 엔티티를 찾으세요
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      marginTop: '8px',
-                      color: '#cbd5e1',
-                    }}
-                  >
-                    예: 처칠, 영국, 2차세계대전
-                  </div>
+                  {entityLinkRemote && entityLinkQuery.trim().length > 0
+                    ? '서버에서 검색 중입니다…'
+                    : '인물·사건·국가·정당 등 목록을 불러오는 중입니다…'}
                 </div>
               ) : entityLinkResults.length === 0 ? (
                 <div
@@ -2979,7 +3613,35 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                     fontSize: '13px',
                   }}
                 >
-                  검색 결과가 없습니다
+                  {entityLinkQuery.trim() === '' ? (
+                    <>
+                      {entityLinkRemote && !mentionEntities ? (
+                        <>
+                          검색어를 한 글자 이상 입력하면 서버에서 인물·사건·국가·정당
+                          등을 찾습니다.
+                          {entityLinkCountryId ? (
+                            <span> (정당은 이 국가 소속만)</span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          연결할 수 있는 항목이 없습니다. (등록된 인물·사건·국가·정당
+                          등이 없거나, 이 편집기에 넘긴 목록이 비어 있습니다.)
+                          <div
+                            style={{
+                              fontSize: '11px',
+                              marginTop: '10px',
+                              color: '#cbd5e1',
+                            }}
+                          >
+                            검색어를 입력하면 목록에서 좁혀 볼 수 있습니다.
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    '검색 결과가 없습니다'
+                  )}
                 </div>
               ) : (
                 (() => {
@@ -3106,14 +3768,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             </EntityLinkResultsList>
           </EntityLinkModalContent>
         </EntityLinkModal>
-      </EntityLinkModalOverlay>
+          </EntityLinkModalOverlay>,
+          document.body,
+        )}
 
       {/* 용어 연결 / 설명 넣기 모달 */}
-      <TermLinkModalOverlay
-        $visible={termLinkModalVisible}
-        onClick={handleCloseTermLinkModal}
-      >
-        <TermLinkModal onClick={(e) => e.stopPropagation()}>
+      {termLinkModalVisible &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <TermLinkModalOverlay onClick={handleCloseTermLinkModal}>
+            <TermLinkModal onClick={(e) => e.stopPropagation()}>
           <TermLinkModalHeader>
             <TermLinkModalTitle>
               {termLinkExplanationOnly ? '설명 넣기' : '용어 연결'}
@@ -3166,20 +3830,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   placeholder="용어 검색 (이름)..."
                   value={termLinkQuery}
                   onChange={(e) => {
-                    const q = e.target.value
-                    setTermLinkQuery(q)
-                    searchTermLinks(q)
+                    const nextQuery = e.target.value
+                    setTermLinkQuery(nextQuery)
+                    searchTermLinks(nextQuery)
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown') {
                       e.preventDefault()
-                      setTermLinkSelectedIndex((i) =>
-                        i < termLinkResults.length - 1 ? i + 1 : 0,
+                      setTermLinkSelectedIndex((prevIdx) =>
+                        prevIdx < termLinkResults.length - 1 ? prevIdx + 1 : 0,
                       )
                     } else if (e.key === 'ArrowUp') {
                       e.preventDefault()
-                      setTermLinkSelectedIndex((i) =>
-                        i > 0 ? i - 1 : termLinkResults.length - 1,
+                      setTermLinkSelectedIndex((prevIdx) =>
+                        prevIdx > 0 ? prevIdx - 1 : termLinkResults.length - 1,
                       )
                     } else if (e.key === 'Enter') {
                       e.preventDefault()
@@ -3302,14 +3966,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             )}
           </TermLinkModalContent>
         </TermLinkModal>
-      </TermLinkModalOverlay>
+          </TermLinkModalOverlay>,
+          document.body,
+        )}
 
       {/* 용어 수정 / 설명 수정 모달 (에디터에서 .term 클릭 시) */}
-      <TermLinkModalOverlay
-        $visible={termEditModalVisible}
-        onClick={handleCloseTermEditModal}
-      >
-        <TermLinkModal onClick={(e) => e.stopPropagation()}>
+      {termEditModalVisible &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <TermLinkModalOverlay onClick={handleCloseTermEditModal}>
+            <TermLinkModal onClick={(e) => e.stopPropagation()}>
           <TermLinkModalHeader>
             <TermLinkModalTitle>
               {termEditIsDocumentScoped ? '설명 수정' : '용어 수정'}
@@ -3445,7 +4111,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             )}
           </TermLinkModalContent>
         </TermLinkModal>
-      </TermLinkModalOverlay>
+          </TermLinkModalOverlay>,
+          document.body,
+        )}
     </EditorContainer>
   )
 }

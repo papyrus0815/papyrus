@@ -43,6 +43,15 @@ import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import {
+  ModalBody,
+  ModalBox,
+  ModalCloseButton,
+  ModalHeader,
+  ModalOverlay,
+  ModalSubtitle,
+  ModalTitle,
+} from '@/shared/ui/modal/modal.styles'
+import {
   BackButton,
   DateFieldBtn,
   DateFieldsRow,
@@ -53,23 +62,15 @@ import {
   FormCardWrapper,
   FormRows,
   FormSectionInner,
-  Input as RegisterInput,
   Input,
+  Input as RegisterInput,
   Required,
   SubmitButton,
   TabButton,
   TabNavigation,
 } from '@/shared/ui/register-form-layout'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalHeader,
-  ModalOverlay,
-  ModalSubtitle,
-  ModalTitle,
-} from '@/shared/ui/modal/modal.styles'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import {
   SelectModal,
   type SelectOption,
@@ -1624,12 +1625,20 @@ export function HeadsOfStateSection({
                           value={tenureSearchQuery}
                           onChange={(e) => setTenureSearchQuery(e.target.value)}
                           onFocus={(e) => {
-                            e.currentTarget.style.borderColor = isDark ? 'rgba(99,102,241,0.6)' : '#a5b4fc'
-                            e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.08)' : '#fff'
+                            e.currentTarget.style.borderColor = isDark
+                              ? 'rgba(99,102,241,0.6)'
+                              : '#a5b4fc'
+                            e.currentTarget.style.background = isDark
+                              ? 'rgba(255,255,255,0.08)'
+                              : '#fff'
                           }}
                           onBlur={(e) => {
-                            e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0'
-                            e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.06)' : '#f8fafc'
+                            e.currentTarget.style.borderColor = isDark
+                              ? 'rgba(255,255,255,0.12)'
+                              : '#e2e8f0'
+                            e.currentTarget.style.background = isDark
+                              ? 'rgba(255,255,255,0.06)'
+                              : '#f8fafc'
                           }}
                         />
                         {tenureSearchQuery ? (
@@ -1926,7 +1935,9 @@ export function HeadsOfStateSection({
                                     <div
                                       key={rowIdx}
                                       style={{
-                                        background: isDark ? 'rgba(255,255,255,0.02)' : '#fff',
+                                        background: isDark
+                                          ? 'rgba(255,255,255,0.02)'
+                                          : '#fff',
                                         borderBottom:
                                           rowIdx < rows.length - 1
                                             ? `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#f0f2f5'}`
@@ -2239,7 +2250,9 @@ export function HeadsOfStateSection({
                                                     width: 14,
                                                     height: 14,
                                                     borderRadius: '50%',
-                                                    background: isDark ? '#1e1e2e' : '#fff',
+                                                    background: isDark
+                                                      ? '#1e1e2e'
+                                                      : '#fff',
                                                     border: `3px solid ${p.line}`,
                                                     boxShadow: `0 0 0 3px ${isDark ? '#1e1e2e' : '#fff'}`,
                                                     marginLeft:
@@ -2644,11 +2657,8 @@ export function HeadsOfStateSection({
                                           {a.title}
                                         </strong>
                                         {a.description && (
-                                          <div
-                                            className="desc prose"
-                                            dangerouslySetInnerHTML={{
-                                              __html: a.description,
-                                            }}
+                                          <AchievementDescRead
+                                            html={a.description}
                                           />
                                         )}
                                         {(a.startDate || a.endDate) && (
@@ -3100,15 +3110,15 @@ export function HeadsOfStateSection({
       )}
 
       {cabinetModalTenureId && (
-        <ModalOverlay
-          onClick={() => setCabinetModalTenureId(null)}
-        >
-          <ModalBox $maxWidth="720px" $maxHeight="80vh" onClick={(e) => e.stopPropagation()}>
+        <ModalOverlay onClick={() => setCabinetModalTenureId(null)}>
+          <ModalBox
+            $maxWidth="720px"
+            $maxHeight="80vh"
+            onClick={(e) => e.stopPropagation()}
+          >
             <ModalHeader>
               <div>
-                <ModalTitle>
-                  행정부 각료 현황
-                </ModalTitle>
+                <ModalTitle>행정부 각료 현황</ModalTitle>
                 <ModalSubtitle>
                   {selectedCabinetHeadCountry} · {selectedCabinetHeadTitle}(
                   {selectedCabinetHeadName})의 각료 구성
@@ -3227,11 +3237,13 @@ const SectionOuter = styled.div<{ $embedded?: boolean }>`
   margin-top: ${({ $embedded }) => ($embedded ? '0' : '0')};
 `
 
-
 const CabinetMembersSummary = styled.div`
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
   border-radius: 10px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
   padding: 10px 12px;
   margin-bottom: 10px;
   display: flex;
@@ -3300,9 +3312,12 @@ const CabinetMembersItem = styled.li`
   flex-direction: column;
   gap: 7px;
   padding: 10px 12px;
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
   border-radius: 10px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
 
@@ -3330,9 +3345,20 @@ const CabinetMembersStatus = styled.span<{ $active: boolean }>`
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
-  border: 1px solid ${({ $active, theme }) => $active ? '#bbf7d0' : (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0')};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? '#bbf7d0'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#e2e8f0'};
   color: ${({ $active }) => ($active ? '#15803d' : '#64748b')};
-  background: ${({ $active, theme }) => $active ? '#f0fdf4' : (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc')};
+  background: ${({ $active, theme }) =>
+    $active
+      ? '#f0fdf4'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : '#f8fafc'};
 `
 
 const CabinetMembersMetaRow = styled.div`
@@ -3373,7 +3399,9 @@ const PositionFilterTabs = styled.div`
   &::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15, 23, 42, 0.18)'};
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.18)'
+        : 'rgba(15, 23, 42, 0.18)'};
   }
 `
 
@@ -3441,13 +3469,23 @@ const PositionFilterTab = styled.button<{ $active?: boolean }>`
 const ListWrap = styled.div<{ $lineageMode?: boolean }>`
   margin-top: 0;
   background: ${({ $lineageMode, theme }) =>
-    $lineageMode ? 'transparent' : (theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff')};
+    $lineageMode
+      ? 'transparent'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : '#fff'};
   border: ${({ $lineageMode, theme }) =>
-    $lineageMode ? 'none' : `1px solid ${theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`};
+    $lineageMode
+      ? 'none'
+      : `1px solid ${theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`};
   border-radius: ${({ $lineageMode }) => ($lineageMode ? '0' : '16px')};
   overflow: ${({ $lineageMode }) => ($lineageMode ? 'visible' : 'hidden')};
   box-shadow: ${({ $lineageMode, theme }) =>
-    $lineageMode ? 'none' : (theme.mode === 'dark' ? '0 1px 4px rgba(0,0,0,0.3)' : '0 1px 4px rgba(15, 23, 42, 0.04)')};
+    $lineageMode
+      ? 'none'
+      : theme.mode === 'dark'
+        ? '0 1px 4px rgba(0,0,0,0.3)'
+        : '0 1px 4px rgba(15, 23, 42, 0.04)'};
 `
 
 const ListHead = styled.div`
@@ -3456,8 +3494,11 @@ const ListHead = styled.div`
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
   flex-wrap: wrap;
 `
 
@@ -3588,12 +3629,17 @@ const PositionSectionTitle = styled.h3`
   padding: 6px 20px;
   font-size: 11px;
   font-weight: 700;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#3730a3'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#3730a3')};
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#f5f3ff'};
-  border-bottom: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#ede9fe'};
-  border-top: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#ede9fe'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#f5f3ff'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#ede9fe'};
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#ede9fe'};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3640,9 +3686,12 @@ const AddTenureButton = styled.button`
 const SettingsButton = styled.button`
   width: 34px;
   height: 34px;
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 8px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   color: ${({ theme }) => theme.colors.text.tertiary};
   display: inline-flex;
   align-items: center;
@@ -3650,12 +3699,12 @@ const SettingsButton = styled.button`
   cursor: pointer;
 
   &:hover {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#f8fafc'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#f8fafc'};
     color: #4338ca;
     border-color: #c7d2fe;
   }
 `
-
 
 const SettingsItem = styled.div`
   display: flex;
@@ -3711,8 +3760,11 @@ const EmptyState = styled.div`
   padding: 40px 24px;
   gap: 12px;
   text-align: center;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
-  border: 1.5px dashed ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+  border: 1.5px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 14px;
   margin: 16px;
 `
@@ -3724,9 +3776,12 @@ const EmptyIconWrap = styled.div`
   align-items: center;
   justify-content: center;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
 `
 
 const EmptyTitle = styled.p`
@@ -3773,12 +3828,23 @@ const ItemAvatar = styled.div<{ $hasImage?: boolean }>`
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  background: ${({ $hasImage, theme }) => $hasImage ? (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9') : '#eff1fe'};
+  background: ${({ $hasImage, theme }) =>
+    $hasImage
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.08)'
+        : '#f1f5f9'
+      : '#eff1fe'};
   display: flex;
   align-items: center;
   justify-content: center;
   color: #818cf8;
-  border: 1px solid ${({ $hasImage, theme }) => $hasImage ? (theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0') : '#e0e3fc'};
+  border: 1px solid
+    ${({ $hasImage, theme }) =>
+      $hasImage
+        ? theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#e2e8f0'
+        : '#e0e3fc'};
 
   img {
     width: 100%;
@@ -3991,7 +4057,6 @@ const SubSectionTitle = styled.h4`
   letter-spacing: -0.02em;
 `
 
-
 const TabPanel = styled.div`
   padding-top: 0;
   margin-top: 24px;
@@ -4038,6 +4103,13 @@ const AchievementCard = styled.div`
   }
 `
 
+const AchievementDescRead = styled(RichTextReadView)`
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+  margin-bottom: 6px;
+`
+
 const AchievementCardContent = styled.div`
   flex: 1;
   min-width: 0;
@@ -4048,37 +4120,6 @@ const AchievementCardContent = styled.div`
     font-size: 15px;
     font-weight: 600;
     color: #0f172a;
-  }
-  .desc.prose {
-    font-size: 14px;
-    color: #475569;
-    line-height: 1.6;
-    margin-bottom: 6px;
-  }
-  .desc.prose p {
-    margin: 0 0 0.5em;
-  }
-  .desc.prose p:last-child {
-    margin-bottom: 0;
-  }
-  .desc.prose ul,
-  .desc.prose ol {
-    margin: 0.5em 0;
-    padding-left: 1.5em;
-    list-style-position: outside;
-  }
-  .desc.prose ul {
-    list-style-type: disc;
-  }
-  .desc.prose ol {
-    list-style-type: decimal;
-  }
-  .desc.prose li {
-    margin: 0.25em 0;
-    display: list-item;
-  }
-  .desc.prose li p {
-    margin: 0;
   }
   .date {
     font-size: 12px;
@@ -4230,7 +4271,8 @@ const HeadsFormHeader = styled.div`
   justify-content: space-between;
   gap: 16px;
   padding: 24px 28px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-wrap: wrap;
 `
@@ -4249,7 +4291,6 @@ const HeadsFormTitle = styled.h2`
     margin-bottom: 8px;
   }
 `
-
 
 const EventsPageCheckWrap = styled.div`
   display: flex;
@@ -4295,7 +4336,6 @@ const CheckboxRow = styled.div`
     user-select: none;
   }
 `
-
 
 const DatePairRow = styled.div`
   display: flex;
@@ -4443,8 +4483,11 @@ const TenureSearchInput = styled.input`
   padding: 0 32px 0 32px;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
   border-radius: 8px;
   outline: none;
   transition:
@@ -4456,8 +4499,10 @@ const TenureSearchInput = styled.input`
   }
 
   &:focus {
-    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.6)' : '#a5b4fc'};
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.6)' : '#a5b4fc'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
   }
 `
 
@@ -4471,7 +4516,8 @@ const TenureSearchClear = styled.button`
   justify-content: center;
   width: 18px;
   height: 18px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
   border: none;
   border-radius: 50%;
   color: #fff;
@@ -4479,7 +4525,8 @@ const TenureSearchClear = styled.button`
   padding: 0;
 
   &:hover {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.35)' : '#94a3b8'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.35)' : '#94a3b8'};
   }
 `
 

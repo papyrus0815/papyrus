@@ -14,6 +14,8 @@ import React, {
 
 import { createPortal } from 'react-dom'
 
+import { useNavigate } from 'react-router-dom'
+
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
@@ -62,6 +64,7 @@ import {
 } from '@/shared/api/treaty'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { useRichTextProseClick } from '@/shared/hooks/use-rich-text-prose-click'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -161,6 +164,7 @@ export function CabinetsSection({
   onOpenMinistriesTab,
 }: CabinetsSectionProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { searchParams, pushCabinetParams, lastPushedKeyRef } =
     useCabinetSectionUrlSync()
   const { mode } = useThemeStore()
@@ -246,24 +250,11 @@ export function CabinetsSection({
     return () => mq.removeEventListener('change', apply)
   }, [])
 
-  /** 히스토리 본문 클릭 — .mention/.entity-link 인물 클릭 시 인물 모달 표시 */
-  const handleHistoryProseClick = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement
-    const personMentionEl = target.closest('.mention[data-type="person"]')
-    const personLinkEl = target.closest(
-      '.entity-link[data-entity-type="person"]',
-    )
-    const personEl = personMentionEl ?? personLinkEl
-    if (personEl) {
-      const id =
-        personEl.getAttribute('data-id') ??
-        personEl.getAttribute('data-entity-id')
-      if (id) {
-        e.preventDefault()
-        setMentionPersonId(id)
-      }
-    }
-  }, [])
+  /** 히스토리 본문 클릭 — 멘션/엔티티(인물·정당·사건·국가 등) 공통 처리 */
+  const { handleProseClick: handleHistoryProseClick } = useRichTextProseClick({
+    navigate,
+    onPersonClick: setMentionPersonId,
+  })
 
   const scrollToCabSection = useCallback((sectionId: string) => {
     const el = document.getElementById(sectionId)
@@ -2228,6 +2219,7 @@ export function CabinetsSection({
                   setAddMinisterCabinet={setAddMinisterCabinet}
                   setPersonSelectOpen={setPersonSelectOpen}
                   handleDeleteCabinet={handleDeleteCabinet}
+                  onEditCabinet={() => handleOpenEditCabinet(selectedCabinet)}
                   scrollToCabSection={scrollToCabSection}
                 />
                 {selectedMinisterId
@@ -2638,9 +2630,7 @@ export function CabinetsSection({
                                         role="presentation"
                                       >
                                         <CabS.HistoryArticleProse
-                                          dangerouslySetInnerHTML={{
-                                            __html: selAch.description ?? '',
-                                          }}
+                                          html={selAch.description ?? ''}
                                         />
                                       </div>
                                     ) : (
@@ -2871,17 +2861,6 @@ export function CabinetsSection({
                               id="cab-detail-profile"
                               style={{ scrollMarginTop: 12 }}
                             >
-                              <CabS.HeadProfileActions>
-                                <CabS.HeadActionBtn
-                                  type="button"
-                                  onClick={() =>
-                                    handleOpenEditCabinet(selectedCabinet)
-                                  }
-                                >
-                                  <FiEdit2 size={12} />
-                                  수정
-                                </CabS.HeadActionBtn>
-                              </CabS.HeadProfileActions>
                               <CabS.HeadProfileAvatar
                                 tabIndex={head?.person?.id ? 0 : undefined}
                                 role={head?.person?.id ? 'button' : undefined}
@@ -3802,9 +3781,7 @@ export function CabinetsSection({
                                           role="presentation"
                                         >
                                           <CabS.HistoryArticleProse
-                                            dangerouslySetInnerHTML={{
-                                              __html: selAch.description,
-                                            }}
+                                            html={selAch.description ?? ''}
                                           />
                                         </div>
                                       ) : (
@@ -5061,6 +5038,7 @@ export function CabinetsSection({
                   onEdit={() => setMentionPersonId(null)}
                   hideHeaderActions
                   embedInModal
+                  onLinkedPersonClick={setMentionPersonId}
                 />
               </CabS.PersonViewModalBody>
             </CabS.PersonViewModalBox>

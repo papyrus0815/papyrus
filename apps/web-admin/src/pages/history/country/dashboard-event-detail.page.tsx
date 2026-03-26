@@ -15,17 +15,23 @@ import styled, { useTheme } from 'styled-components'
 import { useFormEntities } from '@/entities/event-form/model'
 import { mapEventResponseToHistoricalEvent } from '@/pages/events/utils/event-detail.mapper'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
-import { dynastyApi } from '@/shared/api/dynasty'
 import {
   type EventResponseDto,
   getEventById,
   updateEvent,
 } from '@/shared/api/events'
-import { getGlossaryTermById } from '@/shared/api/glossary'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
+import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import {
+  useRichTextProseClick,
+  useRichTextTooltipEscape,
+  type RichTextDynastyTooltipState,
+  type RichTextTermTooltipState,
+} from '@/shared/hooks/use-rich-text-prose-click'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
 const ARTICLE_MAX_WIDTH = '680px'
@@ -207,76 +213,18 @@ const SectionSaveBtn = styled.button`
   }
 `
 
-const Prose = styled.div`
+const DashboardRichText = styled(RichTextReadView)`
+  font-family: ${SansFamily};
+`
+
+/** 피해·비용 — 구조화된 필드만 표시(RichText 아님) */
+const CasualtiesBlock = styled.div`
   font-family: ${SansFamily};
   font-size: 15px;
   line-height: 1.7;
   color: ${({ theme }) => theme.colors.text.primary};
-
   p {
-    margin: 0 0 1em;
-  }
-  p:last-child {
-    margin-bottom: 0;
-  }
-  strong {
-    font-weight: 700;
-  }
-
-  ul,
-  ol {
-    margin: 12px 0;
-    padding-left: 28px;
-  }
-
-  white-space: pre-wrap;
-  word-break: break-word;
-
-  .mention,
-  .entity-link {
-    color: inherit;
-    font-weight: inherit;
-    text-decoration: none;
-    cursor: pointer;
-    display: inline;
-    padding: 1px 6px;
-    margin: 0 1px;
-    border-radius: 4px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0, 0, 0, 0.03)'};
-    border: none;
-    transition:
-      background 0.15s ease,
-      color 0.15s ease;
-  }
-  .mention:hover,
-  .entity-link:hover {
-    color: #1d4ed8;
-    background: rgba(29, 78, 216, 0.06);
-  }
-
-  .term {
-    color: #0f766e;
-    font-weight: inherit;
-    text-decoration: none;
-    cursor: pointer;
-    padding: 0 2px;
-    border-radius: 3px;
-    transition:
-      color 0.15s ease,
-      background 0.15s ease;
-  }
-  .term:hover {
-    color: #0d9488;
-    background: rgba(13, 148, 136, 0.1);
-  }
-
-  hr {
-    border: none;
-    border-top: 1px solid ${({ theme }) => theme.colors.border.default};
-    margin: 24px 0;
-    height: 1px;
-    display: block;
+    margin: 0 0 6px;
   }
 `
 
@@ -600,11 +548,6 @@ const DynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
   }
 `
 
-/** 본문 HTML에서 멘션 스팬의 선두 @ 제거 (상세에서는 이름만 표시) */
-function stripMentionAt(html: string): string {
-  return html.replace(/(<span[^>]*class="[^"]*mention[^"]*"[^>]*>)@/g, '$1')
-}
-
 export function DashboardEventDetailPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
@@ -614,20 +557,10 @@ export function DashboardEventDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [mentionPersonId, setMentionPersonId] = useState<string | null>(null)
-  const [termTooltip, setTermTooltip] = useState<{
-    termId: string
-    name: string
-    description: string | null
-    x: number
-    y: number
-  } | null>(null)
-  const [dynastyTooltip, setDynastyTooltip] = useState<{
-    dynastyId: string
-    name: string
-    description: string | null
-    x: number
-    y: number
-  } | null>(null)
+  const [termTooltip, setTermTooltip] =
+    useState<RichTextTermTooltipState | null>(null)
+  const [dynastyTooltip, setDynastyTooltip] =
+    useState<RichTextDynastyTooltipState | null>(null)
   type EditingSection =
     | { type: 'description' }
     | { type: 'background' }
@@ -648,6 +581,8 @@ export function DashboardEventDetailPage() {
     availableEvents,
     availableMilitaryUnits,
     availableDynasties,
+    availablePoliticalParties,
+    isLoading: entitiesLoading,
     refetch: refetchEntities,
   } = useFormEntities()
 
@@ -659,6 +594,7 @@ export function DashboardEventDetailPage() {
       historicalCountries: availableHistoricalCountries,
       militaryUnits: availableMilitaryUnits ?? [],
       dynasties: availableDynasties ?? [],
+      politicalParties: availablePoliticalParties ?? [],
     }),
     [
       availablePersons,
@@ -667,8 +603,24 @@ export function DashboardEventDetailPage() {
       availableHistoricalCountries,
       availableMilitaryUnits,
       availableDynasties,
+      availablePoliticalParties,
     ],
   )
+
+  /** 사건 본문 에디터 이미지 — 미전달 시 툴바 이미지 버튼이 비활성·금지 커서로 보임 */
+  const handleRichTextImageUpload = useCallback(async (file: File) => {
+    try {
+      const result = await uploadImage(file, 'events')
+      return getUploadImageUrl(result.url) || result.url
+    } catch {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+    }
+  }, [])
 
   const { data: mentionPerson } = useQuery({
     queryKey: ['person-detail', mentionPersonId],
@@ -694,112 +646,19 @@ export function DashboardEventDetailPage() {
       .finally(() => setLoading(false))
   }, [eventId])
 
-  useEffect(() => {
-    if (!termTooltip) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setTermTooltip(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [termTooltip])
+  const { handleProseClick } = useRichTextProseClick({
+    navigate,
+    onPersonClick: setMentionPersonId,
+    setTermTooltip,
+    setDynastyTooltip,
+  })
 
-  useEffect(() => {
-    if (!dynastyTooltip) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDynastyTooltip(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [dynastyTooltip])
-
-  const handleProseClick = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement
-    // 인물: .mention (기존) 또는 .entity-link (엔티티 연결)
-    const personMentionEl = target.closest('.mention[data-type="person"]')
-    const personLinkEl = target.closest(
-      '.entity-link[data-entity-type="person"]',
-    )
-    const personEl = personMentionEl ?? personLinkEl
-    if (personEl) {
-      const id =
-        personEl.getAttribute('data-id') ??
-        personEl.getAttribute('data-entity-id')
-      if (id) {
-        e.preventDefault()
-        setMentionPersonId(id)
-      }
-      return
-    }
-    // 가문: .mention (기존) 또는 .entity-link (엔티티 연결)
-    const dynastyMentionEl = target.closest('.mention[data-type="dynasty"]')
-    const dynastyLinkEl = target.closest(
-      '.entity-link[data-entity-type="dynasty"]',
-    )
-    const dynastyEl = dynastyMentionEl ?? dynastyLinkEl
-    if (dynastyEl) {
-      const id =
-        dynastyEl.getAttribute('data-id') ??
-        dynastyEl.getAttribute('data-entity-id')
-      const name =
-        dynastyEl.getAttribute('data-name') ??
-        dynastyEl.getAttribute('data-entity-name') ??
-        ''
-      if (id) {
-        e.preventDefault()
-        setDynastyTooltip({
-          dynastyId: id,
-          name,
-          description: null,
-          x: e.clientX,
-          y: e.clientY,
-        })
-        dynastyApi
-          .getById(id)
-          .then((d) => {
-            setDynastyTooltip((prev) =>
-              prev ? { ...prev, description: d.description ?? null } : null,
-            )
-          })
-          .catch(() => {
-            setDynastyTooltip((prev) =>
-              prev
-                ? { ...prev, description: '(정보를 불러올 수 없습니다)' }
-                : null,
-            )
-          })
-      }
-      return
-    }
-    const termEl = target.closest('.term')
-    if (termEl) {
-      const termId = termEl.getAttribute('data-term-id')
-      const name =
-        termEl.getAttribute('data-term-name') || termEl.textContent || ''
-      if (termId) {
-        e.preventDefault()
-        setTermTooltip({
-          termId,
-          name,
-          description: null,
-          x: e.clientX,
-          y: e.clientY,
-        })
-        getGlossaryTermById(termId)
-          .then((t) => {
-            setTermTooltip((prev) =>
-              prev ? { ...prev, description: t.description } : null,
-            )
-          })
-          .catch(() => {
-            setTermTooltip((prev) =>
-              prev
-                ? { ...prev, description: '(설명을 불러올 수 없습니다)' }
-                : null,
-            )
-          })
-      }
-    }
-  }, [])
+  useRichTextTooltipEscape(
+    !!termTooltip,
+    !!dynastyTooltip,
+    () => setTermTooltip(null),
+    () => setDynastyTooltip(null),
+  )
 
   const startEditSection = useCallback(
     (key: EditingSection, initialValue: string, initialTitle?: string) => {
@@ -830,21 +689,26 @@ export function DashboardEventDetailPage() {
         const sections = (dto.eventSections ?? [])
           .slice()
           .sort(
-            (a: { order: number }, b: { order: number }) => a.order - b.order,
+            (left: { order: number }, right: { order: number }) =>
+              left.order - right.order,
           )
         const next = sections.map(
-          (sec: {
+          (sectionRow: {
             id: string
             title: string
             content: string
             order: number
           }) =>
-            sec.id === editingSection.id
-              ? { title: sec.title, content: draftValue, order: sec.order }
+            sectionRow.id === editingSection.id
+              ? {
+                  title: sectionRow.title,
+                  content: draftValue,
+                  order: sectionRow.order,
+                }
               : {
-                  title: sec.title,
-                  content: sec.content ?? '',
-                  order: sec.order,
+                  title: sectionRow.title,
+                  content: sectionRow.content ?? '',
+                  order: sectionRow.order,
                 },
         )
         await updateEvent(eventId, { eventSections: next })
@@ -852,19 +716,20 @@ export function DashboardEventDetailPage() {
         const sections = (dto.eventSections ?? [])
           .slice()
           .sort(
-            (a: { order: number }, b: { order: number }) => a.order - b.order,
+            (left: { order: number }, right: { order: number }) =>
+              left.order - right.order,
           )
         const next = sections.map(
-          (s: {
+          (sectionRow: {
             title: string
             content: string
             order: number
             sectionType?: string
           }) => ({
-            title: s.title,
-            content: s.content ?? '',
-            order: s.order,
-            sectionType: s.sectionType ?? 'content',
+            title: sectionRow.title,
+            content: sectionRow.content ?? '',
+            order: sectionRow.order,
+            sectionType: sectionRow.sectionType ?? 'content',
           }),
         )
         next.push({
@@ -944,11 +809,16 @@ export function DashboardEventDetailPage() {
       : null
   const eventSections = (dto.eventSections ?? [])
     .slice()
-    .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
+    .sort(
+      (left: { order: number }, right: { order: number }) =>
+        left.order - right.order,
+    )
   // 상단 히어로에 이미 쓴 이미지는 갤러리에서 제외 (한 장만 있을 때 중복 표시 방지)
   const galleryWithoutHero =
     heroImage && mapped.visuals.gallery.length > 0
-      ? mapped.visuals.gallery.filter((img) => img.url !== heroImage)
+      ? mapped.visuals.gallery.filter(
+          (galleryItem) => galleryItem.url !== heroImage,
+        )
       : mapped.visuals.gallery
 
   const goToEdit = () => navigate(pathKeys.history.dashboardEventEdit(dto.id))
@@ -990,124 +860,35 @@ export function DashboardEventDetailPage() {
           </ImageWrap>
         )}
 
-      <Section>
-        <SectionTitleRow>
-          <SectionTitle>개요</SectionTitle>
-          {editingSection?.type !== 'description' && (
-            <SectionEditBtn
-              type="button"
-              onClick={() =>
-                startEditSection(
-                  { type: 'description' },
-                  dto?.description ?? '',
-                )
-              }
-            >
-              <FiEdit2 size={14} />
-              {mapped.description ? '수정' : '추가'}
-            </SectionEditBtn>
-          )}
-        </SectionTitleRow>
-        {editingSection?.type === 'description' ? (
-          <>
-            <SectionEditorWrap>
-              <RichTextEditor
-                value={draftValue}
-                onChange={setDraftValue}
-                placeholder="개요를 입력하세요..."
-                mentionEntities={mentionEntities}
-                onEntityModalOpen={refetchEntities}
-                documentScope={
-                  eventId ? { type: 'event', id: eventId } : undefined
-                }
-              />
-            </SectionEditorWrap>
-            <SectionEditActions>
-              <SectionEditBtn
-                type="button"
-                onClick={cancelEditSection}
-                disabled={savingSection}
-              >
-                취소
-              </SectionEditBtn>
-              <SectionSaveBtn
-                type="button"
-                onClick={saveEditSection}
-                disabled={savingSection}
-              >
-                {savingSection ? '저장 중…' : '저장'}
-              </SectionSaveBtn>
-            </SectionEditActions>
-          </>
-        ) : (
-          mapped.description && (
-            <div onClick={handleProseClick} role="presentation">
-              <Prose
-                dangerouslySetInnerHTML={{
-                  __html: stripMentionAt(mapped.description),
-                }}
-              />
-            </div>
-          )
-        )}
-      </Section>
-
-      {/* 본문: 없을 때 추가 블록, 있을 때 목록 + 수정 */}
-      {(eventSections.length === 0 ||
-        editingSection?.type === 'section-new') && (
         <Section>
           <SectionTitleRow>
-            <SectionTitle>본문</SectionTitle>
-            {editingSection?.type !== 'section-new' && (
+            <SectionTitle>개요</SectionTitle>
+            {editingSection?.type !== 'description' && (
               <SectionEditBtn
                 type="button"
                 onClick={() =>
-                  startEditSection({ type: 'section-new' }, '', 'Part 1')
+                  startEditSection(
+                    { type: 'description' },
+                    dto?.description ?? '',
+                  )
                 }
               >
                 <FiEdit2 size={14} />
-                본문 (제목과 내용) 추가
+                {mapped.description ? '수정' : '추가'}
               </SectionEditBtn>
             )}
           </SectionTitleRow>
-          {editingSection?.type === 'section-new' ? (
+          {editingSection?.type === 'description' ? (
             <>
-              <div style={{ marginBottom: 12 }}>
-                <label
-                  style={{
-                    display: 'block',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: theme.colors.text.primary,
-                    marginBottom: 6,
-                  }}
-                >
-                  제목
-                </label>
-                <input
-                  type="text"
-                  value={draftSectionTitle}
-                  onChange={(e) => setDraftSectionTitle(e.target.value)}
-                  placeholder="예: Part 1"
-                  style={{
-                    width: '100%',
-                    maxWidth: 400,
-                    padding: '10px 12px',
-                    fontSize: 14,
-                    border: `1px solid ${theme.colors.border.default}`,
-                    borderRadius: 8,
-                    background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-                    color: theme.colors.text.primary,
-                  }}
-                />
-              </div>
               <SectionEditorWrap>
                 <RichTextEditor
                   value={draftValue}
                   onChange={setDraftValue}
-                  placeholder="본문 내용을 입력하세요..."
+                  placeholder="개요를 입력하세요..."
                   mentionEntities={mentionEntities}
+                  mentionEntitiesLoading={entitiesLoading}
                   onEntityModalOpen={refetchEntities}
+                  onImageUpload={handleRichTextImageUpload}
                   documentScope={
                     eventId ? { type: 'event', id: eventId } : undefined
                   }
@@ -1130,52 +911,208 @@ export function DashboardEventDetailPage() {
                 </SectionSaveBtn>
               </SectionEditActions>
             </>
-          ) : eventSections.length === 0 ? (
-            <p
-              style={{
-                fontSize: 14,
-                color: theme.colors.text.secondary,
-                margin: 0,
-              }}
-            >
-              본문이 없습니다. 위 버튼으로 제목과 내용을 추가하세요.
-            </p>
-          ) : null}
+          ) : (
+            mapped.description && (
+              <div onClick={handleProseClick} role="presentation">
+                <DashboardRichText html={mapped.description ?? ''} />
+              </div>
+            )
+          )}
         </Section>
-      )}
 
-      {eventSections.length > 0 &&
-        eventSections.map(
-          (sec: { id: string; title?: string; content?: string }) => (
-            <Section key={sec.id}>
+        {/* 본문: 없을 때 추가 블록, 있을 때 목록 + 수정 */}
+        {(eventSections.length === 0 ||
+          editingSection?.type === 'section-new') && (
+          <Section>
+            <SectionTitleRow>
+              <SectionTitle>본문</SectionTitle>
+              {editingSection?.type !== 'section-new' && (
+                <SectionEditBtn
+                  type="button"
+                  onClick={() =>
+                    startEditSection({ type: 'section-new' }, '', 'Part 1')
+                  }
+                >
+                  <FiEdit2 size={14} />
+                  본문 (제목과 내용) 추가
+                </SectionEditBtn>
+              )}
+            </SectionTitleRow>
+            {editingSection?.type === 'section-new' ? (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: theme.colors.text.primary,
+                      marginBottom: 6,
+                    }}
+                  >
+                    제목
+                  </label>
+                  <input
+                    type="text"
+                    value={draftSectionTitle}
+                    onChange={(e) => setDraftSectionTitle(e.target.value)}
+                    placeholder="예: Part 1"
+                    style={{
+                      width: '100%',
+                      maxWidth: 400,
+                      padding: '10px 12px',
+                      fontSize: 14,
+                      border: `1px solid ${theme.colors.border.default}`,
+                      borderRadius: 8,
+                      background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                      color: theme.colors.text.primary,
+                    }}
+                  />
+                </div>
+                <SectionEditorWrap>
+                  <RichTextEditor
+                    value={draftValue}
+                    onChange={setDraftValue}
+                    placeholder="본문 내용을 입력하세요..."
+                    mentionEntities={mentionEntities}
+                  mentionEntitiesLoading={entitiesLoading}
+                    onEntityModalOpen={refetchEntities}
+                    onImageUpload={handleRichTextImageUpload}
+                    documentScope={
+                      eventId ? { type: 'event', id: eventId } : undefined
+                    }
+                  />
+                </SectionEditorWrap>
+                <SectionEditActions>
+                  <SectionEditBtn
+                    type="button"
+                    onClick={cancelEditSection}
+                    disabled={savingSection}
+                  >
+                    취소
+                  </SectionEditBtn>
+                  <SectionSaveBtn
+                    type="button"
+                    onClick={saveEditSection}
+                    disabled={savingSection}
+                  >
+                    {savingSection ? '저장 중…' : '저장'}
+                  </SectionSaveBtn>
+                </SectionEditActions>
+              </>
+            ) : eventSections.length === 0 ? (
+              <p
+                style={{
+                  fontSize: 14,
+                  color: theme.colors.text.secondary,
+                  margin: 0,
+                }}
+              >
+                본문이 없습니다. 위 버튼으로 제목과 내용을 추가하세요.
+              </p>
+            ) : null}
+          </Section>
+        )}
+
+        {eventSections.length > 0 &&
+          eventSections.map(
+            (sec: { id: string; title?: string; content?: string }) => (
+              <Section key={sec.id}>
+                <SectionTitleRow>
+                  <SectionTitle>{sec.title}</SectionTitle>
+                  {editingSection?.type !== 'section' ||
+                  editingSection?.id !== sec.id ? (
+                    <SectionEditBtn
+                      type="button"
+                      onClick={() =>
+                        startEditSection(
+                          { type: 'section', id: sec.id },
+                          sec.content ?? '',
+                        )
+                      }
+                    >
+                      <FiEdit2 size={14} />
+                      수정
+                    </SectionEditBtn>
+                  ) : null}
+                </SectionTitleRow>
+                {editingSection?.type === 'section' &&
+                editingSection.id === sec.id ? (
+                  <>
+                    <SectionEditorWrap>
+                      <RichTextEditor
+                        value={draftValue}
+                        onChange={setDraftValue}
+                        placeholder="본문 내용을 입력하세요..."
+                        mentionEntities={mentionEntities}
+                  mentionEntitiesLoading={entitiesLoading}
+                        onEntityModalOpen={refetchEntities}
+                        onImageUpload={handleRichTextImageUpload}
+                        documentScope={
+                          eventId ? { type: 'event', id: eventId } : undefined
+                        }
+                      />
+                    </SectionEditorWrap>
+                    <SectionEditActions>
+                      <SectionEditBtn
+                        type="button"
+                        onClick={cancelEditSection}
+                        disabled={savingSection}
+                      >
+                        취소
+                      </SectionEditBtn>
+                      <SectionSaveBtn
+                        type="button"
+                        onClick={saveEditSection}
+                        disabled={savingSection}
+                      >
+                        {savingSection ? '저장 중…' : '저장'}
+                      </SectionSaveBtn>
+                    </SectionEditActions>
+                  </>
+                ) : (
+                  <div onClick={handleProseClick} role="presentation">
+                    <DashboardRichText html={sec.content ?? ''} />
+                  </div>
+                )}
+              </Section>
+            ),
+          )}
+
+        {(mapped.background ||
+          mapped.aftermath ||
+          editingSection?.type === 'background' ||
+          editingSection?.type === 'aftermath') && (
+          <TwoCol>
+            <Section>
               <SectionTitleRow>
-                <SectionTitle>{sec.title}</SectionTitle>
-                {editingSection?.type !== 'section' ||
-                editingSection?.id !== sec.id ? (
+                <SectionTitle>배경</SectionTitle>
+                {editingSection?.type !== 'background' && (
                   <SectionEditBtn
                     type="button"
                     onClick={() =>
                       startEditSection(
-                        { type: 'section', id: sec.id },
-                        sec.content ?? '',
+                        { type: 'background' },
+                        dto?.background ?? '',
                       )
                     }
                   >
                     <FiEdit2 size={14} />
-                    수정
+                    {mapped.background ? '수정' : '추가'}
                   </SectionEditBtn>
-                ) : null}
+                )}
               </SectionTitleRow>
-              {editingSection?.type === 'section' &&
-              editingSection.id === sec.id ? (
+              {editingSection?.type === 'background' ? (
                 <>
                   <SectionEditorWrap>
                     <RichTextEditor
                       value={draftValue}
                       onChange={setDraftValue}
-                      placeholder="본문 내용을 입력하세요..."
+                      placeholder="배경을 입력하세요..."
                       mentionEntities={mentionEntities}
+                  mentionEntitiesLoading={entitiesLoading}
                       onEntityModalOpen={refetchEntities}
+                      onImageUpload={handleRichTextImageUpload}
                       documentScope={
                         eventId ? { type: 'event', id: eventId } : undefined
                       }
@@ -1199,324 +1136,261 @@ export function DashboardEventDetailPage() {
                   </SectionEditActions>
                 </>
               ) : (
-                <div onClick={handleProseClick} role="presentation">
-                  <Prose
-                    dangerouslySetInnerHTML={{
-                      __html: stripMentionAt(sec.content ?? ''),
-                    }}
-                  />
-                </div>
+                mapped.background && (
+                  <div onClick={handleProseClick} role="presentation">
+                    <DashboardRichText html={mapped.background ?? ''} />
+                  </div>
+                )
               )}
             </Section>
-          ),
+            <Section>
+              <SectionTitleRow>
+                <SectionTitle>여파</SectionTitle>
+                {editingSection?.type !== 'aftermath' && (
+                  <SectionEditBtn
+                    type="button"
+                    onClick={() =>
+                      startEditSection(
+                        { type: 'aftermath' },
+                        dto?.aftermath ?? '',
+                      )
+                    }
+                  >
+                    <FiEdit2 size={14} />
+                    {mapped.aftermath ? '수정' : '추가'}
+                  </SectionEditBtn>
+                )}
+              </SectionTitleRow>
+              {editingSection?.type === 'aftermath' ? (
+                <>
+                  <SectionEditorWrap>
+                    <RichTextEditor
+                      value={draftValue}
+                      onChange={setDraftValue}
+                      placeholder="여파를 입력하세요..."
+                      mentionEntities={mentionEntities}
+                  mentionEntitiesLoading={entitiesLoading}
+                      onEntityModalOpen={refetchEntities}
+                      onImageUpload={handleRichTextImageUpload}
+                      documentScope={
+                        eventId ? { type: 'event', id: eventId } : undefined
+                      }
+                    />
+                  </SectionEditorWrap>
+                  <SectionEditActions>
+                    <SectionEditBtn
+                      type="button"
+                      onClick={cancelEditSection}
+                      disabled={savingSection}
+                    >
+                      취소
+                    </SectionEditBtn>
+                    <SectionSaveBtn
+                      type="button"
+                      onClick={saveEditSection}
+                      disabled={savingSection}
+                    >
+                      {savingSection ? '저장 중…' : '저장'}
+                    </SectionSaveBtn>
+                  </SectionEditActions>
+                </>
+              ) : (
+                mapped.aftermath && (
+                  <div onClick={handleProseClick} role="presentation">
+                    <DashboardRichText html={mapped.aftermath ?? ''} />
+                  </div>
+                )
+              )}
+            </Section>
+          </TwoCol>
         )}
 
-      {(mapped.background ||
-        mapped.aftermath ||
-        editingSection?.type === 'background' ||
-        editingSection?.type === 'aftermath') && (
-        <TwoCol>
+        {hasBelligerents && (
           <Section>
-            <SectionTitleRow>
-              <SectionTitle>배경</SectionTitle>
-              {editingSection?.type !== 'background' && (
-                <SectionEditBtn
-                  type="button"
-                  onClick={() =>
-                    startEditSection(
-                      { type: 'background' },
-                      dto?.background ?? '',
-                    )
-                  }
-                >
-                  <FiEdit2 size={14} />
-                  {mapped.background ? '수정' : '추가'}
-                </SectionEditBtn>
-              )}
-            </SectionTitleRow>
-            {editingSection?.type === 'background' ? (
-              <>
-                <SectionEditorWrap>
-                  <RichTextEditor
-                    value={draftValue}
-                    onChange={setDraftValue}
-                    placeholder="배경을 입력하세요..."
-                    mentionEntities={mentionEntities}
-                    onEntityModalOpen={refetchEntities}
-                    documentScope={
-                      eventId ? { type: 'event', id: eventId } : undefined
-                    }
-                  />
-                </SectionEditorWrap>
-                <SectionEditActions>
-                  <SectionEditBtn
-                    type="button"
-                    onClick={cancelEditSection}
-                    disabled={savingSection}
-                  >
-                    취소
-                  </SectionEditBtn>
-                  <SectionSaveBtn
-                    type="button"
-                    onClick={saveEditSection}
-                    disabled={savingSection}
-                  >
-                    {savingSection ? '저장 중…' : '저장'}
-                  </SectionSaveBtn>
-                </SectionEditActions>
-              </>
-            ) : (
-              mapped.background && (
-                <div onClick={handleProseClick} role="presentation">
-                  <Prose
-                    dangerouslySetInnerHTML={{
-                      __html: stripMentionAt(mapped.background),
-                    }}
-                  />
-                </div>
-              )
+            <SectionTitle>교전 세력</SectionTitle>
+            {dto.belligerents!.sides.map(
+              (
+                side: {
+                  name?: string
+                  commander?: string
+                  forces?: string
+                  description?: string
+                  countries?: unknown[]
+                },
+                i: number,
+              ) => (
+                <SideBlock key={i}>
+                  <SideName>{side.name}</SideName>
+                  {side.commander && (
+                    <SideDetail>지휘: {side.commander}</SideDetail>
+                  )}
+                  {side.forces && <SideDetail>병력: {side.forces}</SideDetail>}
+                  {side.description && (
+                    <SideDetail>{side.description}</SideDetail>
+                  )}
+                  {(side.countries?.length ?? 0) > 0 && (
+                    <SideDetail>
+                      참여:{' '}
+                      {([] as unknown[])
+                        .concat(side.countries ?? [])
+                        .map((countryItem: unknown) => {
+                          if (
+                            typeof countryItem === 'object' &&
+                            countryItem !== null &&
+                            'name' in countryItem &&
+                            typeof (countryItem as { name: unknown }).name ===
+                              'string'
+                          ) {
+                            return (countryItem as { name: string }).name
+                          }
+                          return String(countryItem)
+                        })
+                        .join(', ')}
+                    </SideDetail>
+                  )}
+                </SideBlock>
+              ),
             )}
           </Section>
+        )}
+
+        {(casualtiesObj || dto.warCost) && (
           <Section>
-            <SectionTitleRow>
-              <SectionTitle>여파</SectionTitle>
-              {editingSection?.type !== 'aftermath' && (
-                <SectionEditBtn
-                  type="button"
-                  onClick={() =>
-                    startEditSection(
-                      { type: 'aftermath' },
-                      dto?.aftermath ?? '',
-                    )
-                  }
-                >
-                  <FiEdit2 size={14} />
-                  {mapped.aftermath ? '수정' : '추가'}
-                </SectionEditBtn>
+            <SectionTitle>피해·비용</SectionTitle>
+            <CasualtiesBlock>
+              {casualtiesObj &&
+                Object.entries(casualtiesObj).map(([key, val]) =>
+                  val != null && String(val).trim() !== '' ? (
+                    <p key={key} style={{ marginBottom: 6 }}>
+                      <strong>{key.replace(/([A-Z])/g, ' $1').trim()}: </strong>
+                      {typeof val === 'object'
+                        ? JSON.stringify(val)
+                        : String(val)}
+                    </p>
+                  ) : null,
+                )}
+              {dto.warCost && (
+                <p style={{ marginBottom: 0 }}>
+                  <strong>전쟁 비용:</strong> {dto.warCost}
+                </p>
               )}
-            </SectionTitleRow>
-            {editingSection?.type === 'aftermath' ? (
-              <>
-                <SectionEditorWrap>
-                  <RichTextEditor
-                    value={draftValue}
-                    onChange={setDraftValue}
-                    placeholder="여파를 입력하세요..."
-                    mentionEntities={mentionEntities}
-                    onEntityModalOpen={refetchEntities}
-                    documentScope={
-                      eventId ? { type: 'event', id: eventId } : undefined
-                    }
-                  />
-                </SectionEditorWrap>
-                <SectionEditActions>
-                  <SectionEditBtn
-                    type="button"
-                    onClick={cancelEditSection}
-                    disabled={savingSection}
-                  >
-                    취소
-                  </SectionEditBtn>
-                  <SectionSaveBtn
-                    type="button"
-                    onClick={saveEditSection}
-                    disabled={savingSection}
-                  >
-                    {savingSection ? '저장 중…' : '저장'}
-                  </SectionSaveBtn>
-                </SectionEditActions>
-              </>
-            ) : (
-              mapped.aftermath && (
-                <div onClick={handleProseClick} role="presentation">
-                  <Prose
-                    dangerouslySetInnerHTML={{
-                      __html: stripMentionAt(mapped.aftermath),
-                    }}
-                  />
-                </div>
-              )
+            </CasualtiesBlock>
+          </Section>
+        )}
+
+        {(mapped.relatedCountries?.length ||
+          mapped.relatedHistoricalCountries?.length) && (
+          <Section>
+            <SectionTitle>관련 국가</SectionTitle>
+            <TagRow>
+              {mapped.relatedCountries?.map((country) => (
+                <CountryChip key={country.id}>
+                  {country.flagEmoji ? `${country.flagEmoji} ` : ''}
+                  {country.name}
+                </CountryChip>
+              ))}
+              {mapped.relatedHistoricalCountries?.map((histCountry) => (
+                <CountryChip key={histCountry.id} $historical>
+                  {histCountry.name}
+                </CountryChip>
+              ))}
+            </TagRow>
+          </Section>
+        )}
+
+        {dto.parentEvent && (
+          <Section>
+            <SectionTitle>상위 사건</SectionTitle>
+            <SubEventBtn
+              type="button"
+              onClick={() => goToEvent(dto.parentEvent!.id)}
+            >
+              {dto.parentEvent.title}
+              {dto.parentEvent.startDate && (
+                <SubEventMeta>
+                  {formatDateRange(
+                    dto.parentEvent.startDate,
+                    dto.parentEvent.endDate ?? undefined,
+                    dto.parentEvent.startDatePrecision,
+                    dto.parentEvent.endDatePrecision,
+                  )}
+                </SubEventMeta>
+              )}
+            </SubEventBtn>
+          </Section>
+        )}
+
+        {dto.childEvents && dto.childEvents.length > 0 && (
+          <Section>
+            <SectionTitle>하위 사건</SectionTitle>
+            {dto.childEvents.map(
+              (child: {
+                id: string
+                title?: string
+                startDate?: string
+                endDate?: string
+                startDatePrecision?: string
+                endDatePrecision?: string
+              }) => (
+                <SubEventBtn
+                  key={child.id}
+                  type="button"
+                  onClick={() => goToEvent(child.id)}
+                >
+                  {child.title}
+                  {child.startDate && (
+                    <SubEventMeta>
+                      {formatDateRange(
+                        child.startDate,
+                        child.endDate ?? undefined,
+                        child.startDatePrecision,
+                        child.endDatePrecision,
+                      )}
+                    </SubEventMeta>
+                  )}
+                </SubEventBtn>
+              ),
             )}
           </Section>
-        </TwoCol>
-      )}
+        )}
 
-      {hasBelligerents && (
-        <Section>
-          <SectionTitle>교전 세력</SectionTitle>
-          {dto.belligerents!.sides.map(
-            (
-              side: {
-                name?: string
-                commander?: string
-                forces?: string
-                description?: string
-                countries?: unknown[]
-              },
-              i: number,
-            ) => (
-              <SideBlock key={i}>
-                <SideName>{side.name}</SideName>
-                {side.commander && (
-                  <SideDetail>지휘: {side.commander}</SideDetail>
-                )}
-                {side.forces && <SideDetail>병력: {side.forces}</SideDetail>}
-                {side.description && (
-                  <SideDetail>{side.description}</SideDetail>
-                )}
-                {(side.countries?.length ?? 0) > 0 && (
-                  <SideDetail>
-                    참여:{' '}
-                    {([] as unknown[])
-                      .concat(side.countries ?? [])
-                      .map((c: any) =>
-                        typeof c === 'object' && c?.name ? c.name : String(c),
-                      )
-                      .join(', ')}
-                  </SideDetail>
-                )}
-              </SideBlock>
-            ),
-          )}
-        </Section>
-      )}
+        {mapped.keywords && mapped.keywords.length > 0 && (
+          <Section>
+            <SectionTitle>키워드</SectionTitle>
+            <TagRow>
+              {mapped.keywords.map((keyword) => (
+                <Tag key={keyword}>{keyword}</Tag>
+              ))}
+            </TagRow>
+          </Section>
+        )}
 
-      {(casualtiesObj || dto.warCost) && (
-        <Section>
-          <SectionTitle>피해·비용</SectionTitle>
-          <Prose as="div" style={{ fontSize: 15 }}>
-            {casualtiesObj &&
-              Object.entries(casualtiesObj).map(([key, val]) =>
-                val != null && String(val).trim() !== '' ? (
-                  <p key={key} style={{ marginBottom: 6 }}>
-                    <strong>{key.replace(/([A-Z])/g, ' $1').trim()}: </strong>
-                    {typeof val === 'object'
-                      ? JSON.stringify(val)
-                      : String(val)}
-                  </p>
-                ) : null,
-              )}
-            {dto.warCost && (
-              <p style={{ marginBottom: 0 }}>
-                <strong>전쟁 비용:</strong> {dto.warCost}
-              </p>
-            )}
-          </Prose>
-        </Section>
-      )}
-
-      {(mapped.relatedCountries?.length ||
-        mapped.relatedHistoricalCountries?.length) && (
-        <Section>
-          <SectionTitle>관련 국가</SectionTitle>
-          <TagRow>
-            {mapped.relatedCountries?.map((c) => (
-              <CountryChip key={c.id}>
-                {c.flagEmoji ? `${c.flagEmoji} ` : ''}
-                {c.name}
-              </CountryChip>
+        {galleryWithoutHero.length > 0 && (
+          <Section>
+            <SectionTitle>이미지</SectionTitle>
+            {galleryWithoutHero.map((galleryItem) => (
+              <ImageWrap key={galleryItem.id}>
+                <img src={galleryItem.url} alt={galleryItem.title} />
+                <Figcaption>
+                  {galleryItem.caption || galleryItem.title}
+                  {galleryItem.source && (
+                    <ImageSource>{galleryItem.source}</ImageSource>
+                  )}
+                </Figcaption>
+              </ImageWrap>
             ))}
-            {mapped.relatedHistoricalCountries?.map((c) => (
-              <CountryChip key={c.id} $historical>
-                {c.name}
-              </CountryChip>
-            ))}
-          </TagRow>
-        </Section>
-      )}
+          </Section>
+        )}
 
-      {dto.parentEvent && (
-        <Section>
-          <SectionTitle>상위 사건</SectionTitle>
-          <SubEventBtn
-            type="button"
-            onClick={() => goToEvent(dto.parentEvent!.id)}
-          >
-            {dto.parentEvent.title}
-            {dto.parentEvent.startDate && (
-              <SubEventMeta>
-                {formatDateRange(
-                  dto.parentEvent.startDate,
-                  dto.parentEvent.endDate ?? undefined,
-                  dto.parentEvent.startDatePrecision,
-                  dto.parentEvent.endDatePrecision,
-                )}
-              </SubEventMeta>
-            )}
-          </SubEventBtn>
-        </Section>
-      )}
-
-      {dto.childEvents && dto.childEvents.length > 0 && (
-        <Section>
-          <SectionTitle>하위 사건</SectionTitle>
-          {dto.childEvents.map(
-            (child: {
-              id: string
-              title?: string
-              startDate?: string
-              endDate?: string
-              startDatePrecision?: string
-              endDatePrecision?: string
-            }) => (
-              <SubEventBtn
-                key={child.id}
-                type="button"
-                onClick={() => goToEvent(child.id)}
-              >
-                {child.title}
-                {child.startDate && (
-                  <SubEventMeta>
-                    {formatDateRange(
-                      child.startDate,
-                      child.endDate ?? undefined,
-                      child.startDatePrecision,
-                      child.endDatePrecision,
-                    )}
-                  </SubEventMeta>
-                )}
-              </SubEventBtn>
-            ),
-          )}
-        </Section>
-      )}
-
-      {mapped.keywords && mapped.keywords.length > 0 && (
-        <Section>
-          <SectionTitle>키워드</SectionTitle>
-          <TagRow>
-            {mapped.keywords.map((k) => (
-              <Tag key={k}>{k}</Tag>
-            ))}
-          </TagRow>
-        </Section>
-      )}
-
-      {galleryWithoutHero.length > 0 && (
-        <Section>
-          <SectionTitle>이미지</SectionTitle>
-          {galleryWithoutHero.map((img) => (
-            <ImageWrap key={img.id}>
-              <img src={img.url} alt={img.title} />
-              <Figcaption>
-                {img.caption || img.title}
-                {img.source && <ImageSource>{img.source}</ImageSource>}
-              </Figcaption>
-            </ImageWrap>
-          ))}
-        </Section>
-      )}
-
-      {(dto.updatedAt || dto.createdAt) && (
-        <MetaNote>
-          {dto.updatedAt &&
-            `수정: ${new Date(dto.updatedAt).toLocaleString('ko-KR')}`}
-          {dto.createdAt && dto.updatedAt && ' · '}
-          {dto.createdAt &&
-            `등록: ${new Date(dto.createdAt).toLocaleString('ko-KR')}`}
-        </MetaNote>
-      )}
-
+        {(dto.updatedAt || dto.createdAt) && (
+          <MetaNote>
+            {dto.updatedAt &&
+              `수정: ${new Date(dto.updatedAt).toLocaleString('ko-KR')}`}
+            {dto.createdAt && dto.updatedAt && ' · '}
+            {dto.createdAt &&
+              `등록: ${new Date(dto.createdAt).toLocaleString('ko-KR')}`}
+          </MetaNote>
+        )}
       </ContentArea>
 
       <AnimatePresence>
@@ -1557,6 +1431,7 @@ export function DashboardEventDetailPage() {
                   onEdit={() => setMentionPersonId(null)}
                   hideHeaderActions
                   embedInModal
+                  onLinkedPersonClick={setMentionPersonId}
                 />
               </MentionModalBody>
             </MentionModalPanel>

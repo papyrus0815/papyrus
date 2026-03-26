@@ -27,6 +27,7 @@ import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventResponseDto } from '@/shared/api/events'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import type { MilitaryUnit } from '@/shared/api/military-unit'
+import type { PoliticalParty } from '@/shared/api/political-party'
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { uploadImage } from '@/shared/api/upload'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
@@ -57,6 +58,9 @@ interface DetailsSectionProps {
   availableCountries: CountryResponseDto[]
   availableHistoricalCountries: HistoricalCountryResponseDto[]
   availableMilitaryUnits: MilitaryUnit[]
+  availablePoliticalParties: PoliticalParty[]
+  /** `useFormEntities` 로딩 중이면 엔티티 모달에 표시 */
+  mentionEntitiesLoading?: boolean
   playClickSound: () => void
   // 사이드바용 추가 정보
   eventTitle?: string
@@ -75,6 +79,8 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
   availableCountries,
   availableHistoricalCountries,
   availableMilitaryUnits,
+  availablePoliticalParties,
+  mentionEntitiesLoading = false,
   playClickSound,
   eventTitle = '제목 없음',
   eventStartDate = '',
@@ -308,7 +314,9 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
                   countries: availableCountries,
                   historicalCountries: availableHistoricalCountries,
                   militaryUnits: availableMilitaryUnits,
+                  politicalParties: availablePoliticalParties,
                 }}
+                mentionEntitiesLoading={mentionEntitiesLoading}
               />
 
               {section.mentions.length > 0 && (

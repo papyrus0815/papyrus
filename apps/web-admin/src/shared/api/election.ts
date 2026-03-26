@@ -82,9 +82,11 @@ export type PartyMembershipLeadershipTier =
 export type PartyMembershipRow = {
   id: string
   personId: string
-  partyId: string
-  startDate?: string | null
-  endDate?: string | null
+  /** 인물 상세 API는 과거에 누락될 수 있음 — `party.id`로 대체 */
+  partyId?: string
+  /** 일부 응답에서 ISO 문자열 대신 Date로 올 수 있음 */
+  startDate?: string | Date | null
+  endDate?: string | Date | null
   roleCategory?: PartyMembershipRoleCategory | null
   leadershipTier?: PartyMembershipLeadershipTier | null
   roleTitle?: string | null

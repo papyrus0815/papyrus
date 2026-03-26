@@ -26,6 +26,7 @@ import { EthnicityModule } from '../../../libs/ethnicity/ethnicity.module'
 import { GlossaryModule } from '../../../libs/glossary/glossary.module'
 import { TreatyModule } from '../../../libs/treaty/treaty.module'
 import { ElectionModule } from '../../../libs/election/election.module'
+import { EntityLinkSearchModule } from '../../../libs/entity-link-search/entity-link-search.module'
 
 import {
   AppConfigModule,
@@ -66,6 +67,7 @@ import {
     GlossaryModule,
     TreatyModule,
     ElectionModule,
+    EntityLinkSearchModule,
     HealthModule,
   ],
   controllers: [AppController],

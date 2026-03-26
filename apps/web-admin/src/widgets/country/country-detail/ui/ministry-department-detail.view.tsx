@@ -99,10 +99,16 @@ export function MinistryDepartmentDetailView({
               국방·군사
             </S.DefenseBadge>
           ) : null}
-          <S.DeptTopDeleteBtn type="button" onClick={onDelete}>
-            <FiTrash2 size={12} />
-            삭제
-          </S.DeptTopDeleteBtn>
+          <S.DeptDetailActionsGroup role="group" aria-label="부처 편집">
+            <S.DeptTopEditBtn onClick={onEdit}>
+              <FiEdit2 size={14} />
+              수정
+            </S.DeptTopEditBtn>
+            <S.DeptTopDeleteBtn onClick={onDelete}>
+              <FiTrash2 size={14} />
+              삭제
+            </S.DeptTopDeleteBtn>
+          </S.DeptDetailActionsGroup>
         </S.DeptDetailTopBarRight>
       </S.DeptDetailTopBar>
 
@@ -210,10 +216,6 @@ export function MinistryDepartmentDetailView({
             ) : null}
           </S.DeptProfileActionsRow>
           <S.DeptProfileActionsRow>
-            <S.DeptActionBtn type="button" onClick={onEdit}>
-              <FiEdit2 size={14} />
-              정보 수정
-            </S.DeptActionBtn>
             <S.DeptActionBtn type="button" onClick={onGoToPositions}>
               <FiLayers size={14} />
               직위 정의

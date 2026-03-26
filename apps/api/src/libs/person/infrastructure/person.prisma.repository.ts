@@ -783,6 +783,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         politicalPartyMemberships: {
           select: {
             id: true,
+            partyId: true,
             startDate: true,
             endDate: true,
             roleCategory: true,

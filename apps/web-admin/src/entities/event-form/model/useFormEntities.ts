@@ -15,6 +15,7 @@ import { getAllEvents, type EventResponseDto } from '@/shared/api/events'
 import { getAllHistoricalCountries, type HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { militaryUnitApi, type MilitaryUnit } from '@/shared/api/military-unit'
 import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
+import { politicalPartyApi, type PoliticalParty } from '@/shared/api/political-party'
 
 export const useFormEntities = () => {
   const [availablePersons, setAvailablePersons] = useState<PersonResponseDto[]>([])
@@ -24,6 +25,9 @@ export const useFormEntities = () => {
   const [availableMilitaryUnits, setAvailableMilitaryUnits] = useState<MilitaryUnit[]>([])
   const [availableEvents, setAvailableEvents] = useState<EventResponseDto[]>([])
   const [availableDynasties, setAvailableDynasties] = useState<Dynasty[]>([])
+  const [availablePoliticalParties, setAvailablePoliticalParties] = useState<
+    PoliticalParty[]
+  >([])
   const [isLoading, setIsLoading] = useState(true)
 
   const loadEntities = useCallback(async () => {
@@ -47,6 +51,10 @@ export const useFormEntities = () => {
         dynastyApi.getAll()
           .then(setAvailableDynasties)
           .catch(() => setAvailableDynasties([])),
+        politicalPartyApi
+          .getAll()
+          .then(setAvailablePoliticalParties)
+          .catch(() => setAvailablePoliticalParties([])),
       ])
     } finally {
       setIsLoading(false)
@@ -65,6 +73,7 @@ export const useFormEntities = () => {
     availableMilitaryUnits,
     availableEvents,
     availableDynasties,
+    availablePoliticalParties,
     isLoading,
     refetch: loadEntities,
   }

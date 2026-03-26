@@ -65,30 +65,82 @@ export const DeptCrumbTitle = styled.span`
 export const DeptDetailTopBarRight = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
 `
 
-/** 상단 삭제 — 텍스트형 고스트 */
-export const DeptTopDeleteBtn = styled.button`
+/** 상단 우측 — 수정·삭제를 한 덩어리로 (행정부 상세 툴바와 동일 톤) */
+export const DeptDetailActionsGroup = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
-  font-size: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+/** 상단 수정 — 인디고 보더 고스트 */
+export const DeptTopEditBtn = styled.button.attrs({ type: 'button' })`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(129, 140, 250, 0.35)' : '#c7d2fe'};
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s,
+    background 0.14s,
+    color 0.14s;
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(165, 180, 252, 0.55)' : '#818cf8'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.18)' : '#eef2ff'};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+  }
+`
+
+/** 상단 삭제 — 레드 보더 (수정 버튼과 높이·모서리 통일) */
+export const DeptTopDeleteBtn = styled.button.attrs({ type: 'button' })`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#f87171' : '#dc2626'};
-  background: transparent;
-  border: none;
-  border-radius: 8px;
+    theme.mode === 'dark' ? '#fca5a5' : '#dc2626'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'transparent' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.4)' : '#fecaca'};
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.14s, color 0.14s;
+  transition:
+    background 0.14s,
+    border-color 0.14s,
+    color 0.14s;
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(220,38,38,0.12)' : '#fef2f2'};
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.15)' : '#fff1f2'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.55)' : '#f87171'};
     color: #ef4444;
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35);
   }
 `
 

@@ -50,6 +50,9 @@ export const pathKeys = {
     /** 국가 상세 내 선거·투표 탭 고유 URL */
     countryElections: (countryId: string) =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/elections`,
+    /** 선거·투표 탭 내 정당 상세 (목록에서 정당 행 클릭) */
+    countryElectionPartyDetail: (countryId: string, partyId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/elections/party/${encodeURIComponent(partyId)}`,
     /** 국가 상세 내 연대표(전체 사건) 탭 고유 URL. form=create 시 사건 등록 폼 표시 */
     countryEvents: (countryId: string, form?: 'create') =>
       form === 'create'

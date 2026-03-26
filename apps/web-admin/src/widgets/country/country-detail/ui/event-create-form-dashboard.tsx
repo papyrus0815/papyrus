@@ -487,6 +487,8 @@ export function EventCreateFormDashboard({
     availablePersons,
     availableMilitaryUnits,
     availableDynasties,
+    availablePoliticalParties,
+    isLoading: entitiesLoading,
   } = useFormEntities()
   const [showCountryModal, setShowCountryModal] = useState(false)
   const [showStartDateModal, setShowStartDateModal] = useState(false)
@@ -1413,7 +1415,10 @@ export function EventCreateFormDashboard({
                                     availableHistoricalCountries,
                                   militaryUnits: availableMilitaryUnits ?? [],
                                   dynasties: availableDynasties ?? [],
+                                  politicalParties:
+                                    availablePoliticalParties ?? [],
                                 }}
+                                mentionEntitiesLoading={entitiesLoading}
                               />
                             </EditorWrap>
                           </SectionContentControl>

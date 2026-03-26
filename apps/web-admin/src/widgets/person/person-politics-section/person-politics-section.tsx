@@ -78,6 +78,32 @@ function formatYmdKo(ymd: string) {
   }
 }
 
+/** 상세 API·직렬화에 따라 ISO 문자열 또는 Date가 올 수 있음. (구버전 API는 Date가 `{}`로 깨질 수 있음) */
+function membershipDateToYmd(
+  value: string | Date | Record<string, never> | null | undefined,
+): string {
+  if (value == null) return ''
+  if (typeof value === 'object' && !(value instanceof Date)) {
+    if (Object.keys(value).length === 0) return ''
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return ''
+    return value.toISOString().slice(0, 10)
+  }
+  if (typeof value === 'string') return value.slice(0, 10)
+  return ''
+}
+
+function membershipEndDisplay(
+  end: string | Date | Record<string, never> | null | undefined,
+): string {
+  if (end == null || end === '') return '현재'
+  if (typeof end === 'object' && !(end instanceof Date)) {
+    if (Object.keys(end).length === 0) return '현재'
+  }
+  return membershipDateToYmd(end as string | Date | null) || '—'
+}
+
 const PARTY_MEMBERSHIP_ROLE_OPTIONS: {
   value: PartyMembershipRoleCategory
   label: string
@@ -242,7 +268,7 @@ export function PersonPoliticsSection({
   const startEdit = (row: PartyMembershipRow) => {
     setPanelOpen(false)
     setEditingId(row.id)
-    setEditPartyId(row.partyId)
+    setEditPartyId(row.partyId ?? row.party?.id ?? '')
     setEditRoleCategory(
       (row.roleCategory as PartyMembershipRoleCategory | undefined) ?? 'OTHER',
     )
@@ -250,8 +276,8 @@ export function PersonPoliticsSection({
       (row.leadershipTier as PartyMembershipLeadershipTier | undefined) ??
         'UNSPECIFIED',
     )
-    setEditStart(row.startDate?.slice(0, 10) ?? '')
-    setEditEnd(row.endDate?.slice(0, 10) ?? '')
+    setEditStart(membershipDateToYmd(row.startDate))
+    setEditEnd(membershipDateToYmd(row.endDate))
     setEditRole(row.roleTitle ?? '')
     setEditNotes(row.notes ?? '')
   }
@@ -562,8 +588,8 @@ export function PersonPoliticsSection({
                     : '—'}
                 </td>
                 <td>
-                  {membershipRow.startDate?.slice(0, 10) ?? '—'} ~{' '}
-                  {membershipRow.endDate?.slice(0, 10) ?? '현재'}
+                  {membershipDateToYmd(membershipRow.startDate) || '—'} ~{' '}
+                  {membershipEndDisplay(membershipRow.endDate)}
                 </td>
                 <td>{membershipRow.roleTitle ?? '—'}</td>
                 <td>
