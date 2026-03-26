@@ -31,6 +31,7 @@ import type { EventResponseDto } from '@/shared/api/events'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import type { MilitaryUnit } from '@/shared/api/military-unit'
 import type { PersonResponseDto } from '@/shared/api/persons'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 // 멘션 가능한 엔티티 타입
 export type MentionEntityType =
@@ -94,11 +95,14 @@ export const MENTION_TYPE_CONFIG: Record<
     searchFields: ['name', 'surname'],
     getName: (item: unknown) => {
       const p = item as PersonResponseDto
-      const name = p.name ?? ''
-      const surname = p.surname ?? ''
-      const order = (p.nameDisplayOrder as string) ?? 'korean'
-      if (order === 'western') return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
-      return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
+      return (
+        getPersonDisplayName({
+          name: p.name ?? '',
+          surname: p.surname,
+          middleName: p.middleName,
+          country: p.country ?? null,
+        }) || '이름 없음'
+      )
     },
     getSubtitle: (item: unknown) =>
       (item as PersonResponseDto).birthYear

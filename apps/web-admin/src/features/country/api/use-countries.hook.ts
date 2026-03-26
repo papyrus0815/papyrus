@@ -17,10 +17,14 @@
  * - pages/history/person/person.page.tsx (인물 국가 선택)
  * - widgets/country/country-detail/ui/CountryDetail.tsx (국가 상세)
  */
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as countriesApi from '@/shared/api/countries'
-import type { CreateCountryDto, UpdateCountryDto } from '@/shared/api/countries'
+import type {
+  CountryResponseDto,
+  CreateCountryDto,
+  UpdateCountryDto,
+} from '@/shared/api/countries'
 
 /**
  * React Query 캐시 키 관리
@@ -131,13 +135,23 @@ export function useUpdateCountry() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateCountryDto }) =>
       countriesApi.updateCountry(id, data),
-    onSuccess: (_, variables) => {
-      // 목록 갱신
+    onSuccess: (updated, variables) => {
+      // 무효화 전에 목록·상세 캐시를 응답으로 즉시 병합 (재조회 전에 폼을 다시 열어도 값 유지)
+      queryClient.setQueryData(
+        countryKeys.lists(),
+        (old: CountryResponseDto[] | undefined) =>
+          old?.map((c) =>
+            c.id === updated.id ? { ...c, ...updated } : c,
+          ),
+      )
+      queryClient.setQueryData(countryKeys.detail(variables.id), updated)
       queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
-      // 상세 갱신
       queryClient.invalidateQueries({
         queryKey: countryKeys.detail(variables.id),
       })
+      queryClient.invalidateQueries({ queryKey: ['persons'] })
+      queryClient.invalidateQueries({ queryKey: ['person-detail'] })
+      queryClient.invalidateQueries({ queryKey: ['persons-by-country'] })
     },
   })
 }

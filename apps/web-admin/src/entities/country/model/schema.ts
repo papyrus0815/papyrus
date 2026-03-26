@@ -78,7 +78,8 @@ export const countrySchema = z.object({
     .max(10, '언어 ID는 10자 이내여야 합니다')
     .transform((val) => val || undefined)
     .optional(),
+  /** 인물 이름 한 줄 표시: 성·이름(korean) / 이름·성(western) */
+  defaultNameDisplayOrder: z.enum(['korean', 'western']),
 })
 
 export type CountryFormData = z.infer<typeof countrySchema>
-

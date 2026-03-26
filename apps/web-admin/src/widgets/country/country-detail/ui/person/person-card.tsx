@@ -2,6 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 import { type PersonResponseDto as Person } from '@/shared/api/persons'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 interface PersonCardProps {
   person: Person
@@ -12,9 +13,7 @@ interface PersonCardProps {
 }
 
 export function PersonCard({ person, index, onClick, dynastyName }: PersonCardProps) {
-  const fullName = person.surname
-    ? `${person.surname} ${person.name}`
-    : person.name
+  const fullName = getPersonDisplayName(person)
 
   const birthYear = person.birthYear
   const deathYear = person.deathYear

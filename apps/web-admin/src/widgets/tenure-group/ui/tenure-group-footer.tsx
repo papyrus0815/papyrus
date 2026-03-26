@@ -5,6 +5,7 @@
 import React from 'react'
 
 import type { HeadOfStateDuringEvent } from '@/shared/api/government-positions'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import * as List from '../../../pages/events/styles/list.styles'
 
@@ -24,7 +25,7 @@ export const TenureGroupFooter: React.FC<TenureGroupFooterProps> = ({
     if (tenure.termNumber) parts.push(`제${tenure.termNumber}대`)
     if (position.title) parts.push(position.title)
     const title = parts.length > 0 ? parts.join(' ') : position.title
-    return `${headOfState.person.surname || ''}${headOfState.person.name} ${title} 집권기 종료`
+    return `${getPersonDisplayName(headOfState.person)} ${title} 집권기 종료`
   })()
   return (
     <List.TenureGroupFooter>

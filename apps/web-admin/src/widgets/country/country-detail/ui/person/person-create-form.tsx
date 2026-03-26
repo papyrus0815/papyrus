@@ -10,6 +10,7 @@ import {
 import { countryApi } from '@/shared/api/country'
 import { dynastyApi } from '@/shared/api/dynasty'
 import { jobApi } from '@/shared/api/job'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 interface PersonCreateFormProps {
   countryId: string
@@ -571,7 +572,7 @@ export function PersonCreateForm({
                         .filter((p) => p.gender === '남성')
                         .map((person) => (
                           <option key={person.id} value={person.id}>
-                            {person.surname} {person.name}
+                            {getPersonDisplayName(person)}
                             {person.birthYear && ` (${person.birthYear}~)`}
                           </option>
                         ))}
@@ -590,7 +591,7 @@ export function PersonCreateForm({
                         .filter((p) => p.gender === '여성')
                         .map((person) => (
                           <option key={person.id} value={person.id}>
-                            {person.surname} {person.name}
+                            {getPersonDisplayName(person)}
                             {person.birthYear && ` (${person.birthYear}~)`}
                           </option>
                         ))}

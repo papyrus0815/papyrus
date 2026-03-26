@@ -31,8 +31,10 @@ export interface PersonSelectFieldProps {
   value: string
   selectedPerson: Pick<
     PersonResponseDto,
-    'id' | 'name' | 'surname' | 'middleName' | 'nameDisplayOrder' | 'profileImageUrl'
-  > | null
+    'id' | 'name' | 'surname' | 'middleName' | 'profileImageUrl'
+  > & {
+    country?: { defaultNameDisplayOrder?: string | null } | null
+  } | null
   persons: PersonResponseDto[]
   isModalOpen: boolean
   onModalOpenChange: (open: boolean) => void
@@ -41,17 +43,19 @@ export interface PersonSelectFieldProps {
 }
 
 function getDisplayName(
-  p: Pick<
+  p: (Pick<
     PersonResponseDto,
-    'name' | 'surname' | 'middleName' | 'nameDisplayOrder'
-  > | null,
+    'name' | 'surname' | 'middleName'
+  > & {
+    country?: { defaultNameDisplayOrder?: string | null } | null
+  }) | null,
 ): string {
   if (!p) return '—'
   return getPersonDisplayName({
     name: p.name ?? '',
     surname: p.surname ?? '',
     middleName: p.middleName ?? '',
-    nameDisplayOrder: (p.nameDisplayOrder as 'korean' | 'western') ?? 'korean',
+    country: p.country ?? null,
   })
 }
 

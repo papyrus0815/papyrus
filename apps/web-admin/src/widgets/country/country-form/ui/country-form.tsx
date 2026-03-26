@@ -12,19 +12,23 @@ import {
 import { countrySchema } from '@/entities/country/model/schema'
 import { uploadImage } from '@/shared/api/upload'
 import { FormInput } from '@/shared/ui/form-input/form-input'
+import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
 import {
   FormHeader,
   FormSectionInner,
   SubmitButton,
-  TabButton,
-  TabNavigation,
 } from '@/shared/ui/register-form-layout'
 import {
   SelectModal,
   SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
 import { zodResolver } from '@hookform/resolvers/zod'
+
+import {
+  MapRegionTabButton,
+  MapRegionTabNav,
+} from '../../country-detail/ui/map-region-section.styles'
 
 import * as S from './country-form.styles'
 
@@ -37,7 +41,7 @@ const CountryFormModalLayout = styled.div`
   ${FormSectionInner} {
     padding-top: 16px;
   }
-  ${TabNavigation} {
+  ${MapRegionTabNav} {
     margin-bottom: 24px;
   }
   ${S.FormSection} {
@@ -314,6 +318,7 @@ export function CountryForm({
     mode: 'all', // 모든 이벤트에서 검증
     reValidateMode: 'onChange', // 재검증도 onChange
     criteriaMode: 'all', // 모든 에러 표시
+    shouldUnregister: false,
   })
 
   /** 선택된 대륙 ID */
@@ -322,11 +327,12 @@ export function CountryForm({
   // ==================== useEffect 훅 ====================
 
   /**
-   * editing 객체가 변경될 때마다 form 초기화
-   * - 수정 모드: 기존 데이터로 폼 채우기
-   * - 생성 모드 (editing.id가 없음): 빈 값으로 초기화
-   * - 숫자 필드는 undefined로 초기화하여 빈 값 처리
+   * 동일 국가 편집 중에는 `editing` 참조만 바뀌는 경우가 있다(목록 재조회 등).
+   * `[editing]`에 의존하면 매번 reset 되어 select 등 입력이 초기화되므로,
+   * 신규(`__new__`) 또는 국가 id가 바뀔 때만 동기화한다.
    */
+  const editingSyncKey = editing?.id ?? '__new__'
+
   useEffect(() => {
     if (editing) {
       // 수정 모드: 기존 데이터로 폼 채우기
@@ -345,6 +351,9 @@ export function CountryForm({
           thumbnailUrl: editing.thumbnailUrl || '',
           currencyId: editing.currencyId || '',
           languageId: editing.languageId || '',
+          defaultNameDisplayOrder:
+            (editing as { defaultNameDisplayOrder?: 'korean' | 'western' })
+              .defaultNameDisplayOrder ?? 'korean',
         })
         setThumbnailPreview(editing.thumbnailUrl || '')
       } else {
@@ -363,13 +372,16 @@ export function CountryForm({
           thumbnailUrl: '',
           currencyId: '',
           languageId: '',
+          defaultNameDisplayOrder: 'korean',
         })
         setThumbnailPreview('')
       }
       setFlagImageFile(null)
       setThumbnailFile(null)
     }
-  }, [editing, reset])
+    // editing 객체 참조는 제외 — 같은 id인 채로 목록 재조회 등으로 갱신되어도 reset 하지 않음
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editingSyncKey로 편집 세션만 구분
+  }, [editingSyncKey, reset])
 
   /** 썸네일 URL 필드 값 감시 */
   const thumbnailUrl = watch('thumbnailUrl')
@@ -458,6 +470,7 @@ export function CountryForm({
       languageId: data.languageId,
       continentId: data.continentId,
       gdpUsdBn: data.gdpUsdBn,
+      defaultNameDisplayOrder: data.defaultNameDisplayOrder,
     })
   }
 
@@ -523,32 +536,71 @@ export function CountryForm({
   const formBody = (
     <S.Form id="country-form" onSubmit={handleSubmit(onSubmit)}>
       {embedIn === 'modal' && (
-        <TabNavigation>
-          <TabButton
+        <MapRegionTabNav
+          role="tablist"
+          aria-label="국가 폼 섹션"
+          style={{ marginBottom: 0 }}
+        >
+          <MapRegionTabButton
             type="button"
+            role="tab"
+            aria-selected={modalTab === 'basic'}
             $active={modalTab === 'basic'}
             onClick={() => setModalTab('basic')}
           >
             <FiInfo size={16} />
             기본 정보
-          </TabButton>
-          <TabButton
+          </MapRegionTabButton>
+          <MapRegionTabButton
             type="button"
+            role="tab"
+            aria-selected={modalTab === 'stats'}
             $active={modalTab === 'stats'}
             onClick={() => setModalTab('stats')}
           >
             <FiBarChart2 size={16} />
             통계 정보
-          </TabButton>
-          <TabButton
+          </MapRegionTabButton>
+          <MapRegionTabButton
             type="button"
+            role="tab"
+            aria-selected={modalTab === 'extra'}
             $active={modalTab === 'extra'}
             onClick={() => setModalTab('extra')}
           >
             <FiPlusCircle size={16} />
             추가 정보
-          </TabButton>
-        </TabNavigation>
+          </MapRegionTabButton>
+        </MapRegionTabNav>
+      )}
+      {/*
+        모달: 이 필드는 탭 밖에 둬서 기본/통계/추가 전환 시에도 언마운트되지 않게 함.
+        (탭 안에만 두면 다른 탭에서 저장 시 제출 payload에서 빠질 수 있음)
+      */}
+      {embedIn === 'modal' && (
+        <S.FormSection>
+          <S.FormField>
+            <S.FormLabel>인물 이름 표시 기본</S.FormLabel>
+            <FormSelectNative
+              {...register('defaultNameDisplayOrder')}
+              className="input-name-order"
+              aria-label="인물 이름 표시 기본 순서"
+            >
+              <option value="korean">동양식 (성 → 이름)</option>
+              <option value="western">서양식 (이름 → 성)</option>
+            </FormSelectNative>
+            <p
+              style={{
+                margin: '8px 0 0',
+                fontSize: 12,
+                color: 'var(--text-secondary, #64748b)',
+                lineHeight: 1.45,
+              }}
+            >
+              이 국가에 소속된 인물을 한 줄로 표시할 때의 기본 순서입니다.
+            </p>
+          </S.FormField>
+        </S.FormSection>
       )}
 
       {(embedIn !== 'modal' || modalTab === 'basic') && (
@@ -811,6 +863,29 @@ export function CountryForm({
               )}
             </S.FormField>
           </S.FormRow>
+          {embedIn !== 'modal' && (
+            <S.FormField>
+              <S.FormLabel>인물 이름 표시 기본</S.FormLabel>
+              <FormSelectNative
+                {...register('defaultNameDisplayOrder')}
+                className="input-name-order"
+                aria-label="인물 이름 표시 기본 순서"
+              >
+                <option value="korean">동양식 (성 → 이름)</option>
+                <option value="western">서양식 (이름 → 성)</option>
+              </FormSelectNative>
+              <p
+                style={{
+                  margin: '8px 0 0',
+                  fontSize: 12,
+                  color: 'var(--text-secondary, #64748b)',
+                  lineHeight: 1.45,
+                }}
+              >
+                이 국가에 소속된 인물을 한 줄로 표시할 때의 기본 순서입니다.
+              </p>
+            </S.FormField>
+          )}
         </S.FormSection>
       )}
 

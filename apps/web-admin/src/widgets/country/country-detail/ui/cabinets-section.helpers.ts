@@ -9,7 +9,7 @@ export function getPersonName(person: {
   name?: string | null
   surname?: string | null
   middleName?: string | null
-  nameDisplayOrder?: string | null
+  country?: { defaultNameDisplayOrder?: string | null } | null
 } | null | undefined): string {
   if (!person) return '—'
   return getPersonDisplayName(
@@ -17,8 +17,7 @@ export function getPersonName(person: {
       name: person.name ?? '',
       surname: person.surname ?? null,
       middleName: person.middleName ?? null,
-      nameDisplayOrder:
-        (person.nameDisplayOrder as 'korean' | 'western') ?? 'korean',
+      country: person.country ?? null,
     },
     true,
   )

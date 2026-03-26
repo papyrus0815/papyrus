@@ -6,11 +6,13 @@
  *     <PillTabButton $active={tab === 'a'} onClick={() => setTab('a')}>탭A</PillTabButton>
  *     <PillTabButton $active={tab === 'b'} onClick={() => setTab('b')}>탭B</PillTabButton>
  *   </PillTabNav>
+ *
+ * 탭 줄만큼만 너비를 쓰려면 (행정구역 탭과 동일): <PillTabNav $hugContent>
  */
 import styled from 'styled-components'
 
 /** 배경 pill 컨테이너 */
-export const PillTabNav = styled.div`
+export const PillTabNav = styled.div<{ $hugContent?: boolean }>`
   display: flex;
   align-items: center;
   gap: 6px;
@@ -18,11 +20,11 @@ export const PillTabNav = styled.div`
   padding: 10px 10px 12px;
   min-height: 52px;
   box-sizing: border-box;
-  /* 부모(overflow:hidden 카드 등) 안에서 너비를 넘지 않게 하고, 탭이 많을 때 가로 스크롤 */
-  width: 100%;
+  /* 기본: 가로 전체. $hugContent: 탭 개수·라벨 길이만큼만 (행정구역 MapRegionTabNav와 동일) */
+  width: ${({ $hugContent }) => ($hugContent ? 'fit-content' : '100%')};
   max-width: 100%;
   min-width: 0;
-  align-self: stretch;
+  align-self: ${({ $hugContent }) => ($hugContent ? 'flex-start' : 'stretch')};
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.05)'

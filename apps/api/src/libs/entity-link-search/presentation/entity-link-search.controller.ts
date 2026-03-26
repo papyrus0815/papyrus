@@ -22,9 +22,13 @@ export type EntityLinkSearchItemDto = {
 function displayPersonName(p: {
   name: string
   surname: string | null
-  nameDisplayOrder: string | null
+  country?: { defaultNameDisplayOrder?: string | null; isoCode?: string | null } | null
 }): string {
-  const order = p.nameDisplayOrder ?? 'korean'
+  const d = p.country?.defaultNameDisplayOrder
+  let order: 'western' | 'korean'
+  if (d === 'western') order = 'western'
+  else if (d === 'korean') order = 'korean'
+  else order = 'korean'
   if (order === 'western')
     return [p.name, p.surname].filter(Boolean).join(' ').trim() || p.name
   return [p.surname, p.name].filter(Boolean).join(' ').trim() || p.name
@@ -87,8 +91,8 @@ export class EntityLinkSearchController {
           id: true,
           name: true,
           surname: true,
-          nameDisplayOrder: true,
           birthDate: true,
+          country: { select: { defaultNameDisplayOrder: true, isoCode: true } },
         },
       }),
       this.prisma.event.findMany({

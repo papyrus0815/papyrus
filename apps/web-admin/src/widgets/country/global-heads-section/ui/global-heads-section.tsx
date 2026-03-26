@@ -669,13 +669,14 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
   }
 
   const getPersonName = (p: any) =>
-    p ? getPersonDisplayName({
-        name: p.name || '',
-        surname: p.surname ?? '',
-        middleName: p.middleName ?? '',
-        nameDisplayOrder: (p.nameDisplayOrder as 'korean' | 'western') ?? 'korean',
-      })
-    : '—'
+    p
+      ? getPersonDisplayName({
+          name: p.name || '',
+          surname: p.surname ?? '',
+          middleName: p.middleName ?? '',
+          country: p.country ?? null,
+        })
+      : '—'
 
   const formatDate = (d: string) => {
     if (!d) return '—'

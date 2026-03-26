@@ -13,6 +13,8 @@ export class Country {
   capital?: string | null
   latitude?: number | null
   longitude?: number | null
+  /** 인물 표시명 기본 순서. null이면 동양식(성+이름) */
+  defaultNameDisplayOrder?: 'korean' | 'western' | null
   currencyId?: string | null
   languageId?: string | null
   continentId?: string | null

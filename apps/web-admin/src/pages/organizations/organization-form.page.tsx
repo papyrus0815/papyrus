@@ -212,7 +212,7 @@ function OrganizationHeadsSection({ organizationId }: { organizationId: string }
                 name: t.person?.name ?? '',
                 surname: t.person?.surname ?? '',
                 middleName: t.person?.middleName ?? '',
-                nameDisplayOrder: (t.person?.nameDisplayOrder as 'korean' | 'western') ?? 'korean',
+                country: t.person?.country ?? null,
               })}
               {' · '}
               {formatDate(t.startDate)} ~ {t.endDate ? formatDate(t.endDate) : '현재'}

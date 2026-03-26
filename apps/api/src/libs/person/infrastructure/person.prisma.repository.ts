@@ -52,6 +52,54 @@ import {
   AllCareersResponseDto,
 } from '../presentation/dto'
 
+/** 재임·행정부 등 nested person에 이름 표시 순서용 국가 필드 포함 */
+const PERSON_INCLUDE_COUNTRY_FOR_NAME: Prisma.PersonInclude = {
+  country: {
+    select: {
+      id: true,
+      name: true,
+      flagEmoji: true,
+      isoCode: true,
+      defaultNameDisplayOrder: true,
+    },
+  },
+}
+
+/**
+ * 출생이 역사적 국가(BIRTH_PLACE)만 있고 Person.countryId는 비어 있는 경우가 많음.
+ * 이때도 연결된 현대 국가의 defaultNameDisplayOrder를 쓰려면 affiliation·historical→modern 조인 필요.
+ */
+const PERSON_INCLUDE_AFFILIATIONS_FOR_NAME: Prisma.PersonCountryAffiliationInclude =
+  {
+    country: {
+      select: {
+        id: true,
+        name: true,
+        flagEmoji: true,
+        isoCode: true,
+        defaultNameDisplayOrder: true,
+      },
+    },
+    historicalCountry: {
+      include: {
+        modernConnections: {
+          take: 1,
+          include: {
+            modernCountry: {
+              select: {
+                id: true,
+                name: true,
+                flagEmoji: true,
+                isoCode: true,
+                defaultNameDisplayOrder: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  }
+
 /**
  * Prisma 기반 인물 Repository 구현체
  */
@@ -93,6 +141,75 @@ export class PersonPrismaRepository implements IPersonRepository {
     const affiliations = person.countryAffiliations as Array<{ affiliationType: string; historicalCountryId?: string | null; countryId?: string | null }> | undefined
     const birth = affiliations?.find((a) => String(a.affiliationType) === 'BIRTH_PLACE')
     return birth?.historicalCountryId ?? birth?.countryId ?? null
+  }
+
+  /**
+   * 이름 표시 순서용 country 블록: Person.country(FK) 우선, 없으면 출생 소속의 현대 국가 또는 역사→현대 연결.
+   */
+  private resolveCountryBlockForName(person: any): {
+    id: string
+    name: string
+    flagEmoji: string | null
+    isoCode: string | null
+    defaultNameDisplayOrder: string | null
+  } | null {
+    if (person.country != null) {
+      return {
+        id: person.country.id,
+        name: person.country.name,
+        flagEmoji: person.country.flagEmoji ?? null,
+        isoCode: person.country.isoCode ?? null,
+        defaultNameDisplayOrder: person.country.defaultNameDisplayOrder ?? null,
+      }
+    }
+    const affiliations = person.countryAffiliations as
+      | Array<{
+          affiliationType: string
+          country?: {
+            id: string
+            name: string
+            flagEmoji: string | null
+            isoCode: string | null
+            defaultNameDisplayOrder: string | null
+          } | null
+          historicalCountry?: {
+            modernConnections?: Array<{
+              modernCountry: {
+                id: string
+                name: string
+                flagEmoji: string | null
+                isoCode: string | null
+                defaultNameDisplayOrder: string | null
+              }
+            }>
+          } | null
+        }>
+      | undefined
+    const birth = affiliations?.find(
+      (a) => String(a.affiliationType) === 'BIRTH_PLACE',
+    )
+    if (birth?.country != null) {
+      const c = birth.country
+      return {
+        id: c.id,
+        name: c.name,
+        flagEmoji: c.flagEmoji ?? null,
+        isoCode: c.isoCode ?? null,
+        defaultNameDisplayOrder: c.defaultNameDisplayOrder ?? null,
+      }
+    }
+    const mc =
+      birth?.historicalCountry?.modernConnections?.[0]?.modernCountry
+    if (mc != null) {
+      return {
+        id: mc.id,
+        name: mc.name,
+        flagEmoji: mc.flagEmoji ?? null,
+        isoCode: mc.isoCode ?? null,
+        defaultNameDisplayOrder: mc.defaultNameDisplayOrder ?? null,
+      }
+    }
+    return null
   }
 
   /**
@@ -157,14 +274,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           ? { id: person.job.id, title: person.job.title }
           : null,
       countryId: this.getEffectiveBirthCountryId(person),
-      country:
-        person.country != null
-          ? {
-              id: person.country.id,
-              name: person.country.name,
-              flagEmoji: person.country.flagEmoji ?? null,
-            }
-          : null,
+      country: this.resolveCountryBlockForName(person),
       birthCityId: person.birthCityId ?? null,
       deathCityId: person.deathCityId ?? null,
       birthAdminDivisionId: person.birthAdminDivisionId ?? null,
@@ -407,8 +517,18 @@ export class PersonPrismaRepository implements IPersonRepository {
         createdAt: 'desc',
       },
       include: {
-        countryAffiliations: true,
-        country: { select: { id: true, name: true, flagEmoji: true } },
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            isoCode: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
         dynasty: { select: { id: true, name: true } },
         job: { select: { id: true, title: true } },
         birthCity: { select: { id: true, name: true } },
@@ -449,8 +569,18 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { countryId },
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
-        countryAffiliations: true,
-        country: { select: { id: true, name: true, flagEmoji: true } },
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            isoCode: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
         dynasty: { select: { id: true, name: true } },
         job: { select: { id: true, title: true } },
         birthCity: { select: { id: true, name: true } },
@@ -516,8 +646,18 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id: { in: personIds } },
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
-        countryAffiliations: true,
-        country: { select: { id: true, name: true, flagEmoji: true } },
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            isoCode: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
         dynasty: { select: { id: true, name: true } },
         job: { select: { id: true, title: true } },
         birthCity: { select: { id: true, name: true } },
@@ -620,7 +760,18 @@ export class PersonPrismaRepository implements IPersonRepository {
       ? await this.prisma.person.findFirst({
           where: { id, accountId },
           include: {
-            countryAffiliations: true,
+            countryAffiliations: {
+              include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+            },
+            country: {
+              select: {
+                id: true,
+                name: true,
+                flagEmoji: true,
+                isoCode: true,
+                defaultNameDisplayOrder: true,
+              },
+            },
             dynasty: { select: { id: true, name: true } },
             job: { select: { id: true, title: true } },
             GovernmentTenures: {
@@ -636,7 +787,18 @@ export class PersonPrismaRepository implements IPersonRepository {
       : await this.prisma.person.findUnique({
           where: { id },
           include: {
-            countryAffiliations: true,
+            countryAffiliations: {
+              include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+            },
+            country: {
+              select: {
+                id: true,
+                name: true,
+                flagEmoji: true,
+                isoCode: true,
+                defaultNameDisplayOrder: true,
+              },
+            },
             dynasty: { select: { id: true, name: true } },
             job: { select: { id: true, title: true } },
             GovernmentTenures: {
@@ -997,7 +1159,20 @@ export class PersonPrismaRepository implements IPersonRepository {
     // 응답에 effective countryId(역사적 국가 포함)를 넣기 위해 countryAffiliations 포함해 재조회
     const created = await this.prisma.person.findUnique({
       where: { id: person.id },
-      include: { countryAffiliations: true },
+      include: {
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            isoCode: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
+      },
     })
     return created ? this.mapToPersonResponse(created) : this.mapToPersonResponse(person)
   }
@@ -1083,7 +1258,20 @@ export class PersonPrismaRepository implements IPersonRepository {
     // 응답에 effective countryId(역사적 국가 포함)를 넣기 위해 countryAffiliations 포함해 재조회
     const updated = await this.prisma.person.findUnique({
       where: { id },
-      include: { countryAffiliations: true },
+      include: {
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            isoCode: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
+      },
     })
     return updated ? this.mapToPersonResponse(updated) : this.mapToPersonResponse(person)
   }
@@ -1341,8 +1529,14 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
-        person: true,
-        cabinet: { include: { headTenure: { include: { person: true } } } },
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+        cabinet: {
+          include: {
+            headTenure: {
+              include: { person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME } },
+            },
+          },
+        },
         electionCandidacy: {
           select: {
             id: true,
@@ -1412,8 +1606,14 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
-        person: true,
-        cabinet: { include: { headTenure: { include: { person: true } } } },
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+        cabinet: {
+          include: {
+            headTenure: {
+              include: { person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME } },
+            },
+          },
+        },
         electionCandidacy: {
           select: {
             id: true,
@@ -1470,7 +1670,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         headTenure: {
           include: {
-            person: true,
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
@@ -1504,7 +1704,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { cabinetId },
       orderBy: [{ startDate: 'asc' }],
       include: {
-        person: true,
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
         positionDefinition: true,
         country: true,
         historicalCountry: true,
@@ -1566,7 +1766,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         headTenure: {
           include: {
-            person: true,
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
@@ -1599,7 +1799,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         headTenure: {
           include: {
-            person: true,
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
@@ -1616,7 +1816,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         headTenure: {
           include: {
-            person: true,
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
@@ -1656,7 +1856,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         headTenure: {
           include: {
-            person: true,
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
@@ -1701,7 +1901,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
       orderBy: [{ startDate: 'asc' }],
       include: {
-        person: true,
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
         positionDefinition: true,
         country: true,
         historicalCountry: true,
@@ -1718,7 +1918,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const tenure = await this.prisma.governmentPositionTenure.findUnique({
       where: { id },
       include: {
-        person: true,
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
         achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
       },
     })
@@ -1798,7 +1998,14 @@ export class PersonPrismaRepository implements IPersonRepository {
                 nameDisplayOrder: true,
               },
             },
-            country: { select: { id: true, name: true, flagEmoji: true } },
+            country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
             historicalCountry: { select: { id: true, name: true } },
             positionDefinition: {
               select: {
@@ -2229,8 +2436,18 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id: { in: personIds } },
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
       include: {
-        countryAffiliations: true,
-        country: { select: { id: true, name: true, flagEmoji: true } },
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            isoCode: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
         dynasty: { select: { id: true, name: true } },
         job: { select: { id: true, title: true } },
         birthCity: { select: { id: true, name: true } },

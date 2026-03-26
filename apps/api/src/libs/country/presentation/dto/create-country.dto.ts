@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsString, IsOptional, IsNumber, IsNotEmpty } from 'class-validator'
+import { IsString, IsOptional, IsNumber, IsNotEmpty, IsIn } from 'class-validator'
 
 export class CreateCountryDto {
   @ApiProperty({ description: '국가명' })
@@ -61,4 +61,14 @@ export class CreateCountryDto {
   @IsString()
   @IsOptional()
   continentId?: string
+
+  @ApiProperty({
+    description:
+      '인물 이름 표시 기본 순서: korean(성·이름), western(이름·성). 비우면 동양식',
+    enum: ['korean', 'western'],
+    required: false,
+  })
+  @IsOptional()
+  @IsIn(['korean', 'western'])
+  defaultNameDisplayOrder?: 'korean' | 'western'
 }

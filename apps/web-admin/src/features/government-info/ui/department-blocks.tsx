@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import type { AdministrationDepartmentEventType } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
@@ -27,11 +28,24 @@ export function DepartmentTenuresBlock({
   const formatDate = (dateStr: string | null) =>
     dateStr ? dateStr.slice(0, 10).replace(/-/g, '.') : '—'
   const formatName = (
-    p: { name?: string; surname?: string; middleName?: string } | null,
+    p: {
+      name?: string
+      surname?: string
+      middleName?: string
+      country?: { defaultNameDisplayOrder?: string | null } | null
+    } | null,
   ) => {
     if (!p) return '—'
-    const parts = [p.surname, p.middleName, p.name].filter(Boolean)
-    return parts.join(' ') || p.name || '—'
+    return (
+      getPersonDisplayName({
+        name: p.name ?? '',
+        surname: p.surname,
+        middleName: p.middleName,
+        country: p.country ?? undefined,
+      }) ||
+      p.name ||
+      '—'
+    )
   }
   const listEl = (
     <>
@@ -64,6 +78,14 @@ export function DepartmentTenuresBlock({
                       name: tenure.person.name,
                       surname: tenure.person.surname ?? undefined,
                       middleName: tenure.person.middleName ?? undefined,
+                      country:
+                        (
+                          tenure.person as {
+                            country?: {
+                              defaultNameDisplayOrder?: string | null
+                            } | null
+                          }
+                        ).country ?? undefined,
                     }
                   : null,
               )}

@@ -44,6 +44,7 @@ export class CountryController {
       currencyId: country.currencyId,
       languageId: country.languageId,
       continentId: country.continentId,
+      defaultNameDisplayOrder: country.defaultNameDisplayOrder ?? null,
       createdAt: created instanceof Date ? created.toISOString() : typeof created === 'string' ? created : undefined,
       updatedAt: updated instanceof Date ? updated.toISOString() : typeof updated === 'string' ? updated : undefined,
       historicalCountries: country.historicalCountries?.map((hc) => ({
@@ -162,6 +163,7 @@ export class CountryController {
         currencyId: dto.currencyId,
         languageId: dto.languageId,
         continentId: dto.continentId,
+        defaultNameDisplayOrder: dto.defaultNameDisplayOrder,
       },
       accountId,
     )
@@ -198,6 +200,7 @@ export class CountryController {
         currencyId: dto.currencyId,
         languageId: dto.languageId,
         continentId: dto.continentId,
+        defaultNameDisplayOrder: dto.defaultNameDisplayOrder,
       },
       accountId,
     )

@@ -17,6 +17,7 @@ import {
 import { toast } from 'react-hot-toast'
 import styled, { useTheme } from 'styled-components'
 
+import { useCountry } from '@/entities/country/api'
 import { usePersons } from '@/entities/person/api'
 import type { PersonResponseDto } from '@/shared/api/persons'
 import {
@@ -407,17 +408,6 @@ function partyResultSliceFill(
   return `hsl(${fallbackHue} 68% 54%)`
 }
 
-function candidacyLabel(c: ElectionCandidacyDto) {
-  if (c.person) {
-    return getPersonDisplayName({
-      name: c.person.name,
-      surname: c.person.surname,
-    })
-  }
-  if (c.party) return c.party.shortName || c.party.name
-  return '(후보 정보 없음)'
-}
-
 export interface CountryElectionsSectionProps {
   /** 현대 국가 상세에서 전달 */
   countryId?: string
@@ -494,6 +484,36 @@ export function CountryElectionsSection({
     queryFn: () => getElectoralDistricts(listParams as Record<string, string>),
     enabled: !!scopeKey,
   })
+
+  const { data: countryForNames } = useCountry(countryId ?? '')
+
+  const candidacyLabel = useCallback(
+    (c: ElectionCandidacyDto) => {
+      if (c.person) {
+        const p = c.person as {
+          name: string
+          surname?: string | null
+          middleName?: string | null
+          country?: { defaultNameDisplayOrder?: string | null } | null
+        }
+        return getPersonDisplayName(
+          {
+            name: p.name,
+            surname: p.surname,
+            middleName: p.middleName,
+            country: p.country ?? null,
+          },
+          {
+            countryDefaultNameDisplayOrder:
+              countryForNames?.defaultNameDisplayOrder ?? null,
+          },
+        )
+      }
+      if (c.party) return c.party.shortName || c.party.name
+      return '(후보 정보 없음)'
+    },
+    [countryForNames?.defaultNameDisplayOrder],
+  )
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: qk.list(scopeKey) })

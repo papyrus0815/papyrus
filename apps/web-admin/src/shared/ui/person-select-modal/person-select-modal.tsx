@@ -19,6 +19,7 @@ import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface PersonSelectModalProps {
@@ -87,19 +88,20 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     const query = searchQuery.toLowerCase().trim()
     if (query) {
       result = result.filter((person) => {
-        const fullName = `${person.surname || ''} ${person.name}`
-          .toLowerCase()
-          .trim()
-        const reverseName = `${person.name} ${person.surname || ''}`
-          .toLowerCase()
-          .trim()
-
+        const display = getPersonDisplayName(person).toLowerCase()
+        const westernLike = getPersonDisplayName(person, {
+          countryDefaultNameDisplayOrder: 'western',
+        }).toLowerCase()
+        const koreanLike = getPersonDisplayName(person, {
+          countryDefaultNameDisplayOrder: 'korean',
+        }).toLowerCase()
         const birthYear = person.birthYear ? String(person.birthYear) : ''
         const deathYear = person.deathYear ? String(person.deathYear) : ''
 
         return (
-          fullName.includes(query) ||
-          reverseName.includes(query) ||
+          display.includes(query) ||
+          westernLike.includes(query) ||
+          koreanLike.includes(query) ||
           birthYear.includes(query) ||
           deathYear.includes(query)
         )
@@ -129,8 +131,8 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     // 정렬
     result = [...result].sort((personA, personB) => {
       if (sortBy === 'name') {
-        const nameA = `${personA.surname || ''} ${personA.name}`.trim()
-        const nameB = `${personB.surname || ''} ${personB.name}`.trim()
+        const nameA = getPersonDisplayName(personA)
+        const nameB = getPersonDisplayName(personB)
         return nameA.localeCompare(nameB, 'ko')
       } else if (sortBy === 'birth-asc') {
         const birthA = personA.birthYear || 9999
@@ -163,9 +165,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   ].filter(Boolean).length
 
   const handleSelect = (person: PersonResponseDto) => {
-    const fullName = person.surname
-      ? `${person.surname} ${person.name}`
-      : person.name
+    const fullName = getPersonDisplayName(person)
     playClickSound()
     onSelect(person.id, fullName)
     onClose()
@@ -352,9 +352,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                 </EmptyState>
               ) : (
                 filteredPersons.map((person) => {
-                  const fullName = person.surname
-                    ? `${person.surname} ${person.name}`
-                    : person.name
+                  const fullName = getPersonDisplayName(person)
                   const isSelected = selectedPersonId === person.id
 
                   // 생몰년도 포맷팅 (직업·국가는 ID만 있어 카드에는 표시하지 않음)

@@ -36,6 +36,7 @@ import {
 } from '@/shared/api/treaty'
 import { uploadImage } from '@/shared/api/upload'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 const fadeIn = keyframes`from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; }`
 
@@ -1215,14 +1216,29 @@ const TreatyDetail: React.FC<{
                     s.country?.name ?? s.historicalCountry?.name ?? '알 수 없음'
                   const flag = s.country?.flagEmoji ?? ''
                   const personName = s.person
-                    ? `${s.person.surname ?? ''}${s.person.name ?? ''}`
+                    ? getPersonDisplayName({
+                        name: s.person.name ?? '',
+                        surname: s.person.surname,
+                        middleName: (s.person as { middleName?: string | null }).middleName,
+                        country: (s.person as { country?: { defaultNameDisplayOrder?: string | null } | null })
+                          .country,
+                      })
                     : null
                   const cabinetLabel = s.cabinet
                     ? (s.cabinet.name ??
                       (() => {
                         const ht = s.cabinet.headTenure
                         const pName = ht?.person
-                          ? `${ht.person.surname ?? ''}${ht.person.name ?? ''}`
+                          ? getPersonDisplayName({
+                              name: ht.person.name ?? '',
+                              surname: ht.person.surname,
+                              middleName: (ht.person as { middleName?: string | null }).middleName,
+                              country: (
+                                ht.person as {
+                                  country?: { defaultNameDisplayOrder?: string | null } | null
+                                }
+                              ).country,
+                            })
                           : ''
                         const term = ht?.termNumber ?? ht?.subTermNumber
                         return term

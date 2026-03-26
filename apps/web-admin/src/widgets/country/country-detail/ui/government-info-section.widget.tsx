@@ -19,13 +19,16 @@ import { GovernmentStatisticsTab } from '@/features/government-info/ui/governmen
 import { MinistriesTabSection } from '@/features/government-info/ui/ministries-tab-section.widget'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { useThemeStore } from '@/shared/styles/theme.store'
-import { TabButton, TabNavigation } from '@/shared/ui/register-form-layout'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 
 import { CabinetsSection } from './cabinets-section.widget'
 import { GovernmentCategoryModal } from './government-category-modal.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
+import {
+  MapRegionTabButton,
+  MapRegionTabNav,
+} from './map-region-section.styles'
 import { PositionDefinitionsSection } from './position-definitions-section.widget'
 
 export type { GovernmentContentTab }
@@ -112,6 +115,7 @@ export function GovernmentInfoSection({
         }}
       >
         <SectionTabHeader
+          variant="flat"
           title="행정조직"
           description="역대 수반, 행정부, 중앙부처, 행정기구, 직위 정의, 통계를 관리합니다."
           rightSlot={
@@ -140,19 +144,26 @@ export function GovernmentInfoSection({
           }
         />
 
-        <TabNavigation>
+        {/* 행정구역 탭과 동일 컴포넌트·시각 스타일 */}
+        <MapRegionTabNav
+          role="tablist"
+          aria-label="행정조직 하위 메뉴"
+          style={{ marginBottom: 0 }}
+        >
           {GOVERNMENT_TAB_ORDER.map((tabKey) => (
-            <TabButton
+            <MapRegionTabButton
               key={tabKey}
               type="button"
+              role="tab"
+              aria-selected={contentTab === tabKey}
               $active={contentTab === tabKey}
               onClick={() => setContentTab(tabKey)}
               title={GOV_TAB_META[tabKey].hint}
             >
               {GOV_TAB_META[tabKey].label}
-            </TabButton>
+            </MapRegionTabButton>
           ))}
-        </TabNavigation>
+        </MapRegionTabNav>
 
         {contentTab === 'heads' && country && (
           <section aria-label="역대 수반">

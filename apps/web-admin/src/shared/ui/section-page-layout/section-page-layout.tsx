@@ -35,52 +35,72 @@ export const SectionRoot = styled(motion.div)`
   background: ${({ theme }) => theme.colors.background.primary};
 `
 
-// ─── SectionTabHeader (글라스 히어로 헤더) ────────────────────────────────────
+// ─── SectionTabHeader (기본: 글라스 히어로 / flat: 탭 줄과 동일한 얕은 스트립) ─
 
-const TabHeaderOuter = styled.header`
+const TabHeaderOuter = styled.header<{ $flat?: boolean }>`
   padding: 28px 32px;
   border-radius: 20px;
   position: relative;
 
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          backdrop-filter: blur(24px) saturate(180%);
-          -webkit-backdrop-filter: blur(24px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow:
-            0 4px 24px rgba(0, 0, 0, 0.5),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
-        `
-      : css`
-          background: ${theme.colors.background.primary};
-          border: 1px solid ${theme.colors.border.default};
-          box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
-        `}
+  ${({ theme, $flat }) =>
+    $flat
+      ? theme.mode === 'dark'
+        ? css`
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: none;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+          `
+        : css`
+            background: #f1f5f9;
+            border: none;
+            box-shadow: none;
+          `
+      : theme.mode === 'dark'
+        ? css`
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow:
+              0 4px 24px rgba(0, 0, 0, 0.5),
+              inset 0 1px 0 rgba(255, 255, 255, 0.06);
+          `
+        : css`
+            background: ${theme.colors.background.primary};
+            border: 1px solid ${theme.colors.border.default};
+            box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
+          `}
 
   @media (max-width: 768px) {
     padding: 20px 22px;
     border-radius: 16px;
   }
 
-  /* 배경 오버레이 */
+  /* 히어로 전용: 보라 음영 오버레이 — flat 에서는 비활성 */
   &::before {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: radial-gradient(
-      ellipse at 85% 20%,
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(159, 122, 234, 0.07)'
-          : 'rgba(139, 92, 246, 0.04)'}
-        0%,
-      transparent 55%
-    );
     pointer-events: none;
     z-index: 0;
+    ${({ $flat, theme }) =>
+      $flat
+        ? css`
+            display: none;
+          `
+        : css`
+            background: radial-gradient(
+              ellipse at 85% 20%,
+              ${theme.mode === 'dark'
+                ? 'rgba(159, 122, 234, 0.07)'
+                : 'rgba(139, 92, 246, 0.04)'}
+                0%,
+              transparent 55%
+            );
+          `}
   }
 `
 
@@ -133,11 +153,22 @@ export interface SectionTabHeaderProps {
   leftSlot?: React.ReactNode
   /** 우측 버튼 슬롯 */
   rightSlot?: React.ReactNode
+  /**
+   * `flat`: 행정구역 탭 줄과 같은 얕은 배경·무그림자 (행정조직 등)
+   * 기본 `hero`: 글라스·그림자·보라 하이라이트
+   */
+  variant?: 'hero' | 'flat'
 }
 
-export function SectionTabHeader({ title, description, leftSlot, rightSlot }: SectionTabHeaderProps) {
+export function SectionTabHeader({
+  title,
+  description,
+  leftSlot,
+  rightSlot,
+  variant = 'hero',
+}: SectionTabHeaderProps) {
   return (
-    <TabHeaderOuter>
+    <TabHeaderOuter $flat={variant === 'flat'}>
       <TabHeaderInner>
         <TabHeaderLeft>
           {leftSlot}

@@ -91,11 +91,22 @@ export function useUpdateCountry() {
       const response = await countriesApi.updateCountry(id, data)
       return response as Country
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData(
+        countryKeys.all,
+        (old: Country[] | undefined) =>
+          old?.map((c) =>
+            c.id === updated.id ? { ...c, ...updated } : c,
+          ),
+      )
+      queryClient.setQueryData(countryKeys.detail(variables.id), updated)
       queryClient.invalidateQueries({ queryKey: countryKeys.all })
       queryClient.invalidateQueries({
         queryKey: countryKeys.detail(variables.id),
       })
+      queryClient.invalidateQueries({ queryKey: ['persons'] })
+      queryClient.invalidateQueries({ queryKey: ['person-detail'] })
+      queryClient.invalidateQueries({ queryKey: ['persons-by-country'] })
     },
   })
 }

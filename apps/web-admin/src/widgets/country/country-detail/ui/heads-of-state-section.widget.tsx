@@ -862,7 +862,7 @@ export function HeadsOfStateSection({
       name?: string
       surname?: string
       middleName?: string
-      nameDisplayOrder?: string
+      country?: { defaultNameDisplayOrder?: string | null } | null
     } | null,
   ) => {
     if (!p) return '—'
@@ -870,8 +870,7 @@ export function HeadsOfStateSection({
       name: p.name || '',
       surname: p.surname ?? '',
       middleName: p.middleName ?? '',
-      nameDisplayOrder:
-        (p.nameDisplayOrder as 'korean' | 'western') ?? 'korean',
+      country: p.country ?? null,
     })
   }
 

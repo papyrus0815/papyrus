@@ -6,6 +6,7 @@
 import React from 'react'
 
 import type { HeadOfStateDuringEvent } from '@/shared/api/government-positions'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import * as List from '../../../pages/events/styles/list.styles'
 
@@ -26,7 +27,7 @@ export const OtherHeadsOfStateList: React.FC<OtherHeadsOfStateListProps> = ({
             {otherHead.person.profileImageUrl ? (
               <img
                 src={otherHead.person.profileImageUrl}
-                alt={`${otherHead.person.surname || ''}${otherHead.person.name}`}
+                alt={getPersonDisplayName(otherHead.person)}
               />
             ) : (
               <>
@@ -36,10 +37,7 @@ export const OtherHeadsOfStateList: React.FC<OtherHeadsOfStateListProps> = ({
             )}
           </List.OtherHeadAvatar>
           <List.OtherHeadInfo>
-            <strong>
-              {otherHead.person.surname || ''}
-              {otherHead.person.name}
-            </strong>
+            <strong>{getPersonDisplayName(otherHead.person)}</strong>
             <span>|</span>
             <span>{otherHead.country.name}</span>
             <span>{otherHead.position.title}</span>

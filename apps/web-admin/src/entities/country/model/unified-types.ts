@@ -33,6 +33,8 @@ export interface UnifiedCountry {
   continentId?: string | null
   latitude?: number | null
   longitude?: number | null
+  /** 인물 이름 표시 순서 (현대 국가) */
+  defaultNameDisplayOrder?: 'korean' | 'western' | null
 
   // 역사적 국가 목록 (현대 국가에만 존재)
   historicalCountries?: HistoricalCountry[]
@@ -71,6 +73,9 @@ export function modernToUnified(country: Country): UnifiedCountry {
     latitude: country.latitude,
     longitude: country.longitude,
     historicalCountries: country.historicalCountries,
+    defaultNameDisplayOrder:
+      (country as { defaultNameDisplayOrder?: 'korean' | 'western' | null })
+        .defaultNameDisplayOrder ?? null,
   }
 }
 

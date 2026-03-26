@@ -48,6 +48,14 @@ export class CountryResponseDto {
   continentId?: string | null
 
   @ApiProperty({
+    description:
+      '인물 이름 표시 기본 순서: korean(성·이름), western(이름·성). null이면 동양식',
+    enum: ['korean', 'western'],
+    required: false,
+  })
+  defaultNameDisplayOrder?: 'korean' | 'western' | null
+
+  @ApiProperty({
     description: '연결된 역사적 국가 목록',
     type: [HistoricalCountrySimpleResponseDto],
     required: false,

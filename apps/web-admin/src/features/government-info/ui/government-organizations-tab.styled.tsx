@@ -4,6 +4,7 @@ import {
   GOV_BORDER_COLOR as BORDER_COLOR,
   GOV_MAIN_COLOR as MAIN,
 } from '@/features/government-info/model/constants'
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { ModalBox } from '@/shared/ui/modal/modal.styles'
 
 /* 행정기구 리스트·모달 (인물 리스트/인물 등록 모달 참조) */
@@ -13,7 +14,8 @@ export const OrgListHeader = styled.header`
   gap: 16px;
   padding: 20px 0 20px;
   margin-bottom: 24px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-bottom: 1px solid
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
 `
 export const OrgListHeaderRow = styled.div`
   display: flex;
@@ -31,7 +33,8 @@ export const OrgListHeaderTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').text};
   letter-spacing: -0.03em;
   display: flex;
   align-items: baseline;
@@ -40,14 +43,28 @@ export const OrgListHeaderTitle = styled.h2`
 export const OrgListHeaderCount = styled.span`
   font-size: 13px;
   font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
 `
 export const OrgListHeaderDesc = styled.p`
   margin: 0;
   font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   line-height: 1.5;
 `
+/** 행정부(cabinets)·중앙부처·통계 등 공통 섹션 소제목 */
+export const GovSectionEyebrow = styled.div`
+  margin-bottom: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+`
+
 export const OrgToolbarRow = styled.div`
   display: flex;
   align-items: center;

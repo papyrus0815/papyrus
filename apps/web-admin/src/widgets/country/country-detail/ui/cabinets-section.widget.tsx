@@ -1621,28 +1621,9 @@ export function CabinetsSection({
                 </CabS.CabListBody>
               ) : (
                 <CabS.CabListBody>
-                  <div
-                    style={{
-                      width: '100%',
-                      padding: '0 0 32px',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    {/* 타임라인 요약 헤더 + 인포 범례 */}
-                    <div
-                      style={{
-                        borderBottom: `1px solid ${C.border}`,
-                        background: 'transparent',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '36px 0 10px',
-                        }}
-                      >
+                  <CabS.CabTimelineSummaryOuter>
+                    <CabS.CabTimelineSummaryHeader>
+                      <CabS.CabTimelineSummaryTopRow>
                         <div
                           style={{
                             display: 'flex',
@@ -1656,6 +1637,7 @@ export function CabinetsSection({
                               fontSize: 12,
                               fontWeight: 700,
                               color: C.text,
+                              letterSpacing: '-0.02em',
                             }}
                           >
                             {filteredCabinets.length}개 행정부
@@ -1663,13 +1645,7 @@ export function CabinetsSection({
                         </div>
                         {cabinetTimelineYearRange.minY != null && (
                           <>
-                            <div
-                              style={{
-                                width: 1,
-                                height: 12,
-                                background: C.borderMid,
-                              }}
-                            />
+                            <CabS.CabTimelineSepRule aria-hidden />
                             <div
                               style={{
                                 display: 'flex',
@@ -1688,18 +1664,11 @@ export function CabinetsSection({
                           </>
                         )}
                         <div style={{ flex: 1 }} />
-                      </div>
+                      </CabS.CabTimelineSummaryTopRow>
                       {cabinetTerritoryLegendEntries.length > 0 && (
-                        <div
+                        <CabS.CabTimelineLegendRow
                           role="list"
                           aria-label="이 목록의 소속별 강조 색"
-                          style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            alignItems: 'center',
-                            gap: '8px 12px',
-                            padding: '0 0 12px',
-                          }}
                         >
                           {cabinetTerritoryLegendEntries.map((e) => (
                             <div
@@ -1739,48 +1708,23 @@ export function CabinetsSection({
                               </span>
                             </div>
                           ))}
-                        </div>
+                        </CabS.CabTimelineLegendRow>
                       )}
-                      <p
-                        role="note"
-                        style={{
-                          margin: 0,
-                          padding: '0 0 18px',
-                          fontSize: 11,
-                          lineHeight: 1.55,
-                          color: C.textMuted,
-                          fontWeight: 500,
-                        }}
-                      >
-                        아래 목록에서{' '}
-                        <strong style={{ color: C.text }}>서로 다른 소속</strong>
-                        (역사국가·현대국가, 또는 행정부 명칭 구분)마다 강조
-                        색을 나눕니다. 필터·검색으로 목록이 바뀌면 같은 소속도
-                        배정 순서가 달라질 수 있습니다. 가로줄은 시간 흐름만
+                      <CabS.CabTimelineNote role="note">
+                        아래 목록에서 <strong>서로 다른 소속</strong>
+                        (역사국가·현대국가, 또는 행정부 명칭 구분)마다 강조 색을
+                        나눕니다. 필터·검색으로 목록이 바뀌면 같은 소속도 배정
+                        순서가 달라질 수 있습니다. 가로줄은 시간 흐름만
                         나타냅니다. 짝수 행은 왼쪽→오른쪽, 홀수 행은
                         오른쪽→왼쪽으로 이어집니다.
-                      </p>
-                    </div>
-                    <div
+                      </CabS.CabTimelineNote>
+                    </CabS.CabTimelineSummaryHeader>
+                    <CabS.CabTimelineGrid
                       role="region"
                       aria-label="역대 행정부 타임라인"
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(140px, 220px) 1fr',
-                        gap: '0 12px',
-                        alignItems: 'start',
-                        /* 요약 헤더의 border-bottom과 첫 행 썸네일 사이 간격 */
-                        paddingTop: 24,
-                      }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                        }}
-                      >
+                      <CabS.CabTimelineColLeft>
                         {cabinetTimelineRows.map((rowItems, rowIdx) => {
-                          const rowSpine = C.borderMid
                           const rowLabelColor = C.textMuted
                           const firstHead = rowItems[0]?.headTenure
                           const lastHead =
@@ -1799,29 +1743,14 @@ export function CabinetsSection({
                               : `${rowIdx * timelineColumnCount + 1}번째 행`
                           return (
                             <Fragment key={`cab-tl-l-${rowIdx}`}>
-                              <div
+                              <CabS.CabTimelineRowLabelWrap
                                 title={
                                   rowIdx % 2 === 0
                                     ? '이 행의 시간 순서: 왼쪽 → 오른쪽'
                                     : '이 행의 시간 순서: 오른쪽 → 왼쪽'
                                 }
-                                style={{
-                                  minHeight: TL_ROW_H,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  paddingRight: 4,
-                                }}
                               >
-                                <div
-                                  style={{
-                                    width: 4,
-                                    height: 16,
-                                    borderRadius: 2,
-                                    background: rowSpine,
-                                    flexShrink: 0,
-                                  }}
-                                />
+                                <CabS.CabTimelineRowSpine />
                                 {rowIdx % 2 === 0 ? (
                                   <FiChevronRight
                                     size={12}
@@ -1837,36 +1766,16 @@ export function CabinetsSection({
                                     aria-hidden
                                   />
                                 )}
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    color: rowLabelColor,
-                                    letterSpacing: '0.04em',
-                                  }}
-                                >
+                                <CabS.CabTimelineRowTermText>
                                   {rangeLabel}
-                                </span>
-                                <div
-                                  style={{
-                                    flex: 1,
-                                    height: 1,
-                                    background: `linear-gradient(90deg, ${rowSpine}, transparent)`,
-                                    opacity: 0.55,
-                                  }}
-                                />
-                              </div>
+                                </CabS.CabTimelineRowTermText>
+                                <CabS.CabTimelineRowRule />
+                              </CabS.CabTimelineRowLabelWrap>
                             </Fragment>
                           )
                         })}
-                      </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          minWidth: 0,
-                        }}
-                      >
+                      </CabS.CabTimelineColLeft>
+                      <CabS.CabTimelineColRight>
                         {cabinetTimelineRows.map((rowItems, rowIdx) => {
                           const cols = timelineColumnCount
                           const rowFlowLine = C.borderMid
@@ -2287,9 +2196,9 @@ export function CabinetsSection({
                             </Fragment>
                           )
                         })}
-                      </div>
-                    </div>
-                  </div>
+                      </CabS.CabTimelineColRight>
+                    </CabS.CabTimelineGrid>
+                  </CabS.CabTimelineSummaryOuter>
                 </CabS.CabListBody>
               )}
             </CabS.CabListPanel>

@@ -930,6 +930,7 @@ export function CountryDashboard({
                       const modernCountry: Country = {
                         id: country.id,
                         name: country.name,
+                        fullName: country.fullName ?? undefined,
                         localName: country.localName,
                         isoCode: country.isoCode,
                         flagEmoji: country.flagEmoji,
@@ -938,6 +939,8 @@ export function CountryDashboard({
                         areaSqKm: country.areaSqKm,
                         thumbnailUrl: country.thumbnailUrl || undefined,
                         continentId: country.continentId,
+                        defaultNameDisplayOrder:
+                          country.defaultNameDisplayOrder ?? undefined,
                       }
                       onCountryEdit(modernCountry)
                     }

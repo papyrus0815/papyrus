@@ -1,8 +1,6 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 
-import styled from 'styled-components'
-
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { mockGovernmentData } from '@/widgets/country/country-detail/mock'
@@ -13,19 +11,7 @@ import {
 } from '../model/constants'
 import { useGovernmentStatisticsMockData } from '../model/use-government-statistics-mock'
 
-const SectionLabelDiv = styled.div`
-  margin-bottom: 18px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-`
-
-function SectionLabel({ children }: { children: ReactNode }) {
-  return <SectionLabelDiv>{children}</SectionLabelDiv>
-}
+import { GovSectionEyebrow } from './government-organizations-tab.styled'
 
 /** props 없음 — mock 통계·필터 상태는 `useGovernmentStatisticsMockData`에서 처리 */
 export function GovernmentStatisticsTab() {
@@ -52,7 +38,7 @@ export function GovernmentStatisticsTab() {
         style={{
           display: 'flex',
           gap: 0,
-          borderBottom: `1px solid ${palette.border}`,
+          borderBottom: `1px solid ${palette.divider}`,
           paddingBottom: 20,
           marginBottom: 4,
         }}
@@ -117,7 +103,7 @@ export function GovernmentStatisticsTab() {
 
       {/* 요약 지표 */}
       <section aria-label="행정조직 요약">
-        <SectionLabel>요약 지표</SectionLabel>
+        <GovSectionEyebrow>요약 지표</GovSectionEyebrow>
         <div
           style={{
             display: 'grid',
@@ -236,7 +222,7 @@ export function GovernmentStatisticsTab() {
 
       {/* 예산 추이 — 요약 지표 바로 아래 */}
       <section aria-label="국가 예산 추이">
-        <SectionLabel>예산 추이</SectionLabel>
+        <GovSectionEyebrow>예산 추이</GovSectionEyebrow>
         <div
           style={{
             background: palette.bgSubtle,
@@ -426,7 +412,7 @@ export function GovernmentStatisticsTab() {
       >
         {/* 좌측: 주요 사건 타임라인 */}
         <div style={{ minWidth: 0 }}>
-          <SectionLabel>주요 사건</SectionLabel>
+          <GovSectionEyebrow>주요 사건</GovSectionEyebrow>
           <div
             style={{
               background: palette.bgSubtle,
@@ -838,7 +824,7 @@ export function GovernmentStatisticsTab() {
 
         {/* 우측: 조직 유형별 현황 2x2 */}
         <div style={{ minWidth: 0 }}>
-          <SectionLabel>조직 유형별 현황</SectionLabel>
+          <GovSectionEyebrow>조직 유형별 현황</GovSectionEyebrow>
           <div
             style={{
               display: 'grid',

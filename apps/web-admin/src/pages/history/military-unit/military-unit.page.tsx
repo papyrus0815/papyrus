@@ -6,6 +6,8 @@ import {
   useDeleteMilitaryUnit,
 } from '@/features/military-unit/use-military-units.hook'
 import type { MilitaryUnit } from '@/shared/api/military-unit'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+
 import { MilitaryUnitForm } from './components/military-unit-form'
 
 const UNIT_TYPE_LABELS: Record<string, string> = {
@@ -162,7 +164,7 @@ export const MilitaryUnitPage = () => {
                           <MetaIcon>👤</MetaIcon>
                           <MetaText>
                             {unit.commanders[0].person
-                              ? `${unit.commanders[0].person.surname || ''} ${unit.commanders[0].person.name}`
+                              ? getPersonDisplayName(unit.commanders[0].person)
                               : '지휘관'}
                             {unit.commanders[0].rank && ` (${unit.commanders[0].rank})`}
                           </MetaText>

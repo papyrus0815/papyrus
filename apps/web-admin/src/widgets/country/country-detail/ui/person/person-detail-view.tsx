@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { FiEdit2, FiPlus } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 
 interface PersonDetailViewProps {
@@ -37,9 +38,7 @@ export function PersonDetailView({
     )
   }
 
-  const fullName = person.surname
-    ? `${person.surname} ${person.name}`
-    : person.name
+  const fullName = getPersonDisplayName(person)
 
   const birthYearText = person.birthYear
     ? `${person.birthYear}${person.birthEra === 'BC' ? ' BC' : ''}`
@@ -212,7 +211,7 @@ export function PersonDetailView({
                       {person.father && (
                         <FamilyCard>
                           <FamilyName>
-                            {person.father.surname} {person.father.name}
+                            {getPersonDisplayName(person.father)}
                           </FamilyName>
                           <FamilyMeta>아버지</FamilyMeta>
                         </FamilyCard>
@@ -220,7 +219,7 @@ export function PersonDetailView({
                       {person.mother && (
                         <FamilyCard>
                           <FamilyName>
-                            {person.mother.surname} {person.mother.name}
+                            {getPersonDisplayName(person.mother)}
                           </FamilyName>
                           <FamilyMeta>어머니</FamilyMeta>
                         </FamilyCard>
@@ -236,9 +235,7 @@ export function PersonDetailView({
                     <FamilyGrid>
                       {person.children.map((child: any) => (
                         <FamilyCard key={child.id}>
-                          <FamilyName>
-                            {child.surname} {child.name}
-                          </FamilyName>
+                          <FamilyName>{getPersonDisplayName(child)}</FamilyName>
                           <FamilyMeta>자녀</FamilyMeta>
                         </FamilyCard>
                       ))}
@@ -590,16 +587,18 @@ const HeroImage = styled.img`
   object-fit: cover;
   object-position: top center;
   flex-shrink: 0;
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
 `
 
 const HeroPlaceholder = styled.div`
   width: 64px;
   height: 64px;
   border-radius: 10px;
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -644,7 +643,9 @@ const TabMenu = styled.nav`
   width: fit-content;
   border-radius: 20px;
   overflow-x: auto;
-  &::-webkit-scrollbar { display: none; }
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -668,7 +669,10 @@ const TabButton = styled.button<{ $active?: boolean }>`
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s ease, background 0.15s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.2s ease;
 
   ${({ $active, theme }) =>
     theme.mode === 'dark'
@@ -676,10 +680,14 @@ const TabButton = styled.button<{ $active?: boolean }>`
           background: ${$active ? 'rgba(99, 106, 242, 0.25)' : 'transparent'};
           color: ${$active ? '#ffffff' : theme.colors.text.secondary};
           font-weight: ${$active ? 600 : 500};
-          box-shadow: ${$active ? '0 2px 8px rgba(99, 106, 242, 0.25)' : 'none'};
+          box-shadow: ${$active
+            ? '0 2px 8px rgba(99, 106, 242, 0.25)'
+            : 'none'};
           &:hover {
             color: #ffffff;
-            background: ${$active ? 'rgba(99, 106, 242, 0.3)' : 'rgba(255,255,255,0.07)'};
+            background: ${$active
+              ? 'rgba(99, 106, 242, 0.3)'
+              : 'rgba(255,255,255,0.07)'};
           }
         `
       : css`
@@ -834,8 +842,9 @@ const EmptyState = styled.div`
   text-align: center;
   padding: 40px 24px;
   border-radius: ${RADIUS_CARD}px;
-  border: 1px dashed ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   font-size: 14px;
   font-weight: 500;
   background: ${({ theme }) =>
@@ -895,8 +904,9 @@ const FamilyCard = styled.div`
   border-radius: ${RADIUS_BTN}px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
 `
 
 const FamilyName = styled.div`
@@ -969,7 +979,9 @@ const TenureAddBtn = styled.button`
   cursor: pointer;
   transition: background 0.2s ease;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-  &:hover { background: ${ACCENT_HOVER}; }
+  &:hover {
+    background: ${ACCENT_HOVER};
+  }
   &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
@@ -998,10 +1010,13 @@ const TenureRowEditBtn = styled.button`
   font-weight: 600;
   border-radius: 12px;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
   color: ${ACCENT};
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#e5e7eb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#e5e7eb'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#fff'};
   &:hover {
@@ -1027,8 +1042,9 @@ const ActivityItem = styled.div`
   border-radius: ${RADIUS_BTN}px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc'};
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
 `
 
 const ActivityName = styled.div`
@@ -1092,8 +1108,9 @@ const EventItem = styled.div`
   transition: border-color 0.15s;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
   &:hover {
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(99,106,242,0.4)' : '#cbd5e1'};
@@ -1125,8 +1142,9 @@ const EventDate = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
 `
 
 const EventRole = styled.div`
@@ -1147,7 +1165,9 @@ const RoleBadge = styled.span`
   width: fit-content;
   color: ${ACCENT_HOVER};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99, 102, 241, 0.08)'};
+    theme.mode === 'dark'
+      ? 'rgba(99,102,241,0.18)'
+      : 'rgba(99, 102, 241, 0.08)'};
 `
 
 const EventRoleDesc = styled.div`
@@ -1160,8 +1180,9 @@ const EventDescription = styled.div`
   font-size: 13px;
   line-height: 1.6;
   padding-top: 8px;
-  border-top: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#e5e7eb'};
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#e5e7eb'};
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
@@ -1171,12 +1192,15 @@ const EventNote = styled.div`
   padding: 8px 12px;
   border-radius: 4px;
   border-left: 3px solid ${ACCENT};
-  border-top: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-  border-right: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-  border-bottom: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border-right: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
@@ -1192,8 +1216,11 @@ const TimelineSection = styled.div`
   margin-top: 8px;
   padding: 12px 14px;
   border-radius: 9px;
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(226, 232, 240, 0.6)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.07)'
+        : 'rgba(226, 232, 240, 0.6)'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
 `
@@ -1216,7 +1243,9 @@ const TimelineItem = styled.div`
   gap: 6px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
-  &:last-child { margin-bottom: 0; }
+  &:last-child {
+    margin-bottom: 0;
+  }
 `
 
 const TimelineHeader = styled.div`
@@ -1256,8 +1285,11 @@ const TimelinePersons = styled.div`
   flex-direction: column;
   gap: 3px;
   padding-top: 6px;
-  border-top: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(226, 232, 240, 0.5)'};
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.07)'
+        : 'rgba(226, 232, 240, 0.5)'};
 `
 
 const TimelinePerson = styled.div`
@@ -1273,8 +1305,9 @@ const ErrorContainer = styled.div`
   padding: 60px 32px;
   text-align: center;
   border-radius: ${RADIUS_CARD}px;
-  border: 1px dashed ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   min-height: 300px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};

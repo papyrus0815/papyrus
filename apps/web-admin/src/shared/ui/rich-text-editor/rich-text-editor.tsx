@@ -3256,12 +3256,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <FiMoreHorizontal />
         </ToolbarButton>
       </Toolbar>
-      {/* 색상 선택기 - Portal로 body에 렌더링 */}
-      {colorPickerVisible &&
+      {/* 색상 선택기 — body 포털 (EditorContainer backdrop-filter가 fixed 기준을 바꿔 뷰포트 좌표와 불일치하는 것 방지) */}
+      {typeof document !== 'undefined' &&
+        colorPickerVisible &&
         colorPickerButtonRef.current &&
         (() => {
           const rect = colorPickerButtonRef.current!.getBoundingClientRect()
-          return (
+          return createPortal(
             <>
               <div
                 style={{
@@ -3355,15 +3356,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   </ColorPickerInputWrapper>
                 </ColorPickerDropdown>
               </div>
-            </>
+            </>,
+            document.body,
           )
         })()}
-      {/* 표 삽입 격자 (iOS 메모 스타일) — Portal로 body에 렌더링 */}
-      {tablePickerVisible &&
+      {/* 표 삽입 격자 — body 포털 (색상 선택기와 동일 이유) */}
+      {typeof document !== 'undefined' &&
+        tablePickerVisible &&
         tablePickerButtonRef.current &&
         (() => {
           const rect = tablePickerButtonRef.current!.getBoundingClientRect()
-          return (
+          return createPortal(
             <>
               <div
                 style={{
@@ -3414,7 +3417,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   </TableInsertHint>
                 </TableInsertPopover>
               </div>
-            </>
+            </>,
+            document.body,
           )
         })()}
       {/* 컨텍스트 메뉴 — 모달(overflow:auto) 밖으로 포털해 잘림·가림 방지 */}

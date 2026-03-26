@@ -50,6 +50,9 @@ export const MapRegionTabNav = styled.div`
 
 export const MapRegionTabButton = styled.button<{ $active?: boolean }>`
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 18px;
   border-radius: 14px;
   border: none;

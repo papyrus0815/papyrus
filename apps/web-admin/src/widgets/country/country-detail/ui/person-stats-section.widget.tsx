@@ -6,6 +6,7 @@ import styled, { css } from 'styled-components'
 
 import { PositionCategoryCrudModal } from '@/pages/persons/position-category-crud-modal'
 import { type PersonResponseDto as Person, getPersonsByTenureCountry, getAllPersons } from '@/shared/api/persons'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { ACCENT } from '@/shared/styles/constants'
 import { darkGlassMixin, glassOrSolidMixin } from '@/shared/styles/mixins'
 
@@ -997,9 +998,7 @@ export function PersonStatsSection({
                       </RecentPersonAvatar>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <RecentPersonName>
-                          {[person.surname, person.name]
-                            .filter(Boolean)
-                            .join(' ') || person.name}
+                          {getPersonDisplayName(person)}
                         </RecentPersonName>
                         <RecentPersonMeta>
                           {person.country && (

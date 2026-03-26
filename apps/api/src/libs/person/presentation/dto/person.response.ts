@@ -41,8 +41,14 @@ export interface PersonResponseDto {
   /** 직업 (목록/상세 표시용, id·title) */
   job?: { id: string; title: string } | null
   countryId: string | null
-  /** 소속 국가 (목록 표시용, id·name·flagEmoji) */
-  country?: { id: string; name: string; flagEmoji?: string | null } | null
+  /** 소속 국가 (목록 표시용, id·name·flagEmoji·이름 표시 기본) */
+  country?: {
+    id: string
+    name: string
+    flagEmoji?: string | null
+    isoCode?: string | null
+    defaultNameDisplayOrder?: string | null
+  } | null
   birthCityId: string | null
   deathCityId: string | null
   /** 출생지 행정구역 ID */

@@ -114,6 +114,7 @@ export class CountryPrismaRepository implements CountryRepository {
         currencyId: data.currencyId,
         languageId: data.languageId,
         continentId: data.continentId,
+        defaultNameDisplayOrder: data.defaultNameDisplayOrder ?? undefined,
         accountId: (data as any).accountId ?? undefined,
       },
     })
@@ -124,21 +125,30 @@ export class CountryPrismaRepository implements CountryRepository {
     id: string,
     data: Partial<Omit<Country, 'id'>>,
   ): Promise<Country> {
+    // Prisma는 undefined를 무시하지만, 명시적으로 넘기면 버전/직렬화에 따라 섞일 수 있어
+    // PATCH 의미로 `전달된 필드만` 갱신한다.
     const country = await this.prisma.country.update({
       where: { id },
       data: {
-        name: data.name,
-        fullName: data.fullName,
-        localName: data.localName,
-        flagEmoji: data.flagEmoji,
-        isoCode: data.isoCode,
-        population: data.population,
-        areaSqKm: data.areaSqKm,
-        thumbnailUrl: data.thumbnailUrl,
-        capital: data.capital,
-        currencyId: data.currencyId,
-        languageId: data.languageId,
-        continentId: data.continentId,
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.fullName !== undefined && { fullName: data.fullName }),
+        ...(data.localName !== undefined && { localName: data.localName }),
+        ...(data.flagEmoji !== undefined && { flagEmoji: data.flagEmoji }),
+        ...(data.isoCode !== undefined && { isoCode: data.isoCode }),
+        ...(data.population !== undefined && { population: data.population }),
+        ...(data.areaSqKm !== undefined && { areaSqKm: data.areaSqKm }),
+        ...(data.thumbnailUrl !== undefined && {
+          thumbnailUrl: data.thumbnailUrl,
+        }),
+        ...(data.capital !== undefined && { capital: data.capital }),
+        ...(data.currencyId !== undefined && { currencyId: data.currencyId }),
+        ...(data.languageId !== undefined && { languageId: data.languageId }),
+        ...(data.continentId !== undefined && {
+          continentId: data.continentId,
+        }),
+        ...(data.defaultNameDisplayOrder !== undefined && {
+          defaultNameDisplayOrder: data.defaultNameDisplayOrder,
+        }),
       },
     })
     return this.toEntity(country)
@@ -191,6 +201,7 @@ export class CountryPrismaRepository implements CountryRepository {
       currencyId: data.currencyId,
       languageId: data.languageId,
       continentId: data.continentId,
+      defaultNameDisplayOrder: data.defaultNameDisplayOrder ?? null,
       historicalCountries: historicalCountries || [],
       accountId: data.accountId ?? undefined,
       createdAt: data.createdAt,

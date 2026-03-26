@@ -64,6 +64,9 @@ model Country {
   /// 경도 (수도 또는 중심부)
   longitude Decimal? @db.Decimal(10, 7)
 
+  /// 인물 표시명 기본 순서 (성·이름 / 이름·성). null이면 동양식(성+이름) 취급
+  defaultNameDisplayOrder NameDisplayOrder? @map("default_name_display_order")
+
   //--- 외래키
   currencyId  String? @map("currency_id") @db.Char(36)
   languageId  String? @map("language_id") @db.Char(36)

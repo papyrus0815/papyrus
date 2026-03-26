@@ -132,11 +132,12 @@ export function CountryFormModal({
     onClose()
   }
 
+  /** 신규 등록 시 부모의 `editing` 참조를 그대로 쓴다. 매 렌더 `({} as Country)`를 만들면 참조가 바뀌어 폼이 매번 reset 되어 select 등 입력이 유지되지 않는다. */
   const effectiveEditing =
     editing && typeof editing === 'object' && 'id' in editing
       ? (editing as Country)
       : editing && Object.keys(editing).length === 0
-        ? ({} as Country)
+        ? (editing as Country)
         : null
 
   const content = (

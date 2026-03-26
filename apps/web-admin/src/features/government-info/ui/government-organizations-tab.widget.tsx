@@ -6,8 +6,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import { FiGrid, FiInfo, FiPlus, FiSearch, FiX } from 'react-icons/fi'
-import styled from 'styled-components'
-
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
   ORGANIZATION_SCOPE_OPTIONS,
@@ -48,6 +46,7 @@ import {
   OrgErrorText,
   OrgField,
   OrgFormActions,
+  GovSectionEyebrow,
   OrgFormDesc,
   OrgGrid,
   OrgInput,
@@ -67,20 +66,6 @@ import {
   OrgTextArea,
   OrgToolbarRow,
 } from './government-organizations-tab.styled'
-
-const SectionLabelDiv = styled.div`
-  margin-bottom: 18px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-`
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <SectionLabelDiv>{children}</SectionLabelDiv>
-}
 
 export type GovernmentOrganizationsTabProps = {
   country?: UnifiedCountry
@@ -463,7 +448,7 @@ export function GovernmentOrganizationsTab({
         <>
           {!effectiveCountryId ? (
             <>
-              <SectionLabel>행정기구·조직</SectionLabel>
+              <GovSectionEyebrow>행정기구·조직</GovSectionEyebrow>
               <p
                 style={{
                   fontSize: 14,
@@ -476,7 +461,7 @@ export function GovernmentOrganizationsTab({
             </>
           ) : organizationsLoading ? (
             <>
-              <SectionLabel>행정기구·조직</SectionLabel>
+              <GovSectionEyebrow>행정기구·조직</GovSectionEyebrow>
               <p
                 style={{
                   fontSize: 14,

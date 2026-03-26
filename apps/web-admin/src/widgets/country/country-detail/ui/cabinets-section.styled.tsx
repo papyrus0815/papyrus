@@ -23,6 +23,7 @@ import {
   CABINET_SECTION_MAIN_HOVER as MAIN_HOVER,
   TL_COL_PAD_X,
   TL_LIST_PAD_LEFT,
+  TL_ROW_H,
 } from './cabinets-section.constants'
 
 /* 행정부 등록 모달 */
@@ -552,7 +553,7 @@ export const CabinetsSectionRoot = styled.div`
   gap: 0;
 `
 
-/** 리스트 뷰 루트 — 필터 블록·목록 블록 세로 배치 */
+/** 리스트 뷰 루트 — 필터·본문을 한 흐름으로 (이중 카드 박스 없음) */
 export const CabListPanel = styled.div`
   display: flex;
   flex-direction: column;
@@ -561,13 +562,13 @@ export const CabListPanel = styled.div`
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  gap: 16px;
+  gap: 0;
   @media (max-width: 640px) {
-    gap: 12px;
+    gap: 0;
   }
 `
 
-/** 필터·검색·등록 */
+/** 필터·검색·등록 — 플랫 스트립, 하단만 얇게 구분 */
 export const CabListToolbarShell = styled.div.attrs({
   role: 'region',
   'aria-label': '행정부 검색 및 필터',
@@ -575,15 +576,18 @@ export const CabListToolbarShell = styled.div.attrs({
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
-  background: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').btnBg};
-  border: 1px solid
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid
     ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
+      getCabinetsSectionPalette(theme.mode === 'dark').divider};
   box-sizing: border-box;
+  padding: 0 0 16px;
+  margin: 0 0 20px;
   @media (max-width: 640px) {
-    border-radius: 12px;
+    padding: 0 0 14px;
+    margin: 0 0 16px;
   }
 `
 
@@ -593,15 +597,14 @@ export const CabListToolbar = styled.div`
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 14px 16px 16px;
+  padding: 0;
   box-sizing: border-box;
   @media (max-width: 640px) {
     gap: 12px;
-    padding: 12px 14px 14px;
   }
 `
 
-/** 타임라인·빈 상태 */
+/** 타임라인·빈 상태 — 별도 카드 테두리 없음 */
 export const CabListBody = styled.div.attrs({
   role: 'region',
   'aria-label': '행정부 목록',
@@ -611,26 +614,156 @@ export const CabListBody = styled.div.attrs({
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
-  background: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').cardBg};
-  border: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+  border-radius: 0;
+  background: transparent;
+  border: none;
   box-sizing: border-box;
-  padding: 20px 16px 24px;
+  padding: 0;
   @media (max-width: 640px) {
-    border-radius: 12px;
-    padding: 16px 12px 20px;
+    padding: 0;
+  }
+`
+
+/** 타임라인 요약(개수·연도·범례) 래퍼 */
+export const CabTimelineSummaryOuter = styled.div`
+  width: 100%;
+  padding: 0 0 28px;
+  box-sizing: border-box;
+  @media (max-width: 640px) {
+    padding: 0 0 20px;
+  }
+`
+
+export const CabTimelineSummaryHeader = styled.div`
+  width: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').divider};
+`
+
+export const CabTimelineSummaryTopRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0 10px;
+  flex-wrap: wrap;
+  @media (max-width: 640px) {
+    padding: 2px 0 8px;
+  }
+`
+
+export const CabTimelineNote = styled.p`
+  margin: 0;
+  padding: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.62;
+  font-weight: 500;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  strong {
+    font-weight: 600;
+    color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').text};
+  }
+`
+
+export const CabTimelineLegendRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 0 4px 12px 0;
+  max-height: 112px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'}
+    transparent;
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : '#cbd5e1'};
+    border-radius: 4px;
   }
 `
 
 export const CabListToolbarHairline = styled.div`
   flex-shrink: 0;
   height: 0;
-  margin: 0;
+  margin: 2px 0 4px;
   border: 0;
   border-top: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').divider};
+`
+
+/** 타임라인 2열 그리드 */
+export const CabTimelineGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  gap: 0 12px;
+  align-items: start;
+  padding-top: 8px;
+`
+
+export const CabTimelineColLeft = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+export const CabTimelineColRight = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`
+
+export const CabTimelineRowLabelWrap = styled.div`
+  min-height: ${TL_ROW_H}px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 4px;
+`
+
+export const CabTimelineRowSpine = styled.div`
+  width: 4px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+`
+
+export const CabTimelineRowRule = styled.div`
+  flex: 1;
+  height: 1px;
+  opacity: 0.55;
+  background: linear-gradient(
+    90deg,
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderMid},
+    transparent
+  );
+`
+
+export const CabTimelineRowTermText = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+`
+
+export const CabTimelineSepRule = styled.div`
+  width: 1px;
+  height: 12px;
+  flex-shrink: 0;
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
 `
 
 /** 필터 라벨 + 칩 (박스 없음) */
@@ -654,7 +787,8 @@ export const CabListFilterLabel = styled.span`
   font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   user-select: none;
   svg {
     color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
@@ -779,12 +913,12 @@ export const CabListSearchIcon = styled.span`
 `
 export const CabListSearchInput = styled.input<{ $hasTrailing: boolean }>`
   width: 100%;
-  height: 38px;
+  height: 40px;
   box-sizing: border-box;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : '#e2e8f0'};
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 0 ${(p) => (p.$hasTrailing ? '52px' : '14px')} 0 44px;
   font-size: 13px;
   font-weight: 500;
@@ -860,9 +994,9 @@ export const CabListSortBadge = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 0 12px;
-  height: 38px;
-  border-radius: 10px;
+  padding: 0 14px;
+  height: 40px;
+  border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -879,14 +1013,14 @@ export const CabListRegisterBtn = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 16px;
-  height: 38px;
+  padding: 0 18px;
+  height: 40px;
   font-size: 12.5px;
   font-weight: 600;
   color: #fff;
-  background: #6366f1;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   border: none;
-  border-radius: 10px;
+  border-radius: 999px;
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(99, 102, 241, 0.28);
   transition:
@@ -2144,21 +2278,20 @@ export const CabDetailTreatyCountryPill = styled.span`
     getCabinetsSectionPalette(theme.mode === 'dark').signatoryPillText};
 `
 
-/** `CabListPanel` 안 빈 상태 — 패널과 이중 카드 느낌 줄이기: 배경 없음·얇은 점선만 */
+/** `CabListPanel` 안 빈 상태 — 점선 박스 없이 여백·타이포만 */
 export const CabinetEmptyState = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 40px 20px;
-  margin: 8px 0 0;
+  gap: 14px;
+  padding: 48px 24px;
+  margin: 12px 0 0;
   text-align: center;
-  background: transparent;
-  border: 1px dashed
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
-  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(248,250,252,0.9)'};
+  border: none;
+  border-radius: 20px;
 `
 export const CabinetEmptyIconWrap = styled.div`
   width: 52px;

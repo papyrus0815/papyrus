@@ -43,6 +43,9 @@ export type Person = {
     id: string
     name: string
     flagEmoji?: string | null
+    isoCode?: string | null
+    /** 인물 이름 표시 순서 기본값 (국가 설정) */
+    defaultNameDisplayOrder?: string | null
   } | null
   /** 가문 (목록/재임 응답에서 포함될 수 있음) */
   dynasty?: { id: string; name: string } | null

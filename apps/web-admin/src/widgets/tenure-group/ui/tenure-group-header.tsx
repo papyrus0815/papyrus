@@ -7,6 +7,7 @@ import React from 'react'
 import { FiChevronDown, FiUserCheck } from 'react-icons/fi'
 
 import type { HeadOfStateDuringEvent } from '@/shared/api/government-positions'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import * as List from '../../../pages/events/styles/list.styles'
 
@@ -47,7 +48,7 @@ export const TenureGroupHeader: React.FC<TenureGroupHeaderProps> = ({
         {headOfState.person.profileImageUrl ? (
           <img
             src={headOfState.person.profileImageUrl}
-            alt={`${headOfState.person.surname || ''}${headOfState.person.name}`}
+            alt={getPersonDisplayName(headOfState.person)}
           />
         ) : (
           <>
@@ -57,10 +58,7 @@ export const TenureGroupHeader: React.FC<TenureGroupHeaderProps> = ({
         )}
       </List.TenureGroupAvatar>
       <List.TenureGroupInfo>
-        <span>
-          {headOfState.person.surname || ''}
-          {headOfState.person.name}
-        </span>
+        <span>{getPersonDisplayName(headOfState.person)}</span>
         <List.TenureGroupBadge>
           {headOfState.country.name}
         </List.TenureGroupBadge>
@@ -82,7 +80,10 @@ export const TenureGroupHeader: React.FC<TenureGroupHeaderProps> = ({
             : ''
 
           // showPositionInfo가 false면 직책 정보 표시 안 함
-          if (actualTenure && actualTenure.showPositionInfo === false) {
+          if (
+            actualTenure &&
+            (actualTenure as { showPositionInfo?: boolean }).showPositionInfo === false
+          ) {
             return (
               <span style={{ color: 'rgba(99, 102, 241, 0.6)' }}>
                 재임 {tenurePeriod}

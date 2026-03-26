@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import styled from 'styled-components'
 
 import { type PersonResponseDto as Person } from '@/shared/api/persons'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { PersonCard } from './person-card'
 import { PersonFilters } from './person-filters'
@@ -55,10 +56,17 @@ export function PersonList({
   const filteredPersons = persons
     .filter((person) => {
       const searchLower = searchTerm.toLowerCase()
-      const fullName = person.surname
-        ? `${person.surname} ${person.name}`
-        : person.name
-      const matchesSearch = fullName.toLowerCase().includes(searchLower)
+      const display = getPersonDisplayName(person).toLowerCase()
+      const westernLike = getPersonDisplayName(person, {
+        countryDefaultNameDisplayOrder: 'western',
+      }).toLowerCase()
+      const koreanLike = getPersonDisplayName(person, {
+        countryDefaultNameDisplayOrder: 'korean',
+      }).toLowerCase()
+      const matchesSearch =
+        display.includes(searchLower) ||
+        westernLike.includes(searchLower) ||
+        koreanLike.includes(searchLower)
 
       const matchesGender =
         genderFilter === 'all' || person.gender === genderFilter
@@ -74,8 +82,8 @@ export function PersonList({
     })
     .sort((a, b) => {
       if (sortBy === 'name') {
-        const nameA = a.surname ? `${a.surname} ${a.name}` : a.name
-        const nameB = b.surname ? `${b.surname} ${b.name}` : b.name
+        const nameA = getPersonDisplayName(a)
+        const nameB = getPersonDisplayName(b)
         return nameA.localeCompare(nameB)
       } else if (sortBy === 'birthYear') {
         return (b.birthYear || 0) - (a.birthYear || 0)

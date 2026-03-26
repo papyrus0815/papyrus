@@ -5,15 +5,20 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-hot-toast'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-
-import { pathKeys } from '@/shared/router'
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom'
 
 import { type ContinentOption, type Country } from '@/entities/country/api'
 import { getSummaryMetrics } from '@/entities/country/lib/utils'
-import { countrySchema } from '@/entities/country/model/schema'
 import {
   type CountryFormData,
+  countrySchema,
+} from '@/entities/country/model/schema'
+import {
   type CountryTypeFilter,
   type UnifiedCountry,
   historicalToUnified,
@@ -35,13 +40,14 @@ import {
   useHistoricalCountry,
   useUpdateHistoricalCountry,
 } from '@/features/historical-country'
+import { DashboardEventDetailPage } from '@/pages/history/country/dashboard-event-detail.page'
 import { getAllEvents } from '@/shared/api/events'
-import { PersonDashboardSection } from '@/widgets/country/person-dashboard-section/ui/person-dashboard-section'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { pathKeys } from '@/shared/router'
 import { CountryDashboard } from '@/widgets/country/country-dashboard/ui/country-dashboard'
 import { CountryDetail } from '@/widgets/country/country-detail/ui/country-detail.widget'
 import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-section.widget'
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
-import { DashboardEventDetailPage } from '@/pages/history/country/dashboard-event-detail.page'
 import { EventsTimelineSection } from '@/widgets/country/country-detail/ui/events-timeline-section.widget'
 import { CountryFormModal } from '@/widgets/country/country-form/ui/country-form-modal'
 import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
@@ -51,6 +57,7 @@ import {
   type DashboardContentView,
 } from '@/widgets/country/country-list/ui/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
+import { PersonDashboardSection } from '@/widgets/country/person-dashboard-section/ui/person-dashboard-section'
 import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
 import { zodResolver } from '@hookform/resolvers/zod'
 
@@ -109,7 +116,9 @@ function DashboardMenuContent({
           type="button"
           onClick={onNavigateAdministration}
         >
-          {hasSelectedCountry ? '선택 국가 행정조직 열기' : '국가를 먼저 선택하세요'}
+          {hasSelectedCountry
+            ? '선택 국가 행정조직 열기'
+            : '국가를 먼저 선택하세요'}
         </S.DashboardMenuContentButton>
       )}
       {fullPath && fullLabel && (
@@ -151,29 +160,42 @@ export default function CountryPage() {
   /** 역대 수반 탭 전용 URL 여부 (/history/country/:id/heads-of-state) */
   const isHeadsOfStateUrl = location.pathname.includes('/heads-of-state')
   /** 인물 탭 전용 URL 여부 (/history/country/:id/persons, 하위 뷰는 ?tab=stats|list|heads) */
-  const isPersonsUrl = /\/history\/country\/[^/]+\/persons\/?$/.test(location.pathname)
+  const isPersonsUrl = /\/history\/country\/[^/]+\/persons\/?$/.test(
+    location.pathname,
+  )
   /** 연결된 역사적 국가 탭 전용 URL 여부 (/history/country/:id/historical) */
   const isLinkedHistoricalUrl =
     /\/history\/country\/[^/]+\/historical\/?$/.test(location.pathname)
   /** 행정구역 탭 전용 URL 여부 (/history/country/:id/regions) */
-  const isRegionsUrl =
-    /\/history\/country\/[^/]+\/regions\/?$/.test(location.pathname)
+  const isRegionsUrl = /\/history\/country\/[^/]+\/regions\/?$/.test(
+    location.pathname,
+  )
   /** 행정조직 탭 전용 URL 여부 (/history/country/:id/government) */
-  const isGovernmentUrl =
-    /\/history\/country\/[^/]+\/government\/?$/.test(location.pathname)
+  const isGovernmentUrl = /\/history\/country\/[^/]+\/government\/?$/.test(
+    location.pathname,
+  )
   /** 선거·투표 탭 전용 URL (/history/country/:id/elections, …/elections/party/:partyId) */
   const isElectionsUrl =
     /\/history\/country\/[^/]+\/elections(\/party\/[^/?#]+)?\/?$/.test(
       location.pathname,
     )
   /** 대시보드 탭 전용 URL 여부 (/history/country/:id/dashboard) */
-  const isDashboardUrl = /\/history\/country\/[^/]+\/dashboard\/?$/.test(location.pathname)
+  const isDashboardUrl = /\/history\/country\/[^/]+\/dashboard\/?$/.test(
+    location.pathname,
+  )
   /** 연대표(전체 사건) 탭 전용 URL 여부 (/history/country/:id/events) */
-  const isEventsUrl = /\/history\/country\/[^/]+\/events\/?$/.test(location.pathname)
+  const isEventsUrl = /\/history\/country\/[^/]+\/events\/?$/.test(
+    location.pathname,
+  )
   /** 연대표/대시보드 인물 뷰 URL (/history/dashboard/persons) */
-  const isDashboardPersonsUrl = /\/history\/dashboard\/persons\/?$/.test(location.pathname)
+  const isDashboardPersonsUrl = /\/history\/dashboard\/persons\/?$/.test(
+    location.pathname,
+  )
   /** 연대표/대시보드 연대표(전체 사건) 뷰 URL (/history/dashboard/events, /events/:eventId, /events/:eventId/edit) */
-  const isDashboardEventsUrl = /\/history\/dashboard\/events(\/[^/]+)?(\/edit)?\/?$/.test(location.pathname)
+  const isDashboardEventsUrl =
+    /\/history\/dashboard\/events(\/[^/]+)?(\/edit)?\/?$/.test(
+      location.pathname,
+    )
   /** 연대표/대시보드 통계 뷰 URL (/history/dashboard) */
   const isDashboardStatsUrl = /\/history\/dashboard\/?$/.test(location.pathname)
 
@@ -219,14 +241,16 @@ export default function CountryPage() {
       (rawCountries as { id?: string }[]).map((c) => c.id).filter(Boolean),
     )
     const historicalToModern = new Map<string, string>()
-    ;(rawCountries as { id?: string; historicalCountries?: { id: string }[] }[]).forEach(
-      (c) => {
-        ;(c.historicalCountries || []).forEach((h) => {
-          if (c.id && h.id) historicalToModern.set(h.id, c.id)
-        })
-      },
-    )
-    const getEffectiveModernCountryId = (countryId: string | null | undefined): string | null => {
+    ;(
+      rawCountries as { id?: string; historicalCountries?: { id: string }[] }[]
+    ).forEach((c) => {
+      ;(c.historicalCountries || []).forEach((h) => {
+        if (c.id && h.id) historicalToModern.set(h.id, c.id)
+      })
+    })
+    const getEffectiveModernCountryId = (
+      countryId: string | null | undefined,
+    ): string | null => {
       if (!countryId) return null
       if (modernIds.has(countryId)) return countryId
       return historicalToModern.get(countryId) ?? null
@@ -237,15 +261,45 @@ export default function CountryPage() {
         id?: string
         name?: string | null
         surname?: string | null
+        middleName?: string | null
         createdAt?: string
         profileImageUrl?: string | null
-        country?: { name?: string } | null
+        country?: {
+          name?: string
+          defaultNameDisplayOrder?: string | null
+        } | null
         countryId?: string | null
       }) => {
         const date = p.createdAt
         if (!date || now - new Date(date).getTime() > oneWeekMs) return
+        const countryRow = p.countryId
+          ? (
+              countriesList as {
+                id?: string
+                name?: string
+                defaultNameDisplayOrder?: string | null
+              }[]
+            ).find((c) => c.id === p.countryId)
+          : undefined
+        const defaultOrder =
+          p.country?.defaultNameDisplayOrder ??
+          countryRow?.defaultNameDisplayOrder ??
+          null
         const displayName =
-          [p.surname, p.name].filter(Boolean).join(' ') || p.name || p.surname || '이름 없음'
+          getPersonDisplayName(
+            {
+              name: p.name ?? '',
+              surname: p.surname,
+              middleName: p.middleName,
+              country: p.country ?? undefined,
+            },
+            defaultOrder != null
+              ? { countryDefaultNameDisplayOrder: defaultOrder }
+              : undefined,
+          ) ||
+          p.name ||
+          p.surname ||
+          '이름 없음'
         const countryName =
           p.country?.name ??
           (p.countryId
@@ -253,7 +307,9 @@ export default function CountryPage() {
                 (c) => c.id === p.countryId,
               )?.name
             : undefined)
-        const effectiveModernId = getEffectiveModernCountryId(p.countryId ?? undefined)
+        const effectiveModernId = getEffectiveModernCountryId(
+          p.countryId ?? undefined,
+        )
         items.push({
           date,
           type: 'person',
@@ -265,7 +321,9 @@ export default function CountryPage() {
         })
       },
     )
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    items.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    )
     return items.slice(0, 50)
   }, [apiCountries, apiPersons])
 
@@ -284,28 +342,43 @@ export default function CountryPage() {
     const rawModern = apiCountries ?? []
     const rawHistorical = apiHistoricalCountries ?? []
 
-    rawModern.forEach((c: { name?: string; createdAt?: string; thumbnailUrl?: string | null; flagEmoji?: string | null }) => {
-      const date = c.createdAt
-      if (!date || now - new Date(date).getTime() > oneWeekMs) return
-      items.push({
-        date,
-        name: c.name ?? '국가',
-        type: 'modern',
-        thumbnailUrl: c.thumbnailUrl ?? null,
-        flagEmoji: c.flagEmoji ?? null,
-      })
-    })
-    rawHistorical.forEach((c: { name?: string; createdAt?: string; thumbnailUrl?: string | null }) => {
-      const date = c.createdAt
-      if (!date || now - new Date(date).getTime() > oneWeekMs) return
-      items.push({
-        date,
-        name: c.name ?? '역사적 국가',
-        type: 'historical',
-        thumbnailUrl: c.thumbnailUrl ?? null,
-      })
-    })
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    rawModern.forEach(
+      (c: {
+        name?: string
+        createdAt?: string
+        thumbnailUrl?: string | null
+        flagEmoji?: string | null
+      }) => {
+        const date = c.createdAt
+        if (!date || now - new Date(date).getTime() > oneWeekMs) return
+        items.push({
+          date,
+          name: c.name ?? '국가',
+          type: 'modern',
+          thumbnailUrl: c.thumbnailUrl ?? null,
+          flagEmoji: c.flagEmoji ?? null,
+        })
+      },
+    )
+    rawHistorical.forEach(
+      (c: {
+        name?: string
+        createdAt?: string
+        thumbnailUrl?: string | null
+      }) => {
+        const date = c.createdAt
+        if (!date || now - new Date(date).getTime() > oneWeekMs) return
+        items.push({
+          date,
+          name: c.name ?? '역사적 국가',
+          type: 'historical',
+          thumbnailUrl: c.thumbnailUrl ?? null,
+        })
+      },
+    )
+    items.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    )
     return items.slice(0, 50)
   }, [apiCountries, apiHistoricalCountries])
 
@@ -313,7 +386,9 @@ export default function CountryPage() {
   useEffect(() => {
     getAllEvents({ limit: 100, createdSinceDays: 7 })
       .then((raw) => {
-        const list = Array.isArray(raw) ? raw : (raw as { data?: unknown[] })?.data ?? []
+        const list = Array.isArray(raw)
+          ? raw
+          : ((raw as { data?: unknown[] })?.data ?? [])
         type Evt = {
           id: string
           title?: string
@@ -326,7 +401,9 @@ export default function CountryPage() {
         const withDate = (list as Evt[]).map((evt) => {
           const countryNames = [
             ...(evt.relatedCountries ?? []).map((c) => c.name).filter(Boolean),
-            ...(evt.relatedHistoricalCountries ?? []).map((c) => c.name).filter(Boolean),
+            ...(evt.relatedHistoricalCountries ?? [])
+              .map((c) => c.name)
+              .filter(Boolean),
           ] as string[]
           return {
             id: evt.id,
@@ -340,7 +417,10 @@ export default function CountryPage() {
         const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
         const filtered = withDate
           .filter((e) => e._date && new Date(e._date).getTime() >= oneWeekAgo)
-          .sort((a, b) => new Date(b._date!).getTime() - new Date(a._date!).getTime())
+          .sort(
+            (a, b) =>
+              new Date(b._date!).getTime() - new Date(a._date!).getTime(),
+          )
           .slice(0, 25)
           .map((e) => ({
             id: e.id,
@@ -380,14 +460,19 @@ export default function CountryPage() {
       currencyId: country.currencyId || undefined,
       languageId: country.languageId || undefined,
       continentId: country.continentId || undefined,
+      defaultNameDisplayOrder:
+        (country as { defaultNameDisplayOrder?: 'korean' | 'western' | null })
+          .defaultNameDisplayOrder ?? undefined,
       // 역사 국가를 최신순으로 정렬 (최신 = 상단)
-      historicalCountries: (country.historicalCountries || []).sort((a, b) => {
-        // endYear가 있으면 endYear 기준으로 정렬 (최신 = 큰 숫자)
-        // endYear가 없으면 startYear 기준으로 정렬
-        const aYear = a.endYear || a.startYear || 0
-        const bYear = b.endYear || b.startYear || 0
-        return bYear - aYear // 내림차순 (최신 = 위)
-      }),
+      historicalCountries: (country.historicalCountries || []).sort(
+        (a: HistoricalCountry, b: HistoricalCountry) => {
+          // endYear가 있으면 endYear 기준으로 정렬 (최신 = 큰 숫자)
+          // endYear가 없으면 startYear 기준으로 정렬
+          const aYear = a.endYear || a.startYear || 0
+          const bYear = b.endYear || b.startYear || 0
+          return bYear - aYear // 내림차순 (최신 = 위)
+        },
+      ),
     }))
   }, [apiCountries])
 
@@ -473,11 +558,7 @@ export default function CountryPage() {
 
   // 역대 수반은 행정조직 탭으로 통합: /persons?tab=heads → /government (URL 정리)
   useEffect(() => {
-    if (
-      selectedId &&
-      isPersonsUrl &&
-      searchParams.get('tab') === 'heads'
-    ) {
+    if (selectedId && isPersonsUrl && searchParams.get('tab') === 'heads') {
       navigate(pathKeys.history.countryGovernment(selectedId), {
         replace: true,
       })
@@ -569,6 +650,9 @@ export default function CountryPage() {
         thumbnailUrl: editing.thumbnailUrl || '',
         currencyId: editing.currencyId || '',
         languageId: editing.languageId || '',
+        defaultNameDisplayOrder:
+          (editing as { defaultNameDisplayOrder?: 'korean' | 'western' })
+            .defaultNameDisplayOrder ?? 'korean',
       })
       setThumbnailPreview(editing.thumbnailUrl || '')
       setFlagImageFile(null)
@@ -689,7 +773,9 @@ export default function CountryPage() {
   /** 역사적 국가 수정 클릭 시 폼에 전달할 데이터 설정 */
   const handleEditHistoricalFromList = useCallback(
     (country: UnifiedCountry) => {
-      const historical = apiHistoricalCountries?.find((hc) => hc.id === country.id)
+      const historical = apiHistoricalCountries?.find(
+        (hc) => hc.id === country.id,
+      )
       if (historical) setEditingHistorical(historical as HistoricalCountry)
     },
     [apiHistoricalCountries],
@@ -709,13 +795,20 @@ export default function CountryPage() {
         | null,
     ) => {
       if (!selectedId) return
-      if (tab === 'person') navigate(pathKeys.history.countryPersons(selectedId))
-      else if (tab === 'heads') navigate(pathKeys.history.countryGovernment(selectedId))
-      else if (tab === 'persons-list') navigate(pathKeys.history.countryPersons(selectedId, 'list'))
-      else if (tab === 'linked-historical') navigate(pathKeys.history.countryHistorical(selectedId))
-      else if (tab === 'regions') navigate(pathKeys.history.countryRegions(selectedId))
-      else if (tab === 'government') navigate(pathKeys.history.countryGovernment(selectedId))
-      else if (tab === 'elections') navigate(pathKeys.history.countryElections(selectedId))
+      if (tab === 'person')
+        navigate(pathKeys.history.countryPersons(selectedId))
+      else if (tab === 'heads')
+        navigate(pathKeys.history.countryGovernment(selectedId))
+      else if (tab === 'persons-list')
+        navigate(pathKeys.history.countryPersons(selectedId, 'list'))
+      else if (tab === 'linked-historical')
+        navigate(pathKeys.history.countryHistorical(selectedId))
+      else if (tab === 'regions')
+        navigate(pathKeys.history.countryRegions(selectedId))
+      else if (tab === 'government')
+        navigate(pathKeys.history.countryGovernment(selectedId))
+      else if (tab === 'elections')
+        navigate(pathKeys.history.countryElections(selectedId))
       else navigate(pathKeys.history.countryDetail(selectedId))
     },
     [navigate, selectedId],
@@ -787,6 +880,9 @@ export default function CountryPage() {
             currencyId: data.currencyId,
             languageId: data.languageId,
             continentId: data.continentId,
+            defaultNameDisplayOrder: (
+              data as { defaultNameDisplayOrder?: 'korean' | 'western' }
+            ).defaultNameDisplayOrder,
           },
         })
         toast.success('수정되었습니다', { id: loadingToast })
@@ -805,6 +901,9 @@ export default function CountryPage() {
           currencyId: data.currencyId,
           languageId: data.languageId,
           continentId: data.continentId,
+          defaultNameDisplayOrder: (
+            data as { defaultNameDisplayOrder?: 'korean' | 'western' }
+          ).defaultNameDisplayOrder,
         })
         toast.success('등록되었습니다', { id: loadingToast })
       }
@@ -842,6 +941,7 @@ export default function CountryPage() {
       languageId: data.languageId || undefined,
       continentId: data.continentId || undefined,
       gdpUsdBn: data.gdpUsdBn || undefined,
+      defaultNameDisplayOrder: data.defaultNameDisplayOrder,
     })
   }
 
@@ -1088,10 +1188,10 @@ export default function CountryPage() {
               setDashboardContentView(id)
               if (id === 'person') navigate(pathKeys.history.dashboardPersons())
               else if (id === 'events') {
-                if (selectedId) navigate(pathKeys.history.countryEvents(selectedId))
+                if (selectedId)
+                  navigate(pathKeys.history.countryEvents(selectedId))
                 else navigate(pathKeys.history.dashboardEvents())
-              }
-              else if (id === 'stats') navigate(pathKeys.history.dashboard())
+              } else if (id === 'stats') navigate(pathKeys.history.dashboard())
             }}
             collapsed={listCollapsed}
             onToggleCollapse={handleToggleListCollapsed}
@@ -1099,134 +1199,162 @@ export default function CountryPage() {
 
           <S.DetailPane>
             <S.DetailPaneScrollBody>
-            <AnimatePresence initial={false}>
-              {activeTab === 'dashboard' ? (
-                <motion.div
-                  key={dashboardContentView}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  style={{ width: '100%', height: '100%', minHeight: '100%' }}
-                >
-                  {dashboardContentView === 'stats' ? (
-                    <CountryDashboard
-                      isLoading={isLoading}
-                      onCountryEdit={setEditing}
-                      registrationFeed={registrationFeed}
-                      recentEvents={recentEvents}
-                      countryRegistrationFeed={countryRegistrationFeed}
-                      onRegistrationPersonClick={(item) => {
-                        if (item.type === 'person' && item.countryId) {
-                          navigate(pathKeys.history.countryPersons(item.countryId, 'list'))
-                        }
-                      }}
-                    />
-                  ) : dashboardContentView === 'dynasty' ? (
-                    <DynastySection />
-                  ) : dashboardContentView === 'ethnicity' ? (
-                    <EthnicityDashboardSection />
-                  ) : dashboardContentView === 'events' ? (
-                    params.eventId && location.pathname.endsWith('/edit') ? (
-                      <EventsTimelineSection
-                        countryId={selectedId ?? undefined}
-                        initialFormFromSearchParams={false}
-                        onNavigateToForm={() => {}}
-                        editEventId={params.eventId}
-                        onEditBack={() => navigate(pathKeys.history.dashboardEventDetail(params.eventId!))}
-                        onEditSuccess={() => navigate(pathKeys.history.dashboardEventDetail(params.eventId!))}
-                      />
-                    ) : params.eventId ? (
-                      <DashboardEventDetailPage />
-                    ) : (
-                      <EventsTimelineSection
-                        countryId={selectedId ?? undefined}
-                        initialFormFromSearchParams={searchParams.get('form') === 'create'}
-                        onNavigateToForm={(toForm) => {
-                          if (selectedId) {
-                            navigate(toForm ? pathKeys.history.countryEvents(selectedId, 'create') : pathKeys.history.countryEvents(selectedId))
+              <AnimatePresence initial={false}>
+                {activeTab === 'dashboard' ? (
+                  <motion.div
+                    key={dashboardContentView}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    style={{ width: '100%', height: '100%', minHeight: '100%' }}
+                  >
+                    {dashboardContentView === 'stats' ? (
+                      <CountryDashboard
+                        isLoading={isLoading}
+                        onCountryEdit={setEditing}
+                        registrationFeed={registrationFeed}
+                        recentEvents={recentEvents}
+                        countryRegistrationFeed={countryRegistrationFeed}
+                        onRegistrationPersonClick={(item) => {
+                          if (item.type === 'person' && item.countryId) {
+                            navigate(
+                              pathKeys.history.countryPersons(
+                                item.countryId,
+                                'list',
+                              ),
+                            )
                           }
                         }}
                       />
-                    )
-                  ) : dashboardContentView === 'person' ? (
-                    <PersonDashboardSection />
-                  ) : (
-                    <DashboardMenuContent
-                      view={dashboardContentView}
-                      onNavigateFullPage={navigate}
-                      hasSelectedCountry={Boolean(selectedId)}
-                      onNavigateAdministration={() => {
-                        if (!selectedId) {
-                          toast('좌측 목록에서 국가를 먼저 선택해 주세요.')
-                          return
-                        }
-                        navigate(pathKeys.history.countryGovernment(selectedId))
-                      }}
-                    />
-                  )}
-                </motion.div>
-              ) : selectedId ? (
-                <motion.div
-                  key={`detail-${selectedId}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  style={{ width: '100%', minHeight: '100%' }}
-                >
-                  <CountryDetail
-                    country={selectedCountry || null}
-                    continents={CONTINENTS}
-                    isLoading={isLoading}
-                    onEdit={handleEditFromDetail}
-                    onDelete={handleDeleteFromDetail}
-                    initialDetailTab={
-                      isDashboardUrl
-                        ? 'dashboard'
-                        : isHeadsOfStateUrl
-                          ? 'heads'
+                    ) : dashboardContentView === 'dynasty' ? (
+                      <DynastySection />
+                    ) : dashboardContentView === 'ethnicity' ? (
+                      <EthnicityDashboardSection />
+                    ) : dashboardContentView === 'events' ? (
+                      params.eventId && location.pathname.endsWith('/edit') ? (
+                        <EventsTimelineSection
+                          countryId={selectedId ?? undefined}
+                          initialFormFromSearchParams={false}
+                          onNavigateToForm={() => {}}
+                          editEventId={params.eventId}
+                          onEditBack={() =>
+                            navigate(
+                              pathKeys.history.dashboardEventDetail(
+                                params.eventId!,
+                              ),
+                            )
+                          }
+                          onEditSuccess={() =>
+                            navigate(
+                              pathKeys.history.dashboardEventDetail(
+                                params.eventId!,
+                              ),
+                            )
+                          }
+                        />
+                      ) : params.eventId ? (
+                        <DashboardEventDetailPage />
+                      ) : (
+                        <EventsTimelineSection
+                          countryId={selectedId ?? undefined}
+                          initialFormFromSearchParams={
+                            searchParams.get('form') === 'create'
+                          }
+                          onNavigateToForm={(toForm) => {
+                            if (selectedId) {
+                              navigate(
+                                toForm
+                                  ? pathKeys.history.countryEvents(
+                                      selectedId,
+                                      'create',
+                                    )
+                                  : pathKeys.history.countryEvents(selectedId),
+                              )
+                            }
+                          }}
+                        />
+                      )
+                    ) : dashboardContentView === 'person' ? (
+                      <PersonDashboardSection />
+                    ) : (
+                      <DashboardMenuContent
+                        view={dashboardContentView}
+                        onNavigateFullPage={navigate}
+                        hasSelectedCountry={Boolean(selectedId)}
+                        onNavigateAdministration={() => {
+                          if (!selectedId) {
+                            toast('좌측 목록에서 국가를 먼저 선택해 주세요.')
+                            return
+                          }
+                          navigate(
+                            pathKeys.history.countryGovernment(selectedId),
+                          )
+                        }}
+                      />
+                    )}
+                  </motion.div>
+                ) : selectedId ? (
+                  <motion.div
+                    key={`detail-${selectedId}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    style={{ width: '100%', minHeight: '100%' }}
+                  >
+                    <CountryDetail
+                      country={selectedCountry || null}
+                      continents={CONTINENTS}
+                      isLoading={isLoading}
+                      onEdit={handleEditFromDetail}
+                      onDelete={handleDeleteFromDetail}
+                      initialDetailTab={
+                        isDashboardUrl
+                          ? 'dashboard'
+                          : isHeadsOfStateUrl
+                            ? 'heads'
                             : isPersonsUrl
-                            ? (() => {
-                                const tab = searchParams.get('tab')
-                                if (tab === 'list') return 'persons-list'
-                                if (tab === 'heads') return 'heads'
-                                return 'person'
-                              })()
-                            : isLinkedHistoricalUrl
-                              ? 'linked-historical'
-                              : isRegionsUrl
-                                ? 'regions'
-                                : isGovernmentUrl
-                                  ? 'government'
-                                  : isElectionsUrl
-                                    ? 'elections'
-                                    : undefined
-                    }
-                    onDetailTabChange={handleDetailTabChange}
-                    onPersonInnerTabChange={handlePersonInnerTabChange}
-                    onDashboardView={handleDashboardView}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="list-empty"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeInOut' }}
-                  style={{ width: '100%', minHeight: '100%' }}
-                >
-                  <CountryDetail
-                    country={null}
-                    continents={CONTINENTS}
-                    isLoading={isLoading}
-                    onEdit={handleEditFromDetail}
-                    onDelete={handleDeleteFromDetail}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                              ? (() => {
+                                  const tab = searchParams.get('tab')
+                                  if (tab === 'list') return 'persons-list'
+                                  if (tab === 'heads') return 'heads'
+                                  return 'person'
+                                })()
+                              : isLinkedHistoricalUrl
+                                ? 'linked-historical'
+                                : isRegionsUrl
+                                  ? 'regions'
+                                  : isGovernmentUrl
+                                    ? 'government'
+                                    : isElectionsUrl
+                                      ? 'elections'
+                                      : undefined
+                      }
+                      onDetailTabChange={handleDetailTabChange}
+                      onPersonInnerTabChange={handlePersonInnerTabChange}
+                      onDashboardView={handleDashboardView}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="list-empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    style={{ width: '100%', minHeight: '100%' }}
+                  >
+                    <CountryDetail
+                      country={null}
+                      continents={CONTINENTS}
+                      isLoading={isLoading}
+                      onEdit={handleEditFromDetail}
+                      onDelete={handleDeleteFromDetail}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </S.DetailPaneScrollBody>
           </S.DetailPane>
         </S.MainGrid>
