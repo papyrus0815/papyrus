@@ -4,10 +4,10 @@
  * 프로젝트 디자인 시스템에 맞춘 커스텀 스타일
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from 'react-hot-toast'
 
 import { createPortal } from 'react-dom'
 
+import { toast } from 'react-hot-toast'
 import {
   FiBold,
   FiChevronDown,
@@ -1232,7 +1232,9 @@ export type DocumentScope =
 
 const TABLE_GRID_MAX = 8
 
-function getTableCellFromSelection(editor: HTMLElement): HTMLTableCellElement | null {
+function getTableCellFromSelection(
+  editor: HTMLElement,
+): HTMLTableCellElement | null {
   const sel = window.getSelection()
   if (!sel?.rangeCount) return null
   const range = sel.getRangeAt(0)
@@ -1449,8 +1451,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [entityLinkModalVisible, setEntityLinkModalVisible] = useState(false)
   const [entityLinkQuery, setEntityLinkQuery] = useState('')
   const [entityLinkResults, setEntityLinkResults] = useState<MentionItem[]>([])
-  const [entityLinkRemoteLoading, setEntityLinkRemoteLoading] =
-    useState(false)
+  const [entityLinkRemoteLoading, setEntityLinkRemoteLoading] = useState(false)
   const [entityLinkSelectedIndex, setEntityLinkSelectedIndex] = useState(0)
   const [selectedTextRange, setSelectedTextRange] = useState<Range | null>(null)
   const [selectedText, setSelectedText] = useState('')
@@ -1807,8 +1808,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
 
     setCursorInTable(
-      editorRef.current.contains(element) &&
-        element.closest('td, th') !== null,
+      editorRef.current.contains(element) && element.closest('td, th') !== null,
     )
   }, [])
 
@@ -2164,10 +2164,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const figureCountBefore = editor.querySelectorAll('figure').length
 
     try {
-      if (
-        insertRange &&
-        editor.contains(insertRange.commonAncestorContainer)
-      ) {
+      if (insertRange && editor.contains(insertRange.commonAncestorContainer)) {
         const selection = window.getSelection()
         if (selection) {
           selection.removeAllRanges()
@@ -2207,7 +2204,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (editorRef.current) {
       editorRef.current.focus()
     }
-  }, [pendingImageUrl, imageCaptionInput, handleContentChange, updateFormatState])
+  }, [
+    pendingImageUrl,
+    imageCaptionInput,
+    handleContentChange,
+    updateFormatState,
+  ])
 
   // 이미지 설명 모달 닫기
   const handleImageCaptionCancel = useCallback(() => {
@@ -2346,7 +2348,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       const partyCountryId = (item.data as { countryId?: string | null } | null)
         ?.countryId
       if (item.type === 'politicalParty' && partyCountryId) {
-        entitySpan.setAttribute('data-entity-country-id', String(partyCountryId))
+        entitySpan.setAttribute(
+          'data-entity-country-id',
+          String(partyCountryId),
+        )
       }
       entitySpan.setAttribute(
         'title',
@@ -3273,8 +3278,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               <div
                 style={{
                   position: 'fixed',
-                  top: `${rect.bottom + window.scrollY + 8}px`,
-                  left: `${rect.left + window.scrollX}px`,
+                  /* fixed + getBoundingClientRect는 뷰포트 기준 — scrollY/X를 더하면 스크롤만큼 어긋남 */
+                  top: `${rect.bottom + 8}px`,
+                  left: `${rect.left}px`,
                   zIndex: 99999,
                 }}
               >
@@ -3374,8 +3380,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               <div
                 style={{
                   position: 'fixed',
-                  top: `${rect.bottom + window.scrollY + 8}px`,
-                  left: `${rect.left + window.scrollX}px`,
+                  top: `${rect.bottom + 8}px`,
+                  left: `${rect.left}px`,
                   zIndex: 99999,
                 }}
               >
@@ -3397,9 +3403,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                               setTablePickerHover({ row, col })
                             }
                             onMouseDown={(e) => e.preventDefault()}
-                            onClick={() =>
-                              confirmInsertTable(row + 1, col + 1)
-                            }
+                            onClick={() => confirmInsertTable(row + 1, col + 1)}
                           />
                         )
                       },
@@ -3495,7 +3499,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <ImageCaptionModalOverlay onClick={handleImageCaptionCancel}>
             <ImageCaptionModal onClick={(e) => e.stopPropagation()}>
               <ImageCaptionModalHeader>
-                <ImageCaptionModalTitle>이미지 설명 추가</ImageCaptionModalTitle>
+                <ImageCaptionModalTitle>
+                  이미지 설명 추가
+                </ImageCaptionModalTitle>
                 <ImageCaptionModalClose onClick={handleImageCaptionCancel}>
                   <FiX size={20} />
                 </ImageCaptionModalClose>
@@ -3548,226 +3554,235 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         createPortal(
           <EntityLinkModalOverlay onClick={handleCloseEntityLinkModal}>
             <EntityLinkModal onClick={(e) => e.stopPropagation()}>
-          <EntityLinkModalHeader>
-            <EntityLinkModalTitle>엔티티 연결</EntityLinkModalTitle>
-            <EntityLinkModalClose onClick={handleCloseEntityLinkModal}>
-              <FiX size={20} />
-            </EntityLinkModalClose>
-          </EntityLinkModalHeader>
-          <EntityLinkModalContent>
-            <EntityLinkSelectedText>
-              <strong>선택한 텍스트</strong>"{selectedText}"
-            </EntityLinkSelectedText>
+              <EntityLinkModalHeader>
+                <EntityLinkModalTitle>엔티티 연결</EntityLinkModalTitle>
+                <EntityLinkModalClose onClick={handleCloseEntityLinkModal}>
+                  <FiX size={20} />
+                </EntityLinkModalClose>
+              </EntityLinkModalHeader>
+              <EntityLinkModalContent>
+                <EntityLinkSelectedText>
+                  <strong>선택한 텍스트</strong>"{selectedText}"
+                </EntityLinkSelectedText>
 
-            <EntityLinkSearchInput
-              type="text"
-              placeholder="연결할 엔티티 검색 (인물, 사건, 국가, 정당 등)"
-              value={entityLinkQuery}
-              onChange={(e) => {
-                setEntityLinkQuery(e.target.value)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  setEntityLinkSelectedIndex((prev) =>
-                    prev < entityLinkResults.length - 1 ? prev + 1 : 0,
-                  )
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  setEntityLinkSelectedIndex((prev) =>
-                    prev > 0 ? prev - 1 : entityLinkResults.length - 1,
-                  )
-                } else if (e.key === 'Enter') {
-                  e.preventDefault()
-                  if (entityLinkResults[entityLinkSelectedIndex]) {
-                    insertEntityLink(entityLinkResults[entityLinkSelectedIndex])
-                  }
-                } else if (e.key === 'Escape') {
-                  e.preventDefault()
-                  handleCloseEntityLinkModal()
-                }
-              }}
-              autoFocus
-            />
+                <EntityLinkSearchInput
+                  type="text"
+                  placeholder="연결할 엔티티 검색 (인물, 사건, 국가, 정당 등)"
+                  value={entityLinkQuery}
+                  onChange={(e) => {
+                    setEntityLinkQuery(e.target.value)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      setEntityLinkSelectedIndex((prev) =>
+                        prev < entityLinkResults.length - 1 ? prev + 1 : 0,
+                      )
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      setEntityLinkSelectedIndex((prev) =>
+                        prev > 0 ? prev - 1 : entityLinkResults.length - 1,
+                      )
+                    } else if (e.key === 'Enter') {
+                      e.preventDefault()
+                      if (entityLinkResults[entityLinkSelectedIndex]) {
+                        insertEntityLink(
+                          entityLinkResults[entityLinkSelectedIndex],
+                        )
+                      }
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      handleCloseEntityLinkModal()
+                    }
+                  }}
+                  autoFocus
+                />
 
-            <EntityLinkResultsList>
-              {mentionEntitiesLoading || entityLinkRemoteLoading ? (
-                <div
-                  style={{
-                    padding: '24px',
-                    textAlign: 'center',
-                    color: '#94a3b8',
-                    fontSize: '13px',
-                  }}
-                >
-                  {entityLinkRemote && entityLinkQuery.trim().length > 0
-                    ? '서버에서 검색 중입니다…'
-                    : '인물·사건·국가·정당 등 목록을 불러오는 중입니다…'}
-                </div>
-              ) : entityLinkResults.length === 0 ? (
-                <div
-                  style={{
-                    padding: '24px',
-                    textAlign: 'center',
-                    color: '#94a3b8',
-                    fontSize: '13px',
-                  }}
-                >
-                  {entityLinkQuery.trim() === '' ? (
-                    <>
-                      {entityLinkRemote && !mentionEntities ? (
+                <EntityLinkResultsList>
+                  {mentionEntitiesLoading || entityLinkRemoteLoading ? (
+                    <div
+                      style={{
+                        padding: '24px',
+                        textAlign: 'center',
+                        color: '#94a3b8',
+                        fontSize: '13px',
+                      }}
+                    >
+                      {entityLinkRemote && entityLinkQuery.trim().length > 0
+                        ? '서버에서 검색 중입니다…'
+                        : '인물·사건·국가·정당 등 목록을 불러오는 중입니다…'}
+                    </div>
+                  ) : entityLinkResults.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '24px',
+                        textAlign: 'center',
+                        color: '#94a3b8',
+                        fontSize: '13px',
+                      }}
+                    >
+                      {entityLinkQuery.trim() === '' ? (
                         <>
-                          검색어를 한 글자 이상 입력하면 서버에서 인물·사건·국가·정당
-                          등을 찾습니다.
-                          {entityLinkCountryId ? (
-                            <span> (정당은 이 국가 소속만)</span>
-                          ) : null}
+                          {entityLinkRemote && !mentionEntities ? (
+                            <>
+                              검색어를 한 글자 이상 입력하면 서버에서
+                              인물·사건·국가·정당 등을 찾습니다.
+                              {entityLinkCountryId ? (
+                                <span> (정당은 이 국가 소속만)</span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              연결할 수 있는 항목이 없습니다. (등록된
+                              인물·사건·국가·정당 등이 없거나, 이 편집기에 넘긴
+                              목록이 비어 있습니다.)
+                              <div
+                                style={{
+                                  fontSize: '11px',
+                                  marginTop: '10px',
+                                  color: '#cbd5e1',
+                                }}
+                              >
+                                검색어를 입력하면 목록에서 좁혀 볼 수 있습니다.
+                              </div>
+                            </>
+                          )}
                         </>
                       ) : (
-                        <>
-                          연결할 수 있는 항목이 없습니다. (등록된 인물·사건·국가·정당
-                          등이 없거나, 이 편집기에 넘긴 목록이 비어 있습니다.)
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              marginTop: '10px',
-                              color: '#cbd5e1',
-                            }}
-                          >
-                            검색어를 입력하면 목록에서 좁혀 볼 수 있습니다.
-                          </div>
-                        </>
+                        '검색 결과가 없습니다'
                       )}
-                    </>
+                    </div>
                   ) : (
-                    '검색 결과가 없습니다'
-                  )}
-                </div>
-              ) : (
-                (() => {
-                  // 타입별로 그룹화
-                  const grouped: Record<string, MentionItem[]> = {}
-                  entityLinkResults.forEach((item) => {
-                    if (!grouped[item.type]) {
-                      grouped[item.type] = []
-                    }
-                    grouped[item.type].push(item)
-                  })
+                    (() => {
+                      // 타입별로 그룹화
+                      const grouped: Record<string, MentionItem[]> = {}
+                      entityLinkResults.forEach((item) => {
+                        if (!grouped[item.type]) {
+                          grouped[item.type] = []
+                        }
+                        grouped[item.type].push(item)
+                      })
 
-                  let globalIndex = 0
-                  return Object.entries(grouped).map(([type, items]) => {
-                    const typeConfig =
-                      MENTION_TYPE_CONFIG[
-                        type as keyof typeof MENTION_TYPE_CONFIG
-                      ]
-                    const startIndex = globalIndex
-                    globalIndex += items.length
+                      let globalIndex = 0
+                      return Object.entries(grouped).map(([type, items]) => {
+                        const typeConfig =
+                          MENTION_TYPE_CONFIG[
+                            type as keyof typeof MENTION_TYPE_CONFIG
+                          ]
+                        const startIndex = globalIndex
+                        globalIndex += items.length
 
-                    return (
-                      <div key={type} style={{ marginBottom: '12px' }}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 12px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            color: '#64748b',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            background: 'rgba(79, 70, 229, 0.06)',
-                            borderRadius: '8px',
-                            marginBottom: '4px',
-                          }}
-                        >
-                          {typeConfig && typeConfig.icon && (
-                            <span style={{ color: typeConfig.color }}>
-                              {React.createElement(typeConfig.icon, {
-                                size: 14,
-                              })}
-                            </span>
-                          )}
-                          <span style={{ color: '#64748b' }}>
-                            {typeConfig?.label || type}
-                          </span>
-                          <span
-                            style={{
-                              marginLeft: 'auto',
-                              fontSize: '10px',
-                              color: '#94a3b8',
-                            }}
-                          >
-                            {items.length}
-                          </span>
-                        </div>
-                        {items.map((item, itemIndex) => {
-                          const currentIndex = startIndex + itemIndex
-                          return (
+                        return (
+                          <div key={type} style={{ marginBottom: '12px' }}>
                             <div
-                              key={`${item.type}-${item.id}`}
                               style={{
-                                padding: '12px 14px',
-                                cursor: 'pointer',
-                                background:
-                                  currentIndex === entityLinkSelectedIndex
-                                    ? 'rgba(245, 158, 11, 0.08)'
-                                    : 'transparent',
-                                borderRadius: '10px',
-                                marginBottom: '4px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '12px',
-                                border:
-                                  currentIndex === entityLinkSelectedIndex
-                                    ? '1px solid rgba(245, 158, 11, 0.25)'
-                                    : '1px solid transparent',
-                              }}
-                              onMouseEnter={() =>
-                                setEntityLinkSelectedIndex(currentIndex)
-                              }
-                              onClick={() => {
-                                playClickSound()
-                                insertEntityLink(item)
+                                gap: '8px',
+                                padding: '8px 12px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#64748b',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                background: 'rgba(79, 70, 229, 0.06)',
+                                borderRadius: '8px',
+                                marginBottom: '4px',
                               }}
                             >
-                              {item.icon && (
-                                <span
-                                  style={{ color: item.color, flexShrink: 0 }}
-                                >
-                                  {React.createElement(item.icon, {
-                                    size: 18,
+                              {typeConfig && typeConfig.icon && (
+                                <span style={{ color: typeConfig.color }}>
+                                  {React.createElement(typeConfig.icon, {
+                                    size: 14,
                                   })}
                                 </span>
                               )}
+                              <span style={{ color: '#64748b' }}>
+                                {typeConfig?.label || type}
+                              </span>
                               <span
                                 style={{
-                                  flex: 1,
-                                  fontWeight: 500,
-                                  fontSize: '14px',
-                                  color: '#0f172a',
+                                  marginLeft: 'auto',
+                                  fontSize: '10px',
+                                  color: '#94a3b8',
                                 }}
                               >
-                                {item.name}
+                                {items.length}
                               </span>
-                              {item.subtitle && (
-                                <span
-                                  style={{ fontSize: '12px', color: '#64748b' }}
-                                >
-                                  {item.subtitle}
-                                </span>
-                              )}
                             </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })
-                })()
-              )}
-            </EntityLinkResultsList>
-          </EntityLinkModalContent>
-        </EntityLinkModal>
+                            {items.map((item, itemIndex) => {
+                              const currentIndex = startIndex + itemIndex
+                              return (
+                                <div
+                                  key={`${item.type}-${item.id}`}
+                                  style={{
+                                    padding: '12px 14px',
+                                    cursor: 'pointer',
+                                    background:
+                                      currentIndex === entityLinkSelectedIndex
+                                        ? 'rgba(245, 158, 11, 0.08)'
+                                        : 'transparent',
+                                    borderRadius: '10px',
+                                    marginBottom: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    border:
+                                      currentIndex === entityLinkSelectedIndex
+                                        ? '1px solid rgba(245, 158, 11, 0.25)'
+                                        : '1px solid transparent',
+                                  }}
+                                  onMouseEnter={() =>
+                                    setEntityLinkSelectedIndex(currentIndex)
+                                  }
+                                  onClick={() => {
+                                    playClickSound()
+                                    insertEntityLink(item)
+                                  }}
+                                >
+                                  {item.icon && (
+                                    <span
+                                      style={{
+                                        color: item.color,
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {React.createElement(item.icon, {
+                                        size: 18,
+                                      })}
+                                    </span>
+                                  )}
+                                  <span
+                                    style={{
+                                      flex: 1,
+                                      fontWeight: 500,
+                                      fontSize: '14px',
+                                      color: '#0f172a',
+                                    }}
+                                  >
+                                    {item.name}
+                                  </span>
+                                  {item.subtitle && (
+                                    <span
+                                      style={{
+                                        fontSize: '12px',
+                                        color: '#64748b',
+                                      }}
+                                    >
+                                      {item.subtitle}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })
+                    })()
+                  )}
+                </EntityLinkResultsList>
+              </EntityLinkModalContent>
+            </EntityLinkModal>
           </EntityLinkModalOverlay>,
           document.body,
         )}
@@ -3778,194 +3793,206 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         createPortal(
           <TermLinkModalOverlay onClick={handleCloseTermLinkModal}>
             <TermLinkModal onClick={(e) => e.stopPropagation()}>
-          <TermLinkModalHeader>
-            <TermLinkModalTitle>
-              {termLinkExplanationOnly ? '설명 넣기' : '용어 연결'}
-            </TermLinkModalTitle>
-            <TermLinkModalClose onClick={handleCloseTermLinkModal}>
-              <FiX size={20} />
-            </TermLinkModalClose>
-          </TermLinkModalHeader>
-          <TermLinkModalContent>
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-              <strong>선택한 문구</strong> &quot;{selectedText}&quot;
-            </div>
-
-            {termLinkExplanationOnly ? (
-              /* 설명 넣기: 이 문서에만 쓰는 설명만 입력 */
-              <TermLinkNewSection>
+              <TermLinkModalHeader>
+                <TermLinkModalTitle>
+                  {termLinkExplanationOnly ? '설명 넣기' : '용어 연결'}
+                </TermLinkModalTitle>
+                <TermLinkModalClose onClick={handleCloseTermLinkModal}>
+                  <FiX size={20} />
+                </TermLinkModalClose>
+              </TermLinkModalHeader>
+              <TermLinkModalContent>
                 <div
-                  style={{
-                    fontSize: 12,
-                    color: '#64748b',
-                    marginBottom: 8,
-                  }}
+                  style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}
                 >
-                  읽는 사람이 아래 문구에 마우스를 올리면 이 설명이 툴팁으로
-                  표시됩니다.
+                  <strong>선택한 문구</strong> &quot;{selectedText}&quot;
                 </div>
-                <TermLinkNewLabel>설명 (이 문서에서만 표시)</TermLinkNewLabel>
-                <TermLinkNewTextarea
-                  placeholder="선택한 문구에 달 설명을 입력하세요"
-                  value={termLinkNewDesc}
-                  onChange={(e) => setTermLinkNewDesc(e.target.value)}
-                  autoFocus
-                />
-                <TermLinkNewButton
-                  $primary
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    handleCreateAndLinkTerm()
-                  }}
-                  disabled={!termLinkNewDesc.trim()}
-                >
-                  설명 넣기
-                </TermLinkNewButton>
-              </TermLinkNewSection>
-            ) : (
-              <>
-                <TermLinkSearchInput
-                  type="text"
-                  placeholder="용어 검색 (이름)..."
-                  value={termLinkQuery}
-                  onChange={(e) => {
-                    const nextQuery = e.target.value
-                    setTermLinkQuery(nextQuery)
-                    searchTermLinks(nextQuery)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault()
-                      setTermLinkSelectedIndex((prevIdx) =>
-                        prevIdx < termLinkResults.length - 1 ? prevIdx + 1 : 0,
-                      )
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault()
-                      setTermLinkSelectedIndex((prevIdx) =>
-                        prevIdx > 0 ? prevIdx - 1 : termLinkResults.length - 1,
-                      )
-                    } else if (e.key === 'Enter') {
-                      e.preventDefault()
-                      if (termLinkResults[termLinkSelectedIndex]) {
-                        insertTermLink(termLinkResults[termLinkSelectedIndex])
-                      }
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault()
-                      handleCloseTermLinkModal()
-                    }
-                  }}
-                  autoFocus
-                />
-                <TermLinkResultsList>
-                  {termLinkResults.length === 0 ? (
+
+                {termLinkExplanationOnly ? (
+                  /* 설명 넣기: 이 문서에만 쓰는 설명만 입력 */
+                  <TermLinkNewSection>
                     <div
                       style={{
-                        padding: 20,
-                        textAlign: 'center',
-                        color: '#94a3b8',
-                        fontSize: 13,
+                        fontSize: 12,
+                        color: '#64748b',
+                        marginBottom: 8,
                       }}
                     >
-                      {termLinkQuery.trim()
-                        ? '검색 결과가 없습니다. 아래에서 새 용어를 등록할 수 있습니다.'
-                        : '검색어를 입력하거나 아래에서 새 용어를 등록하세요.'}
+                      읽는 사람이 아래 문구에 마우스를 올리면 이 설명이 툴팁으로
+                      표시됩니다.
                     </div>
-                  ) : (
-                    termLinkResults.map((term, idx) => (
-                      <div
-                        key={term.id}
-                        style={{
-                          padding: '12px 14px',
-                          cursor: 'pointer',
-                          background:
-                            idx === termLinkSelectedIndex
-                              ? 'rgba(13, 148, 136, 0.08)'
-                              : 'transparent',
-                          borderRadius: 10,
-                          marginBottom: 4,
-                          border:
-                            idx === termLinkSelectedIndex
-                              ? '1px solid rgba(13, 148, 136, 0.25)'
-                              : '1px solid transparent',
-                        }}
-                        onMouseEnter={() => setTermLinkSelectedIndex(idx)}
-                        onClick={() => {
-                          playClickSound()
-                          insertTermLink(term)
-                        }}
-                      >
-                        <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                          {term.name}
-                        </span>
-                        {term.description && (
+                    <TermLinkNewLabel>
+                      설명 (이 문서에서만 표시)
+                    </TermLinkNewLabel>
+                    <TermLinkNewTextarea
+                      placeholder="선택한 문구에 달 설명을 입력하세요"
+                      value={termLinkNewDesc}
+                      onChange={(e) => setTermLinkNewDesc(e.target.value)}
+                      autoFocus
+                    />
+                    <TermLinkNewButton
+                      $primary
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        handleCreateAndLinkTerm()
+                      }}
+                      disabled={!termLinkNewDesc.trim()}
+                    >
+                      설명 넣기
+                    </TermLinkNewButton>
+                  </TermLinkNewSection>
+                ) : (
+                  <>
+                    <TermLinkSearchInput
+                      type="text"
+                      placeholder="용어 검색 (이름)..."
+                      value={termLinkQuery}
+                      onChange={(e) => {
+                        const nextQuery = e.target.value
+                        setTermLinkQuery(nextQuery)
+                        searchTermLinks(nextQuery)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setTermLinkSelectedIndex((prevIdx) =>
+                            prevIdx < termLinkResults.length - 1
+                              ? prevIdx + 1
+                              : 0,
+                          )
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setTermLinkSelectedIndex((prevIdx) =>
+                            prevIdx > 0
+                              ? prevIdx - 1
+                              : termLinkResults.length - 1,
+                          )
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (termLinkResults[termLinkSelectedIndex]) {
+                            insertTermLink(
+                              termLinkResults[termLinkSelectedIndex],
+                            )
+                          }
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          handleCloseTermLinkModal()
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <TermLinkResultsList>
+                      {termLinkResults.length === 0 ? (
+                        <div
+                          style={{
+                            padding: 20,
+                            textAlign: 'center',
+                            color: '#94a3b8',
+                            fontSize: 13,
+                          }}
+                        >
+                          {termLinkQuery.trim()
+                            ? '검색 결과가 없습니다. 아래에서 새 용어를 등록할 수 있습니다.'
+                            : '검색어를 입력하거나 아래에서 새 용어를 등록하세요.'}
+                        </div>
+                      ) : (
+                        termLinkResults.map((term, idx) => (
                           <div
+                            key={term.id}
                             style={{
-                              fontSize: 12,
-                              color: '#64748b',
-                              marginTop: 4,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
+                              padding: '12px 14px',
+                              cursor: 'pointer',
+                              background:
+                                idx === termLinkSelectedIndex
+                                  ? 'rgba(13, 148, 136, 0.08)'
+                                  : 'transparent',
+                              borderRadius: 10,
+                              marginBottom: 4,
+                              border:
+                                idx === termLinkSelectedIndex
+                                  ? '1px solid rgba(13, 148, 136, 0.25)'
+                                  : '1px solid transparent',
+                            }}
+                            onMouseEnter={() => setTermLinkSelectedIndex(idx)}
+                            onClick={() => {
+                              playClickSound()
+                              insertTermLink(term)
                             }}
                           >
-                            {term.description}
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                              {term.name}
+                            </span>
+                            {term.description && (
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: '#64748b',
+                                  marginTop: 4,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {term.description}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </TermLinkResultsList>
-                <TermLinkNewSection>
-                  <TermLinkNewLabel>새 용어로 등록 후 연결</TermLinkNewLabel>
-                  {documentScope ? (
-                    <label
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginBottom: 10,
-                        fontSize: 13,
-                        color: '#475569',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={termLinkDocumentOnly}
-                        onChange={(e) =>
-                          setTermLinkDocumentOnly(e.target.checked)
-                        }
+                        ))
+                      )}
+                    </TermLinkResultsList>
+                    <TermLinkNewSection>
+                      <TermLinkNewLabel>
+                        새 용어로 등록 후 연결
+                      </TermLinkNewLabel>
+                      {documentScope ? (
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            marginBottom: 10,
+                            fontSize: 13,
+                            color: '#475569',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={termLinkDocumentOnly}
+                            onChange={(e) =>
+                              setTermLinkDocumentOnly(e.target.checked)
+                            }
+                          />
+                          이 문서에만 사용 (문서 전용 용어)
+                        </label>
+                      ) : null}
+                      <TermLinkNewInput
+                        placeholder="용어명 (필수)"
+                        value={termLinkNewName}
+                        onChange={(e) => setTermLinkNewName(e.target.value)}
                       />
-                      이 문서에만 사용 (문서 전용 용어)
-                    </label>
-                  ) : null}
-                  <TermLinkNewInput
-                    placeholder="용어명 (필수)"
-                    value={termLinkNewName}
-                    onChange={(e) => setTermLinkNewName(e.target.value)}
-                  />
-                  <TermLinkNewTextarea
-                    placeholder="설명 (선택)"
-                    value={termLinkNewDesc}
-                    onChange={(e) => setTermLinkNewDesc(e.target.value)}
-                  />
-                  <TermLinkNewButton
-                    $primary
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      handleCreateAndLinkTerm()
-                    }}
-                    disabled={!termLinkNewName.trim()}
-                  >
-                    등록 후 연결
-                  </TermLinkNewButton>
-                </TermLinkNewSection>
-              </>
-            )}
-          </TermLinkModalContent>
-        </TermLinkModal>
+                      <TermLinkNewTextarea
+                        placeholder="설명 (선택)"
+                        value={termLinkNewDesc}
+                        onChange={(e) => setTermLinkNewDesc(e.target.value)}
+                      />
+                      <TermLinkNewButton
+                        $primary
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          handleCreateAndLinkTerm()
+                        }}
+                        disabled={!termLinkNewName.trim()}
+                      >
+                        등록 후 연결
+                      </TermLinkNewButton>
+                    </TermLinkNewSection>
+                  </>
+                )}
+              </TermLinkModalContent>
+            </TermLinkModal>
           </TermLinkModalOverlay>,
           document.body,
         )}
@@ -3976,141 +4003,147 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         createPortal(
           <TermLinkModalOverlay onClick={handleCloseTermEditModal}>
             <TermLinkModal onClick={(e) => e.stopPropagation()}>
-          <TermLinkModalHeader>
-            <TermLinkModalTitle>
-              {termEditIsDocumentScoped ? '설명 수정' : '용어 수정'}
-            </TermLinkModalTitle>
-            <TermLinkModalClose
-              type="button"
-              onClick={handleCloseTermEditModal}
-            >
-              <FiX size={20} />
-            </TermLinkModalClose>
-          </TermLinkModalHeader>
-          <TermLinkModalContent>
-            {termEditLoading ? (
-              <div
-                style={{ padding: 24, textAlign: 'center', color: '#64748b' }}
-              >
-                불러오는 중…
-              </div>
-            ) : termEditIsDocumentScoped ? (
-              /* 문서 전용(설명 넣기) → 문구는 읽기 전용, 설명만 수정 */
-              <>
-                <TermLinkNewLabel>문구</TermLinkNewLabel>
-                <div
-                  style={{
-                    padding: '10px 12px',
-                    background: '#f1f5f9',
-                    borderRadius: 8,
-                    fontSize: 14,
-                    color: '#334155',
-                    marginBottom: 12,
-                    maxWidth: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={termEditName}
+              <TermLinkModalHeader>
+                <TermLinkModalTitle>
+                  {termEditIsDocumentScoped ? '설명 수정' : '용어 수정'}
+                </TermLinkModalTitle>
+                <TermLinkModalClose
+                  type="button"
+                  onClick={handleCloseTermEditModal}
                 >
-                  {termEditName}
-                </div>
-                <TermLinkNewLabel>설명 (이 문서에서만 표시)</TermLinkNewLabel>
-                <TermLinkNewTextarea
-                  placeholder="설명을 입력하세요"
-                  value={termEditDesc}
-                  onChange={(e) => setTermEditDesc(e.target.value)}
-                  style={{ minHeight: 120 }}
-                />
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 10,
-                    marginTop: 16,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <TermLinkNewButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      handleCloseTermEditModal()
-                    }}
-                  >
-                    취소
-                  </TermLinkNewButton>
-                  <TermLinkNewButton
-                    $primary
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      handleSaveTermEdit()
-                    }}
-                    disabled={termEditLoading}
-                  >
-                    저장
-                  </TermLinkNewButton>
-                  <TermLinkNewButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      handleDeleteTermEdit()
-                    }}
-                    disabled={termEditLoading}
+                  <FiX size={20} />
+                </TermLinkModalClose>
+              </TermLinkModalHeader>
+              <TermLinkModalContent>
+                {termEditLoading ? (
+                  <div
                     style={{
-                      marginLeft: 'auto',
-                      color: '#dc2626',
-                      borderColor: '#fecaca',
-                      background: '#fef2f2',
+                      padding: 24,
+                      textAlign: 'center',
+                      color: '#64748b',
                     }}
                   >
-                    설명 삭제
-                  </TermLinkNewButton>
-                </div>
-              </>
-            ) : (
-              <>
-                <TermLinkNewLabel>용어명</TermLinkNewLabel>
-                <TermLinkNewInput
-                  placeholder="용어명 (필수)"
-                  value={termEditName}
-                  onChange={(e) => setTermEditName(e.target.value)}
-                />
-                <TermLinkNewLabel style={{ marginTop: 12 }}>
-                  설명
-                </TermLinkNewLabel>
-                <TermLinkNewTextarea
-                  placeholder="설명 (선택)"
-                  value={termEditDesc}
-                  onChange={(e) => setTermEditDesc(e.target.value)}
-                  style={{ minHeight: 200 }}
-                />
-                <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                  <TermLinkNewButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      handleCloseTermEditModal()
-                    }}
-                  >
-                    취소
-                  </TermLinkNewButton>
-                  <TermLinkNewButton
-                    $primary
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      handleSaveTermEdit()
-                    }}
-                    disabled={!termEditName.trim() || termEditLoading}
-                  >
-                    저장
-                  </TermLinkNewButton>
-                </div>
-              </>
-            )}
-          </TermLinkModalContent>
-        </TermLinkModal>
+                    불러오는 중…
+                  </div>
+                ) : termEditIsDocumentScoped ? (
+                  /* 문서 전용(설명 넣기) → 문구는 읽기 전용, 설명만 수정 */
+                  <>
+                    <TermLinkNewLabel>문구</TermLinkNewLabel>
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        background: '#f1f5f9',
+                        borderRadius: 8,
+                        fontSize: 14,
+                        color: '#334155',
+                        marginBottom: 12,
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={termEditName}
+                    >
+                      {termEditName}
+                    </div>
+                    <TermLinkNewLabel>
+                      설명 (이 문서에서만 표시)
+                    </TermLinkNewLabel>
+                    <TermLinkNewTextarea
+                      placeholder="설명을 입력하세요"
+                      value={termEditDesc}
+                      onChange={(e) => setTermEditDesc(e.target.value)}
+                      style={{ minHeight: 120 }}
+                    />
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        marginTop: 16,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <TermLinkNewButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          handleCloseTermEditModal()
+                        }}
+                      >
+                        취소
+                      </TermLinkNewButton>
+                      <TermLinkNewButton
+                        $primary
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          handleSaveTermEdit()
+                        }}
+                        disabled={termEditLoading}
+                      >
+                        저장
+                      </TermLinkNewButton>
+                      <TermLinkNewButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          handleDeleteTermEdit()
+                        }}
+                        disabled={termEditLoading}
+                        style={{
+                          marginLeft: 'auto',
+                          color: '#dc2626',
+                          borderColor: '#fecaca',
+                          background: '#fef2f2',
+                        }}
+                      >
+                        설명 삭제
+                      </TermLinkNewButton>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <TermLinkNewLabel>용어명</TermLinkNewLabel>
+                    <TermLinkNewInput
+                      placeholder="용어명 (필수)"
+                      value={termEditName}
+                      onChange={(e) => setTermEditName(e.target.value)}
+                    />
+                    <TermLinkNewLabel style={{ marginTop: 12 }}>
+                      설명
+                    </TermLinkNewLabel>
+                    <TermLinkNewTextarea
+                      placeholder="설명 (선택)"
+                      value={termEditDesc}
+                      onChange={(e) => setTermEditDesc(e.target.value)}
+                      style={{ minHeight: 200 }}
+                    />
+                    <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                      <TermLinkNewButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          handleCloseTermEditModal()
+                        }}
+                      >
+                        취소
+                      </TermLinkNewButton>
+                      <TermLinkNewButton
+                        $primary
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          handleSaveTermEdit()
+                        }}
+                        disabled={!termEditName.trim() || termEditLoading}
+                      >
+                        저장
+                      </TermLinkNewButton>
+                    </div>
+                  </>
+                )}
+              </TermLinkModalContent>
+            </TermLinkModal>
           </TermLinkModalOverlay>,
           document.body,
         )}

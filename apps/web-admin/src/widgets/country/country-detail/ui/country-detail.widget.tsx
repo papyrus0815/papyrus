@@ -369,7 +369,9 @@ function CountryDetailInner({
 
                       {activeSubTab === 'elections' && (
                         <CountryStyles.TabContentPane>
-                          <CountryElectionsSection countryId={country.id} />
+                          <CountryElectionsSection
+                            countryId={country.id}
+                          />
                         </CountryStyles.TabContentPane>
                       )}
 

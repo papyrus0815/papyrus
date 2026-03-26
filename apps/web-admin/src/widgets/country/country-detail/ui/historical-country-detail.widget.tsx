@@ -38,6 +38,7 @@ import {
 import { historicalCountryMockData } from '../mock/historical-country.mock'
 import { CountryFlag } from '../../shared'
 import * as S from './country-detail.styles'
+import { CountryElectionsSection } from './country-elections-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { LoadingOverlay } from './loading-overlay'
@@ -122,6 +123,7 @@ export type HistoricalCountryTab =
   | 'figures' // 주요 인물
   | 'heads' // 수장 (국왕, 황제 등)
   | 'government' // 행정조직 (관직 정의, 행정기구)
+  | 'elections' // 선거·투표 (역사 국가 맥락)
   | 'ethnicity' // 구성 민족
   | 'succession' // 계승 관계
   | 'membership' // 소속·구성 (신성로마-제후국 등)
@@ -366,6 +368,13 @@ export function HistoricalCountryDetail({
                       행정조직 정보는 현대 국가 상세에서 확인할 수 있습니다.
                     </div>
                   )}
+                  {activeTab === 'elections' && (
+                    <div style={{ padding: '16px 24px 32px', maxWidth: '100%' }}>
+                      <CountryElectionsSection
+                        historicalCountryId={country.id}
+                      />
+                    </div>
+                  )}
                   {activeTab === 'ethnicity' && (
                     <EthnicitySection historicalCountryId={country.id} />
                   )}
@@ -593,6 +602,7 @@ function HistoricalCountryTabs({
     { id: 'figures', label: '인물' },
     { id: 'heads', label: '역대 수반' },
     { id: 'government', label: '행정조직' },
+    { id: 'elections', label: '선거·투표' },
     { id: 'ethnicity', label: '민족' },
     { id: 'succession', label: '계승' },
     { id: 'membership', label: '소속·구성' },

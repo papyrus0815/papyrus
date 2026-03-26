@@ -350,6 +350,31 @@ export type GovernmentCabinetTenureItem = {
   achievements?: GovernmentTenureAchievementItem[]
 }
 
+/** 행정부 목록 API의 수반 재임(소속 국가·이름 포함) */
+export type GovernmentHeadTenureInCabinetList = {
+  id: string
+  historicalCountryId?: string | null
+  countryId?: string | null
+  title?: string | null
+  startDate: string
+  endDate?: string | null
+  termNumber?: number | null
+  regnalNumber?: number | null
+  subTermNumber?: number | null
+  person?: GovernmentCabinetTenureItem['person']
+  positionDefinition?: GovernmentCabinetTenureItem['positionDefinition']
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
+}
+
+/** GET /government-positions/cabinets 응답 1건 */
+export type CabinetListItemDto = {
+  id: string
+  name?: string | null
+  headTenureId?: string
+  headTenure: GovernmentHeadTenureInCabinetList
+}
+
 /**
  * Person Career API
  */
@@ -564,7 +589,7 @@ export const personCareerApi = {
   getCabinets: async (params: {
     countryId?: string
     historicalCountryId?: string
-  }) => {
+  }): Promise<CabinetListItemDto[]> => {
     const search = new URLSearchParams()
     if (params.countryId) search.set('countryId', params.countryId)
     if (params.historicalCountryId) search.set('historicalCountryId', params.historicalCountryId)

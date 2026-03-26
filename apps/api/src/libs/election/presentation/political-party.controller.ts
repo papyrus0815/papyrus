@@ -39,6 +39,37 @@ export class PoliticalPartyController {
     return serializeElectionBigInt(rows)
   }
 
+  /** `:id`보다 먼저 등록 — `lineage`가 id로 오인되지 않도록 */
+  @Get(':id/lineage')
+  async getLineage(@Param('id') id: string) {
+    const row = await this.prisma.politicalParty.findUnique({ where: { id } })
+    if (!row) throw new NotFoundException('정당을 찾을 수 없습니다.')
+    const [outgoing, incoming] = await Promise.all([
+      this.prisma.politicalPartyTransition.findMany({
+        where: { fromPartyId: id },
+        include: {
+          toParty: {
+            select: { id: true, name: true, shortName: true, brandColor: true },
+          },
+        },
+        orderBy: [{ effectiveDate: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.politicalPartyTransition.findMany({
+        where: { toPartyId: id },
+        include: {
+          fromParty: {
+            select: { id: true, name: true, shortName: true, brandColor: true },
+          },
+        },
+        orderBy: [{ effectiveDate: 'desc' }, { id: 'desc' }],
+      }),
+    ])
+    return serializeElectionBigInt({
+      successors: outgoing,
+      predecessors: incoming,
+    })
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string) {
     const row = await this.prisma.politicalParty.findUnique({ where: { id } })
@@ -62,6 +93,7 @@ export class PoliticalPartyController {
       headquartersCityId?: string | null
       countryId?: string | null
       historicalCountryId?: string | null
+      brandColor?: string | null
     },
   ) {
     const row = await this.prisma.politicalParty.create({
@@ -75,6 +107,7 @@ export class PoliticalPartyController {
         foundedDate: body.foundedDate ? new Date(body.foundedDate) : undefined,
         dissolvedDate: body.dissolvedDate ? new Date(body.dissolvedDate) : undefined,
         logoUrl: body.logoUrl ?? undefined,
+        brandColor: body.brandColor ?? undefined,
         headquartersCityId: body.headquartersCityId ?? undefined,
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
@@ -100,6 +133,7 @@ export class PoliticalPartyController {
       headquartersCityId: string | null
       countryId: string | null
       historicalCountryId: string | null
+      brandColor: string | null
     }>,
   ) {
     const data: Record<string, unknown> = {}
@@ -114,6 +148,7 @@ export class PoliticalPartyController {
     if (body.dissolvedDate !== undefined)
       data.dissolvedDate = body.dissolvedDate ? new Date(body.dissolvedDate) : null
     if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl
+    if (body.brandColor !== undefined) data.brandColor = body.brandColor
     if (body.headquartersCityId !== undefined) data.headquartersCityId = body.headquartersCityId
     if (body.countryId !== undefined) data.countryId = body.countryId
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId

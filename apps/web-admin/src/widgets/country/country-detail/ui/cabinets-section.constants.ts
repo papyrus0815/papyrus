@@ -36,6 +36,22 @@ export const TL_ROWS = [
   { line: '#e11d48', textColor: '#881337' },
 ] as const
 
+/** 소속(현대·역사 국가)별 타임라인 강조색 — 4색 순환만 쓰면 서로 다른 국가가 같은 색으로 겹치기 쉬움 */
+export const TL_TERRITORY_PALETTE = [
+  { line: '#6366f1', textColor: '#3730a3' },
+  { line: '#f59e0b', textColor: '#78350f' },
+  { line: '#10b981', textColor: '#065f46' },
+  { line: '#e11d48', textColor: '#881337' },
+  { line: '#0ea5e9', textColor: '#0c4a6e' },
+  { line: '#8b5cf6', textColor: '#4c1d95' },
+  { line: '#65a30d', textColor: '#365314' },
+  { line: '#c026d3', textColor: '#86198f' },
+  { line: '#0d9488', textColor: '#134e4a' },
+  { line: '#ea580c', textColor: '#7c2d12' },
+  { line: '#2563eb', textColor: '#1e3a8a' },
+  { line: '#db2777', textColor: '#831843' },
+] as const
+
 /** 행정부–정당 연결 역할 (`CabinetPartyRole`) */
 export const CABINET_PARTY_ROLE_OPTIONS = [
   { value: 'LEADING', label: '집권·주도' },

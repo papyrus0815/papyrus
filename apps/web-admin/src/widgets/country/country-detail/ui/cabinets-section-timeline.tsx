@@ -21,13 +21,16 @@ export function cabinetTimelineCellAriaLabel(
   subTermNumber: number | null | undefined,
   posTitle: string,
   personName: string,
+  territoryPrefix?: string | null,
 ): string {
   const term =
     termNum != null
       ? `제${termNum}대${subTermNumber != null ? ` ${subTermNumber}기` : ''}`
       : ''
   const mid = [term, posTitle].filter(Boolean).join(', ')
-  return `${mid ? `${mid}, ` : ''}${personName}, 상세 정보 보기`
+  const core = `${mid ? `${mid}, ` : ''}${personName}, 상세 정보 보기`
+  if (territoryPrefix?.trim()) return `${territoryPrefix.trim()}, ${core}`
+  return core
 }
 
 export function TlItem({
@@ -38,6 +41,7 @@ export function TlItem({
   ageAtStart,
   birthPlace,
   lineColor,
+  territoryLabel,
   isDark,
 }: {
   thumbUrl: string | null
@@ -47,6 +51,8 @@ export function TlItem({
   ageAtStart: number | null
   birthPlace: string | null
   lineColor: string
+  /** 전체 보기 등에서 소속 역사국가·현대국가 구분용 한 줄 */
+  territoryLabel?: string | null
   isDark: boolean
 }) {
   const C = getCabinetsSectionPalette(isDark)
@@ -98,6 +104,24 @@ export function TlItem({
           textAlign: 'left',
         }}
       >
+        {territoryLabel ? (
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: C.textMuted,
+              letterSpacing: '0.02em',
+              marginBottom: 6,
+              lineHeight: 1.35,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={territoryLabel}
+          >
+            {territoryLabel}
+          </div>
+        ) : null}
         <div
           style={{
             display: 'flex',

@@ -95,6 +95,9 @@ model PoliticalParty {
   /// 로고
   logoUrl String? @map("logo_url") @db.VarChar(255)
 
+  /// 차트·목록 강조용 브랜드 컬러 (#RRGGBB)
+  brandColor String? @map("brand_color") @db.VarChar(7)
+
   /// 본부 소재 도시
   headquartersCityId String? @map("headquarters_city_id") @db.Char(36)
 
@@ -110,15 +113,20 @@ model PoliticalParty {
   country           Country?           @relation("PoliticalPartyCountry", fields: [countryId], references: [id], onDelete: SetNull)
   historicalCountry HistoricalCountry? @relation("PoliticalPartyHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
-  aliases      PoliticalPartyAlias[]
-  leaderships  PoliticalPartyLeadership[]
-  affiliations PoliticalPartyOrganization[]
+  transitionsFrom PoliticalPartyTransition[] @relation("PartyTransitionFrom")
+  transitionsTo   PoliticalPartyTransition[] @relation("PartyTransitionTo")
+
+  aliases              PoliticalPartyAlias[]
+  leaderships          PoliticalPartyLeadership[]
+  affiliations         PoliticalPartyOrganization[]
   /// 일반 당원·소속 기간
-  memberships PoliticalPartyMembership[] @relation("PartyMemberships")
+  memberships          PoliticalPartyMembership[]   @relation("PartyMemberships")
   /// 선거 후보(공천 정당)
-  electionCandidacies ElectionCandidacy[] @relation("ElectionCandidacyParty")
+  electionCandidacies  ElectionCandidacy[]          @relation("ElectionCandidacyParty")
+  /// 선거별 정당 집계(득표·득표율·의석 등)
+  electionPartyResults ElectionPartyResult[]        @relation("ElectionPartyResults")
   /// 내각과의 연정·여당 관계
-  cabinetAffiliations CabinetPoliticalParty[] @relation("CabinetPartyAffiliations")
+  cabinetAffiliations  CabinetPoliticalParty[]      @relation("CabinetPartyAffiliations")
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -238,4 +246,40 @@ model PoliticalPartyOrganization {
   @@index([partyId], name: "idx_party_org_partyId")
   @@index([organizationId], name: "idx_party_org_orgId")
   @@map("political_party_organization")
+}
+
+// ========================
+// PoliticalPartyTransition (전신·후신·합당·분당)
+// ========================
+
+/// 정당 간 계보: 한 방향 엣지(from → to). 합당은 여러 행(A→C, B→C)으로 표현.
+enum PoliticalPartyTransitionKind {
+  SUCCESSION
+  MERGER_INTO
+  SPLIT_FROM
+  CONTINUITY
+}
+
+model PoliticalPartyTransition {
+  id String @id @default(uuid()) @db.Char(36)
+
+  fromPartyId String @map("from_party_id") @db.Char(36)
+  toPartyId   String @map("to_party_id") @db.Char(36)
+
+  kind PoliticalPartyTransitionKind @map("kind")
+
+  effectiveDate DateTime? @map("effective_date")
+  notes         String?   @db.Text
+
+  fromParty PoliticalParty @relation("PartyTransitionFrom", fields: [fromPartyId], references: [id], onDelete: Cascade)
+  toParty   PoliticalParty @relation("PartyTransitionTo", fields: [toPartyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([fromPartyId], name: "idx_party_trans_from")
+  @@index([toPartyId], name: "idx_party_trans_to")
+  /// 동일 방향(from→to) 중복 행 방지 — 유형·날짜·메모 변경은 PATCH로
+  @@unique([fromPartyId, toPartyId], name: "uniq_party_transition_from_to")
+  @@map("political_party_transition")
 }

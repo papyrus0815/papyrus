@@ -7,6 +7,7 @@
 ```
 libs/db/
 └── prisma/
+    ├── SCHEMA_SOURCE_OF_TRUTH.md # ⚠️ 병합 파일 직접 수정 금지(에이전트/개발자용)
     ├── base.prisma              # Datasource, Generator, 전역 Enum
     ├── build-schema.ts          # 스키마 병합 빌드 스크립트
     ├── run-migrate.ts           # 마이그레이션 실행 스크립트
@@ -24,26 +25,30 @@ libs/db/
 ## 🎯 목적
 
 ### 1. **도메인 분리**
+
 - 6000+ 라인의 단일 스키마 파일을 도메인별로 분리
 - 유지보수성 향상 및 가독성 개선
 - 팀 협업 시 Git 충돌 최소화
 
 ### 2. **재사용성**
+
 - 모노레포 내 여러 앱에서 공유 가능
 - 일관된 데이터 모델 유지
 
 ### 3. **모듈화**
+
 - 필요한 도메인만 선택적으로 사용 가능 (향후)
 - 마이크로서비스 전환 시 용이
 
 ## 🔄 빌드 프로세스
 
 ### 자동 병합
+
 모든 `.prisma` 파일이 자동으로 병합되어 `apps/api/prisma/schema.prisma`로 생성됩니다.
 
 ```typescript
 // libs/db/prisma/build-schema.ts
-base.prisma → 
+base.prisma →
 common.prisma →
 country.prisma →
 ... (모든 .prisma 파일) →
@@ -51,6 +56,7 @@ country.prisma →
 ```
 
 ### 병합 규칙
+
 1. ✅ **base.prisma**가 항상 맨 앞에 위치
 2. ✅ 나머지 파일들은 알파벳 순서로 병합
 3. ✅ 파일 간 `\n\n`로 구분
@@ -58,6 +64,7 @@ country.prisma →
 ## 🚀 사용 방법
 
 ### 1. 스키마 수정
+
 도메인별 파일을 직접 수정:
 
 ```bash
@@ -66,6 +73,8 @@ vi libs/db/prisma/country.prisma
 ```
 
 `apps/api/prisma/schema.prisma`는 병합 결과물이므로 **직접 편집하지 말고**, 아래 `db:build`로 `libs/db/prisma`에서 생성합니다.
+
+**마이그레이션 SQL은 수동으로 추가하지 않습니다.** 스키마 변경은 **`libs/db/prisma/*.prisma`**만 수정한 뒤, `db:build`로 병합하고 `db:migrate`(또는 `libs/db/prisma/run-migrate.ts`)로 마이그레이션을 **생성**합니다. `apps/api/prisma/migrations/`에 빈 폴더·수동 `.sql`을 만들어 넣지 마세요.
 
 ### 2. 스키마 빌드 및 마이그레이션
 
@@ -91,6 +100,7 @@ npm run db:generate
 ### 핵심 파일
 
 #### `base.prisma`
+
 - Datasource 설정 (MySQL 연결)
 - Generator 설정 (Prisma Client, ERD)
 - 전역 Enum 정의
@@ -106,39 +116,42 @@ generator client {
 }
 ```
 
-> **참고**: Prisma 7부터 datasource의 `url` 속성이 제거되었습니다. 
+> **참고**: Prisma 7부터 datasource의 `url` 속성이 제거되었습니다.
 > 데이터베이스 연결 URL은 `PrismaClient` 생성 시 `adapter` 옵션으로 전달합니다.
 > 자세한 내용은 [Prisma 7 마이그레이션 가이드](https://pris.ly/d/config-datasource)를 참조하세요.
 
 #### `build-schema.ts`
+
 - 모든 `.prisma` 파일을 읽어서 병합
 - `apps/api/prisma/schema.prisma` 생성
 - 자동 실행 (마이그레이션 전)
 
 #### `run-migrate.ts`
+
 - 스키마 빌드 + 마이그레이션 실행
 - 대화형 마이그레이션 이름 입력
 - Prisma Client 자동 재생성
 
 ### 도메인별 스키마
 
-| 파일 | 설명 |
-|------|------|
-| `common.prisma` | Tag, Attachment, CategoryPath |
-| `country.prisma` | Country, CountryRecord, CountryStatistics |
-| `person.prisma` | Person, PersonRelation |
-| `event.prisma` | Event, EventCategory, EventPerson |
-| `military.prisma` | MilitaryUnit, Weapon, Vehicle |
-| `economy.prisma` | Company, Resource, Currency |
-| `politics.prisma` | PoliticalParty, GovernmentPosition |
-| `geography.prisma` | Continent, AdministrativeDivision |
-| `historical.prisma` | HistoricalCountry, Dynasty |
-| `society.prisma` | Job, Religion, SocialPhenomenon |
-| ... | ... |
+| 파일                | 설명                                      |
+| ------------------- | ----------------------------------------- |
+| `common.prisma`     | Tag, Attachment, CategoryPath             |
+| `country.prisma`    | Country, CountryRecord, CountryStatistics |
+| `person.prisma`     | Person, PersonRelation                    |
+| `event.prisma`      | Event, EventCategory, EventPerson         |
+| `military.prisma`   | MilitaryUnit, Weapon, Vehicle             |
+| `economy.prisma`    | Company, Resource, Currency               |
+| `politics.prisma`   | PoliticalParty, GovernmentPosition        |
+| `geography.prisma`  | Continent, AdministrativeDivision         |
+| `historical.prisma` | HistoricalCountry, Dynasty                |
+| `society.prisma`    | Job, Religion, SocialPhenomenon           |
+| ...                 | ...                                       |
 
 ## ⚠️ 주의사항
 
 ### 1. 생성된 파일 직접 수정 금지
+
 ```bash
 # ❌ 절대 직접 수정하지 마세요
 apps/api/prisma/schema.prisma
@@ -148,10 +161,12 @@ libs/db/prisma/*.prisma
 ```
 
 ### 2. Git 추적
+
 - ✅ **소스 파일만 Git 추적**: `libs/db/prisma/*.prisma`
 - ❌ **생성 파일 제외**: `apps/api/prisma/schema.prisma` (.gitignore에 추가)
 
 ### 3. 스키마 변경 워크플로우
+
 ```bash
 1. libs/db/prisma/*.prisma 수정
 2. ts-node run-migrate.ts [마이그레이션명]
@@ -167,6 +182,7 @@ libs/db/prisma/*.prisma
 ## 📚 참고
 
 ### Prisma 명령어
+
 ```bash
 # 스키마 검증
 npx prisma validate --schema=apps/api/prisma/schema.prisma

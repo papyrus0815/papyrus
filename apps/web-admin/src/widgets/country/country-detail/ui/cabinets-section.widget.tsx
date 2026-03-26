@@ -49,6 +49,7 @@ import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import {
+  type CabinetListItemDto,
   type GovernmentCabinetTenureItem,
   personCareerApi,
 } from '@/shared/api/person-career'
@@ -134,7 +135,6 @@ import {
   TL_LIST_PAD_LEFT,
   TL_NODE_CENTER_X,
   TL_NODE_EDGE_PAD,
-  TL_ROWS,
   TL_ROW_H,
   TL_THUMB,
   TL_VERT_SEG_H,
@@ -145,8 +145,13 @@ import {
   END_REASON_LABEL,
   calcAgeAtEndTenure,
   calcTenureDuration,
+  buildCabinetTerritoryLegendEntries,
+  buildCabinetTerritoryOrdinalMap,
   formatDate,
+  getHeadTenureTerritoryLabel,
   getPersonName,
+  getTimelineBubbleTextColors,
+  paletteForCabinetListItem,
   stripHtmlToPlain,
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
@@ -360,7 +365,9 @@ export function CabinetsSection({
   const cabDetailBackBtnRef = useRef<HTMLButtonElement>(null)
   const cabinetViewPrevRef = useRef<'list' | 'detail'>(cabinetView)
 
-  const { data: cabinets = [], isLoading: loadingCabinets } = useQuery({
+  const { data: cabinets = [], isLoading: loadingCabinets } = useQuery<
+    CabinetListItemDto[]
+  >({
     queryKey: ['cabinets-by-country', countryId, historicalCountryId],
     queryFn: () =>
       personCareerApi.getCabinets({
@@ -372,7 +379,7 @@ export function CabinetsSection({
 
   /** 행정부 리스트: 수반 취임일 기준 시간순(과거→현재) 정렬 */
   const sortedCabinets = useMemo(() => {
-    const list = [...(cabinets as any[])]
+    const list = [...cabinets]
     return list.sort((a, b) => {
       const dateA = a.headTenure?.startDate
         ? new Date(a.headTenure.startDate).getTime()
@@ -411,11 +418,59 @@ export function CabinetsSection({
       const end = head?.endDate
         ? new Date(head.endDate).getFullYear().toString()
         : '현재'
-      return [personName, posTitle, start, end].some((v) =>
+      const territory = getHeadTenureTerritoryLabel(head, country.name)
+      const cabName = typeof c.name === 'string' ? c.name : ''
+      return [personName, posTitle, start, end, territory, cabName].some((v) =>
         String(v).toLowerCase().includes(q),
       )
     })
-  }, [sortedCabinets, cabinetSearchQuery, cabinetCountryFilter, countryId])
+  }, [
+    sortedCabinets,
+    cabinetSearchQuery,
+    cabinetCountryFilter,
+    countryId,
+    country.name,
+  ])
+
+  /** 목록에 등장하는 소속마다 서로 다른 강조색(ordinal) — 같은 countryId만 있어도 이름 키로 분리 */
+  const cabinetTerritoryOrdinalMap = useMemo(
+    () => buildCabinetTerritoryOrdinalMap(filteredCabinets),
+    [filteredCabinets],
+  )
+
+  const cabinetTerritoryLegendEntries = useMemo(
+    () =>
+      buildCabinetTerritoryLegendEntries(
+        filteredCabinets,
+        country.name,
+        cabinetTerritoryOrdinalMap,
+        country.type === 'modern'
+          ? {
+              modernCountryId: country.id,
+              historicalCountries: country.historicalCountries,
+            }
+          : {
+              pageHistoricalCountry: {
+                id: country.id,
+                startYear: country.startYear ?? null,
+                startEra: country.startEra ?? null,
+                startMonth: country.startMonth ?? null,
+                startDay: country.startDay ?? null,
+              },
+            },
+      ),
+    [filteredCabinets, country.name, cabinetTerritoryOrdinalMap, country],
+  )
+
+  /** 현대국가 + 역사국가 하위가 있을 때만 "전체" 목록에서 소속 국가명 표시 */
+  const showCabinetTerritoryLabels = useMemo(
+    () =>
+      country.type === 'modern' &&
+      cabinetCountryFilter === '' &&
+      Array.isArray(country.historicalCountries) &&
+      country.historicalCountries.length > 0,
+    [country, cabinetCountryFilter],
+  )
 
   /** 타임라인 그리드 행(열 수만큼 슬라이스) — 한 번만 계산 */
   const cabinetTimelineRows = useMemo(() => {
@@ -1432,7 +1487,7 @@ export function CabinetsSection({
                       </CabS.CabListSearchIcon>
                       <CabS.CabListSearchInput
                         type="text"
-                        placeholder="수반명, 직위, 연도 검색"
+                        placeholder="수반명, 직위, 연도, 소속 국가명, 행정부명 검색"
                         value={cabinetSearchQuery}
                         onChange={(e) => setCabinetSearchQuery(e.target.value)}
                         $hasTrailing={Boolean(
@@ -1633,28 +1688,59 @@ export function CabinetsSection({
                           </>
                         )}
                         <div style={{ flex: 1 }} />
+                      </div>
+                      {cabinetTerritoryLegendEntries.length > 0 && (
                         <div
+                          role="list"
+                          aria-label="이 목록의 소속별 강조 색"
                           style={{
                             display: 'flex',
-                            gap: 4,
+                            flexWrap: 'wrap',
                             alignItems: 'center',
+                            gap: '8px 12px',
+                            padding: '0 0 12px',
                           }}
-                          title="행마다 반복되는 구분 색(4색 순환)"
-                          aria-label="행 구분 색 범례"
                         >
-                          {TL_ROWS.map((r, i) => (
+                          {cabinetTerritoryLegendEntries.map((e) => (
                             <div
-                              key={i}
+                              key={e.key}
+                              role="listitem"
                               style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                background: r.line,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                maxWidth: '100%',
                               }}
-                            />
+                              title={e.label}
+                            >
+                              <span
+                                aria-hidden
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  background: e.line,
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: C.textMuted,
+                                  lineHeight: 1.35,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  maxWidth: 220,
+                                }}
+                              >
+                                {e.label}
+                              </span>
+                            </div>
                           ))}
                         </div>
-                      </div>
+                      )}
                       <p
                         role="note"
                         style={{
@@ -1666,10 +1752,13 @@ export function CabinetsSection({
                           fontWeight: 500,
                         }}
                       >
-                        색 띠는{' '}
-                        <strong style={{ color: C.text }}>행 구분</strong>
-                        용입니다. 짝수 행은 왼쪽→오른쪽, 홀수 행은
-                        오른쪽→왼쪽으로 시간이 이어집니다.
+                        아래 목록에서{' '}
+                        <strong style={{ color: C.text }}>서로 다른 소속</strong>
+                        (역사국가·현대국가, 또는 행정부 명칭 구분)마다 강조
+                        색을 나눕니다. 필터·검색으로 목록이 바뀌면 같은 소속도
+                        배정 순서가 달라질 수 있습니다. 가로줄은 시간 흐름만
+                        나타냅니다. 짝수 행은 왼쪽→오른쪽, 홀수 행은
+                        오른쪽→왼쪽으로 이어집니다.
                       </p>
                     </div>
                     <div
@@ -1691,7 +1780,8 @@ export function CabinetsSection({
                         }}
                       >
                         {cabinetTimelineRows.map((rowItems, rowIdx) => {
-                          const p = TL_ROWS[rowIdx % TL_ROWS.length]
+                          const rowSpine = C.borderMid
+                          const rowLabelColor = C.textMuted
                           const firstHead = rowItems[0]?.headTenure
                           const lastHead =
                             rowItems[rowItems.length - 1]?.headTenure
@@ -1728,21 +1818,21 @@ export function CabinetsSection({
                                     width: 4,
                                     height: 16,
                                     borderRadius: 2,
-                                    background: p.line,
+                                    background: rowSpine,
                                     flexShrink: 0,
                                   }}
                                 />
                                 {rowIdx % 2 === 0 ? (
                                   <FiChevronRight
                                     size={12}
-                                    color={p.line}
+                                    color={rowLabelColor}
                                     style={{ opacity: 0.8, flexShrink: 0 }}
                                     aria-hidden
                                   />
                                 ) : (
                                   <FiChevronLeft
                                     size={12}
-                                    color={p.line}
+                                    color={rowLabelColor}
                                     style={{ opacity: 0.8, flexShrink: 0 }}
                                     aria-hidden
                                   />
@@ -1751,7 +1841,7 @@ export function CabinetsSection({
                                   style={{
                                     fontSize: 11,
                                     fontWeight: 700,
-                                    color: p.line,
+                                    color: rowLabelColor,
                                     letterSpacing: '0.04em',
                                   }}
                                 >
@@ -1761,17 +1851,10 @@ export function CabinetsSection({
                                   style={{
                                     flex: 1,
                                     height: 1,
-                                    background: `linear-gradient(90deg, ${p.line}33, transparent)`,
+                                    background: `linear-gradient(90deg, ${rowSpine}, transparent)`,
+                                    opacity: 0.55,
                                   }}
                                 />
-                                <span
-                                  style={{
-                                    fontSize: 10.5,
-                                    color: C.textFaint,
-                                  }}
-                                >
-                                  {rowItems.length}명
-                                </span>
                               </div>
                             </Fragment>
                           )
@@ -1786,7 +1869,7 @@ export function CabinetsSection({
                       >
                         {cabinetTimelineRows.map((rowItems, rowIdx) => {
                           const cols = timelineColumnCount
-                          const p = TL_ROWS[rowIdx % TL_ROWS.length]
+                          const rowFlowLine = C.borderMid
                           const isReversed = rowIdx % 2 === 1
                           const displayItems = isReversed
                             ? [...rowItems].reverse()
@@ -1811,7 +1894,8 @@ export function CabinetsSection({
                                     top: '50%',
                                     transform: 'translateY(-50%)',
                                     height: 3,
-                                    background: `linear-gradient(90deg, ${p.line}cc, ${p.line}33)`,
+                                    background: rowFlowLine,
+                                    opacity: 0.35,
                                     zIndex: 0,
                                     borderRadius: 2,
                                     pointerEvents: 'none',
@@ -1841,6 +1925,23 @@ export function CabinetsSection({
                                         )
 
                                       const head = item.headTenure
+                                      const itemP = paletteForCabinetListItem(
+                                        item,
+                                        cabinetTerritoryOrdinalMap,
+                                      )
+                                      const bubbleColors =
+                                        getTimelineBubbleTextColors(
+                                          itemP,
+                                          isDark,
+                                          C.text,
+                                        )
+                                      const territoryLabel =
+                                        showCabinetTerritoryLabels
+                                          ? getHeadTenureTerritoryLabel(
+                                              head,
+                                              country.name,
+                                            )
+                                          : null
                                       const personName = head?.person
                                         ? getPersonName(head.person)
                                         : '이름 없음'
@@ -1884,6 +1985,7 @@ export function CabinetsSection({
                                           head?.subTermNumber ?? null,
                                           posTitle,
                                           personName,
+                                          territoryLabel,
                                         )
                                       return (
                                         <CabS.CabinetTimelineCellBtn
@@ -1947,7 +2049,10 @@ export function CabinetsSection({
                                                   range={range}
                                                   ageAtStart={ageAtStart}
                                                   birthPlace={birthPlace}
-                                                  lineColor={p.line}
+                                                  lineColor={itemP.line}
+                                                  territoryLabel={
+                                                    territoryLabel ?? undefined
+                                                  }
                                                   isDark={isDark}
                                                 />
                                               </div>
@@ -1971,11 +2076,11 @@ export function CabinetsSection({
                                                     width: 'fit-content',
                                                     maxWidth: '100%',
                                                     background: C.bg,
-                                                    border: `2.5px solid ${p.line}`,
+                                                    border: `2.5px solid ${itemP.line}`,
                                                     borderRadius: 28,
                                                     padding: '8px 16px',
                                                     minWidth: TL_BUBBLE_W,
-                                                    boxShadow: `0 2px 10px ${p.line}44`,
+                                                    boxShadow: `0 2px 10px ${itemP.line}44`,
                                                     textAlign: 'center',
                                                   }}
                                                 >
@@ -1983,7 +2088,7 @@ export function CabinetsSection({
                                                     style={{
                                                       fontSize: 17,
                                                       fontWeight: 900,
-                                                      color: p.textColor,
+                                                      color: bubbleColors.year,
                                                       letterSpacing: '-0.03em',
                                                       lineHeight: 1.2,
                                                     }}
@@ -1995,7 +2100,7 @@ export function CabinetsSection({
                                                       style={{
                                                         fontSize: 10,
                                                         fontWeight: 700,
-                                                        color: p.line,
+                                                        color: itemP.line,
                                                         marginTop: 3,
                                                       }}
                                                     >
@@ -2034,7 +2139,7 @@ export function CabinetsSection({
                                                 style={{
                                                   width: 2,
                                                   height: TL_VERT_SEG_H,
-                                                  background: p.line,
+                                                  background: itemP.line,
                                                   opacity: 0.6,
                                                 }}
                                               />
@@ -2044,7 +2149,7 @@ export function CabinetsSection({
                                                   height: 14,
                                                   borderRadius: '50%',
                                                   background: C.bg,
-                                                  border: `3px solid ${p.line}`,
+                                                  border: `3px solid ${itemP.line}`,
                                                   boxShadow: `0 0 0 3px ${C.bg}`,
                                                   zIndex: 2,
                                                 }}
@@ -2053,7 +2158,7 @@ export function CabinetsSection({
                                                 style={{
                                                   width: 2,
                                                   height: TL_VERT_SEG_H,
-                                                  background: p.line,
+                                                  background: itemP.line,
                                                   opacity: 0.6,
                                                 }}
                                               />
@@ -2107,7 +2212,10 @@ export function CabinetsSection({
                                                   range={range}
                                                   ageAtStart={ageAtStart}
                                                   birthPlace={birthPlace}
-                                                  lineColor={p.line}
+                                                  lineColor={itemP.line}
+                                                  territoryLabel={
+                                                    territoryLabel ?? undefined
+                                                  }
                                                   isDark={isDark}
                                                 />
                                               </div>
@@ -2131,11 +2239,11 @@ export function CabinetsSection({
                                                     width: 'fit-content',
                                                     maxWidth: '100%',
                                                     background: C.bg,
-                                                    border: `2.5px solid ${p.line}`,
+                                                    border: `2.5px solid ${itemP.line}`,
                                                     borderRadius: 28,
                                                     padding: '8px 16px',
                                                     minWidth: TL_BUBBLE_W,
-                                                    boxShadow: `0 2px 10px ${p.line}44`,
+                                                    boxShadow: `0 2px 10px ${itemP.line}44`,
                                                     textAlign: 'center',
                                                   }}
                                                 >
@@ -2143,7 +2251,7 @@ export function CabinetsSection({
                                                     style={{
                                                       fontSize: 17,
                                                       fontWeight: 900,
-                                                      color: p.textColor,
+                                                      color: bubbleColors.year,
                                                       letterSpacing: '-0.03em',
                                                       lineHeight: 1.2,
                                                     }}
@@ -2155,7 +2263,7 @@ export function CabinetsSection({
                                                       style={{
                                                         fontSize: 10,
                                                         fontWeight: 700,
-                                                        color: p.line,
+                                                        color: itemP.line,
                                                         marginTop: 3,
                                                       }}
                                                     >

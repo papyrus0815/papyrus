@@ -1568,6 +1568,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: true,
             positionDefinition: true,
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
             achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
           },
         },

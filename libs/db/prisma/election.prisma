@@ -136,6 +136,18 @@ model Election {
   /// 기간이 긴 투표·개표(선택)
   pollEndDate DateTime? @map("poll_end_date")
 
+  /// 이번 선거로 구성된 의회 임기 시작(선택)
+  legislatureTermStart DateTime? @map("legislature_term_start")
+
+  /// 의회 임기 종료(선택)
+  legislatureTermEnd DateTime? @map("legislature_term_end")
+
+  /// 유권자 대비 실제 투표 참여율 0~100 (%)
+  voterTurnoutPercent Decimal? @map("voter_turnout_percent") @db.Decimal(9, 6)
+
+  /// 이번 선거로 선출되는 의회의 총 의석 수(선택)
+  totalSeats Int? @map("total_seats")
+
   /// 특정 광역·기초 단위에만 적용되는 선거(선택)
   scopeAdministrativeDivisionId String? @map("scope_administrative_division_id") @db.Char(36)
 
@@ -154,6 +166,7 @@ model Election {
 
   candidacies    ElectionCandidacy[]
   ballotOptions  ElectionBallotOption[]
+  partyResults   ElectionPartyResult[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -164,6 +177,35 @@ model Election {
   @@index([electionType], name: "idx_election_type")
   @@index([accountId], name: "idx_election_accountId")
   @@map("election")
+}
+
+// ========================
+// ElectionPartyResult (선거별 정당 집계)
+// ========================
+model ElectionPartyResult {
+  id String @id @default(uuid()) @db.Char(36)
+
+  electionId String @map("election_id") @db.Char(36)
+  partyId    String @map("party_id") @db.Char(36)
+
+  votes BigInt?
+
+  voteSharePercent Decimal? @map("vote_share_percent") @db.Decimal(9, 6)
+
+  seatsWon Int? @map("seats_won")
+
+  notes String? @db.Text
+
+  election Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  party    PoliticalParty @relation("ElectionPartyResults", fields: [partyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([electionId, partyId], name: "uq_election_party_result_election_party")
+  @@index([electionId], name: "idx_election_party_result_electionId")
+  @@index([partyId], name: "idx_election_party_result_partyId")
+  @@map("election_party_result")
 }
 
 // ========================

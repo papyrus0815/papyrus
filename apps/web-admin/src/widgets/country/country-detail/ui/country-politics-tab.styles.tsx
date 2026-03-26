@@ -40,6 +40,23 @@ export const SectionLead = styled.p`
   line-height: 1.55;
 `
 
+/** 정당·선거 빈 상태 온보딩 단계 */
+export const PoliticsOnboardingSteps = styled.ol`
+  margin: 0;
+  padding: 0 0 0 22px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.65;
+  max-width: 560px;
+
+  li {
+    margin-bottom: 8px;
+  }
+  li:last-child {
+    margin-bottom: 0;
+  }
+`
+
 export const SplitMainRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -51,11 +68,14 @@ export const SplitMainRow = styled.div`
 
 export const ListColumn = styled.div`
   width: 100%;
-  max-width: 340px;
+  max-width: 360px;
   flex-shrink: 0;
-  padding-right: 16px;
-  margin-right: 8px;
+  padding-right: 20px;
+  margin-right: 4px;
   border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 
   @media (max-width: 900px) {
     max-width: none;
@@ -67,42 +87,117 @@ export const ListColumn = styled.div`
   }
 `
 
+/** 정당 블록과 선거 스플릿 사이 구역 구분 */
+export const PoliticsTabSubsection = styled.section`
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+export const SubsectionHeaderBlock = styled.div`
+  margin-bottom: 14px;
+`
+
+/** 소제목 아래 한 줄 설명 (SectionLead보다 짧게) */
+export const SubsectionLead = styled.p`
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.5;
+  max-width: 560px;
+`
+
+export const SubsectionHeading = styled.h2`
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 선거 목록만 세로 스크롤 — 상세는 고정 */
+export const ElectionListScrollArea = styled.div`
+  flex: 1;
+  min-height: 120px;
+  max-height: min(520px, calc(100vh - 280px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  margin-right: -4px;
+  -webkit-overflow-scrolling: touch;
+
+  &::-webkit-scrollbar {
+    width: 7px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 8px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)'};
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+`
+
+/** 선거 목록 — 항목 간 간격 */
+export const ElectionListStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
 export const DetailColumn = styled.div`
   flex: 1;
   min-width: 280px;
   min-height: 280px;
 `
 
-/** 선거 목록 항목 */
+/** 선거 목록 항목 — 카드형 · 선택 시 강조 */
 export const ElectionNavButton = styled.button<{ $active: boolean }>`
   display: block;
   width: 100%;
   text-align: left;
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  border-radius: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
   cursor: pointer;
   font-size: 13px;
   transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.2s ease,
+    transform 0.16s ease;
 
   border: 1px solid
     ${({ $active, theme }) =>
-      $active ? 'rgba(99, 102, 241, 0.55)' : theme.colors.border.default};
+      $active ? 'rgba(99, 102, 241, 0.42)' : theme.colors.border.default};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.12)'
-        : 'rgba(99, 102, 241, 0.08)'
+        ? 'linear-gradient(145deg, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0.05) 100%)'
+        : 'linear-gradient(145deg, rgba(99, 102, 241, 0.14) 0%, rgba(255, 255, 255, 0.95) 100%)'
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.03)'
-        : 'transparent'};
+        : 'rgba(248, 250, 252, 0.85)'};
+  box-shadow: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '0 0 0 1px rgba(99, 102, 241, 0.2), 0 10px 28px rgba(0, 0, 0, 0.35)'
+        : '0 6px 20px rgba(99, 102, 241, 0.12), 0 1px 0 rgba(255, 255, 255, 0.8) inset'
+      : '0 1px 2px rgba(15, 23, 42, 0.04)'};
 
   &:hover {
     border-color: ${({ theme }) => theme.colors.border.medium};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
+    transform: translateY(-1px);
+  }
+
+  &:focus {
+    outline: none;
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.65);
+    outline-offset: 2px;
   }
 `
 
@@ -115,6 +210,134 @@ export const ElectionNavTitle = styled.div`
 export const ElectionNavMeta = styled.div`
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.secondary};
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+`
+
+/** 정당 집계 — 득표율 인포그래픽(원·도넛) */
+export const PartyShareInfographic = styled.div`
+  margin-bottom: 14px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.09) 0%, rgba(0, 0, 0, 0) 55%)'
+      : 'linear-gradient(180deg, #f8fafc 0%, #ffffff 45%)'};
+`
+
+export const PartyShareInfographicTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-bottom: 14px;
+`
+
+/** 좌: 반원 도넛 / 우: 범례 */
+export const PartyShareDonutLayout = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 20px 28px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+/** 위쪽 반원만 보이도록 하단 클립 */
+export const PartyShareDonutClip = styled.div`
+  width: 100%;
+  max-width: 280px;
+  height: min(118px, 32vw);
+  max-height: 130px;
+  margin: 0 auto;
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+`
+
+export const PartyShareDonutInner = styled.div`
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(236px, 86vw);
+  height: min(236px, 86vw);
+  max-width: 240px;
+  max-height: 240px;
+`
+
+export const PartyShareDonutRing = styled.div<{ $gradient: string }>`
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: ${({ $gradient }) => $gradient};
+  box-shadow:
+    0 4px 24px rgba(15, 23, 42, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+`
+
+export const PartyShareDonutHole = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 56%;
+  height: 56%;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.background.primary};
+  box-shadow: inset 0 2px 8px rgba(15, 23, 42, 0.08);
+`
+
+export const PartyShareLegend = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+export const PartyShareLegendItem = styled.li`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+`
+
+/** 득표 분포 범례 — `fill`은 hex 또는 hsl(...) */
+export const PartyShareSwatch = styled.span<{ $fill: string }>`
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: ${({ $fill }) => $fill};
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+`
+
+export const PartyShareLegendBody = styled.div`
+  min-width: 0;
+  flex: 1;
+`
+
+export const PartyShareName = styled.span`
+  font-weight: 600;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const PartyShareStats = styled.span`
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  display: block;
+  margin-top: 2px;
+  white-space: normal;
 `
 
 /** 툴바 버튼 — 인물 등록 SubmitButton 계열 */
@@ -180,6 +403,142 @@ export const ToolbarGhostBtnSm = styled(ToolbarGhostBtn)`
 export const ToolbarDangerBtnSm = styled(ToolbarDangerBtn)`
   padding: 5px 9px;
   font-size: 11px;
+`
+
+/** 선거·정당 상단 — 아이콘 전용 (원형, 얇은 테두리) */
+export const DetailHeaderIconBtn = styled.button<{ $variant?: 'default' | 'danger' }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid
+    ${({ theme, $variant }) =>
+      $variant === 'danger'
+        ? 'transparent'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : 'rgba(15, 23, 42, 0.08)'};
+  border-radius: 999px;
+  background: ${({ theme, $variant }) =>
+    $variant === 'danger'
+      ? 'transparent'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(255,255,255,0.92)'};
+  color: ${({ theme, $variant }) =>
+    $variant === 'danger'
+      ? theme.mode === 'dark'
+        ? '#f87171'
+        : '#dc2626'
+      : theme.colors.text.secondary};
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+  &:hover {
+    border-color: ${({ theme, $variant }) =>
+      $variant === 'danger' ? 'rgba(220, 38, 38, 0.4)' : 'rgba(99, 102, 241, 0.35)'};
+    background: ${({ theme, $variant }) =>
+      $variant === 'danger'
+        ? theme.mode === 'dark'
+          ? 'rgba(220, 38, 38, 0.14)'
+          : '#fef2f2'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#f8fafc'};
+    color: ${({ theme, $variant }) =>
+      $variant === 'danger'
+        ? theme.mode === 'dark'
+          ? '#fca5a5'
+          : '#b91c1c'
+        : theme.colors.text.primary};
+    box-shadow: ${({ $variant }) =>
+      $variant === 'danger'
+        ? 'none'
+        : '0 2px 12px rgba(99, 102, 241, 0.12)'};
+  }
+`
+
+/** 섹션별 「추가」 — 채움색 버튼 대신 라인·캡슐형 */
+export const SubsectionAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #4f46e5;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(99, 102, 241, 0.06)'};
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.18)' : 'rgba(99, 102, 241, 0.12)'};
+    border-color: rgba(99, 102, 241, 0.45);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+/** 테이블 행 끝 — 아이콘 묶음 */
+export const RowActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  flex-wrap: nowrap;
+`
+
+export const RowIconBtn = styled.button<{ $variant?: 'default' | 'danger' }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme, $variant }) =>
+    $variant === 'danger'
+      ? theme.mode === 'dark'
+        ? '#f87171'
+        : '#dc2626'
+      : theme.colors.text.secondary};
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+  &:hover {
+    background: ${({ theme, $variant }) =>
+      $variant === 'danger'
+        ? theme.mode === 'dark'
+          ? 'rgba(220, 38, 38, 0.14)'
+          : '#fef2f2'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : '#f1f5f9'};
+    color: ${({ theme, $variant }) =>
+      $variant === 'danger'
+        ? theme.mode === 'dark'
+          ? '#fca5a5'
+          : '#b91c1c'
+        : theme.colors.text.primary};
+  }
 `
 
 /** 데이터 테이블 카드 */
@@ -268,25 +627,7 @@ export const BallotAddRow = styled.div`
   margin-bottom: 10px;
 `
 
-/** 네이티브 select — Input과 동일 톤 */
-export const FormSelectNative = styled.select`
-  width: 100%;
-  max-width: 100%;
-  padding: 12px 14px;
-  font-size: 15px;
-  line-height: 1.45;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#fff'};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  cursor: pointer;
-  &:focus {
-    outline: none;
-    border-color: #6366f1;
-  }
-`
+export { FormSelectNative } from '@/shared/ui/form-select-native'
 
 export const InlineTextInput = styled.input`
   flex: 1;
@@ -327,11 +668,11 @@ export const PartyBlockCard = styled.div`
       : '0 1px 3px rgba(0, 0, 0, 0.06)'};
 `
 
-/** 정당 목록 — 행정기구(organizations) OrgCard와 유사한 단일 깊이 카드 행 */
+/** 정당 목록 — 선거 목록 카드(ElectionNavButton)와 동일 토큰(16px·그림자·호버) */
 export const PartyListWrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   margin-top: 14px;
 `
 
@@ -342,49 +683,71 @@ export const PartyRowCard = styled.button<{ $active?: boolean }>`
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border-radius: 12px;
-  border: 1.5px solid
+  border-radius: 16px;
+  border: 1px solid
     ${({ $active, theme }) =>
-      $active ? 'rgba(99, 102, 241, 0.55)' : theme.colors.border.default};
+      $active ? 'rgba(99, 102, 241, 0.42)' : theme.colors.border.default};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.12)'
-        : 'rgba(99, 102, 241, 0.08)'
+        ? 'linear-gradient(145deg, rgba(99, 102, 241, 0.18) 0%, rgba(99, 102, 241, 0.04) 100%)'
+        : 'linear-gradient(145deg, rgba(99, 102, 241, 0.1) 0%, rgba(255, 255, 255, 0.98) 100%)'
       : theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.03)'
-        : '#fff'};
+        : 'rgba(248, 250, 252, 0.92)'};
+  box-shadow: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '0 0 0 1px rgba(99, 102, 241, 0.15), 0 8px 22px rgba(0, 0, 0, 0.28)'
+        : '0 4px 16px rgba(99, 102, 241, 0.1), 0 1px 0 rgba(255, 255, 255, 0.85) inset'
+      : '0 1px 2px rgba(15, 23, 42, 0.04)'};
   cursor: pointer;
   transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.2s ease,
+    transform 0.16s ease;
   font: inherit;
   color: inherit;
 
   &:hover {
     border-color: ${({ $active, theme }) =>
-      $active ? 'rgba(99, 102, 241, 0.65)' : theme.colors.border.medium};
+      $active ? 'rgba(99, 102, 241, 0.55)' : theme.colors.border.medium};
     background: ${({ $active, theme }) =>
       $active
         ? theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.14)'
-          : 'rgba(99, 102, 241, 0.1)'
+          ? 'rgba(99, 102, 241, 0.16)'
+          : 'rgba(99, 102, 241, 0.09)'
         : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.06)'
-          : '#f8faff'};
+          ? 'rgba(255, 255, 255, 0.07)'
+          : '#f1f5f9'};
+    transform: translateY(-1px);
+  }
+
+  &:focus {
+    outline: none;
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.65);
+    outline-offset: 2px;
   }
 `
 
-export const PartyRowAvatar = styled.div`
+/** 정당 상세 로고와 동일한 브랜드 링 개념(축소) */
+export const PartyRowAvatar = styled.div<{ $ring?: string | null }>`
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: 12px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border: 1px solid
+    ${({ theme, $ring }) =>
+      $ring ? `${$ring}55` : theme.colors.border.light};
+  box-shadow: ${({ $ring }) =>
+    $ring ? `0 0 0 2px ${$ring}30` : 'none'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -431,36 +794,29 @@ export const PartyRowChevron = styled.span<{ $active?: boolean }>`
 `
 
 /**
- * 정당 상세 — 단일 표면(중첩 카드 없음). 행정조직 부처 상세 `DetailRoot` +
- * `DeptDetailTopBar` + 프로필 블록 패턴과 동일한 정보 위계.
+ * 정당 상세 — 단일 카드로 감싸지 않고, 세로 스택 + 구분선만 사용
  */
-export const PartyDetailPanel = styled.div`
+export const PartyDetailLayout = styled.div`
   margin-top: 14px;
-  border-radius: 16px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8ecf0'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
-  overflow: hidden;
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 4px 24px rgba(0, 0, 0, 0.25)'
-      : '0 1px 2px rgba(15, 23, 42, 0.04)'};
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
 `
 
-/** 행정부 `DeptDetailTopBar` 와 동일: 구분선만, 추가 카드 배경 없음 */
 export const PartyDetailTopBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 20px 14px;
-  border-bottom: 1.5px solid
+  padding: 0 0 14px;
+  border-bottom: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f0f2f7'};
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'};
   flex-shrink: 0;
+  background: transparent;
 `
 
 export const PartyDetailTopLeft = styled.div`
@@ -491,41 +847,77 @@ export const PartyDetailCrumbTitle = styled.span`
 `
 
 export const PartyDetailTopActions = styled.div`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: flex-end;
 `
 
-/** `DeptDetailBackBtn` 톤 */
-export const PartyDetailBackBtn = styled.button`
+/** 목록 — 테두리 없는 텍스트형 뒤로가기 */
+export const PartyDetailBackLink = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 4px;
+  gap: 2px;
+  padding: 6px 8px 6px 2px;
   margin: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: #94a3b8;
-  transition: color 0.14s ease;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  transition: color 0.15s ease, background 0.15s ease;
   &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)'};
   }
 `
 
-/** 로고·명칭 — 부처 `DeptProfileBlock` 과 유사한 단일 히어로 밴드(안에 박스 없음) */
+/** @deprecated PartyDetailBackLink 사용 */
+export const PartyDetailBackBtn = PartyDetailBackLink
+
+/** 정당 상세 히어로 — 구분선 아래 일반 흐름 (로고·상단 border 비겹침) */
 export const PartyDetailHero = styled.div`
-  padding: 24px 22px 22px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
+  padding: 20px 0 8px;
+  margin: 0;
+  border: none;
+  background: transparent;
+`
+
+export const PartyDetailHeroStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+`
+
+export const PartyDetailLogoHero = styled.div<{ $ring?: string | null }>`
+  width: 156px;
+  height: 156px;
+  border-radius: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 20px;
+  border: 1px solid
+    ${({ theme, $ring }) =>
+      $ring ? `${$ring}55` : theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8ecf0'};
+  box-shadow:
+    ${({ $ring }) =>
+      $ring
+        ? `0 0 0 3px ${$ring}22, 0 16px 48px rgba(15, 23, 42, 0.1)`
+        : '0 16px 48px rgba(15, 23, 42, 0.09)'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#fafbfc'};
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#ffffff'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 export const PartyDetailHeaderRow = styled.div`
@@ -535,20 +927,22 @@ export const PartyDetailHeaderRow = styled.div`
   gap: 18px;
 `
 
-export const PartyDetailLogo = styled.div`
-  width: 76px;
-  height: 76px;
-  border-radius: 16px;
+export const PartyDetailLogo = styled.div<{ $ring?: string | null }>`
+  width: 84px;
+  height: 84px;
+  border-radius: 18px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8ecf0'};
+    ${({ theme, $ring }) =>
+      $ring ? `${$ring}55` : theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8ecf0'};
+  box-shadow: ${({ $ring }) =>
+    $ring ? `0 0 0 3px ${$ring}22` : '0 1px 3px rgba(15, 23, 42, 0.06)'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff'};
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -564,12 +958,25 @@ export const PartyDetailHeading = styled.div`
 `
 
 export const PartyDetailName = styled.h3`
-  margin: 0 0 12px;
-  font-size: 1.35rem;
+  margin: 0 0 14px;
+  font-size: clamp(1.25rem, 2.8vw, 1.45rem);
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+`
+
+/** 중앙 히어로용 제목 */
+export const PartyDetailHeroTitle = styled.h2`
+  margin: 0 0 12px;
+  max-width: 100%;
+  font-size: clamp(1.35rem, 3.2vw, 1.65rem);
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.04em;
   line-height: 1.2;
+  text-align: center;
+  word-break: break-word;
 `
 
 export const PartyDetailChipRow = styled.div`
@@ -579,19 +986,28 @@ export const PartyDetailChipRow = styled.div`
   align-items: center;
 `
 
+export const PartyDetailChipRowCenter = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+`
+
+/** 중립 톤 배지 — 과한 보라 대신 슬레이트 계열 */
 export const PartyDetailChip = styled.span`
   display: inline-flex;
   align-items: center;
   font-size: 12px;
   font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#cbd5e1' : '#475569'};
   background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.12)'
-      : 'rgba(99, 102, 241, 0.07)'};
+    theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.12)' : '#f1f5f9'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(165, 180, 252, 0.2)' : '#e0e7ff'};
+      theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.22)' : '#e2e8f0'};
   border-radius: 999px;
   padding: 5px 12px;
   max-width: 100%;
@@ -611,11 +1027,47 @@ export const PartyDetailSub = styled.div`
   line-height: 1.5;
 `
 
-/** 메타 정보 — 별도 카드 없이 패딩만 (구분은 상단 히어로 border-bottom) */
 export const PartyDetailMetaSection = styled.div`
-  padding: 20px 22px 22px;
+  padding: 20px 0 4px;
+  margin-top: 0;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#eef2f7'};
 `
 
+/** 메타 — 패널 안에 또 박스를 두지 않고 라벨·값만 그리드로 배치 */
+export const PartyDetailMetaGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px 20px;
+`
+
+export const PartyDetailMetaTile = styled.div`
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+`
+
+export const PartyDetailMetaTileLabel = styled.div`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 6px;
+`
+
+export const PartyDetailMetaTileValue = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  line-height: 1.45;
+  word-break: break-word;
+`
+
+/** 레거시 dl (다른 화면 호환) */
 export const PartyDetailDl = styled.dl`
   margin: 0;
   display: grid;
@@ -659,38 +1111,100 @@ export const PartyDetailDesc = styled.p`
   white-space: pre-wrap;
 `
 
-/** 설명 — 별도 박스 없이 상단 구분선만 (부처 `ProfileSection` 계열) */
+/** 설명 */
 export const PartyDetailDescSection = styled.section`
-  padding: 22px 22px 26px;
+  padding: 24px 0 8px;
   border-top: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f0f2f7'};
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#eef2f7'};
+  background: transparent;
 `
 
-export const PartyDescriptionLabelRow = styled.div`
+/** 인물 상세 전기(Bio)와 동일 톤 — 라벨 행 */
+export const PartyDescSectionLabelRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
 `
 
-export const PartyDescriptionLabel = styled.span`
-  font-size: 10.5px;
+export const PartyDescSectionLabel = styled.div`
+  font-size: 11px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/** RichTextEditor 저장 HTML 읽기 전용 */
-export const PartyDescriptionReadHtml = styled(RichTextReadView)`
-  font-size: 0.9375rem;
-  line-height: 1.65;
-  word-break: break-word;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+export const PartyDescOutlineBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
 
+export const PartyDescPrimaryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.28);
+  transition:
+    box-shadow 0.15s,
+    opacity 0.15s;
+  &:hover:not(:disabled) {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.38);
+    opacity: 0.95;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+export const PartyDescBody = styled.div`
+  background: transparent;
+  padding: 4px 0 32px;
+`
+
+export const PartyDescProse = styled.div`
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 16px;
+`
+
+/** 인물 전기 BioContent와 동일 — RichTextReadView 래퍼 */
+export const PartyDescContent = styled(RichTextReadView)`
+  font-size: 14.5px;
+  line-height: 1.8;
+  word-break: break-word;
   & p {
     margin: 0 0 0.75em;
   }
@@ -715,7 +1229,252 @@ export const PartyDescriptionReadHtml = styled(RichTextReadView)`
   }
 `
 
+export const PartyDescPlainText = styled.div`
+  font-size: 14.5px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 68ch;
+  margin: 0 auto;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const PartyDescEmptyHint = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+  padding: 4px 0;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 계보 블록 */
+export const PartyDetailLineageSection = styled.section`
+  padding: 18px 0 4px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#eef2f7'};
+`
+
+export const PartyDetailLineageIntro = styled.p`
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const PartyDetailLineageGroupTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+`
+
+export const PartyDetailLineageList = styled.ul`
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+`
+
+export const PartyDetailLineageItem = styled.li`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 13px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#eef2f7'};
+
+  &:last-child {
+    border-bottom: none;
+  }
+`
+
+export const PartyDetailLineageItemMain = styled.div`
+  flex: 1;
+  min-width: 0;
+`
+
+export const PartyDetailLineageMeta = styled.div`
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: pre-wrap;
+  word-break: break-word;
+`
+
+/** 전신/후신 연결 직전 — 기준일·메모 */
+export const PartyLineageConfirmPanel = styled.div`
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+`
+
+export const PartyLineageConfirmSummary = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  margin-bottom: 14px;
+  word-break: break-word;
+  line-height: 1.45;
+`
+
+export const PartyLineageConfirmActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+`
+
+export const PartyLineageDateInput = styled.input`
+  width: 100%;
+  max-width: 220px;
+  padding: 9px 12px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const PartyLineageTextarea = styled.textarea`
+  width: 100%;
+  min-height: 88px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0, 0, 0, 0.2)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+`
+
+export const PartyDetailLineageAddRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+`
+
+/** 계보 추가 — 안쪽에 또 프레임을 두지 않고 여백만 */
+export const PartyDetailLineageAddPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  margin-top: 4px;
+`
+
+export const PartyDetailLineageHint = styled.p`
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const PartyDetailLineageBtnPair = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+`
+
+export const PartyDetailLineageActionBtn = styled.button`
+  flex: 1;
+  min-width: min(100%, 240px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &:hover:not(:disabled) {
+    border-color: rgba(99, 102, 241, 0.45);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.1)'
+        : 'rgba(99, 102, 241, 0.06)'};
+    box-shadow: 0 1px 0 rgba(99, 102, 241, 0.08);
+  }
+  &:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+
+  strong {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  small {
+    font-size: 11px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    line-height: 1.4;
+  }
+`
+
+export const PartyDescriptionLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+`
+
+export const PartyDescriptionLabel = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+`
+
+/** 인물 전기 BioEditorWrap과 동일 — 중앙 정렬 좁은 폭 */
 export const PartyDescriptionEditorWrap = styled.div`
+  max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
   min-height: 280px;
   max-height: min(480px, 55vh);
   display: flex;
@@ -729,9 +1488,12 @@ export const PartyDescriptionEditorWrap = styled.div`
 
 export const PartyDescriptionEditActions = styled.div`
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  max-width: 680px;
+  margin: 16px auto 0;
+  width: 100%;
 `
 
 /** @deprecated 상단 바(PartyDetailTopBar)로 이동 — 레거시 호환용 */

@@ -18,6 +18,7 @@ export type PoliticalParty = PoliticalPartyRow & {
   foundedDate?: string | null
   dissolvedDate?: string | null
   logoUrl?: string | null
+  brandColor?: string | null
   createdAt?: string
   updatedAt?: string
 }
@@ -32,12 +33,53 @@ export type CreatePoliticalPartyInput = {
   foundedDate?: string | null
   dissolvedDate?: string | null
   logoUrl?: string | null
+  /** UI·차트용 #RRGGBB */
+  brandColor?: string | null
   countryId?: string | null
   /** 역사적 국가 맥락의 정당 (현대 국가와 배타적으로 쓰는 경우가 많음) */
   historicalCountryId?: string | null
 }
 
 export type UpdatePoliticalPartyInput = Partial<CreatePoliticalPartyInput>
+
+export type PoliticalPartyTransitionKind =
+  | 'SUCCESSION'
+  | 'MERGER_INTO'
+  | 'SPLIT_FROM'
+  | 'CONTINUITY'
+
+export type PartyTransitionEndpoint = {
+  id: string
+  fromPartyId: string
+  toPartyId: string
+  kind: PoliticalPartyTransitionKind
+  effectiveDate?: string | null
+  notes?: string | null
+  toParty?: { id: string; name: string; shortName?: string | null; brandColor?: string | null }
+  fromParty?: { id: string; name: string; shortName?: string | null; brandColor?: string | null }
+}
+
+export type PoliticalPartyLineageDto = {
+  successors: PartyTransitionEndpoint[]
+  predecessors: PartyTransitionEndpoint[]
+}
+
+export type PoliticalPartyTransitionDto = PartyTransitionEndpoint
+
+export type CreatePartyTransitionInput = {
+  fromPartyId: string
+  toPartyId: string
+  kind: PoliticalPartyTransitionKind
+  effectiveDate?: string | null
+  notes?: string | null
+}
+
+/** PATCH — 상대 정당(from/to) 변경 없음 */
+export type UpdatePartyTransitionInput = {
+  kind?: PoliticalPartyTransitionKind
+  effectiveDate?: string | null
+  notes?: string | null
+}
 
 import { getApiConnection } from '../client'
 
@@ -104,5 +146,32 @@ export const politicalPartyApi = {
     await requestJson<void>(`/political-parties/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     })
+  },
+
+  getLineage: async (partyId: string) => {
+    return requestJson<PoliticalPartyLineageDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/lineage`,
+    )
+  },
+
+  createTransition: async (body: CreatePartyTransitionInput) => {
+    return requestJson<PoliticalPartyTransitionDto>('/political-party-transitions', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  updateTransition: async (id: string, body: UpdatePartyTransitionInput) => {
+    return requestJson<PoliticalPartyTransitionDto>(
+      `/political-party-transitions/${encodeURIComponent(id)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    )
+  },
+
+  deleteTransition: async (transitionId: string) => {
+    await requestJson<void>(
+      `/political-party-transitions/${encodeURIComponent(transitionId)}`,
+      { method: 'DELETE' },
+    )
   },
 }

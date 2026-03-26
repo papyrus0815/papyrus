@@ -55,7 +55,9 @@ export type PoliticalPartyRow = {
   name: string
   shortName?: string | null
   logoUrl?: string | null
+  brandColor?: string | null
   countryId?: string | null
+  historicalCountryId?: string | null
 }
 
 // --- Party membership ---
@@ -215,6 +217,22 @@ export type ElectionBallotOptionDto = {
   } | null
 }
 
+export type ElectionPartyResultDto = {
+  id: string
+  electionId: string
+  partyId: string
+  votes?: string | null
+  voteSharePercent?: string | null
+  seatsWon?: number | null
+  notes?: string | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  }
+}
+
 export type ElectionDetailDto = {
   id: string
   name: string
@@ -223,6 +241,14 @@ export type ElectionDetailDto = {
   status: string
   pollDate: string
   pollEndDate?: string | null
+  /** 이번 선거로 구성된 의회 임기 시작 */
+  legislatureTermStart?: string | null
+  /** 의회 임기 종료 */
+  legislatureTermEnd?: string | null
+  /** 유권자 대비 실제 투표 참여율 (%) */
+  voterTurnoutPercent?: string | null
+  /** 선거로 선출되는 의회 총 의석 */
+  totalSeats?: number | null
   countryId?: string | null
   historicalCountryId?: string | null
   scopeAdministrativeDivisionId?: string | null
@@ -230,6 +256,8 @@ export type ElectionDetailDto = {
   notes?: string | null
   candidacies: ElectionCandidacyDto[]
   ballotOptions: ElectionBallotOptionDto[]
+  /** 선거별 정당 집계(전국 득표·의석) */
+  partyResults?: ElectionPartyResultDto[]
 }
 
 export async function getElection(electionId: string) {
@@ -245,6 +273,10 @@ export async function createElection(body: {
   status?: string
   pollDate: string
   pollEndDate?: string | null
+  legislatureTermStart?: string | null
+  legislatureTermEnd?: string | null
+  voterTurnoutPercent?: string | number | null
+  totalSeats?: number | null
   countryId?: string | null
   historicalCountryId?: string | null
   scopeAdministrativeDivisionId?: string | null
@@ -266,6 +298,10 @@ export async function updateElection(
     status: string
     pollDate: string
     pollEndDate: string | null
+    legislatureTermStart: string | null
+    legislatureTermEnd: string | null
+    voterTurnoutPercent: string | number | null
+    totalSeats: number | null
     countryId: string | null
     historicalCountryId: string | null
     scopeAdministrativeDivisionId: string | null
@@ -426,6 +462,32 @@ export async function upsertBallotOptionResult(
   return requestJson<unknown>(
     `/elections/${encodeURIComponent(electionId)}/ballot-options/${encodeURIComponent(optionId)}/result`,
     { method: 'PUT', body: JSON.stringify(body) },
+  )
+}
+
+export async function upsertElectionPartyResult(
+  electionId: string,
+  partyId: string,
+  body: {
+    votes?: string | null
+    voteSharePercent?: string | null
+    seatsWon?: number | null
+    notes?: string | null
+  },
+) {
+  return requestJson<ElectionPartyResultDto>(
+    `/elections/${encodeURIComponent(electionId)}/party-results/${encodeURIComponent(partyId)}`,
+    { method: 'PUT', body: JSON.stringify(body) },
+  )
+}
+
+export async function deleteElectionPartyResult(
+  electionId: string,
+  partyId: string,
+) {
+  return requestJson<void>(
+    `/elections/${encodeURIComponent(electionId)}/party-results/${encodeURIComponent(partyId)}`,
+    { method: 'DELETE' },
   )
 }
 
