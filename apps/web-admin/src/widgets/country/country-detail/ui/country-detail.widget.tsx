@@ -12,7 +12,6 @@ import * as CountryDetailStyles from './country-detail.styles'
 import * as CountryStyles from './country-detail.styles'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
-import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { LinkedHistoricalCountriesSection } from './linked-historical-countries-section.widget'
 import { TreatySectionWidget } from './treaty-section.widget'
@@ -22,6 +21,7 @@ import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
 import { PersonListSection } from './person-list-section.widget'
 import { PersonStatsSection } from './person-stats-section.widget'
 import { CountryElectionsSection } from './country-elections-section.widget'
+import { CountryLawsSection } from './country-laws-section.widget'
 
 // 목업 데이터 (지도 및 지역 탭용)
 const mockCities = [
@@ -78,6 +78,7 @@ export interface CountryDetailProps {
     | 'regions'
     | 'government'
     | 'elections'
+    | 'laws'
   onDetailTabChange?: (
     tab:
       | 'person'
@@ -87,6 +88,7 @@ export interface CountryDetailProps {
       | 'regions'
       | 'government'
       | 'elections'
+      | 'laws'
       | null,
   ) => void
   /** 인물 탭 내 하위 탭(통계/리스트) 클릭 시 URL 갱신 (?tab=). 역대 수반은 행정조직 탭에서. */
@@ -165,6 +167,8 @@ function CountryDetailInner({
       setActiveSubTab('government')
     } else if (initialDetailTab === 'elections') {
       setActiveSubTab('elections')
+    } else if (initialDetailTab === 'laws') {
+      setActiveSubTab('laws')
     }
   }, [initialDetailTab])
 
@@ -176,6 +180,7 @@ function CountryDetailInner({
       else if (tab === 'map') onDetailTabChange?.('regions')
       else if (tab === 'government') onDetailTabChange?.('government')
       else if (tab === 'elections') onDetailTabChange?.('elections')
+      else if (tab === 'laws') onDetailTabChange?.('laws')
     },
     [onDashboardView, onDetailTabChange],
   )
@@ -372,6 +377,12 @@ function CountryDetailInner({
                           <CountryElectionsSection
                             countryId={country.id}
                           />
+                        </CountryStyles.TabContentPane>
+                      )}
+
+                      {activeSubTab === 'laws' && (
+                        <CountryStyles.TabContentPane>
+                          <CountryLawsSection countryId={country.id} />
                         </CountryStyles.TabContentPane>
                       )}
 

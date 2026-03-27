@@ -26,10 +26,13 @@ export const TabContentPane = styled.div`
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;
+  flex-basis: 0;
+  /* 부모 flex 높이가 0으로 계산될 때 탭 본문이 사라지는 것 방지 */
+  min-height: 320px;
   min-width: 0;
   padding: 0;
   width: 100%;
+  height: 100%;
 `
 
 // Grid Layouts (Modern Design)

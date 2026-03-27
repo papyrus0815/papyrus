@@ -70,8 +70,8 @@ model PoliticalParty {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 정당명(공식 명칭)
-  name String @unique @db.VarChar(150)
+  /// 정당명(공식 명칭) — 동일 국가(현대·역사) 내에서만 유일. 전역 유일 아님.
+  name String @db.VarChar(150)
 
   /// 약칭/두문자
   shortName String? @map("short_name") @db.VarChar(50)
@@ -127,6 +127,8 @@ model PoliticalParty {
   electionPartyResults ElectionPartyResult[]        @relation("ElectionPartyResults")
   /// 내각과의 연정·여당 관계
   cabinetAffiliations  CabinetPoliticalParty[]      @relation("CabinetPartyAffiliations")
+  /// 관련 법령(`Law`) 연결 — 정당법·정치자금법 등
+  politicalPartyLaws   PoliticalPartyLaw[]        @relation("PartyLawAffiliations")
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
@@ -135,7 +137,36 @@ model PoliticalParty {
   @@index([countryId], name: "idx_party_countryId")
   @@index([position], name: "idx_party_position")
   @@index([headquartersCityId], name: "idx_party_hqCityId")
+  @@unique([countryId, name], name: "uniq_party_country_name")
+  @@unique([historicalCountryId, name], name: "uniq_party_historical_country_name")
   @@map("political_party")
+}
+
+// ========================
+// PoliticalPartyLaw (정당 ↔ 법령)
+// ========================
+/// 정당 설립·운영·선거와 관련된 법령을 `Law`로 연결
+model PoliticalPartyLaw {
+  id String @id @default(uuid()) @db.Char(36)
+
+  partyId String @map("party_id") @db.Char(36)
+  lawId   String @map("law_id") @db.Char(36)
+
+  /// 조문·적용 범위 등 메모
+  relevanceNote String? @map("relevance_note") @db.Text
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  party PoliticalParty @relation("PartyLawAffiliations", fields: [partyId], references: [id], onDelete: Cascade)
+  /// 법령 행 삭제 전 조인을 해제해야 함
+  law   Law            @relation("PoliticalPartyLawLink", fields: [lawId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([partyId, lawId], name: "uniq_political_party_law")
+  @@index([lawId], name: "idx_political_party_law_lawId")
+  @@map("political_party_law")
 }
 
 // ========================

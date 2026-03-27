@@ -367,6 +367,13 @@ export class PersonService {
   }
 
   /**
+   * 인물이 후보로 등록된 선거 후보 목록 — 재임에 당선 선거 연결용
+   */
+  async findElectionCandidaciesForTenureLink(personId: string): Promise<any[]> {
+    return this.personRepository.findElectionCandidaciesForTenureLink(personId)
+  }
+
+  /**
    * 전역 수반(교황 등) 재임 기록 조회 — 국가에 속하지 않는 직책
    */
   async findGlobalTenures(): Promise<any[]> {

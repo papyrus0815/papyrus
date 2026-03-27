@@ -9,8 +9,8 @@
 ///
 /// 연결 원칙:
 /// - 인물(Person)은 후보(Candidacy)·당원(Membership)·재임(Tenure)으로 각각 다른 행에 표현
-/// - 당선으로 임기가 생기면 GovernmentPositionTenure.electionCandidacyId로 후보와 1:1 연결(선택)
-/// - 행정부는 Cabinet + Tenure로 유지; 여당/연정은 CabinetPoliticalParty로 표현
+/// - 당선으로 임기가 생기면 GovernmentPositionTenure.electionCandidacyId로 후보와 1:1 연결(선택); 재임에는 mandateSource(TenureMandateSource, government.prisma)로 근원 기록
+/// - 행정부는 Cabinet + Tenure로 유지; 여당/연정은 CabinetPoliticalParty(+ provenance·선거 집계 연결)로 표현
 
 // ========================
 // Enums
@@ -66,6 +66,32 @@ enum CabinetPartyRole {
   COALITION_PARTNER
   /// 소수 여당·입각 합의 등(기록용)
   SUPPORTING_MINOR
+  /// 기타
+  OTHER
+}
+
+/// 행정부–정당 연결 행의 데이터 출처
+enum CabinetPartyProvenance {
+  MANUAL
+  FROM_ELECTION_PARTY_RESULT
+  FROM_HEAD_CANDIDACY
+  OTHER
+}
+
+/// 의회가 실제로 막을 내린 방식 — 정식 임기 종료(`legislatureTermEnd`)와 별개로, 조기 종료·해산 유형을 구분
+enum LegislatureTermClosureKind {
+  /// 정식 임기 만료일에 종료(실제 일자는 `legislatureTermEnd`와 동일하게 보거나 `resultingLegislatureClosureDate` 생략)
+  FULL_TERM
+  /// 조기 해산(일반)
+  EARLY_DISSOLUTION
+  /// 불신임·내각 총사퇴 등
+  NO_CONFIDENCE
+  /// 수반·국가원수의 해산권·명령
+  HEAD_DISSOLUTION_DECREE
+  /// 국민투표·개헌 등
+  REFERENDUM_OR_PLEBISCITE
+  /// 사법·헌법재판소 등
+  JUDICIAL_OR_CONSTITUTIONAL
   /// 기타
   OTHER
 }
@@ -139,8 +165,17 @@ model Election {
   /// 이번 선거로 구성된 의회 임기 시작(선택)
   legislatureTermStart DateTime? @map("legislature_term_start")
 
-  /// 의회 임기 종료(선택)
+  /// 법정·예정 **정식** 임기 만료일(선택). 중도 종료가 없으면 실제 종료일도 이 날짜로 보면 됨
   legislatureTermEnd DateTime? @map("legislature_term_end")
+
+  /// 이번 선거로 구성된 의회가 **실제로** 막을 내린 방식(정시 만료 / 조기 해산 등)
+  resultingLegislatureClosureKind LegislatureTermClosureKind? @map("resulting_legislature_closure_kind")
+
+  /// 위 종류가 발생한 **실제 일자**(조기 종료·해산일). `FULL_TERM`이면 `legislatureTermEnd`와 같게 두거나 생략
+  resultingLegislatureClosureDate DateTime? @map("resulting_legislature_closure_date")
+
+  /// 상세 서술(세부 사유·절차)
+  resultingLegislatureDissolutionNotes String? @map("resulting_legislature_dissolution_notes") @db.Text
 
   /// 유권자 대비 실제 투표 참여율 0~100 (%)
   voterTurnoutPercent Decimal? @map("voter_turnout_percent") @db.Decimal(9, 6)
@@ -151,8 +186,10 @@ model Election {
   /// 특정 광역·기초 단위에만 적용되는 선거(선택)
   scopeAdministrativeDivisionId String? @map("scope_administrative_division_id") @db.Char(36)
 
+  /// 회차(대수) 정렬·비교용 — 동일 국가·선거 유형 내 순번 (예: 21, 11)
+  convocationOrdinal Int? @map("convocation_ordinal")
+
   description String? @db.Text
-  notes       String? @db.Text
 
   /// 계정별 월드/시나리오 구분(선택)
   accountId String? @map("account_id") @db.Char(36)
@@ -176,6 +213,10 @@ model Election {
   @@index([pollDate], name: "idx_election_pollDate")
   @@index([electionType], name: "idx_election_type")
   @@index([accountId], name: "idx_election_accountId")
+  @@index([countryId, convocationOrdinal], name: "idx_election_country_convocation")
+  @@index([historicalCountryId, convocationOrdinal], name: "idx_election_hist_country_convocation")
+  /// 동일 국가(현대 또는 역사)·선거 유형·회차 숫자 중복 방지 (회차 미입력 시 MySQL은 NULL 중복 허용)
+  @@unique([countryId, historicalCountryId, electionType, convocationOrdinal], name: "uniq_election_scope_type_convocation")
   @@map("election")
 }
 
@@ -198,6 +239,9 @@ model ElectionPartyResult {
 
   election Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
   party    PoliticalParty @relation("ElectionPartyResults", fields: [partyId], references: [id], onDelete: Cascade)
+
+  /// 이 선거 정당 집계를 근거로 연결된 행정부–정당 행(최대 1건)
+  cabinetPoliticalPartyLink CabinetPoliticalParty? @relation("CabinetPartyFromElectionResult")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -421,6 +465,13 @@ model CabinetPoliticalParty {
   /// 연정 순서·비중 메모(선택)
   notes String? @db.Text
 
+  /// 데이터 입력 경로(수동·선거 집계·수반 후보 등)
+  provenance CabinetPartyProvenance @default(MANUAL) @map("provenance")
+
+  /// 선거별 정당 집계와 연결할 때(선택, 출처 추적용)
+  electionPartyResultId String? @unique @map("election_party_result_id") @db.Char(36)
+  electionPartyResult     ElectionPartyResult? @relation("CabinetPartyFromElectionResult", fields: [electionPartyResultId], references: [id], onDelete: SetNull)
+
   cabinet Cabinet        @relation("CabinetPoliticalParties", fields: [cabinetId], references: [id], onDelete: Cascade)
   party   PoliticalParty @relation("CabinetPartyAffiliations", fields: [partyId], references: [id], onDelete: Cascade)
 
@@ -429,5 +480,6 @@ model CabinetPoliticalParty {
 
   @@unique([cabinetId, partyId], name: "uniq_cabinet_party")
   @@index([partyId], name: "idx_cabinet_party_partyId")
+  @@index([electionPartyResultId], name: "idx_cabinet_party_electionPartyResultId")
   @@map("cabinet_political_party")
 }

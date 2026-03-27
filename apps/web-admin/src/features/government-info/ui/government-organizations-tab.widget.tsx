@@ -13,6 +13,12 @@ import {
   ORGANIZATION_TYPE_OPTIONS,
 } from '@/features/government-info/model/organization-tab.constants'
 import { GOV_MAIN_COLOR as MAIN } from '@/features/government-info/model/constants'
+import {
+  EmptyStateFeatureCard,
+  EmptyStateFill,
+  EmptyStateSimple,
+  EmptyStateSpotlight,
+} from '@/shared/ui/empty-state/empty-state'
 import { apiConnection } from '@/shared/api/client'
 import { getAllCountries } from '@/shared/api/countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -42,11 +48,9 @@ import {
   OrgCard,
   OrgCardContent,
   OrgCreateButton,
-  OrgEmptyState,
   OrgErrorText,
   OrgField,
   OrgFormActions,
-  GovSectionEyebrow,
   OrgFormDesc,
   OrgGrid,
   OrgInput,
@@ -184,7 +188,16 @@ export function GovernmentOrganizationsTab({
 
 
   return (
-    <section aria-label="행정기구(조직)">
+    <section
+      aria-label="행정기구(조직)"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+      }}
+    >
       {selectedOrganization ? (
         /* ── 상세 뷰 ── */
         <>
@@ -445,99 +458,40 @@ export function GovernmentOrganizationsTab({
         </>
       ) : (
         /* ── 목록 뷰 ── */
-        <>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           {!effectiveCountryId ? (
-            <>
-              <GovSectionEyebrow>행정기구·조직</GovSectionEyebrow>
-              <p
-                style={{
-                  fontSize: 14,
-                  color: palette.textMuted,
-                }}
-              >
+            <EmptyStateFill>
+              <EmptyStateSimple border="none">
                 현대 국가를 선택하면 해당 국가 소속 조직을 등록·조회할 수
                 있습니다.
-              </p>
-            </>
+              </EmptyStateSimple>
+            </EmptyStateFill>
           ) : organizationsLoading ? (
-            <>
-              <GovSectionEyebrow>행정기구·조직</GovSectionEyebrow>
-              <p
-                style={{
-                  fontSize: 14,
-                  color: palette.textMuted,
-                }}
-              >
+            <EmptyStateFill>
+              <EmptyStateSimple border="none">
                 불러오는 중…
-              </p>
-            </>
+              </EmptyStateSimple>
+            </EmptyStateFill>
           ) : (
             <>
               {organizationsList.length === 0 ? (
-                /* 행정부와 동일: 등록 카드만 표시 (추가 버튼 없음) */
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 24,
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: '48px 32px',
-                      background: palette.bgSubtle,
-                      borderRadius: 20,
-                      border: `1px solid ${palette.border}`,
-                      boxShadow: isDark
-                        ? '0 2px 8px rgba(0,0,0,0.3)'
-                        : '0 2px 8px rgba(0,0,0,0.04)',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 64,
-                        height: 64,
-                        margin: '0 auto 20px',
-                        borderRadius: 20,
-                        background:
-                          'linear-gradient(145deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: MAIN,
-                      }}
-                    >
-                      <FiPlus size={28} strokeWidth={2.5} />
-                    </div>
-                    <h3
-                      style={{
-                        margin: '0 0 8px',
-                        fontSize: 20,
-                        fontWeight: 700,
-                        color: palette.text,
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      등록된 조직이 없습니다
-                    </h3>
-                    <p
-                      style={{
-                        margin: '0 0 24px',
-                        fontSize: 14,
-                        color: palette.textMuted,
-                        lineHeight: 1.5,
-                        maxWidth: 400,
-                        marginLeft: 'auto',
-                        marginRight: 'auto',
-                      }}
-                    >
-                      만철·관동군·총독부 등 행정기구·조직을 등록하면 이 국가
-                      소속으로 관리할 수 있습니다.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
+                <EmptyStateFill>
+                  <EmptyStateFeatureCard
+                    cardBorder={false}
+                    flat
+                    icon={<FiPlus size={28} strokeWidth={2.5} />}
+                    title="등록된 조직이 없습니다"
+                    description="만철·관동군·총독부 등 행정기구·조직을 등록하면 이 국가 소속으로 관리할 수 있습니다."
+                    primaryAction={{
+                      label: '조직 등록',
+                      onClick: () => {
                         setEditingOrganization(null)
                         setOrganizationForm({
                           name: '',
@@ -555,26 +509,11 @@ export function GovernmentOrganizationsTab({
                           ideology: null,
                         })
                         setOrganizationModalOpen(true)
-                      }}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '14px 24px',
-                        fontSize: 15,
-                        fontWeight: 600,
-                        color: '#fff',
-                        background: MAIN,
-                        border: 'none',
-                        borderRadius: 14,
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-                      }}
-                    >
-                      <FiPlus size={18} /> 조직 등록
-                    </button>
-                  </div>
-                </div>
+                      },
+                      icon: <FiPlus size={16} strokeWidth={2.25} />,
+                    }}
+                  />
+                </EmptyStateFill>
               ) : (
                 <>
                   <OrgListHeader>
@@ -621,9 +560,17 @@ export function GovernmentOrganizationsTab({
                     </OrgToolbarRow>
                   </OrgListHeader>
                   {filteredOrganizationsList.length === 0 ? (
-                    <OrgEmptyState>
-                      검색 조건에 맞는 조직이 없습니다.
-                    </OrgEmptyState>
+                    <EmptyStateSpotlight
+                      fill={false}
+                      flat
+                      icon={<FiSearch size={30} strokeWidth={1.75} />}
+                      title="검색 결과가 없습니다"
+                      description="검색 조건에 맞는 조직이 없습니다."
+                      primaryAction={{
+                        label: '검색어 지우기',
+                        onClick: () => setOrganizationSearchQuery(''),
+                      }}
+                    />
                   ) : (
                     <OrgGrid>
                       {/* 행정부처럼 첫 카드: 조직 등록 카드 */}
@@ -788,7 +735,7 @@ export function GovernmentOrganizationsTab({
               )}
             </>
           )}
-        </>
+        </div>
       )}
 
       {organizationModalOpen &&

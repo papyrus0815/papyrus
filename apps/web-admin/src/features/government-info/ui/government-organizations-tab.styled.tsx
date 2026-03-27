@@ -14,8 +14,6 @@ export const OrgListHeader = styled.header`
   gap: 16px;
   padding: 20px 0 20px;
   margin-bottom: 24px;
-  border-bottom: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
 `
 export const OrgListHeaderRow = styled.div`
   display: flex;
@@ -142,42 +140,20 @@ export const OrgCard = styled.div`
   border-radius: 14px;
   padding: 0;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 1px 4px rgba(0,0,0,0.25)'
-      : '0 1px 4px rgba(0, 0, 0, 0.04)'};
   backdrop-filter: ${({ theme }) =>
     theme.mode === 'dark' ? 'blur(12px)' : 'none'};
   transition:
     border-color 0.2s ease,
-    box-shadow 0.2s ease,
     transform 0.2s ease;
   overflow: hidden;
   &:hover {
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(99,102,241,0.5)' : '#c7d2fe'};
-    box-shadow: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? '0 6px 20px rgba(99,102,241,0.15)'
-        : '0 6px 20px rgba(99, 102, 241, 0.1)'};
     transform: translateY(-1px);
   }
 `
 export const OrgCardContent = styled.div`
   padding: 18px 20px;
-`
-export const OrgEmptyState = styled.div`
-  padding: 52px 24px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafbfd'};
-  border: 1.5px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#dde3ec'};
-  border-radius: 14px;
 `
 /* 행정기구 등록 모달 */
 export const OrgModalBoxCustom = styled(ModalBox)`

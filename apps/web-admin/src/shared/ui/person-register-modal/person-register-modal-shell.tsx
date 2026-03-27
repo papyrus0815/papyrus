@@ -24,10 +24,23 @@ export const PersonRegisterModalBox = styled(motion.div)<{
   $maxWidth?: string
   /** 기본 560px — 짧은 폼은 auto */
   $minHeight?: string
+  /**
+   * 지정 시 `height: min(값, 92vh)` 로 바깥 박스 높이 고정(탭 전환 등).
+   * 콘텐츠는 `PersonRegisterModalFormScroll` 안에서만 스크롤.
+   */
+  $height?: string
 }>`
   width: ${({ $maxWidth }) => $maxWidth ?? 'min(1200px, 96vw)'};
   max-height: min(92vh, 1200px);
-  min-height: ${({ $minHeight }) => $minHeight ?? '560px'};
+  ${({ $height, $minHeight }) =>
+    $height
+      ? `
+    height: min(${$height}, 92vh);
+    min-height: min(${$height}, 92vh);
+  `
+      : `
+    min-height: ${$minHeight ?? '560px'};
+  `}
   border-radius: 22px;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
@@ -91,6 +104,7 @@ export const PersonRegisterModalCloseBtn = styled.button`
 
 export const PersonRegisterModalFormScroll = styled.div`
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 24px;
 
@@ -105,6 +119,16 @@ export const PersonRegisterModalFormScroll = styled.div`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
     border-radius: 3px;
   }
+`
+
+/** 스크롤 밖 하단 고정 — `PersonRegisterModalBox` flex 열에서 `FormScroll` 아래 */
+export const PersonRegisterModalStickyFooter = styled.div`
+  flex-shrink: 0;
+  padding: 20px 24px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 `
 
 /** person-register-modal.tsx FormDesc와 동일 */

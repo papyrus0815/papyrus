@@ -13,6 +13,7 @@ import {
   PersonEducation,
   PersonAward,
   Prisma,
+  TenureMandateSource,
 } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import {
@@ -99,6 +100,30 @@ const PERSON_INCLUDE_AFFILIATIONS_FOR_NAME: Prisma.PersonCountryAffiliationInclu
       },
     },
   }
+
+function resolveMandateSourceForCreate(
+  dto: CreateGovernmentPositionTenureDto,
+): TenureMandateSource {
+  if (dto.mandateSource != null) {
+    return dto.mandateSource as TenureMandateSource
+  }
+  if (dto.electionCandidacyId) {
+    return TenureMandateSource.ELECTION
+  }
+  return TenureMandateSource.UNKNOWN
+}
+
+function resolveMandateSourceForUpdate(
+  dto: Partial<CreateGovernmentPositionTenureDto>,
+): TenureMandateSource | undefined {
+  if (dto.mandateSource != null) {
+    return dto.mandateSource as TenureMandateSource
+  }
+  if (dto.electionCandidacyId !== undefined) {
+    return dto.electionCandidacyId ? TenureMandateSource.ELECTION : TenureMandateSource.UNKNOWN
+  }
+  return undefined
+}
 
 /**
  * Prisma 기반 인물 Repository 구현체
@@ -1523,6 +1548,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         cabinetId: dto.cabinetId ?? undefined,
         administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
         electionCandidacyId: dto.electionCandidacyId ?? undefined,
+        mandateSource: resolveMandateSourceForCreate(dto),
         ...(accountId != null && { accountId }),
       },
       include: {
@@ -1541,6 +1567,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             election: { select: { id: true, name: true, pollDate: true } },
+            party: { select: { id: true, name: true } },
           },
         },
       },
@@ -1599,6 +1626,11 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.electionCandidacyId !== undefined)
       updateData.electionCandidacyId = dto.electionCandidacyId || null
 
+    const mandateResolved = resolveMandateSourceForUpdate(dto)
+    if (mandateResolved !== undefined) {
+      updateData.mandateSource = mandateResolved
+    }
+
     const tenure = await this.prisma.governmentPositionTenure.update({
       where: { id },
       data: updateData,
@@ -1618,6 +1650,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             election: { select: { id: true, name: true, pollDate: true } },
+            party: { select: { id: true, name: true } },
           },
         },
       },
@@ -2248,6 +2281,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             election: { select: { id: true, name: true, pollDate: true } },
+            party: { select: { id: true, name: true } },
           },
         },
       },
@@ -2266,6 +2300,33 @@ export class PersonPrismaRepository implements IPersonRepository {
       return obj
     }
     return serializeBigInt(tenures)
+  }
+
+  /**
+   * 인물이 후보로 등록된 선거 후보 행 — 재임에 연결할 때 선택용
+   */
+  async findElectionCandidaciesForTenureLink(personId: string): Promise<any[]> {
+    const rows = await this.prisma.electionCandidacy.findMany({
+      where: { personId },
+      include: {
+        election: { select: { id: true, name: true, pollDate: true } },
+        party: { select: { id: true, name: true } },
+      },
+      orderBy: [{ election: { pollDate: 'desc' } }, { id: 'desc' }],
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(rows)
   }
 
   /**
@@ -2326,6 +2387,13 @@ export class PersonPrismaRepository implements IPersonRepository {
             birthAdminDivision: { select: { id: true, name: true } },
           },
         },
+        electionCandidacy: {
+          select: {
+            id: true,
+            election: { select: { id: true, name: true, pollDate: true } },
+            party: { select: { id: true, name: true } },
+          },
+        },
         achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
       },
       orderBy: { startDate: 'desc' },
@@ -2372,6 +2440,13 @@ export class PersonPrismaRepository implements IPersonRepository {
             birthPlaceText: true,
             birthCity: { select: { id: true, name: true } },
             birthAdminDivision: { select: { id: true, name: true } },
+          },
+        },
+        electionCandidacy: {
+          select: {
+            id: true,
+            election: { select: { id: true, name: true, pollDate: true } },
+            party: { select: { id: true, name: true } },
           },
         },
         achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },

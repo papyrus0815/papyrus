@@ -6,6 +6,8 @@ import { ElectoralDistrictController } from './presentation/electoral-district.c
 import { ElectionController } from './presentation/election.controller'
 import { PersonElectionController } from './presentation/person-election.controller'
 import { CabinetPoliticalPartyController } from './presentation/cabinet-political-party.controller'
+import { LawController } from './presentation/law.controller'
+import { LawTypeController } from './presentation/law-type.controller'
 
 @Module({
   imports: [PrismaModule],
@@ -14,6 +16,8 @@ import { CabinetPoliticalPartyController } from './presentation/cabinet-politica
     PoliticalPartyTransitionController,
     ElectoralDistrictController,
     ElectionController,
+    LawController,
+    LawTypeController,
     PersonElectionController,
     CabinetPoliticalPartyController,
   ],

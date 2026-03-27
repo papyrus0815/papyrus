@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsDateString, IsBoolean, IsNumber, IsArray, ValidateNested } from 'class-validator'
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsBoolean,
+  IsNumber,
+  IsArray,
+  ValidateNested,
+  IsIn,
+} from 'class-validator'
 import { Type } from 'class-transformer'
 
 /**
@@ -741,4 +750,9 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsString()
   electionCandidacyId?: string | null
+
+  /** 재임 권한 근원. 생략 시 electionCandidacyId가 있으면 ELECTION, 없으면 UNKNOWN */
+  @IsOptional()
+  @IsIn(['UNKNOWN', 'ELECTION', 'APPOINTMENT', 'SUCCESSION', 'HEREDITARY', 'OTHER'])
+  mandateSource?: 'UNKNOWN' | 'ELECTION' | 'APPOINTMENT' | 'SUCCESSION' | 'HEREDITARY' | 'OTHER'
 }

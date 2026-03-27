@@ -95,6 +95,19 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 인물별 선거 후보 목록 — 재임에 당선 선거(ElectionCandidacy) 연결 시 선택용
+   */
+  @Get('tenures/election-candidacy-options')
+  async getElectionCandidacyOptionsForTenure(
+    @Query('personId') personId: string,
+  ): Promise<any[]> {
+    const id = personId?.trim()
+    if (!id) return []
+    const list = await this.personService.findElectionCandidaciesForTenureLink(id)
+    return list.map(serializeBigInt)
+  }
+
+  /**
    * 관직 정의 목록 조회 (전역 단일 레벨)
    */
   @Get('definitions')

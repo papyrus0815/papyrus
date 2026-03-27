@@ -13,6 +13,7 @@ import {
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { PrismaService } from '@prisma/prisma.service'
+import { assertLawMatchesPoliticalPartyJurisdiction } from '../domain/law-jurisdiction.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
 /**
@@ -68,6 +69,79 @@ export class PoliticalPartyController {
       successors: outgoing,
       predecessors: incoming,
     })
+  }
+
+  @Get(':id/laws')
+  async listPartyLaws(@Param('id') id: string) {
+    await this.ensureParty(id)
+    const rows = await this.prisma.politicalPartyLaw.findMany({
+      where: { partyId: id },
+      include: {
+        law: {
+          select: {
+            id: true,
+            name: true,
+            summary: true,
+            countryId: true,
+            historicalCountryId: true,
+          },
+        },
+      },
+      orderBy: { sortOrder: 'asc' },
+    })
+    return serializeElectionBigInt(rows)
+  }
+
+  @Post(':id/laws')
+  async addPartyLaw(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      lawId: string
+      relevanceNote?: string | null
+      sortOrder?: number
+    },
+  ) {
+    const party = await this.prisma.politicalParty.findUnique({
+      where: { id },
+      select: { id: true, countryId: true, historicalCountryId: true },
+    })
+    if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
+    const law = await this.prisma.law.findUnique({ where: { id: body.lawId } })
+    if (!law) throw new NotFoundException('법령을 찾을 수 없습니다.')
+    assertLawMatchesPoliticalPartyJurisdiction(law, party)
+    const row = await this.prisma.politicalPartyLaw.create({
+      data: {
+        partyId: id,
+        lawId: body.lawId,
+        relevanceNote: body.relevanceNote ?? undefined,
+        sortOrder: body.sortOrder ?? 0,
+      },
+      include: {
+        law: {
+          select: {
+            id: true,
+            name: true,
+            summary: true,
+            countryId: true,
+            historicalCountryId: true,
+          },
+        },
+      },
+    })
+    return serializeElectionBigInt(row)
+  }
+
+  @Delete(':id/laws/:linkId')
+  async removePartyLaw(
+    @Param('id') id: string,
+    @Param('linkId') linkId: string,
+  ) {
+    const existing = await this.prisma.politicalPartyLaw.findFirst({
+      where: { id: linkId, partyId: id },
+    })
+    if (!existing) throw new NotFoundException('연결을 찾을 수 없습니다.')
+    await this.prisma.politicalPartyLaw.delete({ where: { id: linkId } })
   }
 
   @Get(':id')
@@ -163,5 +237,13 @@ export class PoliticalPartyController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     await this.prisma.politicalParty.delete({ where: { id } })
+  }
+
+  private async ensureParty(id: string) {
+    const p = await this.prisma.politicalParty.findUnique({
+      where: { id },
+      select: { id: true },
+    })
+    if (!p) throw new NotFoundException('정당을 찾을 수 없습니다.')
   }
 }

@@ -40,23 +40,6 @@ export const SectionLead = styled.p`
   line-height: 1.55;
 `
 
-/** 정당·선거 빈 상태 온보딩 단계 */
-export const PoliticsOnboardingSteps = styled.ol`
-  margin: 0;
-  padding: 0 0 0 22px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  line-height: 1.65;
-  max-width: 560px;
-
-  li {
-    margin-bottom: 8px;
-  }
-  li:last-child {
-    margin-bottom: 0;
-  }
-`
-
 export const SplitMainRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -96,15 +79,6 @@ export const PoliticsTabSubsection = styled.section`
 
 export const SubsectionHeaderBlock = styled.div`
   margin-bottom: 14px;
-`
-
-/** 소제목 아래 한 줄 설명 (SectionLead보다 짧게) */
-export const SubsectionLead = styled.p`
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  line-height: 1.5;
-  max-width: 560px;
 `
 
 export const SubsectionHeading = styled.h2`
@@ -150,6 +124,46 @@ export const DetailColumn = styled.div`
   flex: 1;
   min-width: 280px;
   min-height: 280px;
+`
+
+/** 선거 상세 본문 — 목록 옆 패널에 은은한 프레임 */
+export const ElectionDetailSurface = styled.div`
+  padding: 20px 20px 22px;
+  border-radius: 16px;
+  min-height: 0;
+`
+
+/** 선거 미선택·로딩 안내 */
+export const ElectionDetailEmptyCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 28px 20px;
+  border-radius: 16px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.02)'
+      : 'rgba(248, 250, 252, 0.65)'};
+  text-align: center;
+`
+
+export const ElectionDetailEmptyTitle = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.02em;
+`
+
+export const ElectionDetailEmptyHint = styled.p`
+  margin: 0;
+  max-width: 320px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /** 선거 목록 항목 — 카드형 · 선택 시 강조 */
@@ -212,6 +226,18 @@ export const ElectionNavMeta = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
+  margin-top: 2px;
+`
+
+/** 선거 목록 — 종료일(실제·투표·임기) 한 줄 */
+export const ElectionNavEndLine = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  margin-top: 4px;
+  line-height: 1.35;
 `
 
 /** 정당 집계 — 득표율 인포그래픽(원·도넛) */
@@ -406,7 +432,9 @@ export const ToolbarDangerBtnSm = styled(ToolbarDangerBtn)`
 `
 
 /** 선거·정당 상단 — 아이콘 전용 (원형, 얇은 테두리) */
-export const DetailHeaderIconBtn = styled.button<{ $variant?: 'default' | 'danger' }>`
+export const DetailHeaderIconBtn = styled.button<{
+  $variant?: 'default' | 'danger'
+}>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -442,7 +470,9 @@ export const DetailHeaderIconBtn = styled.button<{ $variant?: 'default' | 'dange
     box-shadow 0.18s ease;
   &:hover {
     border-color: ${({ theme, $variant }) =>
-      $variant === 'danger' ? 'rgba(220, 38, 38, 0.4)' : 'rgba(99, 102, 241, 0.35)'};
+      $variant === 'danger'
+        ? 'rgba(220, 38, 38, 0.4)'
+        : 'rgba(99, 102, 241, 0.35)'};
     background: ${({ theme, $variant }) =>
       $variant === 'danger'
         ? theme.mode === 'dark'
@@ -458,9 +488,7 @@ export const DetailHeaderIconBtn = styled.button<{ $variant?: 'default' | 'dange
           : '#b91c1c'
         : theme.colors.text.primary};
     box-shadow: ${({ $variant }) =>
-      $variant === 'danger'
-        ? 'none'
-        : '0 2px 12px rgba(99, 102, 241, 0.12)'};
+      $variant === 'danger' ? 'none' : '0 2px 12px rgba(99, 102, 241, 0.12)'};
   }
 `
 
@@ -475,7 +503,9 @@ export const SubsectionAddBtn = styled.button`
   letter-spacing: 0.01em;
   color: #4f46e5;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(99, 102, 241, 0.06)'};
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.1)'
+      : 'rgba(99, 102, 241, 0.06)'};
   border: 1px solid rgba(99, 102, 241, 0.28);
   border-radius: 999px;
   cursor: pointer;
@@ -484,7 +514,9 @@ export const SubsectionAddBtn = styled.button`
     border-color 0.15s ease;
   &:hover:not(:disabled) {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.18)' : 'rgba(99, 102, 241, 0.12)'};
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.18)'
+        : 'rgba(99, 102, 241, 0.12)'};
     border-color: rgba(99, 102, 241, 0.45);
   }
   &:disabled {
@@ -627,6 +659,160 @@ export const BallotAddRow = styled.div`
   margin-bottom: 10px;
 `
 
+/** 국민투표·주민투표 — 투표 안 블록 */
+export const ReferendumBallotPanel = styled.div`
+  margin-top: 4px;
+  padding: 16px 18px 18px;
+  border-radius: 16px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(14, 165, 233, 0.08) 0%, rgba(0, 0, 0, 0) 52%)'
+      : 'linear-gradient(180deg, #f0f9ff 0%, #ffffff 48%)'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+      : 'inset 0 1px 0 rgba(255, 255, 255, 0.85)'};
+`
+
+export const ReferendumBallotPanelHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e0f2fe'};
+`
+
+export const ReferendumBallotPanelTitleRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+`
+
+export const ReferendumBallotPanelIcon = styled.span`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: #0284c7;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(14, 165, 233, 0.15)'
+      : 'rgba(14, 165, 233, 0.12)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(14, 165, 233, 0.25)'
+        : 'rgba(14, 165, 233, 0.22)'};
+`
+
+export const ReferendumBallotPanelTitles = styled.div`
+  min-width: 0;
+`
+
+export const ReferendumBallotPanelKicker = styled.div`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 4px;
+`
+
+export const ReferendumBallotPanelTitle = styled.h3`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  line-height: 1.35;
+`
+
+export const ReferendumBallotAddRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 14px;
+
+  input[type='text'] {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+`
+
+/** 투표 안별 득표 비중 — 가로 막대 */
+export const ReferendumBallotBars = styled.div`
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+export const ReferendumBallotBarKicker = styled.div`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 2px;
+`
+
+export const ReferendumBallotBarRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+`
+
+export const ReferendumBallotBarLabel = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const ReferendumBallotBarValue = styled.div`
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  flex-shrink: 0;
+`
+
+export const ReferendumBallotBarTrack = styled.div`
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'};
+  overflow: hidden;
+`
+
+export const ReferendumBallotBarFill = styled.div<{
+  $widthPct: number
+  $fill: string
+}>`
+  height: 100%;
+  width: ${({ $widthPct }) => `${Math.min(100, Math.max(0, $widthPct))}%`};
+  border-radius: inherit;
+  background: ${({ $fill }) => $fill};
+  box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.08);
+  transition: width 0.35s ease;
+`
+
 export { FormSelectNative } from '@/shared/ui/form-select-native'
 
 export const InlineTextInput = styled.input`
@@ -744,10 +930,8 @@ export const PartyRowAvatar = styled.div<{ $ring?: string | null }>`
   justify-content: center;
   overflow: hidden;
   border: 1px solid
-    ${({ theme, $ring }) =>
-      $ring ? `${$ring}55` : theme.colors.border.light};
-  box-shadow: ${({ $ring }) =>
-    $ring ? `0 0 0 2px ${$ring}30` : 'none'};
+    ${({ theme, $ring }) => ($ring ? `${$ring}55` : theme.colors.border.light)};
+  box-shadow: ${({ $ring }) => ($ring ? `0 0 0 2px ${$ring}30` : 'none')};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -791,6 +975,344 @@ export const PartyRowChevron = styled.span<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   transition: color 0.15s ease;
+`
+
+/** 정당 목록 — 인포그래픽: 스펙트럼 + 연정 띠 + 타일 카드 */
+export const PartyInfographicSection = styled.div`
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+`
+
+export const PartyInfographicKicker = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+`
+
+export const PartyInfographicKickerLeft = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+export const PartyInfographicKickerTitle = styled.span`
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const PartyInfographicKickerDesc = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.45;
+`
+
+export const PartyIdeologySpectrumWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+export const PartyIdeologySpectrumLabel = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const PartyIdeologySpectrumTrack = styled.div`
+  position: relative;
+  height: 30px;
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(90deg, #312e81 0%, #5b21b6 22%, #475569 50%, #be123c 78%, #881337 100%)'
+      : 'linear-gradient(90deg, #4f46e5 0%, #9333ea 24%, #94a3b8 50%, #ea580c 76%, #dc2626 100%)'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'inset 0 0 0 1px rgba(255,255,255,0.12)'
+      : 'inset 0 0 0 1px rgba(15,23,42,0.06)'};
+  opacity: 0.92;
+`
+
+export const PartyIdeologySpectrumDot = styled.div<{
+  $leftPct: number
+  $fill: string
+}>`
+  position: absolute;
+  bottom: 7px;
+  left: ${({ $leftPct }) => $leftPct}%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.95)'};
+  background: ${({ $fill }) => $fill};
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+`
+
+export const PartyIdeologySpectrumEnds = styled.div`
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  padding: 0 2px;
+`
+
+export const PartyCoalitionStrip = styled.div`
+  display: flex;
+  width: 100%;
+  height: 11px;
+  border-radius: 999px;
+  overflow: hidden;
+  gap: 3px;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'inset 0 0 0 1px rgba(255,255,255,0.1)'
+      : 'inset 0 0 0 1px rgba(15,23,42,0.07)'};
+`
+
+export const PartyCoalitionSegment = styled.div<{ $color: string }>`
+  flex: 1 1 0;
+  min-width: 4px;
+  height: 100%;
+  background: ${({ $color }) => $color};
+  transition: filter 0.15s ease;
+
+  &:hover {
+    filter: brightness(1.1) saturate(1.05);
+  }
+`
+
+export const PartyInfographicGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
+  gap: 14px;
+  width: 100%;
+
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+export const PartyInfographicCard = styled.button<{ $accent?: string | null }>`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  width: 100%;
+  min-height: 176px;
+  padding: 0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 20px;
+  overflow: hidden;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.98) 100%)'
+      : 'linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%)'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 10px 32px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.04)'
+      : '0 4px 18px rgba(15, 23, 42, 0.07), 0 1px 0 rgba(255, 255, 255, 0.9) inset'};
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.2s ease,
+    transform 0.16s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    z-index: 1;
+    background: ${({ $accent, theme }) =>
+      $accent ?? (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+    border-radius: 20px 0 0 20px;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    transform: translateY(-2px);
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 14px 40px rgba(0, 0, 0, 0.48)'
+        : '0 12px 32px rgba(15, 23, 42, 0.1)'};
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.65);
+    outline-offset: 2px;
+  }
+`
+
+export const PartyInfographicCardHero = styled.div<{ $tint?: string | null }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 16px 10px;
+  min-height: 96px;
+  position: relative;
+  z-index: 0;
+  background: ${({ $tint, theme }) =>
+    $tint
+      ? theme.mode === 'dark'
+        ? `radial-gradient(ellipse 95% 85% at 50% 20%, ${$tint}40 0%, transparent 68%)`
+        : `radial-gradient(ellipse 95% 85% at 50% 18%, ${$tint}30 0%, transparent 65%)`
+      : 'transparent'};
+`
+
+export const PartyInfographicLogo = styled.div<{ $ring?: string | null }>`
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid
+    ${({ theme, $ring }) => ($ring ? `${$ring}55` : theme.colors.border.light)};
+  box-shadow: ${({ $ring }) =>
+    $ring
+      ? `0 0 0 3px ${$ring}26, 0 10px 22px rgba(15, 23, 42, 0.2)`
+      : '0 8px 18px rgba(15, 23, 42, 0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 22px;
+`
+
+export const PartyInfographicLogoImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+`
+
+export const PartyInfographicStatusPill = styled.span<{ $dissolved: boolean }>`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  ${({ $dissolved, theme }) =>
+    $dissolved
+      ? `
+    color: ${theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'};
+    background: ${theme.mode === 'dark' ? 'rgba(248,113,113,0.18)' : 'rgba(254,226,226,0.96)'};
+  `
+      : `
+    color: ${theme.mode === 'dark' ? '#86efac' : '#15803d'};
+    background: ${theme.mode === 'dark' ? 'rgba(34,197,94,0.16)' : 'rgba(220,252,231,0.96)'};
+  `}
+`
+
+export const PartyInfographicCardBody = styled.div`
+  padding: 0 14px 14px;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 0;
+`
+
+export const PartyInfographicPartyName = styled.div`
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: ${({ theme }) => theme.colors.text.primary};
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`
+
+export const PartyInfographicShortRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+export const PartyInfographicShortBadge = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.07)'
+      : 'rgba(99, 102, 241, 0.09)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const PartyInfographicMetaRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const PartyInfographicPositionChip = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(129, 140, 248, 0.22)'
+      : 'rgba(99, 102, 241, 0.12)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+`
+
+export const PartyInfographicFootHint = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  gap: 4px;
 `
 
 /**
@@ -869,7 +1391,9 @@ export const PartyDetailBackLink = styled.button`
   font-weight: 500;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.secondary};
-  transition: color 0.15s ease, background 0.15s ease;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) =>
@@ -909,12 +1433,15 @@ export const PartyDetailLogoHero = styled.div<{ $ring?: string | null }>`
   margin-bottom: 20px;
   border: 1px solid
     ${({ theme, $ring }) =>
-      $ring ? `${$ring}55` : theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8ecf0'};
-  box-shadow:
-    ${({ $ring }) =>
       $ring
-        ? `0 0 0 3px ${$ring}22, 0 16px 48px rgba(15, 23, 42, 0.1)`
-        : '0 16px 48px rgba(15, 23, 42, 0.09)'};
+        ? `${$ring}55`
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : '#e8ecf0'};
+  box-shadow: ${({ $ring }) =>
+    $ring
+      ? `0 0 0 3px ${$ring}22, 0 16px 48px rgba(15, 23, 42, 0.1)`
+      : '0 16px 48px rgba(15, 23, 42, 0.09)'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -938,7 +1465,11 @@ export const PartyDetailLogo = styled.div<{ $ring?: string | null }>`
   overflow: hidden;
   border: 1px solid
     ${({ theme, $ring }) =>
-      $ring ? `${$ring}55` : theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e8ecf0'};
+      $ring
+        ? `${$ring}55`
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : '#e8ecf0'};
   box-shadow: ${({ $ring }) =>
     $ring ? `0 0 0 3px ${$ring}22` : '0 1px 3px rgba(15, 23, 42, 0.06)'};
   background: ${({ theme }) =>
@@ -1001,8 +1532,7 @@ export const PartyDetailChip = styled.span`
   align-items: center;
   font-size: 12px;
   font-weight: 500;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#cbd5e1' : '#475569'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.12)' : '#f1f5f9'};
   border: 1px solid
@@ -1065,6 +1595,79 @@ export const PartyDetailMetaTileValue = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.45;
   word-break: break-word;
+`
+
+/** 선거 상세 — 요약 래퍼(박스 없음) */
+export const ElectionDetailSummaryPanel = styled.div`
+  margin-top: 14px;
+`
+
+export const ElectionDetailBadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+`
+
+export const ElectionDetailTypeBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: transparent;
+  border: none;
+`
+
+export const ElectionDetailStatusBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: none;
+`
+
+export const ElectionDetailStatsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  gap: 10px 12px;
+`
+
+export const ElectionDetailStatCard = styled.div`
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+`
+
+export const ElectionDetailStatLabel = styled.div`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 6px;
+`
+
+export const ElectionDetailStatValue = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+  word-break: break-word;
+`
+
+export const ElectionDetailStatCardWide = styled(ElectionDetailStatCard)`
+  grid-column: 1 / -1;
 `
 
 /** 레거시 dl (다른 화면 호환) */

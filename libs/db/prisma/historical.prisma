@@ -267,6 +267,9 @@ model HistoricalCountry {
   /// 용어 사전 (본문 문구·관직 설명)
   glossaryTerms GlossaryTerm[] @relation("GlossaryTermHistoricalCountry")
 
+  /// 법령(`Law`) — 역사 국가 소속 법제
+  laws Law[] @relation("LawHistoricalCountry")
+
   // --- 등록 계정 (개인 정보 플랫폼: 본인만 수정/삭제)
   accountId String?  @map("account_id") @db.Char(36)
   account   Account? @relation("AccountHistoricalCountries", fields: [accountId], references: [id], onDelete: SetNull)

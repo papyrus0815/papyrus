@@ -123,6 +123,11 @@ export const FormRows = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0;
+
+  /* 맨 아래 필드 줄은 하단 구분선 없음 */
+  & > *:last-child {
+    border-bottom: none;
+  }
 `
 
 export const FieldRow = styled.div`

@@ -61,9 +61,24 @@ export type CabinetsSectionPalette = {
   borderEmphasis: string
 }
 
+let cabinetsSectionPaletteLight: CabinetsSectionPalette | undefined
+let cabinetsSectionPaletteDark: CabinetsSectionPalette | undefined
+
+/**
+ * 라이트/다크별 객체를 한 번만 생성해 재사용합니다(국가 상세 등에서 빈번 호출).
+ */
 export function getCabinetsSectionPalette(
   isDark: boolean,
 ): CabinetsSectionPalette {
+  if (isDark) {
+    cabinetsSectionPaletteDark ??= buildCabinetsSectionPalette(true)
+    return cabinetsSectionPaletteDark
+  }
+  cabinetsSectionPaletteLight ??= buildCabinetsSectionPalette(false)
+  return cabinetsSectionPaletteLight
+}
+
+function buildCabinetsSectionPalette(isDark: boolean): CabinetsSectionPalette {
   return {
     bg: isDark ? 'rgba(18,18,28,0.6)' : '#fff',
     bgSubtle: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',

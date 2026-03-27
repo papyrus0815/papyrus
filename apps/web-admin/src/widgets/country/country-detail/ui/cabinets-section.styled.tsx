@@ -2278,50 +2278,6 @@ export const CabDetailTreatyCountryPill = styled.span`
     getCabinetsSectionPalette(theme.mode === 'dark').signatoryPillText};
 `
 
-/** `CabListPanel` 안 빈 상태 — 점선 박스 없이 여백·타이포만 */
-export const CabinetEmptyState = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 48px 24px;
-  margin: 12px 0 0;
-  text-align: center;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(248,250,252,0.9)'};
-  border: none;
-  border-radius: 20px;
-`
-export const CabinetEmptyIconWrap = styled.div`
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').accentBg};
-  border: 1.5px solid
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').accentBorder};
-  color: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').accent};
-  margin-bottom: 4px;
-`
-export const CabinetEmptyTitle = styled.p`
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#1e293b')};
-`
-export const CabinetEmptyDesc = styled.p`
-  margin: 0;
-  font-size: 13px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#94a3b8')};
-  max-width: 340px;
-  line-height: 1.6;
-`
 export const CardIconButton = styled.button<{ $danger?: boolean }>`
   display: inline-flex;
   align-items: center;

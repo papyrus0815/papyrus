@@ -14,8 +14,6 @@ import React, {
 
 import { createPortal } from 'react-dom'
 
-import { useNavigate } from 'react-router-dom'
-
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
@@ -40,8 +38,13 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  EmptyStateFill,
+  EmptyStateSpotlight,
+} from '@/shared/ui/empty-state/empty-state'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { type AdministrativeDivision, cityApi } from '@/shared/api/city'
 import { getAllCountries } from '@/shared/api/countries'
@@ -112,18 +115,13 @@ import { SidePanel } from '@/shared/ui/side-panel'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
 import { CabinetDetailChrome } from './cabinet-detail-chrome.widget'
-import { CabinetPoliticalPartiesBlock } from './cabinet-political-parties-block.widget'
 import { CabinetMinisterCards } from './cabinet-minister-cards.widget'
+import { CabinetPoliticalPartiesBlock } from './cabinet-political-parties-block.widget'
 import {
   TlItem,
   cabinetTimelineCellAriaLabel,
   formatCabinetTermBadge,
 } from './cabinets-section-timeline'
-import {
-  CABINET_QS,
-  MINISTER_QS,
-  useCabinetSectionUrlSync,
-} from './cabinets-section-url-sync'
 import {
   HEAD_POSITION_TYPES,
   CABINET_SECTION_MAIN as MAIN,
@@ -143,10 +141,10 @@ import {
 import {
   APPOINTMENT_METHOD_LABEL,
   END_REASON_LABEL,
-  calcAgeAtEndTenure,
-  calcTenureDuration,
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
+  calcAgeAtEndTenure,
+  calcTenureDuration,
   formatDate,
   getHeadTenureTerritoryLabel,
   getPersonName,
@@ -170,8 +168,6 @@ export function CabinetsSection({
 }: CabinetsSectionProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { searchParams, pushCabinetParams, lastPushedKeyRef } =
-    useCabinetSectionUrlSync()
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
   const C = getCabinetsSectionPalette(isDark)
@@ -1043,7 +1039,6 @@ export function CabinetsSection({
       if (selectedCabinetId === cabinetId) {
         setSelectedCabinetId(null)
         setCabinetView('list')
-        pushCabinetParams(null, null)
       }
       queryClient.invalidateQueries({
         queryKey: ['cabinets-by-country', countryId, historicalCountryId],
@@ -1285,17 +1280,18 @@ export function CabinetsSection({
     return cancelRaf
   }, [cabinetView, hasSelectedCabinet])
 
-  const historyTargetTenure = useMemo((): GovernmentCabinetTenureItem | null => {
-    if (!historyTargetTenureId) return null
-    const fromMinisters = selectedCabinetMinisters.find(
-      (t) => t.id === historyTargetTenureId,
-    )
-    if (fromMinisters) return fromMinisters
-    const head = selectedCabinet?.headTenure
-    if (head?.id === historyTargetTenureId)
-      return head as GovernmentCabinetTenureItem
-    return null
-  }, [selectedCabinetMinisters, selectedCabinet, historyTargetTenureId])
+  const historyTargetTenure =
+    useMemo((): GovernmentCabinetTenureItem | null => {
+      if (!historyTargetTenureId) return null
+      const fromMinisters = selectedCabinetMinisters.find(
+        (t) => t.id === historyTargetTenureId,
+      )
+      if (fromMinisters) return fromMinisters
+      const head = selectedCabinet?.headTenure
+      if (head?.id === historyTargetTenureId)
+        return head as GovernmentCabinetTenureItem
+      return null
+    }, [selectedCabinetMinisters, selectedCabinet, historyTargetTenureId])
 
   /** 히스토리 등록 모달 — 수반 재임이면 제목 구분 */
   const historyModalTitle =
@@ -1310,8 +1306,8 @@ export function CabinetsSection({
     }
   }, [historyTargetTenureId, historyTargetTenure])
 
-  const visibleSelectedCabinetMinisters = selectedCabinetMinisters.filter(
-    (t) => isMinisterMatched(t),
+  const visibleSelectedCabinetMinisters = selectedCabinetMinisters.filter((t) =>
+    isMinisterMatched(t),
   )
   const sortedVisibleMinisters = useMemo(
     () =>
@@ -1322,61 +1318,6 @@ export function CabinetsSection({
       }),
     [visibleSelectedCabinetMinisters],
   )
-
-  useEffect(() => {
-    const cab = searchParams.get(CABINET_QS)
-    const min = searchParams.get(MINISTER_QS)
-    const key = `${cab ?? ''}\t${min ?? ''}`
-    if (key === lastPushedKeyRef.current) {
-      lastPushedKeyRef.current = null
-      return
-    }
-
-    if (loadingCabinets) return
-
-    if (!cab) {
-      setCabinetView('list')
-      setSelectedCabinetId(null)
-      setSelectedMinisterId(null)
-      setSelectedHeadHistoryId(null)
-      setSelectedHistoryId(null)
-      setSelectedTreatyId(null)
-      return
-    }
-
-    if (!sortedCabinets.some((c: any) => c.id === cab)) {
-      setCabinetView('list')
-      setSelectedCabinetId(null)
-      setSelectedMinisterId(null)
-      setSelectedHeadHistoryId(null)
-      setSelectedHistoryId(null)
-      setSelectedTreatyId(null)
-      pushCabinetParams(null, null, { replace: true })
-      return
-    }
-
-    setSelectedCabinetId(cab)
-    setCabinetView('detail')
-
-    if (!min) {
-      setSelectedMinisterId(null)
-      setSelectedHistoryId(null)
-      return
-    }
-
-    if (loadingCabinetMinisters) return
-    const ok = selectedCabinetMinisters.some((t) => t.id === min)
-    if (ok) setSelectedMinisterId(min)
-    else setSelectedMinisterId(null)
-  }, [
-    loadingCabinets,
-    loadingCabinetMinisters,
-    searchParams,
-    sortedCabinets,
-    selectedCabinetMinisters,
-    lastPushedKeyRef,
-    pushCabinetParams,
-  ])
 
   const getMinisterDepartmentName = (t: GovernmentCabinetTenureItem) => {
     const depId = t?.positionDefinition?.administrationDepartmentId
@@ -1423,15 +1364,23 @@ export function CabinetsSection({
   return (
     <CabS.CabinetsSectionRoot>
       {/* ── 포스트 상세 패턴: list view(카드 그리드) / detail view(행정부 상세) ── */}
-      <AnimatePresence mode="wait" initial={false}>
+      {/* wait 제거: 리스트·상세 DOM이 커서 exit 끝날 때까지 다음 뷰가 안 뜨면 체감 지연이 큼 → sync + 짧은 opacity만 */}
+      <AnimatePresence mode="sync" initial={false}>
         {cabinetView === 'list' ? (
           <motion.div
             key="cab-list-view"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            style={{ padding: '0' }}
+            transition={{ duration: 0.1, ease: 'easeOut' }}
+            style={{
+              padding: 0,
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              width: '100%',
+            }}
           >
             <CabS.CabListPanel>
               <CabS.CabListToolbarShell>
@@ -1532,92 +1481,37 @@ export function CabinetsSection({
               </CabS.CabListToolbarShell>
               {filteredCabinets.length === 0 ? (
                 <CabS.CabListBody>
-                  <CabS.CabinetEmptyState>
+                  <EmptyStateFill>
                     {cabinetSearchQuery.trim() || cabinetCountryFilter ? (
-                      <>
-                        <CabS.CabinetEmptyIconWrap>
-                          <FiSearch size={28} />
-                        </CabS.CabinetEmptyIconWrap>
-                        <CabS.CabinetEmptyTitle>
-                          검색 결과가 없습니다
-                        </CabS.CabinetEmptyTitle>
-                        <CabS.CabinetEmptyDesc>
-                          다른 검색어나 필터를 사용해 보세요.
-                        </CabS.CabinetEmptyDesc>
-                        <CabS.CabRegisterBtn
-                          type="button"
-                          onClick={() => {
+                      <EmptyStateSpotlight
+                        icon={<FiSearch size={30} strokeWidth={1.75} />}
+                        title="검색 결과가 없습니다"
+                        description="다른 검색어나 필터를 사용해 보세요."
+                        primaryAction={{
+                          label: '필터 초기화',
+                          onClick: () => {
                             setCabinetSearchQuery('')
                             setCabinetCountryFilter('')
-                          }}
-                        >
-                          <FiX size={14} />
-                          필터 초기화
-                        </CabS.CabRegisterBtn>
-                      </>
+                          },
+                          icon: <FiX size={14} />,
+                        }}
+                      />
                     ) : (
-                      <>
-                        <CabS.CabinetEmptyIconWrap>
-                          <FiUsers size={28} />
-                        </CabS.CabinetEmptyIconWrap>
-                        <CabS.CabinetEmptyTitle>
-                          등록된 행정부가 없습니다
-                        </CabS.CabinetEmptyTitle>
-                        <CabS.CabinetEmptyDesc>
-                          행정부는 수반(국가원수·정부수반)의 재임 기록을
-                          기반으로 생성됩니다.
-                        </CabS.CabinetEmptyDesc>
-                        <CabS.CabinetEmptyDesc
-                          style={{
-                            marginTop: -4,
-                            fontSize: 12.5,
-                            color: C.iconColor,
-                          }}
-                        >
-                          역대 수반이 이미 등록돼 있다면{' '}
-                          <strong style={{ color: MAIN }}>
-                            기존 수반 선택
-                          </strong>{' '}
-                          으로, 처음이라면{' '}
-                          <strong style={{ color: MAIN }}>새 수반 등록</strong>
-                          으로 행정부를 만드세요.
-                        </CabS.CabinetEmptyDesc>
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 10,
-                            flexWrap: 'wrap',
-                            justifyContent: 'center',
-                            marginTop: 4,
-                          }}
-                        >
-                          <CabS.CabRegisterBtn
-                            type="button"
-                            onClick={() => {
-                              setRegisterFlow('select')
-                              setRegisterCabinetModalOpen(true)
-                            }}
-                          >
-                            <FiUsers size={14} />
-                            기존 수반으로 등록
-                          </CabS.CabRegisterBtn>
-                          <CabS.CabRegisterBtn
-                            type="button"
-                            onClick={() => {
-                              setRegisterFlow('new')
-                              setRegisterCabinetModalOpen(true)
-                            }}
-                            style={{
-                              background: C.accentSecondaryBg,
-                              borderColor: C.accentSecondaryBorder,
-                            }}
-                          >
-                            <FiPlus size={14} />새 수반과 함께 등록
-                          </CabS.CabRegisterBtn>
-                        </div>
-                      </>
+                      <EmptyStateSpotlight
+                        icon={<FiUsers size={30} strokeWidth={1.75} />}
+                        title="등록된 행정부가 없습니다"
+                        description="행정부는 수반(국가원수·정부수반)의 재임 기록을 기반으로 생성됩니다."
+                        primaryAction={{
+                          label: '새 수반과 함께 등록',
+                          onClick: () => {
+                            setRegisterFlow('new')
+                            setRegisterCabinetModalOpen(true)
+                          },
+                          icon: <FiPlus size={16} strokeWidth={2.25} />,
+                        }}
+                      />
                     )}
-                  </CabS.CabinetEmptyState>
+                  </EmptyStateFill>
                 </CabS.CabListBody>
               ) : (
                 <CabS.CabListBody>
@@ -1905,9 +1799,6 @@ export function CabinetsSection({
                                             if (!isDeleting) {
                                               setSelectedCabinetId(item.id)
                                               setCabinetView('detail')
-                                              pushCabinetParams(item.id, null, {
-                                                replace: false,
-                                              })
                                             }
                                           }}
                                         >
@@ -2207,10 +2098,10 @@ export function CabinetsSection({
           /* ── 상세 뷰: 선택한 행정부 내용 ── */
           <motion.div
             key="cab-detail-view"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.12, ease: 'easeOut' }}
           >
             {hasSelectedCabinet && selectedCabinet && (
               <>
@@ -2220,7 +2111,6 @@ export function CabinetsSection({
                   selectedMinisterId={selectedMinisterId}
                   selectedHeadHistoryId={selectedHeadHistoryId}
                   sortedVisibleMinisters={sortedVisibleMinisters}
-                  pushCabinetParams={pushCabinetParams}
                   setCabinetView={setCabinetView}
                   setSelectedCabinetId={setSelectedCabinetId}
                   setSelectedMinisterId={setSelectedMinisterId}
@@ -2700,52 +2590,53 @@ export function CabinetsSection({
                                 <CabS.HistoryCardList>
                                   {(minister.achievements ?? []).map(
                                     (ach: any) => (
-                                    <CabS.HistoryCard
-                                      key={ach.id}
-                                      onClick={() =>
-                                        setSelectedHistoryId(ach.id)
-                                      }
-                                    >
-                                      <CabS.HistoryCardTitle>
-                                        {ach.title}
-                                      </CabS.HistoryCardTitle>
-                                      {(ach.startDate || ach.endDate) && (
-                                        <CabS.HistoryCardMeta>
-                                          {ach.startDate
-                                            ? formatDate(ach.startDate)
-                                            : '—'}
-                                          {' – '}
-                                          {ach.endDate
-                                            ? formatDate(ach.endDate)
-                                            : '현재'}
-                                        </CabS.HistoryCardMeta>
-                                      )}
-                                      {ach.description && (
-                                        <CabS.HistoryCardExcerpt>
-                                          {stripHtmlToPlain(
-                                            ach.description,
-                                            80,
-                                          )}
-                                        </CabS.HistoryCardExcerpt>
-                                      )}
-                                      <CabS.HistoryCardChevron>
-                                        <FiChevronRight size={13} />
-                                      </CabS.HistoryCardChevron>
-                                      <CabS.HistoryCardDeleteBtn
-                                        type="button"
-                                        title="삭제"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          deleteMinisterHistoryDirect(
-                                            minister.id,
-                                            ach.id,
-                                          )
-                                        }}
+                                      <CabS.HistoryCard
+                                        key={ach.id}
+                                        onClick={() =>
+                                          setSelectedHistoryId(ach.id)
+                                        }
                                       >
-                                        <FiTrash2 size={12} />
-                                      </CabS.HistoryCardDeleteBtn>
-                                    </CabS.HistoryCard>
-                                  ))}
+                                        <CabS.HistoryCardTitle>
+                                          {ach.title}
+                                        </CabS.HistoryCardTitle>
+                                        {(ach.startDate || ach.endDate) && (
+                                          <CabS.HistoryCardMeta>
+                                            {ach.startDate
+                                              ? formatDate(ach.startDate)
+                                              : '—'}
+                                            {' – '}
+                                            {ach.endDate
+                                              ? formatDate(ach.endDate)
+                                              : '현재'}
+                                          </CabS.HistoryCardMeta>
+                                        )}
+                                        {ach.description && (
+                                          <CabS.HistoryCardExcerpt>
+                                            {stripHtmlToPlain(
+                                              ach.description,
+                                              80,
+                                            )}
+                                          </CabS.HistoryCardExcerpt>
+                                        )}
+                                        <CabS.HistoryCardChevron>
+                                          <FiChevronRight size={13} />
+                                        </CabS.HistoryCardChevron>
+                                        <CabS.HistoryCardDeleteBtn
+                                          type="button"
+                                          title="삭제"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            deleteMinisterHistoryDirect(
+                                              minister.id,
+                                              ach.id,
+                                            )
+                                          }}
+                                        >
+                                          <FiTrash2 size={12} />
+                                        </CabS.HistoryCardDeleteBtn>
+                                      </CabS.HistoryCard>
+                                    ),
+                                  )}
                                 </CabS.HistoryCardList>
                               )}
                             </CabS.ProfileSection>
@@ -4045,11 +3936,6 @@ export function CabinetsSection({
                                     onSelectMinister={(tenureId) => {
                                       setSelectedHeadHistoryId(null)
                                       setSelectedMinisterId(tenureId)
-                                      pushCabinetParams(
-                                        selectedCabinet.id,
-                                        tenureId,
-                                        { replace: true },
-                                      )
                                     }}
                                     onMentionPerson={setMentionPersonId}
                                   />

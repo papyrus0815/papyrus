@@ -19,11 +19,6 @@ export type CabinetDetailChromeProps = {
   selectedMinisterId: string | null
   selectedHeadHistoryId: string | null
   sortedVisibleMinisters: unknown[]
-  pushCabinetParams: (
-    cabinetId: string | null,
-    ministerId: string | null,
-    options?: { replace?: boolean },
-  ) => void
   setCabinetView: (view: 'list' | 'detail') => void
   setSelectedCabinetId: (id: string | null) => void
   setSelectedMinisterId: (id: string | null) => void
@@ -50,7 +45,6 @@ export function CabinetDetailChrome({
   selectedMinisterId,
   selectedHeadHistoryId,
   sortedVisibleMinisters,
-  pushCabinetParams,
   setCabinetView,
   setSelectedCabinetId,
   setSelectedMinisterId,
@@ -81,7 +75,6 @@ export function CabinetDetailChrome({
               setSelectedCabinetId(null)
               setSelectedMinisterId(null)
               setSelectedHeadHistoryId(null)
-              pushCabinetParams(null, null)
             }}
           >
             <FiChevronLeft size={14} />
@@ -98,7 +91,6 @@ export function CabinetDetailChrome({
                     setSelectedHistoryId(null)
                     setSelectedHeadHistoryId(null)
                     setEditingHistoryContent(false)
-                    pushCabinetParams(selectedCabinet.id, null)
                   }}
                 >
                   {formatCabinetHeadBreadcrumbLabel(selectedCabinet.headTenure)}

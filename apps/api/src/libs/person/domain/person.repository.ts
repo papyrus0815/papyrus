@@ -217,6 +217,8 @@ export interface IPersonRepository {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]>
+  /** 인물별 선거 후보 행 — 재임에 electionCandidacyId 연결용 */
+  findElectionCandidaciesForTenureLink(personId: string): Promise<any[]>
   findGlobalTenures(): Promise<any[]>
   /** 특정 수반 재임(행정부 수반) 하의 각료 목록 — headTenureId로 Cabinet 조회 후 memberTenures */
   findSubordinateTenures(headTenureId: string): Promise<any[]>

@@ -65,6 +65,12 @@ model Law {
   /// 간단 요약
   summary String? @db.Text
 
+  /// 조 번호(양의 정수만 저장·입력, 표시 시 「제N조」)
+  articleNumber Int? @map("article_number")
+
+  /// 항 번호(양의 정수만 저장·입력, 표시 시 「제M항」)
+  paragraphNumber Int? @map("paragraph_number")
+
   /// 시행/폐지 시점
   startDate DateTime? @map("start_date")
   endDate   DateTime? @map("end_date")
@@ -73,17 +79,22 @@ model Law {
   note String?
 
   //--- 외래키
-  lawTypeId String? @map("law_type_id") @db.Char(36)
-  countryId String? @map("country_id") @db.Char(36)
+  lawTypeId           String? @map("law_type_id") @db.Char(36)
+  countryId           String? @map("country_id") @db.Char(36)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   //--- 관계 필드
   facilities CompanyFacilityLaw[]
   lawType    LawType?             @relation(fields: [lawTypeId], references: [id], onDelete: SetNull)
   country    Country?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry? @relation("LawHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  /// 정당과의 연결 (`politics.prisma` PoliticalPartyLaw)
+  politicalPartyLaws PoliticalPartyLaw[] @relation("PoliticalPartyLawLink")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([historicalCountryId], name: "idx_law_historicalCountryId")
   @@map("law")
 }

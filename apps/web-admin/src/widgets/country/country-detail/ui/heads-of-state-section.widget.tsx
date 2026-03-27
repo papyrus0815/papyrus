@@ -724,11 +724,11 @@ export function HeadsOfStateSection({
         endDate: endDate || undefined,
         termNumber:
           regnalNumber.trim() === ''
-            ? null
+            ? undefined
             : parseInt(regnalNumber, 10) || undefined,
         regnalNumber:
           regnalNumber.trim() === ''
-            ? null
+            ? undefined
             : parseInt(regnalNumber, 10) || undefined,
         notes: notesValue,
         showPositionInfo: showOnEventsPage,
@@ -1143,7 +1143,9 @@ export function HeadsOfStateSection({
           placement.set(t.id, { row: rowIdx, col: colIdx }),
         )
       })
-      const personIds = new Set(withOrder.map(getPersonId).filter(Boolean))
+      const personIds = new Set(
+        withOrder.map(getPersonId).filter((id): id is string => !!id),
+      )
       const tenureByPersonId = new Map<string, any>()
       withOrder.forEach((t: any) => {
         const pid = getPersonId(t)
@@ -1693,7 +1695,10 @@ export function HeadsOfStateSection({
                     )}
                     <AddTenureButton
                       type="button"
-                      onClick={() => setView('register')}
+                      onClick={() => {
+                        resetForm()
+                        setView('register')
+                      }}
                     >
                       <FiPlus size={20} />
                       수반 등록

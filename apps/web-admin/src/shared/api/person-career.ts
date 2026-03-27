@@ -185,6 +185,14 @@ export interface CreateMedicalCareerDto {
 /**
  * 국가원수/왕위 재임 기록 생성 DTO
  */
+export type TenureMandateSourceValue =
+  | 'UNKNOWN'
+  | 'ELECTION'
+  | 'APPOINTMENT'
+  | 'SUCCESSION'
+  | 'HEREDITARY'
+  | 'OTHER'
+
 export interface CreateGovernmentPositionTenureDto {
   personId: string
   positionType:
@@ -201,7 +209,8 @@ export interface CreateGovernmentPositionTenureDto {
     | 'MILITARY_COMMANDER'
     | 'ROYAL_NOBLE_TITLE'
     | 'OTHER' // 직위 타입 (필수)
-  title: string // 직위명 (필수) - 예: "대통령", "국왕", "황제"
+  /** 직위 정의가 있으면 생략 가능 */
+  title?: string // 예: "대통령", "국왕", "황제"
   titleEn?: string // 영문 직위명
   showPositionInfo?: boolean // 사건 타임라인에 직책 정보 표시 여부 (기본값: true)
   countryId?: string // 현대 국가 ID
@@ -239,6 +248,10 @@ export interface CreateGovernmentPositionTenureDto {
   priority?: number
   /** 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 */
   administrationDepartmentId?: string | null
+  /** 재임 권한 근원 */
+  mandateSource?: TenureMandateSourceValue
+  /** 당선된 선거 후보와 1:1 연결 */
+  electionCandidacyId?: string | null
 }
 
 /**

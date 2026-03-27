@@ -174,27 +174,36 @@ export function GovernmentInfoSection({
         {contentTab === 'statistics' && <GovernmentStatisticsTab />}
 
         {contentTab === 'ministries' && (
-          <MinistriesTabSection
-            contentTab={contentTab}
-            effectiveCountryId={effectiveCountryId}
-            isDark={isDark}
-            cabinetOpenMinistryIntent={cabinetMinistryIntent}
-            onConsumedCabinetOpenMinistryIntent={() =>
-              setCabinetMinistryIntent(null)
-            }
-            onNavigateToPositions={() => setContentTab('positions')}
-            onRegisterMilitaryUnit={(departmentId) => {
-              setMilitaryDeptDefaultId(departmentId)
-              setMilitaryUnitEditingId(null)
-              setMilitaryUnitModalOpen(true)
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
             }}
-            onEditMilitaryUnit={(unitId) => {
-              setMilitaryUnitEditingId(unitId)
-              setMilitaryDeptDefaultId(null)
-              setMilitaryUnitModalOpen(true)
-            }}
-            openCategoryModal={openCategoryModal}
-          />
+          >
+            <MinistriesTabSection
+              contentTab={contentTab}
+              effectiveCountryId={effectiveCountryId}
+              isDark={isDark}
+              cabinetOpenMinistryIntent={cabinetMinistryIntent}
+              onConsumedCabinetOpenMinistryIntent={() =>
+                setCabinetMinistryIntent(null)
+              }
+              onNavigateToPositions={() => setContentTab('positions')}
+              onRegisterMilitaryUnit={(departmentId) => {
+                setMilitaryDeptDefaultId(departmentId)
+                setMilitaryUnitEditingId(null)
+                setMilitaryUnitModalOpen(true)
+              }}
+              onEditMilitaryUnit={(unitId) => {
+                setMilitaryUnitEditingId(unitId)
+                setMilitaryDeptDefaultId(null)
+                setMilitaryUnitModalOpen(true)
+              }}
+              openCategoryModal={openCategoryModal}
+            />
+          </div>
         )}
 
         {contentTab === 'positions' && (
@@ -226,10 +235,19 @@ export function GovernmentInfoSection({
         )}
 
         {contentTab === 'organizations' && (
-          <GovernmentOrganizationsTab
-            country={country}
-            effectiveCountryId={effectiveCountryId}
-          />
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <GovernmentOrganizationsTab
+              country={country}
+              effectiveCountryId={effectiveCountryId}
+            />
+          </div>
         )}
       </motion.div>
 

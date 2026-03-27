@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -56,6 +57,13 @@ export class CabinetPoliticalPartyController {
       where: { cabinetId },
       include: {
         party: { select: { id: true, name: true, shortName: true } },
+        electionPartyResult: {
+          include: {
+            election: {
+              select: { id: true, name: true, pollDate: true },
+            },
+          },
+        },
       },
       orderBy: { role: 'asc' },
     })
@@ -66,18 +74,90 @@ export class CabinetPoliticalPartyController {
   async create(
     @Param('cabinetId') cabinetId: string,
     @Req() req: Request,
-    @Body() body: { partyId: string; role: string; notes?: string | null },
+    @Body()
+    body: {
+      partyId: string
+      role: string
+      notes?: string | null
+      provenance?: string
+      electionPartyResultId?: string | null
+    },
   ) {
     await this.ensureCabinetAccess(cabinetId, req)
+
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      include: {
+        headTenure: {
+          select: { countryId: true, historicalCountryId: true },
+        },
+      },
+    })
+    if (!cabinet) {
+      throw new NotFoundException('행정부를 찾을 수 없습니다.')
+    }
+
+    let provenance: 'MANUAL' | 'FROM_ELECTION_PARTY_RESULT' | 'FROM_HEAD_CANDIDACY' | 'OTHER' =
+      'MANUAL'
+    let electionPartyResultId: string | null | undefined = undefined
+
+    if (body.electionPartyResultId) {
+      const epr = await this.prisma.electionPartyResult.findUnique({
+        where: { id: body.electionPartyResultId },
+        include: { election: true },
+      })
+      if (!epr) {
+        throw new BadRequestException('선거 정당 집계를 찾을 수 없습니다.')
+      }
+      if (epr.partyId !== body.partyId) {
+        throw new BadRequestException('선거 집계와 선택한 정당이 일치하지 않습니다.')
+      }
+      const taken = await this.prisma.cabinetPoliticalParty.findFirst({
+        where: { electionPartyResultId: body.electionPartyResultId },
+      })
+      if (taken) {
+        throw new BadRequestException('이 선거 집계는 이미 다른 행정부와 연결되어 있습니다.')
+      }
+
+      const ec = epr.election
+      const ht = cabinet.headTenure
+      const hasElectionScope = ec.countryId != null || ec.historicalCountryId != null
+      if (hasElectionScope && ht) {
+        const match =
+          (ec.countryId != null && ec.countryId === ht.countryId) ||
+          (ec.historicalCountryId != null &&
+            ec.historicalCountryId === ht.historicalCountryId)
+        if (!match) {
+          throw new BadRequestException(
+            '선거 소속 국가가 이 행정부 수반 재임과 맞지 않습니다.',
+          )
+        }
+      }
+
+      provenance = 'FROM_ELECTION_PARTY_RESULT'
+      electionPartyResultId = body.electionPartyResultId
+    } else if (body.provenance && ['MANUAL', 'FROM_HEAD_CANDIDACY', 'OTHER'].includes(body.provenance)) {
+      provenance = body.provenance as any
+    }
+
     const row = await this.prisma.cabinetPoliticalParty.create({
       data: {
         cabinetId,
         partyId: body.partyId,
         role: body.role as any,
         notes: body.notes ?? undefined,
+        provenance: provenance as any,
+        ...(electionPartyResultId != null && { electionPartyResultId }),
       },
       include: {
         party: { select: { id: true, name: true, shortName: true } },
+        electionPartyResult: {
+          include: {
+            election: {
+              select: { id: true, name: true, pollDate: true },
+            },
+          },
+        },
       },
     })
     return serializeElectionBigInt(row)

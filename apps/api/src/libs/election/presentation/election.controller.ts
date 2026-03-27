@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -13,8 +14,14 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
-import { Prisma } from '@prisma/client'
+import {
+  ElectionType,
+  LegislatureTermClosureKind,
+  Prisma,
+} from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+import { buildPartyResultComparisonVsPrevious } from '../domain/election-party-comparison.util'
+import { findPreviousComparableElection } from '../domain/find-previous-election.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
 const electionInclude = {
@@ -41,6 +48,11 @@ const electionInclude = {
   },
 } satisfies Prisma.ElectionInclude
 
+const ELECTION_TYPE_VALUES = new Set<string>(Object.values(ElectionType))
+const CLOSURE_KIND_VALUES = new Set<string>(
+  Object.values(LegislatureTermClosureKind),
+)
+
 @ApiTags('elections')
 @Controller('elections')
 @UseGuards(AuthGuard('jwt'))
@@ -51,10 +63,36 @@ export class ElectionController {
   async list(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
+    /** `true`이면 정당 집계(`ElectionPartyResult`)가 1건 이상인 선거만 */
+    @Query('hasPartyResults') hasPartyResults?: string,
+    /** 콤마로 구분한 `ElectionType` 값 (예: `PRESIDENTIAL_OR_HEAD,PARLIAMENTARY_PROPORTIONAL`) */
+    @Query('electionTypes') electionTypesRaw?: string,
   ) {
     const where: Prisma.ElectionWhereInput = {}
     if (countryId) where.countryId = countryId
     if (historicalCountryId) where.historicalCountryId = historicalCountryId
+
+    if (hasPartyResults === 'true' || hasPartyResults === '1') {
+      where.partyResults = { some: {} }
+    }
+
+    if (electionTypesRaw?.trim()) {
+      const parts = electionTypesRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      const inTypes = parts.filter((p): p is ElectionType =>
+        ELECTION_TYPE_VALUES.has(p),
+      )
+      if (parts.length > 0 && inTypes.length === 0) {
+        where.id = { in: [] }
+      } else if (inTypes.length === 1) {
+        where.electionType = inTypes[0]
+      } else if (inTypes.length > 1) {
+        where.electionType = { in: inTypes }
+      }
+    }
+
     const rows = await this.prisma.election.findMany({
       where: Object.keys(where).length ? where : undefined,
       orderBy: { pollDate: 'desc' },
@@ -431,7 +469,45 @@ export class ElectionController {
       include: electionInclude,
     })
     if (!row) throw new NotFoundException('선거를 찾을 수 없습니다.')
-    return serializeElectionBigInt(row)
+
+    const previousElection = await findPreviousComparableElection(
+      this.prisma,
+      row,
+    )
+    let partyResultComparisonVsPrevious: ReturnType<
+      typeof buildPartyResultComparisonVsPrevious
+    > | null = null
+    if (previousElection) {
+      const prevFull = await this.prisma.election.findUnique({
+        where: { id: previousElection.id },
+        include: {
+          partyResults: {
+            include: {
+              party: {
+                select: {
+                  id: true,
+                  name: true,
+                  shortName: true,
+                  brandColor: true,
+                },
+              },
+            },
+            orderBy: { party: { name: 'asc' } },
+          },
+        },
+      })
+      if (prevFull) {
+        partyResultComparisonVsPrevious = buildPartyResultComparisonVsPrevious(
+          row,
+          prevFull,
+        )
+      }
+    }
+
+    return serializeElectionBigInt({
+      ...row,
+      partyResultComparisonVsPrevious,
+    })
   }
 
   @Post()
@@ -446,13 +522,16 @@ export class ElectionController {
       pollEndDate?: string | null
       legislatureTermStart?: string | null
       legislatureTermEnd?: string | null
+      resultingLegislatureClosureKind?: string | null
+      resultingLegislatureClosureDate?: string | null
+      resultingLegislatureDissolutionNotes?: string | null
       voterTurnoutPercent?: string | number | null
       totalSeats?: number | null
       countryId?: string | null
       historicalCountryId?: string | null
       scopeAdministrativeDivisionId?: string | null
+      convocationOrdinal?: number | null
       description?: string | null
-      notes?: string | null
       accountId?: string | null
     },
   ) {
@@ -470,6 +549,17 @@ export class ElectionController {
         legislatureTermEnd: body.legislatureTermEnd
           ? new Date(body.legislatureTermEnd)
           : undefined,
+        resultingLegislatureClosureKind:
+          body.resultingLegislatureClosureKind === undefined
+            ? undefined
+            : body.resultingLegislatureClosureKind === null
+              ? null
+              : this.parseClosureKind(body.resultingLegislatureClosureKind),
+        resultingLegislatureClosureDate: body.resultingLegislatureClosureDate
+          ? new Date(body.resultingLegislatureClosureDate)
+          : undefined,
+        resultingLegislatureDissolutionNotes:
+          body.resultingLegislatureDissolutionNotes ?? undefined,
         voterTurnoutPercent:
           body.voterTurnoutPercent != null && body.voterTurnoutPercent !== ''
             ? new Prisma.Decimal(String(body.voterTurnoutPercent))
@@ -478,8 +568,8 @@ export class ElectionController {
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
         scopeAdministrativeDivisionId: body.scopeAdministrativeDivisionId ?? undefined,
+        convocationOrdinal: body.convocationOrdinal ?? undefined,
         description: body.description ?? undefined,
-        notes: body.notes ?? undefined,
         accountId: body.accountId ?? undefined,
       },
       include: electionInclude,
@@ -500,13 +590,16 @@ export class ElectionController {
       pollEndDate: string | null
       legislatureTermStart: string | null
       legislatureTermEnd: string | null
+      resultingLegislatureClosureKind: string | null
+      resultingLegislatureClosureDate: string | null
+      resultingLegislatureDissolutionNotes: string | null
       voterTurnoutPercent: string | number | null
       totalSeats: number | null
       countryId: string | null
       historicalCountryId: string | null
       scopeAdministrativeDivisionId: string | null
+      convocationOrdinal: number | null
       description: string | null
-      notes: string | null
     }>,
   ) {
     const data: Record<string, unknown> = {}
@@ -525,6 +618,20 @@ export class ElectionController {
       data.legislatureTermEnd = body.legislatureTermEnd
         ? new Date(body.legislatureTermEnd)
         : null
+    if (body.resultingLegislatureClosureKind !== undefined) {
+      data.resultingLegislatureClosureKind =
+        body.resultingLegislatureClosureKind === null ||
+        body.resultingLegislatureClosureKind === ''
+          ? null
+          : this.parseClosureKind(body.resultingLegislatureClosureKind)
+    }
+    if (body.resultingLegislatureClosureDate !== undefined)
+      data.resultingLegislatureClosureDate = body.resultingLegislatureClosureDate
+        ? new Date(body.resultingLegislatureClosureDate)
+        : null
+    if (body.resultingLegislatureDissolutionNotes !== undefined)
+      data.resultingLegislatureDissolutionNotes =
+        body.resultingLegislatureDissolutionNotes
     if (body.voterTurnoutPercent !== undefined)
       data.voterTurnoutPercent =
         body.voterTurnoutPercent != null && body.voterTurnoutPercent !== ''
@@ -535,8 +642,8 @@ export class ElectionController {
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId
     if (body.scopeAdministrativeDivisionId !== undefined)
       data.scopeAdministrativeDivisionId = body.scopeAdministrativeDivisionId
+    if (body.convocationOrdinal !== undefined) data.convocationOrdinal = body.convocationOrdinal
     if (body.description !== undefined) data.description = body.description
-    if (body.notes !== undefined) data.notes = body.notes
 
     const row = await this.prisma.election.update({
       where: { id },
@@ -554,5 +661,15 @@ export class ElectionController {
   private async ensureElection(id: string) {
     const e = await this.prisma.election.findUnique({ where: { id }, select: { id: true } })
     if (!e) throw new NotFoundException('선거를 찾을 수 없습니다.')
+  }
+
+  private parseClosureKind(
+    raw: string | undefined | null,
+  ): LegislatureTermClosureKind | undefined {
+    if (raw === undefined || raw === null || raw === '') return undefined
+    if (!CLOSURE_KIND_VALUES.has(raw)) {
+      throw new BadRequestException(`유효하지 않은 의회 종료 유형입니다: ${raw}`)
+    }
+    return raw as LegislatureTermClosureKind
   }
 }

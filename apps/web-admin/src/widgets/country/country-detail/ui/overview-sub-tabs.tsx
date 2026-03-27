@@ -10,6 +10,7 @@ export type OverviewSubTab =
   | 'ethnicity'
   | 'person'
   | 'elections'
+  | 'laws'
   | 'treaty'
 
 interface OverviewSubTabsProps {
@@ -63,6 +64,12 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             onClick={() => onSubTabChange('elections')}
           >
             선거·투표
+          </S.TabButton>
+          <S.TabButton
+            $active={activeSubTab === 'laws'}
+            onClick={() => onSubTabChange('laws')}
+          >
+            법령
           </S.TabButton>
           <S.TabButton
             $active={activeSubTab === 'linkedHistorical'}

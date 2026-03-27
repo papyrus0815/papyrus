@@ -39,6 +39,7 @@ import { historicalCountryMockData } from '../mock/historical-country.mock'
 import { CountryFlag } from '../../shared'
 import * as S from './country-detail.styles'
 import { CountryElectionsSection } from './country-elections-section.widget'
+import { CountryLawsSection } from './country-laws-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { LoadingOverlay } from './loading-overlay'
@@ -124,6 +125,7 @@ export type HistoricalCountryTab =
   | 'heads' // 수장 (국왕, 황제 등)
   | 'government' // 행정조직 (관직 정의, 행정기구)
   | 'elections' // 선거·투표 (역사 국가 맥락)
+  | 'laws' // 법령 카탈로그
   | 'ethnicity' // 구성 민족
   | 'succession' // 계승 관계
   | 'membership' // 소속·구성 (신성로마-제후국 등)
@@ -223,8 +225,8 @@ interface HistoricalCountryDetailProps {
   onDelete?: (id: string) => void
   /** URL 연동: 역대 수반 탭으로 직접 진입 시 */
   initialTab?: 'heads'
-  /** 탭 변경 시 URL 업데이트용 (heads일 때만 호출, 그 외 null) */
-  onTabChangeToUrl?: (tab: 'heads' | null) => void
+  /** 탭 변경 시 URL 업데이트용 (heads·선거·투표 등) */
+  onTabChangeToUrl?: (tab: 'heads' | 'elections' | null) => void
 }
 
 /**
@@ -274,7 +276,9 @@ export function HistoricalCountryDetail({
 
   const handleTabChange = (tab: HistoricalCountryTab) => {
     setActiveTab(tab)
-    onTabChangeToUrl?.(tab === 'heads' ? 'heads' : null)
+    if (tab === 'heads') onTabChangeToUrl?.('heads')
+    else if (tab === 'elections') onTabChangeToUrl?.('elections')
+    else onTabChangeToUrl?.(null)
   }
 
   // URL에서 직접 진입·뒤로가기 시 탭 동기화
@@ -347,6 +351,13 @@ export function HistoricalCountryDetail({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    width: '100%',
+                  }}
                 >
                   {activeTab === 'overview' && (
                     <HistoricalOverviewSection
@@ -369,10 +380,35 @@ export function HistoricalCountryDetail({
                     </div>
                   )}
                   {activeTab === 'elections' && (
-                    <div style={{ padding: '16px 24px 32px', maxWidth: '100%' }}>
+                    <div
+                      style={{
+                        padding: '16px 24px 32px',
+                        maxWidth: '100%',
+                        flex: 1,
+                        minHeight: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignSelf: 'stretch',
+                      }}
+                    >
                       <CountryElectionsSection
                         historicalCountryId={country.id}
                       />
+                    </div>
+                  )}
+                  {activeTab === 'laws' && (
+                    <div
+                      style={{
+                        padding: '16px 24px 32px',
+                        maxWidth: '100%',
+                        flex: 1,
+                        minHeight: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignSelf: 'stretch',
+                      }}
+                    >
+                      <CountryLawsSection historicalCountryId={country.id} />
                     </div>
                   )}
                   {activeTab === 'ethnicity' && (
@@ -603,6 +639,7 @@ function HistoricalCountryTabs({
     { id: 'heads', label: '역대 수반' },
     { id: 'government', label: '행정조직' },
     { id: 'elections', label: '선거·투표' },
+    { id: 'laws', label: '법령' },
     { id: 'ethnicity', label: '민족' },
     { id: 'succession', label: '계승' },
     { id: 'membership', label: '소속·구성' },

@@ -36,16 +36,6 @@ export function MinistryCategoryTabBar({
       }}
     >
       <div
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          letterSpacing: '-0.02em',
-          color: C.textMuted,
-        }}
-      >
-        부처 카테고리
-      </div>
-      <div
         role="tablist"
         aria-label="부처 카테고리"
         style={{
@@ -89,8 +79,7 @@ export function MinistryCategoryTabBar({
                   : '1px solid transparent',
                 background: active ? C.accentBg : 'transparent',
                 color: active ? (isDark ? '#e0e7ff' : C.accent) : C.textMuted,
-                transition:
-                  'background 0.14s, border-color 0.14s, color 0.14s',
+                transition: 'background 0.14s, border-color 0.14s, color 0.14s',
               }}
             >
               {cat.name}
@@ -112,11 +101,7 @@ export function MinistryCategoryTabBar({
                     : isDark
                       ? 'rgba(255,255,255,0.06)'
                       : C.badge,
-                  color: active
-                    ? isDark
-                      ? '#e2e8f0'
-                      : C.accent
-                    : C.textFaint,
+                  color: active ? (isDark ? '#e2e8f0' : C.accent) : C.textFaint,
                 }}
               >
                 {n}

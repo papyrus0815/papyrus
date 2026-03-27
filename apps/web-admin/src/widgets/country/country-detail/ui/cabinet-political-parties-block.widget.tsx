@@ -139,6 +139,18 @@ export function CabinetPoliticalPartiesBlock({
                       <FiTrash2 size={13} strokeWidth={2} />
                     </CabS.CabDetailPartyRemoveBtn>
                   </CabS.CabDetailPartyRowMain>
+                  {link.provenance === 'FROM_ELECTION_PARTY_RESULT' &&
+                  link.electionPartyResult?.election?.name ? (
+                    <CabS.CabDetailPartyNotes style={{ fontStyle: 'normal' }}>
+                      출처: 선거 집계 —{' '}
+                      {link.electionPartyResult.election.name}
+                      {link.electionPartyResult.election.pollDate
+                        ? ` (${new Date(
+                            link.electionPartyResult.election.pollDate,
+                          ).toLocaleDateString('ko-KR')})`
+                        : ''}
+                    </CabS.CabDetailPartyNotes>
+                  ) : null}
                   {notesText ? (
                     <CabS.CabDetailPartyNotes>{notesText}</CabS.CabDetailPartyNotes>
                   ) : null}

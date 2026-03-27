@@ -157,19 +157,45 @@ export type ElectionListRow = {
   electionType: string
   status?: string
   pollDate: string
-  countryId?: string | null
+  /** 기간 투표·개표 종료(선택) */
+  pollEndDate?: string | null
+  /** 법정·예정 임기 만료(선택) */
+  legislatureTermEnd?: string | null
+  /** 회차(대수) */
+  convocationOrdinal?: number | null
   candidacies?: { id: string }[]
   ballotOptions?: { id: string }[]
+  countryId?: string | null
 }
+
+/**
+ * 행정부–정당 연결(선거 집계) 목록용 — 국민투표·다중 안건(`REFERENDUM_OR_PLEBISCITE`) 제외
+ */
+export const CABINET_PARTY_LINK_ELECTION_TYPES = [
+  'PRESIDENTIAL_OR_HEAD',
+  'PARLIAMENTARY_CONSTITUENCY',
+  'PARLIAMENTARY_PROPORTIONAL',
+  'LOCAL',
+  'BY_ELECTION',
+  'PRIMARY',
+  'OTHER',
+] as const
 
 export async function getElections(params?: {
   countryId?: string
   historicalCountryId?: string
+  /** 정당 집계가 1건 이상 있는 선거만 */
+  hasPartyResults?: boolean
+  /** `CABINET_PARTY_LINK_ELECTION_TYPES` 등 — 콤마 구분은 클라이언트에서 join */
+  electionTypes?: readonly string[]
 }) {
   const queryParams = new URLSearchParams()
   if (params?.countryId) queryParams.set('countryId', params.countryId)
   if (params?.historicalCountryId)
     queryParams.set('historicalCountryId', params.historicalCountryId)
+  if (params?.hasPartyResults) queryParams.set('hasPartyResults', 'true')
+  if (params?.electionTypes?.length)
+    queryParams.set('electionTypes', params.electionTypes.join(','))
   const qs = queryParams.toString()
   return requestJson<ElectionListRow[]>(`/elections${qs ? `?${qs}` : ''}`)
 }
@@ -233,6 +259,78 @@ export type ElectionPartyResultDto = {
   }
 }
 
+/** DB `LegislatureTermClosureKind` */
+export type LegislatureTermClosureKind =
+  | 'FULL_TERM'
+  | 'EARLY_DISSOLUTION'
+  | 'NO_CONFIDENCE'
+  | 'HEAD_DISSOLUTION_DECREE'
+  | 'REFERENDUM_OR_PLEBISCITE'
+  | 'JUDICIAL_OR_CONSTITUTIONAL'
+  | 'OTHER'
+
+export type LawTypeRow = {
+  id: string
+  name: string
+  description?: string | null
+}
+
+export type LawRow = {
+  id: string
+  name: string
+  summary?: string | null
+  /** 제N조 — 입력·저장은 양의 정수만 */
+  articleNumber?: number | null
+  /** 제M항 */
+  paragraphNumber?: number | null
+  lawTypeId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  lawType?: LawTypeRow | null
+}
+
+export async function getLawTypes() {
+  return requestJson<LawTypeRow[]>(`/law-types`)
+}
+
+export async function createLawType(body: {
+  name: string
+  description?: string | null
+}) {
+  return requestJson<LawTypeRow>(`/law-types`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export type PartyResultComparisonRowDto = {
+  partyId: string
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
+  previousVoteSharePercent?: string | null
+  currentVoteSharePercent?: string | null
+  /** 직전 대비 득표율 변화(퍼센트포인트) */
+  voteShareDeltaPpt: number | null
+  previousSeatsWon: number | null
+  currentSeatsWon: number | null
+  seatsDelta: number | null
+}
+
+export type PartyResultComparisonVsPreviousDto = {
+  previousElection: {
+    id: string
+    name: string
+    shortName?: string | null
+    pollDate: string
+    convocationOrdinal?: number | null
+  }
+  rows: PartyResultComparisonRowDto[]
+}
+
 export type ElectionDetailDto = {
   id: string
   name: string
@@ -252,17 +350,107 @@ export type ElectionDetailDto = {
   countryId?: string | null
   historicalCountryId?: string | null
   scopeAdministrativeDivisionId?: string | null
+  convocationOrdinal?: number | null
+  resultingLegislatureClosureKind?: LegislatureTermClosureKind | null
+  resultingLegislatureClosureDate?: string | null
+  resultingLegislatureDissolutionNotes?: string | null
   description?: string | null
-  notes?: string | null
   candidacies: ElectionCandidacyDto[]
   ballotOptions: ElectionBallotOptionDto[]
   /** 선거별 정당 집계(전국 득표·의석) */
   partyResults?: ElectionPartyResultDto[]
+  /** 동일 유형·범위의 직전 선거 대비 정당 득표·의석 증감 */
+  partyResultComparisonVsPrevious?: PartyResultComparisonVsPreviousDto | null
 }
 
 export async function getElection(electionId: string) {
   return requestJson<ElectionDetailDto>(
     `/elections/${encodeURIComponent(electionId)}`,
+  )
+}
+
+export async function getLaws(params?: {
+  countryId?: string
+  historicalCountryId?: string
+}) {
+  const queryParams = new URLSearchParams()
+  if (params?.countryId) queryParams.set('countryId', params.countryId)
+  if (params?.historicalCountryId)
+    queryParams.set('historicalCountryId', params.historicalCountryId)
+  const qs = queryParams.toString()
+  return requestJson<LawRow[]>(`/laws${qs ? `?${qs}` : ''}`)
+}
+
+export async function createLaw(body: {
+  name: string
+  summary?: string | null
+  articleNumber?: number | null
+  paragraphNumber?: number | null
+  lawTypeId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+}) {
+  return requestJson<LawRow>(`/laws`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateLaw(
+  lawId: string,
+  body: Partial<{
+    name: string
+    summary: string | null
+    articleNumber: number | null
+    paragraphNumber: number | null
+    lawTypeId: string | null
+  }>,
+) {
+  return requestJson<LawRow>(`/laws/${encodeURIComponent(lawId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function deleteLaw(lawId: string) {
+  return requestJson<void>(`/laws/${encodeURIComponent(lawId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export type PartyLawLinkDto = {
+  id: string
+  partyId: string
+  lawId: string
+  relevanceNote?: string | null
+  sortOrder: number
+  law?: LawRow
+}
+
+export async function getPartyLaws(partyId: string) {
+  return requestJson<PartyLawLinkDto[]>(
+    `/political-parties/${encodeURIComponent(partyId)}/laws`,
+  )
+}
+
+export async function addPartyLaw(
+  partyId: string,
+  body: {
+    lawId: string
+    relevanceNote?: string | null
+    sortOrder?: number
+  },
+) {
+  return requestJson<PartyLawLinkDto>(
+    `/political-parties/${encodeURIComponent(partyId)}/laws`,
+    { method: 'POST', body: JSON.stringify(body) },
+  )
+}
+
+export async function removePartyLaw(partyId: string, linkId: string) {
+  return requestJson<void>(
+    `/political-parties/${encodeURIComponent(partyId)}/laws/${encodeURIComponent(linkId)}`,
+    { method: 'DELETE' },
   )
 }
 
@@ -280,8 +468,11 @@ export async function createElection(body: {
   countryId?: string | null
   historicalCountryId?: string | null
   scopeAdministrativeDivisionId?: string | null
+  convocationOrdinal?: number | null
+  resultingLegislatureClosureKind?: LegislatureTermClosureKind | null
+  resultingLegislatureClosureDate?: string | null
+  resultingLegislatureDissolutionNotes?: string | null
   description?: string | null
-  notes?: string | null
 }) {
   return requestJson<ElectionDetailDto>(`/elections`, {
     method: 'POST',
@@ -305,8 +496,11 @@ export async function updateElection(
     countryId: string | null
     historicalCountryId: string | null
     scopeAdministrativeDivisionId: string | null
+    convocationOrdinal: number | null
+    resultingLegislatureClosureKind: LegislatureTermClosureKind | null
+    resultingLegislatureClosureDate: string | null
+    resultingLegislatureDissolutionNotes: string | null
     description: string | null
-    notes: string | null
   }>,
 ) {
   return requestJson<ElectionDetailDto>(
@@ -530,14 +724,44 @@ export function labelNominationType(value: string) {
   return NOMINATION_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value
 }
 
+export const LEGISLATURE_CLOSURE_KIND_OPTIONS: { value: string; label: string }[] =
+  [
+    { value: 'FULL_TERM', label: '정식 임기 만료' },
+    { value: 'EARLY_DISSOLUTION', label: '조기 해산' },
+    { value: 'NO_CONFIDENCE', label: '불신임·내각 총사퇴' },
+    { value: 'HEAD_DISSOLUTION_DECREE', label: '수반 해산권·명령' },
+    { value: 'REFERENDUM_OR_PLEBISCITE', label: '국민투표·개헌' },
+    { value: 'JUDICIAL_OR_CONSTITUTIONAL', label: '사법·헌법재판' },
+    { value: 'OTHER', label: '기타' },
+  ]
+
+export function labelLegislatureClosureKind(value: string) {
+  return (
+    LEGISLATURE_CLOSURE_KIND_OPTIONS.find((o) => o.value === value)?.label ??
+    value
+  )
+}
+
 // --- Cabinet — political parties ---
+export type CabinetPartyProvenanceValue =
+  | 'MANUAL'
+  | 'FROM_ELECTION_PARTY_RESULT'
+  | 'FROM_HEAD_CANDIDACY'
+  | 'OTHER'
+
 export type CabinetPartyLink = {
   id: string
   cabinetId: string
   partyId: string
   role: string
   notes?: string | null
+  provenance?: CabinetPartyProvenanceValue
+  electionPartyResultId?: string | null
   party?: { id: string; name: string; shortName?: string | null }
+  electionPartyResult?: {
+    id: string
+    election?: { id: string; name: string; pollDate?: string | null } | null
+  } | null
 }
 
 export async function getCabinetPoliticalParties(cabinetId: string) {
@@ -548,7 +772,13 @@ export async function getCabinetPoliticalParties(cabinetId: string) {
 
 export async function addCabinetPoliticalParty(
   cabinetId: string,
-  body: { partyId: string; role: string; notes?: string | null },
+  body: {
+    partyId: string
+    role: string
+    notes?: string | null
+    provenance?: CabinetPartyProvenanceValue
+    electionPartyResultId?: string | null
+  },
 ) {
   return requestJson<CabinetPartyLink>(
     `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/political-parties`,

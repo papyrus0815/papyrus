@@ -179,6 +179,10 @@ export default function CountryPage() {
     /\/history\/country\/[^/]+\/elections(\/party\/[^/?#]+)?\/?$/.test(
       location.pathname,
     )
+  /** 법령 탭 전용 URL */
+  const isLawsUrl = /\/history\/country\/[^/]+\/laws\/?$/.test(
+    location.pathname,
+  )
   /** 대시보드 탭 전용 URL 여부 (/history/country/:id/dashboard) */
   const isDashboardUrl = /\/history\/country\/[^/]+\/dashboard\/?$/.test(
     location.pathname,
@@ -792,6 +796,7 @@ export default function CountryPage() {
         | 'regions'
         | 'government'
         | 'elections'
+        | 'laws'
         | null,
     ) => {
       if (!selectedId) return
@@ -809,6 +814,8 @@ export default function CountryPage() {
         navigate(pathKeys.history.countryGovernment(selectedId))
       else if (tab === 'elections')
         navigate(pathKeys.history.countryElections(selectedId))
+      else if (tab === 'laws')
+        navigate(pathKeys.history.countryLaws(selectedId))
       else navigate(pathKeys.history.countryDetail(selectedId))
     },
     [navigate, selectedId],
@@ -1329,7 +1336,9 @@ export default function CountryPage() {
                                     ? 'government'
                                     : isElectionsUrl
                                       ? 'elections'
-                                      : undefined
+                                      : isLawsUrl
+                                        ? 'laws'
+                                        : undefined
                       }
                       onDetailTabChange={handleDetailTabChange}
                       onPersonInnerTabChange={handlePersonInnerTabChange}
