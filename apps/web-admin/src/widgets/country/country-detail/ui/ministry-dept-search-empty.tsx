@@ -14,6 +14,7 @@ export function MinistryDeptSearchEmpty({
 }: MinistryDeptSearchEmptyProps) {
   return (
     <EmptyStateSpotlight
+      flat
       icon={<FiSearch size={30} strokeWidth={1.75} />}
       title="검색 결과가 없습니다"
       description="이 카테고리에서 검색과 일치하는 부처가 없습니다."

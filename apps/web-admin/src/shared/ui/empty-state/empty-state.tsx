@@ -46,7 +46,7 @@ export function EmptyStateFeatureCard({
   return (
     <S.FeatureCardWrap>
       <S.FeatureCardInner $cardBorder={cardBorder} $flat={flat}>
-        <S.FeatureCardIconWrap>{icon}</S.FeatureCardIconWrap>
+        <S.FeatureCardIconWrap $flat={flat}>{icon}</S.FeatureCardIconWrap>
         <S.FeatureCardTitle>{title}</S.FeatureCardTitle>
         <S.FeatureCardDesc>{description}</S.FeatureCardDesc>
         <S.PrimaryButton

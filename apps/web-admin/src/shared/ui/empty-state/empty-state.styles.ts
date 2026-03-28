@@ -32,7 +32,7 @@ export const SimpleBox = styled.div<{ $border: 'dashed' | 'solid' | 'none' }>`
           : `1px solid ${palette.border}`
     return css`
       color: ${palette.textMuted};
-      background: ${palette.bgSubtle};
+      background: ${theme.mode === 'dark' ? 'transparent' : palette.bgSubtle};
       border: ${borderValue};
     `
   }}
@@ -61,27 +61,42 @@ export const FeatureCardInner = styled.div<{
       padding: 48px 32px;
       border-radius: 20px;
       text-align: center;
-      background: ${palette.cardBg};
+      background: ${theme.mode === 'dark' && $flat
+        ? 'transparent'
+        : palette.cardBg};
       border: ${$cardBorder ? `1px solid ${palette.border}` : 'none'};
       box-shadow: ${boxShadow};
     `
   }}
 `
 
-export const FeatureCardIconWrap = styled.div`
+export const FeatureCardIconWrap = styled.div<{ $flat?: boolean }>`
   width: 64px;
   height: 64px;
   margin: 0 auto 20px;
   border-radius: 20px;
-  background: linear-gradient(
-    145deg,
-    rgba(99, 102, 241, 0.12) 0%,
-    rgba(99, 102, 241, 0.06) 100%
-  );
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${({ theme }) => sectionPalette(theme).accent};
+  ${({ theme, $flat }) => {
+    const palette = sectionPalette(theme)
+    if (theme.mode === 'dark' && $flat) {
+      return css`
+        background: transparent;
+        border: 1px solid ${palette.borderMid};
+        color: ${palette.accent};
+        box-shadow: none;
+      `
+    }
+    return css`
+      background: linear-gradient(
+        145deg,
+        rgba(99, 102, 241, 0.12) 0%,
+        rgba(99, 102, 241, 0.06) 100%
+      );
+      color: ${palette.accent};
+    `
+  }}
 `
 
 export const FeatureCardTitle = styled.h3`
@@ -151,12 +166,19 @@ export const SpotlightIconWrap = styled.div<{ $flat: boolean }>`
   justify-content: center;
   ${({ theme, $flat }) => {
     const palette = sectionPalette(theme)
+    if (theme.mode === 'dark' && $flat) {
+      return css`
+        background: transparent;
+        color: ${palette.accent};
+        box-shadow: none;
+        border: 1px solid ${palette.borderMid};
+      `
+    }
     const background =
       theme.mode === 'dark'
         ? 'linear-gradient(145deg, rgba(99,102,241,0.22), rgba(99,102,241,0.08))'
         : 'linear-gradient(145deg, #eef2ff, #f5f3ff)'
-    const color =
-      theme.mode === 'dark' ? '#a5b4fc' : palette.accent
+    const color = theme.mode === 'dark' ? '#a5b4fc' : palette.accent
     const boxShadow = $flat
       ? 'none'
       : theme.mode === 'dark'

@@ -349,6 +349,8 @@ export type ElectionDetailDto = {
   totalSeats?: number | null
   countryId?: string | null
   historicalCountryId?: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
   scopeAdministrativeDivisionId?: string | null
   convocationOrdinal?: number | null
   resultingLegislatureClosureKind?: LegislatureTermClosureKind | null

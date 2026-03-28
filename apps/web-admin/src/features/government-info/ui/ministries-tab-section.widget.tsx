@@ -4,15 +4,15 @@ import { motion } from 'framer-motion'
 import { FiBriefcase, FiGrid, FiPlus, FiSearch } from 'react-icons/fi'
 
 import type { GovernmentContentTab } from '@/features/government-info/model/government-content-tab'
+import { useMinistriesTab } from '@/features/government-info/model/use-ministries-tab'
+import { emptyMinistryFormFields } from '@/shared/lib/ministry-department/ministry-department-utils'
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import {
   EmptyStateFeatureCard,
   EmptyStateFill,
   EmptyStateSimple,
   EmptyStateSpotlight,
 } from '@/shared/ui/empty-state/empty-state'
-import { useMinistriesTab } from '@/features/government-info/model/use-ministries-tab'
-import { emptyMinistryFormFields } from '@/shared/lib/ministry-department/ministry-department-utils'
-import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { MinistryCategoryTabBar } from '@/widgets/country/country-detail/ui/ministry-category-tab-bar'
 import { MinistryDepartmentDetailView } from '@/widgets/country/country-detail/ui/ministry-department-detail.view'
 import { MinistryDepartmentTree } from '@/widgets/country/country-detail/ui/ministry-department-tree'
@@ -239,13 +239,13 @@ export function MinistriesTabSection({
             </EmptyStateFill>
           ) : ministriesLoading ? (
             <EmptyStateFill>
-              <EmptyStateSimple border="solid">
-                불러오는 중…
-              </EmptyStateSimple>
+              <EmptyStateSimple border="solid">불러오는 중…</EmptyStateSimple>
             </EmptyStateFill>
           ) : categoriesList.length === 0 ? (
             <EmptyStateFill>
               <EmptyStateFeatureCard
+                flat
+                cardBorder={false}
                 icon={<FiPlus size={28} strokeWidth={2.5} />}
                 title="등록된 부처 카테고리가 없습니다"
                 description="먼저 카테고리를 추가한 뒤, 해당 카테고리에 부처를 등록하세요."
@@ -394,7 +394,10 @@ export function MinistriesTabSection({
                         >
                           {deptsInCat.length === 0 ? (
                             <EmptyStateSpotlight
-                              icon={<FiBriefcase size={30} strokeWidth={1.75} />}
+                              flat
+                              icon={
+                                <FiBriefcase size={30} strokeWidth={1.75} />
+                              }
                               title="등록된 부처가 없습니다"
                               description="이 카테고리에 첫 부처를 등록하면 목록과 계층이 여기에 표시됩니다."
                               primaryAction={{

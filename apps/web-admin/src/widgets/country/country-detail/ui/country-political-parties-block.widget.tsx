@@ -2,7 +2,7 @@
  * 국가 상세 — 선거·투표 탭 상단: 이 국가 소속 정당(PoliticalParty) 등록·편집
  * 정당 등록/수정은 인물 등록 모달(PersonRegisterViewModal)과 동일한 셸 사용
  */
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -117,10 +117,13 @@ import {
   PartyDetailTopActions,
   PartyDetailTopBar,
   PartyDetailTopLeft,
-  PartyIdeologySpectrumDot,
+  PartyIdeologySpectrumBubble,
+  PartyIdeologySpectrumBubbleAnchor,
   PartyIdeologySpectrumEnds,
   PartyIdeologySpectrumLabel,
-  PartyIdeologySpectrumTrack,
+  PartyIdeologySpectrumPin,
+  PartyIdeologySpectrumStage,
+  PartyIdeologySpectrumTrackBar,
   PartyIdeologySpectrumWrap,
   PartyInfographicCard,
   PartyInfographicCardBody,
@@ -1186,6 +1189,51 @@ export function CountryPoliticalPartiesBlock({
     enabled: !!scopeKey,
   })
 
+  /** 스펙트럼 점·연정 띠·범례가 같은 좌표·색을 쓰도록 한 번만 계산 */
+  const partyInfographicRows = useMemo(() => {
+    return parties.map((p, i) => {
+      const base = ideologySpectrumLeftPct(p.position as PoliticalPosition)
+      const jitter = ((i * 11 + p.name.length) % 7) - 3
+      const leftPct = Math.min(97, Math.max(3, base + jitter * 0.35))
+      const displayName = p.shortName?.trim() || p.name
+      const brandColor =
+        normalizeBrandColorInput(p.brandColor ?? '') ??
+        partyFallbackBrandColor(p.id)
+      return { party: p, leftPct, displayName, brandColor }
+    })
+  }, [parties])
+
+  /** 범례·연정 띠는 스펙트럼 좌→우 순서와 맞춤 */
+  const partiesSpectrumSorted = useMemo(
+    () => [...partyInfographicRows].sort((a, b) => a.leftPct - b.leftPct),
+    [partyInfographicRows],
+  )
+
+  /** 스펙트럼 말풍선: 좌표가 가까우면 위로 레인을 나눠 겹침 완화 */
+  const spectrumBubbleLanes = useMemo(() => {
+    const THRESHOLD_PCT = 8.5
+    const sorted = [...partyInfographicRows].sort(
+      (a, b) => a.leftPct - b.leftPct,
+    )
+    const laneByPartyId = new Map<string, number>()
+    let prevLeft = -Infinity
+    let prevLane = 0
+    for (const row of sorted) {
+      let lane = 0
+      if (row.leftPct - prevLeft < THRESHOLD_PCT) {
+        lane = Math.min(prevLane + 1, 4)
+      }
+      laneByPartyId.set(row.party.id, lane)
+      prevLeft = row.leftPct
+      prevLane = lane
+    }
+    let maxLane = 0
+    for (const v of laneByPartyId.values()) {
+      if (v > maxLane) maxLane = v
+    }
+    return { laneByPartyId, maxLane }
+  }, [partyInfographicRows])
+
   const { data: detailParty, isLoading: detailLoading } = useQuery({
     queryKey: ['political-parties', 'detail', selectedPartyId],
     queryFn: () => politicalPartyApi.getById(selectedPartyId!),
@@ -1617,57 +1665,81 @@ export function CountryPoliticalPartiesBlock({
                   정당 스펙트럼 · 연정 띠
                 </PartyInfographicKickerTitle>
                 <PartyInfographicKickerDesc>
-                  좌–우 스펙트럼 위 점은 성향(입력값) 기준이며, 아래 색 띠는 각
-                  정당 브랜드 색 비율입니다.
+                  말풍선·막대 위 포인트·아래 띠는 정당 브랜드 색으로 맞춥니다.
+                  막대는 좌·우 성향 축입니다. 가까운 위치의 말풍선은 위로 나눠 겹치지
+                  않게 배치합니다. 아래 카드 그리드는 등록·목록 순서입니다.
                 </PartyInfographicKickerDesc>
               </PartyInfographicKickerLeft>
             </PartyInfographicKicker>
 
             <PartyIdeologySpectrumWrap>
-              <PartyIdeologySpectrumLabel>
+              <span
+                id="party-spectrum-axis-help"
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  width: 1,
+                  height: 1,
+                  padding: 0,
+                  margin: -1,
+                  overflow: 'hidden',
+                  clip: 'rect(0, 0, 0, 0)',
+                  whiteSpace: 'nowrap',
+                  border: 0,
+                }}
+              >
+                가로축은 좌에서 우로 갈수록 정치적 성향이 우측으로 이동하는
+                대략적인 배치입니다. 말풍선은 서로 가까우면 위아래로 나뉩니다.
+              </span>
+              <PartyIdeologySpectrumLabel id="party-spectrum-axis-label">
                 이념·성향 축 (좌 → 우)
               </PartyIdeologySpectrumLabel>
-              <PartyIdeologySpectrumTrack aria-hidden>
-                {parties.map((p, i) => {
-                  const base = ideologySpectrumLeftPct(
-                    p.position as PoliticalPosition,
-                  )
-                  const jitter = ((i * 11 + p.name.length) % 7) - 3
-                  const leftPct = Math.min(
-                    97,
-                    Math.max(3, base + jitter * 0.35),
-                  )
-                  const fill =
-                    normalizeBrandColorInput(p.brandColor ?? '') ??
-                    partyFallbackBrandColor(p.id)
-                  return (
-                    <PartyIdeologySpectrumDot
+              <PartyIdeologySpectrumStage
+                role="group"
+                aria-labelledby="party-spectrum-axis-label"
+                aria-describedby="party-spectrum-axis-help"
+                $maxLane={spectrumBubbleLanes.maxLane}
+              >
+                {partyInfographicRows.map(
+                  ({ party: p, leftPct, displayName, brandColor }, stack) => (
+                    <PartyIdeologySpectrumBubbleAnchor
                       key={p.id}
                       $leftPct={leftPct}
-                      $fill={fill}
-                      title={`${p.name}${
+                      $stack={stack}
+                      $lane={spectrumBubbleLanes.laneByPartyId.get(p.id) ?? 0}
+                      aria-label={`${p.name}${
                         p.position
-                          ? ` · ${labelPoliticalPosition(p.position)}`
+                          ? `, ${labelPoliticalPosition(p.position)}`
                           : ''
                       }`}
-                    />
-                  )
-                })}
-              </PartyIdeologySpectrumTrack>
+                    >
+                      <PartyIdeologySpectrumBubble
+                        $brand={brandColor}
+                        title={p.name}
+                      >
+                        {displayName}
+                      </PartyIdeologySpectrumBubble>
+                      <PartyIdeologySpectrumPin
+                        $fill={brandColor}
+                        aria-hidden
+                      />
+                    </PartyIdeologySpectrumBubbleAnchor>
+                  ),
+                )}
+                <PartyIdeologySpectrumTrackBar aria-hidden />
+              </PartyIdeologySpectrumStage>
               <PartyIdeologySpectrumEnds>
                 <span>좌</span>
                 <span>우</span>
               </PartyIdeologySpectrumEnds>
             </PartyIdeologySpectrumWrap>
 
-            <PartyCoalitionStrip aria-label="정당 브랜드 색 비율">
-              {parties.map((p) => (
+            <PartyCoalitionStrip aria-label="정당 구성 비율 (좌→우 성향 축 순)">
+              {partiesSpectrumSorted.map(({ party: p, brandColor }) => (
                 <PartyCoalitionSegment
                   key={p.id}
-                  $color={
-                    normalizeBrandColorInput(p.brandColor ?? '') ??
-                    partyFallbackBrandColor(p.id)
-                  }
+                  $color={brandColor}
                   title={p.shortName?.trim() || p.name}
                 />
               ))}
@@ -1681,7 +1753,6 @@ export function CountryPoliticalPartiesBlock({
                   <PartyInfographicCard
                     key={p.id}
                     type="button"
-                    $accent={accent}
                     onClick={() =>
                       navigate(
                         pathKeys.history.countryElectionPartyDetail(

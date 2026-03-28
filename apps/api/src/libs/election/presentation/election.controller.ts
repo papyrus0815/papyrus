@@ -25,6 +25,8 @@ import { findPreviousComparableElection } from '../domain/find-previous-election
 import { serializeElectionBigInt } from '../election-serialize.util'
 
 const electionInclude = {
+  country: { select: { id: true, name: true } },
+  historicalCountry: { select: { id: true, name: true } },
   candidacies: {
     include: {
       person: { select: { id: true, name: true, surname: true } },

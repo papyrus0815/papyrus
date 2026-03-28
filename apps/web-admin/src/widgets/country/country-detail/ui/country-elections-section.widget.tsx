@@ -22,6 +22,7 @@ import styled, { useTheme } from 'styled-components'
 
 import { useCountry } from '@/entities/country/api'
 import { usePersons } from '@/entities/person/api'
+import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import {
   ELECTION_STATUS_OPTIONS,
   ELECTION_TYPE_OPTIONS,
@@ -68,7 +69,6 @@ import {
 } from '@/shared/ui/empty-state/empty-state'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
-import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import {
   PersonRegisterModalBox,
   PersonRegisterModalCloseBtn,
@@ -92,33 +92,56 @@ import {
   TabNavigation,
   Textarea,
 } from '@/shared/ui/register-form-layout'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 
+import {
+  HistoryArticleEditorWrap,
+  HistoryArticleInner,
+  HistoryArticleProse,
+} from './cabinets-section.styled'
 import { CountryPoliticalPartiesBlock } from './country-political-parties-block.widget'
 import {
+  BallotOptionEditInput,
+  BallotOptionEditRow,
+  CandidacyNameStrong,
+  CandidacyPartyMeta,
   DataTable,
   DataTableCard,
   DataTd,
+  DataTdRight,
   DataTh,
+  DataThActions72,
+  DataThActions96,
+  DataThActions104,
   DataTr,
   DetailColumn,
   DetailHeaderIconBtn,
   DetailTitle,
   DetailToolbar,
   ElectedBadge,
+  ElectionComparisonLabelIcon,
+  ElectionComparisonMetaLine,
+  ElectionComparisonSectionBlock,
   ElectionDetailBadgeRow,
+  ElectionDetailCountryMeta,
   ElectionDetailEmptyCard,
   ElectionDetailEmptyTitle,
+  ElectionDetailHeaderMain,
+  ElectionDetailHelpNote,
+  ElectionDetailPanelStack,
   ElectionDetailStatCard,
   ElectionDetailStatLabel,
   ElectionDetailStatValue,
   ElectionDetailStatsGrid,
+  ElectionDetailStatsScrollWrap,
   ElectionDetailStatusBadge,
   ElectionDetailSummaryPanel,
   ElectionDetailSurface,
   ElectionDetailTypeBadge,
   ElectionListScrollArea,
   ElectionListStack,
+  ElectionNarrativeStackBlock,
   ElectionNavButton,
   ElectionNavEndLine,
   ElectionNavMeta,
@@ -126,6 +149,12 @@ import {
   EmptyHint,
   InlineTextInput,
   ListColumn,
+  PartyLegendDeltaHint,
+  PartyMetricSegmentBtn,
+  PartyMetricSegmentedGroup,
+  PartyMetricTitleTight,
+  PartyMetricToolbarRow,
+  PartyResultDeltaTd,
   PartyShareDonutClip,
   PartyShareDonutHole,
   PartyShareDonutInner,
@@ -139,6 +168,8 @@ import {
   PartyShareName,
   PartyShareStats,
   PartyShareSwatch,
+  PartyTableCellStrong,
+  PoliticsElectionSubTabNav,
   PoliticsTabPanel,
   PoliticsTabSubsection,
   ReferendumBallotAddRow,
@@ -159,21 +190,14 @@ import {
   RowActions,
   RowIconBtn,
   SectionHeaderRow,
+  SectionHeaderRowNarrative,
+  SectionHeaderRowSubsection,
+  SectionHeaderRowWrapTight,
   SplitMainRow,
   SubsectionAddBtn,
-  SubsectionHeaderBlock,
-  SubsectionHeading,
   SubsectionLabel,
 } from './country-politics-tab.styles'
-import {
-  HistoryArticleEditorWrap,
-  HistoryArticleInner,
-  HistoryArticleProse,
-} from './cabinets-section.styled'
-import {
-  MapRegionTabButton,
-  MapRegionTabNav,
-} from './map-region-section.styles'
+import { MapRegionTabButton } from './map-region-section.styles'
 
 /** RichTextEditor HTML — 시각적 빈 본문이면 null (저장 시) */
 function optionalRichTextHtmlOrNull(html: string): string | null {
@@ -195,6 +219,15 @@ function optionalRichTextHtmlOrNull(html: string): string | null {
 
 function hasRichTextContent(html: string): boolean {
   return optionalRichTextHtmlOrNull(html) != null
+}
+
+function electionScopeCountryLabel(detail: ElectionDetailDto): string | null {
+  const modern = detail.country?.name?.trim()
+  const hist = detail.historicalCountry?.name?.trim()
+  if (modern && hist) return `${modern} · ${hist}`
+  if (hist) return hist
+  if (modern) return modern
+  return null
 }
 
 /** 서술·설명 블록 — 연대표 개요 수정 버튼과 유사 */
@@ -246,16 +279,23 @@ function electionListParams(input: {
   return {}
 }
 
-function electionScopeBody(input: {
-  countryId?: string
-  historicalCountryId?: string
-}): { countryId: string | null; historicalCountryId: string | null } {
-  if (input.historicalCountryId) {
-    return { countryId: null, historicalCountryId: input.historicalCountryId }
+/**
+ * 선거 저장 시 국가 범위 — 역사 국가 상세 페이지면 페이지의 역사 국가만,
+ * 현대 국가 상세면 현대 국가 ID + (선택) 역사 국가 ID.
+ */
+function resolveElectionScopeForSubmit(
+  pageScope: { countryId?: string; historicalCountryId?: string },
+  selectedHistoricalCountryId: string,
+): { countryId: string | null; historicalCountryId: string | null } {
+  if (pageScope.historicalCountryId) {
+    return {
+      countryId: null,
+      historicalCountryId: pageScope.historicalCountryId,
+    }
   }
   return {
-    countryId: input.countryId ?? null,
-    historicalCountryId: null,
+    countryId: pageScope.countryId ?? null,
+    historicalCountryId: selectedHistoricalCountryId.trim() || null,
   }
 }
 
@@ -642,6 +682,11 @@ export function CountryElectionsSection({
     [countryId, historicalCountryId],
   )
 
+  const pickerModernCountryId =
+    countryId && !historicalCountryId ? countryId : ''
+  const { data: historicalCountryOptions = [] } =
+    useHistoricalCountriesByModernCountry(pickerModernCountryId)
+
   const [electionModal, setElectionModal] = useState<
     | { mode: 'create' }
     | {
@@ -919,10 +964,9 @@ export function CountryElectionsSection({
           }
         />
 
-        <MapRegionTabNav
+        <PoliticsElectionSubTabNav
           role="tablist"
           aria-label="정당·선거 하위 메뉴"
-          style={{ marginBottom: 0 }}
         >
           <MapRegionTabButton
             type="button"
@@ -942,7 +986,7 @@ export function CountryElectionsSection({
           >
             선거·투표
           </MapRegionTabButton>
-        </MapRegionTabNav>
+        </PoliticsElectionSubTabNav>
 
         {politicsViewTab === 'parties' ? (
           <CountryPoliticalPartiesBlock
@@ -954,9 +998,6 @@ export function CountryElectionsSection({
 
         {politicsViewTab === 'elections' ? (
           <ElectionsPoliticsTabSubsection aria-label="선거 목록·상세">
-            <SubsectionHeaderBlock>
-              <SubsectionHeading>선거</SubsectionHeading>
-            </SubsectionHeaderBlock>
             <SplitMainRow>
               <ListColumn>
                 {listLoading ? (
@@ -1165,6 +1206,7 @@ export function CountryElectionsSection({
                 ? electionModal.initialTab
                 : undefined
             }
+            historicalCountryOptions={historicalCountryOptions}
             saving={saveElectionMut.isPending}
             onClose={() => setElectionModal(null)}
             onSubmit={(payload) => {
@@ -1505,10 +1547,15 @@ function ElectionDetailPanel({
   }, [isReferendum, sortedBallotOptions])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <SectionHeaderRow style={{ alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
+    <ElectionDetailPanelStack>
+      <SectionHeaderRow>
+        <ElectionDetailHeaderMain>
           <DetailTitle>{electionPrimaryTitle(detail)}</DetailTitle>
+          {electionScopeCountryLabel(detail) ? (
+            <ElectionDetailCountryMeta>
+              국가 · {electionScopeCountryLabel(detail)}
+            </ElectionDetailCountryMeta>
+          ) : null}
           <ElectionDetailSummaryPanel>
             <ElectionDetailBadgeRow>
               <ElectionDetailTypeBadge>
@@ -1518,90 +1565,95 @@ function ElectionDetailPanel({
                 {labelElectionStatus(detail.status)}
               </ElectionDetailStatusBadge>
             </ElectionDetailBadgeRow>
-            <ElectionDetailStatsGrid>
-              <ElectionDetailStatCard>
-                <ElectionDetailStatLabel>투표일</ElectionDetailStatLabel>
-                <ElectionDetailStatValue>
-                  {formatPollDate(detail.pollDate)}
-                </ElectionDetailStatValue>
-              </ElectionDetailStatCard>
-              {detail.pollEndDate != null &&
-              String(detail.pollEndDate).trim() !== '' ? (
+            <ElectionDetailStatsScrollWrap>
+              <ElectionDetailStatsGrid>
                 <ElectionDetailStatCard>
-                  <ElectionDetailStatLabel>투표 종료</ElectionDetailStatLabel>
+                  <ElectionDetailStatLabel>투표일</ElectionDetailStatLabel>
                   <ElectionDetailStatValue>
-                    {formatPollDate(detail.pollEndDate)}
+                    {formatPollDate(detail.pollDate)}
                   </ElectionDetailStatValue>
                 </ElectionDetailStatCard>
-              ) : null}
-              {detail.convocationOrdinal != null ? (
-                <ElectionDetailStatCard>
-                  <ElectionDetailStatLabel>회차</ElectionDetailStatLabel>
-                  <ElectionDetailStatValue>
-                    {detail.convocationOrdinal}차
-                  </ElectionDetailStatValue>
-                </ElectionDetailStatCard>
-              ) : null}
-              {detail.legislatureTermStart || detail.legislatureTermEnd ? (
-                <ElectionDetailStatCard>
-                  <ElectionDetailStatLabel>의회 임기</ElectionDetailStatLabel>
-                  <ElectionDetailStatValue>
-                    {detail.legislatureTermStart
-                      ? formatPollDate(detail.legislatureTermStart)
-                      : '—'}
-                    {' — '}
-                    {detail.legislatureTermEnd
-                      ? formatPollDate(detail.legislatureTermEnd)
-                      : '—'}
-                  </ElectionDetailStatValue>
-                </ElectionDetailStatCard>
-              ) : null}
-              {detail.voterTurnoutPercent != null &&
-              String(detail.voterTurnoutPercent).trim() !== '' ? (
-                <ElectionDetailStatCard>
-                  <ElectionDetailStatLabel>투표율</ElectionDetailStatLabel>
-                  <ElectionDetailStatValue>
-                    {detail.voterTurnoutPercent}%
-                  </ElectionDetailStatValue>
-                </ElectionDetailStatCard>
-              ) : null}
-              {detail.totalSeats != null ? (
-                <ElectionDetailStatCard>
-                  <ElectionDetailStatLabel>총 의석</ElectionDetailStatLabel>
-                  <ElectionDetailStatValue>
-                    {detail.totalSeats}석
-                  </ElectionDetailStatValue>
-                </ElectionDetailStatCard>
-              ) : null}
-              {detail.resultingLegislatureClosureKind ||
-              (detail.resultingLegislatureClosureDate != null &&
-                String(detail.resultingLegislatureClosureDate).trim() !==
-                  '') ? (
-                <ElectionDetailStatCard>
-                  <ElectionDetailStatLabel>
-                    의회 실제 종료
-                  </ElectionDetailStatLabel>
-                  <ElectionDetailStatValue>
-                    {[
-                      detail.resultingLegislatureClosureKind
-                        ? labelLegislatureClosureKind(
-                            detail.resultingLegislatureClosureKind,
-                          )
-                        : null,
-                      detail.resultingLegislatureClosureDate != null &&
-                      String(detail.resultingLegislatureClosureDate).trim() !==
-                        ''
-                        ? formatPollDate(detail.resultingLegislatureClosureDate)
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || '—'}
-                  </ElectionDetailStatValue>
-                </ElectionDetailStatCard>
-              ) : null}
-            </ElectionDetailStatsGrid>
+                {detail.pollEndDate != null &&
+                String(detail.pollEndDate).trim() !== '' ? (
+                  <ElectionDetailStatCard>
+                    <ElectionDetailStatLabel>투표 종료</ElectionDetailStatLabel>
+                    <ElectionDetailStatValue>
+                      {formatPollDate(detail.pollEndDate)}
+                    </ElectionDetailStatValue>
+                  </ElectionDetailStatCard>
+                ) : null}
+                {detail.convocationOrdinal != null ? (
+                  <ElectionDetailStatCard>
+                    <ElectionDetailStatLabel>회차</ElectionDetailStatLabel>
+                    <ElectionDetailStatValue>
+                      {detail.convocationOrdinal}차
+                    </ElectionDetailStatValue>
+                  </ElectionDetailStatCard>
+                ) : null}
+                {detail.legislatureTermStart || detail.legislatureTermEnd ? (
+                  <ElectionDetailStatCard>
+                    <ElectionDetailStatLabel>의회 임기</ElectionDetailStatLabel>
+                    <ElectionDetailStatValue>
+                      {detail.legislatureTermStart
+                        ? formatPollDate(detail.legislatureTermStart)
+                        : '—'}
+                      {' — '}
+                      {detail.legislatureTermEnd
+                        ? formatPollDate(detail.legislatureTermEnd)
+                        : '—'}
+                    </ElectionDetailStatValue>
+                  </ElectionDetailStatCard>
+                ) : null}
+                {detail.voterTurnoutPercent != null &&
+                String(detail.voterTurnoutPercent).trim() !== '' ? (
+                  <ElectionDetailStatCard>
+                    <ElectionDetailStatLabel>투표율</ElectionDetailStatLabel>
+                    <ElectionDetailStatValue>
+                      {detail.voterTurnoutPercent}%
+                    </ElectionDetailStatValue>
+                  </ElectionDetailStatCard>
+                ) : null}
+                {detail.totalSeats != null ? (
+                  <ElectionDetailStatCard>
+                    <ElectionDetailStatLabel>총 의석</ElectionDetailStatLabel>
+                    <ElectionDetailStatValue>
+                      {detail.totalSeats}석
+                    </ElectionDetailStatValue>
+                  </ElectionDetailStatCard>
+                ) : null}
+                {detail.resultingLegislatureClosureKind ||
+                (detail.resultingLegislatureClosureDate != null &&
+                  String(detail.resultingLegislatureClosureDate).trim() !==
+                    '') ? (
+                  <ElectionDetailStatCard>
+                    <ElectionDetailStatLabel>
+                      의회 실제 종료
+                    </ElectionDetailStatLabel>
+                    <ElectionDetailStatValue>
+                      {[
+                        detail.resultingLegislatureClosureKind
+                          ? labelLegislatureClosureKind(
+                              detail.resultingLegislatureClosureKind,
+                            )
+                          : null,
+                        detail.resultingLegislatureClosureDate != null &&
+                        String(
+                          detail.resultingLegislatureClosureDate,
+                        ).trim() !== ''
+                          ? formatPollDate(
+                              detail.resultingLegislatureClosureDate,
+                            )
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') || '—'}
+                    </ElectionDetailStatValue>
+                  </ElectionDetailStatCard>
+                ) : null}
+              </ElectionDetailStatsGrid>
+            </ElectionDetailStatsScrollWrap>
           </ElectionDetailSummaryPanel>
-        </div>
+        </ElectionDetailHeaderMain>
         <DetailToolbar>
           <DetailHeaderIconBtn
             type="button"
@@ -1624,98 +1676,43 @@ function ElectionDetailPanel({
       </SectionHeaderRow>
 
       <div>
-        <SectionHeaderRow style={{ marginBottom: 10 }}>
+        <SectionHeaderRowSubsection>
           <SubsectionLabel>정당별 집계 (전국·비례 등)</SubsectionLabel>
           <SubsectionAddBtn type="button" onClick={onAddPartyResult}>
             <FiPlus size={14} strokeWidth={2.25} />
             집계 추가
           </SubsectionAddBtn>
-        </SectionHeaderRow>
+        </SectionHeaderRowSubsection>
         {partyResults.length > 0 ? (
           <PartyShareInfographic>
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                marginBottom: 8,
-              }}
-            >
-              <PartyShareInfographicTitle style={{ marginBottom: 0 }}>
+            <PartyMetricToolbarRow>
+              <PartyMetricTitleTight>
                 {partyDistributionMetric === 'seats'
                   ? '의석 분포'
                   : '득표율 분포'}
-              </PartyShareInfographicTitle>
-              <div
+              </PartyMetricTitleTight>
+              <PartyMetricSegmentedGroup
                 role="group"
                 aria-label="분포 그래프 기준"
-                style={{
-                  display: 'inline-flex',
-                  flexWrap: 'wrap',
-                  gap: 0,
-                  borderRadius: 10,
-                  border: '1px solid var(--border-default, #e2e8f0)',
-                  overflow: 'hidden',
-                  background: 'var(--surface-muted, #f8fafc)',
-                }}
               >
-                <button
+                <PartyMetricSegmentBtn
                   type="button"
                   aria-pressed={partyDistributionMetric === 'voteShare'}
+                  $active={partyDistributionMetric === 'voteShare'}
                   onClick={() => setPartyDistributionMetric('voteShare')}
-                  style={{
-                    padding: '8px 14px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    border: 'none',
-                    cursor: 'pointer',
-                    background:
-                      partyDistributionMetric === 'voteShare'
-                        ? 'var(--surface-elevated, #fff)'
-                        : 'transparent',
-                    color:
-                      partyDistributionMetric === 'voteShare'
-                        ? 'var(--text-primary, #0f172a)'
-                        : 'var(--text-secondary, #64748b)',
-                    boxShadow:
-                      partyDistributionMetric === 'voteShare'
-                        ? 'inset 0 0 0 1px rgba(99,102,241,0.25)'
-                        : 'none',
-                  }}
                 >
                   득표율
-                </button>
-                <button
+                </PartyMetricSegmentBtn>
+                <PartyMetricSegmentBtn
                   type="button"
                   aria-pressed={partyDistributionMetric === 'seats'}
+                  $active={partyDistributionMetric === 'seats'}
                   onClick={() => setPartyDistributionMetric('seats')}
-                  style={{
-                    padding: '8px 14px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    border: 'none',
-                    borderLeft: '1px solid var(--border-default, #e2e8f0)',
-                    cursor: 'pointer',
-                    background:
-                      partyDistributionMetric === 'seats'
-                        ? 'var(--surface-elevated, #fff)'
-                        : 'transparent',
-                    color:
-                      partyDistributionMetric === 'seats'
-                        ? 'var(--text-primary, #0f172a)'
-                        : 'var(--text-secondary, #64748b)',
-                    boxShadow:
-                      partyDistributionMetric === 'seats'
-                        ? 'inset 0 0 0 1px rgba(99,102,241,0.25)'
-                        : 'none',
-                  }}
                 >
                   의석
-                </button>
-              </div>
-            </div>
+                </PartyMetricSegmentBtn>
+              </PartyMetricSegmentedGroup>
+            </PartyMetricToolbarRow>
             <PartyShareDonutLayout>
               <PartyShareDonutClip>
                 <PartyShareDonutInner>
@@ -1797,16 +1794,9 @@ function ElectionDetailPanel({
                           {detail ? ` · ${detail}` : ''}
                         </PartyShareStats>
                         {deltaHint ? (
-                          <div
-                            style={{
-                              fontSize: 11,
-                              lineHeight: 1.35,
-                              marginTop: 4,
-                              color: 'var(--text-secondary, #64748b)',
-                            }}
-                          >
+                          <PartyLegendDeltaHint>
                             전회차 대비: {deltaHint}
-                          </div>
+                          </PartyLegendDeltaHint>
                         ) : null}
                       </PartyShareLegendBody>
                     </PartyShareLegendItem>
@@ -1830,7 +1820,7 @@ function ElectionDetailPanel({
                 {hasPartyComparison ? (
                   <DataTh>전회차 대비 (의석)</DataTh>
                 ) : null}
-                <DataTh style={{ width: 72, textAlign: 'right' }} />
+                <DataThActions72 />
               </tr>
             </thead>
             <tbody>
@@ -1855,31 +1845,23 @@ function ElectionDetailPanel({
                         {formatVoteShareLabel(row.voteSharePercent) ?? '—'}
                       </DataTd>
                       {hasPartyComparison ? (
-                        <DataTd
-                          style={{
-                            fontWeight: 600,
-                            color: deltaToneCss(
-                              cmp?.voteShareDeltaPpt ?? undefined,
-                            ),
-                            whiteSpace: 'nowrap',
-                          }}
+                        <PartyResultDeltaTd
+                          $tone={deltaToneCss(
+                            cmp?.voteShareDeltaPpt ?? undefined,
+                          )}
                         >
                           {formatVoteShareDeltaPpt(cmp?.voteShareDeltaPpt)}
-                        </DataTd>
+                        </PartyResultDeltaTd>
                       ) : null}
                       <DataTd>{row.seatsWon ?? '—'}</DataTd>
                       {hasPartyComparison ? (
-                        <DataTd
-                          style={{
-                            fontWeight: 600,
-                            color: deltaToneCss(cmp?.seatsDelta ?? undefined),
-                            whiteSpace: 'nowrap',
-                          }}
+                        <PartyResultDeltaTd
+                          $tone={deltaToneCss(cmp?.seatsDelta ?? undefined)}
                         >
                           {formatSeatsDelta(cmp?.seatsDelta)}
-                        </DataTd>
+                        </PartyResultDeltaTd>
                       ) : null}
-                      <DataTd style={{ textAlign: 'right' }}>
+                      <DataTdRight>
                         <RowActions>
                           <RowIconBtn
                             type="button"
@@ -1899,7 +1881,7 @@ function ElectionDetailPanel({
                             <FiTrash2 size={15} strokeWidth={2} />
                           </RowIconBtn>
                         </RowActions>
-                      </DataTd>
+                      </DataTdRight>
                     </DataTr>
                   )
                 })
@@ -1909,27 +1891,16 @@ function ElectionDetailPanel({
         </DataTableCard>
 
         {detail.partyResultComparisonVsPrevious?.previousElection ? (
-          <div style={{ marginTop: 20 }}>
-            <SectionHeaderRow
-              style={{ marginBottom: 10, flexWrap: 'wrap', gap: 8 }}
-            >
+          <ElectionComparisonSectionBlock>
+            <SectionHeaderRowWrapTight>
               <SubsectionLabel>
-                <FiBarChart2
-                  size={14}
-                  style={{ marginRight: 6, verticalAlign: 'text-bottom' }}
-                  aria-hidden
-                />
+                <ElectionComparisonLabelIcon>
+                  <FiBarChart2 size={14} aria-hidden />
+                </ElectionComparisonLabelIcon>
                 직전 회차 대비 (동일 선거 유형·동일 범위)
               </SubsectionLabel>
-            </SectionHeaderRow>
-            <p
-              style={{
-                margin: '0 0 12px',
-                fontSize: 12,
-                color: 'var(--text-secondary, #64748b)',
-                lineHeight: 1.5,
-              }}
-            >
+            </SectionHeaderRowWrapTight>
+            <ElectionComparisonMetaLine>
               비교 선거:{' '}
               <strong>
                 {detail.partyResultComparisonVsPrevious.previousElection.name}
@@ -1943,7 +1914,7 @@ function ElectionDetailPanel({
                 .convocationOrdinal != null
                 ? ` · 제${detail.partyResultComparisonVsPrevious.previousElection.convocationOrdinal}회`
                 : ''}
-            </p>
+            </ElectionComparisonMetaLine>
             <DataTableCard>
               <DataTable>
                 <thead>
@@ -1973,7 +1944,7 @@ function ElectionDetailPanel({
                       return (
                         <DataTr key={`cmp-${r.partyId}`}>
                           <DataTd>
-                            <div style={{ fontWeight: 600 }}>{label}</div>
+                            <PartyTableCellStrong>{label}</PartyTableCellStrong>
                           </DataTd>
                           <DataTd>
                             {formatVoteShareLabel(r.previousVoteSharePercent) ??
@@ -1983,14 +1954,11 @@ function ElectionDetailPanel({
                             {formatVoteShareLabel(r.currentVoteSharePercent) ??
                               '—'}
                           </DataTd>
-                          <DataTd
-                            style={{
-                              fontWeight: 600,
-                              color: deltaToneCss(dPpt ?? undefined),
-                            }}
+                          <PartyResultDeltaTd
+                            $tone={deltaToneCss(dPpt ?? undefined)}
                           >
                             {formatVoteShareDeltaPpt(dPpt)}
-                          </DataTd>
+                          </PartyResultDeltaTd>
                           <DataTd>
                             {r.previousSeatsWon != null
                               ? r.previousSeatsWon
@@ -2001,14 +1969,11 @@ function ElectionDetailPanel({
                               ? r.currentSeatsWon
                               : '—'}
                           </DataTd>
-                          <DataTd
-                            style={{
-                              fontWeight: 600,
-                              color: deltaToneCss(dSeat ?? undefined),
-                            }}
+                          <PartyResultDeltaTd
+                            $tone={deltaToneCss(dSeat ?? undefined)}
                           >
                             {formatSeatsDelta(dSeat)}
-                          </DataTd>
+                          </PartyResultDeltaTd>
                         </DataTr>
                       )
                     })
@@ -2016,21 +1981,17 @@ function ElectionDetailPanel({
                 </tbody>
               </DataTable>
             </DataTableCard>
-          </div>
+          </ElectionComparisonSectionBlock>
         ) : partyResults.length > 0 ? (
-          <p
-            style={{
-              marginTop: 16,
-              marginBottom: 0,
-              fontSize: 12,
-              color: 'var(--text-secondary, #64748b)',
-              lineHeight: 1.5,
-            }}
-          >
-            직전 선거 비교: 동일 국가·선거 유형·선거 범위가 같고, 직전 회차(번호
-            −1) 선거 또는 더 이른 투표일의 선거가 있을 때 여기에 표시됩니다.
-            제1회만 있거나 회차가 비어 있으면 날짜 순 직전 선거와 비교합니다.
-          </p>
+          <ElectionDetailHelpNote role="note">
+            <FiInfo size={14} aria-hidden />
+            <span>
+              직전 선거 비교: 동일 국가·선거 유형·선거 범위가 같고, 직전
+              회차(번호 −1) 선거 또는 더 이른 투표일의 선거가 있을 때 여기에
+              표시됩니다. 제1회만 있거나 회차가 비어 있으면 날짜 순 직전 선거와
+              비교합니다.
+            </span>
+          </ElectionDetailHelpNote>
         ) : null}
       </div>
 
@@ -2113,7 +2074,7 @@ function ElectionDetailPanel({
                   <DataTh>안</DataTh>
                   <DataTh>득표</DataTh>
                   <DataTh>득표율</DataTh>
-                  <DataTh style={{ width: 96, textAlign: 'right' }} />
+                  <DataThActions96 />
                 </tr>
               </thead>
               <tbody>
@@ -2128,21 +2089,13 @@ function ElectionDetailPanel({
                     <DataTr key={opt.id}>
                       <DataTd>
                         {editingBallotId === opt.id ? (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 8,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <InlineTextInput
+                          <BallotOptionEditRow>
+                            <BallotOptionEditInput
                               type="text"
                               value={editingBallotLabel}
-                              onChange={(e) =>
-                                setEditingBallotLabel(e.target.value)
-                              }
-                              style={{ minWidth: 140, flex: '1 1 160px' }}
+                              onChange={(
+                                e: React.ChangeEvent<HTMLInputElement>,
+                              ) => setEditingBallotLabel(e.target.value)}
                             />
                             <RowIconBtn
                               type="button"
@@ -2172,7 +2125,7 @@ function ElectionDetailPanel({
                             >
                               <FiX size={17} strokeWidth={2.25} />
                             </RowIconBtn>
-                          </div>
+                          </BallotOptionEditRow>
                         ) : (
                           <span>{opt.label}</span>
                         )}
@@ -2182,7 +2135,7 @@ function ElectionDetailPanel({
                         {formatVoteShareLabel(opt.result?.voteSharePercent) ??
                           '—'}
                       </DataTd>
-                      <DataTd style={{ textAlign: 'right' }}>
+                      <DataTdRight>
                         {editingBallotId !== opt.id ? (
                           <RowActions>
                             <RowIconBtn
@@ -2215,7 +2168,7 @@ function ElectionDetailPanel({
                             </RowIconBtn>
                           </RowActions>
                         ) : null}
-                      </DataTd>
+                      </DataTdRight>
                     </DataTr>
                   ))
                 )}
@@ -2225,13 +2178,13 @@ function ElectionDetailPanel({
         </ReferendumBallotPanel>
       ) : (
         <div>
-          <SectionHeaderRow style={{ marginBottom: 10 }}>
+          <SectionHeaderRowSubsection>
             <SubsectionLabel>후보</SubsectionLabel>
             <SubsectionAddBtn type="button" onClick={onAddCandidacy}>
               <FiPlus size={14} strokeWidth={2.25} />
               후보 추가
             </SubsectionAddBtn>
-          </SectionHeaderRow>
+          </SectionHeaderRowSubsection>
           <DataTableCard>
             <DataTable>
               <thead>
@@ -2243,7 +2196,7 @@ function ElectionDetailPanel({
                   <DataTh>득표율</DataTh>
                   <DataTh>순위</DataTh>
                   <DataTh>의석</DataTh>
-                  <DataTh style={{ width: 104, textAlign: 'right' }} />
+                  <DataThActions104 />
                 </tr>
               </thead>
               <tbody>
@@ -2257,13 +2210,13 @@ function ElectionDetailPanel({
                   detail.candidacies.map((c) => (
                     <DataTr key={c.id}>
                       <DataTd>
-                        <div style={{ fontWeight: 600 }}>
+                        <CandidacyNameStrong>
                           {candidacyLabel(c)}
-                        </div>
+                        </CandidacyNameStrong>
                         {c.party ? (
-                          <div style={{ fontSize: 11, opacity: 0.85 }}>
+                          <CandidacyPartyMeta>
                             {c.party.shortName || c.party.name}
-                          </div>
+                          </CandidacyPartyMeta>
                         ) : null}
                       </DataTd>
                       <DataTd>
@@ -2292,7 +2245,7 @@ function ElectionDetailPanel({
                       <DataTd>
                         {c.result?.seatsWon != null ? c.result.seatsWon : '—'}
                       </DataTd>
-                      <DataTd style={{ textAlign: 'right' }}>
+                      <DataTdRight>
                         <RowActions>
                           <RowIconBtn
                             type="button"
@@ -2320,7 +2273,7 @@ function ElectionDetailPanel({
                             <FiTrash2 size={15} strokeWidth={2} />
                           </RowIconBtn>
                         </RowActions>
-                      </DataTd>
+                      </DataTdRight>
                     </DataTr>
                   ))
                 )}
@@ -2330,22 +2283,16 @@ function ElectionDetailPanel({
         </div>
       )}
 
-      {(hasRichTextContent(detail.resultingLegislatureDissolutionNotes ?? '') ||
-        hasRichTextContent(detail.description ?? '')) ? (
+      {hasRichTextContent(detail.resultingLegislatureDissolutionNotes ?? '') ||
+      hasRichTextContent(detail.description ?? '') ? (
         <PoliticsTabSubsection aria-label="선거 서술·설명">
           {hasRichTextContent(
             detail.resultingLegislatureDissolutionNotes ?? '',
           ) ? (
-            <div
-              style={{
-                marginBottom: hasRichTextContent(detail.description ?? '')
-                  ? 20
-                  : 0,
-              }}
+            <ElectionNarrativeStackBlock
+              $spacedBelow={hasRichTextContent(detail.description ?? '')}
             >
-              <SectionHeaderRow
-                style={{ marginBottom: 10, alignItems: 'center' }}
-              >
+              <SectionHeaderRowNarrative>
                 <SubsectionLabel>이번 의회 종료 서술</SubsectionLabel>
                 <ElectionNarrativeEditBtn
                   type="button"
@@ -2355,7 +2302,7 @@ function ElectionDetailPanel({
                   <FiEdit2 size={14} strokeWidth={2} />
                   수정
                 </ElectionNarrativeEditBtn>
-              </SectionHeaderRow>
+              </SectionHeaderRowNarrative>
               <HistoryArticleInner>
                 <HistoryArticleProse
                   html={detail.resultingLegislatureDissolutionNotes ?? ''}
@@ -2363,13 +2310,11 @@ function ElectionDetailPanel({
                   hideWhenEmpty
                 />
               </HistoryArticleInner>
-            </div>
+            </ElectionNarrativeStackBlock>
           ) : null}
           {hasRichTextContent(detail.description ?? '') ? (
             <>
-              <SectionHeaderRow
-                style={{ marginBottom: 10, alignItems: 'center' }}
-              >
+              <SectionHeaderRowNarrative>
                 <SubsectionLabel>설명</SubsectionLabel>
                 <ElectionNarrativeEditBtn
                   type="button"
@@ -2379,7 +2324,7 @@ function ElectionDetailPanel({
                   <FiEdit2 size={14} strokeWidth={2} />
                   수정
                 </ElectionNarrativeEditBtn>
-              </SectionHeaderRow>
+              </SectionHeaderRowNarrative>
               <HistoryArticleInner>
                 <HistoryArticleProse
                   html={detail.description ?? ''}
@@ -2391,7 +2336,7 @@ function ElectionDetailPanel({
           ) : null}
         </PoliticsTabSubsection>
       ) : null}
-    </div>
+    </ElectionDetailPanelStack>
   )
 }
 
@@ -2400,6 +2345,7 @@ function ElectionFormModal({
   mode,
   initial,
   initialTab,
+  historicalCountryOptions,
   saving,
   onClose,
   onSubmit,
@@ -2409,6 +2355,8 @@ function ElectionFormModal({
   initial?: ElectionDetailDto
   /** 수정 모달을 열 때 보여줄 탭 (서술·설명 등) */
   initialTab?: 'basic' | 'legislature' | 'stats'
+  /** 현대 국가와 연결된 역사 국가 — 현대 국가 상세에서만 전달 */
+  historicalCountryOptions: Array<{ id: string; name: string }>
   saving: boolean
   onClose: () => void
   onSubmit: (p: {
@@ -2474,6 +2422,13 @@ function ElectionFormModal({
   const [resultingDissolutionNotes, setResultingDissolutionNotes] = useState(
     initial?.resultingLegislatureDissolutionNotes ?? '',
   )
+  const [scopeHistoricalCountryId, setScopeHistoricalCountryId] = useState(
+    () => initial?.historicalCountryId ?? '',
+  )
+
+  const showHistoricalCountryPicker = Boolean(
+    electionScope.countryId && !electionScope.historicalCountryId,
+  )
 
   useEffect(() => {
     if (mode !== 'edit' || !initial) return
@@ -2510,6 +2465,7 @@ function ElectionFormModal({
     setResultingDissolutionNotes(
       initial.resultingLegislatureDissolutionNotes ?? '',
     )
+    setScopeHistoricalCountryId(initial.historicalCountryId ?? '')
   }, [mode, initial, initialTab])
 
   const title = mode === 'create' ? '새 선거' : '선거 수정'
@@ -2559,7 +2515,10 @@ function ElectionFormModal({
                 : null
               const turnoutBody =
                 turnoutParsed === null ? null : String(turnoutParsed)
-              const scopeFields = electionScopeBody(electionScope)
+              const scopeFields = resolveElectionScopeForSubmit(
+                electionScope,
+                scopeHistoricalCountryId,
+              )
               const resultingKindVal =
                 resultingClosureKind.trim() === '' ? null : resultingClosureKind
               const chronologyExtra = {
@@ -2666,6 +2625,33 @@ function ElectionFormModal({
                   />
                 </ModalFieldMedium>
               </FieldRow>
+              {showHistoricalCountryPicker ? (
+                <FieldRow>
+                  <FieldLabel>역사 국가</FieldLabel>
+                  <ModalFieldWide>
+                    <FormSelectNative
+                      value={scopeHistoricalCountryId}
+                      onChange={(e) =>
+                        setScopeHistoricalCountryId(e.target.value)
+                      }
+                      aria-label="역사 국가 (선택)"
+                    >
+                      <option value="">(미지정 · 이 현대 국가에만 연결)</option>
+                      {[...historicalCountryOptions]
+                        .sort((a, b) =>
+                          a.name.localeCompare(b.name, 'ko', {
+                            sensitivity: 'base',
+                          }),
+                        )
+                        .map((h) => (
+                          <option key={h.id} value={h.id}>
+                            {h.name}
+                          </option>
+                        ))}
+                    </FormSelectNative>
+                  </ModalFieldWide>
+                </FieldRow>
+              ) : null}
               <FieldRow>
                 <FieldLabel>유형</FieldLabel>
                 <ModalFieldNarrow>
@@ -3578,11 +3564,11 @@ function PartyResultFormModal({
                 ))}
               </FormSelectNative>
             ) : (
-              <div style={{ fontWeight: 600 }}>
+              <PartyTableCellStrong>
                 {initialRow?.party?.shortName ||
                   initialRow?.party?.name ||
                   initialRow?.partyId}
-              </div>
+              </PartyTableCellStrong>
             )}
           </ModalFieldWide>
         </FieldRow>
