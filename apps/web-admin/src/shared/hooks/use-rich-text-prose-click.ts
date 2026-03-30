@@ -43,6 +43,16 @@ export type UseRichTextProseClickOptions = {
   setDynastyTooltip?: React.Dispatch<
     React.SetStateAction<RichTextDynastyTooltipState | null>
   >
+  /**
+   * 설정 시 정당 엔티티 링크 클릭 시 라우팅 대신 콜백 (예: 선거 서술 읽기 화면에서 모달).
+   * `countryId`는 링크의 `data-entity-country-id` 또는 API 조회 결과.
+   */
+  onPoliticalPartyClick?: (args: {
+    partyId: string
+    countryId: string | null
+  }) => void
+  /** 설정 시, 클릭한 정당 id가 이 값과 같으면 토스트만 (모달 안 중복 열기) */
+  samePoliticalPartyId?: string | null
 }
 
 /**
@@ -58,11 +68,22 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
     samePersonId,
     setTermTooltip,
     setDynastyTooltip,
+    onPoliticalPartyClick,
+    samePoliticalPartyId,
   } = options
 
   const handleProseClick = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement
+      /** 텍스트 노드만 target인 경우(브라우저마다 다름) closest 없음 → 전체 핸들러 실패 방지 */
+      const raw = e.target
+      const el =
+        raw instanceof Element
+          ? raw
+          : raw instanceof Text
+            ? raw.parentElement
+            : null
+      if (!el) return
+      const target = el as HTMLElement
 
       const personMentionEl = target.closest('.mention[data-type="person"]')
       const personLinkEl = target.closest(
@@ -134,6 +155,26 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         if (!partyId) return
         e.preventDefault()
         const countryIdAttr = partyLinkEl.getAttribute('data-entity-country-id')
+        if (onPoliticalPartyClick) {
+          if (samePoliticalPartyId != null && partyId === samePoliticalPartyId) {
+            toast('현재 보고 있는 정당입니다.', { icon: 'ℹ️' })
+            return
+          }
+          if (countryIdAttr) {
+            onPoliticalPartyClick({ partyId, countryId: countryIdAttr })
+            return
+          }
+          politicalPartyApi
+            .getById(partyId)
+            .then((p) =>
+              onPoliticalPartyClick({
+                partyId,
+                countryId: p.countryId ?? null,
+              }),
+            )
+            .catch(() => toast.error('정당 정보를 불러올 수 없습니다.'))
+          return
+        }
         const go = (cid: string) =>
           navigate(pathKeys.history.countryElectionPartyDetail(cid, partyId))
         if (countryIdAttr) {
@@ -269,7 +310,15 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         }
       }
     },
-    [navigate, onPersonClick, samePersonId, setTermTooltip, setDynastyTooltip],
+    [
+      navigate,
+      onPersonClick,
+      samePersonId,
+      setTermTooltip,
+      setDynastyTooltip,
+      onPoliticalPartyClick,
+      samePoliticalPartyId,
+    ],
   )
 
   return { handleProseClick }

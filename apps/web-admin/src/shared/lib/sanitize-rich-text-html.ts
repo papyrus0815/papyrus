@@ -6,6 +6,8 @@ import type { Config } from 'dompurify'
  * 붙여넣기·외부에서 주입된 value 로드 시 XSS 완화용.
  */
 const RICH_TEXT_PURIFY_CONFIG: Config = {
+  /* blob: 붙여넣기 등이 잠깐 DOM에 남아도 제거되지 않게 (허용 태그만 쓰므로 script 등은 여전히 차단) */
+  ALLOW_UNKNOWN_PROTOCOLS: true,
   ADD_TAGS: [
     'figure',
     'figcaption',

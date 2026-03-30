@@ -17,6 +17,7 @@ import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { CabinetPartyLinkModal } from './cabinet-party-link-modal'
 import { labelCabinetPartyRole } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
+import { SubsectionAddBtn } from './country-politics-tab.styles'
 
 export type CabinetPoliticalPartiesBlockProps = {
   cabinetId: string
@@ -66,14 +67,14 @@ export function CabinetPoliticalPartiesBlock({
           </CabS.CabDetailPartySectionTitle>
           <CabS.CabDetailPartyCount>{links.length}개</CabS.CabDetailPartyCount>
           <div style={{ flex: 1 }} />
-          <CabS.CabDetailPartyToolbarBtn
+          <SubsectionAddBtn
             type="button"
             onClick={() => setPartyLinkModalOpen(true)}
             disabled={!countryQueryEnabled || loading}
           >
-            <FiPlus size={12} strokeWidth={2.5} />
+            <FiPlus size={14} strokeWidth={2.25} />
             연결
-          </CabS.CabDetailPartyToolbarBtn>
+          </SubsectionAddBtn>
         </CabS.CabDetailMinistersSectionHeader>
 
         {loading ? (
@@ -98,14 +99,14 @@ export function CabinetPoliticalPartiesBlock({
             <CabS.CabDetailPartyEmptyHint>
               선거·투표 탭에서 정당을 등록한 뒤 연결할 수 있습니다.
             </CabS.CabDetailPartyEmptyHint>
-            <CabS.CabDetailPartyToolbarBtn
+            <SubsectionAddBtn
               type="button"
               onClick={() => setPartyLinkModalOpen(true)}
               disabled={loading}
             >
-              <FiPlus size={12} strokeWidth={2.5} />
+              <FiPlus size={14} strokeWidth={2.25} />
               연결
-            </CabS.CabDetailPartyToolbarBtn>
+            </SubsectionAddBtn>
           </CabS.CabDetailPartyEmpty>
         ) : (
           <CabS.CabDetailPartyList>

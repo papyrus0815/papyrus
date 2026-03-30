@@ -5,9 +5,9 @@ import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { proseHrStyles } from '@/shared/styles/prose-hr'
 import { richTextReadonlyMediaAndTablesCss } from '@/shared/styles/rich-text-readonly-content'
-import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import {
   ModalBody,
@@ -15,8 +15,8 @@ import {
   ModalHeader,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
-import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { FieldControl } from '@/shared/ui/register-form-layout'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
 import {
   CABINET_SECTION_MAIN as MAIN,
@@ -580,8 +580,7 @@ export const CabListToolbarShell = styled.div.attrs({
   background: transparent;
   border: none;
   border-bottom: 1px solid
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').divider};
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
   box-sizing: border-box;
   padding: 0 0 16px;
   margin: 0 0 20px;
@@ -638,8 +637,7 @@ export const CabTimelineSummaryHeader = styled.div`
   width: 100%;
   box-sizing: border-box;
   border-bottom: 1px solid
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').divider};
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
 `
 
 export const CabTimelineSummaryTopRow = styled.div`
@@ -697,8 +695,7 @@ export const CabListToolbarHairline = styled.div`
   margin: 2px 0 4px;
   border: 0;
   border-top: 1px solid
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').divider};
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
 `
 
 /** 타임라인 2열 그리드 */
@@ -1114,23 +1111,31 @@ export const CabResultCount = styled.span`
 
 /* 닫기 버튼 — 상단 bar에 인라인 배치 */
 
+/** 행정부 상세 상단 — 선거 상세 `SectionHeaderRow`와 같이 박스·회색 배경 없이 구분선만 */
 export const CabDetailTopBar = styled.div`
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px 16px;
   flex-wrap: wrap;
-  padding: 12px 16px;
+  padding: 2px 0 14px;
   margin-bottom: 14px;
   flex-shrink: 0;
-  border-radius: 16px;
-  border: 1px solid
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
-  background: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').bgSubtle};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.04)'};
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
+  background: transparent;
+  box-shadow: none;
+`
+
+/** 상단 바 좌측: 브레드크럼 + (선택) 행정부 명칭 */
+export const CabDetailTopBarMain = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 `
 
 export const CabDetailTopBarRow = styled.div`
@@ -1141,21 +1146,17 @@ export const CabDetailTopBarRow = styled.div`
   min-width: 0;
 `
 
-export const CabDetailTopBarActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-`
-
-/** 히스토리 전체화면 읽기 시 본문 상단 안내 */
-export const CabDetailHistoryHint = styled.p`
-  margin: 0 0 10px;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.45;
+/** 등록한 행정부 이름(예: 루즈벨트 제1기) — 수반 브레드크럼 아래 보조 제목 */
+export const CabDetailTopBarSubtitle = styled.p`
+  margin: 6px 0 0;
+  padding-left: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
   color: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+    getCabinetsSectionPalette(theme.mode === 'dark').sectionHeading};
+  opacity: ${({ theme }) => (theme.mode === 'dark' ? 0.92 : 0.88)};
 `
 
 /* 우: 카드 열 — 상세 열리면 고정 너비 2열 그리드, 닫히면 자동채움 */
@@ -1242,8 +1243,8 @@ export const CabCard = styled.div<{ $selected?: boolean; $deleting?: boolean }>`
 export const CabDetailMinistersSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 20px 0 28px;
+  gap: 12px;
+  padding: 22px 0 30px;
 `
 /** 조약 등 각료 외 블록 — 레이아웃은 동일, 의미만 구분 */
 export const CabDetailSubSection = CabDetailMinistersSection
@@ -1256,10 +1257,10 @@ export const CabDetailMinistersSectionHeader = styled.div`
 export const CabDetailMinistersSectionTitle = styled.h4`
   margin: 0;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').sectionHeading};
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 `
 
 /* ── 각료 테이블 ── */
@@ -1273,19 +1274,25 @@ export const CabDetailBackBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 4px;
+  padding: 6px 8px;
+  margin: 0 -4px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-  background: none;
+  background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: color 0.14s;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
   &:hover {
     color: ${({ theme }) =>
       getCabinetsSectionPalette(theme.mode === 'dark').sectionLabelTint};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)'};
   }
   &:focus-visible {
     outline: none;
@@ -1374,111 +1381,13 @@ export const CabinetListSkeletonBar = styled.div<{ $w?: string; $h?: string }>`
   }
 `
 
-/** 본문 내 스크롤 앵커 — 배경·테두리 박스 없이 한 줄 텍스트 링크 톤 */
-export const CabDetailAnchorNav = styled.nav`
+/** 취임·퇴임 등 앵커 구역 공통 래퍼 */
+export const CabDetailScrollSection = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 20px;
-  margin: 0 0 16px;
-  padding: 0;
-  position: relative;
-  z-index: 1;
-`
-
-export const CabDetailAnchorBtn = styled.button.attrs({ type: 'button' })`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-  background: none;
-  border: none;
-  border-radius: 0;
-  cursor: pointer;
-  transition: color 0.16s ease;
-  text-decoration: none;
-  text-underline-offset: 5px;
-  &:hover {
-    color: ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').text};
-    text-decoration: underline;
-    text-decoration-color: ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').accent};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
-    border-radius: 4px;
-  }
-`
-
-export const DetailToolbarGhostBtn = styled.button.attrs({ type: 'button' })`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : '#fff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(129, 140, 250, 0.35)' : '#c7d2fe'};
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    border-color 0.14s,
-    background 0.14s,
-    color 0.14s;
-  &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(165, 180, 252, 0.55)' : '#818cf8'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.18)' : '#eef2ff'};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
-  }
-`
-
-export const CabDetailDeleteBtn = styled.button.attrs({ type: 'button' })`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#fca5a5' : '#dc2626'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'transparent' : '#fff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.4)' : '#fecaca'};
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    background 0.14s,
-    border-color 0.14s,
-    color 0.14s;
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.15)' : '#fff1f2'};
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.55)' : '#f87171'};
-    color: #ef4444;
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.35);
-  }
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 0 10px;
+  scroll-margin-top: 12px;
 `
 
 /* ── 각료 상세 패널 (뷰 전환 방식) ── */
@@ -1659,8 +1568,8 @@ export const HeadProfileBlock = styled.div`
   text-align: center;
   gap: 0;
   /* 위로 반원이 나가므로 바깥 여백 + 테두리선에 원 중심이 오도록 패딩 */
-  margin-top: ${HEAD_PROFILE_AVATAR_RADIUS}px;
-  margin-bottom: 12px;
+  margin-top: 25px;
+  margin-bottom: 16px;
   padding: ${HEAD_PROFILE_AVATAR_RADIUS + 24}px 24px 32px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
@@ -1669,6 +1578,8 @@ export const HeadProfileBlock = styled.div`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e8ecf0'};
   border-radius: 16px;
   overflow: visible;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 4px rgba(15, 23, 42, 0.04)'};
 `
 export const HeadProfileAvatar = styled.div`
   position: absolute;
@@ -1763,11 +1674,11 @@ export const HeadProfileDetailChipPosition = styled.span`
 `
 export const HeadProfileHeadline = styled.h3`
   margin: 0;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
-  letter-spacing: -0.03em;
-  line-height: 1.4;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f8fafc' : '#0f172a')};
+  letter-spacing: -0.035em;
+  line-height: 1.35;
   word-break: keep-all;
   text-align: center;
 `
@@ -1824,6 +1735,17 @@ export const HeadLifespan = styled.div`
   line-height: 1.55;
   text-align: center;
 `
+
+/** 수반 프로필 — 생몰·출신 등 소제목 라벨 */
+export const HeadMetaKicker = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
+  margin-right: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+`
 export const HeadProfileActions = styled.div`
   position: absolute;
   top: 14px;
@@ -1835,80 +1757,6 @@ export const HeadProfileActions = styled.div`
   flex-wrap: wrap;
   justify-content: flex-end;
   z-index: 2;
-`
-export const HeadActionBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 32px;
-  padding: 0 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  border-radius: 9px;
-  cursor: pointer;
-  transition:
-    border-color 0.14s,
-    background 0.14s;
-  white-space: nowrap;
-  &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#94a3b8'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f8fafc'};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
-  }
-`
-export const HeadActionBtnPrimary = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 32px;
-  padding: 0 14px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  border: none;
-  border-radius: 9px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    opacity 0.14s,
-    box-shadow 0.14s;
-  &:hover {
-    opacity: 0.88;
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 0.35),
-      0 4px 14px rgba(99, 102, 241, 0.35);
-  }
-`
-
-/** 집권·연정 정당 헤더용 — 각료/조약 헤더보다 한 단계 작게 */
-export const CabDetailPartyToolbarBtn = styled(HeadActionBtnPrimary)`
-  height: 28px;
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 600;
-  gap: 4px;
-  border-radius: 8px;
-  box-shadow: none;
-  & svg {
-    width: 12px;
-    height: 12px;
-  }
 `
 
 /* ── 구 배너 스타일 (미사용, 참조용) ── */
@@ -2113,7 +1961,9 @@ export const CabDetailPartyRoleChip = styled.span`
   white-space: nowrap;
   color: ${MAIN};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)'};
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.2)'
+      : 'rgba(99, 102, 241, 0.1)'};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
@@ -2143,10 +1993,14 @@ export const CabDetailPartyRemoveBtn = styled.button.attrs({ type: 'button' })`
     getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   &:hover:not(:disabled) {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+      theme.mode === 'dark'
+        ? 'rgba(239, 68, 68, 0.12)'
+        : 'rgba(239, 68, 68, 0.08)'};
     color: ${({ theme }) =>
       getCabinetsSectionPalette(theme.mode === 'dark').danger};
   }
@@ -2169,8 +2023,7 @@ export const CabDetailTreatyCard = styled.div<{
   $accent: string
   $borderIdle: string
 }>`
-  border: 1.5px solid
-    ${(p) => (p.$expanded ? p.$accent : p.$borderIdle)};
+  border: 1.5px solid ${(p) => (p.$expanded ? p.$accent : p.$borderIdle)};
   border-radius: 10px;
   overflow: hidden;
   background: ${({ theme }) =>
@@ -2235,10 +2088,147 @@ export const CabDetailTreatyChevronWrap = styled.span<{ $expanded: boolean }>`
 `
 
 export const CabDetailTreatyExpandedPanel = styled.div`
-  padding: 0 14px 12px;
+  padding: 12px 14px 14px;
+  margin: 0;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0,0,0,0.12)' : 'rgba(248, 250, 252, 0.95)'};
+`
+
+export const CabDetailTreatySectionTitle = styled.div<{ $spaced?: boolean }>`
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').sectionLabelTint};
+  margin: ${(p) => (p.$spaced ? '4px 0 0' : '0')};
+`
+
+export const CabDetailTreatyInfoRows = styled.dl`
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(72px, auto) minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: 12px;
+  align-items: start;
+`
+
+export const CabDetailTreatyInfoDt = styled.dt`
+  margin: 0;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
+  font-weight: 600;
+`
+
+export const CabDetailTreatyInfoDd = styled.dd`
+  margin: 0;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
+  line-height: 1.45;
+  word-break: break-word;
+`
+
+export const CabDetailTreatyBodyPara = styled.div`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  white-space: pre-wrap;
+  word-break: break-word;
+`
+
+export const CabDetailTreatyTermList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+export const CabDetailTreatyTermItem = styled.li`
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
+`
+
+export const CabDetailTreatyTermTitle = styled.div`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
+  margin-bottom: 4px;
+`
+
+export const CabDetailTreatyTermExcerpt = styled.div`
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+`
+
+export const CabDetailTreatySigTable = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+export const CabDetailTreatySigRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 10px 12px;
+  padding: 10px 11px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : '#e8ecf0'};
+  font-size: 12px;
+  line-height: 1.45;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+`
+
+export const CabDetailTreatySigCountry = styled.div`
+  font-weight: 700;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
+`
+
+export const CabDetailTreatySigCabinetHint = styled.div`
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textFaint};
+  margin-top: 3px;
+`
+
+export const CabDetailTreatyImageRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+export const CabDetailTreatyImageThumb = styled.img`
+  width: 76px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 7px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9'};
 `
 
 export const CabDetailTreatySignatoryRow = styled.div`
@@ -2251,14 +2241,6 @@ export const CabDetailTreatyMetaText = styled.span`
   font-size: 12px;
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-`
-
-export const CabDetailTreatySummaryPara = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  color: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-  line-height: 1.6;
 `
 
 export const CabDetailTreatyPillRow = styled.div`
@@ -2855,8 +2837,7 @@ export const HistoryArticleByline = styled.p`
 export const HistoryArticleDivider = styled.hr`
   border: none;
   border-top: 1px solid
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
   margin: 14px 20px 18px;
 `
 export const HistoryArticleEditorWrap = styled.div`
@@ -2945,23 +2926,13 @@ export const HistoryArticleProse = styled(RichTextReadView)`
   }
   h1 {
     font-size: 32px;
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#818cf8' : '#4f46e5'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
   }
   h2 {
     font-size: 24px;
   }
   h3 {
     font-size: 20px;
-  }
-  ul,
-  ol {
-    margin: 8px 0;
-    padding-left: 28px;
-  }
-  li {
-    margin: 4px 0;
-    line-height: 1.55;
   }
   blockquote {
     border-left: 4px solid #4f46e5;
@@ -3056,8 +3027,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
     text-underline-offset: 2px;
   }
   .term {
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#2dd4bf' : '#0f766e'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#2dd4bf' : '#0f766e')};
     cursor: pointer;
     padding: 0 2px;
     border-radius: 3px;
@@ -3076,6 +3046,88 @@ export const HistoryArticleEmpty = styled.p`
     getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   margin: 0;
   padding: 6px 0 16px;
+`
+
+/** 재임 히스토리 본문 — 용어(.term) / 가문 클릭 시 툴팁 (다른 리치텍스트 뷰와 동일 z-index) */
+export const HistoryProseTooltipOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
+  background: transparent;
+`
+
+export const HistoryProseTermTooltipPopover = styled.div<{
+  $x: number
+  $y: number
+}>`
+  position: fixed;
+  left: ${({ $x }) => $x}px;
+  top: ${({ $y }) => $y}px;
+  transform: translate(12px, 12px);
+  max-width: 360px;
+  padding: 14px 18px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 30, 30, 0.96)' : '#fff'};
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  z-index: ${Z_INDEX.MODAL_CONTENT};
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.primary};
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #0d9488;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
+
+export const HistoryProseDynastyTooltipPopover = styled.div<{
+  $x: number
+  $y: number
+}>`
+  position: fixed;
+  left: ${({ $x }) => $x}px;
+  top: ${({ $y }) => $y}px;
+  transform: translate(12px, 12px);
+  max-width: 360px;
+  padding: 14px 18px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 30, 30, 0.96)' : '#fff'};
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  z-index: ${Z_INDEX.MODAL_CONTENT};
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.primary};
+  strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #6d28d9;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 `
 
 /* ── 인물 상세 모달 ── */
@@ -3297,7 +3349,7 @@ export const TreatyFieldModeBtn = styled.button<{ $active?: boolean }>`
   transition:
     background 0.15s ease,
     color 0.15s ease;
-  &:hover {
+  mar &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `

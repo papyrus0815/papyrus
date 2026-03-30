@@ -9,6 +9,8 @@ import { createPortal } from 'react-dom'
 
 import { toast } from 'react-hot-toast'
 import {
+  FiAlignCenter,
+  FiAlignLeft,
   FiBold,
   FiChevronDown,
   FiChevronLeft,
@@ -48,9 +50,17 @@ import {
   MENTION_TYPE_CONFIG,
   searchMentionEntities,
 } from '@/shared/lib/mention/mention-system'
+import {
+  resolveRichTextImageSrcsForDisplay,
+} from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
+import { getUploadImageUrl, validateImageFile } from '@/shared/api/upload'
 import { scrollbarMixin } from '@/shared/styles/mixins'
 import { PROSE_HR_HTML, proseHrStyles } from '@/shared/styles/prose-hr'
+import {
+  richTextBlockAlignCss,
+  richTextProseListCss,
+} from '@/shared/styles/rich-text-readonly-content'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 // 멘션 엔티티 props 타입
@@ -293,16 +303,8 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
-  ul,
-  ol {
-    margin: 8px 0;
-    padding-left: 28px;
-  }
-
-  li {
-    margin: 4px 0;
-    line-height: 1.55;
-  }
+  ${richTextProseListCss}
+  ${richTextBlockAlignCss}
 
   img {
     max-width: 100%;
@@ -1431,6 +1433,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [currentHeading, setCurrentHeading] = useState<number | null>(null)
   const [isBulletList, setIsBulletList] = useState(false)
   const [isOrderedList, setIsOrderedList] = useState(false)
+  const [isAlignCenter, setIsAlignCenter] = useState(false)
   const [isCode, setIsCode] = useState(false)
   const [currentColor, setCurrentColor] = useState<string>('#000000')
   const [colorPickerVisible, setColorPickerVisible] = useState(false)
@@ -1498,7 +1501,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   useEffect(() => {
     if (editorRef.current) {
       const currentContent = editorRef.current.innerHTML
-      const newContent = sanitizeRichTextHtml(value || '')
+      const newContent = resolveRichTextImageSrcsForDisplay(
+        sanitizeRichTextHtml(value || ''),
+      )
 
       // 값이 실제로 변경되었을 때만 업데이트 (무한 루프 방지)
       if (currentContent !== newContent) {
@@ -1782,6 +1787,35 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     setIsBulletList(element.closest('ul') !== null)
     setIsOrderedList(element.closest('ol') !== null)
 
+    // 블록 가운데 정렬 (execCommand·align·computed text-align)
+    let alignCenter = false
+    try {
+      alignCenter = document.queryCommandState('justifyCenter')
+    } catch {
+      /* Safari 등 */
+    }
+    if (!alignCenter) {
+      let n: HTMLElement | null = element
+      while (
+        n &&
+        editorRef.current.contains(n) &&
+        n !== editorRef.current
+      ) {
+        const ac = n.getAttribute('align')?.toLowerCase()
+        if (ac === 'center' || ac === 'middle') {
+          alignCenter = true
+          break
+        }
+        const ta = window.getComputedStyle(n).textAlign
+        if (ta === 'center' || ta === 'webkit-center') {
+          alignCenter = true
+          break
+        }
+        n = n.parentElement
+      }
+    }
+    setIsAlignCenter(alignCenter)
+
     // Code 체크
     setIsCode(element.closest('code') !== null)
 
@@ -1825,25 +1859,87 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [updateFormatState],
   )
 
-  // 글자 적어나가는 위치에 맞춰 스크롤 (커서가 보이는 영역 중앙 근처로)
+  // 커서( caret )가 보이도록 스크롤 — block:nearest + 부모 scrollIntoView는
+  // 긴 단락 하단 입력 시 단락 일부만 보여도 스크롤을 안 해서, rect 기준으로 조상 스크롤을 맞춤
   const scrollCursorIntoView = useCallback(() => {
     if (!editorRef.current) return
     const sel = window.getSelection()
     if (!sel || sel.rangeCount === 0) return
     const range = sel.getRangeAt(0)
     if (!editorRef.current.contains(range.startContainer)) return
-    const node = range.startContainer
-    const el =
-      node.nodeType === Node.TEXT_NODE
-        ? (node as Text).parentElement
-        : (node as HTMLElement)
-    if (el)
-      el.scrollIntoView({
-        /* center면 긴 본문에서 표 삽입·편집 시 뷰가 가운데로 점프함 — 필요한 만큼만 스크롤 */
-        block: 'nearest',
-        inline: 'nearest',
-        behavior: 'smooth',
-      })
+
+    const margin = 12
+    const maxIter = 8
+
+    for (let iter = 0; iter < maxIter; iter++) {
+      let rect = range.getBoundingClientRect()
+      const clientRects = range.getClientRects()
+      if (
+        (rect.width === 0 && rect.height === 0) ||
+        (rect.height === 0 && clientRects.length > 0)
+      ) {
+        if (clientRects.length > 0) rect = clientRects[clientRects.length - 1]!
+      }
+      if (rect.width === 0 && rect.height === 0) return
+
+      let scrolled = false
+      let el: HTMLElement | null = editorRef.current
+
+      while (el && el !== document.documentElement) {
+        const style = window.getComputedStyle(el)
+        const oy = style.overflowY
+        const canScrollY =
+          el.scrollHeight > el.clientHeight + 1 &&
+          (oy === 'auto' || oy === 'scroll' || oy === 'overlay')
+
+        if (canScrollY) {
+          const br = el.getBoundingClientRect()
+          if (rect.bottom > br.bottom - margin) {
+            el.scrollTop += rect.bottom - br.bottom + margin
+            scrolled = true
+            break
+          }
+          if (rect.top < br.top + margin) {
+            el.scrollTop -= br.top + margin - rect.top
+            scrolled = true
+            break
+          }
+        }
+        el = el.parentElement
+      }
+
+      if (!scrolled) {
+        const vh = window.innerHeight
+        const vw = window.innerWidth
+        if (rect.bottom > vh - margin) {
+          window.scrollBy({
+            top: rect.bottom - vh + margin,
+            left: 0,
+            behavior: 'auto',
+          })
+          scrolled = true
+        } else if (rect.top < margin) {
+          window.scrollBy({ top: rect.top - margin, left: 0, behavior: 'auto' })
+          scrolled = true
+        } else if (rect.right > vw - margin) {
+          window.scrollBy({
+            left: rect.right - vw + margin,
+            top: 0,
+            behavior: 'auto',
+          })
+          scrolled = true
+        } else if (rect.left < margin) {
+          window.scrollBy({
+            left: rect.left - margin,
+            top: 0,
+            behavior: 'auto',
+          })
+          scrolled = true
+        }
+      }
+
+      if (!scrolled) break
+    }
   }, [])
 
   // 내용 변경 핸들러
@@ -1856,12 +1952,197 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     requestAnimationFrame(scrollCursorIntoView)
   }, [onChange, updateFormatState, scrollCursorIntoView])
 
+  /** figure+img(+선택 figcaption)를 삽입. `rangeRef`는 사용 후 null로 비움. */
+  const insertFigureAtCaret = useCallback(
+    (
+      imageUrl: string,
+      caption: string,
+      rangeRef: React.MutableRefObject<Range | null>,
+    ) => {
+      const editor = editorRef.current
+      if (!editor || !imageUrl) return
+
+      editor.focus()
+
+      const imageContainer = document.createElement('figure')
+      imageContainer.style.margin = '10px 0'
+      imageContainer.style.textAlign = 'center'
+
+      const img = document.createElement('img')
+      img.src = imageUrl
+      img.style.borderRadius = '12px'
+      img.style.display = 'block'
+      img.style.margin = '0 auto'
+      img.style.cursor = 'pointer'
+      img.style.userSelect = 'none'
+      img.setAttribute('contenteditable', 'false')
+      img.setAttribute('draggable', 'false')
+      img.setAttribute('data-resizable', 'true')
+      img.style.maxWidth = '100%'
+      img.style.height = 'auto'
+      img.style.width = 'auto'
+      img.title = '클릭하여 크기 조절'
+
+      imageContainer.appendChild(img)
+
+      if (caption) {
+        const figcaption = document.createElement('figcaption')
+        figcaption.style.marginTop = '8px'
+        figcaption.style.fontSize = '13px'
+        figcaption.style.color = '#64748b'
+        figcaption.style.fontStyle = 'italic'
+        figcaption.style.textAlign = 'center'
+        figcaption.textContent = caption
+        imageContainer.appendChild(figcaption)
+      }
+
+      const holder = document.createElement('div')
+      holder.appendChild(imageContainer)
+      const sanitized = sanitizeRichTextHtml(holder.innerHTML)
+      if (!sanitized.trim()) {
+        console.warn('RichTextEditor: image HTML was removed by sanitize')
+        return
+      }
+
+      let insertRange: Range | null = null
+      if (rangeRef.current) {
+        try {
+          insertRange = rangeRef.current.cloneRange()
+        } catch {
+          insertRange = null
+        }
+      }
+      if (!insertRange) {
+        const selection = window.getSelection()
+        if (selection && selection.rangeCount > 0) {
+          try {
+            insertRange = selection.getRangeAt(0).cloneRange()
+          } catch {
+            insertRange = null
+          }
+        }
+      }
+
+      rangeRef.current = null
+
+      const moveCaretAfter = (node: Node) => {
+        const spaceText = document.createTextNode('\u200B')
+        node.parentNode?.insertBefore(spaceText, node.nextSibling)
+        const newRange = document.createRange()
+        newRange.setStart(spaceText, 0)
+        newRange.collapse(true)
+        const selection = window.getSelection()
+        if (selection) {
+          selection.removeAllRanges()
+          selection.addRange(newRange)
+        }
+      }
+
+      const figureCountBefore = editor.querySelectorAll('figure').length
+
+      try {
+        if (insertRange && editor.contains(insertRange.commonAncestorContainer)) {
+          const selection = window.getSelection()
+          if (selection) {
+            selection.removeAllRanges()
+            selection.addRange(insertRange)
+          }
+          const ok = document.execCommand('insertHTML', false, sanitized)
+          if (!ok) {
+            editor.insertAdjacentHTML('beforeend', sanitized)
+          }
+          const figuresAfter = editor.querySelectorAll('figure')
+          const newFig = figuresAfter[figureCountBefore]
+          if (newFig && editor.contains(newFig)) moveCaretAfter(newFig)
+        } else {
+          editor.insertAdjacentHTML('beforeend', sanitized)
+          const figuresAfter = editor.querySelectorAll('figure')
+          const newFig = figuresAfter[figureCountBefore]
+          if (newFig) moveCaretAfter(newFig)
+        }
+      } catch (err) {
+        console.warn('RichTextEditor: insertHTML failed, appending', err)
+        editor.insertAdjacentHTML('beforeend', sanitized)
+        const figuresAfter = editor.querySelectorAll('figure')
+        const newFig = figuresAfter[figureCountBefore]
+        if (newFig) moveCaretAfter(newFig)
+      }
+
+      updateFormatState()
+      handleContentChange()
+      editor.focus()
+    },
+    [handleContentChange, updateFormatState],
+  )
+
   // 붙여넣기: 외부 웹 등에서 복사한 HTML 서식은 넣지 않고 평문만 삽입 (같은 에디터 내 복사도 동일)
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
       const clipboardData = e.clipboardData
-      // 클립보드에 파일(스크린샷·이미지 등)이 있으면 브라우저 기본 붙여넣기 유지
       if (clipboardData.files && clipboardData.files.length > 0) {
+        const imageFile = Array.from(clipboardData.files).find((f) =>
+          f.type.startsWith('image/'),
+        )
+        if (imageFile) {
+          e.preventDefault()
+          if (!onImageUpload) {
+            toast.error(
+              '이 필드는 이미지 업로드를 쓰지 않습니다. 이미지는 사진·썸네일 등 업로드가 있는 항목에서 넣어 주세요.',
+            )
+            return
+          }
+          if (imageFile.size > 10 * 1024 * 1024) {
+            toast.error('이미지 크기는 10MB 이하여야 합니다.')
+            return
+          }
+          void (async () => {
+            try {
+              validateImageFile(imageFile)
+            } catch (err) {
+              toast.error(
+                err instanceof Error ? err.message : '이미지 파일이 아닙니다.',
+              )
+              return
+            }
+            const editor = editorRef.current
+            if (!editor) return
+            const selection = window.getSelection()
+            if (
+              selection?.rangeCount &&
+              editor.contains(selection.getRangeAt(0).commonAncestorContainer)
+            ) {
+              savedImageInsertRangeRef.current = selection
+                .getRangeAt(0)
+                .cloneRange()
+            } else {
+              const range = document.createRange()
+              range.selectNodeContents(editor)
+              range.collapse(false)
+              savedImageInsertRangeRef.current = range
+            }
+            try {
+              const rawUrl = await onImageUpload(imageFile)
+              const imageUrl = (getUploadImageUrl(rawUrl) || rawUrl || '').trim()
+              if (!imageUrl) {
+                toast.error('이미지 URL을 받지 못했습니다.')
+                return
+              }
+              insertFigureAtCaret(
+                imageUrl,
+                '',
+                savedImageInsertRangeRef,
+              )
+            } catch (err) {
+              const message =
+                err instanceof Error
+                  ? err.message
+                  : '이미지 업로드에 실패했습니다.'
+              console.error('RichTextEditor paste image upload:', err)
+              toast.error(message)
+            }
+          })()
+          return
+        }
         return
       }
 
@@ -1899,7 +2180,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }
       handleContentChange()
     },
-    [handleContentChange],
+    [handleContentChange, onImageUpload, insertFigureAtCaret],
   )
 
   // 키 입력 핸들러 (Tab 들여쓰기, Ctrl+B 등)
@@ -2046,7 +2327,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }
 
       try {
-        const imageUrl = await onImageUpload(file)
+        const rawUrl = await onImageUpload(file)
+        const imageUrl = (getUploadImageUrl(rawUrl) || rawUrl || '').trim()
+        if (!imageUrl) {
+          alert('이미지 URL을 받지 못했습니다.')
+          return
+        }
         if (!editorRef.current) return
 
         // 현재 커서 위치 저장
@@ -2081,134 +2367,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!pendingImageUrl || !editorRef.current) return
 
     const caption = imageCaptionInput.trim()
-    const editor = editorRef.current
-    editor.focus()
+    insertFigureAtCaret(pendingImageUrl, caption, savedImageInsertRangeRef)
 
-    // 이미지 컨테이너 생성 (직렬화 후 insertHTML로 삽입 — insertNode는 <p> 안에 figure+figcaption
-    // 을 넣을 때 WebKit에서 DOM이 깨지고, 이후 innerHTML/sanitize 시 이미지가 사라질 수 있음)
-    const imageContainer = document.createElement('figure')
-    imageContainer.style.margin = '10px 0'
-    imageContainer.style.textAlign = 'center'
-
-    const img = document.createElement('img')
-    img.src = pendingImageUrl
-    img.style.borderRadius = '12px'
-    img.style.display = 'block'
-    img.style.margin = '0 auto'
-    img.style.cursor = 'pointer'
-    img.style.userSelect = 'none'
-    img.setAttribute('contenteditable', 'false')
-    img.setAttribute('draggable', 'false')
-    img.setAttribute('data-resizable', 'true')
-    img.style.maxWidth = '100%'
-    img.style.height = 'auto'
-    img.style.width = 'auto'
-    img.title = '클릭하여 크기 조절'
-
-    imageContainer.appendChild(img)
-
-    if (caption) {
-      const figcaption = document.createElement('figcaption')
-      figcaption.style.marginTop = '8px'
-      figcaption.style.fontSize = '13px'
-      figcaption.style.color = '#64748b'
-      figcaption.style.fontStyle = 'italic'
-      figcaption.style.textAlign = 'center'
-      figcaption.textContent = caption
-      imageContainer.appendChild(figcaption)
-    }
-
-    const holder = document.createElement('div')
-    holder.appendChild(imageContainer)
-    const sanitized = sanitizeRichTextHtml(holder.innerHTML)
-    if (!sanitized.trim()) {
-      console.warn('RichTextEditor: image HTML was removed by sanitize')
-      return
-    }
-
-    const savedRange = savedImageInsertRangeRef.current
-    let insertRange: Range | null = null
-    if (savedRange) {
-      try {
-        insertRange = savedRange.cloneRange()
-      } catch {
-        insertRange = null
-      }
-    }
-    if (!insertRange) {
-      const selection = window.getSelection()
-      if (selection && selection.rangeCount > 0) {
-        try {
-          insertRange = selection.getRangeAt(0).cloneRange()
-        } catch {
-          insertRange = null
-        }
-      }
-    }
-
-    savedImageInsertRangeRef.current = null
-
-    const moveCaretAfter = (node: Node) => {
-      const spaceText = document.createTextNode('\u200B')
-      node.parentNode?.insertBefore(spaceText, node.nextSibling)
-      const newRange = document.createRange()
-      newRange.setStart(spaceText, 0)
-      newRange.collapse(true)
-      const selection = window.getSelection()
-      if (selection) {
-        selection.removeAllRanges()
-        selection.addRange(newRange)
-      }
-    }
-
-    const figureCountBefore = editor.querySelectorAll('figure').length
-
-    try {
-      if (insertRange && editor.contains(insertRange.commonAncestorContainer)) {
-        const selection = window.getSelection()
-        if (selection) {
-          selection.removeAllRanges()
-          selection.addRange(insertRange)
-        }
-        const ok = document.execCommand('insertHTML', false, sanitized)
-        if (!ok) {
-          editor.insertAdjacentHTML('beforeend', sanitized)
-        }
-        const figuresAfter = editor.querySelectorAll('figure')
-        const newFig = figuresAfter[figureCountBefore]
-        if (newFig && editor.contains(newFig)) moveCaretAfter(newFig)
-      } else {
-        editor.insertAdjacentHTML('beforeend', sanitized)
-        const figuresAfter = editor.querySelectorAll('figure')
-        const newFig = figuresAfter[figureCountBefore]
-        if (newFig) moveCaretAfter(newFig)
-      }
-    } catch (err) {
-      console.warn('RichTextEditor: insertHTML failed, appending', err)
-      editor.insertAdjacentHTML('beforeend', sanitized)
-      const figuresAfter = editor.querySelectorAll('figure')
-      const newFig = figuresAfter[figureCountBefore]
-      if (newFig) moveCaretAfter(newFig)
-    }
-
-    // 포맷 상태 업데이트
-    updateFormatState()
-    handleContentChange()
-
-    // 모달 닫기
     setImageCaptionModalVisible(false)
     setImageCaptionInput('')
     setPendingImageUrl(null)
-
-    // 에디터 포커스 유지
-    if (editorRef.current) {
-      editorRef.current.focus()
-    }
   }, [
     pendingImageUrl,
     imageCaptionInput,
-    handleContentChange,
-    updateFormatState,
+    insertFigureAtCaret,
   ])
 
   // 이미지 설명 모달 닫기
@@ -2971,6 +3138,33 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         >
           <FiType />
           <span style={{ fontSize: '10px', marginLeft: '2px' }}>3</span>
+        </ToolbarButton>
+        <ToolbarDivider />
+        <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            playClickSound()
+            applyFormat('justifyLeft')
+          }}
+          $active={!isAlignCenter}
+          title="왼쪽 정렬"
+          aria-label="왼쪽 정렬"
+          aria-pressed={!isAlignCenter}
+        >
+          <FiAlignLeft />
+        </ToolbarButton>
+        <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            playClickSound()
+            applyFormat('justifyCenter')
+          }}
+          $active={isAlignCenter}
+          title="가운데 정렬"
+          aria-label="가운데 정렬"
+          aria-pressed={isAlignCenter}
+        >
+          <FiAlignCenter />
         </ToolbarButton>
         <ToolbarDivider />
         <ToolbarButton

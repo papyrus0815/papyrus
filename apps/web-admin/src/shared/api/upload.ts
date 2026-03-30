@@ -4,31 +4,47 @@
 
 import { getApiConnection } from './client'
 
-export const getApiHost = (): string => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL
+/** API가 돌려주는 업로드 경로 접두사 (외부 도메인의 /uploads/ 오인 방지) */
+const UPLOADS_IMAGES_PREFIX = '/uploads/images/'
 
-  if (envUrl === '') {
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    return origin
+function apiOriginFromConnection(): string {
+  const raw = getApiConnection().host.replace(/\/$/, '')
+  if (!raw) return ''
+  try {
+    const withProto = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`
+    return new URL(withProto).origin
+  } catch {
+    return ''
   }
-
-  if (envUrl) {
-    return envUrl
-  }
-
-  return 'http://localhost:8000'
 }
 
 /**
  * 업로드 이미지 URL을 API 기준 전체 URL로 변환.
- * - 상대 경로(/uploads/...)일 때 API 호스트를 붙여서 프록시/다른 도메인에서도 이미지 로드 보장.
+ * - `getApiConnection().host`와 업로드 fetch가 동일 베이스를 쓰도록 함(api.service의 Electron 등 분기와 일치).
+ * - 상대 경로(/uploads/...)에 API origin 부착.
+ * - DB에 예전 호스트(예: localhost)로 저장된 절대 URL이 있어도, `/uploads/images/`면 현재 API로 재작성.
  */
 export function getUploadImageUrl(path: string | null | undefined): string {
   if (!path || typeof path !== 'string') return ''
   const trimmed = path.trim()
   if (!trimmed) return ''
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
-  const base = getApiHost().replace(/\/$/, '')
+
+  const origin = apiOriginFromConnection()
+  const base = origin || getApiConnection().host.replace(/\/$/, '')
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const u = new URL(trimmed)
+      if (u.pathname.startsWith(UPLOADS_IMAGES_PREFIX) && origin) {
+        return `${origin}${u.pathname}${u.search}`
+      }
+    } catch {
+      /* keep trimmed */
+    }
+    return trimmed
+  }
+
+  if (!base) return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
   return trimmed.startsWith('/') ? `${base}${trimmed}` : `${base}/${trimmed}`
 }
 

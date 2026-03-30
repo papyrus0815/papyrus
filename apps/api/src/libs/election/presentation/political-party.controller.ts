@@ -12,8 +12,14 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
+import { GovernmentPositionType } from '@prisma/client'
+
 import { PrismaService } from '@prisma/prisma.service'
 import { assertLawMatchesPoliticalPartyJurisdiction } from '../domain/law-jurisdiction.util'
+import {
+  buildTenureJurisdictionWhere,
+  membershipOverlapsTenure,
+} from '../domain/party-top-leaders.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
 /**
@@ -69,6 +75,125 @@ export class PoliticalPartyController {
       successors: outgoing,
       predecessors: incoming,
     })
+  }
+
+  /**
+   * 이 정당과 연결된 국가원수·정부수반 재임 (당선 선거 정당 또는 재임 기간과 겹치는 당원 소속)
+   */
+  @Get(':id/top-leaders')
+  async listTopLeaders(@Param('id') id: string) {
+    const party = await this.prisma.politicalParty.findUnique({
+      where: { id },
+      select: { id: true, countryId: true, historicalCountryId: true },
+    })
+    if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
+
+    const jurisdictionWhere = await buildTenureJurisdictionWhere(
+      this.prisma,
+      party,
+    )
+    if (!jurisdictionWhere) return []
+
+    const tenureInclude = {
+      positionDefinition: true,
+      country: true,
+      historicalCountry: true,
+      person: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          middleName: true,
+          nameDisplayOrder: true,
+          profileImageUrl: true,
+          fatherId: true,
+          motherId: true,
+          dynastyId: true,
+          dynasty: { select: { id: true, name: true } },
+          birthCityId: true,
+          birthAdminDivisionId: true,
+          birthPlaceText: true,
+          birthCity: { select: { id: true, name: true } },
+          birthAdminDivision: { select: { id: true, name: true } },
+          country: {
+            select: {
+              defaultNameDisplayOrder: true,
+              isoCode: true,
+            },
+          },
+        },
+      },
+      electionCandidacy: {
+        select: {
+          id: true,
+          partyId: true,
+          election: { select: { id: true, name: true, pollDate: true } },
+          party: { select: { id: true, name: true } },
+        },
+      },
+    }
+
+    const topLeaderPositionFilter = {
+      positionType: {
+        in: [
+          GovernmentPositionType.HEAD_OF_STATE,
+          GovernmentPositionType.HEAD_OF_GOVERNMENT,
+        ],
+      },
+    }
+
+    const [memberships, candidates, fromCabinetHead] = await Promise.all([
+      this.prisma.politicalPartyMembership.findMany({
+        where: { partyId: id },
+        select: { personId: true, startDate: true, endDate: true },
+      }),
+      this.prisma.governmentPositionTenure.findMany({
+        where: {
+          AND: [jurisdictionWhere, topLeaderPositionFilter],
+        },
+        include: tenureInclude,
+        orderBy: { startDate: 'desc' },
+      }),
+      this.prisma.governmentPositionTenure.findMany({
+        where: {
+          AND: [
+            jurisdictionWhere,
+            topLeaderPositionFilter,
+            {
+              headOfCabinet: {
+                is: {
+                  politicalParties: { some: { partyId: id } },
+                },
+              },
+            },
+          ],
+        },
+        include: tenureInclude,
+        orderBy: { startDate: 'desc' },
+      }),
+    ])
+
+    const linked = candidates.filter((tenure) => {
+      const ecPartyId = tenure.electionCandidacy?.partyId
+      if (ecPartyId === id) return true
+      return memberships.some(
+        (m) =>
+          m.personId === tenure.personId &&
+          membershipOverlapsTenure(m, tenure),
+      )
+    })
+
+    const byId = new Map<string, (typeof linked)[number]>()
+    for (const t of linked) byId.set(t.id, t)
+    for (const t of fromCabinetHead) {
+      if (!byId.has(t.id)) byId.set(t.id, t)
+    }
+
+    const merged = Array.from(byId.values()).sort(
+      (a, b) => b.startDate.getTime() - a.startDate.getTime(),
+    )
+
+    return serializeElectionBigInt(merged)
   }
 
   @Get(':id/laws')

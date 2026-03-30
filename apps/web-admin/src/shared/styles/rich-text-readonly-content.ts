@@ -122,3 +122,62 @@ export const richTextReadonlyEntityLinksCss = css`
     background: rgba(13, 148, 136, 0.1);
   }
 `
+
+/**
+ * 순서·비순서 목록 — RichTextEditor 본문(`EditorContent`)과 읽기 전용 뷰 동일.
+ * 중첩 `ul` 마커(disc → circle → square)까지 맞춤.
+ */
+export const richTextProseListCss = css`
+  ul,
+  ol {
+    margin: 8px 0;
+    padding-left: 28px;
+    list-style-position: outside;
+  }
+
+  ul {
+    list-style-type: disc;
+  }
+
+  ol {
+    list-style-type: decimal;
+  }
+
+  ul ul {
+    list-style-type: circle;
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+
+  ul ul ul {
+    list-style-type: square;
+  }
+
+  ol ol {
+    list-style-type: lower-alpha;
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+
+  ol ol ol {
+    list-style-type: lower-roman;
+  }
+
+  li {
+    margin: 4px 0;
+    line-height: 1.55;
+  }
+
+  li > ul,
+  li > ol {
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+`
+
+/** 블록 가운데 정렬 — execCommand `justifyCenter`·레거시 align 속성 */
+export const richTextBlockAlignCss = css`
+  [align='center'] {
+    text-align: center;
+  }
+`

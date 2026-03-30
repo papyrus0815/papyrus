@@ -402,6 +402,86 @@ export const PartyShareDonutHole = styled.div`
   border-radius: 50%;
   background: ${({ theme }) => theme.colors.background.primary};
   box-shadow: inset 0 2px 8px rgba(15, 23, 42, 0.08);
+  z-index: 2;
+`
+
+/** 반원 도넛 — 조각별 fill + 호버 시 해당 조각만 확대 */
+export const PartyShareDonutSliceSvg = styled.svg`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+
+  path {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+`
+
+/** 도넛 중심(50,50) 기준 — 호버한 조각만 살짝 확대 + 그림자 */
+export const PartyShareDonutSectorGroup = styled.g<{ $emphasize?: boolean }>`
+  transform-origin: 50px 50px;
+  transition:
+    transform 0.16s ease-out,
+    filter 0.16s ease-out;
+  transform: ${({ $emphasize }) =>
+    $emphasize
+      ? 'translate(50px, 50px) scale(1.028) translate(-50px, -50px)'
+      : 'translate(50px, 50px) scale(1) translate(-50px, -50px)'};
+  filter: ${({ $emphasize, theme }) =>
+    $emphasize
+      ? theme.mode === 'dark'
+        ? 'drop-shadow(0 1px 4px rgba(0, 0, 0, 0.35))'
+        : 'drop-shadow(0 1px 5px rgba(15, 23, 42, 0.09))'
+      : 'none'};
+`
+
+export const PartyShareDonutSectorPath = styled.path<{ $fill: string }>`
+  fill: ${({ $fill }) => $fill};
+  vector-effect: non-scaling-stroke;
+  stroke-width: 0.4px;
+  stroke: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.55)'};
+`
+
+/** @deprecated 투명 히트 전용 레이어 — SVG 조각 렌더로 대체 */
+export const PartyShareDonutHitLayer = styled.svg`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+
+  path {
+    pointer-events: auto;
+    fill: transparent;
+    cursor: pointer;
+  }
+`
+
+/** 선거 그래프 호버 — 네이티브 title 대신 즉시 보이는 고정 레이어 */
+export const ElectionChartTooltip = styled.div`
+  position: fixed;
+  z-index: 11000;
+  max-width: min(300px, calc(100vw - 20px));
+  padding: 9px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.98)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(15, 23, 42, 0.04);
+  pointer-events: none;
+  word-break: break-word;
 `
 
 export const PartyShareLegend = styled.ul`
@@ -684,6 +764,33 @@ export const DataTh = styled.th`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
 `
 
+/** 정렬 가능한 테이블 헤더 */
+export const DataThSortButton = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  margin: 0;
+  padding: 2px 0;
+  width: 100%;
+  font: inherit;
+  font-weight: 600;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+`
+
 export const DataTd = styled.td`
   padding: 10px 12px;
   font-size: 13px;
@@ -896,6 +1003,7 @@ export const ReferendumBallotBarRow = styled.div`
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px 12px;
   align-items: center;
+  cursor: default;
 `
 
 export const ReferendumBallotBarLabel = styled.div`
@@ -2047,6 +2155,63 @@ export const PartyDetailDescSection = styled.section`
   background: transparent;
 `
 
+export const PartyTopLeadersHint = styled.p`
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const PartyTopLeadersList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+export const PartyTopLeaderRow = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : '#eef2ff'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(129, 140, 248, 0.35)' : '#c7d2fe'};
+  }
+`
+
+export const PartyTopLeaderName = styled.span`
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+`
+
+export const PartyTopLeaderMeta = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.45;
+`
+
 /** 인물 상세 전기(Bio)와 동일 톤 — 라벨 행 */
 export const PartyDescSectionLabelRow = styled.div`
   display: flex;
@@ -2137,22 +2302,6 @@ export const PartyDescContent = styled(RichTextReadView)`
   }
   & p:last-child {
     margin-bottom: 0;
-  }
-  & ul,
-  & ol {
-    margin: 8px 0;
-    padding-left: 28px;
-    list-style-position: outside;
-  }
-  & ul {
-    list-style-type: disc;
-  }
-  & ol {
-    list-style-type: decimal;
-  }
-  & li {
-    margin: 4px 0;
-    line-height: 1.55;
   }
 `
 

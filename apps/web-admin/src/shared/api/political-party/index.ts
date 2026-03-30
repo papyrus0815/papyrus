@@ -64,6 +64,34 @@ export type PoliticalPartyLineageDto = {
   predecessors: PartyTransitionEndpoint[]
 }
 
+/** GET /political-parties/:id/top-leaders — 국가원수·정부수반 재임 */
+export type PartyTopLeaderTenure = {
+  id: string
+  positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+  title?: string | null
+  termNumber?: number | null
+  subTermNumber?: number | null
+  startDate: string
+  endDate?: string | null
+  positionDefinition?: { id: string; title: string; positionType?: string } | null
+  person: {
+    id: string
+    name: string
+    surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
+    profileImageUrl?: string | null
+    country?: {
+      defaultNameDisplayOrder?: string | null
+      isoCode?: string | null
+    } | null
+  }
+  electionCandidacy?: {
+    partyId?: string | null
+    election?: { id: string; name: string; pollDate?: string | null } | null
+  } | null
+}
+
 export type PoliticalPartyTransitionDto = PartyTransitionEndpoint
 
 export type CreatePartyTransitionInput = {
@@ -151,6 +179,12 @@ export const politicalPartyApi = {
   getLineage: async (partyId: string) => {
     return requestJson<PoliticalPartyLineageDto>(
       `/political-parties/${encodeURIComponent(partyId)}/lineage`,
+    )
+  },
+
+  getTopLeaders: async (partyId: string) => {
+    return requestJson<PartyTopLeaderTenure[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/top-leaders`,
     )
   },
 

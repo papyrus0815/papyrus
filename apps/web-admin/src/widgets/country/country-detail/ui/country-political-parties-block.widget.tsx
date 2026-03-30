@@ -25,6 +25,7 @@ import styled from 'styled-components'
 
 import {
   type CreatePoliticalPartyInput,
+  type PartyTopLeaderTenure,
   type PoliticalParty,
   type PoliticalPartyTransitionKind,
   type PoliticalPosition,
@@ -37,6 +38,7 @@ import {
 } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useRichTextProseClick } from '@/shared/hooks/use-rich-text-prose-click'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
@@ -145,6 +147,11 @@ import {
   PartyInfographicStatusPill,
   PartyLineageConfirmSummary,
   PartyLineageTextarea,
+  PartyTopLeaderMeta,
+  PartyTopLeaderName,
+  PartyTopLeaderRow,
+  PartyTopLeadersHint,
+  PartyTopLeadersList,
   SectionHeaderRow,
   SectionKicker,
   SectionLead,
@@ -401,6 +408,76 @@ function labelPoliticalPosition(value: string | null | undefined) {
   if (!value) return '—'
   const o = POSITION_OPTIONS.find((x) => x.value === value)
   return o?.label ?? value
+}
+
+function labelTopLeaderPositionType(
+  positionType: PartyTopLeaderTenure['positionType'],
+) {
+  if (positionType === 'HEAD_OF_GOVERNMENT') return '정부수반'
+  return '국가원수'
+}
+
+function tenureTitleLine(t: PartyTopLeaderTenure): string {
+  const defTitle = t.positionDefinition?.title?.trim()
+  const raw = t.title?.trim()
+  const title = defTitle || raw
+  if (title) return title
+  return labelTopLeaderPositionType(t.positionType)
+}
+
+function formatTenureRange(startDate: string, endDate?: string | null) {
+  const a = formatDate(startDate)
+  const b = endDate ? formatDate(endDate) : '재임 중'
+  return `${a} — ${b}`
+}
+
+function PartyTopLeadersBlock({ partyId }: { partyId: string }) {
+  const navigate = useNavigate()
+  const { data = [], isLoading, isError } = useQuery({
+    queryKey: ['political-parties', partyId, 'top-leaders'],
+    queryFn: () => politicalPartyApi.getTopLeaders(partyId),
+    enabled: !!partyId,
+  })
+
+  return (
+    <PartyDetailDescSection aria-label="배출 최고권력자">
+      <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
+        <PartyDescSectionLabel>배출 최고권력자</PartyDescSectionLabel>
+      </PartyDescSectionLabelRow>
+      <PartyTopLeadersHint>
+        국가원수·정부수반(대통령, 국왕, 수상·총리 등) 재임이 이 정당으로
+        당선된 경우, 또는 재임 기간과 겹치는 당원 소속이 있으면 표시합니다.
+      </PartyTopLeadersHint>
+      {isLoading ? (
+        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+      ) : isError ? (
+        <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
+      ) : data.length === 0 ? (
+        <PartyDescEmptyHint>연결된 최고권력자 재임이 없습니다.</PartyDescEmptyHint>
+      ) : (
+        <PartyTopLeadersList>
+          {data.map((t) => (
+            <li key={t.id}>
+              <PartyTopLeaderRow
+                type="button"
+                onClick={() => navigate(pathKeys.persons.detail(t.person.id))}
+                aria-label={`${getPersonDisplayName(t.person)} 인물 상세`}
+              >
+                <PartyTopLeaderName>
+                  {getPersonDisplayName(t.person)}
+                </PartyTopLeaderName>
+                <PartyTopLeaderMeta>
+                  {tenureTitleLine(t)}
+                  {' · '}
+                  {formatTenureRange(t.startDate, t.endDate)}
+                </PartyTopLeaderMeta>
+              </PartyTopLeaderRow>
+            </li>
+          ))}
+        </PartyTopLeadersList>
+      )}
+    </PartyDetailDescSection>
+  )
 }
 
 const POSITION_SPECTRUM_PCT: Record<PoliticalPosition, number> = {
@@ -1545,6 +1622,7 @@ export function CountryPoliticalPartiesBlock({
                 partyName={detailParty.name}
                 parties={parties}
               />
+              <PartyTopLeadersBlock partyId={detailParty.id} />
               <PartyDetailDescSection aria-label="정당 설명">
                 <PartyDescSectionLabelRow>
                   <PartyDescSectionLabel>설명</PartyDescSectionLabel>

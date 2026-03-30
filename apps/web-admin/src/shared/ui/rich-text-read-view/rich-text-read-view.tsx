@@ -4,6 +4,8 @@ import styled from 'styled-components'
 
 import { formatRichTextForReadView } from '@/shared/lib/rich-text-read-view'
 import {
+  richTextBlockAlignCss,
+  richTextProseListCss,
   richTextReadonlyEntityLinksCss,
   richTextReadonlyHorizontalRuleCss,
   richTextReadonlyMediaAndTablesCss,
@@ -31,22 +33,8 @@ const Root = styled.div`
     font-weight: 700;
   }
 
-  ul,
-  ol {
-    margin: 12px 0;
-    padding-left: 28px;
-    list-style-position: outside;
-  }
-  ul {
-    list-style-type: disc;
-  }
-  ol {
-    list-style-type: decimal;
-  }
-  li {
-    margin: 4px 0;
-    line-height: 1.55;
-  }
+  ${richTextProseListCss}
+  ${richTextBlockAlignCss}
 
   blockquote {
     border-left: 4px solid

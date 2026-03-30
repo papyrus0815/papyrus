@@ -68,7 +68,12 @@ import {
 } from '@/shared/api/treaty'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
-import { useRichTextProseClick } from '@/shared/hooks/use-rich-text-prose-click'
+import {
+  useRichTextProseClick,
+  useRichTextTooltipEscape,
+  type RichTextDynastyTooltipState,
+  type RichTextTermTooltipState,
+} from '@/shared/hooks/use-rich-text-prose-click'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -117,6 +122,7 @@ import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-d
 import { CabinetDetailChrome } from './cabinet-detail-chrome.widget'
 import { CabinetMinisterCards } from './cabinet-minister-cards.widget'
 import { CabinetPoliticalPartiesBlock } from './cabinet-political-parties-block.widget'
+import { SubsectionAddBtn } from './country-politics-tab.styles'
 import {
   TlItem,
   cabinetTimelineCellAriaLabel,
@@ -231,6 +237,10 @@ export function CabinetsSection({
   )
   /** 각료/수반 썸네일 클릭 시 인물 상세 모달 (포스트 상세와 동일한 mentionPersonId 패턴) */
   const [mentionPersonId, setMentionPersonId] = useState<string | null>(null)
+  const [historyProseTermTooltip, setHistoryProseTermTooltip] =
+    useState<RichTextTermTooltipState | null>(null)
+  const [historyProseDynastyTooltip, setHistoryProseDynastyTooltip] =
+    useState<RichTextDynastyTooltipState | null>(null)
   const { data: mentionPerson } = useQuery({
     queryKey: ['person-detail', mentionPersonId],
     queryFn: () => getPersonDetailById(mentionPersonId!),
@@ -251,39 +261,20 @@ export function CabinetsSection({
     return () => mq.removeEventListener('change', apply)
   }, [])
 
-  /** 히스토리 본문 클릭 — 멘션/엔티티(인물·정당·사건·국가 등) 공통 처리 */
+  /** 히스토리 본문 클릭 — 멘션/엔티티/용어·가문 툴팁 (인물·정당·사건·국가 등) 공통 처리 */
   const { handleProseClick: handleHistoryProseClick } = useRichTextProseClick({
     navigate,
     onPersonClick: setMentionPersonId,
+    setTermTooltip: setHistoryProseTermTooltip,
+    setDynastyTooltip: setHistoryProseDynastyTooltip,
   })
 
-  const scrollToCabSection = useCallback((sectionId: string) => {
-    const el = document.getElementById(sectionId)
-    if (!el) return
-    /** 상위 패널이 overflow:auto인 경우(국가 상세 본문) window가 아니라 그 요소를 스크롤해야 함 */
-    let scrollParent: HTMLElement | null = null
-    for (let n: HTMLElement | null = el.parentElement; n; n = n.parentElement) {
-      const { overflowY } = window.getComputedStyle(n)
-      if (overflowY === 'auto' || overflowY === 'scroll') {
-        scrollParent = n
-        break
-      }
-    }
-    const pad = 14
-    if (scrollParent) {
-      const nextTop =
-        el.getBoundingClientRect().top -
-        scrollParent.getBoundingClientRect().top +
-        scrollParent.scrollTop -
-        pad
-      scrollParent.scrollTo({
-        top: Math.max(0, nextTop),
-        behavior: 'smooth',
-      })
-    } else {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [])
+  useRichTextTooltipEscape(
+    !!historyProseTermTooltip,
+    !!historyProseDynastyTooltip,
+    () => setHistoryProseTermTooltip(null),
+    () => setHistoryProseDynastyTooltip(null),
+  )
 
   /** 행정부 수정 모달 (이름 + 수반 재임 대수/직위/취임·퇴임) */
   const [editingCabinet, setEditingCabinet] = useState<any | null>(null)
@@ -2109,7 +2100,6 @@ export function CabinetsSection({
                   cabDetailBackBtnRef={cabDetailBackBtnRef}
                   selectedCabinet={selectedCabinet}
                   selectedMinisterId={selectedMinisterId}
-                  selectedHeadHistoryId={selectedHeadHistoryId}
                   sortedVisibleMinisters={sortedVisibleMinisters}
                   setCabinetView={setCabinetView}
                   setSelectedCabinetId={setSelectedCabinetId}
@@ -2127,7 +2117,6 @@ export function CabinetsSection({
                   setPersonSelectOpen={setPersonSelectOpen}
                   handleDeleteCabinet={handleDeleteCabinet}
                   onEditCabinet={() => handleOpenEditCabinet(selectedCabinet)}
-                  scrollToCabSection={scrollToCabSection}
                 />
                 {selectedMinisterId
                   ? /* ── 각료 상세 뷰 ── */
@@ -2845,18 +2834,7 @@ export function CabinetsSection({
                                 <CabS.HeadProfileDivider aria-hidden />
                                 {head?.person && (
                                   <CabS.HeadLifespan>
-                                    <span
-                                      style={{
-                                        fontWeight: 700,
-                                        color: C.slate400,
-                                        marginRight: 4,
-                                        fontSize: 10,
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.04em',
-                                      }}
-                                    >
-                                      생몰년
-                                    </span>
+                                    <CabS.HeadMetaKicker>생몰년</CabS.HeadMetaKicker>
                                     {formatPersonLifespan(head.person)}
                                   </CabS.HeadLifespan>
                                 )}
@@ -2868,18 +2846,7 @@ export function CabinetsSection({
                                     p?.birthPlaceText
                                   return birthPlace ? (
                                     <CabS.HeadLifespan>
-                                      <span
-                                        style={{
-                                          fontWeight: 700,
-                                          color: C.slate400,
-                                          marginRight: 4,
-                                          fontSize: 10,
-                                          textTransform: 'uppercase',
-                                          letterSpacing: '0.04em',
-                                        }}
-                                      >
-                                        출신
-                                      </span>
+                                      <CabS.HeadMetaKicker>출신</CabS.HeadMetaKicker>
                                       {birthPlace}
                                     </CabS.HeadLifespan>
                                   ) : null
@@ -2900,16 +2867,7 @@ export function CabinetsSection({
                           {!selectedHeadHistoryId && (
                             <>
                               {/* 취임/퇴임 정보 섹션 — 수반 히스토리 상세 시에는 숨김(각료 상세와 동일하게 프로필+히스토리만) */}
-                              <div
-                                id="cab-detail-tenure"
-                                style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: 2,
-                                  padding: '16px 0 8px',
-                                  scrollMarginTop: 12,
-                                }}
-                              >
+                              <CabS.CabDetailScrollSection id="cab-detail-tenure">
                                 {/* ── 취임 정보 ── */}
                                 <CabS.HeadTenureInfoSection $accent="mint">
                                   <div
@@ -3424,8 +3382,7 @@ export function CabinetsSection({
                                     </p>
                                   )}
                                 </CabS.HeadTenureInfoSection>
-                              </div>
-                              {/* end tenure info container */}
+                              </CabS.CabDetailScrollSection>
                             </>
                           )}
 
@@ -3889,15 +3846,15 @@ export function CabinetsSection({
                                   )}
                                   {!loadingCabinetMinisters &&
                                     sortedVisibleMinisters.length > 0 && (
-                                      <CabS.HeadActionBtnPrimary
+                                      <SubsectionAddBtn
                                         type="button"
                                         onClick={() =>
                                           handleAddMinister(selectedCabinet)
                                         }
                                       >
-                                        <FiPlus size={13} />
+                                        <FiPlus size={14} strokeWidth={2.25} />
                                         각료 추가
-                                      </CabS.HeadActionBtnPrimary>
+                                      </SubsectionAddBtn>
                                     )}
                                 </CabS.CabDetailMinistersSectionHeader>
 
@@ -3918,15 +3875,15 @@ export function CabinetsSection({
                                       <CabS.CabDetailEmptyText>
                                         등록된 각료가 없습니다.
                                       </CabS.CabDetailEmptyText>
-                                      <CabS.HeadActionBtnPrimary
+                                      <SubsectionAddBtn
                                         type="button"
                                         onClick={() =>
                                           handleAddMinister(selectedCabinet)
                                         }
                                       >
-                                        <FiPlus size={13} />
+                                        <FiPlus size={14} strokeWidth={2.25} />
                                         각료 추가
-                                      </CabS.HeadActionBtnPrimary>
+                                      </SubsectionAddBtn>
                                     </CabS.CabDetailEmptyStack>
                                   )
                                 ) : (
@@ -3961,13 +3918,13 @@ export function CabinetsSection({
                                     {cabinetTreaties.length}건
                                   </CabS.CabResultCount>
                                   <div style={{ flex: 1 }} />
-                                  <CabS.HeadActionBtnPrimary
+                                  <SubsectionAddBtn
                                     type="button"
                                     onClick={() => setShowTreatyLinkModal(true)}
                                   >
-                                    <FiLink size={13} />
+                                    <FiLink size={14} strokeWidth={2.25} />
                                     조약 연결
-                                  </CabS.HeadActionBtnPrimary>
+                                  </SubsectionAddBtn>
                                 </CabS.CabDetailMinistersSectionHeader>
 
                                 {loadingCabinetTreaties ? (
@@ -3983,15 +3940,15 @@ export function CabinetsSection({
                                     <CabS.CabDetailEmptyText>
                                       연결된 조약이 없습니다.
                                     </CabS.CabDetailEmptyText>
-                                    <CabS.HeadActionBtnPrimary
+                                    <SubsectionAddBtn
                                       type="button"
                                       onClick={() =>
                                         setShowTreatyLinkModal(true)
                                       }
                                     >
-                                      <FiLink size={13} />
+                                      <FiLink size={14} strokeWidth={2.25} />
                                       조약 연결
-                                    </CabS.HeadActionBtnPrimary>
+                                    </SubsectionAddBtn>
                                   </CabS.CabDetailEmptyStack>
                                 ) : (
                                   <CabS.CabDetailTreatyList>
@@ -4048,19 +4005,18 @@ export function CabinetsSection({
 
                                           {isExpanded && (
                                             <CabS.CabDetailTreatyExpandedPanel>
-                                              {signatory && (
+                                              <CabS.CabDetailTreatySectionTitle>
+                                                이 행정부 연결
+                                              </CabS.CabDetailTreatySectionTitle>
+                                              {signatory ? (
                                                 <CabS.CabDetailTreatySignatoryRow>
                                                   {signatory.person && (
                                                     <CabS.CabDetailTreatyMetaText>
                                                       서명자:{' '}
                                                       <strong>
-                                                        {[
-                                                          signatory.person.name,
-                                                          signatory.person
-                                                            .surname,
-                                                        ]
-                                                          .filter(Boolean)
-                                                          .join(' ')}
+                                                        {getPersonName(
+                                                          signatory.person,
+                                                        )}
                                                       </strong>
                                                     </CabS.CabDetailTreatyMetaText>
                                                   )}
@@ -4082,30 +4038,321 @@ export function CabinetsSection({
                                                         signatory.participationType}
                                                     </strong>
                                                   </CabS.CabDetailTreatyMetaText>
+                                                  {signatory.signedAt && (
+                                                    <CabS.CabDetailTreatyMetaText>
+                                                      서명 시각:{' '}
+                                                      <strong>
+                                                        {formatDate(
+                                                          signatory.signedAt,
+                                                        )}
+                                                      </strong>
+                                                    </CabS.CabDetailTreatyMetaText>
+                                                  )}
+                                                  {signatory.note?.trim() && (
+                                                    <CabS.CabDetailTreatyMetaText>
+                                                      비고:{' '}
+                                                      <strong>
+                                                        {signatory.note}
+                                                      </strong>
+                                                    </CabS.CabDetailTreatyMetaText>
+                                                  )}
                                                 </CabS.CabDetailTreatySignatoryRow>
+                                              ) : (
+                                                <CabS.CabDetailTreatyMetaText>
+                                                  이 행정부와 직접 연결된 서명
+                                                  행을 찾지 못했습니다. 아래
+                                                  「서명·참여」에서 전체 서명국을
+                                                  확인하세요.
+                                                </CabS.CabDetailTreatyMetaText>
                                               )}
-                                              {treaty.summary && (
-                                                <CabS.CabDetailTreatySummaryPara>
-                                                  {treaty.summary}
-                                                </CabS.CabDetailTreatySummaryPara>
+
+                                              <CabS.CabDetailTreatySectionTitle
+                                                $spaced
+                                              >
+                                                조약 정보
+                                              </CabS.CabDetailTreatySectionTitle>
+                                              <CabS.CabDetailTreatyInfoRows>
+                                                <CabS.CabDetailTreatyInfoDt>
+                                                  서명일
+                                                </CabS.CabDetailTreatyInfoDt>
+                                                <CabS.CabDetailTreatyInfoDd>
+                                                  {treaty.signDate
+                                                    ? formatDate(
+                                                        treaty.signDate,
+                                                      )
+                                                    : '—'}
+                                                </CabS.CabDetailTreatyInfoDd>
+                                                <CabS.CabDetailTreatyInfoDt>
+                                                  발효일
+                                                </CabS.CabDetailTreatyInfoDt>
+                                                <CabS.CabDetailTreatyInfoDd>
+                                                  {treaty.effectiveDate
+                                                    ? formatDate(
+                                                        treaty.effectiveDate,
+                                                      )
+                                                    : '—'}
+                                                </CabS.CabDetailTreatyInfoDd>
+                                                <CabS.CabDetailTreatyInfoDt>
+                                                  만료일
+                                                </CabS.CabDetailTreatyInfoDt>
+                                                <CabS.CabDetailTreatyInfoDd>
+                                                  {treaty.expiryDate
+                                                    ? formatDate(
+                                                        treaty.expiryDate,
+                                                      )
+                                                    : '—'}
+                                                </CabS.CabDetailTreatyInfoDd>
+                                                <CabS.CabDetailTreatyInfoDt>
+                                                  위치
+                                                </CabS.CabDetailTreatyInfoDt>
+                                                <CabS.CabDetailTreatyInfoDd>
+                                                  {treaty.location?.trim() ||
+                                                    '—'}
+                                                </CabS.CabDetailTreatyInfoDd>
+                                                <CabS.CabDetailTreatyInfoDt>
+                                                  서명 장소
+                                                </CabS.CabDetailTreatyInfoDt>
+                                                <CabS.CabDetailTreatyInfoDd>
+                                                  {treaty.signingAdministrativeDivision
+                                                    ? [
+                                                        treaty
+                                                          .signingAdministrativeDivision
+                                                          .name,
+                                                        treaty
+                                                          .signingAdministrativeDivision
+                                                          .localName,
+                                                      ]
+                                                        .filter(Boolean)
+                                                        .join(' · ') || '—'
+                                                    : '—'}
+                                                </CabS.CabDetailTreatyInfoDd>
+                                                {(treaty.violationDate ||
+                                                  treaty.violationReason?.trim()) && (
+                                                  <>
+                                                    <CabS.CabDetailTreatyInfoDt>
+                                                      파기·위반
+                                                    </CabS.CabDetailTreatyInfoDt>
+                                                    <CabS.CabDetailTreatyInfoDd>
+                                                      {treaty.violationDate
+                                                        ? formatDate(
+                                                            treaty.violationDate,
+                                                          )
+                                                        : '—'}
+                                                      {treaty.violationReason?.trim()
+                                                        ? ` — ${treaty.violationReason}`
+                                                        : ''}
+                                                    </CabS.CabDetailTreatyInfoDd>
+                                                  </>
+                                                )}
+                                              </CabS.CabDetailTreatyInfoRows>
+
+                                              {treaty.summary?.trim() && (
+                                                <>
+                                                  <CabS.CabDetailTreatySectionTitle
+                                                    $spaced
+                                                  >
+                                                    요약
+                                                  </CabS.CabDetailTreatySectionTitle>
+                                                  <CabS.CabDetailTreatyBodyPara>
+                                                    {treaty.summary}
+                                                  </CabS.CabDetailTreatyBodyPara>
+                                                </>
                                               )}
+                                              {treaty.background?.trim() && (
+                                                <>
+                                                  <CabS.CabDetailTreatySectionTitle
+                                                    $spaced
+                                                  >
+                                                    배경
+                                                  </CabS.CabDetailTreatySectionTitle>
+                                                  <CabS.CabDetailTreatyBodyPara>
+                                                    {treaty.background}
+                                                  </CabS.CabDetailTreatyBodyPara>
+                                                </>
+                                              )}
+                                              {treaty.aftermath?.trim() && (
+                                                <>
+                                                  <CabS.CabDetailTreatySectionTitle
+                                                    $spaced
+                                                  >
+                                                    이후 영향
+                                                  </CabS.CabDetailTreatySectionTitle>
+                                                  <CabS.CabDetailTreatyBodyPara>
+                                                    {treaty.aftermath}
+                                                  </CabS.CabDetailTreatyBodyPara>
+                                                </>
+                                              )}
+
+                                              {treaty.terms &&
+                                                treaty.terms.length > 0 && (
+                                                  <>
+                                                    <CabS.CabDetailTreatySectionTitle
+                                                      $spaced
+                                                    >
+                                                      조항 ({treaty.terms.length})
+                                                    </CabS.CabDetailTreatySectionTitle>
+                                                    <CabS.CabDetailTreatyTermList>
+                                                      {treaty.terms.map(
+                                                        (term) => (
+                                                          <CabS.CabDetailTreatyTermItem
+                                                            key={term.id}
+                                                          >
+                                                            <CabS.CabDetailTreatyTermTitle>
+                                                              {term.title?.trim() ||
+                                                                `조항 ${term.order}`}
+                                                              {term.isSecret
+                                                                ? ' · 비밀'
+                                                                : ''}
+                                                            </CabS.CabDetailTreatyTermTitle>
+                                                            <CabS.CabDetailTreatyTermExcerpt>
+                                                              {stripHtmlToPlain(
+                                                                term.content,
+                                                                500,
+                                                              )}
+                                                            </CabS.CabDetailTreatyTermExcerpt>
+                                                          </CabS.CabDetailTreatyTermItem>
+                                                        ),
+                                                      )}
+                                                    </CabS.CabDetailTreatyTermList>
+                                                  </>
+                                                )}
+
                                               {treaty.signatories &&
                                                 treaty.signatories.length >
                                                   0 && (
-                                                  <CabS.CabDetailTreatyPillRow>
-                                                    {treaty.signatories.map(
-                                                      (s) => (
-                                                        <CabS.CabDetailTreatyCountryPill
-                                                          key={s.id}
-                                                        >
-                                                          {s.country?.name ??
-                                                            s.historicalCountry
-                                                              ?.name ??
-                                                            '미상'}
-                                                        </CabS.CabDetailTreatyCountryPill>
-                                                      ),
-                                                    )}
-                                                  </CabS.CabDetailTreatyPillRow>
+                                                  <>
+                                                    <CabS.CabDetailTreatySectionTitle
+                                                      $spaced
+                                                    >
+                                                      서명·참여 국가
+                                                    </CabS.CabDetailTreatySectionTitle>
+                                                    <CabS.CabDetailTreatyPillRow>
+                                                      {treaty.signatories.map(
+                                                        (s) => (
+                                                          <CabS.CabDetailTreatyCountryPill
+                                                            key={s.id}
+                                                          >
+                                                            {s.country?.name ??
+                                                              s
+                                                                .historicalCountry
+                                                                ?.name ??
+                                                              '미상'}
+                                                          </CabS.CabDetailTreatyCountryPill>
+                                                        ),
+                                                      )}
+                                                    </CabS.CabDetailTreatyPillRow>
+                                                    <CabS.CabDetailTreatySectionTitle
+                                                      $spaced
+                                                    >
+                                                      서명 행 상세
+                                                    </CabS.CabDetailTreatySectionTitle>
+                                                    <CabS.CabDetailTreatySigTable>
+                                                      {treaty.signatories.map(
+                                                        (s) => (
+                                                          <CabS.CabDetailTreatySigRow
+                                                            key={s.id}
+                                                          >
+                                                            <div>
+                                                              <CabS.CabDetailTreatySigCountry>
+                                                                {s.country
+                                                                  ?.flagEmoji
+                                                                  ? `${s.country.flagEmoji} `
+                                                                  : ''}
+                                                                {s.country
+                                                                  ?.name ??
+                                                                  s
+                                                                    .historicalCountry
+                                                                    ?.name ??
+                                                                  '미상'}
+                                                              </CabS.CabDetailTreatySigCountry>
+                                                              {s.cabinetId && (
+                                                                <CabS.CabDetailTreatySigCabinetHint>
+                                                                  행정부 연결됨
+                                                                </CabS.CabDetailTreatySigCabinetHint>
+                                                              )}
+                                                            </div>
+                                                            <div>
+                                                              {s.person && (
+                                                                <div>
+                                                                  인물:{' '}
+                                                                  {getPersonName(
+                                                                    s.person,
+                                                                  )}
+                                                                </div>
+                                                              )}
+                                                              <div>
+                                                                {
+                                                                  TREATY_PARTICIPATION_LABELS[
+                                                                    s.participationType
+                                                                  ]
+                                                                }
+                                                                {s.role
+                                                                  ? ` · ${s.role}`
+                                                                  : ''}
+                                                              </div>
+                                                              {s.signedAt && (
+                                                                <div>
+                                                                  서명:{' '}
+                                                                  {formatDate(
+                                                                    s.signedAt,
+                                                                  )}
+                                                                </div>
+                                                              )}
+                                                              {s.positionDefinition
+                                                                ?.title && (
+                                                                <div>
+                                                                  관직:{' '}
+                                                                  {
+                                                                    s
+                                                                      .positionDefinition
+                                                                      .title
+                                                                  }
+                                                                </div>
+                                                              )}
+                                                              {s.note?.trim() && (
+                                                                <div>
+                                                                  비고:{' '}
+                                                                  {s.note}
+                                                                </div>
+                                                              )}
+                                                            </div>
+                                                          </CabS.CabDetailTreatySigRow>
+                                                        ),
+                                                      )}
+                                                    </CabS.CabDetailTreatySigTable>
+                                                  </>
+                                                )}
+
+                                              {treaty.images &&
+                                                treaty.images.length > 0 && (
+                                                  <>
+                                                    <CabS.CabDetailTreatySectionTitle
+                                                      $spaced
+                                                    >
+                                                      관련 이미지
+                                                    </CabS.CabDetailTreatySectionTitle>
+                                                    <CabS.CabDetailTreatyImageRow>
+                                                      {treaty.images.map(
+                                                        (img) => (
+                                                          <CabS.CabDetailTreatyImageThumb
+                                                            key={img.id}
+                                                            src={getUploadImageUrl(
+                                                              img.imageUrl,
+                                                            )}
+                                                            alt={
+                                                              img.caption?.trim() ||
+                                                              treaty.name
+                                                            }
+                                                            title={
+                                                              img.caption?.trim() ||
+                                                              undefined
+                                                            }
+                                                            loading="lazy"
+                                                          />
+                                                        ),
+                                                      )}
+                                                    </CabS.CabDetailTreatyImageRow>
+                                                  </>
                                                 )}
                                             </CabS.CabDetailTreatyExpandedPanel>
                                           )}
@@ -4248,7 +4495,10 @@ export function CabinetsSection({
                         placeholder="재임 중 활동 내용을 입력하세요. 서식/이미지 입력이 가능합니다."
                         onImageUpload={async (file) => {
                           const result = await uploadImage(file, 'persons')
-                          return result.url ?? ''
+                          return (
+                            getUploadImageUrl(result.url) ||
+                            (result.url ?? '')
+                          )
                         }}
                       />
                     </FieldControl>
@@ -4948,6 +5198,46 @@ export function CabinetsSection({
           </CabS.PersonViewOverlay>
         )}
       </AnimatePresence>
+
+      {historyProseTermTooltip && (
+        <CabS.HistoryProseTooltipOverlay
+          role="presentation"
+          onClick={() => setHistoryProseTermTooltip(null)}
+        >
+          <CabS.HistoryProseTermTooltipPopover
+            $x={historyProseTermTooltip.x}
+            $y={historyProseTermTooltip.y}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <strong>{historyProseTermTooltip.name}</strong>
+            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {historyProseTermTooltip.description === null
+                ? ' 로딩…'
+                : historyProseTermTooltip.description || '(설명 없음)'}
+            </span>
+          </CabS.HistoryProseTermTooltipPopover>
+        </CabS.HistoryProseTooltipOverlay>
+      )}
+
+      {historyProseDynastyTooltip && (
+        <CabS.HistoryProseTooltipOverlay
+          role="presentation"
+          onClick={() => setHistoryProseDynastyTooltip(null)}
+        >
+          <CabS.HistoryProseDynastyTooltipPopover
+            $x={historyProseDynastyTooltip.x}
+            $y={historyProseDynastyTooltip.y}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <strong>가문 · {historyProseDynastyTooltip.name}</strong>
+            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              {historyProseDynastyTooltip.description === null
+                ? ' 로딩…'
+                : historyProseDynastyTooltip.description || '(설명 없음)'}
+            </span>
+          </CabS.HistoryProseDynastyTooltipPopover>
+        </CabS.HistoryProseTooltipOverlay>
+      )}
 
       {/* ── 조약 연결 모달 ── */}
       {showTreatyLinkModal && selectedCabinetId && (

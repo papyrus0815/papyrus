@@ -1767,22 +1767,6 @@ const BioContent = styled(RichTextReadView)`
   & p:last-child {
     margin-bottom: 0;
   }
-  & ul,
-  & ol {
-    margin: 8px 0;
-    padding-left: 28px;
-    list-style-position: outside;
-  }
-  & ul {
-    list-style-type: disc;
-  }
-  & ol {
-    list-style-type: decimal;
-  }
-  & li {
-    margin: 4px 0;
-    line-height: 1.55;
-  }
 `
 
 const BioEditActions = styled.div`
