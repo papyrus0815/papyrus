@@ -6,14 +6,14 @@ import React from 'react'
 import { FiChevronLeft, FiEdit2, FiTrash2 } from 'react-icons/fi'
 
 import {
-  DetailHeaderIconBtn,
-  DetailToolbar,
-} from './country-politics-tab.styles'
-import {
   formatCabinetHeadBreadcrumbLabel,
   getPersonName,
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
+import {
+  DetailHeaderIconBtn,
+  DetailToolbar,
+} from './country-politics-tab.styles'
 
 export type CabinetDetailChromeProps = {
   cabDetailBackBtnRef: React.RefObject<HTMLButtonElement | null>
@@ -21,6 +21,10 @@ export type CabinetDetailChromeProps = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   selectedCabinet: any
   selectedMinisterId: string | null
+  /** 재임 기록 상세(수반) */
+  selectedHeadHistoryId: string | null
+  /** 재임 기록 상세(각료) */
+  selectedHistoryId: string | null
   sortedVisibleMinisters: unknown[]
   setCabinetView: (view: 'list' | 'detail') => void
   setSelectedCabinetId: (id: string | null) => void
@@ -28,6 +32,7 @@ export type CabinetDetailChromeProps = {
   setSelectedHeadHistoryId: (id: string | null) => void
   setSelectedHistoryId: (id: string | null) => void
   setEditingHistoryContent: (editing: boolean) => void
+  setEditingHistoryMeta: (editing: boolean) => void
   setMinisterFormPositionDefId: (id: string | null) => void
   setMinisterFormTitle: (title: string) => void
   setMinisterFormStartDate: (startDate: string) => void
@@ -45,6 +50,8 @@ export function CabinetDetailChrome({
   cabDetailBackBtnRef,
   selectedCabinet,
   selectedMinisterId,
+  selectedHeadHistoryId,
+  selectedHistoryId,
   sortedVisibleMinisters,
   setCabinetView,
   setSelectedCabinetId,
@@ -52,6 +59,7 @@ export function CabinetDetailChrome({
   setSelectedHeadHistoryId,
   setSelectedHistoryId,
   setEditingHistoryContent,
+  setEditingHistoryMeta,
   setMinisterFormPositionDefId,
   setMinisterFormTitle,
   setMinisterFormStartDate,
@@ -70,6 +78,9 @@ export function CabinetDetailChrome({
       ? selectedCabinet.name.trim()
       : null
 
+  const isTenureHistoryArticleDetail =
+    !!selectedHeadHistoryId || (!!selectedMinisterId && !!selectedHistoryId)
+
   return (
     <>
       <CabS.CabDetailTopBar>
@@ -79,6 +90,13 @@ export function CabinetDetailChrome({
               ref={cabDetailBackBtnRef}
               type="button"
               onClick={() => {
+                if (isTenureHistoryArticleDetail) {
+                  setSelectedHeadHistoryId(null)
+                  setSelectedHistoryId(null)
+                  setEditingHistoryContent(false)
+                  setEditingHistoryMeta(false)
+                  return
+                }
                 setCabinetView('list')
                 setSelectedCabinetId(null)
                 setSelectedMinisterId(null)
@@ -86,7 +104,7 @@ export function CabinetDetailChrome({
               }}
             >
               <FiChevronLeft size={14} />
-              행정부 목록
+              {isTenureHistoryArticleDetail ? '재임 기록 목록' : '행정부 목록'}
             </CabS.CabDetailBackBtn>
             {selectedCabinet && (
               <>
@@ -99,13 +117,18 @@ export function CabinetDetailChrome({
                       setSelectedHistoryId(null)
                       setSelectedHeadHistoryId(null)
                       setEditingHistoryContent(false)
+                      setEditingHistoryMeta(false)
                     }}
                   >
-                    {formatCabinetHeadBreadcrumbLabel(selectedCabinet.headTenure)}
+                    {formatCabinetHeadBreadcrumbLabel(
+                      selectedCabinet.headTenure,
+                    )}
                   </CabS.CabDetailBackBtn>
                 ) : (
                   <CabS.CabDetailCrumbText>
-                    {formatCabinetHeadBreadcrumbLabel(selectedCabinet.headTenure)}
+                    {formatCabinetHeadBreadcrumbLabel(
+                      selectedCabinet.headTenure,
+                    )}
                   </CabS.CabDetailCrumbText>
                 )}
               </>
@@ -144,6 +167,7 @@ export function CabinetDetailChrome({
           style={{ flexShrink: 0, alignSelf: 'flex-start', paddingTop: 2 }}
         >
           {selectedMinisterId &&
+            !selectedHistoryId &&
             (() => {
               const minister = (
                 sortedVisibleMinisters as {
@@ -178,9 +202,7 @@ export function CabinetDetailChrome({
                     )
                     setMinisterFormTitle(minister.title ?? '')
                     setMinisterFormStartDate(
-                      minister.startDate
-                        ? minister.startDate.slice(0, 10)
-                        : '',
+                      minister.startDate ? minister.startDate.slice(0, 10) : '',
                     )
                     setMinisterFormEndDate(
                       minister.endDate ? minister.endDate.slice(0, 10) : '',
@@ -204,7 +226,10 @@ export function CabinetDetailChrome({
                 </DetailHeaderIconBtn>
               )
             })()}
-          {!selectedMinisterId && selectedCabinet && onEditCabinet ? (
+          {!selectedMinisterId &&
+          selectedCabinet &&
+          onEditCabinet &&
+          !selectedHeadHistoryId ? (
             <DetailHeaderIconBtn
               type="button"
               aria-label="행정부 수정"
@@ -214,7 +239,7 @@ export function CabinetDetailChrome({
               <FiEdit2 size={17} strokeWidth={2} />
             </DetailHeaderIconBtn>
           ) : null}
-          {!selectedMinisterId && selectedCabinet && (
+          {!selectedMinisterId && selectedCabinet && !selectedHeadHistoryId && (
             <DetailHeaderIconBtn
               type="button"
               $variant="danger"

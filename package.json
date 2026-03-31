@@ -39,6 +39,7 @@
     "ssl:generate:simple": "node scripts/run.js infrastructure/ssl-generate --simple",
     "nginx:generate": "node scripts/run.js infrastructure/nginx-generate",
     "prisma:seed": "node -r ./prisma-seed-loader.js ./node_modules/.bin/tsx apps/api/prisma/seed.ts",
+    "migrate:narrative-events": "node -r ./prisma-seed-loader.js ./node_modules/.bin/tsx apps/api/prisma/scripts/migrate-narrative-to-events.ts",
     "prepare": "ts-patch install"
   },
   "prisma": {

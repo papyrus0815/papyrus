@@ -7,6 +7,8 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  /** JWT 쿠키(access_token) 전달 — 묶기 검색 등 로그인 사용자 식별에 필요 */
+  withCredentials: true,
 })
 
 /**
@@ -323,13 +325,53 @@ export interface CreatePersonAwardDto {
   images?: CareerImageDto[]
 }
 
+/** API가 포함하는 사건(Event) 요약 — 재임 업적 정본 연결 시 */
+export type TenureLinkedEventSummary = {
+  id: string
+  title: string
+  description?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  deletedAt?: string | null
+}
+
 /** 재임 한일·업적 (행정부 각료 상세 등) */
 export type GovernmentTenureAchievementItem = {
   id: string
+  /** 소속 재임 FK — 다국 행정부 묶음으로 병합 표시된 항목은 상대 수반 재임일 수 있음 */
+  tenureId?: string | null
   title?: string | null
+  description?: string | null
   startDate?: string | null
   endDate?: string | null
-  description?: string | null
+  orderNum?: number | null
+  showOnEventsPage?: boolean | null
+  /** 연결된 사건(Event) — FK는 재임 업적 쪽; 지정은 행정부·재임 UI에서만 */
+  eventId?: string | null
+  event?: TenureLinkedEventSummary | null
+}
+
+/**
+ * GET /government-positions/achievements/by-event/:eventId
+ * 동일 사건에 연결된 재임 업적(다국 행정부 공유 조회)
+ */
+export type TenureAchievementByEventLinkRow = {
+  id: string
+  title: string
+  eventId?: string | null
+  tenure: {
+    id: string
+    person?: {
+      id: string
+      name?: string | null
+      surname?: string | null
+      middleName?: string | null
+      nameDisplayOrder?: string | null
+    } | null
+    country?: { id: string; name: string } | null
+    historicalCountry?: { id: string; name: string } | null
+    cabinet?: { id: string; name?: string | null } | null
+  }
 }
 
 /**
@@ -376,8 +418,17 @@ export type GovernmentHeadTenureInCabinetList = {
   subTermNumber?: number | null
   person?: GovernmentCabinetTenureItem['person']
   positionDefinition?: GovernmentCabinetTenureItem['positionDefinition']
-  country?: { id: string; name: string } | null
-  historicalCountry?: { id: string; name: string } | null
+  country?: {
+    id: string
+    name: string
+    flagEmoji?: string | null
+    thumbnailUrl?: string | null
+  } | null
+  historicalCountry?: {
+    id: string
+    name: string
+    thumbnailUrl?: string | null
+  } | null
 }
 
 /** GET /government-positions/cabinets 응답 1건 */
@@ -385,6 +436,13 @@ export type CabinetListItemDto = {
   id: string
   name?: string | null
   headTenureId?: string
+  /** 다국 행정부 묶음 (CabinetLinkageGroup) — `eventId`로 같은 국제 사건 축 */
+  linkageGroup?: {
+    id: string
+    label?: string | null
+    eventId?: string | null
+    event?: { id: string; title: string } | null
+  } | null
   headTenure: GovernmentHeadTenureInCabinetList
 }
 
@@ -508,6 +566,7 @@ export const personCareerApi = {
       endDate?: string
       orderNum?: number
       showOnEventsPage?: boolean
+      eventId?: string
     },
   ) => {
     const response = await apiClient.post(
@@ -531,6 +590,8 @@ export const personCareerApi = {
       endDate?: string
       orderNum?: number
       showOnEventsPage?: boolean
+      /** null이면 사건 연결 해제 */
+      eventId?: string | null
     },
   ) => {
     const response = await apiClient.patch(
@@ -549,6 +610,20 @@ export const personCareerApi = {
       '/government-positions/achievements/for-events-page',
     )
     return response.data ?? []
+  },
+
+  /**
+   * 동일 사건(eventId)에 연결된 재임 업적 전부 — 다국 행정부 연결
+   * GET /government-positions/achievements/by-event/:eventId
+   */
+  getTenureAchievementsByEventId: async (
+    eventId: string,
+  ): Promise<TenureAchievementByEventLinkRow[]> => {
+    const response = await apiClient.get(
+      `/government-positions/achievements/by-event/${encodeURIComponent(eventId)}`,
+    )
+    const raw = response.data
+    return Array.isArray(raw) ? raw : []
   },
 
   /**
@@ -579,7 +654,10 @@ export const personCareerApi = {
     const raw = response.data ?? []
     return Array.isArray(raw)
       ? raw
-      : raw && typeof raw === 'object' && 'data' in raw && Array.isArray((raw as any).data)
+      : raw &&
+          typeof raw === 'object' &&
+          'data' in raw &&
+          Array.isArray((raw as any).data)
         ? (raw as any).data
         : []
   },
@@ -605,7 +683,8 @@ export const personCareerApi = {
   }): Promise<CabinetListItemDto[]> => {
     const search = new URLSearchParams()
     if (params.countryId) search.set('countryId', params.countryId)
-    if (params.historicalCountryId) search.set('historicalCountryId', params.historicalCountryId)
+    if (params.historicalCountryId)
+      search.set('historicalCountryId', params.historicalCountryId)
     const response = await apiClient.get(
       `/government-positions/cabinets?${search.toString()}`,
     )
@@ -627,7 +706,10 @@ export const personCareerApi = {
    * 행정부 등록
    * POST /government-positions/cabinets
    */
-  createCabinet: async (dto: { headTenureId: string; name?: string | null }) => {
+  createCabinet: async (dto: {
+    headTenureId: string
+    name?: string | null
+  }) => {
     const response = await apiClient.post('/government-positions/cabinets', dto)
     return response.data
   },
@@ -665,6 +747,90 @@ export const personCareerApi = {
       `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/tenures`,
     )
     return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 다른 나라 행정부 묶기 — 검색 (로그인 필요)
+   * GET /government-positions/cabinets/search-for-linkage?excludeCabinetId=&q=&limit=
+   */
+  searchCabinetsForLinkage: async (params: {
+    excludeCabinetId: string
+    q?: string
+    limit?: number
+    /** 지정 시 해당 현대 국가(연결된 역사국가 포함) 소속 수반 재임 행정부만 */
+    countryId?: string
+    /** 지정 시 해당 역사적 국가 소속 수반 재임 행정부만 */
+    historicalCountryId?: string
+  }): Promise<CabinetListItemDto[]> => {
+    const response = await apiClient.get(
+      '/government-positions/cabinets/search-for-linkage',
+      {
+        params: {
+          excludeCabinetId: params.excludeCabinetId,
+          ...(params.q?.trim() ? { q: params.q.trim() } : {}),
+          ...(params.limit != null ? { limit: String(params.limit) } : {}),
+          ...(params.countryId?.trim()
+            ? { countryId: params.countryId.trim() }
+            : {}),
+          ...(params.historicalCountryId?.trim()
+            ? { historicalCountryId: params.historicalCountryId.trim() }
+            : {}),
+        },
+      },
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 같은 묶음에 속한 다른 행정부 목록
+   * GET /government-positions/cabinets/:cabinetId/linked-cabinets
+   */
+  getLinkedCabinets: async (
+    cabinetId: string,
+  ): Promise<CabinetListItemDto[]> => {
+    const response = await apiClient.get(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/linked-cabinets`,
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 다른 행정부와 같은 묶음으로 연결 (같은 사건 eventId 필수)
+   * POST /government-positions/cabinets/:cabinetId/link-with
+   */
+  linkCabinetWithOther: async (
+    cabinetId: string,
+    otherCabinetId: string,
+    eventId: string,
+  ): Promise<CabinetListItemDto> => {
+    const response = await apiClient.post(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/link-with`,
+      { otherCabinetId, eventId },
+    )
+    return response.data
+  },
+
+  /**
+   * 사건을 축으로 묶인 행정부 목록
+   * GET /government-positions/cabinets/by-linkage-event/:eventId
+   */
+  getCabinetsByLinkageEventId: async (
+    eventId: string,
+  ): Promise<CabinetListItemDto[]> => {
+    const response = await apiClient.get(
+      `/government-positions/cabinets/by-linkage-event/${encodeURIComponent(eventId)}`,
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 이 행정부만 묶음에서 제거
+   * DELETE /government-positions/cabinets/:cabinetId/linkage
+   */
+  leaveCabinetLinkage: async (cabinetId: string): Promise<void> => {
+    await apiClient.delete(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/linkage`,
+    )
   },
 
   /**

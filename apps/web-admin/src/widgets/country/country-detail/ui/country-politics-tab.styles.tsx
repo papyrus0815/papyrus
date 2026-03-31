@@ -673,7 +673,7 @@ export const SubsectionAddBtn = styled.button`
       ? 'rgba(99, 102, 241, 0.1)'
       : 'rgba(99, 102, 241, 0.06)'};
   border: 1px solid rgba(99, 102, 241, 0.28);
-  border-radius: 999px;
+  border-radius: 8px;
   cursor: pointer;
   transition:
     background 0.15s ease,

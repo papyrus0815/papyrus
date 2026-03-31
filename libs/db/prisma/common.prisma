@@ -41,6 +41,8 @@ model Account {
   countries Country[] @relation("AccountCountries")
   /// 이 계정이 등록한 행정부(Cabinet)
   cabinets Cabinet[] @relation("AccountCabinets")
+  /// 다국 행정부 묶음 그룹 (CabinetLinkageGroup)
+  cabinetLinkageGroups CabinetLinkageGroup[] @relation("AccountCabinetLinkageGroups")
   /// 이 계정이 등록한 재임/각료(GovernmentPositionTenure)
   governmentTenures GovernmentPositionTenure[] @relation("AccountGovernmentTenures")
   /// 이 계정이 등록한 조약(Treaty)

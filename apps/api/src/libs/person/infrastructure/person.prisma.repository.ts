@@ -125,12 +125,36 @@ function resolveMandateSourceForUpdate(
   return undefined
 }
 
+/** 재임 업적 목록 — 사건(Event) 정본 포함 */
+const TENURE_ACHIEVEMENTS_INCLUDE = {
+  orderBy: [{ orderNum: 'asc' as const }, { startDate: 'asc' as const }],
+  include: {
+    event: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        startDate: true,
+        endDate: true,
+        deletedAt: true,
+      },
+    },
+  },
+}
+
 /**
  * Prisma 기반 인물 Repository 구현체
  */
 @Injectable()
 export class PersonPrismaRepository implements IPersonRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  private readonly LINKAGE_GROUP_EVENT_SELECT = {
+    id: true,
+    label: true,
+    eventId: true,
+    event: { select: { id: true, title: true } },
+  } as const
 
   /**
    * 인물 create/update 시 FK 필드 정리.
@@ -1685,6 +1709,96 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.findTenuresByCabinetId(cabinet.id)
   }
 
+  /**
+   * 같은 CabinetLinkageGroup의 다른 수반 재임에만 있는 업적(동일 사건 eventId)을
+   * 각 수반의 achievements 목록에 합쳐서 내려준다(묶인 상대 행정부에서도 사건이 보이게).
+   */
+  private mergePeerHeadAchievementsIntoOneCabinet(
+    cabinet: { headTenure: { id: string; achievements: any[] } },
+    groupCabinets: Array<{
+      linkageGroup?: { eventId?: string | null } | null
+      headTenure: { id: string; achievements: any[] }
+    }>,
+  ): void {
+    const ownId = cabinet.headTenure.id
+    const groupEventId = groupCabinets[0]?.linkageGroup?.eventId ?? null
+    const sharedEventIds = new Set<string>()
+    if (groupEventId) sharedEventIds.add(groupEventId)
+    for (const gc of groupCabinets) {
+      for (const a of gc.headTenure.achievements ?? []) {
+        if (a.eventId) sharedEventIds.add(a.eventId)
+      }
+    }
+    const own = [...(cabinet.headTenure.achievements ?? [])]
+    const ownIds = new Set(own.map((a) => a.id))
+    const ownEventKeys = new Set(
+      own.map((a) => a.eventId).filter((x): x is string => !!x),
+    )
+
+    for (const gc of groupCabinets) {
+      if (gc.headTenure.id === ownId) continue
+      for (const a of gc.headTenure.achievements ?? []) {
+        if (ownIds.has(a.id)) continue
+        if (!a.eventId) continue
+        if (!sharedEventIds.has(a.eventId)) continue
+        if (ownEventKeys.has(a.eventId)) continue
+        own.push({ ...a })
+        ownIds.add(a.id)
+        ownEventKeys.add(a.eventId)
+      }
+    }
+    own.sort((a, b) => {
+      const oa = a.orderNum ?? 0
+      const ob = b.orderNum ?? 0
+      if (oa !== ob) return oa - ob
+      const sa = a.startDate ? new Date(a.startDate).getTime() : 0
+      const sb = b.startDate ? new Date(b.startDate).getTime() : 0
+      return sa - sb
+    })
+    cabinet.headTenure.achievements = own
+  }
+
+  private async mergeLinkagePeerHeadAchievementsForCabinets(
+    cabinets: Array<{
+      id: string
+      linkageGroupId: string | null
+      linkageGroup?: { eventId?: string | null } | null
+      headTenure: { id: string; achievements: any[] }
+    }>,
+  ): Promise<void> {
+    const groupIds = [
+      ...new Set(
+        cabinets.map((c) => c.linkageGroupId).filter((g): g is string => !!g),
+      ),
+    ]
+    if (groupIds.length === 0) return
+
+    const groupCabinetsAll = await this.prisma.cabinet.findMany({
+      where: { linkageGroupId: { in: groupIds } },
+      include: {
+        linkageGroup: { select: { eventId: true } },
+        headTenure: {
+          include: {
+            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+          },
+        },
+      },
+    })
+    const byGroup = new Map<string, typeof groupCabinetsAll>()
+    for (const c of groupCabinetsAll) {
+      if (!c.linkageGroupId) continue
+      if (!byGroup.has(c.linkageGroupId)) byGroup.set(c.linkageGroupId, [])
+      byGroup.get(c.linkageGroupId)!.push(c)
+    }
+
+    for (const c of cabinets) {
+      if (!c.linkageGroupId) continue
+      const group = byGroup.get(c.linkageGroupId)
+      if (!group || group.length < 2) continue
+      this.mergePeerHeadAchievementsIntoOneCabinet(c, group)
+    }
+  }
+
   async findCabinetByHeadTenureId(headTenureId: string): Promise<any | null> {
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
@@ -1701,16 +1815,19 @@ export class PersonPrismaRepository implements IPersonRepository {
     const cabinet = await this.prisma.cabinet.findUnique({
       where: { headTenureId },
       include: {
+        linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
         headTenure: {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
-            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           },
         },
       },
     })
-    return cabinet ? serializeBigInt(cabinet) : null
+    if (!cabinet) return null
+    await this.mergeLinkagePeerHeadAchievementsForCabinets([cabinet as any])
+    return serializeBigInt(cabinet)
   }
 
   async findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]> {
@@ -1741,7 +1858,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
-        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
       },
     })
     return tenures.map((t) => serializeBigInt(t))
@@ -1797,17 +1914,19 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: Object.keys(baseWhere).length > 0 ? baseWhere : undefined,
       orderBy: [{ headTenure: { startDate: 'desc' } }],
       include: {
+        linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
         headTenure: {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
-            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           },
         },
       },
     })
+    await this.mergeLinkagePeerHeadAchievementsForCabinets(list as any[])
     return list.map(serializeBigInt)
   }
 
@@ -1834,7 +1953,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
-            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           },
         },
       },
@@ -1851,7 +1970,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
-            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           },
         },
       },
@@ -1891,7 +2010,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
-            achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           },
         },
       },
@@ -1910,6 +2029,432 @@ export class PersonPrismaRepository implements IPersonRepository {
       this.prisma.governmentPositionTenure.deleteMany({ where: { cabinetId } }),
       this.prisma.governmentPositionTenure.delete({ where: { id: cabinet.headTenureId } }),
     ])
+  }
+
+  /** 서로 다른 사건(eventId)이 섞이면 묶기 불가 — 단일 값으로 합침 */
+  private mergedLinkageEventId(
+    ...parts: Array<string | null | undefined>
+  ): string | null {
+    const ids = parts
+      .map((x) => (typeof x === 'string' ? x.trim() : ''))
+      .filter((x) => x !== '')
+    const unique = [...new Set(ids)]
+    if (unique.length > 1) {
+      throw new Error(
+        '서로 다른 사건에 속한 행정부 묶음은 합칠 수 없습니다. 같은 사건을 선택했는지 확인하세요.',
+      )
+    }
+    return unique[0] ?? null
+  }
+
+  /**
+   * 두 행정부를 같은 묶음으로 — 새 그룹 생성 또는 기존 그룹 병합.
+   * `eventId`가 있으면 그 사건을 축으로 한 다국 행정부 연결로 기록한다.
+   */
+  async linkCabinetWithOther(
+    cabinetId: string,
+    otherCabinetId: string,
+    accountId: string,
+    eventId?: string | null,
+  ): Promise<any> {
+    const ser = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(ser)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = ser(obj[key])
+        return result
+      }
+      return obj
+    }
+    if (cabinetId === otherCabinetId) {
+      throw new Error('같은 행정부는 묶을 수 없습니다.')
+    }
+    const canLinkThisCabinet = (cab: { accountId: string | null }) =>
+      cab.accountId == null || cab.accountId === accountId
+    const reqEvent = eventId?.trim() || null
+
+    return this.prisma.$transaction(async (tx) => {
+      if (reqEvent) {
+        const ev = await tx.event.findFirst({
+          where: { id: reqEvent, deletedAt: null },
+          select: { id: true },
+        })
+        if (!ev) {
+          throw new Error('해당 사건을 찾을 수 없습니다.')
+        }
+      }
+
+      const a = await tx.cabinet.findUnique({
+        where: { id: cabinetId },
+        select: { id: true, linkageGroupId: true, accountId: true },
+      })
+      const b = await tx.cabinet.findUnique({
+        where: { id: otherCabinetId },
+        select: { id: true, linkageGroupId: true, accountId: true },
+      })
+      if (!a || !b) {
+        throw new Error('행정부를 찾을 수 없습니다.')
+      }
+      if (!canLinkThisCabinet(a) || !canLinkThisCabinet(b)) {
+        throw new Error('행정부를 찾을 수 없거나 권한이 없습니다.')
+      }
+      if (
+        a.accountId != null &&
+        b.accountId != null &&
+        a.accountId !== b.accountId
+      ) {
+        throw new Error(
+          '서로 다른 계정이 등록한 행정부는 한 묶음으로 묶을 수 없습니다.',
+        )
+      }
+      let gA = a.linkageGroupId
+      let gB = b.linkageGroupId
+      if (gA && gB && gA === gB) {
+        // 이미 동일 묶음 — 사건 정보만 보정
+        if (reqEvent) {
+          const grp = await tx.cabinetLinkageGroup.findUnique({
+            where: { id: gA },
+            select: { id: true, eventId: true },
+          })
+          const merged = this.mergedLinkageEventId(grp?.eventId, reqEvent)
+          if (merged !== grp?.eventId) {
+            await tx.cabinetLinkageGroup.update({
+              where: { id: gA },
+              data: { eventId: merged },
+            })
+          }
+        }
+      } else if (!gA && !gB) {
+        const merged = this.mergedLinkageEventId(null, null, reqEvent)
+        const g = await tx.cabinetLinkageGroup.create({
+          data: { accountId, eventId: merged ?? undefined },
+        })
+        await tx.cabinet.updateMany({
+          where: { id: { in: [cabinetId, otherCabinetId] } },
+          data: { linkageGroupId: g.id },
+        })
+      } else if (gA && !gB) {
+        const grp = await tx.cabinetLinkageGroup.findUnique({
+          where: { id: gA },
+          select: { id: true, eventId: true },
+        })
+        const merged = this.mergedLinkageEventId(grp?.eventId, null, reqEvent)
+        if (merged !== grp?.eventId) {
+          await tx.cabinetLinkageGroup.update({
+            where: { id: gA },
+            data: { eventId: merged },
+          })
+        }
+        await tx.cabinet.update({
+          where: { id: otherCabinetId },
+          data: { linkageGroupId: gA },
+        })
+      } else if (!gA && gB) {
+        const grp = await tx.cabinetLinkageGroup.findUnique({
+          where: { id: gB },
+          select: { id: true, eventId: true },
+        })
+        const merged = this.mergedLinkageEventId(grp?.eventId, null, reqEvent)
+        if (merged !== grp?.eventId) {
+          await tx.cabinetLinkageGroup.update({
+            where: { id: gB },
+            data: { eventId: merged },
+          })
+        }
+        await tx.cabinet.update({
+          where: { id: cabinetId },
+          data: { linkageGroupId: gB },
+        })
+      } else {
+        const grpA = await tx.cabinetLinkageGroup.findUnique({
+          where: { id: gA as string },
+          select: { id: true, eventId: true },
+        })
+        const grpB = await tx.cabinetLinkageGroup.findUnique({
+          where: { id: gB as string },
+          select: { id: true, eventId: true },
+        })
+        const merged = this.mergedLinkageEventId(
+          grpA?.eventId,
+          grpB?.eventId,
+          reqEvent,
+        )
+        const [keep, drop] =
+          (gA as string) < (gB as string)
+            ? [gA as string, gB as string]
+            : [gB as string, gA as string]
+        await tx.cabinetLinkageGroup.update({
+          where: { id: keep },
+          data: { eventId: merged },
+        })
+        await tx.cabinet.updateMany({
+          where: { linkageGroupId: drop },
+          data: { linkageGroupId: keep },
+        })
+        await tx.cabinetLinkageGroup.delete({ where: { id: drop } })
+      }
+      const updated = await tx.cabinet.findUnique({
+        where: { id: cabinetId },
+        include: {
+          linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
+          headTenure: {
+            include: {
+              person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+              positionDefinition: true,
+              country: { select: { id: true, name: true } },
+              historicalCountry: { select: { id: true, name: true } },
+              achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            },
+          },
+        },
+      })
+      return ser(updated)
+    })
+  }
+
+  /**
+   * 특정 사건(eventId)을 축으로 묶인 행정부 목록 (다국 행정부 연결 조회)
+   */
+  async findCabinetsByLinkageEventId(eventId: string): Promise<any[]> {
+    const ser = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(ser)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = ser(obj[key])
+        return result
+      }
+      return obj
+    }
+    const list = await this.prisma.cabinet.findMany({
+      where: {
+        linkageGroup: { eventId },
+      },
+      orderBy: [{ headTenure: { startDate: 'desc' } }],
+      include: {
+        linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
+        headTenure: {
+          include: {
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+            positionDefinition: true,
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+        },
+      },
+    })
+    return list.map((c) => ser(c))
+  }
+
+  /** 이 행정부만 묶음에서 빠짐. 남은 행정부가 없으면 그룹 삭제 */
+  async leaveCabinetLinkageGroup(cabinetId: string, accountId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const cab = await tx.cabinet.findUnique({
+        where: { id: cabinetId },
+        select: { linkageGroupId: true, accountId: true },
+      })
+      if (!cab?.linkageGroupId) return
+      if (cab.accountId != null && cab.accountId !== accountId) {
+        throw new Error('행정부를 찾을 수 없거나 권한이 없습니다.')
+      }
+      const gid = cab.linkageGroupId
+      await tx.cabinet.update({
+        where: { id: cabinetId },
+        data: { linkageGroupId: null },
+      })
+      const n = await tx.cabinet.count({ where: { linkageGroupId: gid } })
+      if (n === 0) {
+        await tx.cabinetLinkageGroup.delete({ where: { id: gid } })
+      }
+    })
+  }
+
+  /**
+   * 같은 묶음의 다른 행정부 목록 (로그인한 사용자용; accountId는 API 시그니처 호환용).
+   */
+  async findLinkedCabinets(cabinetId: string, _accountId: string): Promise<any[]> {
+    const ser = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(ser)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = ser(obj[key])
+        return result
+      }
+      return obj
+    }
+    const cab = await this.prisma.cabinet.findFirst({
+      where: { id: cabinetId },
+      select: { linkageGroupId: true },
+    })
+    if (!cab?.linkageGroupId) return []
+    const list = await this.prisma.cabinet.findMany({
+      where: {
+        linkageGroupId: cab.linkageGroupId,
+        id: { not: cabinetId },
+      },
+      orderBy: [{ headTenure: { startDate: 'desc' } }],
+      include: {
+        linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
+        headTenure: {
+          include: {
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+            positionDefinition: true,
+            country: {
+              select: {
+                id: true,
+                name: true,
+                flagEmoji: true,
+                thumbnailUrl: true,
+              },
+            },
+            historicalCountry: {
+              select: { id: true, name: true, thumbnailUrl: true },
+            },
+          },
+        },
+      },
+    })
+    return list.map((c) => ser(c))
+  }
+
+  /**
+   * 묶기 대상 행정부 검색 — 로그인한 사용자가 DB 전체에서 고름(계정별 제한 없음).
+   * `filter`에 countryId / historicalCountryId 가 있으면 해당 영토의 행정부만.
+   */
+  async searchCabinetsForLinkage(
+    _accountId: string,
+    q: string,
+    excludeCabinetId: string,
+    limit = 40,
+    filter?: { countryId?: string; historicalCountryId?: string },
+  ): Promise<any[]> {
+    const ser = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(ser)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = ser(obj[key])
+        return result
+      }
+      return obj
+    }
+    const term = q.trim()
+    const fc = filter?.countryId?.trim()
+    const fh = filter?.historicalCountryId?.trim()
+
+    /**
+     * 영토 필터 없이 검색어만 있으면 DB 전역 텍스트 검색이 되어 다른 나라 행정부가 섞임.
+     * 묶기 UI는 항상 국가(현대/역사)를 고른 뒤 검색하므로, 필터 없는 전역 검색은 금지.
+     */
+    if (!fc && !fh && term.length > 0) {
+      return []
+    }
+
+    let territoryWhere: Prisma.GovernmentPositionTenureWhereInput | null = null
+    if (fc) {
+      const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+        .findMany({
+          where: { modernCountryId: fc },
+          select: { historicalCountryId: true },
+        })
+        .then((rows) => rows.map((r) => r.historicalCountryId))
+      territoryWhere =
+        linkedHistoricalIds.length > 0
+          ? {
+              OR: [
+                { countryId: fc },
+                { historicalCountryId: { in: linkedHistoricalIds } },
+              ],
+            }
+          : { countryId: fc }
+    } else if (fh) {
+      territoryWhere = { historicalCountryId: fh }
+    }
+
+    /** 국가 미지정·검색어 없을 때: 다른 영토 위주 후보 */
+    let excludeSameTerritory: {
+      NOT: { headTenure: { OR: Array<{ countryId?: string; historicalCountryId?: string }> } }
+    } | null = null
+    if (!territoryWhere && term.length === 0) {
+      const self = await this.prisma.cabinet.findUnique({
+        where: { id: excludeCabinetId },
+        select: {
+          headTenure: { select: { countryId: true, historicalCountryId: true } },
+        },
+      })
+      const ht = self?.headTenure
+      const or: Array<{ countryId?: string; historicalCountryId?: string }> = []
+      if (ht?.countryId) or.push({ countryId: ht.countryId })
+      if (ht?.historicalCountryId) or.push({ historicalCountryId: ht.historicalCountryId })
+      if (or.length > 0) {
+        excludeSameTerritory = {
+          NOT: { headTenure: { OR: or } },
+        }
+      }
+    }
+
+    const textClause: Prisma.CabinetWhereInput | null =
+      term.length > 0
+        ? {
+            OR: [
+              { name: { contains: term } },
+              { headTenure: { person: { name: { contains: term } } } },
+              { headTenure: { country: { name: { contains: term } } } },
+              { headTenure: { historicalCountry: { name: { contains: term } } } },
+            ],
+          }
+        : null
+
+    const headTenureClause: Prisma.CabinetWhereInput | null = territoryWhere
+      ? { headTenure: territoryWhere }
+      : null
+
+    const list = await this.prisma.cabinet.findMany({
+      where: {
+        id: { not: excludeCabinetId },
+        ...(excludeSameTerritory ?? {}),
+        ...(headTenureClause && textClause
+          ? { AND: [headTenureClause, textClause] }
+          : headTenureClause
+            ? headTenureClause
+            : textClause
+              ? textClause
+              : {}),
+      },
+      take: limit,
+      orderBy: [{ headTenure: { startDate: 'desc' } }],
+      include: {
+        linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
+        headTenure: {
+          include: {
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+            country: {
+              select: {
+                id: true,
+                name: true,
+                flagEmoji: true,
+                thumbnailUrl: true,
+              },
+            },
+            historicalCountry: {
+              select: { id: true, name: true, thumbnailUrl: true },
+            },
+            positionDefinition: { select: { title: true } },
+          },
+        },
+      },
+    })
+    return list.map((c) => ser(c))
   }
 
   /**
@@ -1938,7 +2483,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
-        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
       },
     })
     return tenures.map((t) => serializeBigInt(t))
@@ -1952,7 +2497,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id },
       include: {
         person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
       },
     })
     if (!tenure) return null
@@ -1996,6 +2541,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         orderNum: dto.orderNum ?? 0,
         showOnEventsPage: dto.showOnEventsPage ?? true,
+        eventId: dto.eventId ?? undefined,
       },
     })
     const serializeBigInt = (obj: any): any => {
@@ -2014,12 +2560,80 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 동일 사건(eventId)에 연결된 재임 업적 전부 — 여러 국가 행정부와 같은 사건을 엮었을 때 목록
+   */
+  async findTenureAchievementsByEventId(eventId: string): Promise<any[]> {
+    const list = await this.prisma.tenureAchievement.findMany({
+      where: { eventId },
+      include: {
+        event: {
+          select: { id: true, title: true },
+        },
+        tenure: {
+          include: {
+            person: {
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+                middleName: true,
+                nameDisplayOrder: true,
+              },
+            },
+            country: {
+              select: {
+                id: true,
+                name: true,
+                flagEmoji: true,
+                defaultNameDisplayOrder: true,
+              },
+            },
+            historicalCountry: { select: { id: true, name: true } },
+            cabinet: { select: { id: true, name: true } },
+            positionDefinition: {
+              select: {
+                title: true,
+                category: { select: { id: true, name: true, nameEn: true } },
+                organization: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'asc' }],
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(list)
+  }
+
+  /**
    * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
    */
   async findAchievementsForEventsPage(): Promise<any[]> {
     const list = await this.prisma.tenureAchievement.findMany({
       where: { showOnEventsPage: true },
       include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            startDate: true,
+            endDate: true,
+            deletedAt: true,
+          },
+        },
         tenure: {
           include: {
             person: {
@@ -2081,6 +2695,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null
     if (dto.orderNum !== undefined) data.orderNum = dto.orderNum
     if (dto.showOnEventsPage !== undefined) data.showOnEventsPage = dto.showOnEventsPage
+    if (dto.eventId !== undefined) data.eventId = dto.eventId
     const existing = await this.prisma.tenureAchievement.findFirst({
       where: { id: achievementId, tenureId },
     })
@@ -2276,7 +2891,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         positionDefinition: true,
         country: true,
         historicalCountry: true,
-        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
         electionCandidacy: {
           select: {
             id: true,
@@ -2394,7 +3009,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             party: { select: { id: true, name: true } },
           },
         },
-        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
       },
       orderBy: { startDate: 'desc' },
     })
@@ -2449,7 +3064,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             party: { select: { id: true, name: true } },
           },
         },
-        achievements: { orderBy: [{ orderNum: 'asc' }, { startDate: 'asc' }] },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
       },
       orderBy: { startDate: 'desc' },
     })

@@ -59,6 +59,7 @@ import {
   upsertCandidacyResult,
   upsertElectionPartyResult,
 } from '@/shared/api/election'
+import { updateEvent } from '@/shared/api/events'
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import {
@@ -1077,6 +1078,20 @@ export function CountryElectionsSection({
     onError: (e: Error) => toast.error(e.message),
   })
 
+  /** 선거 설명 정본이 연결 사건(Event)에 있을 때 — election.description 대신 event 수정 */
+  const saveElectionLinkedEventDescriptionMut = useMutation({
+    mutationFn: async (p: { eventId: string; description: string | null }) => {
+      await updateEvent(p.eventId, {
+        description: p.description ?? undefined,
+      })
+    },
+    onSuccess: () => {
+      invalidate()
+      toast.success('저장되었습니다.')
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
   const delElectionMut = useMutation({
     mutationFn: (id: string) => deleteElection(id),
     onSuccess: () => {
@@ -1391,13 +1406,29 @@ export function CountryElectionsSection({
                         setElectionModal({ mode: 'edit', election: detail })
                       }
                       onSaveElectionNarrative={async (patch) => {
+                        if (
+                          patch.description !== undefined &&
+                          detail.eventId != null &&
+                          String(detail.eventId).trim() !== ''
+                        ) {
+                          await saveElectionLinkedEventDescriptionMut.mutateAsync(
+                            {
+                              eventId: detail.eventId,
+                              description: patch.description,
+                            },
+                          )
+                          return
+                        }
                         await saveElectionMut.mutateAsync({
                           mode: 'edit',
                           id: detail.id,
                           body: patch,
                         })
                       }}
-                      savingNarrative={saveElectionMut.isPending}
+                      savingNarrative={
+                        saveElectionMut.isPending ||
+                        saveElectionLinkedEventDescriptionMut.isPending
+                      }
                       onDeleteElection={() => {
                         if (
                           window.confirm(
@@ -1764,6 +1795,12 @@ function ElectionDetailPanel({
     }
   }, [])
 
+  /** FM: `election.description` 비운 뒤에도 연결된 Event 본문을 설명으로 표시 */
+  const effectiveElectionDescription = useMemo(
+    () => detail.event?.description ?? detail.description ?? '',
+    [detail.event?.description, detail.description],
+  )
+
   const [narrativeEdit, setNarrativeEdit] = useState<
     null | 'legislature' | 'stats'
   >(null)
@@ -1773,17 +1810,17 @@ function ElectionDetailPanel({
   useEffect(() => {
     setNarrativeEdit(null)
     setLegislatureDraft(detail.resultingLegislatureDissolutionNotes ?? '')
-    setDescriptionDraft(detail.description ?? '')
-  }, [detail.id])
+    setDescriptionDraft(effectiveElectionDescription)
+  }, [detail.id, effectiveElectionDescription])
 
   useEffect(() => {
     if (narrativeEdit == null) {
       setLegislatureDraft(detail.resultingLegislatureDissolutionNotes ?? '')
-      setDescriptionDraft(detail.description ?? '')
+      setDescriptionDraft(effectiveElectionDescription)
     }
   }, [
     detail.resultingLegislatureDissolutionNotes,
-    detail.description,
+    effectiveElectionDescription,
     narrativeEdit,
   ])
 
@@ -2086,6 +2123,31 @@ function ElectionDetailPanel({
             {electionScopeCountryLabel(detail) ? (
               <ElectionDetailCountryMeta>
                 국가 · {electionScopeCountryLabel(detail)}
+              </ElectionDetailCountryMeta>
+            ) : null}
+            {detail.eventId ? (
+              <ElectionDetailCountryMeta>
+                연결 사건 ·{' '}
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      pathKeys.history.dashboardEventDetail(detail.eventId!),
+                    )
+                  }
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    margin: 0,
+                    cursor: 'pointer',
+                    color: theme.colors.primary,
+                    textDecoration: 'underline',
+                    font: 'inherit',
+                  }}
+                >
+                  {detail.event?.title?.trim() || detail.eventId}
+                </button>
               </ElectionDetailCountryMeta>
             ) : null}
             <ElectionDetailSummaryPanel>
@@ -3068,22 +3130,35 @@ function ElectionDetailPanel({
                 <ElectionNarrativeEditBtn
                   type="button"
                   onClick={() => {
-                    setDescriptionDraft(detail.description ?? '')
+                    setDescriptionDraft(effectiveElectionDescription)
                     setNarrativeEdit('stats')
                   }}
                   aria-label={
-                    hasRichTextContent(detail.description ?? '')
+                    hasRichTextContent(effectiveElectionDescription)
                       ? '선거 설명 수정'
                       : '선거 설명 작성'
                   }
                 >
                   <FiEdit2 size={14} strokeWidth={2} />
-                  {hasRichTextContent(detail.description ?? '')
+                  {hasRichTextContent(effectiveElectionDescription)
                     ? '수정'
                     : '작성'}
                 </ElectionNarrativeEditBtn>
               ) : null}
             </SectionHeaderRowNarrative>
+            {detail.eventId &&
+            hasRichTextContent(detail.event?.description ?? '') ? (
+              <p
+                style={{
+                  margin: '0 0 8px',
+                  fontSize: 12,
+                  color: theme.colors.text.secondary,
+                }}
+              >
+                본문 정본은 연결된 사건(Event)에 있습니다. 수정 시 Event가
+                갱신됩니다.
+              </p>
+            ) : null}
             {narrativeEdit === 'stats' ? (
               <HistoryArticleInner>
                 <HistoryArticleEditorWrap>
@@ -3100,7 +3175,7 @@ function ElectionDetailPanel({
                     type="button"
                     disabled={savingNarrative}
                     onClick={() => {
-                      setDescriptionDraft(detail.description ?? '')
+                      setDescriptionDraft(effectiveElectionDescription)
                       setNarrativeEdit(null)
                     }}
                   >
@@ -3115,11 +3190,11 @@ function ElectionDetailPanel({
                   </HistoryArticleSaveBtn>
                 </HistoryArticleEditActions>
               </HistoryArticleInner>
-            ) : hasRichTextContent(detail.description ?? '') ? (
+            ) : hasRichTextContent(effectiveElectionDescription) ? (
               <HistoryArticleInner>
                 <RichTextProseWithEntityClicks
                   readViewAs={HistoryArticleProse}
-                  html={detail.description ?? ''}
+                  html={effectiveElectionDescription}
                   aria-label="선거 설명"
                   hideWhenEmpty
                   onPersonClick={setMentionPersonId}
@@ -3580,6 +3655,9 @@ function ElectionFormModal({
   const [scopeHistoricalCountryId, setScopeHistoricalCountryId] = useState(
     () => initial?.historicalCountryId ?? '',
   )
+  const [linkedEventId, setLinkedEventId] = useState(
+    () => initial?.eventId ?? '',
+  )
 
   const showHistoricalCountryPicker = Boolean(
     electionScope.countryId && !electionScope.historicalCountryId,
@@ -3621,6 +3699,7 @@ function ElectionFormModal({
       initial.resultingLegislatureDissolutionNotes ?? '',
     )
     setScopeHistoricalCountryId(initial.historicalCountryId ?? '')
+    setLinkedEventId(initial.eventId ?? '')
   }, [mode, initial, initialTab])
 
   const title = mode === 'create' ? '새 선거' : '선거 수정'
@@ -3684,6 +3763,7 @@ function ElectionFormModal({
                 resultingLegislatureDissolutionNotes:
                   optionalRichTextHtmlOrNull(resultingDissolutionNotes),
               }
+              const eventIdBody = linkedEventId.trim() || null
               if (mode === 'create') {
                 onSubmit({
                   mode: 'create',
@@ -3699,6 +3779,7 @@ function ElectionFormModal({
                     voterTurnoutPercent: turnoutBody,
                     totalSeats: totalSeatsParsed,
                     description: optionalRichTextHtmlOrNull(description),
+                    eventId: eventIdBody,
                     ...chronologyExtra,
                   },
                 })
@@ -3718,6 +3799,7 @@ function ElectionFormModal({
                     voterTurnoutPercent: turnoutBody,
                     totalSeats: totalSeatsParsed,
                     description: optionalRichTextHtmlOrNull(description),
+                    eventId: eventIdBody,
                     ...chronologyExtra,
                   },
                 })
@@ -3779,6 +3861,20 @@ function ElectionFormModal({
                     onChange={(event) => setShortName(event.target.value)}
                   />
                 </ModalFieldMedium>
+              </FieldRow>
+              <FieldRow>
+                <FieldLabel htmlFor="election-form-linked-event">
+                  연결 사건 (선택)
+                </FieldLabel>
+                <ModalFieldWide>
+                  <Input
+                    id="election-form-linked-event"
+                    value={linkedEventId}
+                    onChange={(e) => setLinkedEventId(e.target.value)}
+                    placeholder="Event UUID — 비우면 연결 해제"
+                    autoComplete="off"
+                  />
+                </ModalFieldWide>
               </FieldRow>
               {showHistoricalCountryPicker ? (
                 <FieldRow>

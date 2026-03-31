@@ -320,6 +320,16 @@ export type PartyResultComparisonRowDto = {
   seatsDelta: number | null
 }
 
+/** 선거 상세에 포함되는 연결 사건(Event) 요약 */
+export type ElectionLinkedEventSummary = {
+  id: string
+  title: string
+  description?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  deletedAt?: string | null
+}
+
 export type PartyResultComparisonVsPreviousDto = {
   previousElection: {
     id: string
@@ -357,6 +367,8 @@ export type ElectionDetailDto = {
   resultingLegislatureClosureDate?: string | null
   resultingLegislatureDissolutionNotes?: string | null
   description?: string | null
+  eventId?: string | null
+  event?: ElectionLinkedEventSummary | null
   candidacies: ElectionCandidacyDto[]
   ballotOptions: ElectionBallotOptionDto[]
   /** 선거별 정당 집계(전국 득표·의석) */
@@ -475,6 +487,7 @@ export async function createElection(body: {
   resultingLegislatureClosureDate?: string | null
   resultingLegislatureDissolutionNotes?: string | null
   description?: string | null
+  eventId?: string | null
 }) {
   return requestJson<ElectionDetailDto>(`/elections`, {
     method: 'POST',
@@ -503,6 +516,7 @@ export async function updateElection(
     resultingLegislatureClosureDate: string | null
     resultingLegislatureDissolutionNotes: string | null
     description: string | null
+    eventId: string | null
   }>,
 ) {
   return requestJson<ElectionDetailDto>(

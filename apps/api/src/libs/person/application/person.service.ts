@@ -418,6 +418,52 @@ export class PersonService {
     return this.personRepository.deleteCabinet(cabinetId, accountId)
   }
 
+  async linkCabinetWithOther(
+    cabinetId: string,
+    otherCabinetId: string,
+    accountId: string,
+    eventId?: string | null,
+  ): Promise<any> {
+    try {
+      return await this.personRepository.linkCabinetWithOther(
+        cabinetId,
+        otherCabinetId,
+        accountId,
+        eventId,
+      )
+    } catch (e: any) {
+      throw new BadRequestException(e?.message ?? '행정부 묶기에 실패했습니다.')
+    }
+  }
+
+  async findCabinetsByLinkageEventId(eventId: string): Promise<any[]> {
+    return this.personRepository.findCabinetsByLinkageEventId(eventId)
+  }
+
+  async leaveCabinetLinkageGroup(cabinetId: string, accountId: string): Promise<void> {
+    return this.personRepository.leaveCabinetLinkageGroup(cabinetId, accountId)
+  }
+
+  async findLinkedCabinets(cabinetId: string, accountId: string): Promise<any[]> {
+    return this.personRepository.findLinkedCabinets(cabinetId, accountId)
+  }
+
+  async searchCabinetsForLinkage(
+    accountId: string,
+    q: string,
+    excludeCabinetId: string,
+    limit?: number,
+    filter?: { countryId?: string; historicalCountryId?: string },
+  ): Promise<any[]> {
+    return this.personRepository.searchCabinetsForLinkage(
+      accountId,
+      q,
+      excludeCabinetId,
+      limit,
+      filter,
+    )
+  }
+
   /**
    * 조직(만철, 관동군, 대만총독부 등) 역대 수장
    */
@@ -438,6 +484,10 @@ export class PersonService {
   /**
    * 사건 페이지에 표시할 업적 목록
    */
+  async findTenureAchievementsByEventId(eventId: string): Promise<any[]> {
+    return this.personRepository.findTenureAchievementsByEventId(eventId)
+  }
+
   async findAchievementsForEventsPage(): Promise<any[]> {
     return this.personRepository.findAchievementsForEventsPage()
   }

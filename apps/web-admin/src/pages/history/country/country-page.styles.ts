@@ -975,13 +975,11 @@ export const DetailPane = styled.div`
   }
 `
 
-/** DetailPane 안 스크롤 콘텐츠 — flex로 세로 높이를 넘겨 행정조직·인물·선거·법령 탭이 수축되지 않게 함 */
+/** DetailPane 안 콘텐츠 — 콘텐츠 높이보다 작게 줄어들지 않게(shrink 0) 해 스크롤 높이가 잘리지 않게 함 */
 export const DetailPaneScrollBody = styled.div`
   width: 100%;
   box-sizing: border-box;
-  padding-bottom: 40px;
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;

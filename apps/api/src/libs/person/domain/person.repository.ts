@@ -9,17 +9,15 @@ import {
   CreateAthleteCareerDto,
   CreateBusinessCareerDto,
   CreateEducationDto,
-  CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
-  CreateTenureAchievementDto,
-  UpdateTenureAchievementDto,
-  UpdateGovernmentPositionDefinitionDto,
+  CreateGovernmentPositionTenureDto,
   CreateLegalCareerDto,
   CreateMediaCareerDto,
   CreateMedicalCareerDto,
   CreateMilitaryCareerDto,
   CreatePersonAwardDto,
   CreateReligiousCareerDto,
+  CreateTenureAchievementDto,
   LegalCareerResponseDto,
   MediaCareerResponseDto,
   MedicalCareerResponseDto,
@@ -28,6 +26,8 @@ import {
   PersonEducationResponseDto,
   PersonResponseDto,
   ReligiousCareerResponseDto,
+  UpdateGovernmentPositionDefinitionDto,
+  UpdateTenureAchievementDto,
 } from '../presentation/dto'
 
 /**
@@ -158,7 +158,9 @@ export interface IPersonRepository {
    * 해당 현대 국가 또는 연결된 역사적 국가에 소속(affiliation)이 있는 인물 조회
    * (PersonCountryAffiliation: 출생지·시민권·봉사국 등)
    */
-  findPersonsByAffiliationInCountry(countryId: string): Promise<PersonResponseDto[]>
+  findPersonsByAffiliationInCountry(
+    countryId: string,
+  ): Promise<PersonResponseDto[]>
 
   /**
    * ID로 인물 조회 (accountId 있으면 해당 계정 소유만 반환)
@@ -224,12 +226,44 @@ export interface IPersonRepository {
   findSubordinateTenures(headTenureId: string): Promise<any[]>
   findCabinetByHeadTenureId(headTenureId: string): Promise<any | null>
   findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]>
-  findCabinets(params: { countryId?: string; historicalCountryId?: string; accountId?: string }): Promise<any[]>
-  createCabinet(dto: { headTenureId: string; name?: string | null }, accountId?: string): Promise<any>
+  findCabinets(params: {
+    countryId?: string
+    historicalCountryId?: string
+    accountId?: string
+  }): Promise<any[]>
+  createCabinet(
+    dto: { headTenureId: string; name?: string | null },
+    accountId?: string,
+  ): Promise<any>
   /** 행정부 수정 — name 등 */
-  updateCabinet(cabinetId: string, dto: { name?: string | null }, accountId?: string): Promise<any>
+  updateCabinet(
+    cabinetId: string,
+    dto: { name?: string | null },
+    accountId?: string,
+  ): Promise<any>
   /** 행정부 삭제 — 소속 각료 재임 삭제 후 행정부·수반 재임 삭제 (관련 데이터 모두) */
   deleteCabinet(cabinetId: string, accountId?: string): Promise<void>
+  /** 두 행정부를 같은 묶음(CabinetLinkageGroup)으로 연결 */
+  linkCabinetWithOther(
+    cabinetId: string,
+    otherCabinetId: string,
+    accountId: string,
+    eventId?: string | null,
+  ): Promise<any>
+  /** 이 행정부만 묶음에서 제거 (그룹이 비면 삭제) */
+  leaveCabinetLinkageGroup(cabinetId: string, accountId: string): Promise<void>
+  /** 같은 묶음의 다른 행정부 목록 */
+  findLinkedCabinets(cabinetId: string, accountId: string): Promise<any[]>
+  /** 특정 사건을 축으로 묶인 행정부 목록 */
+  findCabinetsByLinkageEventId(eventId: string): Promise<any[]>
+  /** 묶기 대상 행정부 검색 (countryId / historicalCountryId 로 해당 국가만) */
+  searchCabinetsForLinkage(
+    accountId: string,
+    q: string,
+    excludeCabinetId: string,
+    limit?: number,
+    filter?: { countryId?: string; historicalCountryId?: string },
+  ): Promise<any[]>
   /** 조직(만철, 관동군 등) 역대 수장 — positionDefinition.organizationId 기준 */
   findTenuresByOrganizationId(organizationId: string): Promise<any[]>
   /**
@@ -239,6 +273,10 @@ export interface IPersonRepository {
     tenureId: string,
     dto: CreateTenureAchievementDto,
   ): Promise<any>
+  /**
+   * 동일 사건(eventId)에 연결된 재임 업적 전부 — 다국 행정부 연결 조회용
+   */
+  findTenureAchievementsByEventId(eventId: string): Promise<any[]>
   /**
    * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
    */
@@ -254,7 +292,10 @@ export interface IPersonRepository {
   /**
    * 재임 업적 삭제
    */
-  deleteTenureAchievement(tenureId: string, achievementId: string): Promise<void>
+  deleteTenureAchievement(
+    tenureId: string,
+    achievementId: string,
+  ): Promise<void>
   /**
    * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (역대 수반 인물 선택용)
    */
@@ -268,8 +309,13 @@ export interface IPersonRepository {
     historicalCountryId?: string
   }): Promise<any[]>
   findPositionDefinitionById(id: string): Promise<any | null>
-  createPositionDefinition(dto: CreateGovernmentPositionDefinitionDto): Promise<any>
-  updatePositionDefinition(id: string, dto: UpdateGovernmentPositionDefinitionDto): Promise<any>
+  createPositionDefinition(
+    dto: CreateGovernmentPositionDefinitionDto,
+  ): Promise<any>
+  updatePositionDefinition(
+    id: string,
+    dto: UpdateGovernmentPositionDefinitionDto,
+  ): Promise<any>
   deletePositionDefinition(id: string): Promise<void>
   addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto>
   addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto>

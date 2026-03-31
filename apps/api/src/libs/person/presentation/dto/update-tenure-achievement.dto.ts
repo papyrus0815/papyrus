@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsString, IsOptional, IsDateString, IsBoolean } from 'class-validator'
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsBoolean,
+  IsUUID,
+  ValidateIf,
+} from 'class-validator'
 
 /**
  * 재임 업적·한일 수정 DTO (일부 필드만 보낼 수 있음)
@@ -33,4 +40,14 @@ export class UpdateTenureAchievementDto {
   @IsOptional()
   @IsBoolean()
   showOnEventsPage?: boolean
+
+  @ApiProperty({
+    description: '연결된 사건(Event) ID — null로 연결 해제',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsUUID()
+  eventId?: string | null
 }

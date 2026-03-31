@@ -28,7 +28,7 @@ export function stripMentionLeadingAt(html: string): string {
  */
 export function resolveRichTextImageSrcsForDisplay(html: string): string {
   const raw = html?.trim() ?? ''
-  if (raw === '' || !raw.includes('<img')) return html ?? ''
+  if (raw === '' || !/<img\b/i.test(raw)) return html ?? ''
   if (typeof document === 'undefined') return html ?? ''
   try {
     const tpl = document.createElement('template')
@@ -37,14 +37,8 @@ export function resolveRichTextImageSrcsForDisplay(html: string): string {
       const img = node as HTMLImageElement
       const src = img.getAttribute('src')
       if (!src) return
-      if (
-        src.startsWith('data:') ||
-        src.startsWith('blob:') ||
-        src.startsWith('http://') ||
-        src.startsWith('https://')
-      ) {
-        return
-      }
+      if (src.startsWith('data:') || src.startsWith('blob:')) return
+      // 상대·절대 모두 getUploadImageUrl — DB에 이전 호스트의 절대 URL이 남아 있어도 /uploads/면 현재 API로 재작성
       const resolved = getUploadImageUrl(src)
       if (resolved) img.setAttribute('src', resolved)
     })

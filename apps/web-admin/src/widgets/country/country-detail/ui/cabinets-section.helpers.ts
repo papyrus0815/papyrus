@@ -72,6 +72,28 @@ export function calcAgeAtEndTenure(
   return null
 }
 
+/** 재임 기록 목록 — 시간순(이른 날짜 먼저) 정렬 */
+export function compareTenureAchievementsChronological(
+  a: { startDate?: string | null },
+  b: { startDate?: string | null },
+): number {
+  const as = a.startDate ? String(a.startDate).slice(0, 10) : ''
+  const bs = b.startDate ? String(b.startDate).slice(0, 10) : ''
+  if (as && bs) return as.localeCompare(bs)
+  if (as) return -1
+  if (bs) return 1
+  return 0
+}
+
+/** 타임라인 연도 뱃지 — 시작일 기준 연도 */
+export function tenureAchievementPrimaryYearLabel(
+  startDate: string | null | undefined,
+): string {
+  if (!startDate) return '기간 미정'
+  const y = String(startDate).slice(0, 4)
+  return /^\d{4}$/.test(y) ? y : '기간'
+}
+
 export function formatDate(
   value: string | Date | null | undefined,
 ): string {
@@ -82,6 +104,49 @@ export function formatDate(
   const m = String(date.getMonth() + 1).padStart(2, '0')
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}.${m}.${d}`
+}
+
+/** 다국 행정부 묶음으로 병합되어, 현재 재임 화면에 끌어온 소스 재임의 업적인지 */
+export function isLinkagePeerAchievement(
+  ach: { tenureId?: string | null },
+  contextTenureId: string,
+): boolean {
+  const t =
+    typeof ach.tenureId === 'string' ? ach.tenureId.trim() : ''
+  return t.length > 0 && t !== contextTenureId
+}
+
+/** 리치텍스트 HTML의 첫 이미지 src (썸네일용) */
+const IMG_SRC_RE = /<img[^>]+src=["']([^"']+)["']/i
+export function extractFirstImageSrcFromHtml(html: string): string | null {
+  if (!html || typeof html !== 'string') return null
+  const m = html.match(IMG_SRC_RE)
+  const raw = m?.[1]?.trim()
+  return raw || null
+}
+
+const TENURE_BODY_IMG_TAG_RE = /<img\b/i
+
+/**
+ * 읽기/편집 초기값 공통: 재임 칸·사건 정본 중 무엇을 보여줄지.
+ * - 한쪽만 있으면 그쪽
+ * - 둘 다 있으면: 한쪽에만 이미지가 있으면 그쪽(요약은 재임·그림은 사건에 둔 경우 대비)
+ * - 둘 다 글+그림이면 재임 칸 우선
+ */
+export function getTenureAchievementDisplayBody(selAch: {
+  description?: string | null
+  event?: { description?: string | null } | null
+}): string {
+  const rawLocal = selAch.description ?? ''
+  const rawEvent = selAch.event?.description ?? ''
+  const hasLocal = rawLocal.trim() !== ''
+  const hasEvent = rawEvent.trim() !== ''
+  if (!hasEvent) return rawLocal
+  if (!hasLocal) return rawEvent
+  const localImg = TENURE_BODY_IMG_TAG_RE.test(rawLocal)
+  const eventImg = TENURE_BODY_IMG_TAG_RE.test(rawEvent)
+  if (eventImg && !localImg) return rawEvent
+  return rawLocal
 }
 
 /** 리치텍스트 HTML을 평문으로 줄여 카드 요약 등에 사용 */

@@ -56,7 +56,12 @@ import {
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { getUploadImageUrl, validateImageFile } from '@/shared/api/upload'
 import { scrollbarMixin } from '@/shared/styles/mixins'
-import { PROSE_HR_HTML, proseHrStyles } from '@/shared/styles/prose-hr'
+import {
+  PROSE_HR_HTML,
+  PROSE_HR_SMALL_HTML,
+  proseHrSmallStyles,
+  proseHrStyles,
+} from '@/shared/styles/prose-hr'
 import {
   richTextBlockAlignCss,
   richTextProseListCss,
@@ -403,6 +408,9 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
   hr,
   .prose-hr {
     ${proseHrStyles}
+  }
+  .prose-hr.prose-hr--small {
+    ${proseHrSmallStyles}
   }
 
   figure {
@@ -1952,6 +1960,30 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     requestAnimationFrame(scrollCursorIntoView)
   }, [onChange, updateFormatState, scrollCursorIntoView])
 
+  const insertProseHrBlock = useCallback(
+    (hrHtml: string) => {
+      playClickSound()
+      setTablePickerVisible(false)
+      if (!editorRef.current) return
+      editorRef.current.focus()
+      document.execCommand('insertHTML', false, `${hrHtml}<p><br></p>`)
+      const selection = window.getSelection()
+      if (selection && editorRef.current) {
+        const allPs = editorRef.current.querySelectorAll('p')
+        const lastP = allPs[allPs.length - 1]
+        if (lastP) {
+          const range = document.createRange()
+          range.setStart(lastP, 0)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+      }
+      handleContentChange()
+    },
+    [handleContentChange, playClickSound],
+  )
+
   /** figure+img(+선택 figcaption)를 삽입. `rangeRef`는 사용 후 null로 비움. */
   const insertFigureAtCaret = useCallback(
     (
@@ -3417,37 +3449,19 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         <ToolbarDivider />
         <ToolbarButton
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            playClickSound()
-            setTablePickerVisible(false)
-            if (!editorRef.current) return
-            editorRef.current.focus()
-            // HR 삽입 후 커서가 prose-hr div 안에 남아 Enter 시 복제되는 문제 방지
-            // HR + 빈 단락을 함께 삽입하고 커서를 빈 단락에 위치시킴
-            document.execCommand(
-              'insertHTML',
-              false,
-              `${PROSE_HR_HTML}<p><br></p>`,
-            )
-            // 삽입된 빈 <p> 안으로 커서 이동
-            const selection = window.getSelection()
-            if (selection && editorRef.current) {
-              const allPs = editorRef.current.querySelectorAll('p')
-              const lastP = allPs[allPs.length - 1]
-              if (lastP) {
-                const range = document.createRange()
-                range.setStart(lastP, 0)
-                range.collapse(true)
-                selection.removeAllRanges()
-                selection.addRange(range)
-              }
-            }
-            handleContentChange()
-          }}
+          onClick={() => insertProseHrBlock(PROSE_HR_HTML)}
           title="수평선 삽입"
           aria-label="수평선 삽입"
         >
           <FiMoreHorizontal />
+        </ToolbarButton>
+        <ToolbarButton
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => insertProseHrBlock(PROSE_HR_SMALL_HTML)}
+          title="작은 수평선 삽입"
+          aria-label="작은 수평선 삽입"
+        >
+          <FiMinus />
         </ToolbarButton>
       </Toolbar>
       {/* 색상 선택기 — body 포털 (EditorContainer backdrop-filter가 fixed 기준을 바꿔 뷰포트 좌표와 불일치하는 것 방지) */}

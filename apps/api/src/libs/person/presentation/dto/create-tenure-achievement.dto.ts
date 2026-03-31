@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsString, IsOptional, IsDateString, IsNotEmpty, IsBoolean } from 'class-validator'
+import {
+  IsString,
+  IsOptional,
+  IsDateString,
+  IsNotEmpty,
+  IsBoolean,
+  IsUUID,
+} from 'class-validator'
 
 /**
  * 재임 업적·한일 생성 DTO (사건과 별도 개념)
@@ -33,4 +40,12 @@ export class CreateTenureAchievementDto {
   @IsOptional()
   @IsBoolean()
   showOnEventsPage?: boolean
+
+  @ApiProperty({
+    description: '연결된 사건(Event) ID — 정본 서술·다국가 공유 시 사용',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID()
+  eventId?: string
 }

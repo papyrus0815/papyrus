@@ -16,10 +16,13 @@ import {
   FiTarget,
   FiUsers,
 } from 'react-icons/fi'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { getEventById } from '@/shared/api/events'
+import type { CabinetListItemDto } from '@/shared/api/person-career'
+import { personCareerApi } from '@/shared/api/person-career'
 import { pathKeys } from '@/shared/router'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
@@ -41,7 +44,67 @@ const SECTION_LINKS = [
   { id: 'theaters', label: '전구' },
   { id: 'figures', label: '핵심 인물' },
   { id: 'countries', label: '참전 국가' },
+  { id: 'linked-cabinets', label: '관련 행정부' },
 ]
+
+function EventLinkedCabinetsPanelBody({ eventId }: { eventId: string }) {
+  const { data = [], isLoading, isError } = useQuery({
+    queryKey: ['cabinets-by-linkage-event', eventId],
+    queryFn: () => personCareerApi.getCabinetsByLinkageEventId(eventId),
+  })
+  if (isLoading) {
+    return <p style={{ margin: 0, fontSize: 13 }}>불러오는 중…</p>
+  }
+  if (isError) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: '#dc2626' }}>
+        목록을 불러오지 못했습니다.
+      </p>
+    )
+  }
+  if (data.length === 0) {
+    return (
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: '#64748b',
+          lineHeight: 1.55,
+        }}
+      >
+        이 사건에 묶인 다국 행정부가 없습니다. 국가 상세 → 행정조직에서 행정부를 연 뒤
+        「다른 나라 행정부와 묶기」에서 이 사건을 선택해 연결할 수 있습니다.
+      </p>
+    )
+  }
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14, lineHeight: 1.45 }}>
+      {(data as CabinetListItemDto[]).map((cab) => {
+        const ht = cab.headTenure
+        const territoryId = ht?.country?.id ?? ht?.historicalCountry?.id
+        const url = territoryId
+          ? pathKeys.history.countryDetail(territoryId)
+          : null
+        const label = [
+          ht?.historicalCountry?.name ?? ht?.country?.name,
+          cab.name?.trim() || null,
+          ht?.person?.name,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+        return (
+          <li key={cab.id} style={{ marginBottom: 8 }}>
+            {url ? (
+              <Link to={url}>{label || cab.id}</Link>
+            ) : (
+              <span>{label || cab.id}</span>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
 
 const projectCoordinates = (marker: EventMapMarker) => {
   const clampedLat = Math.max(-60, Math.min(80, marker.coordinates.lat))
@@ -466,6 +529,18 @@ export const EventDetailPage: React.FC = () => {
               ))}
             </CountryGrid>
           </Panel>
+
+          {eventId && (
+            <Panel id="linked-cabinets">
+              <PanelHeader>
+                <div>
+                  <span>관련 행정부 (CabinetLinkageGroup)</span>
+                  <strong>이 사건을 축으로 묶인 다국 행정부</strong>
+                </div>
+              </PanelHeader>
+              <EventLinkedCabinetsPanelBody eventId={eventId} />
+            </Panel>
+          )}
 
           {selectedEvent.sources && selectedEvent.sources.length > 0 && (
             <SourcesSection>

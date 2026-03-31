@@ -2,11 +2,12 @@
  * 행정부(cabinets-section) 전용 styled-components
  */
 import { motion } from 'framer-motion'
-import styled from 'styled-components'
+import { Link } from 'react-router-dom'
+import styled, { css } from 'styled-components'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { glassCardMixin } from '@/shared/styles/mixins'
-import { proseHrStyles } from '@/shared/styles/prose-hr'
+import { proseHrSmallStyles, proseHrStyles } from '@/shared/styles/prose-hr'
 import { richTextReadonlyMediaAndTablesCss } from '@/shared/styles/rich-text-readonly-content'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import {
@@ -1111,7 +1112,7 @@ export const CabResultCount = styled.span`
 
 /* 닫기 버튼 — 상단 bar에 인라인 배치 */
 
-/** 행정부 상세 상단 — 선거 상세 `SectionHeaderRow`와 같이 박스·회색 배경 없이 구분선만 */
+/** 행정부 상세 상단 — 얇은 헤어라인만 (무거운 테두리 대비) */
 export const CabDetailTopBar = styled.div`
   display: flex;
   align-items: flex-start;
@@ -1123,10 +1124,11 @@ export const CabDetailTopBar = styled.div`
   flex-shrink: 0;
   border-radius: 0;
   border: none;
-  border-bottom: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
   background: transparent;
-  box-shadow: none;
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 1px 0 rgba(255, 255, 255, 0.06)'
+      : '0 1px 0 rgba(15, 23, 42, 0.06)'};
 `
 
 /** 상단 바 좌측: 브레드크럼 + (선택) 행정부 명칭 */
@@ -1135,6 +1137,7 @@ export const CabDetailTopBarMain = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
+  padding-top: 6px;
   gap: 2px;
 `
 
@@ -1243,15 +1246,18 @@ export const CabCard = styled.div<{ $selected?: boolean; $deleting?: boolean }>`
 export const CabDetailMinistersSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 22px 0 30px;
+  gap: 22px;
+  padding: 52px 0 56px;
+  scroll-margin-top: 12px;
 `
-/** 조약 등 각료 외 블록 — 레이아웃은 동일, 의미만 구분 */
-export const CabDetailSubSection = CabDetailMinistersSection
+/** 조약 — 각료와 동일 리듬 (위·아래 패딩으로 블록 간격 확보) */
+export const CabDetailSubSection = styled(CabDetailMinistersSection)`
+  scroll-margin-top: 12px;
+`
 export const CabDetailMinistersSectionHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 0;
 `
 export const CabDetailMinistersSectionTitle = styled.h4`
@@ -1385,8 +1391,8 @@ export const CabinetListSkeletonBar = styled.div<{ $w?: string; $h?: string }>`
 export const CabDetailScrollSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px 0 10px;
+  gap: 44px;
+  padding: 48px 0 56px;
   scroll-margin-top: 12px;
 `
 
@@ -1556,7 +1562,7 @@ export const MinisterCardChevron = styled.span`
 `
 
 /* 프로필 원 지름 — 상단 걸침(반원 노출) 계산에 사용 */
-const HEAD_PROFILE_AVATAR_PX = 160
+const HEAD_PROFILE_AVATAR_PX = 220
 const HEAD_PROFILE_AVATAR_RADIUS = HEAD_PROFILE_AVATAR_PX / 2
 
 /* ── 수반 상세 프로필 블록 (썸네일 중앙, 상단 테두리에 반쯤 걸침) ── */
@@ -1569,7 +1575,7 @@ export const HeadProfileBlock = styled.div`
   gap: 0;
   /* 위로 반원이 나가므로 바깥 여백 + 테두리선에 원 중심이 오도록 패딩 */
   margin-top: 25px;
-  margin-bottom: 16px;
+  margin-bottom: 48px;
   padding: ${HEAD_PROFILE_AVATAR_RADIUS + 24}px 24px 32px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
@@ -1819,8 +1825,11 @@ export const CabDetailEmptyStack = styled.div<{ $padding?: string }>`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: ${(p) => p.$padding ?? '28px 0'};
+  justify-content: center;
+  gap: 12px;
+  min-height: 160px;
+  box-sizing: border-box;
+  padding: ${(p) => p.$padding ?? '32px 0 36px'};
 `
 
 export const CabDetailEmptyText = styled.p<{
@@ -1850,13 +1859,13 @@ export const CabMinistersLoadingBox = styled.div`
     getCabinetsSectionPalette(theme.mode === 'dark').bgSubtle};
 `
 
-/* ── 행정부 상세: 집권·연정 정당 (보조 메타 — 시각적 비중·여백 축소) ── */
+/* ── 행정부 상세: 집권·연정 정당 ── */
 export const CabDetailPartySubSection = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 2px 0 8px;
-  margin-top: 12px;
+  gap: 16px;
+  padding: 36px 0 52px;
+  margin-top: 0;
   scroll-margin-top: 12px;
 `
 
@@ -1882,15 +1891,15 @@ export const CabDetailPartyLoading = styled.div`
   font-size: 11px;
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-  padding: 2px 0 0;
+  padding: 8px 0 4px;
 `
 
 export const CabDetailPartyEmpty = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 6px 0 2px;
+  gap: 10px;
+  padding: 12px 0 8px;
   text-align: center;
 `
 
@@ -1910,7 +1919,7 @@ export const CabDetailPartyEmptyIconWrap = styled.span`
 `
 
 export const CabDetailPartyList = styled.ul`
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -1921,8 +1930,8 @@ export const CabDetailPartyList = styled.ul`
 export const CabDetailPartyRow = styled.li`
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 4px 0 5px;
+  gap: 2px;
+  padding: 8px 0 10px;
   border-bottom: 1px solid
     ${({ theme }) =>
       getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
@@ -2304,9 +2313,9 @@ export const CardIconButton = styled.button<{ $danger?: boolean }>`
     opacity: 0.5;
   }
 `
-/* 재임 히스토리 모달 */
+/* 재임 기록 모달 */
 export const MinisterHistoryModalBox = styled(ModalBox)`
-  max-width: min(1080px, 100%);
+  max-width: min(1000px, 100%);
   max-height: 90vh;
   border-radius: 20px;
   display: flex;
@@ -2381,6 +2390,7 @@ export const MinisterHistoryActions = styled.div`
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
+  padding-top: 24px;
 `
 export const HistorySecondaryButton = styled.button`
   border: 1px solid
@@ -2403,7 +2413,351 @@ export const HistorySecondaryButton = styled.button`
 
 /* ——— 부처 상세 패널 (무슨 일을 했고, 직책·담당자) ——— */
 
-/* ── 히스토리 목록 카드 ── */
+/* ── 재임 기록 가로 타임라인: 열당 말풍선 카드 → 연결선 → 노드(가로 축) → 메타 (팔레트 전용) ── */
+export const TenureHistoryInfographicCardMain = styled.div`
+  flex: 1;
+  min-width: 0;
+`
+export const TenureHistoryInfographicCardBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  min-width: 0;
+  width: 100%;
+`
+
+/** 바깥 래퍼 없음 — 추가 패널·테두리 없음 */
+export const TenureHistoryTimelineShell = styled.div`
+  margin-top: 14px;
+`
+export const TenureHistoryTimelineKicker = styled.p`
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').sectionHeading};
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').accent};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        getCabinetsSectionPalette(theme.mode === 'dark').accentBg};
+  }
+`
+export const TenureHistoryHorizScroll = styled.div`
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  margin: 0 -4px;
+  padding: 4px 4px 8px;
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 3px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(148,163,184,0.35)' : '#cbd5e1'};
+  }
+`
+/** 가로 스크롤 한 줄 — 열(말풍선·축·메타) 정렬 */
+export const TenureHistoryHorizTrack = styled.div`
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  min-width: min-content;
+  gap: 0;
+`
+export const TenureHistoryHorizCol = styled.div`
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 10px;
+  box-sizing: border-box;
+`
+/** 말풍선 중앙 ↔ 노드 중앙 정렬용 세로 줄 */
+export const TenureHistoryHorizConnector = styled.div`
+  width: 2px;
+  height: 14px;
+  flex-shrink: 0;
+  align-self: center;
+  margin-top: 2px;
+  border-radius: 1px;
+  ${({ theme }) => {
+    const p = getCabinetsSectionPalette(theme.mode === 'dark')
+    return css`
+      background: ${p.borderMid};
+      opacity: 0.7;
+    `
+  }}
+`
+/** 열 중심에 맞춘 가로 축(좌·우 반씩) + 중앙 노드 — 카드 열과 동일; 좌우 마진으로 열 간 가로선 연결 */
+export const TenureHistoryHorizSpineCell = styled.div`
+  position: relative;
+  height: 26px;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: calc(100% + 20px);
+  margin-left: -10px;
+  margin-right: -10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 50%;
+    top: 50%;
+    height: 3px;
+    transform: translateY(-50%);
+    border-radius: 2px;
+    ${({ theme }) => {
+      const p = getCabinetsSectionPalette(theme.mode === 'dark')
+      return css`
+        background: ${p.borderMid};
+        opacity: 0.45;
+      `
+    }}
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    right: 0;
+    top: 50%;
+    height: 3px;
+    transform: translateY(-50%);
+    border-radius: 2px;
+    ${({ theme }) => {
+      const p = getCabinetsSectionPalette(theme.mode === 'dark')
+      return css`
+        background: ${p.borderMid};
+        opacity: 0.45;
+      `
+    }}
+  }
+`
+export const TenureHistoryHorizNode = styled.div`
+  position: relative;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  ${({ theme }) => {
+    const p = getCabinetsSectionPalette(theme.mode === 'dark')
+    return css`
+      background: ${p.btnBg};
+      border: 3px solid ${MAIN};
+      box-shadow: 0 0 0 2px ${p.bgMuted};
+    `
+  }}
+`
+/** 말풍선 — 아래 꼬리가 열 중앙 노드와 수직으로 맞춤 */
+export const TenureHistoryHorizCard = styled.div<{ $linkagePeer?: boolean }>`
+  position: relative;
+  width: 100%;
+  min-height: 100px;
+  overflow: visible;
+  border-radius: 18px 18px 20px 18px;
+  cursor: pointer;
+  padding: 12px 32px 14px 14px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease,
+    background 0.15s ease;
+
+  ${({ theme, $linkagePeer }) => {
+    const p = getCabinetsSectionPalette(theme.mode === 'dark')
+    const drop =
+      theme.mode === 'dark'
+        ? '0 4px 18px rgba(0, 0, 0, 0.35)'
+        : '0 2px 10px rgba(15, 23, 42, 0.06)'
+    return css`
+      border: 1px solid ${p.accentBorder};
+      background: ${p.cardBg};
+      box-shadow: ${drop};
+      ${$linkagePeer &&
+      css`
+        box-shadow:
+          inset 3px 0 0 ${MAIN},
+          ${drop};
+      `}
+    `
+  }}
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid
+      ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').cardBg};
+    z-index: 1;
+    pointer-events: none;
+    filter: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'drop-shadow(0 1px 0 rgba(99, 102, 241, 0.25))'
+        : 'none'};
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    ${({ theme, $linkagePeer }) => {
+      const p = getCabinetsSectionPalette(theme.mode === 'dark')
+      const hoverDrop =
+        theme.mode === 'dark'
+          ? '0 8px 24px rgba(0, 0, 0, 0.4)'
+          : '0 6px 18px rgba(15, 23, 42, 0.08)'
+      return css`
+        border-color: ${p.accentSecondaryBorder};
+        background: ${p.cardBgHover};
+        box-shadow: ${$linkagePeer
+          ? `inset 3px 0 0 ${MAIN}, ${hoverDrop}`
+          : hoverDrop};
+      `
+    }}
+  }
+
+  &:hover::after {
+    border-top-color: ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').cardBgHover};
+  }
+
+  &:focus {
+    outline: none;
+  }
+  &:focus-visible {
+    ${({ theme }) => {
+      const p = getCabinetsSectionPalette(theme.mode === 'dark')
+      return css`
+        outline: 2px solid ${p.accent};
+        outline-offset: 3px;
+      `
+    }}
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &,
+    &:hover {
+      transform: none;
+      transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background 0.15s ease;
+    }
+  }
+`
+export const TenureHistoryLinkagePeerBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin-bottom: 6px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  ${({ theme }) => {
+    const p = getCabinetsSectionPalette(theme.mode === 'dark')
+    return css`
+      color: ${p.accent};
+      background: ${p.accentBg};
+      border: 1px solid ${p.accentBorder};
+    `
+  }}
+`
+export const TenureHistoryDateStrip = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 6px;
+`
+export const TenureHistoryYearBadge = styled.span`
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  ${({ theme }) => {
+    const p = getCabinetsSectionPalette(theme.mode === 'dark')
+    return css`
+      color: ${p.accent};
+      background: ${p.accentBg};
+      border: 1px solid ${p.accentBorder};
+    `
+  }}
+  padding: 4px 10px;
+  border-radius: 999px;
+  line-height: 1.2;
+`
+export const TenureHistoryDateRange = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  letter-spacing: -0.01em;
+`
+export const TenureHistoryInfographicTitle = styled.div`
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.4;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').text};
+  margin-bottom: 0;
+`
+export const TenureHistoryInfographicExcerpt = styled.div`
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`
+export const TenureHistoryTimelinePeersSlot = styled.div`
+  margin-top: 8px;
+`
+export const TenureHistoryInfographicChevron = styled.span`
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').iconColor};
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  opacity: 0.65;
+`
+
+/* ── 재임 기록 목록 카드 ── */
 export const HistoryCardList = styled.div`
   display: flex;
   flex-direction: column;
@@ -2492,6 +2846,124 @@ export const HistoryCardExcerpt = styled.div`
   -webkit-box-orient: vertical;
   overflow: hidden;
 `
+/** 다국 행정부 묶음 — 카드 하단 피어 영토(국기·이모지·[국가명]) */
+export const HistoryCardPeersRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
+`
+export const HistoryCardPeerChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  font-size: 16px;
+  line-height: 1;
+`
+export const HistoryCardPeerChipImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`
+
+export const HistoryArticlePeersRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#eceff3'};
+`
+export const HistoryArticlePeerChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  font-size: 17px;
+  line-height: 1;
+`
+export const HistoryArticlePeerChipImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`
+export const HistoryPeerNameFallback = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/** 썸네일·이모지 없을 때 — [국가명] (칩보다 넓게) */
+export const HistoryCardPeerBracket = styled.span`
+  display: inline-flex;
+  align-items: center;
+  max-width: 180px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  line-height: 1.25;
+  word-break: break-all;
+`
+
+export const HistoryArticlePeerBracket = styled.span`
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  line-height: 1.3;
+  word-break: break-all;
+`
+
 export const HistoryCardChevron = styled.span`
   position: absolute;
   right: 12px;
@@ -2504,14 +2976,17 @@ export const HistoryCardChevron = styled.span`
 `
 
 /* ── 각료 프로필 compact block ── */
-export const MinisterProfileBlock = styled.div`
+export const MinisterProfileBlock = styled.div<{ $articleMode?: boolean }>`
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 20px 0 16px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
+  padding: ${(p) => (p.$articleMode ? '18px 0 0' : '20px 0 16px')};
+  border-bottom: ${(p) =>
+    p.$articleMode
+      ? 'none'
+      : `1px solid ${
+          p.theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'
+        }`};
 `
 export const MinisterProfileAvatar = styled.div`
   width: 56px;
@@ -2638,23 +3113,103 @@ export const MinisterEditHistoryBtn = styled.button`
   }
 `
 
-/* ── 히스토리 NYT 상세 아티클 ── */
+/* ── 재임 기록 상세(아티클 레이아웃) ── */
 const NYT_FONT =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
 
+/** 재임 기록 상세 버튼 공통 — 동일 높이·모서리·타이포 */
+const historyArticleBtnPhysical = css`
+  font-family: ${NYT_FONT};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+`
+
+/** 재임 기록 상세 — 박스/카드 없이 본문 흐름만 (편집기·뉴스형) */
 export const HistoryArticleWrap = styled.div`
-  padding: 0 0 48px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'transparent' : '#fff'};
+  margin-top: 6px;
+  padding: 0 0 56px;
+  background: transparent;
   font-family: ${NYT_FONT};
   display: flex;
   flex-direction: column;
+  gap: 0;
 `
-export const HistoryArticleTopBar = styled.div`
-  display: flex;
+/** 재임 기록 상세 상단 액션 — 내용 너비만 차지 (한 줄 전체 점유 방지) */
+export const HistoryArticleToolbarActions = styled.div`
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 0 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 0 1 auto;
+  max-width: 100%;
+`
+/** 다국 행정부 묶기 — accent 고스트 (툴바 공통 터치 영역) */
+export const HistoryArticleToolbarSecondaryBtn = styled.button`
+  ${historyArticleBtnPhysical};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.12)'
+      : 'rgba(99, 102, 241, 0.07)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.28)'
+        : 'rgba(99, 102, 241, 0.2)'};
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.22)'
+        : 'rgba(99, 102, 241, 0.12)'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(165, 180, 252, 0.4)'
+        : 'rgba(99, 102, 241, 0.35)'};
+  }
+`
+/** 툴바 삭제 — danger 고스트 */
+export const HistoryArticleToolbarDeleteBtn = styled.button`
+  ${historyArticleBtnPhysical};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fda4af' : '#be123c')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(244, 63, 94, 0.08)'
+      : 'rgba(254, 242, 242, 0.95)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(251, 113, 133, 0.28)'
+        : 'rgba(225, 29, 72, 0.2)'};
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(244, 63, 94, 0.18)' : '#ffe4e6'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fecdd3' : '#9f1239')};
+  }
 `
 export const HistoryArticleBackBtn = styled.button`
   display: inline-flex;
@@ -2701,22 +3256,21 @@ export const HistoryArticleDeleteBtn = styled.button`
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
   }
 `
+/** 본문 수정·추가 — neutral 고스트 (취소와 동일 계열) */
 export const HistoryArticleEditBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#6b7280')};
-  background: none;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 0.15s;
-  &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#111827')};
-    text-decoration: underline;
+  ${historyArticleBtnPhysical};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#0f172a')};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f8fafc'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : '#cbd5e1'};
   }
 `
 /* 제목/날짜 영역: 100% width */
@@ -2731,23 +3285,34 @@ export const HistoryHeadlineRow = styled.div`
   justify-content: space-between;
   gap: 10px;
 `
-export const HistoryMetaEditBtn = styled.button`
+/** 제목 오른쪽 — 묶기·삭제·제목수정 등 (한 덩어리) */
+export const HistoryArticleHeadlineAside = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#6b7280')};
-  background: none;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
   flex-shrink: 0;
-  transition: color 0.15s;
-  &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#111827')};
-    text-decoration: underline;
+`
+/** 제목 연필 — 아이콘만, 툴바와 동일 32px 터치 */
+export const HistoryMetaEditBtn = styled.button`
+  ${historyArticleBtnPhysical};
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  gap: 0;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#f8fafc'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.18)' : '#cbd5e1'};
   }
 `
 export const HistoryMetaForm = styled.div`
@@ -2834,11 +3399,50 @@ export const HistoryArticleByline = styled.p`
   line-height: 1.5;
   font-weight: 500;
 `
-export const HistoryArticleDivider = styled.hr`
+
+/** 재임 기록 제목·기간 아래 — 다국 행정부 묶음(byline 톤, 패널 아님) */
+export const HistoryArticleLinkageMeta = styled.div<{
+  $placement?: 'article' | 'list'
+}>`
+  font-family: ${NYT_FONT};
+  font-size: 12px;
+  line-height: 1.55;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
+  margin: ${({ $placement }) => ($placement === 'list' ? '0' : '6px 0 0')};
+  font-weight: 500;
+  & p {
+    margin: 0;
+  }
+  & p + p {
+    margin-top: 4px;
+  }
+  & a {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+    font-weight: 600;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`
+
+/** 재임 기록 목록에서 묶음 메타 — 상세 기사 열(720)과 동일 정렬 */
+export const CabinetLinkageMetaListShell = styled.div`
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0;
+  box-sizing: border-box;
+`
+
+/** 본문 전 — 선 없이 여백만으로 구역 구분 */
+export const HistoryArticleDivider = styled.div.attrs({
+  'aria-hidden': true,
+})`
+  flex-shrink: 0;
+  height: 0;
+  margin: 20px 0 4px;
   border: none;
-  border-top: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
-  margin: 14px 20px 18px;
 `
 export const HistoryArticleEditorWrap = styled.div`
   width: 100%;
@@ -2848,48 +3452,46 @@ export const HistoryArticleEditorWrap = styled.div`
 export const HistoryArticleEditActions = styled.div`
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
+  width: 100%;
+  & > ${HistoryArticleToolbarActions} {
+    margin-right: auto;
+  }
 `
 export const HistoryArticleCancelBtn = styled.button`
-  font-family: ${NYT_FONT};
-  font-size: 13px;
-  font-weight: 500;
+  ${historyArticleBtnPhysical};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.15s;
+  background: transparent;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0'};
   &:hover:not(:disabled) {
     color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
-    text-decoration: underline;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f8fafc'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : '#cbd5e1'};
   }
 `
 export const HistoryArticleSaveBtn = styled.button<{ $isRegister?: boolean }>`
-  font-family: ${NYT_FONT};
-  font-size: 13px;
-  font-weight: 600;
+  ${historyArticleBtnPhysical};
+  padding: 0 16px;
+  border: none;
   color: #fff;
   background: ${(p) => (p.$isRegister ? '#059669' : '#6366f1')};
-  border: none;
-  border-radius: 8px;
-  padding: ${(p) => (p.$isRegister ? '9px 18px' : '7px 14px')};
-  cursor: pointer;
-  transition: background 0.15s;
   &:hover:not(:disabled) {
     background: ${(p) => (p.$isRegister ? '#047857' : '#4f46e5')};
   }
   &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+    opacity: 0.55;
   }
 `
 /** RichTextEditor 본문(EditorContent)과 동일한 타이포·간격 — 수평선은 hr + .prose-hr 모두 지원 */
 export const HistoryArticleProse = styled(RichTextReadView)`
+  /* RichTextReadView Root의 pre-wrap은 figure/img 블록과 맞지 않아 뷰에서 이미지가 안 보이는 경우가 있음 */
+  white-space: normal;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
@@ -2961,6 +3563,9 @@ export const HistoryArticleProse = styled(RichTextReadView)`
   hr,
   .prose-hr {
     ${proseHrStyles}
+  }
+  .prose-hr.prose-hr--small {
+    ${proseHrSmallStyles}
   }
   a {
     color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
@@ -3048,7 +3653,7 @@ export const HistoryArticleEmpty = styled.p`
   padding: 6px 0 16px;
 `
 
-/** 재임 히스토리 본문 — 용어(.term) / 가문 클릭 시 툴팁 (다른 리치텍스트 뷰와 동일 z-index) */
+/** 재임 기록 본문 — 용어(.term) / 가문 클릭 시 툴팁 (다른 리치텍스트 뷰와 동일 z-index) */
 export const HistoryProseTooltipOverlay = styled.div`
   position: fixed;
   inset: 0;
@@ -3169,17 +3774,22 @@ export const PersonViewModalBody = styled(ModalBody)`
 /* ── 수반 재임 부가정보 — 플랫(박스 제거), 좌측 액센트만 ── */
 export const HeadTenureInfoSection = styled.div<{
   $accent?: 'mint' | 'rose'
+  /** 재임 기록 상세(아티클)일 때 하단 누적 구분선 제거 */
+  $omitBottomRule?: boolean
 }>`
-  padding: 16px 0 18px;
+  padding: ${(p) => (p.$omitBottomRule ? '22px 0 0' : '28px 0 36px')};
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
   background: transparent;
   border: none;
   border-radius: 0;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#eceff3'};
+  border-bottom: ${(p) =>
+    p.$omitBottomRule
+      ? 'none'
+      : `1px solid ${
+          p.theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#eceff3'
+        }`};
   margin-bottom: 0;
   border-left: ${(p) =>
     p.$accent === 'mint'

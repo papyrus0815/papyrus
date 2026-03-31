@@ -95,8 +95,8 @@ const TabHeaderOuter = styled.header<{ $flat?: boolean }>`
             background: radial-gradient(
               ellipse at 85% 20%,
               ${theme.mode === 'dark'
-                ? 'rgba(159, 122, 234, 0.07)'
-                : 'rgba(139, 92, 246, 0.04)'}
+                  ? 'rgba(159, 122, 234, 0.07)'
+                  : 'rgba(139, 92, 246, 0.04)'}
                 0%,
               transparent 55%
             );
@@ -172,16 +172,20 @@ export function SectionTabHeader({
       <TabHeaderInner>
         <TabHeaderLeft>
           {leftSlot}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
             <TabHeaderTitle>{title}</TabHeaderTitle>
             <TabHeaderSubtitle>{description}</TabHeaderSubtitle>
           </div>
         </TabHeaderLeft>
-        {rightSlot && (
-          <div style={{ flexShrink: 0 }}>
-            {rightSlot}
-          </div>
-        )}
+        {rightSlot && <div style={{ flexShrink: 0 }}>{rightSlot}</div>}
       </TabHeaderInner>
     </TabHeaderOuter>
   )
@@ -273,7 +277,11 @@ const OrbPrimary = styled.div`
   margin-left: -140px;
   margin-top: -140px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.06) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(99, 102, 241, 0.06) 0%,
+    transparent 70%
+  );
   filter: blur(32px);
   pointer-events: none;
 `
@@ -285,7 +293,11 @@ const OrbSecondary = styled.div`
   width: 160px;
   height: 160px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.04) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(99, 102, 241, 0.04) 0%,
+    transparent 70%
+  );
   filter: blur(24px);
   pointer-events: none;
 `
@@ -351,16 +363,22 @@ export const AddButton = styled.button`
   border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : theme.colors.background.primary};
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.08)'
+      : theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
   flex-shrink: 0;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : theme.colors.background.secondary};
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.12)'
+        : theme.colors.background.secondary};
     border-color: ${({ theme }) => theme.colors.border.medium};
   }
 `
@@ -370,8 +388,9 @@ export const ErrorBox = styled.div`
   padding: 12px 16px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,69,58,0.15)' : '#fee2e2'};
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,69,58,0.3)' : '#fecaca'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,69,58,0.3)' : '#fecaca'};
   border-radius: 10px;
   color: ${({ theme }) => theme.colors.error};
   font-size: 14px;
@@ -390,7 +409,9 @@ export const BackButton = styled.button`
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  transition: color 0.2s, background 0.2s;
+  transition:
+    color 0.2s,
+    background 0.2s;
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) => theme.colors.background.tertiary};
@@ -408,7 +429,9 @@ export const SaveButton = styled.button<{ $saving?: boolean }>`
   cursor: ${({ $saving }) => ($saving ? 'wait' : 'pointer')};
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
   opacity: ${({ $saving }) => ($saving ? 0.7 : 1)};
-  transition: opacity 0.2s, background 0.2s;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
   &:hover:not(:disabled) {
     background: ${({ theme }) => theme.colors.button.hover};
   }
@@ -476,23 +499,29 @@ interface SectionPageHeaderProps {
   rightSlot?: React.ReactNode
 }
 
-export function SectionPageHeader({ title, description, addButton, rightSlot }: SectionPageHeaderProps) {
+export function SectionPageHeader({
+  title,
+  description,
+  addButton,
+  rightSlot,
+}: SectionPageHeaderProps) {
   return (
     <HeaderOuter>
       <div>
         <HeaderTitle>{title}</HeaderTitle>
         <HeaderDesc>{description}</HeaderDesc>
       </div>
-      {rightSlot ?? (addButton && (
-        <AddButton
-          type="button"
-          onClick={addButton.onClick}
-          aria-label={addButton.ariaLabel ?? addButton.label}
-        >
-          <PlusIcon />
-          {addButton.label}
-        </AddButton>
-      ))}
+      {rightSlot ??
+        (addButton && (
+          <AddButton
+            type="button"
+            onClick={addButton.onClick}
+            aria-label={addButton.ariaLabel ?? addButton.label}
+          >
+            <PlusIcon />
+            {addButton.label}
+          </AddButton>
+        ))}
     </HeaderOuter>
   )
 }
@@ -505,7 +534,12 @@ interface SectionKpiPanelProps {
   tabSlot?: React.ReactNode
 }
 
-export function SectionKpiPanel({ label, count, unit = '개', tabSlot }: SectionKpiPanelProps) {
+export function SectionKpiPanel({
+  label,
+  count,
+  unit = '개',
+  tabSlot,
+}: SectionKpiPanelProps) {
   return (
     <KpiOuter>
       {tabSlot}
@@ -541,8 +575,26 @@ const DefaultEmptyIcon = () => (
       style={{ display: 'block' }}
     >
       <rect x="4" y="20" width="100" height="60" rx="14" fill="#e2e8f0" />
-      <rect x="14" y="10" width="100" height="60" rx="14" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1" />
-      <rect x="24" y="0" width="100" height="60" rx="14" fill="#ffffff" stroke="#c7d2fe" strokeWidth="1.5" />
+      <rect
+        x="14"
+        y="10"
+        width="100"
+        height="60"
+        rx="14"
+        fill="#f1f5f9"
+        stroke="#e2e8f0"
+        strokeWidth="1"
+      />
+      <rect
+        x="24"
+        y="0"
+        width="100"
+        height="60"
+        rx="14"
+        fill="#ffffff"
+        stroke="#c7d2fe"
+        strokeWidth="1.5"
+      />
       <rect x="32" y="14" width="56" height="10" rx="5" fill="#eef2ff" />
       <rect x="32" y="30" width="76" height="6" rx="3" fill="#e0e7ff" />
       <rect x="32" y="42" width="64" height="6" rx="3" fill="#e0e7ff" />
@@ -550,7 +602,11 @@ const DefaultEmptyIcon = () => (
   </div>
 )
 
-export function SectionEmptyState({ title, description, icon }: SectionEmptyStateProps) {
+export function SectionEmptyState({
+  title,
+  description,
+  icon,
+}: SectionEmptyStateProps) {
   return (
     <EmptyOuter {...EMPTY_MOTION}>
       <OrbPrimary />
@@ -597,12 +653,25 @@ export function SectionFormCard({
             <BackArrowIcon />
             목록으로
           </BackButton>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.025em', color: 'inherit' }}>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 20,
+              fontWeight: 700,
+              letterSpacing: '-0.025em',
+              color: 'inherit',
+            }}
+          >
             {formTitle}
           </h2>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <SaveButton type="button" onClick={onSave} disabled={isSaving} $saving={isSaving}>
+          <SaveButton
+            type="button"
+            onClick={onSave}
+            disabled={isSaving}
+            $saving={isSaving}
+          >
             {isSaving ? '저장 중…' : isEditing ? '저장' : '등록'}
           </SaveButton>
         </div>

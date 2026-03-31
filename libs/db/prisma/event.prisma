@@ -293,6 +293,15 @@ model Event {
   /// 문서 전용 용어 (이 사건에만 쓰는 설명용 용어)
   glossaryTerms GlossaryTerm[] @relation("GlossaryTermEvent")
 
+  /// 재임 기록에서 이 사건을 정본으로 참조
+  tenureAchievements TenureAchievement[] @relation("TenureAchievementEvent")
+
+  /// 이 사건을 축으로 묶인 다국 행정부 그룹 (CabinetLinkageGroup.eventId)
+  cabinetLinkageGroups CabinetLinkageGroup[] @relation("CabinetLinkageEvent")
+
+  /// 선거 상세 서술의 정본으로 연결 (선택)
+  electionsWithNarrative Election[] @relation("ElectionEventNarrative")
+
   /// 등록자 
   createdById String @map("created_by") @db.Char(36)
 

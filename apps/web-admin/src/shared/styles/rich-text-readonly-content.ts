@@ -4,13 +4,16 @@
  */
 import { css } from 'styled-components'
 
-import { proseHrStyles } from './prose-hr'
+import { proseHrSmallStyles, proseHrStyles } from './prose-hr'
 
 /** hr 및 에디터에서 삽입하는 .prose-hr 구분선 */
 export const richTextReadonlyHorizontalRuleCss = css`
   hr,
   .prose-hr {
     ${proseHrStyles}
+  }
+  .prose-hr.prose-hr--small {
+    ${proseHrSmallStyles}
   }
 `
 

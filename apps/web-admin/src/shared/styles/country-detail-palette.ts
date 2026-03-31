@@ -42,7 +42,7 @@ export type CabinetsSectionPalette = {
   borderHairline12: string
   /** 섹션 소제목 (취임 정보 등) */
   sectionLabelTint: string
-  /** 재임 히스토리 등 제목 */
+  /** 재임 기록 등 제목 */
   sectionHeading: string
   /** 조약 행 제목 */
   treatyTitleText: string

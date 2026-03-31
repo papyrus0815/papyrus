@@ -27,6 +27,16 @@ import { serializeElectionBigInt } from '../election-serialize.util'
 const electionInclude = {
   country: { select: { id: true, name: true } },
   historicalCountry: { select: { id: true, name: true } },
+  event: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      startDate: true,
+      endDate: true,
+      deletedAt: true,
+    },
+  },
   candidacies: {
     include: {
       person: { select: { id: true, name: true, surname: true } },
@@ -534,6 +544,8 @@ export class ElectionController {
       scopeAdministrativeDivisionId?: string | null
       convocationOrdinal?: number | null
       description?: string | null
+      /** 사건(Event) 정본 연결 */
+      eventId?: string | null
       accountId?: string | null
     },
   ) {
@@ -572,6 +584,7 @@ export class ElectionController {
         scopeAdministrativeDivisionId: body.scopeAdministrativeDivisionId ?? undefined,
         convocationOrdinal: body.convocationOrdinal ?? undefined,
         description: body.description ?? undefined,
+        eventId: body.eventId ?? undefined,
         accountId: body.accountId ?? undefined,
       },
       include: electionInclude,
@@ -602,6 +615,7 @@ export class ElectionController {
       scopeAdministrativeDivisionId: string | null
       convocationOrdinal: number | null
       description: string | null
+      eventId: string | null
     }>,
   ) {
     const data: Record<string, unknown> = {}
@@ -646,6 +660,7 @@ export class ElectionController {
       data.scopeAdministrativeDivisionId = body.scopeAdministrativeDivisionId
     if (body.convocationOrdinal !== undefined) data.convocationOrdinal = body.convocationOrdinal
     if (body.description !== undefined) data.description = body.description
+    if (body.eventId !== undefined) data.eventId = body.eventId
 
     const row = await this.prisma.election.update({
       where: { id },

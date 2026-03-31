@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -10,7 +11,9 @@ import {
   Param,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common'
+import { AuthGuard } from '@nestjs/passport'
 import { Request } from 'express'
 import { ApiTags } from '@nestjs/swagger'
 import { PersonService } from '../application/person.service'
@@ -216,6 +219,50 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 다른 나라 행정부와 묶기 — 검색 (로그인·excludeCabinetId 필수)
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Get('cabinets/search-for-linkage')
+  async searchCabinetsForLinkage(
+    @Req() req: Request,
+    @Query('excludeCabinetId') excludeCabinetId: string,
+    @Query('q') q?: string,
+    @Query('limit') limitStr?: string,
+    @Query('countryId') countryId?: string,
+    @Query('historicalCountryId') historicalCountryId?: string,
+  ): Promise<any[]> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const ex = excludeCabinetId?.trim()
+    if (!ex) return []
+    const limit = Math.min(Math.max(parseInt(limitStr ?? '40', 10) || 40, 1), 100)
+    const cid = countryId?.trim()
+    const hid = historicalCountryId?.trim()
+    const filter =
+      cid || hid
+        ? { countryId: cid || undefined, historicalCountryId: hid || undefined }
+        : undefined
+    const list = await this.personService.searchCabinetsForLinkage(
+      accountId,
+      q ?? '',
+      ex,
+      limit,
+      filter,
+    )
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 사건을 축으로 묶인 행정부 목록 (다국 행정부 연결)
+   */
+  @Get('cabinets/by-linkage-event/:eventId')
+  async getCabinetsByLinkageEventId(@Param('eventId') eventId: string): Promise<any[]> {
+    const id = eventId?.trim()
+    if (!id) return []
+    const list = await this.personService.findCabinetsByLinkageEventId(id)
+    return list.map(serializeBigInt)
+  }
+
+  /**
    * 행정부 수정 (이름 등)
    */
   @Patch('cabinets/:cabinetId')
@@ -253,6 +300,58 @@ export class GovernmentPositionController {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const list = await this.personService.findTenuresByCabinetId(cabinetId, accountId)
     return list.map(serializeBigInt)
+  }
+
+  /**
+   * 같은 묶음에 속한 다른 행정부 목록 (행정부 단위 다국 연결)
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Get('cabinets/:cabinetId/linked-cabinets')
+  async getLinkedCabinets(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+  ): Promise<any[]> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const list = await this.personService.findLinkedCabinets(cabinetId, accountId)
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 다른 행정부와 같은 묶음으로 연결
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('cabinets/:cabinetId/link-with')
+  async linkCabinetWithOther(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+    @Body() body: { otherCabinetId: string; eventId: string },
+  ): Promise<any> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const other = body?.otherCabinetId?.trim()
+    const eventId = body?.eventId?.trim()
+    if (!other) throw new BadRequestException('otherCabinetId가 필요합니다.')
+    if (!eventId) {
+      throw new BadRequestException(
+        '연결할 사건(eventId)이 필요합니다. 같은 국제 사건을 먼저 선택하세요.',
+      )
+    }
+    const cabinet = await this.personService.linkCabinetWithOther(
+      cabinetId,
+      other,
+      accountId,
+      eventId,
+    )
+    return serializeBigInt(cabinet)
+  }
+
+  /**
+   * 이 행정부만 묶음에서 제거
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('cabinets/:cabinetId/linkage')
+  async leaveCabinetLinkage(@Req() req: Request, @Param('cabinetId') cabinetId: string): Promise<void> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.leaveCabinetLinkageGroup(cabinetId, accountId)
   }
 
   /**
@@ -304,6 +403,17 @@ export class GovernmentPositionController {
   ): Promise<any> {
     const result = await this.personService.createTenureAchievement(tenureId, dto)
     return serializeBigInt(result)
+  }
+
+  /**
+   * 동일 사건(eventId)에 연결된 재임 업적 전부 — 다국 행정부에서 같은 사건을 엮었을 때 공유 목록
+   */
+  @Get('achievements/by-event/:eventId')
+  async getTenureAchievementsByEventId(
+    @Param('eventId') eventId: string,
+  ): Promise<any[]> {
+    const list = await this.personService.findTenureAchievementsByEventId(eventId)
+    return list.map(serializeBigInt)
   }
 
   /**

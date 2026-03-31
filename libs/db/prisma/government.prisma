@@ -174,6 +174,34 @@ model GovernmentPositionDefinition {
 }
 
 // ========================
+// CabinetLinkageGroup — 여러 나라 행정부를 같은 맥락으로 묶음
+// ========================
+/// 한 계정이 A국 행정부·B국 행정부·… 를 같은 묶음으로 둘 때 사용. `Cabinet.linkageGroupId`로 소속.
+/// `eventId`가 있으면 그 사건(예: 제1차 모로코 위기)을 축으로 한 다국 행정부 연결로 본다.
+model CabinetLinkageGroup {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 선택 표시명 (예: 1956년 위기 공동 대응)
+  label String? @db.VarChar(200)
+
+  /// 이 묶음을 설명하는 사건(선택). 있으면 같은 사건 맥락의 다국 행정부 연결.
+  eventId String? @map("event_id") @db.Char(36)
+  event   Event?  @relation("CabinetLinkageEvent", fields: [eventId], references: [id], onDelete: SetNull)
+
+  accountId String? @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountCabinetLinkageGroups", fields: [accountId], references: [id], onDelete: SetNull)
+
+  cabinets Cabinet[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([accountId], name: "idx_cabinet_linkage_group_accountId")
+  @@index([eventId], name: "idx_cabinet_linkage_group_eventId")
+  @@map("cabinet_linkage_group")
+}
+
+// ========================
 // Cabinet (행정부) — 정규화된 행정부 단위
 // ========================
 /// 한 수반(대통령·수상) 재임을 중심으로 한 행정부. 각료 재임은 cabinetId로 소속.
@@ -198,10 +226,15 @@ model Cabinet {
   /// 연정·여당 등 이 행정부를 지지한 정당(행정부 단위 기록)
   politicalParties CabinetPoliticalParty[] @relation("CabinetPoliticalParties")
 
+  /// 다른 나라 행정부와의 묶음 (다국 행정부 연결). 묶음 그룹에 `eventId`가 있으면 그 사건 축.
+  linkageGroupId String?              @map("linkage_group_id") @db.Char(36)
+  linkageGroup   CabinetLinkageGroup? @relation(fields: [linkageGroupId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([accountId], name: "idx_cabinet_accountId")
+  @@index([linkageGroupId], name: "idx_cabinet_linkageGroupId")
   @@map("cabinet")
 }
 
@@ -331,12 +364,16 @@ model GovernmentPositionTenure {
 // ========================
 // TenureAchievement (재임 업적·한일)
 // ========================
-/// 재임 기간 중 수반이 한 일·업적. 사건(Event)과 별도로 관리하며, 사건 목록과 유사한 형태로 조회 가능.
+/// 재임 기간 중 수반이 한 일·업적. 선택적으로 사건(Event) 정본과 연결해 다국가·다 재임에서 동일 서술을 공유할 수 있음.
 model TenureAchievement {
   id String @id @default(uuid()) @db.Char(36)
 
   /// 소속 재임 기록 (역대 수반 한 명의 한 재임)
   tenureId String @map("tenure_id") @db.Char(36)
+
+  /// 사건(Event) 정본 연결
+  eventId String? @map("event_id") @db.Char(36)
+  event   Event?  @relation("TenureAchievementEvent", fields: [eventId], references: [id], onDelete: SetNull)
 
   /// 제목 (예: 한글 창제, 대동법 시행)
   title String @db.VarChar(200)
@@ -362,6 +399,7 @@ model TenureAchievement {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([tenureId], name: "idx_tenure_achievement_tenureId")
+  @@index([eventId], name: "idx_tenure_achievement_eventId")
   @@index([showOnEventsPage], name: "idx_tenure_achievement_showOnEventsPage")
   @@map("tenure_achievement")
 }

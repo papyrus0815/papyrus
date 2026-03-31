@@ -8,7 +8,11 @@ import { FiChevronRight, FiUser } from 'react-icons/fi'
 import type { GovernmentCabinetTenureItem } from '@/shared/api/person-career'
 import { calcAgeAtTenure } from '@/shared/lib/tenure-person-utils'
 
-import { calcTenureDuration, formatDate, getPersonName } from './cabinets-section.helpers'
+import {
+  calcTenureDuration,
+  formatDate,
+  getPersonName,
+} from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 
 export type CabinetMinisterCardsProps = {
@@ -30,8 +34,7 @@ export function CabinetMinisterCards({
       {ministers.map((tenure) => {
         const mThumb = tenure.person?.profileImageUrl ?? null
         const mName = getPersonName(tenure.person)
-        const mPos =
-          tenure.positionDefinition?.title ?? tenure.title ?? '—'
+        const mPos = tenure.positionDefinition?.title ?? tenure.title ?? '—'
         const mStartFull = tenure.startDate ? formatDate(tenure.startDate) : '—'
         const mEndFull = tenure.endDate ? formatDate(tenure.endDate) : '현재'
         const mDuration = calcTenureDuration(tenure.startDate, tenure.endDate)
@@ -57,9 +60,7 @@ export function CabinetMinisterCards({
               style={{
                 cursor: tenure.person?.id ? 'pointer' : 'default',
               }}
-              title={
-                tenure.person?.id ? `${mName} 인물 정보 보기` : undefined
-              }
+              title={tenure.person?.id ? `${mName} 인물 정보 보기` : undefined}
             >
               {mThumb ? (
                 <CabS.MinisterCardThumbImg src={mThumb} alt={mName} />

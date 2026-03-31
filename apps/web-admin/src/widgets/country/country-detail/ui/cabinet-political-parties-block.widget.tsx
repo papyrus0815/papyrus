@@ -16,6 +16,9 @@ import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 
 import { CabinetPartyLinkModal } from './cabinet-party-link-modal'
 import { labelCabinetPartyRole } from './cabinets-section.helpers'
+import {
+  CABINET_SECTION_MAIN as MAIN,
+} from './cabinets-section.constants'
 import * as CabS from './cabinets-section.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
 
@@ -61,7 +64,12 @@ export function CabinetPoliticalPartiesBlock({
     <>
       <CabS.CabDetailPartySubSection id="cab-detail-parties">
         <CabS.CabDetailMinistersSectionHeader style={{ marginBottom: 0 }}>
-          <FiUsers size={13} strokeWidth={2} aria-hidden />
+          <FiUsers
+            size={15}
+            strokeWidth={2}
+            aria-hidden
+            style={{ color: MAIN, flexShrink: 0 }}
+          />
           <CabS.CabDetailPartySectionTitle>
             집권·연정 정당
           </CabS.CabDetailPartySectionTitle>

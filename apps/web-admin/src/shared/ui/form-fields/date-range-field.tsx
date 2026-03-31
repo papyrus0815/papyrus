@@ -46,6 +46,9 @@ export interface DateRangeFieldProps {
   openEndAfterStart?: boolean
   /** true면 FieldRow/FieldLabel 없이 컨트롤(날짜 버튼)만 렌더 (모달 등에서 레이블을 직접 쓸 때) */
   renderControlOnly?: boolean
+  /** DatePickerModal 제목 (기본: 취임일 선택 / 퇴임일 선택) */
+  startPickerTitle?: string
+  endPickerTitle?: string
 }
 
 export const DateRangeField: React.FC<DateRangeFieldProps> = ({
@@ -59,6 +62,8 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   endPlaceholder = '퇴임일 (선택)',
   openEndAfterStart = true,
   renderControlOnly = false,
+  startPickerTitle = '취임일 선택',
+  endPickerTitle = '퇴임일 선택',
 }) => {
   const [startModalOpen, setStartModalOpen] = useState(false)
   const [endModalOpen, setEndModalOpen] = useState(false)
@@ -116,14 +121,14 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
       <DatePickerModal
         isOpen={startModalOpen}
         onClose={() => setStartModalOpen(false)}
-        title="취임일 선택"
+        title={startPickerTitle}
         initialDate={startValue || undefined}
         onSelect={handleStartSelect}
       />
       <DatePickerModal
         isOpen={endModalOpen}
         onClose={() => setEndModalOpen(false)}
-        title="퇴임일 선택"
+        title={endPickerTitle}
         initialDate={endValue || undefined}
         onSelect={handleEndSelect}
       />

@@ -191,6 +191,10 @@ model Election {
 
   description String? @db.Text
 
+  /// 사건(Event) 정본과 연결 — 서술 정본은 event 쪽(선택)
+  eventId String? @map("event_id") @db.Char(36)
+  event   Event?  @relation("ElectionEventNarrative", fields: [eventId], references: [id], onDelete: SetNull)
+
   /// 계정별 월드/시나리오 구분(선택)
   accountId String? @map("account_id") @db.Char(36)
 
@@ -215,6 +219,7 @@ model Election {
   @@index([accountId], name: "idx_election_accountId")
   @@index([countryId, convocationOrdinal], name: "idx_election_country_convocation")
   @@index([historicalCountryId, convocationOrdinal], name: "idx_election_hist_country_convocation")
+  @@index([eventId], name: "idx_election_eventId")
   /// 동일 국가(현대 또는 역사)·선거 유형·회차 숫자 중복 방지 (회차 미입력 시 MySQL은 NULL 중복 허용)
   @@unique([countryId, historicalCountryId, electionType, convocationOrdinal], name: "uniq_election_scope_type_convocation")
   @@map("election")
