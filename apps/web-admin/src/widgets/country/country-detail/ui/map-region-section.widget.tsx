@@ -4,6 +4,10 @@ import { getMapRegionSectionPalette } from '@/shared/styles/country-detail-palet
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { GoogleMap } from '@/shared/ui/google-map/google-map'
 import { SectionTabHeader } from '@/shared/ui/section-page-layout'
+import {
+  UnderlineTabButton,
+  UnderlineTabNav,
+} from '@/shared/ui/underline-tabs'
 
 // Mock 데이터 import
 import {
@@ -470,29 +474,39 @@ export function MapRegionSection({
 
       {/* 탭 + 요약 스트립 — 행정조직과 동일 구조 (탭 위 라벨 없음, 탭 아래 KPI 스트립) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <Styled.MapRegionTabNav>
-          <Styled.MapRegionTabButton
+        <UnderlineTabNav
+          role="tablist"
+          aria-label="행정구역 보기 전환"
+          style={{ marginBottom: 0 }}
+        >
+          <UnderlineTabButton
             type="button"
+            role="tab"
+            aria-selected={viewMode === 'administrative'}
             $active={viewMode === 'administrative'}
             onClick={() => setViewMode('administrative')}
           >
             행정구역
-          </Styled.MapRegionTabButton>
-          <Styled.MapRegionTabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
             type="button"
+            role="tab"
+            aria-selected={viewMode === 'nature'}
             $active={viewMode === 'nature'}
             onClick={() => setViewMode('nature')}
           >
             자연 지리
-          </Styled.MapRegionTabButton>
-          <Styled.MapRegionTabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
             type="button"
+            role="tab"
+            aria-selected={viewMode === 'infrastructure'}
             $active={viewMode === 'infrastructure'}
             onClick={() => setViewMode('infrastructure')}
           >
             인프라
-          </Styled.MapRegionTabButton>
-        </Styled.MapRegionTabNav>
+          </UnderlineTabButton>
+        </UnderlineTabNav>
 
         {/* 요약 스트립 — 행정조직 KPI 스트립과 동일 톤 */}
         <div

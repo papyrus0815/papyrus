@@ -24,24 +24,30 @@ const glassCard = css`
         `}
 `
 
-// ─── 탭 내비게이션 ────────────────────────────────────────────────────────────
+// ─── 탭 내비게이션 (행정구역·국가 폼·선거 등 기존 화면용 — 디자인 고정) ─
 
 export const MapRegionTabNav = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px;
+  /* 세로: flex에서 flex-shrink:0으로 눌림 방지. 가로 스크롤 시 y축이 auto로 계산되므로 패딩으로 그림자·글리프 여유 확보 */
+  padding: 10px 8px;
   margin-bottom: 20px;
   width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
   border-radius: 20px;
   overflow-x: auto;
-  &::-webkit-scrollbar { display: none; }
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255,255,255,0.05);
-          border: 1px solid rgba(255,255,255,0.08);
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.08);
         `
       : css`
           background: #f1f5f9;
@@ -65,23 +71,25 @@ export const MapRegionTabButton = styled.button<{ $active?: boolean }>`
   ${({ $active, theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: ${$active ? 'rgba(255,255,255,0.15)' : 'transparent'};
+          background: ${$active ? 'rgba(255, 255, 255, 0.15)' : 'transparent'};
           color: ${$active ? '#ffffff' : theme.colors.text.secondary};
-          box-shadow: ${$active ? '0 2px 8px rgba(0,0,0,0.35)' : 'none'};
+          box-shadow: ${$active ? '0 2px 8px rgba(0, 0, 0, 0.35)' : 'none'};
           backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
           -webkit-backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
           &:hover {
             color: #ffffff;
-            background: ${$active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)'};
+            background: ${$active
+              ? 'rgba(255, 255, 255, 0.18)'
+              : 'rgba(255, 255, 255, 0.07)'};
           }
         `
       : css`
           background: ${$active ? '#ffffff' : 'transparent'};
           color: ${$active ? '#4f46e5' : '#64748b'};
-          box-shadow: ${$active ? '0 2px 8px rgba(79,70,229,0.12)' : 'none'};
+          box-shadow: ${$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
           &:hover {
             color: ${$active ? '#4f46e5' : '#475569'};
-            background: ${$active ? '#ffffff' : 'rgba(255,255,255,0.6)'};
+            background: ${$active ? '#ffffff' : 'rgba(255, 255, 255, 0.6)'};
           }
         `}
 `

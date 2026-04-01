@@ -35,50 +35,81 @@ export const SectionRoot = styled(motion.div)`
   background: ${({ theme }) => theme.colors.background.primary};
 `
 
-// ─── SectionTabHeader (기본: 글라스 히어로 / flat: 탭 줄과 동일한 얕은 스트립) ─
+// ─── SectionTabHeader (hero / flat / plain: 배경 없음) ─
 
-const TabHeaderOuter = styled.header<{ $flat?: boolean }>`
-  padding: 28px 32px;
+const TabHeaderOuter = styled.header<{
+  $variant: 'hero' | 'flat' | 'plain'
+}>`
   border-radius: 20px;
   position: relative;
 
-  ${({ theme, $flat }) =>
-    $flat
-      ? theme.mode === 'dark'
-        ? css`
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: none;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-          `
-        : css`
-            background: #f1f5f9;
-            border: none;
-            box-shadow: none;
-          `
-      : theme.mode === 'dark'
-        ? css`
-            background: rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(24px) saturate(180%);
-            -webkit-backdrop-filter: blur(24px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow:
-              0 4px 24px rgba(0, 0, 0, 0.5),
-              inset 0 1px 0 rgba(255, 255, 255, 0.06);
-          `
-        : css`
-            background: ${theme.colors.background.primary};
-            border: 1px solid ${theme.colors.border.default};
-            box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
-          `}
+  ${({ $variant, theme }) =>
+    $variant === 'plain'
+      ? css`
+          padding: 0 0 20px;
+          margin-bottom: 4px;
+          border-radius: 0;
+          border-bottom: 1px solid ${theme.colors.border.light};
+        `
+      : css`
+          padding: 28px 32px;
+        `}
 
   @media (max-width: 768px) {
-    padding: 20px 22px;
-    border-radius: 16px;
+    ${({ $variant, theme }) =>
+      $variant === 'plain'
+        ? css`
+            padding: 0 0 16px;
+            margin-bottom: 2px;
+            border-radius: 0;
+            border-bottom: 1px solid ${theme.colors.border.light};
+          `
+        : css`
+            padding: 20px 22px;
+            border-radius: 16px;
+          `}
   }
 
-  /* 히어로 전용: 보라 음영 오버레이 — flat 에서는 비활성 */
+  ${({ theme, $variant }) =>
+    $variant === 'plain'
+      ? css`
+          background: transparent;
+          border-top: none;
+          border-left: none;
+          border-right: none;
+          box-shadow: none;
+        `
+      : $variant === 'flat'
+        ? theme.mode === 'dark'
+          ? css`
+              background: rgba(255, 255, 255, 0.05);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              box-shadow: none;
+              backdrop-filter: none;
+              -webkit-backdrop-filter: none;
+            `
+          : css`
+              background: #f1f5f9;
+              border: none;
+              box-shadow: none;
+            `
+        : theme.mode === 'dark'
+          ? css`
+              background: rgba(255, 255, 255, 0.04);
+              backdrop-filter: blur(24px) saturate(180%);
+              -webkit-backdrop-filter: blur(24px) saturate(180%);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              box-shadow:
+                0 4px 24px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            `
+          : css`
+              background: ${theme.colors.background.primary};
+              border: 1px solid ${theme.colors.border.default};
+              box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
+            `}
+
+  /* 히어로 전용: 보라 음영 오버레이 */
   &::before {
     content: '';
     position: absolute;
@@ -86,12 +117,9 @@ const TabHeaderOuter = styled.header<{ $flat?: boolean }>`
     border-radius: inherit;
     pointer-events: none;
     z-index: 0;
-    ${({ $flat, theme }) =>
-      $flat
+    ${({ $variant, theme }) =>
+      $variant === 'hero'
         ? css`
-            display: none;
-          `
-        : css`
             background: radial-gradient(
               ellipse at 85% 20%,
               ${theme.mode === 'dark'
@@ -100,29 +128,42 @@ const TabHeaderOuter = styled.header<{ $flat?: boolean }>`
                 0%,
               transparent 55%
             );
+          `
+        : css`
+            display: none;
           `}
   }
 `
 
-const TabHeaderInner = styled.div`
+const TabHeaderInner = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
   display: flex;
-  align-items: center;
+  align-items: ${({ $variant }) =>
+    $variant === 'plain' ? 'flex-start' : 'center'};
   justify-content: space-between;
-  gap: 20px;
+  gap: ${({ $variant }) => ($variant === 'plain' ? '16px 24px' : '20px')};
   position: relative;
   z-index: 1;
   flex-wrap: wrap;
 `
 
-const TabHeaderLeft = styled.div`
+const TabHeaderLeft = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
   display: flex;
-  align-items: center;
-  gap: 20px;
+  align-items: ${({ $variant }) =>
+    $variant === 'plain' ? 'flex-start' : 'center'};
+  gap: ${({ $variant }) => ($variant === 'plain' ? '16px' : '20px')};
   flex: 1;
   min-width: 0;
 `
 
-const TabHeaderTitle = styled.h1`
+const TabHeaderTextCol = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: ${({ $variant }) => ($variant === 'plain' ? 6 : 4)}px;
+`
+
+const TabHeaderTitle = styled.h1<{ $variant: 'hero' | 'flat' | 'plain' }>`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
@@ -130,20 +171,53 @@ const TabHeaderTitle = styled.h1`
   letter-spacing: -0.025em;
   line-height: 1.3;
 
+  ${({ $variant }) =>
+    $variant === 'plain' &&
+    css`
+      font-size: 21px;
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      line-height: 1.28;
+    `}
+
   @media (max-width: 768px) {
     font-size: 18px;
+
+    ${({ $variant }) =>
+      $variant === 'plain' &&
+      css`
+        font-size: 18px;
+      `}
   }
 `
 
-const TabHeaderSubtitle = styled.p`
+const TabHeaderSubtitle = styled.p<{ $variant: 'hero' | 'flat' | 'plain' }>`
   margin: 0;
   font-size: 13px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 
+  ${({ $variant }) =>
+    $variant === 'plain' &&
+    css`
+      font-weight: 400;
+      line-height: 1.55;
+      max-width: min(100%, 40rem);
+      color: ${({ theme }) => theme.colors.text.secondary};
+    `}
+
   @media (max-width: 768px) {
     font-size: 12px;
   }
+`
+
+const TabHeaderRightSlot = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
+  flex-shrink: 0;
+  ${({ $variant }) =>
+    $variant === 'plain' &&
+    css`
+      padding-top: 2px;
+    `}
 `
 
 export interface SectionTabHeaderProps {
@@ -154,10 +228,11 @@ export interface SectionTabHeaderProps {
   /** 우측 버튼 슬롯 */
   rightSlot?: React.ReactNode
   /**
-   * `flat`: 행정구역 탭 줄과 같은 얕은 배경·무그림자 (행정조직 등)
+   * `flat`: 행정구역 탭 줄과 같은 얕은 배경·무그림자
+   * `plain`: 배경·테두리 없음 (행정조직 등)
    * 기본 `hero`: 글라스·그림자·보라 하이라이트
    */
-  variant?: 'hero' | 'flat'
+  variant?: 'hero' | 'flat' | 'plain'
 }
 
 export function SectionTabHeader({
@@ -168,24 +243,20 @@ export function SectionTabHeader({
   variant = 'hero',
 }: SectionTabHeaderProps) {
   return (
-    <TabHeaderOuter $flat={variant === 'flat'}>
-      <TabHeaderInner>
-        <TabHeaderLeft>
+    <TabHeaderOuter $variant={variant}>
+      <TabHeaderInner $variant={variant}>
+        <TabHeaderLeft $variant={variant}>
           {leftSlot}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-              flex: 1,
-              minWidth: 0,
-            }}
-          >
-            <TabHeaderTitle>{title}</TabHeaderTitle>
-            <TabHeaderSubtitle>{description}</TabHeaderSubtitle>
-          </div>
+          <TabHeaderTextCol $variant={variant}>
+            <TabHeaderTitle $variant={variant}>{title}</TabHeaderTitle>
+            <TabHeaderSubtitle $variant={variant}>
+              {description}
+            </TabHeaderSubtitle>
+          </TabHeaderTextCol>
         </TabHeaderLeft>
-        {rightSlot && <div style={{ flexShrink: 0 }}>{rightSlot}</div>}
+        {rightSlot && (
+          <TabHeaderRightSlot $variant={variant}>{rightSlot}</TabHeaderRightSlot>
+        )}
       </TabHeaderInner>
     </TabHeaderOuter>
   )

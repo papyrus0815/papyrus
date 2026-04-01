@@ -20,7 +20,7 @@ export const PillTabNav = styled.div<{ $hugContent?: boolean }>`
   padding: 10px 10px 12px;
   min-height: 52px;
   box-sizing: border-box;
-  /* 기본: 가로 전체. $hugContent: 탭 개수·라벨 길이만큼만 (행정구역 MapRegionTabNav와 동일) */
+  /* 기본: 가로 전체. $hugContent: 탭 개수·라벨 길이만큼만 (MapRegionTabNav와 동일) */
   width: ${({ $hugContent }) => ($hugContent ? 'fit-content' : '100%')};
   max-width: 100%;
   min-width: 0;

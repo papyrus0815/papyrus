@@ -5,7 +5,6 @@ import styled, { css } from 'styled-components'
 
 import { glassOrSolidMixin } from '@/shared/styles/mixins'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
-
 import { MapRegionTabNav } from './map-region-section.styles'
 
 /** 본문 패널 */

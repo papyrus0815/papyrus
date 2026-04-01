@@ -566,9 +566,9 @@ export const CabListPanel = styled.div`
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  gap: 20px;
+  gap: 32px;
   @media (max-width: 640px) {
-    gap: 16px;
+    gap: 24px;
   }
 `
 
@@ -598,6 +598,94 @@ export const CabListToolbar = styled.div`
   box-sizing: border-box;
   @media (max-width: 640px) {
     gap: 16px;
+  }
+`
+
+/** 국가·시기 필터 — 역대 수반 목록 헤더의 직책 탭(`PositionFilterTabs` / `PositionFilterTab`)과 동일 */
+export const CabCountryFilterTabs = styled.div`
+  display: flex;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  &::-webkit-scrollbar {
+    height: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.18)'
+        : 'rgba(15, 23, 42, 0.18)'};
+  }
+`
+
+export const CabCountryFilterTab = styled.button<{ $active?: boolean }>`
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? '600' : '500')};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'
+      : theme.mode === 'dark'
+        ? '#94a3b8'
+        : '#64748b'};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.15)'
+        : '#eef2ff'
+      : 'transparent'};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.4)'
+          : '#c7d2fe'
+        : 'transparent'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? '#a5b4fc'
+          : '#4338ca'
+        : theme.mode === 'dark'
+          ? '#cbd5e1'
+          : '#475569'};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.2)'
+          : '#eef2ff'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : '#f8fafc'};
+    border-color: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.5)'
+          : '#c7d2fe'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.12)'
+          : '#e2e8f0'};
   }
 `
 
@@ -634,9 +722,6 @@ export const CabTimelineSummaryOuter = styled.div`
 export const CabTimelineSummaryHeader = styled.div`
   width: 100%;
   box-sizing: border-box;
-  padding-bottom: 12px;
-  border-bottom: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
 `
 
 /** 개수·연도·소속 범례 — 한 줄(좁으면 범례만 가로 스크롤) */
@@ -654,10 +739,13 @@ export const CabTimelineLegendRow = styled.div`
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px 12px;
-  padding: 0 4px 0 0;
-  flex: 1;
+  padding: 0;
+  margin-left: auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -704,130 +792,6 @@ export const CabTimelineSepRule = styled.div`
     getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
 `
 
-/** 필터 라벨 + 칩 (박스 없음) */
-export const CabListFilterSegment = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  @media (min-width: 720px) {
-    flex-direction: row;
-    align-items: center;
-    gap: 12px 16px;
-  }
-`
-
-export const CabListFilterLabel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-  user-select: none;
-  svg {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
-    opacity: 0.9;
-  }
-`
-
-export const CabListFilterChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  @media (max-width: 640px) {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 4px;
-    margin: 0 -2px;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
-`
-/** 미니멀 칩 — 비활성은 플랫, 활성만 틴트·테두리 */
-export const CabListFilterPill = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 14px;
-  font-size: 12.5px;
-  font-weight: ${(p) => (p.$active ? 600 : 500)};
-  letter-spacing: -0.02em;
-  line-height: 1.25;
-  color: ${(p) =>
-    p.$active
-      ? p.theme.mode === 'dark'
-        ? '#e0e7ff'
-        : '#4338ca'
-      : p.theme.mode === 'dark'
-        ? '#94a3b8'
-        : '#64748b'};
-  background: ${(p) =>
-    p.$active
-      ? p.theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.14)'
-        : '#eef2ff'
-      : 'transparent'};
-  border: 1px solid
-    ${(p) =>
-      p.$active
-        ? p.theme.mode === 'dark'
-          ? 'rgba(129, 140, 248, 0.35)'
-          : '#ddd6fe'
-        : 'transparent'};
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition:
-    background 0.14s ease,
-    color 0.14s ease,
-    border-color 0.14s ease;
-  &:hover {
-    color: ${(p) =>
-      p.$active
-        ? p.theme.mode === 'dark'
-          ? '#f1f5ff'
-          : '#3730a3'
-        : p.theme.mode === 'dark'
-          ? '#e2e8f0'
-          : '#334155'};
-    background: ${(p) =>
-      p.$active
-        ? p.theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.2)'
-          : '#e0e7ff'
-        : p.theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.05)'
-          : '#f1f5f9'};
-    border-color: ${(p) =>
-      p.$active
-        ? p.theme.mode === 'dark'
-          ? 'rgba(165, 180, 252, 0.45)'
-          : '#c4b5fd'
-        : p.theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.1)'
-          : '#e2e8f0'};
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(129, 140, 248, 0.45)'
-          : 'rgba(99, 102, 241, 0.35)'};
-  }
-`
 export const CabListControlsRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -856,7 +820,7 @@ export const CabListSearchInput = styled.input<{ $hasTrailing: boolean }>`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : '#e2e8f0'};
-  border-radius: 999px;
+  border-radius: 12px;
   padding: 0 ${(p) => (p.$hasTrailing ? '52px' : '14px')} 0 44px;
   font-size: 13px;
   font-weight: 500;
@@ -928,51 +892,55 @@ export const CabListSearchCount = styled.span`
   pointer-events: none;
   letter-spacing: -0.02em;
 `
+/** 정렬 표시 — SectionTabHeader `AddButton`(카테고리 설정)과 동일 톤 */
 export const CabListSortBadge = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 14px;
-  height: 40px;
-  border-radius: 999px;
-  font-size: 11.5px;
+  gap: 8px;
+  padding: 10px 18px;
+  min-height: 40px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#64748b')};
-  background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.08)'
+      : theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   flex-shrink: 0;
+  user-select: none;
 `
+
+/** 행정부 등록 — 동일 반경, 채움형 CTA */
 export const CabListRegisterBtn = styled.button`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 18px;
-  height: 40px;
-  font-size: 12.5px;
+  gap: 8px;
+  padding: 10px 18px;
+  min-height: 40px;
+  box-sizing: border-box;
+  font-size: 13px;
   font-weight: 600;
   color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: ${({ theme }) => theme.colors.primary};
   border: none;
-  border-radius: 999px;
+  border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.28);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
   transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+    background 0.2s,
+    box-shadow 0.2s;
   &:hover {
-    background: #4f46e5;
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.38);
+    background: ${({ theme }) => theme.colors.button.hover};
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.32);
   }
   &:focus-visible {
     outline: none;
-    box-shadow:
-      0 0 0 3px rgba(99, 102, 241, 0.45),
-      0 2px 10px rgba(99, 102, 241, 0.28);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45);
   }
 `
 
@@ -4131,8 +4099,7 @@ export const TreatyFullWidthFieldControl = styled(FieldControl)`
 
 /* ── 타임라인 셀 `TlItem` (`cabinets-section-timeline`) ─────────────────── */
 
-const TL_MONARCH_HIT_PAD =
-  (TL_MONARCH_HIT_MIN - TL_MONARCH_BADGE_VISUAL) / 2
+const TL_MONARCH_HIT_PAD = (TL_MONARCH_HIT_MIN - TL_MONARCH_BADGE_VISUAL) / 2
 
 export const TlItemRoot = styled.div<{ $thumbOnEnd?: boolean }>`
   display: flex;

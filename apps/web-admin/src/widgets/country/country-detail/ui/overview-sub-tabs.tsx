@@ -1,5 +1,7 @@
 import React from 'react'
 
+import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
+
 import * as S from './overview-sub-tabs.styles'
 
 export type OverviewSubTab =
@@ -28,62 +30,89 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
   return (
     <S.Row>
       <S.Left>
-        <S.TabBar>
-          <S.TabButton
+        <S.TopUnderlineTabNav role="tablist" aria-label="국가 상세 메인 메뉴">
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'statistics'}
             $active={activeSubTab === 'statistics'}
             onClick={() => onSubTabChange('statistics')}
           >
             대시보드
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'map'}
             $active={activeSubTab === 'map'}
             onClick={() => onSubTabChange('map')}
           >
             행정구역
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'government'}
             $active={activeSubTab === 'government'}
             onClick={() => onSubTabChange('government')}
           >
             행정조직
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'ethnicity'}
             $active={activeSubTab === 'ethnicity'}
             onClick={() => onSubTabChange('ethnicity')}
           >
             민족
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'person'}
             $active={activeSubTab === 'person'}
             onClick={() => onSubTabChange('person')}
           >
             인물
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'elections'}
             $active={activeSubTab === 'elections'}
             onClick={() => onSubTabChange('elections')}
           >
             선거·투표
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'laws'}
             $active={activeSubTab === 'laws'}
             onClick={() => onSubTabChange('laws')}
           >
             법령
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'linkedHistorical'}
             $active={activeSubTab === 'linkedHistorical'}
             onClick={() => onSubTabChange('linkedHistorical')}
           >
             과거국가
-          </S.TabButton>
-          <S.TabButton
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            type="button"
+            role="tab"
+            aria-selected={activeSubTab === 'treaty'}
             $active={activeSubTab === 'treaty'}
             onClick={() => onSubTabChange('treaty')}
           >
             조약
-          </S.TabButton>
-        </S.TabBar>
+          </UnderlineTabButton>
+        </S.TopUnderlineTabNav>
       </S.Left>
       <S.Right>{rightSlot}</S.Right>
     </S.Row>

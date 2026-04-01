@@ -10,8 +10,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 
 import {
-  GOV_TAB_META,
   GOVERNMENT_TAB_ORDER,
+  GOV_TAB_META,
   type GovernmentContentTab,
 } from '@/features/government-info/model/government-content-tab'
 import { GovernmentOrganizationsTab } from '@/features/government-info/ui/government-organizations-tab.widget'
@@ -20,15 +20,15 @@ import { MinistriesTabSection } from '@/features/government-info/ui/ministries-t
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import {
+  UnderlineTabButton,
+  UnderlineTabNav,
+} from '@/shared/ui/underline-tabs'
 
 import { CabinetsSection } from './cabinets-section.widget'
 import { GovernmentCategoryModal } from './government-category-modal.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
-import {
-  MapRegionTabButton,
-  MapRegionTabNav,
-} from './map-region-section.styles'
 import { PositionDefinitionsSection } from './position-definitions-section.widget'
 
 export type { GovernmentContentTab }
@@ -115,7 +115,7 @@ export function GovernmentInfoSection({
         }}
       >
         <SectionTabHeader
-          variant="flat"
+          variant="plain"
           title="행정조직"
           description="역대 수반, 행정부, 중앙부처, 행정기구, 직위 정의, 통계를 관리합니다."
           rightSlot={
@@ -144,26 +144,28 @@ export function GovernmentInfoSection({
           }
         />
 
-        {/* 행정구역 탭과 동일 컴포넌트·시각 스타일 */}
-        <MapRegionTabNav
-          role="tablist"
-          aria-label="행정조직 하위 메뉴"
-          style={{ marginBottom: 0 }}
-        >
-          {GOVERNMENT_TAB_ORDER.map((tabKey) => (
-            <MapRegionTabButton
-              key={tabKey}
-              type="button"
-              role="tab"
-              aria-selected={contentTab === tabKey}
-              $active={contentTab === tabKey}
-              onClick={() => setContentTab(tabKey)}
-              title={GOV_TAB_META[tabKey].hint}
-            >
-              {GOV_TAB_META[tabKey].label}
-            </MapRegionTabButton>
-          ))}
-        </MapRegionTabNav>
+        {/* 신규 탭 UI(UnderlineTab*) — MapRegion*과 별도. 상위 flex 열에서 세로로 눌리지 않게 */}
+        <div style={{ flexShrink: 0, width: '100%', minWidth: 0 }}>
+          <UnderlineTabNav
+            role="tablist"
+            aria-label="행정조직 하위 메뉴"
+            style={{ marginBottom: 0 }}
+          >
+            {GOVERNMENT_TAB_ORDER.map((tabKey) => (
+              <UnderlineTabButton
+                key={tabKey}
+                type="button"
+                role="tab"
+                aria-selected={contentTab === tabKey}
+                $active={contentTab === tabKey}
+                onClick={() => setContentTab(tabKey)}
+                title={GOV_TAB_META[tabKey].hint}
+              >
+                {GOV_TAB_META[tabKey].label}
+              </UnderlineTabButton>
+            ))}
+          </UnderlineTabNav>
+        </div>
 
         {contentTab === 'heads' && country && (
           <section aria-label="역대 수반">

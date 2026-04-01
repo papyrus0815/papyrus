@@ -121,6 +121,8 @@ import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
+import { MapRegionTabButton } from './map-region-section.styles'
+
 import {
   HistoryArticleCancelBtn,
   HistoryArticleEditActions,
@@ -248,7 +250,6 @@ import {
   SubsectionAddBtn,
   SubsectionLabel,
 } from './country-politics-tab.styles'
-import { MapRegionTabButton } from './map-region-section.styles'
 
 /** RichTextEditor HTML — 시각적 빈 본문이면 null (저장 시) */
 function optionalRichTextHtmlOrNull(html: string): string | null {

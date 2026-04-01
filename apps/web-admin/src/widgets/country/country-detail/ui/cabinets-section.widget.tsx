@@ -25,7 +25,6 @@ import {
   FiClock,
   FiEdit2,
   FiFileText,
-  FiGlobe,
   FiInfo,
   FiLayers,
   FiLink,
@@ -1487,43 +1486,33 @@ export function CabinetsSection({
                   {country.type === 'modern' &&
                     Array.isArray(country.historicalCountries) &&
                     country.historicalCountries.length > 0 && (
-                      <>
-                        <CabS.CabListFilterSegment>
-                          <CabS.CabListFilterLabel>
-                            <FiGlobe size={14} strokeWidth={2} aria-hidden />
-                            국가·시기
-                          </CabS.CabListFilterLabel>
-                          <CabS.CabListFilterChips
-                            role="tablist"
-                            aria-label="국가·시기 필터"
-                          >
-                            {[
-                              { id: '', label: '전체' },
-                              { id: countryId ?? '', label: country.name },
-                              ...country.historicalCountries.map((hc) => ({
-                                id: hc.id,
-                                label: hc.name,
-                              })),
-                            ].map((tab) => {
-                              const active = cabinetCountryFilter === tab.id
-                              return (
-                                <CabS.CabListFilterPill
-                                  key={tab.id}
-                                  type="button"
-                                  role="tab"
-                                  aria-selected={active}
-                                  $active={active}
-                                  onClick={() =>
-                                    setCabinetCountryFilter(tab.id)
-                                  }
-                                >
-                                  {tab.label}
-                                </CabS.CabListFilterPill>
-                              )
-                            })}
-                          </CabS.CabListFilterChips>
-                        </CabS.CabListFilterSegment>
-                      </>
+                      <CabS.CabCountryFilterTabs
+                        role="tablist"
+                        aria-label="국가·시기 필터"
+                      >
+                        {[
+                          { id: '', label: '전체' },
+                          { id: countryId ?? '', label: country.name },
+                          ...country.historicalCountries.map((hc) => ({
+                            id: hc.id,
+                            label: hc.name,
+                          })),
+                        ].map((tab) => {
+                          const active = cabinetCountryFilter === tab.id
+                          return (
+                            <CabS.CabCountryFilterTab
+                              key={tab.id}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              $active={active}
+                              onClick={() => setCabinetCountryFilter(tab.id)}
+                            >
+                              {tab.label}
+                            </CabS.CabCountryFilterTab>
+                          )
+                        })}
+                      </CabS.CabCountryFilterTabs>
                     )}
 
                   <CabS.CabListControlsRow>
@@ -1657,53 +1646,50 @@ export function CabinetsSection({
                           </>
                         )}
                         {cabinetTerritoryLegendEntries.length > 0 && (
-                          <>
-                            <CabS.CabTimelineSepRule aria-hidden />
-                            <CabS.CabTimelineLegendRow
-                              role="list"
-                              aria-label="이 목록의 소속별 강조 색"
-                            >
-                              {cabinetTerritoryLegendEntries.map((e) => (
-                                <div
-                                  key={e.key}
-                                  role="listitem"
+                          <CabS.CabTimelineLegendRow
+                            role="list"
+                            aria-label="이 목록의 소속별 강조 색"
+                          >
+                            {cabinetTerritoryLegendEntries.map((e) => (
+                              <div
+                                key={e.key}
+                                role="listitem"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  flexShrink: 0,
+                                  maxWidth: '100%',
+                                }}
+                                title={e.label}
+                              >
+                                <span
+                                  aria-hidden
                                   style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    background: e.line,
                                     flexShrink: 0,
-                                    maxWidth: '100%',
                                   }}
-                                  title={e.label}
+                                />
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: C.textMuted,
+                                    lineHeight: 1.35,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: 220,
+                                  }}
                                 >
-                                  <span
-                                    aria-hidden
-                                    style={{
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: '50%',
-                                      background: e.line,
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 600,
-                                      color: C.textMuted,
-                                      lineHeight: 1.35,
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                      maxWidth: 220,
-                                    }}
-                                  >
-                                    {e.label}
-                                  </span>
-                                </div>
-                              ))}
-                            </CabS.CabTimelineLegendRow>
-                          </>
+                                  {e.label}
+                                </span>
+                              </div>
+                            ))}
+                          </CabS.CabTimelineLegendRow>
                         )}
                       </CabS.CabTimelineSummaryTopRow>
                     </CabS.CabTimelineSummaryHeader>
