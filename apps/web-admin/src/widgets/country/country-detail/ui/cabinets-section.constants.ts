@@ -17,17 +17,24 @@ export const MINISTER_POSITION_TYPES = new Set([
 
 /** 인포그래픽 타임라인 — 칼럼 좌우 패딩·리스트 좌측 inset (`cabinets-section.styled`와 위젯 공용) */
 export const TL_COL_PAD_X = 4
-export const TL_LIST_PAD_LEFT = 100
+export const TL_LIST_PAD_LEFT = 112
 
 /** 타임라인 행·썸네일·노드 — 위젯·`cabinets-section-timeline` 공용 */
-export const TL_ROW_H = 400
+export const TL_ROW_H = 520
+/** 한 줄(4칸) 행정부 행과 다음 행 사이 세로 간격 */
+export const TL_ROW_GAP = 96
 export const TL_BUBBLE_W = 84
-export const TL_THUMB = 144
-export const TL_GRID_GAP_X = 12
-export const TL_NODE_EDGE_PAD = 28
-export const TL_VERT_SEG_H = 14
+/** 수반 원형 사진 — 행 높이와 비율 맞춤(과도하게 쪼그라들지 않게) */
+export const TL_THUMB = 176
+export const TL_GRID_GAP_X = 18
+export const TL_NODE_EDGE_PAD = 34
+export const TL_VERT_SEG_H = 18
 export const TL_YEAR_BUBBLE_SHIFT_X = 28
 export const TL_NODE_CENTER_X = TL_COL_PAD_X + TL_THUMB / 2
+
+/** `TlItem` 군주 배지 — 타임라인 컴포넌트와 공용 */
+export const TL_MONARCH_BADGE_VISUAL = 52
+export const TL_MONARCH_HIT_MIN = 64
 
 export const TL_ROWS = [
   { line: '#6366f1', textColor: '#3730a3' },

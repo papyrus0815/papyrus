@@ -22,8 +22,6 @@ import { toast } from 'react-hot-toast'
 import {
   FiCalendar,
   FiChevronDown,
-  FiChevronLeft,
-  FiChevronRight,
   FiClock,
   FiEdit2,
   FiFileText,
@@ -141,7 +139,6 @@ import {
   TL_BUBBLE_W,
   TL_COL_PAD_X,
   TL_GRID_GAP_X,
-  TL_LIST_PAD_LEFT,
   TL_NODE_CENTER_X,
   TL_NODE_EDGE_PAD,
   TL_ROW_H,
@@ -373,15 +370,19 @@ export function CabinetsSection({
     ? getPersonDisplayName(mentionPerson)
     : ''
 
-  /** 좁은 화면에서 타임라인 열 수 (접근성·가독성) */
+  /** 화면 너비별 열 수 — 칸이 너무 쪼그라들지 않게 중간 구간은 3열 */
   const [timelineColumnCount, setTimelineColumnCount] = useState(4)
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const mq = window.matchMedia('(max-width: 900px)')
-    const apply = () => setTimelineColumnCount(mq.matches ? 2 : 4)
+    const apply = () => {
+      const w = window.innerWidth
+      if (w <= 640) setTimelineColumnCount(2)
+      else if (w <= 1100) setTimelineColumnCount(3)
+      else setTimelineColumnCount(4)
+    }
     apply()
-    mq.addEventListener('change', apply)
-    return () => mq.removeEventListener('change', apply)
+    window.addEventListener('resize', apply)
+    return () => window.removeEventListener('resize', apply)
   }, [])
 
   /** 히스토리 본문 클릭 — 멘션/엔티티/용어·가문 툴팁 (인물·정당·사건·국가 등) 공통 처리 */
@@ -1522,7 +1523,6 @@ export function CabinetsSection({
                             })}
                           </CabS.CabListFilterChips>
                         </CabS.CabListFilterSegment>
-                        <CabS.CabListToolbarHairline aria-hidden />
                       </>
                     )}
 
@@ -1620,6 +1620,7 @@ export function CabinetsSection({
                             display: 'flex',
                             alignItems: 'center',
                             gap: 6,
+                            flexShrink: 0,
                           }}
                         >
                           <FiUsers size={13} color={C.iconColor} />
@@ -1642,6 +1643,7 @@ export function CabinetsSection({
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 6,
+                                flexShrink: 0,
                               }}
                             >
                               <FiCalendar size={12} color={C.iconColor} />
@@ -1654,118 +1656,61 @@ export function CabinetsSection({
                             </div>
                           </>
                         )}
-                        <div style={{ flex: 1 }} />
-                      </CabS.CabTimelineSummaryTopRow>
-                      {cabinetTerritoryLegendEntries.length > 0 && (
-                        <CabS.CabTimelineLegendRow
-                          role="list"
-                          aria-label="이 목록의 소속별 강조 색"
-                        >
-                          {cabinetTerritoryLegendEntries.map((e) => (
-                            <div
-                              key={e.key}
-                              role="listitem"
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                maxWidth: '100%',
-                              }}
-                              title={e.label}
+                        {cabinetTerritoryLegendEntries.length > 0 && (
+                          <>
+                            <CabS.CabTimelineSepRule aria-hidden />
+                            <CabS.CabTimelineLegendRow
+                              role="list"
+                              aria-label="이 목록의 소속별 강조 색"
                             >
-                              <span
-                                aria-hidden
-                                style={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  background: e.line,
-                                  flexShrink: 0,
-                                }}
-                              />
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  color: C.textMuted,
-                                  lineHeight: 1.35,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  maxWidth: 220,
-                                }}
-                              >
-                                {e.label}
-                              </span>
-                            </div>
-                          ))}
-                        </CabS.CabTimelineLegendRow>
-                      )}
-                      <CabS.CabTimelineNote role="note">
-                        아래 목록에서 <strong>서로 다른 소속</strong>
-                        (역사국가·현대국가, 또는 행정부 명칭 구분)마다 강조 색을
-                        나눕니다. 필터·검색으로 목록이 바뀌면 같은 소속도 배정
-                        순서가 달라질 수 있습니다. 가로줄은 시간 흐름만
-                        나타냅니다. 짝수 행은 왼쪽→오른쪽, 홀수 행은
-                        오른쪽→왼쪽으로 이어집니다.
-                      </CabS.CabTimelineNote>
+                              {cabinetTerritoryLegendEntries.map((e) => (
+                                <div
+                                  key={e.key}
+                                  role="listitem"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    flexShrink: 0,
+                                    maxWidth: '100%',
+                                  }}
+                                  title={e.label}
+                                >
+                                  <span
+                                    aria-hidden
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      background: e.line,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: C.textMuted,
+                                      lineHeight: 1.35,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      maxWidth: 220,
+                                    }}
+                                  >
+                                    {e.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </CabS.CabTimelineLegendRow>
+                          </>
+                        )}
+                      </CabS.CabTimelineSummaryTopRow>
                     </CabS.CabTimelineSummaryHeader>
                     <CabS.CabTimelineGrid
                       role="region"
                       aria-label="역대 행정부 타임라인"
                     >
-                      <CabS.CabTimelineColLeft>
-                        {cabinetTimelineRows.map((rowItems, rowIdx) => {
-                          const rowLabelColor = C.textMuted
-                          const firstHead = rowItems[0]?.headTenure
-                          const lastHead =
-                            rowItems[rowItems.length - 1]?.headTenure
-                          const firstTerm =
-                            firstHead?.termNumber ?? firstHead?.regnalNumber
-                          const lastTerm =
-                            lastHead?.termNumber ?? lastHead?.regnalNumber
-                          const termLabel = (t: number, sub?: number | null) =>
-                            sub != null ? `제${t}대 ${sub}기` : `제${t}대`
-                          const rangeLabel =
-                            firstTerm != null && lastTerm != null
-                              ? firstTerm === lastTerm
-                                ? termLabel(firstTerm, firstHead?.subTermNumber)
-                                : `제${firstTerm}–${lastTerm}대`
-                              : `${rowIdx * timelineColumnCount + 1}번째 행`
-                          return (
-                            <Fragment key={`cab-tl-l-${rowIdx}`}>
-                              <CabS.CabTimelineRowLabelWrap
-                                title={
-                                  rowIdx % 2 === 0
-                                    ? '이 행의 시간 순서: 왼쪽 → 오른쪽'
-                                    : '이 행의 시간 순서: 오른쪽 → 왼쪽'
-                                }
-                              >
-                                <CabS.CabTimelineRowSpine />
-                                {rowIdx % 2 === 0 ? (
-                                  <FiChevronRight
-                                    size={12}
-                                    color={rowLabelColor}
-                                    style={{ opacity: 0.8, flexShrink: 0 }}
-                                    aria-hidden
-                                  />
-                                ) : (
-                                  <FiChevronLeft
-                                    size={12}
-                                    color={rowLabelColor}
-                                    style={{ opacity: 0.8, flexShrink: 0 }}
-                                    aria-hidden
-                                  />
-                                )}
-                                <CabS.CabTimelineRowTermText>
-                                  {rangeLabel}
-                                </CabS.CabTimelineRowTermText>
-                                <CabS.CabTimelineRowRule />
-                              </CabS.CabTimelineRowLabelWrap>
-                            </Fragment>
-                          )
-                        })}
-                      </CabS.CabTimelineColLeft>
                       <CabS.CabTimelineColRight>
                         {cabinetTimelineRows.map((rowItems, rowIdx) => {
                           const cols = timelineColumnCount
@@ -1782,7 +1727,7 @@ export function CabinetsSection({
                                 style={{
                                   position: 'relative',
                                   height: TL_ROW_H,
-                                  padding: `0 0 0 ${TL_LIST_PAD_LEFT}px`,
+                                  padding: '0 0 0 20px',
                                 }}
                               >
                                 {/* 수평선 — 첫 노드에서 컨테이너 우측 끝까지(잘라내지 않음) */}

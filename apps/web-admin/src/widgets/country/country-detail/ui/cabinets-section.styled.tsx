@@ -24,7 +24,10 @@ import {
   CABINET_SECTION_MAIN_HOVER as MAIN_HOVER,
   TL_COL_PAD_X,
   TL_LIST_PAD_LEFT,
-  TL_ROW_H,
+  TL_MONARCH_BADGE_VISUAL,
+  TL_MONARCH_HIT_MIN,
+  TL_ROW_GAP,
+  TL_THUMB,
 } from './cabinets-section.constants'
 
 /* 행정부 등록 모달 */
@@ -563,13 +566,13 @@ export const CabListPanel = styled.div`
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  gap: 0;
+  gap: 20px;
   @media (max-width: 640px) {
-    gap: 0;
+    gap: 16px;
   }
 `
 
-/** 필터·검색·등록 — 플랫 스트립, 하단만 얇게 구분 */
+/** 필터·검색·등록 — 플랫 스트립 */
 export const CabListToolbarShell = styled.div.attrs({
   role: 'region',
   'aria-label': '행정부 검색 및 필터',
@@ -580,15 +583,9 @@ export const CabListToolbarShell = styled.div.attrs({
   border-radius: 0;
   background: transparent;
   border: none;
-  border-bottom: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
   box-sizing: border-box;
-  padding: 0 0 16px;
-  margin: 0 0 20px;
-  @media (max-width: 640px) {
-    padding: 0 0 14px;
-    margin: 0 0 16px;
-  }
+  padding: 0;
+  margin: 0;
 `
 
 /** `CabListToolbarShell` 내부 툴바 */
@@ -596,11 +593,11 @@ export const CabListToolbar = styled.div`
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
   padding: 0;
   box-sizing: border-box;
   @media (max-width: 640px) {
-    gap: 12px;
+    gap: 16px;
   }
 `
 
@@ -637,51 +634,39 @@ export const CabTimelineSummaryOuter = styled.div`
 export const CabTimelineSummaryHeader = styled.div`
   width: 100%;
   box-sizing: border-box;
+  padding-bottom: 12px;
   border-bottom: 1px solid
     ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
 `
 
+/** 개수·연도·소속 범례 — 한 줄(좁으면 범례만 가로 스크롤) */
 export const CabTimelineSummaryTopRow = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 0 10px;
-  flex-wrap: wrap;
-  @media (max-width: 640px) {
-    padding: 2px 0 8px;
-  }
-`
-
-export const CabTimelineNote = styled.p`
-  margin: 0;
-  padding: 0 0 16px;
-  font-size: 12px;
-  line-height: 1.62;
-  font-weight: 500;
-  color: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
-  strong {
-    font-weight: 600;
-    color: ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').text};
-  }
+  padding: 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+  width: 100%;
 `
 
 export const CabTimelineLegendRow = styled.div`
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px 12px;
-  padding: 0 4px 12px 0;
-  max-height: 112px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 0 4px 0 0;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'}
     transparent;
+  -webkit-overflow-scrolling: touch;
   &::-webkit-scrollbar {
-    width: 6px;
+    height: 6px;
   }
   &::-webkit-scrollbar-thumb {
     background: ${({ theme }) =>
@@ -690,70 +675,25 @@ export const CabTimelineLegendRow = styled.div`
   }
 `
 
-export const CabListToolbarHairline = styled.div`
-  flex-shrink: 0;
-  height: 0;
-  margin: 2px 0 4px;
-  border: 0;
-  border-top: 1px solid
-    ${({ theme }) => getCabinetsSectionPalette(theme.mode === 'dark').divider};
-`
-
-/** 타임라인 2열 그리드 */
+/** 타임라인 그리드 (행정부 카드 열만) — 첫 행 위 여백 */
 export const CabTimelineGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(140px, 220px) 1fr;
-  gap: 0 12px;
+  grid-template-columns: 1fr;
   align-items: start;
-  padding-top: 8px;
-`
-
-export const CabTimelineColLeft = styled.div`
-  display: flex;
-  flex-direction: column;
+  padding-top: 44px;
+  @media (max-width: 640px) {
+    padding-top: 32px;
+  }
 `
 
 export const CabTimelineColRight = styled.div`
   display: flex;
   flex-direction: column;
   min-width: 0;
-`
-
-export const CabTimelineRowLabelWrap = styled.div`
-  min-height: ${TL_ROW_H}px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-right: 4px;
-`
-
-export const CabTimelineRowSpine = styled.div`
-  width: 4px;
-  height: 16px;
-  border-radius: 2px;
-  flex-shrink: 0;
-  background: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
-`
-
-export const CabTimelineRowRule = styled.div`
-  flex: 1;
-  height: 1px;
-  opacity: 0.55;
-  background: linear-gradient(
-    90deg,
-    ${({ theme }) =>
-      getCabinetsSectionPalette(theme.mode === 'dark').borderMid},
-    transparent
-  );
-`
-
-export const CabTimelineRowTermText = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) =>
-    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
+  gap: ${TL_ROW_GAP}px;
+  @media (max-width: 640px) {
+    gap: 72px;
+  }
 `
 
 export const CabTimelineSepRule = styled.div`
@@ -4187,4 +4127,242 @@ export const TreatyFieldWide = styled(FieldControl)`
 export const TreatyFullWidthFieldControl = styled(FieldControl)`
   max-width: 100%;
   width: 100%;
+`
+
+/* ── 타임라인 셀 `TlItem` (`cabinets-section-timeline`) ─────────────────── */
+
+const TL_MONARCH_HIT_PAD =
+  (TL_MONARCH_HIT_MIN - TL_MONARCH_BADGE_VISUAL) / 2
+
+export const TlItemRoot = styled.div<{ $thumbOnEnd?: boolean }>`
+  display: flex;
+  flex-direction: ${(p) => (p.$thumbOnEnd ? 'row-reverse' : 'row')};
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+`
+
+export const TlItemAvatarCol = styled.div`
+  position: relative;
+  width: ${TL_THUMB}px;
+  height: ${TL_THUMB}px;
+  flex-shrink: 0;
+  overflow: visible;
+`
+
+export const TlItemAvatarRing = styled.div<{ $lineColor: string }>`
+  width: ${TL_THUMB}px;
+  height: ${TL_THUMB}px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: ${(p) => `${p.$lineColor}18`};
+  border: 3px solid ${(p) => p.$lineColor};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: ${(p) => `0 4px 16px ${p.$lineColor}44`};
+`
+
+export const TlItemAvatarImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+`
+
+export const TlItemMonarchAnchor = styled.div<{
+  $left: number
+  $top: number
+  $pointerEvents: 'auto' | 'none'
+}>`
+  position: absolute;
+  left: ${(p) => p.$left}px;
+  top: ${(p) => p.$top}px;
+  z-index: 2;
+  pointer-events: ${(p) => p.$pointerEvents};
+  transform: translate(${-TL_MONARCH_HIT_PAD}px, ${-TL_MONARCH_HIT_PAD}px);
+`
+
+export const TlItemMonarchHitBtn = styled.button`
+  margin: 0;
+  padding: ${TL_MONARCH_HIT_PAD}px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 0;
+  min-width: ${TL_MONARCH_HIT_MIN}px;
+  min-height: ${TL_MONARCH_HIT_MIN}px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.accent};
+    outline-offset: 2px;
+  }
+`
+
+export const TlItemMonarchBadgeVisual = styled.div<{
+  $lineColor: string
+  $accentColor: string | null
+  $panelBg: string
+}>`
+  width: ${TL_MONARCH_BADGE_VISUAL}px;
+  height: ${TL_MONARCH_BADGE_VISUAL}px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${(p) =>
+    p.$accentColor ? `${p.$accentColor}28` : `${p.$lineColor}22`};
+  border: 2px solid ${(p) => (p.$accentColor ? p.$accentColor : p.$lineColor)};
+  box-shadow: ${(p) => `0 0 0 2px ${p.$panelBg}, 0 2px 8px rgba(0, 0, 0, 0.2)`};
+`
+
+export const TlItemMonarchBadgeImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+`
+
+export const TlItemTextCol = styled.div<{ $thumbOnEnd?: boolean }>`
+  container-type: inline-size;
+  container-name: tl-item;
+  min-width: 0;
+  flex: 1;
+  text-align: ${(p) => (p.$thumbOnEnd ? 'right' : 'left')};
+`
+
+export const TlItemTerritoryLine = styled.div<{
+  $color: string
+  $thumbOnEnd?: boolean
+}>`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: ${(p) => p.$color};
+  align-self: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
+  max-width: 100%;
+`
+
+export const TlItemPosPill = styled.span<{
+  $lineColor: string
+  $thumbOnEnd?: boolean
+}>`
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${(p) => p.$lineColor};
+  background: ${(p) => `${p.$lineColor}12`};
+  border: 1.5px solid ${(p) => `${p.$lineColor}66`};
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  @container tl-item (max-width: 220px) {
+    max-width: 100%;
+    align-self: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
+  }
+`
+
+export const TlItemTitleRow = styled.div<{ $thumbOnEnd?: boolean }>`
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
+  gap: 8px 10px;
+  min-width: 0;
+
+  @container tl-item (max-width: 220px) {
+    flex-direction: column;
+    align-items: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'stretch')};
+    gap: 6px;
+  }
+`
+
+export const TlItemPersonName = styled.div<{
+  $color: string
+  $thumbOnEnd?: boolean
+}>`
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
+  word-break: keep-all;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  color: ${(p) => p.$color};
+
+  @container tl-item (max-width: 220px) {
+    flex: none;
+    width: 100%;
+    text-align: ${(p) => (p.$thumbOnEnd ? 'right' : 'left')};
+  }
+`
+
+export const TlItemMetaRow = styled.div<{ $thumbOnEnd?: boolean }>`
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
+  gap: 6px 8px;
+`
+
+export const TlItemRangeChip = styled.span<{ $lineColor: string }>`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${(p) => p.$lineColor};
+  background: transparent;
+  border: 1px solid ${(p) => `${p.$lineColor}55`};
+  border-radius: 6px;
+  padding: 2px 9px;
+  white-space: normal;
+  word-break: keep-all;
+  line-height: 1.35;
+`
+
+export const TlItemAgeNote = styled.span<{ $color: string }>`
+  font-size: 10.5px;
+  font-weight: 500;
+  color: ${(p) => p.$color};
+`
+
+export const TlItemBirthRow = styled.div<{
+  $color: string
+  $thumbOnEnd?: boolean
+}>`
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: ${(p) => p.$color};
+  display: flex;
+  align-items: center;
+  justify-content: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+export const TlItemBirthLabel = styled.span<{ $color: string }>`
+  font-size: 9.5px;
+  font-weight: 600;
+  color: ${(p) => p.$color};
 `

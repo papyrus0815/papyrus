@@ -2,7 +2,8 @@ import { FiUser } from 'react-icons/fi'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
-import { TL_THUMB } from './cabinets-section.constants'
+import * as CabS from './cabinets-section.styled'
+import { TL_MONARCH_BADGE_VISUAL, TL_THUMB } from './cabinets-section.constants'
 
 /** 행정부 표기: 「제N대 [M기] 직위 이름」 — TlItem보다 위에 두어 스코프 명확히 */
 export function formatCabinetTermBadge(
@@ -21,14 +22,26 @@ export function cabinetTimelineCellAriaLabel(
   subTermNumber: number | null | undefined,
   posTitle: string,
   personName: string,
-  territoryPrefix?: string | null,
+  opts?: {
+    territoryPrefix?: string | null
+    monarchEraLine?: string | null
+    monarchPersonName?: string | null
+  },
 ): string {
+  const territoryPrefix = opts?.territoryPrefix
+  const monarchEraLine = opts?.monarchEraLine
+  const monarchPersonName = opts?.monarchPersonName
   const term =
     termNum != null
       ? `제${termNum}대${subTermNumber != null ? ` ${subTermNumber}기` : ''}`
       : ''
   const mid = [term, posTitle].filter(Boolean).join(', ')
-  const core = `${mid ? `${mid}, ` : ''}${personName}, 상세 정보 보기`
+  const era = monarchEraLine?.trim()
+    ? monarchPersonName?.trim()
+      ? `, 재위 군주 ${monarchPersonName.trim()}, ${monarchEraLine.trim()}`
+      : `, 재위 시대: ${monarchEraLine.trim()}`
+    : ''
+  const core = `${mid ? `${mid}, ` : ''}${personName}${era}, 상세 정보 보기`
   if (territoryPrefix?.trim()) return `${territoryPrefix.trim()}, ${core}`
   return core
 }
@@ -42,7 +55,16 @@ export function TlItem({
   birthPlace,
   lineColor,
   territoryLabel,
+  monarchThumbUrl,
+  monarchBadgeTitle,
+  monarchPersonId,
+  monarchEraAccentColor,
+  onMonarchPersonClick,
   isDark,
+  /** true면 썸네일을 오른쪽(축 반대편)에 둠 — 세로 타임라인 우측 열 */
+  thumbOnEnd = false,
+  /** 세로 타임라인 등에서 군주 썸네일 배지 숨김 */
+  hideMonarchBadge = false,
 }: {
   thumbUrl: string | null
   personName: string
@@ -51,176 +73,134 @@ export function TlItem({
   ageAtStart: number | null
   birthPlace: string | null
   lineColor: string
+  thumbOnEnd?: boolean
+  hideMonarchBadge?: boolean
   /** 전체 보기 등에서 소속 역사국가·현대국가 구분용 한 줄 */
   territoryLabel?: string | null
+  /** 재위 군주 프로필(없으면 아이콘) — 수반 썸네일 11시 방향 배지 */
+  monarchThumbUrl?: string | null
+  /** 군주 배지 툴팁·접근성 */
+  monarchBadgeTitle?: string | null
+  monarchPersonId?: string | null
+  /** 상단 재위 띠와 맞추는 테두리 색 */
+  monarchEraAccentColor?: string | null
+  onMonarchPersonClick?: (personId: string) => void
   isDark: boolean
 }) {
   const C = getCabinetsSectionPalette(isDark)
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 14,
-        width: '100%',
-        minWidth: 0,
-      }}
+  const showMonarchBadge =
+    Boolean(monarchEraAccentColor) && !hideMonarchBadge
+  const R = TL_THUMB / 2
+  /** 11시 방향: 12시(위)에서 반시계 30° → 표준각 -120° (x 오른쪽, y 아래) */
+  const rad = (-120 * Math.PI) / 180
+  const cxBase = R + R * Math.cos(rad)
+  const cy = R + R * Math.sin(rad)
+  /** 우측 열: 배지를 가로로 뒤집어 바깥(화면 끝) 쪽에 두기 */
+  const cx = thumbOnEnd ? TL_THUMB - cxBase : cxBase
+  const badgeHalf = TL_MONARCH_BADGE_VISUAL / 2
+  const badgeLeft = cx - badgeHalf
+  const badgeTop = cy - badgeHalf
+
+  const monarchBadgeFace = (
+    <CabS.TlItemMonarchBadgeVisual
+      $lineColor={lineColor}
+      $accentColor={monarchEraAccentColor ?? null}
+      $panelBg={C.bg}
     >
-      <div
-        style={{
-          flexShrink: 0,
-          width: TL_THUMB,
-          height: TL_THUMB,
-          borderRadius: '50%',
-          overflow: 'hidden',
-          background: `${lineColor}18`,
-          border: `3px solid ${lineColor}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: `0 4px 16px ${lineColor}44`,
-        }}
-      >
-        {thumbUrl ? (
-          <img
-            src={thumbUrl}
-            alt={personName}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              objectPosition: 'top',
-            }}
-          />
-        ) : (
-          <FiUser size={48} color={lineColor} style={{ opacity: 0.3 }} />
-        )}
-      </div>
-      <div
-        style={{
-          minWidth: 0,
-          flex: 1,
-          textAlign: 'left',
-        }}
-      >
+      {monarchThumbUrl ? (
+        <CabS.TlItemMonarchBadgeImg src={monarchThumbUrl} alt="" />
+      ) : (
+        <FiUser
+          size={28}
+          color={monarchEraAccentColor ?? lineColor}
+          style={{ opacity: 0.55 }}
+        />
+      )}
+    </CabS.TlItemMonarchBadgeVisual>
+  )
+
+  return (
+    <CabS.TlItemRoot $thumbOnEnd={thumbOnEnd}>
+      <CabS.TlItemAvatarCol>
+        <CabS.TlItemAvatarRing $lineColor={lineColor}>
+          {thumbUrl ? (
+            <CabS.TlItemAvatarImg src={thumbUrl} alt={personName} />
+          ) : (
+            <FiUser size={62} color={lineColor} style={{ opacity: 0.3 }} />
+          )}
+        </CabS.TlItemAvatarRing>
+        {showMonarchBadge ? (
+          <CabS.TlItemMonarchAnchor
+            $left={badgeLeft}
+            $top={badgeTop}
+            $pointerEvents={
+              monarchPersonId && onMonarchPersonClick ? 'auto' : 'none'
+            }
+          >
+            {monarchPersonId && onMonarchPersonClick ? (
+              <CabS.TlItemMonarchHitBtn
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onMonarchPersonClick(monarchPersonId)
+                }}
+                title={monarchBadgeTitle ?? undefined}
+                aria-label={
+                  monarchBadgeTitle
+                    ? `재위 군주: ${monarchBadgeTitle}, 인물 정보`
+                    : '재위 군주, 인물 정보'
+                }
+              >
+                {monarchBadgeFace}
+              </CabS.TlItemMonarchHitBtn>
+            ) : (
+              <div title={monarchBadgeTitle ?? undefined} aria-hidden>
+                {monarchBadgeFace}
+              </div>
+            )}
+          </CabS.TlItemMonarchAnchor>
+        ) : null}
+      </CabS.TlItemAvatarCol>
+      <CabS.TlItemTextCol $thumbOnEnd={thumbOnEnd}>
         {territoryLabel ? (
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: C.textMuted,
-              letterSpacing: '0.02em',
-              marginBottom: 6,
-              lineHeight: 1.35,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
+          <CabS.TlItemTerritoryLine
+            $color={C.textMuted}
+            $thumbOnEnd={thumbOnEnd}
             title={territoryLabel}
           >
             {territoryLabel}
-          </div>
+          </CabS.TlItemTerritoryLine>
         ) : null}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            flexWrap: 'nowrap',
-            alignItems: 'center',
-            gap: 10,
-            minWidth: 0,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10.5,
-              fontWeight: 700,
-              color: lineColor,
-              background: `${lineColor}14`,
-              border: `1px solid ${lineColor}55`,
-              borderRadius: 999,
-              padding: '3px 10px',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-              maxWidth: '42%',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
+        <CabS.TlItemTitleRow $thumbOnEnd={thumbOnEnd}>
+          <CabS.TlItemPosPill
+            $lineColor={lineColor}
+            $thumbOnEnd={thumbOnEnd}
             title={posTitle}
           >
             {posTitle}
-          </span>
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 800,
-              color: C.text,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.45,
-              wordBreak: 'keep-all',
-              flex: 1,
-              minWidth: 0,
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-            }}
-          >
+          </CabS.TlItemPosPill>
+          <CabS.TlItemPersonName $color={C.text} $thumbOnEnd={thumbOnEnd}>
             {personName}
-          </div>
-        </div>
-        <div
-          style={{
-            marginTop: 8,
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            gap: '6px 8px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: lineColor,
-              background: `${lineColor}12`,
-              borderRadius: 5,
-              padding: '2px 9px',
-              whiteSpace: 'normal',
-              wordBreak: 'keep-all',
-              lineHeight: 1.35,
-            }}
-          >
-            {range}
-          </span>
+          </CabS.TlItemPersonName>
+        </CabS.TlItemTitleRow>
+        <CabS.TlItemMetaRow $thumbOnEnd={thumbOnEnd}>
+          <CabS.TlItemRangeChip $lineColor={lineColor}>{range}</CabS.TlItemRangeChip>
           {ageAtStart != null && (
-            <span
-              style={{ fontSize: 10.5, color: C.iconColor }}
-            >
+            <CabS.TlItemAgeNote $color={C.iconColor}>
               취임 {ageAtStart}세
-            </span>
+            </CabS.TlItemAgeNote>
           )}
-        </div>
+        </CabS.TlItemMetaRow>
         {birthPlace && (
-          <div
-            style={{
-              marginTop: 6,
-              fontSize: 10.5,
-              color: C.placeholderText,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              flexWrap: 'wrap',
-              gap: 6,
-            }}
+          <CabS.TlItemBirthRow
+            $color={C.placeholderText}
+            $thumbOnEnd={thumbOnEnd}
           >
-            <span style={{ fontSize: 9.5, color: C.textFaint }}>출신</span>
+            <CabS.TlItemBirthLabel $color={C.textFaint}>출신</CabS.TlItemBirthLabel>
             {birthPlace}
-          </div>
+          </CabS.TlItemBirthRow>
         )}
-      </div>
-    </div>
+      </CabS.TlItemTextCol>
+    </CabS.TlItemRoot>
   )
 }
