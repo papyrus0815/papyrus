@@ -405,6 +405,33 @@ export type GovernmentCabinetTenureItem = {
   achievements?: GovernmentTenureAchievementItem[]
 }
 
+/** 수반 재임의 연호·시대명 (동아시아 연호, 유럽식 재위 시대명 등) */
+export type RegnalEraDto = {
+  id: string
+  tenureId: string
+  eraName: string
+  eraNameEn?: string | null
+  startYear: number
+  startMonth?: number | null
+  startDay?: number | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  changeReason?: string | null
+}
+
+export type CreateRegnalEraDto = {
+  eraName: string
+  eraNameEn?: string | null
+  startYear: number
+  startMonth?: number | null
+  startDay?: number | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  changeReason?: string | null
+}
+
 /** 행정부 목록 API의 수반 재임(소속 국가·이름 포함) */
 export type GovernmentHeadTenureInCabinetList = {
   id: string
@@ -416,6 +443,10 @@ export type GovernmentHeadTenureInCabinetList = {
   termNumber?: number | null
   regnalNumber?: number | null
   subTermNumber?: number | null
+  /** 연호·시대 — GET /government-positions/cabinets 등에서 포함 */
+  regnalEras?: RegnalEraDto[]
+  /** 비고 — 역대 수반 등록 시 `왕명: …` 형태로 저장되는 경우 있음 */
+  notes?: string | null
   person?: GovernmentCabinetTenureItem['person']
   positionDefinition?: GovernmentCabinetTenureItem['positionDefinition']
   country?: {
@@ -830,6 +861,46 @@ export const personCareerApi = {
   leaveCabinetLinkage: async (cabinetId: string): Promise<void> => {
     await apiClient.delete(
       `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/linkage`,
+    )
+  },
+
+  /**
+   * 수반 재임에 연호·시대명 추가
+   * POST /government-positions/tenures/:tenureId/regnal-eras
+   */
+  createRegnalEra: async (
+    tenureId: string,
+    dto: CreateRegnalEraDto,
+  ): Promise<RegnalEraDto> => {
+    const response = await apiClient.post(
+      `/government-positions/tenures/${encodeURIComponent(tenureId)}/regnal-eras`,
+      dto,
+    )
+    return response.data
+  },
+
+  /**
+   * 연호·시대명 수정
+   * PATCH /government-positions/regnal-eras/:id
+   */
+  updateRegnalEra: async (
+    id: string,
+    dto: Partial<CreateRegnalEraDto>,
+  ): Promise<RegnalEraDto> => {
+    const response = await apiClient.patch(
+      `/government-positions/regnal-eras/${encodeURIComponent(id)}`,
+      dto,
+    )
+    return response.data
+  },
+
+  /**
+   * 연호·시대명 삭제
+   * DELETE /government-positions/regnal-eras/:id
+   */
+  deleteRegnalEra: async (id: string): Promise<void> => {
+    await apiClient.delete(
+      `/government-positions/regnal-eras/${encodeURIComponent(id)}`,
     )
   },
 

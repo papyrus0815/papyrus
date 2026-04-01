@@ -21,6 +21,8 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
+  CreateRegnalEraDto,
+  UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
 } from './dto'
@@ -175,19 +177,17 @@ export class GovernmentPositionController {
   }
 
   /**
-   * 행정부(Cabinet) 목록 — 국가/역사적 국가별. 로그인 시 해당 계정이 등록한 행정부만 반환.
+   * 행정부(Cabinet) 목록 — 국가/역사적 국가별(수반 재임 소속 기준).
+   * 계정으로 제한하지 않음 — 같은 국가 데이터는 워크스페이스에서 공유.
    */
   @Get('cabinets')
   async getCabinets(
-    @Req() req: Request,
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
   ): Promise<any[]> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const list = await this.personService.findCabinets({
       countryId,
       historicalCountryId,
-      accountId,
     })
     return list.map(serializeBigInt)
   }
@@ -451,5 +451,31 @@ export class GovernmentPositionController {
     @Param('achievementId') achievementId: string,
   ): Promise<void> {
     await this.personService.deleteTenureAchievement(tenureId, achievementId)
+  }
+
+  /**
+   * 수반 재임에 연호·시대명 추가 (일본 연호, 유럽식 재위 시대명 등)
+   */
+  @Post('tenures/:tenureId/regnal-eras')
+  async addRegnalEra(
+    @Param('tenureId') tenureId: string,
+    @Body() dto: CreateRegnalEraDto,
+  ): Promise<any> {
+    const result = await this.personService.createRegnalEra(tenureId, dto)
+    return serializeBigInt(result)
+  }
+
+  @Patch('regnal-eras/:id')
+  async patchRegnalEra(
+    @Param('id') id: string,
+    @Body() dto: UpdateRegnalEraDto,
+  ): Promise<any> {
+    const result = await this.personService.updateRegnalEra(id, dto)
+    return serializeBigInt(result)
+  }
+
+  @Delete('regnal-eras/:id')
+  async deleteRegnalEra(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteRegnalEra(id)
   }
 }

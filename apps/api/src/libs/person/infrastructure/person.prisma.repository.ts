@@ -36,6 +36,8 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
+  CreateRegnalEraDto,
+  UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
@@ -140,6 +142,11 @@ const TENURE_ACHIEVEMENTS_INCLUDE = {
       },
     },
   },
+}
+
+/** 수반 재임의 연호·시대명 (일본 연호, 유럽식 재위 시대명 등) */
+const REGNAL_ERAS_ORDER = {
+  orderBy: { startYear: 'asc' as const },
 }
 
 /**
@@ -1821,6 +1828,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -1867,7 +1875,6 @@ export class PersonPrismaRepository implements IPersonRepository {
   async findCabinets(params: {
     countryId?: string
     historicalCountryId?: string
-    accountId?: string
   }): Promise<any[]> {
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
@@ -1907,9 +1914,10 @@ export class PersonPrismaRepository implements IPersonRepository {
               : { historicalCountryId: params.historicalCountryId },
           }
         : {}
-    if (params.accountId != null) {
-      baseWhere.accountId = params.accountId
-    }
+    /**
+     * 국가(또는 역사국가) 소속 수반 재임 기준으로만 필터.
+     * accountId로 목록을 좁히지 않음 — 다른 계정이 등록한 행정부도 동일 국가 페이지에서 보이게 함.
+     */
     const list = await this.prisma.cabinet.findMany({
       where: Object.keys(baseWhere).length > 0 ? baseWhere : undefined,
       orderBy: [{ headTenure: { startDate: 'desc' } }],
@@ -1922,6 +1930,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -1954,6 +1963,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -1971,6 +1981,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -2011,6 +2022,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -2207,6 +2219,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               country: { select: { id: true, name: true } },
               historicalCountry: { select: { id: true, name: true } },
               achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+              regnalEras: REGNAL_ERAS_ORDER,
             },
           },
         },
@@ -2244,6 +2257,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             positionDefinition: true,
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -2318,6 +2332,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             historicalCountry: {
               select: { id: true, name: true, thumbnailUrl: true },
             },
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -2450,6 +2465,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: { id: true, name: true, thumbnailUrl: true },
             },
             positionDefinition: { select: { title: true } },
+            regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
@@ -2730,6 +2746,78 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
   }
 
+  async createRegnalEra(tenureId: string, dto: CreateRegnalEraDto): Promise<any> {
+    const tenure = await this.prisma.governmentPositionTenure.findUnique({
+      where: { id: tenureId },
+      select: { id: true },
+    })
+    if (!tenure) {
+      throw new Error('GovernmentPositionTenure not found')
+    }
+    const row = await this.prisma.regnalEra.create({
+      data: {
+        tenureId,
+        eraName: dto.eraName.trim(),
+        eraNameEn: dto.eraNameEn?.trim() || null,
+        startYear: dto.startYear,
+        startMonth: dto.startMonth ?? null,
+        startDay: dto.startDay ?? null,
+        endYear: dto.endYear ?? null,
+        endMonth: dto.endMonth ?? null,
+        endDay: dto.endDay ?? null,
+        changeReason: dto.changeReason?.trim() || null,
+      },
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(row)
+  }
+
+  async updateRegnalEra(id: string, dto: UpdateRegnalEraDto): Promise<any> {
+    const existing = await this.prisma.regnalEra.findUnique({ where: { id } })
+    if (!existing) {
+      throw new Error('RegnalEra not found')
+    }
+    const data: any = {}
+    if (dto.eraName !== undefined) data.eraName = dto.eraName.trim()
+    if (dto.eraNameEn !== undefined) data.eraNameEn = dto.eraNameEn?.trim() || null
+    if (dto.startYear !== undefined) data.startYear = dto.startYear
+    if (dto.startMonth !== undefined) data.startMonth = dto.startMonth
+    if (dto.startDay !== undefined) data.startDay = dto.startDay
+    if (dto.endYear !== undefined) data.endYear = dto.endYear
+    if (dto.endMonth !== undefined) data.endMonth = dto.endMonth
+    if (dto.endDay !== undefined) data.endDay = dto.endDay
+    if (dto.changeReason !== undefined) data.changeReason = dto.changeReason?.trim() || null
+    const row = await this.prisma.regnalEra.update({ where: { id }, data })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(row)
+  }
+
+  async deleteRegnalEra(id: string): Promise<void> {
+    await this.prisma.regnalEra.delete({ where: { id } })
+  }
+
   /**
    * 관직 정의 목록 조회 — 단일 레벨 전체 (재임 선택·관리 공통)
    */
@@ -2991,10 +3079,21 @@ export class PersonPrismaRepository implements IPersonRepository {
             middleName: true,
             nameDisplayOrder: true,
             profileImageUrl: true,
+            templeName: true,
+            regnalName: true,
+            posthumousName: true,
             fatherId: true,
             motherId: true,
             dynastyId: true,
             dynasty: { select: { id: true, name: true } },
+            countryId: true,
+            country: {
+              select: {
+                id: true,
+                name: true,
+                defaultNameDisplayOrder: true,
+              },
+            },
             birthCityId: true,
             birthAdminDivisionId: true,
             birthPlaceText: true,

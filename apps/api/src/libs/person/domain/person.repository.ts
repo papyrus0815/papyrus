@@ -18,6 +18,8 @@ import {
   CreatePersonAwardDto,
   CreateReligiousCareerDto,
   CreateTenureAchievementDto,
+  CreateRegnalEraDto,
+  UpdateRegnalEraDto,
   LegalCareerResponseDto,
   MediaCareerResponseDto,
   MedicalCareerResponseDto,
@@ -229,7 +231,6 @@ export interface IPersonRepository {
   findCabinets(params: {
     countryId?: string
     historicalCountryId?: string
-    accountId?: string
   }): Promise<any[]>
   createCabinet(
     dto: { headTenureId: string; name?: string | null },
@@ -296,6 +297,10 @@ export interface IPersonRepository {
     tenureId: string,
     achievementId: string,
   ): Promise<void>
+  /** 연호·시대명 (재임당 1:N) */
+  createRegnalEra(tenureId: string, dto: CreateRegnalEraDto): Promise<any>
+  updateRegnalEra(id: string, dto: UpdateRegnalEraDto): Promise<any>
+  deleteRegnalEra(id: string): Promise<void>
   /**
    * 해당 국가(또는 연결된 역사적 국가)에 재임 기록이 있는 인물만 조회 (역대 수반 인물 선택용)
    */

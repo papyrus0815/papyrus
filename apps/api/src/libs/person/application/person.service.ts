@@ -24,6 +24,8 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
+  CreateRegnalEraDto,
+  UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
@@ -395,7 +397,7 @@ export class PersonService {
     return this.personRepository.findTenuresByCabinetId(cabinetId, accountId)
   }
 
-  async findCabinets(params: { countryId?: string; historicalCountryId?: string; accountId?: string }): Promise<any[]> {
+  async findCabinets(params: { countryId?: string; historicalCountryId?: string }): Promise<any[]> {
     return this.personRepository.findCabinets(params)
   }
 
@@ -508,6 +510,39 @@ export class PersonService {
    */
   async deleteTenureAchievement(tenureId: string, achievementId: string): Promise<void> {
     return this.personRepository.deleteTenureAchievement(tenureId, achievementId)
+  }
+
+  async createRegnalEra(tenureId: string, dto: CreateRegnalEraDto): Promise<any> {
+    try {
+      return await this.personRepository.createRegnalEra(tenureId, dto)
+    } catch (e: any) {
+      if (e?.message === 'GovernmentPositionTenure not found') {
+        throw new NotFoundException('재임을 찾을 수 없습니다.')
+      }
+      throw e
+    }
+  }
+
+  async updateRegnalEra(id: string, dto: UpdateRegnalEraDto): Promise<any> {
+    try {
+      return await this.personRepository.updateRegnalEra(id, dto)
+    } catch (e: any) {
+      if (e?.message === 'RegnalEra not found') {
+        throw new NotFoundException('연호·시대 정보를 찾을 수 없습니다.')
+      }
+      throw e
+    }
+  }
+
+  async deleteRegnalEra(id: string): Promise<void> {
+    try {
+      await this.personRepository.deleteRegnalEra(id)
+    } catch (e: any) {
+      if (e?.code === 'P2025' || /not found/i.test(String(e?.message))) {
+        throw new NotFoundException('연호·시대 정보를 찾을 수 없습니다.')
+      }
+      throw e
+    }
   }
 
   /**
