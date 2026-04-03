@@ -3,6 +3,7 @@ import type {
   RegnalEraDto,
 } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import type { CabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
 import {
   CABINET_PARTY_ROLE_OPTIONS,
@@ -26,6 +27,31 @@ export function getPersonName(person: {
     true,
   )
 }
+
+/** 인물 출신 한 줄 — API `birthCity` / `birthAdminDivision` / `birthPlaceText` */
+export function getPersonBirthPlaceLabel(
+  person:
+    | {
+        birthCity?: { name?: string | null } | null
+        birthAdminDivision?: { name?: string | null } | null
+        birthPlaceText?: string | null
+      }
+    | null
+    | undefined,
+): string | null {
+  if (!person) return null
+  const city = person.birthCity?.name?.trim()
+  if (city) return city
+  const div = person.birthAdminDivision?.name?.trim()
+  if (div) return div
+  const text = person.birthPlaceText?.trim()
+  return text || null
+}
+
+export type CabinetTimelinePosPillPalette = Pick<
+  CabinetsSectionPalette,
+  'posPillHeadOfState' | 'posPillHeadOfGovernment' | 'posPillDefault'
+>
 
 /** 수반 재임 기준 상단 브레드크럼: 「제N대 [M기] 이름」 또는 이름만 / 없으면 「행정부 상세」 */
 export function formatCabinetHeadBreadcrumbLabel(
@@ -291,6 +317,20 @@ export function territoryKeyFromCabinet(
 /**
  * 타임라인 카드 강조색 — `ordinalByTerritoryKey`는 `buildCabinetTerritoryOrdinalMap(filteredCabinets)` 사용.
  */
+/** 타임라인 이름 좌측 직책 뱃지 — `positionType`별 색 (`getCabinetsSectionPalette` 토큰) */
+export function lineColorForCabinetHeadPositionType(
+  positionType: string | null | undefined,
+  palette: CabinetTimelinePosPillPalette,
+): string {
+  const pt =
+    typeof positionType === 'string' && positionType.trim()
+      ? positionType.trim()
+      : null
+  if (pt === 'HEAD_OF_STATE') return palette.posPillHeadOfState
+  if (pt === 'HEAD_OF_GOVERNMENT') return palette.posPillHeadOfGovernment
+  return palette.posPillDefault
+}
+
 export function paletteForCabinetListItem(
   cabinet: {
     name?: string | null

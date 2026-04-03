@@ -4105,7 +4105,7 @@ const TL_MONARCH_HIT_PAD = (TL_MONARCH_HIT_MIN - TL_MONARCH_BADGE_VISUAL) / 2
 export const TlItemRoot = styled.div<{ $thumbOnEnd?: boolean }>`
   display: flex;
   flex-direction: ${(p) => (p.$thumbOnEnd ? 'row-reverse' : 'row')};
-  align-items: flex-start;
+  align-items: center;
   gap: ${TL_ITEM_THUMB_TEXT_GAP}px;
   width: 100%;
   min-width: 0;
@@ -4327,10 +4327,4 @@ export const TlItemBirthRow = styled.div<{
   justify-content: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
   flex-wrap: wrap;
   gap: 6px;
-`
-
-export const TlItemBirthLabel = styled.span<{ $color: string }>`
-  font-size: 9.5px;
-  font-weight: 600;
-  color: ${(p) => p.$color};
 `

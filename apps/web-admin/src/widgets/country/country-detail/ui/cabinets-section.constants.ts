@@ -24,8 +24,8 @@ export const TL_ROW_H = 556
 /** 한 줄(4칸) 행정부 행과 다음 행 사이 세로 간격 */
 export const TL_ROW_GAP = 96
 export const TL_BUBBLE_W = 84
-/** 수반 원형 사진 — 행 높이와 비율 맞춤(과도하게 쪼그라들지 않게) */
-export const TL_THUMB = 176
+/** 수반 원형 사진 — 행 높이와 비율 맞춤 (`176 * 1.1` 반올림) */
+export const TL_THUMB = 212
 /** `TlItemRoot` 썸네일–텍스트 간격 — 가로 타임라인이 텍스트 열까지 넘지 않을 때 사용 */
 export const TL_ITEM_THUMB_TEXT_GAP = 14
 export const TL_GRID_GAP_X = 18
@@ -33,6 +33,10 @@ export const TL_GRID_GAP_X = 18
 export const TL_NODE_EDGE_PAD = 52
 /** 노드 위·아래 짧은 수직 연결선 높이 */
 export const TL_VERT_SEG_H = 28
+/** 홀수 열(`colIdx` 홀수, 썸네일 아래 · `!itemOnTop`) 연도·축 `translateY`(px) */
+export const TL_YEAR_NUDGE_Y_ODD_COL = 0
+/** 짝수 열(`colIdx` 짝수, 썸네일 위 · `itemOnTop`) 연도·축 `translateY`(px) */
+export const TL_YEAR_NUDGE_Y_EVEN_COL = 0
 export const TL_YEAR_BUBBLE_SHIFT_X = 28
 
 /** 화면상 맨 왼쪽 열 행정부만 추가로 우측 이동(행 전체·가로선 간격은 그대로) */

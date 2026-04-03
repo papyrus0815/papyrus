@@ -396,6 +396,10 @@ export type GovernmentCabinetTenureItem = {
     deathEra?: string | null
     deathDate?: string | null
     deathYear?: number | null
+    /** 출생 도시 — 목록·상세 출신 표기 */
+    birthCity?: { name?: string | null } | null
+    birthAdminDivision?: { name?: string | null } | null
+    birthPlaceText?: string | null
   } | null
   positionDefinition?: {
     id: string

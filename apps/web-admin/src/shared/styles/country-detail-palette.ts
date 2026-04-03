@@ -59,6 +59,12 @@ export type CabinetsSectionPalette = {
   warmTitle: string
   /** 카드 호버 시 테두리 강조 */
   borderEmphasis: string
+  /** 타임라인 수반 직책 뱃지 — `HEAD_OF_STATE` */
+  posPillHeadOfState: string
+  /** 타임라인 수반 직책 뱃지 — `HEAD_OF_GOVERNMENT` */
+  posPillHeadOfGovernment: string
+  /** 타임라인 수반 직책 뱃지 — 그 외 직위 유형 */
+  posPillDefault: string
 }
 
 let cabinetsSectionPaletteLight: CabinetsSectionPalette | undefined
@@ -126,6 +132,9 @@ function buildCabinetsSectionPalette(isDark: boolean): CabinetsSectionPalette {
     warmFilterIdle: isDark ? '#94a3b8' : '#57534e',
     warmTitle: isDark ? '#f1f5f9' : '#292524',
     borderEmphasis: isDark ? 'rgba(255,255,255,0.15)' : '#d1d5db',
+    posPillHeadOfState: isDark ? '#fbbf24' : '#d97706',
+    posPillHeadOfGovernment: isDark ? '#a5b4fc' : '#4f46e5',
+    posPillDefault: isDark ? '#94a3b8' : '#64748b',
   }
 }
 

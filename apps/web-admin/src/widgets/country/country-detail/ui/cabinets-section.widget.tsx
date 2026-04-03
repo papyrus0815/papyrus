@@ -141,6 +141,8 @@ import {
   TL_ROW_H,
   TL_THUMB,
   TL_VERT_SEG_H,
+  TL_YEAR_NUDGE_Y_EVEN_COL,
+  TL_YEAR_NUDGE_Y_ODD_COL,
 } from './cabinets-section.constants'
 import {
   APPOINTMENT_METHOD_LABEL,
@@ -151,12 +153,14 @@ import {
   calcTenureDuration,
   formatDate,
   getHeadTenureTerritoryLabel,
+  getPersonBirthPlaceLabel,
   getPersonName,
   getTenureAchievementDisplayBody,
   isLinkagePeerAchievement,
-  shouldHideCabinetFromExecutiveTimeline,
+  lineColorForCabinetHeadPositionType,
   paletteForCabinetListItem,
   resolveReignEraLineForCabinetHead,
+  shouldHideCabinetFromExecutiveTimeline,
   stripHtmlToPlain,
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
@@ -565,10 +569,22 @@ export function CabinetsSection({
       const cabName = typeof c.name === 'string' ? c.name : ''
       const eraLine = resolveReignEraLineForCabinetHead(
         head,
-        countryTenures as Parameters<typeof resolveReignEraLineForCabinetHead>[1],
+        countryTenures as Parameters<
+          typeof resolveReignEraLineForCabinetHead
+        >[1],
       )
-      return [personName, posTitle, start, end, territory, cabName, eraLine].some(
-        (v) => String(v ?? '').toLowerCase().includes(q),
+      return [
+        personName,
+        posTitle,
+        start,
+        end,
+        territory,
+        cabName,
+        eraLine,
+      ].some((v) =>
+        String(v ?? '')
+          .toLowerCase()
+          .includes(q),
       )
     })
   }, [
@@ -1724,6 +1740,17 @@ export function CabinetsSection({
                         {cabinetTimelineRows.map((rowItems, rowIdx) => {
                           const cols = timelineColumnCount
                           const rowFlowLine = C.borderMid
+                          const thumbConnectorLineStyle: React.CSSProperties = {
+                            width: 4,
+                            alignSelf: 'stretch',
+                            borderRadius: 2,
+                            opacity: 0.85,
+                            background: `repeating-linear-gradient(
+                                to bottom,
+                                ${rowFlowLine} 0 5px,
+                                transparent 5px 11px
+                              )`,
+                          }
                           const isReversed = rowIdx % 2 === 1
                           const displayItems = isReversed
                             ? [...rowItems].reverse()
@@ -1783,6 +1810,14 @@ export function CabinetsSection({
                                       )
                                       /** 노드·버블·칩 등 — 무채색(국가 구분색과 분리) */
                                       const uiLine = C.textMuted
+                                      const posPillLine =
+                                        lineColorForCabinetHeadPositionType(
+                                          head?.positionType ??
+                                            head?.positionDefinition
+                                              ?.positionType ??
+                                            null,
+                                          C,
+                                        )
                                       const territoryLabel =
                                         showCabinetTerritoryLabels
                                           ? getHeadTenureTerritoryLabel(
@@ -1814,14 +1849,8 @@ export function CabinetsSection({
                                               head.startDate,
                                             )
                                           : null
-                                      const birthPlace = head?.person
-                                        ? ((head.person as any).birthCity
-                                            ?.name ??
-                                          (head.person as any)
-                                            .birthAdminDivision?.name ??
-                                          (head.person as any).birthPlaceText ??
-                                          null)
-                                        : null
+                                      const birthPlace =
+                                        getPersonBirthPlaceLabel(head?.person)
                                       const isDeleting =
                                         deletingCabinetId === item.id
                                       // 짝수: 썸네일 위·연도는 축 중앙, 홀수: 연도 축 중앙·썸네일 아래
@@ -1849,6 +1878,22 @@ export function CabinetsSection({
                                             ? cellLabelAriaOpts
                                             : undefined,
                                         )
+                                      const cabinetTimelineTlItemProps = {
+                                        thumbUrl,
+                                        personName,
+                                        posTitle,
+                                        range,
+                                        ageAtStart,
+                                        birthPlace,
+                                        lineColor: uiLine,
+                                        posPillLineColor: posPillLine,
+                                        thumbRingColor: itemP.line,
+                                        territoryLabel:
+                                          territoryLabel ?? undefined,
+                                        reignEraLine: reignEraLine ?? undefined,
+                                        hideMonarchBadge: true as const,
+                                        isDark,
+                                      }
                                       return (
                                         <CabS.CabinetTimelineCellBtn
                                           key={item.id}
@@ -1912,27 +1957,15 @@ export function CabinetsSection({
                                                 }}
                                               >
                                                 <TlItem
-                                                  thumbUrl={thumbUrl}
-                                                  personName={personName}
-                                                  posTitle={posTitle}
-                                                  range={range}
-                                                  ageAtStart={ageAtStart}
-                                                  birthPlace={birthPlace}
-                                                  lineColor={uiLine}
-                                                  thumbRingColor={itemP.line}
-                                                  territoryLabel={
-                                                    territoryLabel ?? undefined
-                                                  }
-                                                  reignEraLine={
-                                                    reignEraLine ?? undefined
-                                                  }
-                                                  hideMonarchBadge
-                                                  isDark={isDark}
+                                                  {...cabinetTimelineTlItemProps}
                                                 />
                                               </div>
                                             ) : (
                                               <div
-                                                style={{ flex: 1, minHeight: 0 }}
+                                                style={{
+                                                  flex: 1,
+                                                  minHeight: 0,
+                                                }}
                                                 aria-hidden
                                               />
                                             )}
@@ -1946,6 +1979,13 @@ export function CabinetsSection({
                                               justifyContent: 'flex-start',
                                               width: '100%',
                                               flexShrink: 0,
+                                              transform: `translateY(${
+                                                itemOnTop
+                                                  ? TL_YEAR_NUDGE_Y_EVEN_COL
+                                                  : TL_YEAR_NUDGE_Y_ODD_COL
+                                              }px)`,
+                                              position: 'relative',
+                                              zIndex: 1,
                                             }}
                                           >
                                             <div
@@ -1971,13 +2011,9 @@ export function CabinetsSection({
                                                   aria-hidden
                                                 >
                                                   <div
-                                                    style={{
-                                                      width: 3,
-                                                      alignSelf: 'stretch',
-                                                      background: rowFlowLine,
-                                                      opacity: 0.35,
-                                                      borderRadius: 2,
-                                                    }}
+                                                    style={
+                                                      thumbConnectorLineStyle
+                                                    }
                                                   />
                                                 </div>
                                               ) : null}
@@ -1996,12 +2032,13 @@ export function CabinetsSection({
                                               >
                                                 <span
                                                   style={{
-                                                    fontSize: 21,
+                                                    fontSize: 42,
                                                     fontWeight: 800,
                                                     color: C.text,
                                                     letterSpacing: '-0.04em',
                                                     lineHeight: 1,
-                                                    fontVariantNumeric: 'tabular-nums',
+                                                    fontVariantNumeric:
+                                                      'tabular-nums',
                                                     textShadow: isDark
                                                       ? '0 0 10px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)'
                                                       : '0 0 8px rgba(255,255,255,0.95), 0 1px 0 rgba(255,255,255,1)',
@@ -2060,13 +2097,9 @@ export function CabinetsSection({
                                                   aria-hidden
                                                 >
                                                   <div
-                                                    style={{
-                                                      width: 3,
-                                                      alignSelf: 'stretch',
-                                                      background: rowFlowLine,
-                                                      opacity: 0.35,
-                                                      borderRadius: 2,
-                                                    }}
+                                                    style={
+                                                      thumbConnectorLineStyle
+                                                    }
                                                   />
                                                 </div>
                                               ) : null}
@@ -2114,27 +2147,15 @@ export function CabinetsSection({
                                                 }}
                                               >
                                                 <TlItem
-                                                  thumbUrl={thumbUrl}
-                                                  personName={personName}
-                                                  posTitle={posTitle}
-                                                  range={range}
-                                                  ageAtStart={ageAtStart}
-                                                  birthPlace={birthPlace}
-                                                  lineColor={uiLine}
-                                                  thumbRingColor={itemP.line}
-                                                  territoryLabel={
-                                                    territoryLabel ?? undefined
-                                                  }
-                                                  reignEraLine={
-                                                    reignEraLine ?? undefined
-                                                  }
-                                                  hideMonarchBadge
-                                                  isDark={isDark}
+                                                  {...cabinetTimelineTlItemProps}
                                                 />
                                               </div>
                                             ) : (
                                               <div
-                                                style={{ flex: 1, minHeight: 0 }}
+                                                style={{
+                                                  flex: 1,
+                                                  minHeight: 0,
+                                                }}
                                                 aria-hidden
                                               />
                                             )}
@@ -2319,11 +2340,9 @@ export function CabinetsSection({
                                   </CabS.MinisterProfileLifespan>
                                 )}
                                 {(() => {
-                                  const p = minister.person as any
-                                  const birthPlace =
-                                    p?.birthCity?.name ??
-                                    p?.birthAdminDivision?.name ??
-                                    p?.birthPlaceText
+                                  const birthPlace = getPersonBirthPlaceLabel(
+                                    minister.person,
+                                  )
                                   return birthPlace ? (
                                     <CabS.MinisterProfileLifespan>
                                       <span
@@ -2877,11 +2896,9 @@ export function CabinetsSection({
                                   </CabS.HeadLifespan>
                                 )}
                                 {(() => {
-                                  const p = head?.person as any
-                                  const birthPlace =
-                                    p?.birthCity?.name ??
-                                    p?.birthAdminDivision?.name ??
-                                    p?.birthPlaceText
+                                  const birthPlace = getPersonBirthPlaceLabel(
+                                    head?.person,
+                                  )
                                   return birthPlace ? (
                                     <CabS.HeadLifespan>
                                       <CabS.HeadMetaKicker>

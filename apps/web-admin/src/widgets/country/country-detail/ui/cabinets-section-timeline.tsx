@@ -1,4 +1,4 @@
-import { FiUser } from 'react-icons/fi'
+import { FiHome, FiUser } from 'react-icons/fi'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
@@ -59,6 +59,8 @@ export function TlItem({
   ageAtStart,
   birthPlace,
   lineColor,
+  /** 없으면 `lineColor` — 직책 뱃지(`TlItemPosPill`) 전용 */
+  posPillLineColor,
   /** 없으면 `lineColor` — 있으면 수반 썸네일 링만 이 색(소속 구분) */
   thumbRingColor,
   territoryLabel,
@@ -82,6 +84,7 @@ export function TlItem({
   ageAtStart: number | null
   birthPlace: string | null
   lineColor: string
+  posPillLineColor?: string | null
   thumbRingColor?: string | null
   thumbOnEnd?: boolean
   hideMonarchBadge?: boolean
@@ -113,6 +116,7 @@ export function TlItem({
   const badgeTop = cy - badgeHalf
 
   const ringColor = thumbRingColor ?? lineColor
+  const posPillColor = posPillLineColor ?? lineColor
 
   const monarchBadgeFace = (
     <CabS.TlItemMonarchBadgeVisual
@@ -177,7 +181,7 @@ export function TlItem({
       <CabS.TlItemTextCol $thumbOnEnd={thumbOnEnd}>
         {territoryLabel ? (
           <CabS.TlItemTerritoryLine
-            $color={C.textMuted}
+            $color={ringColor}
             $thumbOnEnd={thumbOnEnd}
             title={territoryLabel}
           >
@@ -195,7 +199,7 @@ export function TlItem({
         ) : null}
         <CabS.TlItemTitleRow $thumbOnEnd={thumbOnEnd}>
           <CabS.TlItemPosPill
-            $lineColor={lineColor}
+            $lineColor={posPillColor}
             $thumbOnEnd={thumbOnEnd}
             title={posTitle}
           >
@@ -218,7 +222,15 @@ export function TlItem({
             $color={C.placeholderText}
             $thumbOnEnd={thumbOnEnd}
           >
-            <CabS.TlItemBirthLabel $color={C.textFaint}>출신</CabS.TlItemBirthLabel>
+            <FiHome
+              size={12}
+              aria-hidden
+              style={{
+                flexShrink: 0,
+                opacity: 0.88,
+                color: C.textFaint,
+              }}
+            />
             {birthPlace}
           </CabS.TlItemBirthRow>
         )}
