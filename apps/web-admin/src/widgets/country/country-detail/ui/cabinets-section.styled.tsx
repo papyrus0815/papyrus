@@ -25,6 +25,7 @@ import {
   TL_COL_PAD_X,
   TL_LIST_PAD_LEFT,
   TL_MONARCH_BADGE_VISUAL,
+  TL_ITEM_THUMB_TEXT_GAP,
   TL_MONARCH_HIT_MIN,
   TL_ROW_GAP,
   TL_THUMB,
@@ -4105,7 +4106,7 @@ export const TlItemRoot = styled.div<{ $thumbOnEnd?: boolean }>`
   display: flex;
   flex-direction: ${(p) => (p.$thumbOnEnd ? 'row-reverse' : 'row')};
   align-items: flex-start;
-  gap: 14px;
+  gap: ${TL_ITEM_THUMB_TEXT_GAP}px;
   width: 100%;
   min-width: 0;
 `

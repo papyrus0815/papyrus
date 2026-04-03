@@ -3109,6 +3109,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
         achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+        regnalEras: REGNAL_ERAS_ORDER,
       },
       orderBy: { startDate: 'desc' },
     })

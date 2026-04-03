@@ -1,3 +1,7 @@
+import type {
+  GovernmentHeadTenureInCabinetList,
+  RegnalEraDto,
+} from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import {
@@ -474,7 +478,7 @@ export function buildCabinetTerritoryLegendEntries(
 
 /** 연도 버블 본문색 — 라이트는 팔레트 대비색, 다크는 테마 본문색으로 가독성 유지 */
 export function getTimelineBubbleTextColors(
-  itemP: CabinetTerritoryPalette,
+  itemP: { line: string; textColor: string },
   isDark: boolean,
   themeText: string,
 ): { year: string; term: string } {
@@ -482,4 +486,141 @@ export function getTimelineBubbleTextColors(
     return { year: itemP.textColor, term: itemP.line }
   }
   return { year: themeText, term: itemP.line }
+}
+
+/**
+ * 내각(행정부) 타임라인에서 숨길 수반인지 — `HEAD_OF_STATE`만으로는 제외하지 않음
+ * (대통령 등 공화국 원수 데이터가 전부 국가원수로만 잡혀 있으면 목록이 비게 됨).
+ * 군주 직함·연호·재위번호 등이 있을 때만 제외.
+ */
+export function shouldHideCabinetFromExecutiveTimeline(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+): boolean {
+  if (!head) return false
+  const pt =
+    head.positionType ?? head.positionDefinition?.positionType ?? null
+  if (pt !== 'HEAD_OF_STATE') return false
+
+  const title = (
+    head.positionDefinition?.title ??
+    head.title ??
+    ''
+  ).trim()
+  const monarchTitlePattern =
+    /황제|皇帝|天皇|천황|국왕|大韓帝國|대한제국|沙皇|차르|\bEmperor\b|\bTsar\b|\bTsarina\b|\bShah\b|\bKaiser\b|\bKing\b|\bQueen regnant\b/i
+  if (monarchTitlePattern.test(title)) return true
+  if ((head.regnalEras?.length ?? 0) > 0) return true
+  if (head.regnalNumber != null) return true
+
+  return false
+}
+
+function lastUtcDayInMonth(year: number, month1to12: number): number {
+  return new Date(Date.UTC(year, month1to12, 0)).getUTCDate()
+}
+
+function eraUtcBounds(era: RegnalEraDto): { start: number; end: number } {
+  const sm = (era.startMonth ?? 1) - 1
+  const sd = era.startDay ?? 1
+  const startMs = Date.UTC(era.startYear, sm, sd)
+  if (era.endYear == null) {
+    return { start: startMs, end: Date.UTC(9999, 11, 31, 23, 59, 59, 999) }
+  }
+  const em = (era.endMonth ?? 12) - 1
+  const ed =
+    era.endDay ?? lastUtcDayInMonth(era.endYear, era.endMonth ?? 12)
+  const endMs = Date.UTC(era.endYear, em, ed, 23, 59, 59, 999)
+  return { start: startMs, end: endMs }
+}
+
+export function pickRegnalEraForDate(
+  eras: RegnalEraDto[] | null | undefined,
+  isoDate: string,
+): RegnalEraDto | null {
+  if (!eras?.length || !isoDate) return null
+  const t = new Date(isoDate).getTime()
+  if (Number.isNaN(t)) return null
+  const sorted = [...eras].sort((a, b) => a.startYear - b.startYear)
+  for (const era of sorted) {
+    const { start, end } = eraUtcBounds(era)
+    if (t >= start && t <= end) return era
+  }
+  return null
+}
+
+/** 연호명을 「○○ 시대」 형태로 (이미 「…시대」로 끝나면 그대로) */
+export function formatReignEraLineLabel(era: RegnalEraDto | null): string | null {
+  if (!era?.eraName?.trim()) return null
+  const n = era.eraName.trim()
+  if (/시대\s*$/.test(n)) return n
+  return `${n} 시대`
+}
+
+function cabinetHeadSameTerritoryAsTenure(
+  head: {
+    historicalCountryId?: string | null
+    countryId?: string | null
+  },
+  tenure: {
+    historicalCountryId?: string | null
+    countryId?: string | null
+  },
+): boolean {
+  const hHist = head.historicalCountryId
+  if (hHist != null && hHist !== '') {
+    return tenure.historicalCountryId === hHist
+  }
+  return (
+    tenure.countryId === head.countryId &&
+    (tenure.historicalCountryId == null || tenure.historicalCountryId === '')
+  )
+}
+
+function tenureCoversIsoDate(
+  tenure: { startDate?: string | null; endDate?: string | null },
+  isoDate: string,
+): boolean {
+  if (!tenure.startDate || !isoDate) return false
+  const t = new Date(isoDate).getTime()
+  const start = new Date(tenure.startDate).getTime()
+  const end = tenure.endDate
+    ? new Date(tenure.endDate).getTime()
+    : Date.UTC(9999, 11, 31)
+  return t >= start && t <= end
+}
+
+type TenureWithEras = {
+  positionType?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  historicalCountryId?: string | null
+  countryId?: string | null
+  regnalEras?: RegnalEraDto[] | null
+}
+
+/**
+ * 수반 취임일이 속한 재위 연호·시대 한 줄.
+ * 수반 재임에 `regnalEras`가 있으면 우선하고, 없으면 같은 소속의 국가원수 재임 연호를 찾는다.
+ */
+export function resolveReignEraLineForCabinetHead(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+  countryTenures: TenureWithEras[] | null | undefined,
+): string | null {
+  if (!head?.startDate) return null
+  const iso = head.startDate
+  const own = pickRegnalEraForDate(head.regnalEras, iso)
+  if (own) return formatReignEraLineLabel(own)
+
+  if (!countryTenures?.length) return null
+  const monarchs = countryTenures.filter(
+    (t) =>
+      t.positionType === 'HEAD_OF_STATE' &&
+      cabinetHeadSameTerritoryAsTenure(head, t) &&
+      tenureCoversIsoDate(t, iso),
+  )
+  for (const m of monarchs) {
+    const era = pickRegnalEraForDate(m.regnalEras, iso)
+    if (era) return formatReignEraLineLabel(era)
+  }
+  return null
 }

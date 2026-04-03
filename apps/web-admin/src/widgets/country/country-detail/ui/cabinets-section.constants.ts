@@ -20,17 +20,23 @@ export const TL_COL_PAD_X = 4
 export const TL_LIST_PAD_LEFT = 112
 
 /** 타임라인 행·썸네일·노드 — 위젯·`cabinets-section-timeline` 공용 */
-export const TL_ROW_H = 520
+export const TL_ROW_H = 556
 /** 한 줄(4칸) 행정부 행과 다음 행 사이 세로 간격 */
 export const TL_ROW_GAP = 96
 export const TL_BUBBLE_W = 84
 /** 수반 원형 사진 — 행 높이와 비율 맞춤(과도하게 쪼그라들지 않게) */
 export const TL_THUMB = 176
+/** `TlItemRoot` 썸네일–텍스트 간격 — 가로 타임라인이 텍스트 열까지 넘지 않을 때 사용 */
+export const TL_ITEM_THUMB_TEXT_GAP = 14
 export const TL_GRID_GAP_X = 18
-export const TL_NODE_EDGE_PAD = 34
-export const TL_VERT_SEG_H = 18
+/** 썸네일·연도 버블 ↔ 노드·가로선 사이 세로 여백 */
+export const TL_NODE_EDGE_PAD = 52
+/** 노드 위·아래 짧은 수직 연결선 높이 */
+export const TL_VERT_SEG_H = 28
 export const TL_YEAR_BUBBLE_SHIFT_X = 28
-export const TL_NODE_CENTER_X = TL_COL_PAD_X + TL_THUMB / 2
+
+/** 화면상 맨 왼쪽 열 행정부만 추가로 우측 이동(행 전체·가로선 간격은 그대로) */
+export const TL_FIRST_COL_EXTRA_SHIFT_X = 48
 
 /** `TlItem` 군주 배지 — 타임라인 컴포넌트와 공용 */
 export const TL_MONARCH_BADGE_VISUAL = 52

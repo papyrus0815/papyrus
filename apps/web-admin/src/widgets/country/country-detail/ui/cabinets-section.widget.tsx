@@ -131,19 +131,16 @@ import {
   formatCabinetTermBadge,
 } from './cabinets-section-timeline'
 import {
-  HEAD_POSITION_TYPES,
   CABINET_SECTION_MAIN as MAIN,
   CABINET_SECTION_MAIN_HOVER as MAIN_HOVER,
   MINISTER_POSITION_TYPES,
-  TL_BUBBLE_W,
   TL_COL_PAD_X,
+  TL_FIRST_COL_EXTRA_SHIFT_X,
   TL_GRID_GAP_X,
-  TL_NODE_CENTER_X,
   TL_NODE_EDGE_PAD,
   TL_ROW_H,
   TL_THUMB,
   TL_VERT_SEG_H,
-  TL_YEAR_BUBBLE_SHIFT_X,
 } from './cabinets-section.constants'
 import {
   APPOINTMENT_METHOD_LABEL,
@@ -156,9 +153,10 @@ import {
   getHeadTenureTerritoryLabel,
   getPersonName,
   getTenureAchievementDisplayBody,
-  getTimelineBubbleTextColors,
   isLinkagePeerAchievement,
+  shouldHideCabinetFromExecutiveTimeline,
   paletteForCabinetListItem,
+  resolveReignEraLineForCabinetHead,
   stripHtmlToPlain,
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
@@ -499,6 +497,20 @@ export function CabinetsSection({
     enabled: !!countryId || !!historicalCountryId,
   })
 
+  const { data: countryTenures = [] } = useQuery({
+    queryKey: [
+      'tenures-by-country-for-cabinet',
+      countryId,
+      historicalCountryId,
+    ],
+    queryFn: () =>
+      personCareerApi.getTenuresByCountry({
+        countryId: countryId || undefined,
+        historicalCountryId: historicalCountryId || undefined,
+      }),
+    enabled: !!countryId || !!historicalCountryId,
+  })
+
   /** 행정부 리스트: 수반 취임일 기준 시간순(과거→현재) 정렬 */
   const sortedCabinets = useMemo(() => {
     const list = [...cabinets]
@@ -513,8 +525,17 @@ export function CabinetsSection({
     })
   }, [cabinets])
 
+  /** 내각 목록 — 군주(황제·왕 등)로 식별되는 국가원수 행정부만 제외 */
+  const executiveCabinetsSorted = useMemo(
+    () =>
+      sortedCabinets.filter(
+        (c) => !shouldHideCabinetFromExecutiveTimeline(c.headTenure),
+      ),
+    [sortedCabinets],
+  )
+
   const filteredCabinets = useMemo(() => {
-    let list = sortedCabinets
+    let list = executiveCabinetsSorted
 
     // 국가 필터
     if (cabinetCountryFilter) {
@@ -542,17 +563,34 @@ export function CabinetsSection({
         : '현재'
       const territory = getHeadTenureTerritoryLabel(head, country.name)
       const cabName = typeof c.name === 'string' ? c.name : ''
-      return [personName, posTitle, start, end, territory, cabName].some((v) =>
-        String(v).toLowerCase().includes(q),
+      const eraLine = resolveReignEraLineForCabinetHead(
+        head,
+        countryTenures as Parameters<typeof resolveReignEraLineForCabinetHead>[1],
+      )
+      return [personName, posTitle, start, end, territory, cabName, eraLine].some(
+        (v) => String(v ?? '').toLowerCase().includes(q),
       )
     })
   }, [
-    sortedCabinets,
+    executiveCabinetsSorted,
     cabinetSearchQuery,
     cabinetCountryFilter,
     countryId,
     country.name,
+    countryTenures,
   ])
+
+  const reignEraLineByCabinetId = useMemo(() => {
+    const m = new Map<string, string>()
+    const tenures = countryTenures as Parameters<
+      typeof resolveReignEraLineForCabinetHead
+    >[1]
+    for (const c of filteredCabinets) {
+      const line = resolveReignEraLineForCabinetHead(c.headTenure, tenures)
+      if (line) m.set(c.id, line)
+    }
+    return m
+  }, [filteredCabinets, countryTenures])
 
   /** 목록에 등장하는 소속마다 서로 다른 강조색(ordinal) — 같은 countryId만 있어도 이름 키로 분리 */
   const cabinetTerritoryOrdinalMap = useMemo(
@@ -663,20 +701,6 @@ export function CabinetsSection({
     enabled: !!effectiveCountryIdForDept,
   })
 
-  const { data: countryTenures = [] } = useQuery({
-    queryKey: [
-      'tenures-by-country-for-cabinet',
-      countryId,
-      historicalCountryId,
-    ],
-    queryFn: () =>
-      personCareerApi.getTenuresByCountry({
-        countryId: countryId || undefined,
-        historicalCountryId: historicalCountryId || undefined,
-      }),
-    enabled: (!!countryId || !!historicalCountryId) && registerCabinetModalOpen,
-  })
-
   const { data: positionDefinitions = [] } = useQuery({
     queryKey: ['position-definitions-cabinet', countryId, historicalCountryId],
     queryFn: () =>
@@ -698,8 +722,8 @@ export function CabinetsSection({
     enabled: registerCabinetModalOpen && registerFlow === 'new',
   })
 
-  const headPositionOptions = (positionDefinitions as any[]).filter((d: any) =>
-    HEAD_POSITION_TYPES.has(d.positionType),
+  const headPositionOptions = (positionDefinitions as any[]).filter(
+    (d: any) => d.positionType === 'HEAD_OF_GOVERNMENT',
   )
 
   /** 각료 등록 모달용 직위 옵션 (각료/차관/기타만) */
@@ -973,8 +997,7 @@ export function CabinetsSection({
   )
   const headTenuresForRegister = (countryTenures as any[]).filter(
     (t: any) =>
-      (t.positionType === 'HEAD_OF_STATE' ||
-        t.positionType === 'HEAD_OF_GOVERNMENT') &&
+      t.positionType === 'HEAD_OF_GOVERNMENT' &&
       !headTenureIdsWithCabinet.has(t.id),
   )
 
@@ -1705,22 +1728,20 @@ export function CabinetsSection({
                           const displayItems = isReversed
                             ? [...rowItems].reverse()
                             : rowItems
-                          const NODE_X = TL_NODE_CENTER_X
-
                           return (
                             <Fragment key={`cab-tl-t-${rowIdx}`}>
                               <div
                                 style={{
                                   position: 'relative',
                                   height: TL_ROW_H,
-                                  padding: '0 0 0 20px',
+                                  padding: 0,
                                 }}
                               >
-                                {/* 수평선 — 첫 노드에서 컨테이너 우측 끝까지(잘라내지 않음) */}
+                                {/* 수평선 — 행 전폭(첫 칸만 셀 안에서 별도로 우측 이동) */}
                                 <div
                                   style={{
                                     position: 'absolute',
-                                    left: NODE_X,
+                                    left: 0,
                                     right: 0,
                                     top: '50%',
                                     transform: 'translateY(-50%)',
@@ -1760,12 +1781,8 @@ export function CabinetsSection({
                                         item,
                                         cabinetTerritoryOrdinalMap,
                                       )
-                                      const bubbleColors =
-                                        getTimelineBubbleTextColors(
-                                          itemP,
-                                          isDark,
-                                          C.text,
-                                        )
+                                      /** 노드·버블·칩 등 — 무채색(국가 구분색과 분리) */
+                                      const uiLine = C.textMuted
                                       const territoryLabel =
                                         showCabinetTerritoryLabels
                                           ? getHeadTenureTerritoryLabel(
@@ -1807,22 +1824,46 @@ export function CabinetsSection({
                                         : null
                                       const isDeleting =
                                         deletingCabinetId === item.id
-                                      // 짝수: 아이템 위 / 버블 아래, 홀수: 버블 위 / 아이템 아래
+                                      // 짝수: 썸네일 위·연도는 축 중앙, 홀수: 연도 축 중앙·썸네일 아래
                                       const itemOnTop = colIdx % 2 === 0
-
+                                      const reignEraLine =
+                                        reignEraLineByCabinetId.get(item.id) ??
+                                        null
+                                      const cellLabelAriaOpts: Parameters<
+                                        typeof cabinetTimelineCellAriaLabel
+                                      >[4] = {
+                                        ...(territoryLabel
+                                          ? { territoryPrefix: territoryLabel }
+                                          : {}),
+                                        ...(reignEraLine
+                                          ? { reignEraLine }
+                                          : {}),
+                                      }
                                       const cellLabel =
                                         cabinetTimelineCellAriaLabel(
                                           termNum,
                                           head?.subTermNumber ?? null,
                                           posTitle,
                                           personName,
-                                          territoryLabel,
+                                          Object.keys(cellLabelAriaOpts).length
+                                            ? cellLabelAriaOpts
+                                            : undefined,
                                         )
                                       return (
                                         <CabS.CabinetTimelineCellBtn
                                           key={item.id}
                                           disabled={isDeleting}
                                           aria-label={cellLabel}
+                                          style={
+                                            colIdx === 0
+                                              ? {
+                                                  padding: `0 ${TL_COL_PAD_X}px 0 ${
+                                                    TL_COL_PAD_X +
+                                                    TL_FIRST_COL_EXTRA_SHIFT_X
+                                                  }px`,
+                                                }
+                                              : undefined
+                                          }
                                           onClick={() => {
                                             if (!isDeleting) {
                                               setSelectedCabinetId(item.id)
@@ -1877,74 +1918,27 @@ export function CabinetsSection({
                                                   range={range}
                                                   ageAtStart={ageAtStart}
                                                   birthPlace={birthPlace}
-                                                  lineColor={itemP.line}
+                                                  lineColor={uiLine}
+                                                  thumbRingColor={itemP.line}
                                                   territoryLabel={
                                                     territoryLabel ?? undefined
                                                   }
+                                                  reignEraLine={
+                                                    reignEraLine ?? undefined
+                                                  }
+                                                  hideMonarchBadge
                                                   isDark={isDark}
                                                 />
                                               </div>
                                             ) : (
-                                              /* 연도 버블 (위) — 썸네일과 같은 좌측 기준선 */
                                               <div
-                                                style={{
-                                                  width: '100%',
-                                                  display: 'flex',
-                                                  justifyContent: 'flex-start',
-                                                  paddingLeft:
-                                                    TL_YEAR_BUBBLE_SHIFT_X,
-                                                }}
-                                              >
-                                                <div
-                                                  style={{
-                                                    display: 'inline-flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    flexShrink: 0,
-                                                    width: 'fit-content',
-                                                    maxWidth: '100%',
-                                                    background: C.bg,
-                                                    border: `2.5px solid ${itemP.line}`,
-                                                    borderRadius: 28,
-                                                    padding: '8px 16px',
-                                                    minWidth: TL_BUBBLE_W,
-                                                    boxShadow: `0 2px 10px ${itemP.line}44`,
-                                                    textAlign: 'center',
-                                                  }}
-                                                >
-                                                  <span
-                                                    style={{
-                                                      fontSize: 17,
-                                                      fontWeight: 900,
-                                                      color: bubbleColors.year,
-                                                      letterSpacing: '-0.03em',
-                                                      lineHeight: 1.2,
-                                                    }}
-                                                  >
-                                                    {startYear ?? '—'}
-                                                  </span>
-                                                  {termNum != null && (
-                                                    <span
-                                                      style={{
-                                                        fontSize: 10,
-                                                        fontWeight: 700,
-                                                        color: itemP.line,
-                                                        marginTop: 3,
-                                                      }}
-                                                    >
-                                                      제{termNum}대
-                                                      {head?.subTermNumber !=
-                                                      null
-                                                        ? ` ${head.subTermNumber}기`
-                                                        : ''}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </div>
+                                                style={{ flex: 1, minHeight: 0 }}
+                                                aria-hidden
+                                              />
                                             )}
                                           </div>
 
-                                          {/* 수직선 + 노드 — 썸네일 너비 안에서 가운데(원 중심과 일치) */}
+                                          {/* 타임라인 축: 수직선 + 중앙 연도(구 포인트 대신) */}
                                           <div
                                             style={{
                                               display: 'flex',
@@ -1961,35 +1955,121 @@ export function CabinetsSection({
                                                 display: 'flex',
                                                 flexDirection: 'column',
                                                 alignItems: 'center',
+                                                position: 'relative',
                                               }}
                                             >
+                                              {itemOnTop ? (
+                                                <div
+                                                  style={{
+                                                    height: TL_VERT_SEG_H,
+                                                    flexShrink: 0,
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'stretch',
+                                                  }}
+                                                  aria-hidden
+                                                >
+                                                  <div
+                                                    style={{
+                                                      width: 3,
+                                                      alignSelf: 'stretch',
+                                                      background: rowFlowLine,
+                                                      opacity: 0.35,
+                                                      borderRadius: 2,
+                                                    }}
+                                                  />
+                                                </div>
+                                              ) : null}
                                               <div
                                                 style={{
-                                                  width: 2,
-                                                  height: TL_VERT_SEG_H,
-                                                  background: itemP.line,
-                                                  opacity: 0.6,
+                                                  display: 'flex',
+                                                  flexDirection: 'column',
+                                                  alignItems: 'center',
+                                                  width: '100%',
+                                                  maxWidth: TL_THUMB,
+                                                  boxSizing: 'border-box',
+                                                  padding: '12px 6px 14px',
+                                                  textAlign: 'center',
+                                                  background: 'transparent',
                                                 }}
-                                              />
-                                              <div
-                                                style={{
-                                                  width: 14,
-                                                  height: 14,
-                                                  borderRadius: '50%',
-                                                  background: C.bg,
-                                                  border: `3px solid ${itemP.line}`,
-                                                  boxShadow: `0 0 0 3px ${C.bg}`,
-                                                  zIndex: 2,
-                                                }}
-                                              />
-                                              <div
-                                                style={{
-                                                  width: 2,
-                                                  height: TL_VERT_SEG_H,
-                                                  background: itemP.line,
-                                                  opacity: 0.6,
-                                                }}
-                                              />
+                                              >
+                                                <span
+                                                  style={{
+                                                    fontSize: 21,
+                                                    fontWeight: 800,
+                                                    color: C.text,
+                                                    letterSpacing: '-0.04em',
+                                                    lineHeight: 1,
+                                                    fontVariantNumeric: 'tabular-nums',
+                                                    textShadow: isDark
+                                                      ? '0 0 10px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)'
+                                                      : '0 0 8px rgba(255,255,255,0.95), 0 1px 0 rgba(255,255,255,1)',
+                                                  }}
+                                                >
+                                                  {startYear ?? '—'}
+                                                </span>
+                                                {termNum != null && (
+                                                  <span
+                                                    style={{
+                                                      fontSize: 10,
+                                                      fontWeight: 600,
+                                                      color: C.textMuted,
+                                                      marginTop: 8,
+                                                      lineHeight: 1.3,
+                                                      letterSpacing: '0.02em',
+                                                      textShadow: isDark
+                                                        ? '0 0 8px rgba(0,0,0,0.8)'
+                                                        : '0 0 6px rgba(255,255,255,0.9)',
+                                                    }}
+                                                  >
+                                                    제{termNum}대
+                                                    {head?.subTermNumber != null
+                                                      ? ` ${head.subTermNumber}기`
+                                                      : ''}
+                                                  </span>
+                                                )}
+                                                {reignEraLine ? (
+                                                  <span
+                                                    style={{
+                                                      fontSize: 9,
+                                                      fontWeight: 500,
+                                                      color: C.textFaint,
+                                                      marginTop: 6,
+                                                      lineHeight: 1.35,
+                                                      maxWidth: TL_THUMB - 4,
+                                                      textShadow: isDark
+                                                        ? '0 0 6px rgba(0,0,0,0.75)'
+                                                        : '0 0 5px rgba(255,255,255,0.85)',
+                                                    }}
+                                                  >
+                                                    {reignEraLine}
+                                                  </span>
+                                                ) : null}
+                                              </div>
+                                              {!itemOnTop ? (
+                                                <div
+                                                  style={{
+                                                    height: TL_VERT_SEG_H,
+                                                    flexShrink: 0,
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'stretch',
+                                                  }}
+                                                  aria-hidden
+                                                >
+                                                  <div
+                                                    style={{
+                                                      width: 3,
+                                                      alignSelf: 'stretch',
+                                                      background: rowFlowLine,
+                                                      opacity: 0.35,
+                                                      borderRadius: 2,
+                                                    }}
+                                                  />
+                                                </div>
+                                              ) : null}
                                             </div>
                                           </div>
 
@@ -2040,70 +2120,23 @@ export function CabinetsSection({
                                                   range={range}
                                                   ageAtStart={ageAtStart}
                                                   birthPlace={birthPlace}
-                                                  lineColor={itemP.line}
+                                                  lineColor={uiLine}
+                                                  thumbRingColor={itemP.line}
                                                   territoryLabel={
                                                     territoryLabel ?? undefined
                                                   }
+                                                  reignEraLine={
+                                                    reignEraLine ?? undefined
+                                                  }
+                                                  hideMonarchBadge
                                                   isDark={isDark}
                                                 />
                                               </div>
                                             ) : (
-                                              /* 연도 버블 (아래) — 썸네일과 같은 좌측 기준선 */
                                               <div
-                                                style={{
-                                                  width: '100%',
-                                                  display: 'flex',
-                                                  justifyContent: 'flex-start',
-                                                  paddingLeft:
-                                                    TL_YEAR_BUBBLE_SHIFT_X,
-                                                }}
-                                              >
-                                                <div
-                                                  style={{
-                                                    display: 'inline-flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    flexShrink: 0,
-                                                    width: 'fit-content',
-                                                    maxWidth: '100%',
-                                                    background: C.bg,
-                                                    border: `2.5px solid ${itemP.line}`,
-                                                    borderRadius: 28,
-                                                    padding: '8px 16px',
-                                                    minWidth: TL_BUBBLE_W,
-                                                    boxShadow: `0 2px 10px ${itemP.line}44`,
-                                                    textAlign: 'center',
-                                                  }}
-                                                >
-                                                  <span
-                                                    style={{
-                                                      fontSize: 17,
-                                                      fontWeight: 900,
-                                                      color: bubbleColors.year,
-                                                      letterSpacing: '-0.03em',
-                                                      lineHeight: 1.2,
-                                                    }}
-                                                  >
-                                                    {startYear ?? '—'}
-                                                  </span>
-                                                  {termNum != null && (
-                                                    <span
-                                                      style={{
-                                                        fontSize: 10,
-                                                        fontWeight: 700,
-                                                        color: itemP.line,
-                                                        marginTop: 3,
-                                                      }}
-                                                    >
-                                                      제{termNum}대
-                                                      {head?.subTermNumber !=
-                                                      null
-                                                        ? ` ${head.subTermNumber}기`
-                                                        : ''}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </div>
+                                                style={{ flex: 1, minHeight: 0 }}
+                                                aria-hidden
+                                              />
                                             )}
                                           </div>
                                         </CabS.CabinetTimelineCellBtn>

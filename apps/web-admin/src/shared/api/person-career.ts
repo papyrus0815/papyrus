@@ -401,6 +401,7 @@ export type GovernmentCabinetTenureItem = {
     id: string
     title: string
     administrationDepartmentId?: string | null
+    positionType?: string | null
   } | null
   achievements?: GovernmentTenureAchievementItem[]
 }
@@ -437,6 +438,8 @@ export type GovernmentHeadTenureInCabinetList = {
   id: string
   historicalCountryId?: string | null
   countryId?: string | null
+  /** 재임 행 자체의 직위 유형 — 직위 정의와 동일 값 */
+  positionType?: string | null
   title?: string | null
   startDate: string
   endDate?: string | null

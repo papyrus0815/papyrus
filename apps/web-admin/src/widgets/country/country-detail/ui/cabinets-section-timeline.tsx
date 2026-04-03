@@ -24,11 +24,14 @@ export function cabinetTimelineCellAriaLabel(
   personName: string,
   opts?: {
     territoryPrefix?: string | null
+    /** 수반 취임일 기준 재위 연호(내각 목록 등) */
+    reignEraLine?: string | null
     monarchEraLine?: string | null
     monarchPersonName?: string | null
   },
 ): string {
   const territoryPrefix = opts?.territoryPrefix
+  const reignEraLine = opts?.reignEraLine
   const monarchEraLine = opts?.monarchEraLine
   const monarchPersonName = opts?.monarchPersonName
   const term =
@@ -36,11 +39,13 @@ export function cabinetTimelineCellAriaLabel(
       ? `제${termNum}대${subTermNumber != null ? ` ${subTermNumber}기` : ''}`
       : ''
   const mid = [term, posTitle].filter(Boolean).join(', ')
-  const era = monarchEraLine?.trim()
-    ? monarchPersonName?.trim()
-      ? `, 재위 군주 ${monarchPersonName.trim()}, ${monarchEraLine.trim()}`
-      : `, 재위 시대: ${monarchEraLine.trim()}`
-    : ''
+  const era = reignEraLine?.trim()
+    ? `, ${reignEraLine.trim()}`
+    : monarchEraLine?.trim()
+      ? monarchPersonName?.trim()
+        ? `, 재위 군주 ${monarchPersonName.trim()}, ${monarchEraLine.trim()}`
+        : `, 재위 시대: ${monarchEraLine.trim()}`
+      : ''
   const core = `${mid ? `${mid}, ` : ''}${personName}${era}, 상세 정보 보기`
   if (territoryPrefix?.trim()) return `${territoryPrefix.trim()}, ${core}`
   return core
@@ -54,7 +59,11 @@ export function TlItem({
   ageAtStart,
   birthPlace,
   lineColor,
+  /** 없으면 `lineColor` — 있으면 수반 썸네일 링만 이 색(소속 구분) */
+  thumbRingColor,
   territoryLabel,
+  /** 수반 취임일이 속한 군주 재위 연호 — 내각 목록에서 군주 배지 대신 텍스트로 */
+  reignEraLine,
   monarchThumbUrl,
   monarchBadgeTitle,
   monarchPersonId,
@@ -73,10 +82,12 @@ export function TlItem({
   ageAtStart: number | null
   birthPlace: string | null
   lineColor: string
+  thumbRingColor?: string | null
   thumbOnEnd?: boolean
   hideMonarchBadge?: boolean
   /** 전체 보기 등에서 소속 역사국가·현대국가 구분용 한 줄 */
   territoryLabel?: string | null
+  reignEraLine?: string | null
   /** 재위 군주 프로필(없으면 아이콘) — 수반 썸네일 11시 방향 배지 */
   monarchThumbUrl?: string | null
   /** 군주 배지 툴팁·접근성 */
@@ -101,6 +112,8 @@ export function TlItem({
   const badgeLeft = cx - badgeHalf
   const badgeTop = cy - badgeHalf
 
+  const ringColor = thumbRingColor ?? lineColor
+
   const monarchBadgeFace = (
     <CabS.TlItemMonarchBadgeVisual
       $lineColor={lineColor}
@@ -122,7 +135,7 @@ export function TlItem({
   return (
     <CabS.TlItemRoot $thumbOnEnd={thumbOnEnd}>
       <CabS.TlItemAvatarCol>
-        <CabS.TlItemAvatarRing $lineColor={lineColor}>
+        <CabS.TlItemAvatarRing $lineColor={ringColor}>
           {thumbUrl ? (
             <CabS.TlItemAvatarImg src={thumbUrl} alt={personName} />
           ) : (
@@ -169,6 +182,15 @@ export function TlItem({
             title={territoryLabel}
           >
             {territoryLabel}
+          </CabS.TlItemTerritoryLine>
+        ) : null}
+        {reignEraLine ? (
+          <CabS.TlItemTerritoryLine
+            $color={C.textMuted}
+            $thumbOnEnd={thumbOnEnd}
+            title={reignEraLine}
+          >
+            {reignEraLine}
           </CabS.TlItemTerritoryLine>
         ) : null}
         <CabS.TlItemTitleRow $thumbOnEnd={thumbOnEnd}>
