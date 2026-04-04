@@ -376,6 +376,12 @@ function CountryDetailInner({
                         <CountryStyles.TabContentPane>
                           <CountryElectionsSection
                             countryId={country.id}
+                            linkedHistoricalCountries={
+                              country.historicalCountries?.map((h) => ({
+                                id: h.id,
+                                name: h.name,
+                              })) ?? []
+                            }
                           />
                         </CountryStyles.TabContentPane>
                       )}

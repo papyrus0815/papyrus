@@ -764,6 +764,36 @@ export const CabTimelineLegendRow = styled.div`
   }
 `
 
+/** 군주 색 범례 — 소속 범례와 구분되는 얇은 구분선 + 정돈된 한 덩어리 */
+export const CabTimelineMonarchLegendBand = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-left: 10px;
+  padding: 2px 0 2px 12px;
+  border-left: 1px solid
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderHairline};
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: min(100%, 420px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.15)' : '#cbd5e1'}
+    transparent;
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
+    border-radius: 4px;
+  }
+`
+
 /** 타임라인 그리드 (행정부 카드 열만) — 첫 행 위 여백 */
 export const CabTimelineGrid = styled.div`
   display: grid;
@@ -1241,6 +1271,7 @@ export const CabDetailCrumbText = styled.span`
 
 /** 행정부 타임라인 칸 — 키보드·포커스 지원 */
 export const CabinetTimelineCellBtn = styled.button.attrs({ type: 'button' })`
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;

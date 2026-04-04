@@ -16,13 +16,34 @@
  * - pages/history/historical-country/historical-country.page.tsx (역사적 국가 전용 페이지)
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
 import * as historicalCountriesApi from '@/shared/api/historical-countries'
 import type {
   CreateHistoricalCountryDto,
   UpdateHistoricalCountryDto,
 } from '@/shared/api/historical-countries'
 import { countryKeys } from '@/features/country/api'
+
+/** `useHistoricalCountriesByModernCountry` — GET /countries/:id/historical-countries 캐시 */
+function invalidateLinkedHistoricalByModernCountry(queryClient: QueryClient) {
+  queryClient.invalidateQueries({
+    predicate: (query) => {
+      const k = query.queryKey
+      return (
+        Array.isArray(k) &&
+        k.length === 3 &&
+        k[0] === 'countries' &&
+        typeof k[1] === 'string' &&
+        k[2] === 'historical-countries'
+      )
+    },
+  })
+}
 
 /**
  * React Query 캐시 키 관리
@@ -113,6 +134,7 @@ export function useCreateHistoricalCountry() {
       })
       // 연대표 페이지의 현대 국가 목록(역사적 국가 중첩) 갱신
       queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
+      invalidateLinkedHistoricalByModernCountry(queryClient)
     },
   })
 }
@@ -151,6 +173,7 @@ export function useUpdateHistoricalCountry() {
         queryKey: historicalCountryKeys.detail(variables.id),
       })
       queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
+      invalidateLinkedHistoricalByModernCountry(queryClient)
     },
   })
 }
@@ -181,6 +204,7 @@ export function useDeleteHistoricalCountry() {
         queryKey: historicalCountryKeys.all,
       })
       queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
+      invalidateLinkedHistoricalByModernCountry(queryClient)
     },
   })
 }

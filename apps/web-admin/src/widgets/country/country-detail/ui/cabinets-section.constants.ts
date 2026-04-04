@@ -2,10 +2,16 @@
 export const CABINET_SECTION_MAIN = '#6366f1'
 export const CABINET_SECTION_MAIN_HOVER = '#4f46e5'
 
-/** 수반 재임 등록 시 HEAD 계열 */
+/**
+ * 수반(행정부 수반) 직위 선택 시 포함할 관직 유형
+ * 역대 수반·전역 수반 등록과 동일 (국가원수·정부수반·섭정·왕세자·왕족/귀족 직함)
+ */
 export const HEAD_POSITION_TYPES = new Set([
   'HEAD_OF_STATE',
   'HEAD_OF_GOVERNMENT',
+  'REGENT',
+  'HEIR_APPARENT',
+  'ROYAL_NOBLE_TITLE',
 ])
 
 /** 각료 등록 시 선택 가능한 직위 타입 (수반·의원 등 제외) */

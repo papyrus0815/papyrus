@@ -10,12 +10,17 @@ import {
   TL_TERRITORY_PALETTE,
 } from './cabinets-section.constants'
 
-export function getPersonName(person: {
-  name?: string | null
-  surname?: string | null
-  middleName?: string | null
-  country?: { defaultNameDisplayOrder?: string | null } | null
-} | null | undefined): string {
+export function getPersonName(
+  person:
+    | {
+        name?: string | null
+        surname?: string | null
+        middleName?: string | null
+        country?: { defaultNameDisplayOrder?: string | null } | null
+      }
+    | null
+    | undefined,
+): string {
   if (!person) return '—'
   return getPersonDisplayName(
     {
@@ -55,12 +60,15 @@ export type CabinetTimelinePosPillPalette = Pick<
 
 /** 수반 재임 기준 상단 브레드크럼: 「제N대 [M기] 이름」 또는 이름만 / 없으면 「행정부 상세」 */
 export function formatCabinetHeadBreadcrumbLabel(
-  headTenure: {
-    person?: Parameters<typeof getPersonName>[0]
-    termNumber?: number | null
-    regnalNumber?: number | null
-    subTermNumber?: number | null
-  } | null | undefined,
+  headTenure:
+    | {
+        person?: Parameters<typeof getPersonName>[0]
+        termNumber?: number | null
+        regnalNumber?: number | null
+        subTermNumber?: number | null
+      }
+    | null
+    | undefined,
 ): string {
   if (!headTenure) return '행정부 상세'
   const n = headTenure.person ? getPersonName(headTenure.person) : null
@@ -124,9 +132,7 @@ export function tenureAchievementPrimaryYearLabel(
   return /^\d{4}$/.test(y) ? y : '기간'
 }
 
-export function formatDate(
-  value: string | Date | null | undefined,
-): string {
+export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return '—'
   const date = typeof value === 'string' ? new Date(value) : value
   if (Number.isNaN(date.getTime())) return '—'
@@ -141,8 +147,7 @@ export function isLinkagePeerAchievement(
   ach: { tenureId?: string | null },
   contextTenureId: string,
 ): boolean {
-  const t =
-    typeof ach.tenureId === 'string' ? ach.tenureId.trim() : ''
+  const t = typeof ach.tenureId === 'string' ? ach.tenureId.trim() : ''
   return t.length > 0 && t !== contextTenureId
 }
 
@@ -280,9 +285,7 @@ export function territoryKeyFromHead(
   if (hid) return `h:${hid}`
   if (cid) return `c:${cid}`
   const name =
-    head.historicalCountry?.name?.trim() ||
-    head.country?.name?.trim() ||
-    null
+    head.historicalCountry?.name?.trim() || head.country?.name?.trim() || null
   if (name) return `n:${name}`
   return 'default'
 }
@@ -302,11 +305,14 @@ function hashStringFnv1a(s: string): number {
  * 역사국가 ID가 비어 있고 현대국가만 같을 때도, 행정부 이름이 다르면 색이 갈라짐.
  */
 export function territoryKeyFromCabinet(
-  cabinet: {
-    id?: string
-    name?: string | null
-    headTenure?: HeadForTerritoryKey | null
-  } | null | undefined,
+  cabinet:
+    | {
+        id?: string
+        name?: string | null
+        headTenure?: HeadForTerritoryKey | null
+      }
+    | null
+    | undefined,
 ): string {
   const base = territoryKeyFromHead(cabinet?.headTenure)
   const extra = cabinet?.name?.trim()
@@ -332,10 +338,13 @@ export function lineColorForCabinetHeadPositionType(
 }
 
 export function paletteForCabinetListItem(
-  cabinet: {
-    name?: string | null
-    headTenure?: HeadForTerritoryKey | null
-  } | null | undefined,
+  cabinet:
+    | {
+        name?: string | null
+        headTenure?: HeadForTerritoryKey | null
+      }
+    | null
+    | undefined,
   ordinalByTerritoryKey?: Map<string, number> | null,
 ): CabinetTerritoryPalette {
   const key = territoryKeyFromCabinet(cabinet)
@@ -367,10 +376,13 @@ export function buildCabinetTerritoryOrdinalMap(
 
 /** 카드에 표시할 소속 국가명 — API가 country/historicalCountry를 내려줄 때 사용 */
 export function getHeadTenureTerritoryLabel(
-  head: {
-    historicalCountry?: { name?: string | null } | null
-    country?: { name?: string | null } | null
-  } | null | undefined,
+  head:
+    | {
+        historicalCountry?: { name?: string | null } | null
+        country?: { name?: string | null } | null
+      }
+    | null
+    | undefined,
   fallbackModernCountryName: string,
 ): string {
   if (!head) return fallbackModernCountryName
@@ -381,10 +393,13 @@ export function getHeadTenureTerritoryLabel(
 
 /** 타임라인 범례·툴팁용 — 소속 + 행정부 명칭이 있으면 구분 */
 export function getCabinetTerritoryLegendLabel(
-  cabinet: {
-    name?: string | null
-    headTenure?: HeadForTerritoryKey | null
-  } | null | undefined,
+  cabinet:
+    | {
+        name?: string | null
+        headTenure?: HeadForTerritoryKey | null
+      }
+    | null
+    | undefined,
   fallbackModernCountryName: string,
 ): string {
   const base = getHeadTenureTerritoryLabel(
@@ -434,8 +449,7 @@ function historicalEntityStartSortKey(p: {
   startDay?: number | null
 }): number {
   if (p.startYear == null) return SORT_KEY_UNKNOWN
-  const y =
-    p.startEra === 'BC' ? -p.startYear : p.startYear
+  const y = p.startEra === 'BC' ? -p.startYear : p.startYear
   const mo = (p.startMonth ?? 1) - 1
   const da = (p.startDay ?? 1) - 1
   return y * 10_000 + mo * 100 + da
@@ -487,7 +501,36 @@ export function buildCabinetTerritoryLegendEntries(
   fallbackModernCountryName: string,
   ordinalByTerritoryKey: Map<string, number>,
   sortContext?: CabinetTerritoryLegendSortContext,
+  options?: { groupByHeadTerritory?: boolean },
 ): CabinetTerritoryLegendEntry[] {
+  if (options?.groupByHeadTerritory) {
+    const firstByBase = new Map<
+      string,
+      { name?: string | null; headTenure?: HeadForTerritoryKey | null }
+    >()
+    for (const c of cabinets) {
+      const b = territoryKeyFromHead(c.headTenure)
+      if (!firstByBase.has(b)) firstByBase.set(b, c)
+    }
+    const bases = [...firstByBase.keys()].sort((a, bb) => {
+      const ka = sortKeyForTerritoryLegendEntry(a, sortContext)
+      const kb = sortKeyForTerritoryLegendEntry(bb, sortContext)
+      if (ka !== kb) return ka - kb
+      return a.localeCompare(bb, 'ko')
+    })
+    const out: CabinetTerritoryLegendEntry[] = []
+    bases.forEach((base, ord) => {
+      const cab = firstByBase.get(base)!
+      const line = TL_TERRITORY_PALETTE[ord % TL_TERRITORY_PALETTE.length].line
+      const label = getHeadTenureTerritoryLabel(
+        cab.headTenure,
+        fallbackModernCountryName,
+      )
+      out.push({ key: base, label, line })
+    })
+    return out
+  }
+
   const seen = new Map<
     string,
     { name?: string | null; headTenure?: HeadForTerritoryKey | null }
@@ -499,12 +542,8 @@ export function buildCabinetTerritoryLegendEntries(
   const out: CabinetTerritoryLegendEntry[] = []
   for (const [key, cab] of seen) {
     const ord = ordinalByTerritoryKey.get(key) ?? 0
-    const line =
-      TL_TERRITORY_PALETTE[ord % TL_TERRITORY_PALETTE.length].line
-    const label = getCabinetTerritoryLegendLabel(
-      cab,
-      fallbackModernCountryName,
-    )
+    const line = TL_TERRITORY_PALETTE[ord % TL_TERRITORY_PALETTE.length].line
+    const label = getCabinetTerritoryLegendLabel(cab, fallbackModernCountryName)
     out.push({ key, label, line })
   }
   out.sort((a, b) => {
@@ -528,31 +567,89 @@ export function getTimelineBubbleTextColors(
   return { year: themeText, term: itemP.line }
 }
 
+/** 직함 판별용 — 정의·재임·영문·현지어·비고 앞부분을 한 덩어리로 */
+export function headTenureTitleBundle(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+): string {
+  if (!head) return ''
+  const def = head.positionDefinition
+  const parts = [
+    def?.title,
+    def?.titleEn,
+    def?.titleLocal,
+    head.title,
+    head.titleEn,
+    head.notes?.slice(0, 400),
+  ].filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+  try {
+    return parts.join(' ').normalize('NFKC')
+  } catch {
+    return parts.join(' ')
+  }
+}
+
 /**
- * 내각(행정부) 타임라인에서 숨길 수반인지 — `HEAD_OF_STATE`만으로는 제외하지 않음
- * (대통령 등 공화국 원수 데이터가 전부 국가원수로만 잡혀 있으면 목록이 비게 됨).
- * 군주 직함·연호·재위번호 등이 있을 때만 제외.
+ * 군주 직함 판별용 — `notes`는 제외.
+ * 비고에 「천황 재위 중」「당시 황제」 등 서술이 있으면 총리 재임이 군주로 오인된다.
+ */
+function headTenureTitleBundleForSovereignCheck(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+): string {
+  if (!head) return ''
+  const def = head.positionDefinition
+  const parts = [
+    def?.title,
+    def?.titleEn,
+    def?.titleLocal,
+    head.title,
+    head.titleEn,
+  ].filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+  try {
+    return parts.join(' ').normalize('NFKC')
+  } catch {
+    return parts.join(' ')
+  }
+}
+
+/** 직함 번들에 `천황`·`황제`·`술탄`·`차르`만 군주로 본다 (`notes` 제외). 총리 직함이면 제외 */
+function tenureBundleHasSovereignMonarchTitle(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+): boolean {
+  if (!head) return false
+  const tb = headTenureTitleBundleForSovereignCheck(head)
+  if (/내각총리|內閣總理|内閣総理|首相|총리대신|Prime\s+Minister/i.test(tb)) {
+    return false
+  }
+  return /천황|황제|술탄|차르/.test(tb)
+}
+
+/**
+ * 내각(행정부) 타임라인에서 숨길 수반인지 — `HEAD_OF_STATE`(또는 타입 없음)이면서
+ * 번들에 `천황`·`황제`·`술탄`·`차르`만 있을 때. (연호·재위번호만으로는 제외하지 않음 — 총리 등 오탐 방지)
  */
 export function shouldHideCabinetFromExecutiveTimeline(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
 ): boolean {
   if (!head) return false
-  const pt =
-    head.positionType ?? head.positionDefinition?.positionType ?? null
-  if (pt !== 'HEAD_OF_STATE') return false
+  const pt = head.positionType ?? head.positionDefinition?.positionType ?? null
 
-  const title = (
-    head.positionDefinition?.title ??
-    head.title ??
-    ''
-  ).trim()
-  const monarchTitlePattern =
-    /황제|皇帝|天皇|천황|국왕|大韓帝國|대한제국|沙皇|차르|\bEmperor\b|\bTsar\b|\bTsarina\b|\bShah\b|\bKaiser\b|\bKing\b|\bQueen regnant\b/i
-  if (monarchTitlePattern.test(title)) return true
-  if ((head.regnalEras?.length ?? 0) > 0) return true
-  if (head.regnalNumber != null) return true
+  if (pt != null && pt !== '' && pt !== 'HEAD_OF_STATE') {
+    return false
+  }
 
-  return false
+  return tenureBundleHasSovereignMonarchTitle(head)
+}
+
+/**
+ * 타임라인 군주 색·연호·기간 겹침 — 위 네 표기가 직함 번들에 있을 때만.
+ */
+export function isSovereignMonarchTenureForCabinetTimeline(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+): boolean {
+  if (!head) return false
+  const pt = head.positionType ?? head.positionDefinition?.positionType ?? null
+  if (pt === 'HEAD_OF_GOVERNMENT') return false
+  return tenureBundleHasSovereignMonarchTitle(head)
 }
 
 function lastUtcDayInMonth(year: number, month1to12: number): number {
@@ -567,8 +664,7 @@ function eraUtcBounds(era: RegnalEraDto): { start: number; end: number } {
     return { start: startMs, end: Date.UTC(9999, 11, 31, 23, 59, 59, 999) }
   }
   const em = (era.endMonth ?? 12) - 1
-  const ed =
-    era.endDay ?? lastUtcDayInMonth(era.endYear, era.endMonth ?? 12)
+  const ed = era.endDay ?? lastUtcDayInMonth(era.endYear, era.endMonth ?? 12)
   const endMs = Date.UTC(era.endYear, em, ed, 23, 59, 59, 999)
   return { start: startMs, end: endMs }
 }
@@ -589,7 +685,9 @@ export function pickRegnalEraForDate(
 }
 
 /** 연호명을 「○○ 시대」 형태로 (이미 「…시대」로 끝나면 그대로) */
-export function formatReignEraLineLabel(era: RegnalEraDto | null): string | null {
+export function formatReignEraLineLabel(
+  era: RegnalEraDto | null,
+): string | null {
   if (!era?.eraName?.trim()) return null
   const n = era.eraName.trim()
   if (/시대\s*$/.test(n)) return n
@@ -616,6 +714,342 @@ function cabinetHeadSameTerritoryAsTenure(
   )
 }
 
+function headTenureDateRangeMs(tenure: {
+  startDate?: string | null
+  endDate?: string | null
+}): { start: number; end: number } | null {
+  if (!tenure.startDate) return null
+  const start = new Date(tenure.startDate).getTime()
+  if (Number.isNaN(start)) return null
+  const end = tenure.endDate ? new Date(tenure.endDate).getTime() : Date.now()
+  if (Number.isNaN(end)) return { start, end: Date.now() }
+  return { start, end: Math.max(start, end) }
+}
+
+/**
+ * 국가 상세 「행정부」타임라인의 국가 범위.
+ * 현대국가 페이지: `countryId`만 있는 총리 재임과 `historicalCountryId`만 있는 천황 재임을 한 묶음으로 본다.
+ */
+export type CabinetTimelineCountryScope =
+  | {
+      kind: 'modern'
+      modernCountryId: string
+      linkedHistoricalCountryIds: readonly string[]
+    }
+  | { kind: 'historical'; historicalCountryId: string }
+
+export function tenureInCabinetTimelineCountryScope(
+  t: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+  },
+  scope: CabinetTimelineCountryScope,
+): boolean {
+  if (scope.kind === 'historical') {
+    return (
+      t.historicalCountryId === scope.historicalCountryId &&
+      t.historicalCountryId != null &&
+      t.historicalCountryId !== ''
+    )
+  }
+  const linked = new Set(scope.linkedHistoricalCountryIds)
+  if (t.historicalCountryId != null && t.historicalCountryId !== '') {
+    return linked.has(t.historicalCountryId)
+  }
+  return (
+    t.countryId === scope.modernCountryId &&
+    (t.historicalCountryId == null || t.historicalCountryId === '')
+  )
+}
+
+function headTenuresMatchForMonarchOverlap(
+  monarch: GovernmentHeadTenureInCabinetList,
+  execHead: GovernmentHeadTenureInCabinetList,
+  scope: CabinetTimelineCountryScope | null | undefined,
+): boolean {
+  if (scope) {
+    return (
+      tenureInCabinetTimelineCountryScope(monarch, scope) &&
+      tenureInCabinetTimelineCountryScope(execHead, scope)
+    )
+  }
+  return cabinetHeadSameTerritoryAsTenure(monarch, execHead)
+}
+
+/**
+ * 행정부 수반(내각용·군주 아님) 재임 기간이, 같은 영토에 등록된 군주 재임 기간과 겹치는지.
+ * 타임라인에서 「해당 군주 재위 중의 행정부」만 가로 강조할 때 사용.
+ * `scope`가 있으면 현대국가+연결 역사국가를 한 범위로 매칭한다.
+ */
+export function executiveHeadOverlapsMonarchReignInCountry(
+  execHead: GovernmentHeadTenureInCabinetList | null | undefined,
+  allCountryTenures:
+    | readonly GovernmentHeadTenureInCabinetList[]
+    | null
+    | undefined,
+  scope?: CabinetTimelineCountryScope | null,
+): boolean {
+  if (!execHead?.startDate || !allCountryTenures?.length) return false
+  if (shouldHideCabinetFromExecutiveTimeline(execHead)) return false
+
+  const execRange = headTenureDateRangeMs(execHead)
+  if (!execRange) return false
+
+  for (const m of allCountryTenures) {
+    if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
+    if (!headTenuresMatchForMonarchOverlap(m, execHead, scope)) continue
+    const mRange = headTenureDateRangeMs(m)
+    if (!mRange) continue
+    if (execRange.start <= mRange.end && mRange.start <= execRange.end)
+      return true
+  }
+  return false
+}
+
+/** `#rgb` / `#rrggbb` → 0–255 */
+function parseHexRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '').trim()
+  if (h.length === 3) {
+    return {
+      r: parseInt(h[0] + h[0], 16),
+      g: parseInt(h[1] + h[1], 16),
+      b: parseInt(h[2] + h[2], 16),
+    }
+  }
+  if (h.length >= 6) {
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+    }
+  }
+  return { r: 99, g: 102, b: 241 }
+}
+
+/** 타임라인 가로 띠 — 스파인 위 얇은 하이라이트(과한 글로우 제거) */
+export function cabinetTimelineMonarchRailGradient(
+  lineHex: string,
+  isDark: boolean,
+): string {
+  const { r, g, b } = parseHexRgb(lineHex)
+  const e = isDark ? 0.18 : 0.12
+  const m = isDark ? 0.52 : 0.4
+  return `linear-gradient(90deg, rgba(${r},${g},${b},0) 0%, rgba(${r},${g},${b},${e}) 12%, rgba(${r},${g},${b},${m}) 50%, rgba(${r},${g},${b},${e}) 88%, rgba(${r},${g},${b},0) 100%)`
+}
+
+/** 군주 범례·연호 칩 테두리/배경 */
+export function cabinetTimelineMonarchUiTint(
+  lineHex: string,
+  isDark: boolean,
+): { border: string; background: string } {
+  const { r, g, b } = parseHexRgb(lineHex)
+  return {
+    border: `rgba(${r},${g},${b},${isDark ? 0.32 : 0.22})`,
+    background: `rgba(${r},${g},${b},${isDark ? 0.12 : 0.07})`,
+  }
+}
+
+/** 연호·직함만 — 인물 이름은 행정부 카드/축에 넣지 않음 */
+function monarchCaptionFromTenure(
+  monarch: GovernmentHeadTenureInCabinetList,
+  execStartIso: string,
+): string {
+  const era = pickRegnalEraForDate(monarch.regnalEras, execStartIso)
+  const eraLine = formatReignEraLineLabel(era)
+  if (eraLine) return eraLine
+  const t =
+    monarch.positionDefinition?.title?.trim() || monarch.title?.trim() || '군주'
+  return t
+}
+
+/** 타임라인 군주 범례 — 인물명 우선, 없으면 연호만(직함·천황 등 단독 표기는 쓰지 않음) */
+export function sovereignLegendPersonLabelFromMonarchTenure(
+  m: GovernmentHeadTenureInCabinetList | null | undefined,
+  pivotIso: string | null | undefined,
+): string {
+  if (!m) return '—'
+  const nm = getPersonName(m.person)
+  if (nm && nm !== '—') return nm
+  const iso = (pivotIso ?? m.startDate ?? '').trim()
+  if (!iso) return '—'
+  const era = pickRegnalEraForDate(m.regnalEras, iso)
+  return formatReignEraLineLabel(era) ?? '—'
+}
+
+/**
+ * 내각 수반 재임과 날짜로 겹치는 군주 재임 한 건(겹침 길이 최대).
+ */
+export function overlappingMonarchTenureForExecutiveHead(
+  execHead: GovernmentHeadTenureInCabinetList | null | undefined,
+  allCountryTenures:
+    | readonly GovernmentHeadTenureInCabinetList[]
+    | null
+    | undefined,
+  scope?: CabinetTimelineCountryScope | null,
+): GovernmentHeadTenureInCabinetList | null {
+  if (!execHead?.startDate || !allCountryTenures?.length) return null
+  if (shouldHideCabinetFromExecutiveTimeline(execHead)) return null
+
+  const execRange = headTenureDateRangeMs(execHead)
+  if (!execRange) return null
+
+  let best: GovernmentHeadTenureInCabinetList | null = null
+  let bestOverlap = -1
+  for (const m of allCountryTenures) {
+    if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
+    if (!headTenuresMatchForMonarchOverlap(m, execHead, scope)) continue
+    const mRange = headTenureDateRangeMs(m)
+    if (!mRange) continue
+    if (execRange.start <= mRange.end && mRange.start <= execRange.end) {
+      const ov =
+        Math.min(execRange.end, mRange.end) -
+        Math.max(execRange.start, mRange.start)
+      if (ov > bestOverlap) {
+        bestOverlap = ov
+        best = m
+      }
+    }
+  }
+  return best
+}
+
+/**
+ * 내각 수반 재임과 날짜로 겹치는 군주 — 타임라인 축·범례용 짧은 캡션(연호·직함, 인물명 없음).
+ */
+export function overlappingMonarchCaptionForExecutiveHead(
+  execHead: GovernmentHeadTenureInCabinetList | null | undefined,
+  allCountryTenures:
+    | readonly GovernmentHeadTenureInCabinetList[]
+    | null
+    | undefined,
+  scope?: CabinetTimelineCountryScope | null,
+): string | null {
+  if (!execHead?.startDate) return null
+  const mon = overlappingMonarchTenureForExecutiveHead(
+    execHead,
+    allCountryTenures,
+    scope,
+  )
+  if (!mon) return null
+  return monarchCaptionFromTenure(mon, execHead.startDate)
+}
+
+function unionExecutiveHeadRangesMs(
+  timelineCabinets: readonly {
+    headTenure: GovernmentHeadTenureInCabinetList
+  }[],
+): { start: number; end: number } | null {
+  let minS = Infinity
+  let maxE = -Infinity
+  for (const c of timelineCabinets) {
+    const h = c.headTenure
+    if (!h || shouldHideCabinetFromExecutiveTimeline(h)) continue
+    const r = headTenureDateRangeMs(h)
+    if (!r) continue
+    if (r.start < minS) minS = r.start
+    if (r.end > maxE) maxE = r.end
+  }
+  if (minS === Infinity) return null
+  return { start: minS, end: maxE }
+}
+
+export type MonarchReignLegendItem = {
+  id: string
+  label: string
+  startYear: number
+  endYear: number
+}
+
+/** 타임라인에 올라온 행정부 기간과 겹치는 군주 재위 — 헤더 표기용 */
+export function monarchReignLegendForCabinetTimeline(
+  timelineCabinets: readonly {
+    headTenure: GovernmentHeadTenureInCabinetList
+  }[],
+  allCountryTenures:
+    | readonly GovernmentHeadTenureInCabinetList[]
+    | null
+    | undefined,
+  scope: CabinetTimelineCountryScope,
+): MonarchReignLegendItem[] {
+  if (!allCountryTenures?.length || !timelineCabinets.length) return []
+
+  const union = unionExecutiveHeadRangesMs(timelineCabinets)
+  if (!union) return []
+
+  const nowY = new Date().getFullYear()
+  const out: MonarchReignLegendItem[] = []
+  const seen = new Set<string>()
+
+  for (const m of allCountryTenures) {
+    if (!isSovereignMonarchTenureForCabinetTimeline(m) || !m.startDate) continue
+    if (!tenureInCabinetTimelineCountryScope(m, scope)) continue
+    const mr = headTenureDateRangeMs(m)
+    if (!mr) continue
+    if (mr.end < union.start || mr.start > union.end) continue
+    if (seen.has(m.id)) continue
+    seen.add(m.id)
+    const cap = monarchCaptionFromTenure(m, m.startDate)
+    const sy = new Date(m.startDate).getFullYear()
+    const ey = m.endDate ? new Date(m.endDate).getFullYear() : nowY
+    out.push({
+      id: m.id,
+      label: `${cap} ${sy}–${ey}`,
+      startYear: sy,
+      endYear: ey,
+    })
+  }
+  out.sort((a, b) => a.startYear - b.startYear)
+  return out
+}
+
+/** 타임라인 헤더 연도 — 행정부 수반 재임 시작·끝 + (겹치는) 군주 재위 시작·끝 포함 */
+export function cabinetTimelineHeaderYearRange(
+  timelineCabinets: readonly {
+    headTenure: GovernmentHeadTenureInCabinetList
+  }[],
+  allCountryTenures:
+    | readonly GovernmentHeadTenureInCabinetList[]
+    | null
+    | undefined,
+  scope?: CabinetTimelineCountryScope | null,
+): { minY: number | null; maxY: number | null } {
+  const years: number[] = []
+  const nowY = new Date().getFullYear()
+
+  for (const c of timelineCabinets) {
+    const h = c.headTenure
+    if (!h?.startDate) continue
+    const sy = new Date(h.startDate).getFullYear()
+    if (!Number.isNaN(sy)) years.push(sy)
+    const ey = h.endDate ? new Date(h.endDate).getFullYear() : nowY
+    if (!Number.isNaN(ey)) years.push(ey)
+  }
+
+  if (allCountryTenures?.length) {
+    for (const c of timelineCabinets) {
+      const h = c.headTenure
+      if (!h?.startDate || shouldHideCabinetFromExecutiveTimeline(h)) continue
+      const execRange = headTenureDateRangeMs(h)
+      if (!execRange) continue
+      for (const m of allCountryTenures) {
+        if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
+        if (!headTenuresMatchForMonarchOverlap(m, h, scope)) continue
+        const mRange = headTenureDateRangeMs(m)
+        if (!mRange) continue
+        if (execRange.start <= mRange.end && mRange.start <= execRange.end) {
+          const ms = new Date(m.startDate).getFullYear()
+          if (!Number.isNaN(ms)) years.push(ms)
+          const me = m.endDate ? new Date(m.endDate).getFullYear() : nowY
+          if (!Number.isNaN(me)) years.push(me)
+        }
+      }
+    }
+  }
+
+  if (years.length === 0) return { minY: null, maxY: null }
+  return { minY: Math.min(...years), maxY: Math.max(...years) }
+}
+
 function tenureCoversIsoDate(
   tenure: { startDate?: string | null; endDate?: string | null },
   isoDate: string,
@@ -629,35 +1063,35 @@ function tenureCoversIsoDate(
   return t >= start && t <= end
 }
 
-type TenureWithEras = {
-  positionType?: string | null
-  startDate?: string | null
-  endDate?: string | null
-  historicalCountryId?: string | null
-  countryId?: string | null
-  regnalEras?: RegnalEraDto[] | null
-}
-
 /**
  * 수반 취임일이 속한 재위 연호·시대 한 줄.
  * 수반 재임에 `regnalEras`가 있으면 우선하고, 없으면 같은 소속의 국가원수 재임 연호를 찾는다.
  */
 export function resolveReignEraLineForCabinetHead(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
-  countryTenures: TenureWithEras[] | null | undefined,
+  countryTenures:
+    | readonly GovernmentHeadTenureInCabinetList[]
+    | null
+    | undefined,
+  scope?: CabinetTimelineCountryScope | null,
 ): string | null {
   if (!head?.startDate) return null
   const iso = head.startDate
+  /** 총리 등에 잘못 붙은 연호만으로 메이지 시대 등이 나오지 않게 — 군주 재임만 자기 연호 사용 */
   const own = pickRegnalEraForDate(head.regnalEras, iso)
-  if (own) return formatReignEraLineLabel(own)
+  if (own && isSovereignMonarchTenureForCabinetTimeline(head)) {
+    return formatReignEraLineLabel(own)
+  }
 
   if (!countryTenures?.length) return null
-  const monarchs = countryTenures.filter(
-    (t) =>
-      t.positionType === 'HEAD_OF_STATE' &&
-      cabinetHeadSameTerritoryAsTenure(head, t) &&
-      tenureCoversIsoDate(t, iso),
-  )
+  const monarchs = countryTenures.filter((t) => {
+    if (!tenureCoversIsoDate(t, iso)) return false
+    if (!isSovereignMonarchTenureForCabinetTimeline(t)) return false
+    if (scope) {
+      return headTenuresMatchForMonarchOverlap(t, head, scope)
+    }
+    return cabinetHeadSameTerritoryAsTenure(head, t)
+  })
   for (const m of monarchs) {
     const era = pickRegnalEraForDate(m.regnalEras, iso)
     if (era) return formatReignEraLineLabel(era)

@@ -919,11 +919,17 @@ export interface CountryElectionsSectionProps {
   countryId?: string
   /** 역사 국가 상세에서 전달 — `countryId`와 동시에 쓰지 않음 */
   historicalCountryId?: string
+  /**
+   * 국가 목록/상세에 이미 실려 온 연결 역사 국가 (GET /countries 등).
+   * `useHistoricalCountriesByModernCountry` 캐시·응답과 어긋날 때 모달 셀렉트를 맞추기 위해 병합한다.
+   */
+  linkedHistoricalCountries?: ReadonlyArray<{ id: string; name: string }>
 }
 
 export function CountryElectionsSection({
   countryId,
   historicalCountryId,
+  linkedHistoricalCountries,
 }: CountryElectionsSectionProps) {
   const { partyId: electionPartyId } = useParams<{ partyId?: string }>()
   const navigate = useNavigate()
@@ -961,8 +967,21 @@ export function CountryElectionsSection({
 
   const pickerModernCountryId =
     countryId && !historicalCountryId ? countryId : ''
-  const { data: historicalCountryOptions = [] } =
+  const { data: historicalCountryOptionsFromApi = [] } =
     useHistoricalCountriesByModernCountry(pickerModernCountryId)
+
+  const historicalCountryOptions = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string }>()
+    for (const h of historicalCountryOptionsFromApi) {
+      if (h?.id) byId.set(h.id, { id: h.id, name: h.name ?? '' })
+    }
+    for (const h of linkedHistoricalCountries ?? []) {
+      if (h?.id && !byId.has(h.id)) {
+        byId.set(h.id, { id: h.id, name: h.name ?? '' })
+      }
+    }
+    return Array.from(byId.values())
+  }, [historicalCountryOptionsFromApi, linkedHistoricalCountries])
 
   const [electionModal, setElectionModal] = useState<
     | { mode: 'create' }

@@ -1,6 +1,7 @@
 /**
  * 행정부(역대 내각) — 행정조직 탭 내 "행정부" 서브탭에서 표시.
  * 수반 재임별 행정부 등록·조회, 각료 추가.
+ * 타임라인: 내각(행정부)만 칸으로 나열. 군주 재임과 겹치는 칸은 군주마다 다른 색 가로 띠·축 라벨로 표시.
  * 정권 선택 시 아래에 중앙부처 스타일 그리드로 해당 정권의 부처별 각료 표시(전자: 카테고리만, 사용자 등록 부처).
  */
 import React, {
@@ -49,6 +50,7 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import {
   type CabinetListItemDto,
   type GovernmentCabinetTenureItem,
+  type GovernmentHeadTenureInCabinetList,
   type TenureAchievementByEventLinkRow,
   personCareerApi,
 } from '@/shared/api/person-career'
@@ -133,12 +135,14 @@ import {
 import {
   CABINET_SECTION_MAIN as MAIN,
   CABINET_SECTION_MAIN_HOVER as MAIN_HOVER,
+  HEAD_POSITION_TYPES,
   MINISTER_POSITION_TYPES,
   TL_COL_PAD_X,
   TL_FIRST_COL_EXTRA_SHIFT_X,
   TL_GRID_GAP_X,
   TL_NODE_EDGE_PAD,
   TL_ROW_H,
+  TL_TERRITORY_PALETTE,
   TL_THUMB,
   TL_VERT_SEG_H,
   TL_YEAR_NUDGE_Y_EVEN_COL,
@@ -149,6 +153,9 @@ import {
   END_REASON_LABEL,
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
+  cabinetTimelineHeaderYearRange,
+  cabinetTimelineMonarchRailGradient,
+  cabinetTimelineMonarchUiTint,
   calcAgeAtEndTenure,
   calcTenureDuration,
   formatDate,
@@ -158,9 +165,12 @@ import {
   getTenureAchievementDisplayBody,
   isLinkagePeerAchievement,
   lineColorForCabinetHeadPositionType,
+  overlappingMonarchCaptionForExecutiveHead,
+  overlappingMonarchTenureForExecutiveHead,
   paletteForCabinetListItem,
   resolveReignEraLineForCabinetHead,
   shouldHideCabinetFromExecutiveTimeline,
+  sovereignLegendPersonLabelFromMonarchTenure,
   stripHtmlToPlain,
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
@@ -302,6 +312,24 @@ export function CabinetsSection({
   const isHistorical = country.type === 'historical'
   const countryId = !isHistorical ? country.id : undefined
   const historicalCountryId = isHistorical ? country.id : undefined
+
+  /** 현대국가 + 연결된 역사국가를 한 범위로 — 총리(countryId)·천황(historicalCountryId) 재임 매칭 */
+  const cabinetTimelineCountryScope = useMemo(
+    () =>
+      country.type === 'modern'
+        ? ({
+            kind: 'modern' as const,
+            modernCountryId: country.id,
+            linkedHistoricalCountryIds: (
+              country.historicalCountries ?? []
+            ).map((h) => h.id).filter((x): x is string => Boolean(x)),
+          } as const)
+        : ({
+            kind: 'historical' as const,
+            historicalCountryId: country.id,
+          } as const),
+    [country],
+  )
 
   /** 선택한 정권 — 위에 행정부처(중앙부처) 그리드로 해당 정권의 부처별 각료 표시 */
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(
@@ -572,7 +600,22 @@ export function CabinetsSection({
         countryTenures as Parameters<
           typeof resolveReignEraLineForCabinetHead
         >[1],
+        cabinetTimelineCountryScope,
       )
+      const monarchLine = overlappingMonarchCaptionForExecutiveHead(
+        head,
+        countryTenures as readonly GovernmentHeadTenureInCabinetList[],
+        cabinetTimelineCountryScope,
+      )
+      const monarchTenure = overlappingMonarchTenureForExecutiveHead(
+        head,
+        countryTenures as readonly GovernmentHeadTenureInCabinetList[],
+        cabinetTimelineCountryScope,
+      )
+      const monarchPersonSearch =
+        monarchTenure?.person != null
+          ? getPersonName(monarchTenure.person)
+          : ''
       return [
         personName,
         posTitle,
@@ -581,6 +624,8 @@ export function CabinetsSection({
         territory,
         cabName,
         eraLine,
+        monarchLine,
+        monarchPersonSearch,
       ].some((v) =>
         String(v ?? '')
           .toLowerCase()
@@ -594,30 +639,106 @@ export function CabinetsSection({
     countryId,
     country.name,
     countryTenures,
+    cabinetTimelineCountryScope,
   ])
+
+  /** 타임라인·범례: 내각(행정부)만 — 군주는 칸으로 넣지 않음 */
+  const timelineCabinetsMerged = useMemo(() => {
+    return [...filteredCabinets].sort((a, b) => {
+      const dateA = a.headTenure?.startDate
+        ? new Date(a.headTenure.startDate).getTime()
+        : 0
+      const dateB = b.headTenure?.startDate
+        ? new Date(b.headTenure.startDate).getTime()
+        : 0
+      return dateA - dateB
+    })
+  }, [filteredCabinets])
 
   const reignEraLineByCabinetId = useMemo(() => {
     const m = new Map<string, string>()
     const tenures = countryTenures as Parameters<
       typeof resolveReignEraLineForCabinetHead
     >[1]
-    for (const c of filteredCabinets) {
-      const line = resolveReignEraLineForCabinetHead(c.headTenure, tenures)
+    for (const c of timelineCabinetsMerged) {
+      const line = resolveReignEraLineForCabinetHead(
+        c.headTenure,
+        tenures,
+        cabinetTimelineCountryScope,
+      )
       if (line) m.set(c.id, line)
     }
     return m
-  }, [filteredCabinets, countryTenures])
+  }, [
+    timelineCabinetsMerged,
+    countryTenures,
+    cabinetTimelineCountryScope,
+  ])
+
+  /** 군주별 색·라벨 — 타임라인 칸·가로 띠·범례(상단 「군주 재위」 블록 없음) */
+  const cabinetTimelineMonarchVisuals = useMemo(() => {
+    const tenures = countryTenures as readonly GovernmentHeadTenureInCabinetList[]
+    const scope = cabinetTimelineCountryScope
+    const monarchOrder = new Map<string, number>()
+    let nextOrd = 0
+    for (const c of timelineCabinetsMerged) {
+      const m = overlappingMonarchTenureForExecutiveHead(
+        c.headTenure,
+        tenures,
+        scope,
+      )
+      if (m && !monarchOrder.has(m.id)) monarchOrder.set(m.id, nextOrd++)
+    }
+    const byCabinetId = new Map<string, { lineHex: string }>()
+    for (const c of timelineCabinetsMerged) {
+      const m = overlappingMonarchTenureForExecutiveHead(
+        c.headTenure,
+        tenures,
+        scope,
+      )
+      if (!m) continue
+      const ord = monarchOrder.get(m.id) ?? 0
+      const lineHex =
+        TL_TERRITORY_PALETTE[ord % TL_TERRITORY_PALETTE.length].line
+      byCabinetId.set(c.id, { lineHex })
+    }
+    const legend = [...monarchOrder.entries()]
+      .sort((a, b) => a[1] - b[1])
+      .map(([monId, ord]) => {
+        const cab = timelineCabinetsMerged.find((c) => {
+          const x = overlappingMonarchTenureForExecutiveHead(
+            c.headTenure,
+            tenures,
+            scope,
+          )
+          return x?.id === monId
+        })
+        const mTenure = tenures.find((t) => t.id === monId)
+        const pivotIso = cab?.headTenure?.startDate ?? mTenure?.startDate
+        const label = sovereignLegendPersonLabelFromMonarchTenure(
+          mTenure ?? null,
+          pivotIso ?? null,
+        )
+        return {
+          key: monId,
+          label,
+          lineHex:
+            TL_TERRITORY_PALETTE[ord % TL_TERRITORY_PALETTE.length].line,
+        }
+      })
+    return { byCabinetId, legend }
+  }, [timelineCabinetsMerged, countryTenures, cabinetTimelineCountryScope])
 
   /** 목록에 등장하는 소속마다 서로 다른 강조색(ordinal) — 같은 countryId만 있어도 이름 키로 분리 */
   const cabinetTerritoryOrdinalMap = useMemo(
-    () => buildCabinetTerritoryOrdinalMap(filteredCabinets),
-    [filteredCabinets],
+    () => buildCabinetTerritoryOrdinalMap(timelineCabinetsMerged),
+    [timelineCabinetsMerged],
   )
 
   const cabinetTerritoryLegendEntries = useMemo(
     () =>
       buildCabinetTerritoryLegendEntries(
-        filteredCabinets,
+        timelineCabinetsMerged,
         country.name,
         cabinetTerritoryOrdinalMap,
         country.type === 'modern'
@@ -634,8 +755,9 @@ export function CabinetsSection({
                 startDay: country.startDay ?? null,
               },
             },
+        { groupByHeadTerritory: true },
       ),
-    [filteredCabinets, country.name, cabinetTerritoryOrdinalMap, country],
+    [timelineCabinetsMerged, country.name, cabinetTerritoryOrdinalMap, country],
   )
 
   /** 현대국가 + 역사국가 하위가 있을 때만 "전체" 목록에서 소속 국가명 표시 */
@@ -651,26 +773,29 @@ export function CabinetsSection({
   /** 타임라인 그리드 행(열 수만큼 슬라이스) — 한 번만 계산 */
   const cabinetTimelineRows = useMemo(() => {
     const cols = timelineColumnCount
-    const list = filteredCabinets
+    const list = timelineCabinetsMerged
     const rows: any[][] = []
     for (let i = 0; i < list.length; i += cols) {
       rows.push(list.slice(i, i + cols))
     }
     return rows
-  }, [filteredCabinets, timelineColumnCount])
+  }, [timelineCabinetsMerged, timelineColumnCount])
 
-  /** 요약 헤더 연도 범위 */
+  /** 요약 헤더 연도 범위 — 수반 재임 시작·종료 + 겹치는 군주 재위 구간 */
   const cabinetTimelineYearRange = useMemo(() => {
-    const years = filteredCabinets.flatMap((c) => {
-      const s = c.headTenure?.startDate
-        ? new Date(c.headTenure.startDate).getFullYear()
-        : null
-      return s != null ? [s] : []
-    })
-    if (years.length === 0)
-      return { minY: null as number | null, maxY: null as number | null }
-    return { minY: Math.min(...years), maxY: Math.max(...years) }
-  }, [filteredCabinets])
+    const tenures = countryTenures as Parameters<
+      typeof cabinetTimelineHeaderYearRange
+    >[1]
+    return cabinetTimelineHeaderYearRange(
+      timelineCabinetsMerged,
+      tenures,
+      cabinetTimelineCountryScope,
+    )
+  }, [
+    timelineCabinetsMerged,
+    countryTenures,
+    cabinetTimelineCountryScope,
+  ])
 
   const isMinisterMatched = (t: GovernmentCabinetTenureItem) => {
     const q = ministerSearchQuery.trim().toLowerCase()
@@ -738,8 +863,13 @@ export function CabinetsSection({
     enabled: registerCabinetModalOpen && registerFlow === 'new',
   })
 
-  const headPositionOptions = (positionDefinitions as any[]).filter(
-    (d: any) => d.positionType === 'HEAD_OF_GOVERNMENT',
+  const headPositionOptions = useMemo(
+    () =>
+      (positionDefinitions as any[]).filter(
+        (d: any) =>
+          d.positionType && HEAD_POSITION_TYPES.has(d.positionType),
+      ),
+    [positionDefinitions],
   )
 
   /** 각료 등록 모달용 직위 옵션 (각료/차관/기타만) */
@@ -1011,11 +1141,17 @@ export function CabinetsSection({
   const headTenureIdsWithCabinet = new Set(
     (cabinets as any[]).map((c: any) => c.headTenureId),
   )
-  const headTenuresForRegister = (countryTenures as any[]).filter(
-    (t: any) =>
-      t.positionType === 'HEAD_OF_GOVERNMENT' &&
-      !headTenureIdsWithCabinet.has(t.id),
-  )
+  const headTenuresForRegister = (countryTenures as any[]).filter((t: any) => {
+    const pt =
+      t.positionType ??
+      t.positionDefinition?.positionType ??
+      t.position?.positionType
+    return (
+      pt &&
+      HEAD_POSITION_TYPES.has(pt) &&
+      !headTenureIdsWithCabinet.has(t.id)
+    )
+  })
 
   const handleRegisterCabinet = async (tenure: any) => {
     setRegisterCabinetSubmitting(true)
@@ -1566,7 +1702,7 @@ export function CabinetsSection({
                         onChange={(e) => setCabinetSearchQuery(e.target.value)}
                         $hasTrailing={Boolean(
                           cabinetSearchQuery.trim() ||
-                          filteredCabinets.length > 0,
+                          timelineCabinetsMerged.length > 0,
                         )}
                       />
                       {cabinetSearchQuery.trim() ? (
@@ -1578,9 +1714,9 @@ export function CabinetsSection({
                           <FiX size={14} />
                         </CabS.CabListSearchClearBtn>
                       ) : (
-                        filteredCabinets.length > 0 && (
+                        timelineCabinetsMerged.length > 0 && (
                           <CabS.CabListSearchCount aria-hidden>
-                            {filteredCabinets.length}개
+                            {timelineCabinetsMerged.length}개
                           </CabS.CabListSearchCount>
                         )
                       )}
@@ -1604,7 +1740,7 @@ export function CabinetsSection({
                   </CabS.CabListControlsRow>
                 </CabS.CabListToolbar>
               </CabS.CabListToolbarShell>
-              {filteredCabinets.length === 0 ? (
+              {timelineCabinetsMerged.length === 0 ? (
                 <CabS.CabListBody>
                   <EmptyStateFill>
                     {cabinetSearchQuery.trim() || cabinetCountryFilter ? (
@@ -1681,6 +1817,16 @@ export function CabinetsSection({
                                 {cabinetTimelineYearRange.minY} –{' '}
                                 {cabinetTimelineYearRange.maxY ?? '현재'}
                               </span>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: C.textFaint,
+                                  marginLeft: 8,
+                                  fontWeight: 500,
+                                }}
+                              >
+                                (과거 ← · → 현재)
+                              </span>
                             </div>
                           </>
                         )}
@@ -1730,6 +1876,68 @@ export function CabinetsSection({
                             ))}
                           </CabS.CabTimelineLegendRow>
                         )}
+                        {cabinetTimelineMonarchVisuals.legend.some(
+                          (e) => e.label !== '—',
+                        ) ? (
+                          <CabS.CabTimelineMonarchLegendBand
+                            role="list"
+                            aria-label="타임라인 군주 색 구분"
+                          >
+                            {cabinetTimelineMonarchVisuals.legend
+                              .filter((e) => e.label !== '—')
+                              .map((e) => {
+                                const chip = cabinetTimelineMonarchUiTint(
+                                  e.lineHex,
+                                  isDark,
+                                )
+                                return (
+                                  <div
+                                    key={e.key}
+                                    role="listitem"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 5,
+                                      flexShrink: 0,
+                                      maxWidth: '100%',
+                                      padding: '3px 9px 3px 7px',
+                                      borderRadius: 9999,
+                                      border: `1px solid ${chip.border}`,
+                                      background: chip.background,
+                                    }}
+                                    title={e.label}
+                                  >
+                                    <span
+                                      aria-hidden
+                                      style={{
+                                        width: 6,
+                                        height: 6,
+                                        borderRadius: '50%',
+                                        background: e.lineHex,
+                                        flexShrink: 0,
+                                        boxShadow: `0 0 0 1px ${chip.border}`,
+                                      }}
+                                    />
+                                    <span
+                                      style={{
+                                        fontSize: 10.5,
+                                        fontWeight: 600,
+                                        color: C.textMuted,
+                                        lineHeight: 1.3,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        maxWidth: 188,
+                                        letterSpacing: '0.01em',
+                                      }}
+                                    >
+                                      {e.label}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                          </CabS.CabTimelineMonarchLegendBand>
+                        ) : null}
                       </CabS.CabTimelineSummaryTopRow>
                     </CabS.CabTimelineSummaryHeader>
                     <CabS.CabTimelineGrid
@@ -1742,46 +1950,36 @@ export function CabinetsSection({
                           const rowFlowLine = C.borderMid
                           const thumbConnectorLineStyle: React.CSSProperties = {
                             width: 4,
-                            alignSelf: 'stretch',
+                            maxWidth: 4,
+                            height: '100%',
+                            maxHeight: '100%',
+                            flexShrink: 0,
+                            boxSizing: 'border-box',
                             borderRadius: 2,
                             opacity: 0.85,
+                            overflow: 'hidden',
                             background: `repeating-linear-gradient(
                                 to bottom,
                                 ${rowFlowLine} 0 5px,
                                 transparent 5px 11px
                               )`,
                           }
-                          const isReversed = rowIdx % 2 === 1
-                          const displayItems = isReversed
-                            ? [...rowItems].reverse()
-                            : rowItems
+                          const gx = TL_GRID_GAP_X
+                          const gxHalf = gx / 2
+                          /** 과거 → 현재가 항상 왼쪽 → 오른쪽 (역전 시 타임라인이 어긋남) */
+                          const displayItems = rowItems
                           return (
                             <Fragment key={`cab-tl-t-${rowIdx}`}>
                               <div
                                 style={{
                                   position: 'relative',
                                   height: TL_ROW_H,
+                                  minHeight: TL_ROW_H,
+                                  maxHeight: TL_ROW_H,
                                   padding: 0,
                                 }}
                               >
-                                {/* 수평선 — 행 전폭(첫 칸만 셀 안에서 별도로 우측 이동) */}
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    left: 0,
-                                    right: 0,
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    height: 3,
-                                    background: rowFlowLine,
-                                    opacity: 0.35,
-                                    zIndex: 0,
-                                    borderRadius: 2,
-                                    pointerEvents: 'none',
-                                  }}
-                                />
-
-                                {/* 아이템 그리드 */}
+                                {/* 아이템 그리드 — 수평선보다 아래(z-1), 클릭 타깃 */}
                                 <div
                                   style={{
                                     display: 'grid',
@@ -1855,17 +2053,30 @@ export function CabinetsSection({
                                         deletingCabinetId === item.id
                                       // 짝수: 썸네일 위·연도는 축 중앙, 홀수: 연도 축 중앙·썸네일 아래
                                       const itemOnTop = colIdx % 2 === 0
-                                      const reignEraLine =
-                                        reignEraLineByCabinetId.get(item.id) ??
-                                        null
+                                      const monarchV =
+                                        cabinetTimelineMonarchVisuals.byCabinetId.get(
+                                          item.id,
+                                        ) ?? null
+                                      const monarchAxisChipTint = monarchV
+                                        ? cabinetTimelineMonarchUiTint(
+                                            monarchV.lineHex,
+                                            isDark,
+                                          )
+                                        : null
+                                      const cardReignLineOnly =
+                                        reignEraLineByCabinetId.get(
+                                          item.id,
+                                        ) ?? null
+                                      /** 연도 아래 — 연호만(천황·총리 등 직함 문구 없음) */
+                                      const yearAxisEraLine = cardReignLineOnly
                                       const cellLabelAriaOpts: Parameters<
                                         typeof cabinetTimelineCellAriaLabel
                                       >[4] = {
                                         ...(territoryLabel
                                           ? { territoryPrefix: territoryLabel }
                                           : {}),
-                                        ...(reignEraLine
-                                          ? { reignEraLine }
+                                        ...(yearAxisEraLine
+                                          ? { reignEraLine: yearAxisEraLine }
                                           : {}),
                                       }
                                       const cellLabel =
@@ -1890,25 +2101,26 @@ export function CabinetsSection({
                                         thumbRingColor: itemP.line,
                                         territoryLabel:
                                           territoryLabel ?? undefined,
-                                        reignEraLine: reignEraLine ?? undefined,
+                                        reignEraLine:
+                                          cardReignLineOnly ?? undefined,
                                         hideMonarchBadge: true as const,
                                         isDark,
                                       }
+                                      const cellPadStyle =
+                                        colIdx === 0
+                                          ? {
+                                              padding: `0 ${TL_COL_PAD_X}px 0 ${
+                                                TL_COL_PAD_X +
+                                                TL_FIRST_COL_EXTRA_SHIFT_X
+                                              }px`,
+                                            }
+                                          : undefined
                                       return (
                                         <CabS.CabinetTimelineCellBtn
                                           key={item.id}
                                           disabled={isDeleting}
                                           aria-label={cellLabel}
-                                          style={
-                                            colIdx === 0
-                                              ? {
-                                                  padding: `0 ${TL_COL_PAD_X}px 0 ${
-                                                    TL_COL_PAD_X +
-                                                    TL_FIRST_COL_EXTRA_SHIFT_X
-                                                  }px`,
-                                                }
-                                              : undefined
-                                          }
+                                          style={cellPadStyle}
                                           onClick={() => {
                                             if (!isDeleting) {
                                               setSelectedCabinetId(item.id)
@@ -2002,11 +2214,16 @@ export function CabinetsSection({
                                                 <div
                                                   style={{
                                                     height: TL_VERT_SEG_H,
+                                                    minHeight: TL_VERT_SEG_H,
+                                                    maxHeight: TL_VERT_SEG_H,
                                                     flexShrink: 0,
                                                     width: '100%',
+                                                    maxWidth: '100%',
                                                     display: 'flex',
                                                     justifyContent: 'center',
                                                     alignItems: 'stretch',
+                                                    overflow: 'hidden',
+                                                    boxSizing: 'border-box',
                                                   }}
                                                   aria-hidden
                                                 >
@@ -2066,21 +2283,44 @@ export function CabinetsSection({
                                                       : ''}
                                                   </span>
                                                 )}
-                                                {reignEraLine ? (
+                                                {yearAxisEraLine ? (
                                                   <span
                                                     style={{
-                                                      fontSize: 9,
-                                                      fontWeight: 500,
-                                                      color: C.textFaint,
-                                                      marginTop: 6,
-                                                      lineHeight: 1.35,
-                                                      maxWidth: TL_THUMB - 4,
+                                                      ...(monarchAxisChipTint
+                                                        ? {
+                                                            fontSize: 10.5,
+                                                            fontWeight: 600,
+                                                            color: C.textMuted,
+                                                            marginTop: 6,
+                                                            lineHeight: 1.35,
+                                                            maxWidth:
+                                                              TL_THUMB + 12,
+                                                            padding:
+                                                              '4px 9px',
+                                                            borderRadius: 9999,
+                                                            boxSizing:
+                                                              'border-box',
+                                                            border: `1px solid ${monarchAxisChipTint.border}`,
+                                                            background:
+                                                              monarchAxisChipTint.background,
+                                                            letterSpacing:
+                                                              '0.01em',
+                                                          }
+                                                        : {
+                                                            fontSize: 9,
+                                                            fontWeight: 500,
+                                                            color: C.textFaint,
+                                                            marginTop: 6,
+                                                            lineHeight: 1.35,
+                                                            maxWidth:
+                                                              TL_THUMB + 12,
+                                                          }),
                                                       textShadow: isDark
                                                         ? '0 0 6px rgba(0,0,0,0.75)'
                                                         : '0 0 5px rgba(255,255,255,0.85)',
                                                     }}
                                                   >
-                                                    {reignEraLine}
+                                                    {yearAxisEraLine}
                                                   </span>
                                                 ) : null}
                                               </div>
@@ -2088,11 +2328,16 @@ export function CabinetsSection({
                                                 <div
                                                   style={{
                                                     height: TL_VERT_SEG_H,
+                                                    minHeight: TL_VERT_SEG_H,
+                                                    maxHeight: TL_VERT_SEG_H,
                                                     flexShrink: 0,
                                                     width: '100%',
+                                                    maxWidth: '100%',
                                                     display: 'flex',
                                                     justifyContent: 'center',
                                                     alignItems: 'stretch',
+                                                    overflow: 'hidden',
+                                                    boxSizing: 'border-box',
                                                   }}
                                                   aria-hidden
                                                 >
@@ -2161,6 +2406,98 @@ export function CabinetsSection({
                                             )}
                                           </div>
                                         </CabS.CabinetTimelineCellBtn>
+                                      )
+                                    },
+                                  )}
+                                </div>
+                                {/* 기본 수평 축 — 회색 스파인(전 행 연속) */}
+                                <div
+                                  aria-hidden
+                                  style={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    right: 0,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    height: 3,
+                                    background: rowFlowLine,
+                                    opacity: 0.45,
+                                    zIndex: 2,
+                                    borderRadius: 2,
+                                    pointerEvents: 'none',
+                                  }}
+                                />
+                                {/* 군주 재임과 겹치는 칸 — 군주마다 `TL_TERRITORY_PALETTE` 색 */}
+                                <div
+                                  aria-hidden
+                                  style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'grid',
+                                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                                    gap: `0 ${TL_GRID_GAP_X}px`,
+                                    alignItems: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 3,
+                                  }}
+                                >
+                                  {Array.from({ length: cols }).map(
+                                    (_, colIdx) => {
+                                      const item = displayItems[colIdx]
+                                      const mv =
+                                        item != null
+                                          ? cabinetTimelineMonarchVisuals.byCabinetId.get(
+                                              item.id,
+                                            )
+                                          : null
+                                      return (
+                                        <div
+                                          key={`tl-seg-${rowIdx}-${colIdx}`}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            minWidth: 0,
+                                            height: '100%',
+                                          }}
+                                        >
+                                          {mv ? (
+                                            <div
+                                              style={{
+                                                ...(cols <= 1
+                                                  ? {
+                                                      width: '100%',
+                                                      marginLeft: 0,
+                                                    }
+                                                  : colIdx === 0
+                                                    ? {
+                                                        width: `calc(100% + ${gxHalf}px)`,
+                                                        marginLeft: 0,
+                                                      }
+                                                    : colIdx === cols - 1
+                                                      ? {
+                                                          width: `calc(100% + ${gxHalf}px)`,
+                                                          marginLeft: -gxHalf,
+                                                        }
+                                                      : {
+                                                          width: `calc(100% + ${gx}px)`,
+                                                          marginLeft: -gxHalf,
+                                                        }),
+                                                flexShrink: 0,
+                                                height: 4,
+                                                borderRadius: 9999,
+                                                background:
+                                                  cabinetTimelineMonarchRailGradient(
+                                                    mv.lineHex,
+                                                    isDark,
+                                                  ),
+                                                boxShadow: isDark
+                                                  ? '0 1px 2px rgba(0,0,0,0.5)'
+                                                  : '0 1px 2px rgba(0,0,0,0.08)',
+                                              }}
+                                            />
+                                          ) : null}
+                                        </div>
                                       )
                                     },
                                   )}
