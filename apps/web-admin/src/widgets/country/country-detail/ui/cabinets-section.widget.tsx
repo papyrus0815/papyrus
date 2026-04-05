@@ -164,7 +164,7 @@ import {
   getPersonName,
   getTenureAchievementDisplayBody,
   isLinkagePeerAchievement,
-  lineColorForCabinetHeadPositionType,
+  lineColorForCabinetHeadPositionBadge,
   overlappingMonarchCaptionForExecutiveHead,
   overlappingMonarchTenureForExecutiveHead,
   paletteForCabinetListItem,
@@ -2009,12 +2009,16 @@ export function CabinetsSection({
                                       /** 노드·버블·칩 등 — 무채색(국가 구분색과 분리) */
                                       const uiLine = C.textMuted
                                       const posPillLine =
-                                        lineColorForCabinetHeadPositionType(
-                                          head?.positionType ??
-                                            head?.positionDefinition
-                                              ?.positionType ??
-                                            null,
-                                          C,
+                                        lineColorForCabinetHeadPositionBadge(
+                                          {
+                                            positionDefinitionId:
+                                              head?.positionDefinition?.id ??
+                                              null,
+                                            tenureTitle: head?.title,
+                                            definitionTitle:
+                                              head?.positionDefinition?.title,
+                                          },
+                                          C.posPillDefault,
                                         )
                                       const territoryLabel =
                                         showCabinetTerritoryLabels

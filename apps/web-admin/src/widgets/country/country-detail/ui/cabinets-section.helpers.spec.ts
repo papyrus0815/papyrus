@@ -1,6 +1,7 @@
 import {
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
+  lineColorForCabinetHeadPositionBadge,
   territoryKeyFromCabinet,
   territoryKeyFromHead,
 } from './cabinets-section.helpers'
@@ -87,5 +88,38 @@ describe('buildCabinetTerritoryLegendEntries', () => {
     expect(entries).toHaveLength(2)
     expect(entries[0].label).toContain('나라A')
     expect(entries[1].label).toContain('나라B')
+  })
+})
+
+describe('lineColorForCabinetHeadPositionBadge', () => {
+  const def = '#64748b'
+
+  it('직위 정의 id가 같으면 색도 같다', () => {
+    const a = lineColorForCabinetHeadPositionBadge(
+      { positionDefinitionId: 'uuid-1' },
+      def,
+    )
+    const b = lineColorForCabinetHeadPositionBadge(
+      { positionDefinitionId: 'uuid-1' },
+      def,
+    )
+    expect(a).toBe(b)
+    expect(a).toMatch(/^#/)
+  })
+
+  it('직함 문자열만 있을 때 동일 문자열이면 동일 색', () => {
+    const a = lineColorForCabinetHeadPositionBadge(
+      { definitionTitle: '국무총리' },
+      def,
+    )
+    const b = lineColorForCabinetHeadPositionBadge(
+      { tenureTitle: '국무총리' },
+      def,
+    )
+    expect(a).toBe(b)
+  })
+
+  it('id·직함이 모두 없으면 기본색', () => {
+    expect(lineColorForCabinetHeadPositionBadge({}, def)).toBe(def)
   })
 })

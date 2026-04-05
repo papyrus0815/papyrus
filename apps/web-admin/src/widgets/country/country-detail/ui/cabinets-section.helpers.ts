@@ -3,10 +3,9 @@ import type {
   RegnalEraDto,
 } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import type { CabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
-
 import {
   CABINET_PARTY_ROLE_OPTIONS,
+  TL_POSITION_BADGE_LINE_HEXES,
   TL_TERRITORY_PALETTE,
 } from './cabinets-section.constants'
 
@@ -52,11 +51,6 @@ export function getPersonBirthPlaceLabel(
   const text = person.birthPlaceText?.trim()
   return text || null
 }
-
-export type CabinetTimelinePosPillPalette = Pick<
-  CabinetsSectionPalette,
-  'posPillHeadOfState' | 'posPillHeadOfGovernment' | 'posPillDefault'
->
 
 /** 수반 재임 기준 상단 브레드크럼: 「제N대 [M기] 이름」 또는 이름만 / 없으면 「행정부 상세」 */
 export function formatCabinetHeadBreadcrumbLabel(
@@ -323,18 +317,42 @@ export function territoryKeyFromCabinet(
 /**
  * 타임라인 카드 강조색 — `ordinalByTerritoryKey`는 `buildCabinetTerritoryOrdinalMap(filteredCabinets)` 사용.
  */
-/** 타임라인 이름 좌측 직책 뱃지 — `positionType`별 색 (`getCabinetsSectionPalette` 토큰) */
-export function lineColorForCabinetHeadPositionType(
-  positionType: string | null | undefined,
-  palette: CabinetTimelinePosPillPalette,
+
+/**
+ * 타임라인 직책 뱃지 선색 — 직위 정의 id가 있으면 그걸로, 없으면 표시 직함 문자열로 해시해 팔레트에서 고름.
+ * 같은 직위(같은 id 또는 같은 직함 문자열)는 항상 같은 색.
+ */
+export function lineColorForCabinetHeadPositionBadge(
+  input: {
+    positionDefinitionId?: string | null
+    tenureTitle?: string | null
+    definitionTitle?: string | null
+  },
+  defaultLineHex: string,
 ): string {
-  const pt =
-    typeof positionType === 'string' && positionType.trim()
-      ? positionType.trim()
-      : null
-  if (pt === 'HEAD_OF_STATE') return palette.posPillHeadOfState
-  if (pt === 'HEAD_OF_GOVERNMENT') return palette.posPillHeadOfGovernment
-  return palette.posPillDefault
+  const n = TL_POSITION_BADGE_LINE_HEXES.length
+  if (n === 0) return defaultLineHex
+
+  const defId =
+    typeof input.positionDefinitionId === 'string'
+      ? input.positionDefinitionId.trim()
+      : ''
+  if (defId) {
+    return TL_POSITION_BADGE_LINE_HEXES[
+      hashStringFnv1a(`pd:${defId}`) % n
+    ] as string
+  }
+
+  const title =
+    (typeof input.definitionTitle === 'string'
+      ? input.definitionTitle.trim()
+      : '') ||
+    (typeof input.tenureTitle === 'string' ? input.tenureTitle.trim() : '')
+  if (!title) return defaultLineHex
+
+  return TL_POSITION_BADGE_LINE_HEXES[
+    hashStringFnv1a(`title:${title}`) % n
+  ] as string
 }
 
 export function paletteForCabinetListItem(

@@ -75,6 +75,10 @@ export const TL_TERRITORY_PALETTE = [
   { line: '#db2777', textColor: '#831843' },
 ] as const
 
+/** 타임라인 직책 뱃지 테두리·글자색 — 직위 정의 id 또는 직함 문자열 해시로 순환 (직책마다 고정 색) */
+export const TL_POSITION_BADGE_LINE_HEXES: readonly string[] =
+  TL_TERRITORY_PALETTE.map((p) => p.line)
+
 /** 행정부–정당 연결 역할 (`CabinetPartyRole`) */
 export const CABINET_PARTY_ROLE_OPTIONS = [
   { value: 'LEADING', label: '집권·주도' },
