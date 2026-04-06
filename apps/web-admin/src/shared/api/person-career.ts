@@ -254,6 +254,11 @@ export interface CreateGovernmentPositionTenureDto {
   mandateSource?: TenureMandateSourceValue
   /** 당선된 선거 후보와 1:1 연결 */
   electionCandidacyId?: string | null
+  /**
+   * true: 군주·국가 원수 재위만 기록 (행정부/내각과 무관). 서버가 Cabinet 행을 만들지 않음.
+   * 생략·false: 국가원수·정부수반 재임에 대해 기존처럼 내각 자동 생성 가능.
+   */
+  sovereignReignOnly?: boolean
 }
 
 /**

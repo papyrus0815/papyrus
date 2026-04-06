@@ -302,20 +302,15 @@ export function TreatyLinkModal({
     })
   }
 
+  /** 기존 조약 연결: 국가 필터로만 불러오면 서명국이 다른 국가만 있는 조약이 전부 빠져 목록이 비어 보임 → 전체 조회 후 검색으로 좁힘 */
   React.useEffect(() => {
     setLoading(true)
     treatyApi
-      .getAll(
-        countryId
-          ? { countryId }
-          : historicalCountryId
-            ? { historicalCountryId }
-            : {},
-      )
+      .getAll({})
       .then((r) => setAllTreaties(r.items))
       .catch(() => setAllTreaties([]))
       .finally(() => setLoading(false))
-  }, [countryId, historicalCountryId])
+  }, [])
 
   const linkedIds = new Set(currentTreaties.map((t) => t.id))
   const filtered = allTreaties
@@ -1007,7 +1002,7 @@ export function TreatyLinkModal({
           {tab === 'new' && (
             <>
               <div style={{ padding: '4px 0 16px' }}>
-                <TabNavigation style={{ marginBottom: 0 }}>
+                <TabNavigation $hugContent style={{ marginBottom: 0 }}>
                   <TabButton
                     type="button"
                     $active={newSubTab === 'basic'}
@@ -1344,8 +1339,9 @@ export function TreatyLinkModal({
                   lineHeight: 1.55,
                 }}
               >
-                아래 목록에서 조약을 한 건 선택한 뒤, 서명·참여 정보를 확인하고
-                하단의 「연결」 또는 「수정」을 누릅니다.
+                전체 조약 목록에서 고릅니다. 많으면 위 검색창에 조약명을 입력하세요.
+                선택 후 서명·참여 정보를 확인하고 하단 「연결」 또는 「수정」을
+                누릅니다.
               </p>
               <div style={{ position: 'relative', marginBottom: 12 }}>
                 <FiSearch
@@ -1548,7 +1544,8 @@ export function TreatyLinkModal({
               countryId: c.isHistorical ? null : c.id,
               historicalCountryId: c.isHistorical ? c.id : null,
               countryLabel: c.name,
-              cabinetId: null,
+              /** 행정부 상세 모달: 국가만 바꿔도 이 행정부 연결은 유지 (null이면 새로고침 후 목록에서 사라짐) */
+              cabinetId,
             })
             setCountryPickerRowIndex(null)
           }}

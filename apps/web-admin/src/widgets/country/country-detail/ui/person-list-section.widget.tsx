@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import { dynastyApi } from '@/shared/api/dynasty'
-import { getPersonsByTenureCountry } from '@/shared/api/persons'
+import { personApi } from '@/shared/api/person'
 import { PersonListContent } from '@/shared/ui/person-list-content/person-list-content'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 
@@ -64,7 +64,7 @@ export function PersonListSection({
     error,
   } = useQuery({
     queryKey: ['persons-by-country', countryId],
-    queryFn: () => getPersonsByTenureCountry({ countryId }),
+    queryFn: () => personApi.getByCountryId(countryId),
     staleTime: 1000 * 60 * 2,
   })
   const { data: dynasties = [] } = useQuery({

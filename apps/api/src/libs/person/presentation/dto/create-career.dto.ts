@@ -755,4 +755,13 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsIn(['UNKNOWN', 'ELECTION', 'APPOINTMENT', 'SUCCESSION', 'HEREDITARY', 'OTHER'])
   mandateSource?: 'UNKNOWN' | 'ELECTION' | 'APPOINTMENT' | 'SUCCESSION' | 'HEREDITARY' | 'OTHER'
+
+  /**
+   * 군주·국가 원수의 재위만 기록하는 경우 true.
+   * 행정부(내각)의 수반이 아니므로 Cabinet(행정부) 행을 만들지 않음.
+   * false/생략이면 국가원수·정부수반 재임 추가 시 기존처럼 내각(Cabinet)이 자동 생성될 수 있음.
+   */
+  @IsOptional()
+  @IsBoolean()
+  sovereignReignOnly?: boolean
 }

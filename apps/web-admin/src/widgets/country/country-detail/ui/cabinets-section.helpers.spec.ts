@@ -1,7 +1,10 @@
 import {
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
+  isSovereignMonarchTenureForCabinetTimeline,
   lineColorForCabinetHeadPositionBadge,
+  shouldHideCabinetFromExecutiveTimeline,
+  sovereignLegendPersonLabelFromMonarchTenure,
   territoryKeyFromCabinet,
   territoryKeyFromHead,
 } from './cabinets-section.helpers'
@@ -88,6 +91,85 @@ describe('buildCabinetTerritoryLegendEntries', () => {
     expect(entries).toHaveLength(2)
     expect(entries[0].label).toContain('나라A')
     expect(entries[1].label).toContain('나라B')
+  })
+})
+
+describe('sovereignLegendPersonLabelFromMonarchTenure', () => {
+  it('notes의 왕명이 있으면 인물 본명보다 우선', () => {
+    expect(
+      sovereignLegendPersonLabelFromMonarchTenure(
+        {
+          notes: '왕명: 비토리오 에마누엘레 2세',
+          person: { name: '사보이아', surname: '비토리오 에마누엘레' },
+          startDate: '1849-01-01',
+        } as any,
+        '1852-01-01',
+      ),
+    ).toBe('비토리오 에마누엘레 2세')
+  })
+})
+
+describe('isSovereignMonarchTenureForCabinetTimeline', () => {
+  it('국왕 직함(유럽 군주)도 행정부 타임라인 군주 겹침 판별에 포함', () => {
+    expect(
+      isSovereignMonarchTenureForCabinetTimeline({
+        positionType: 'HEAD_OF_STATE',
+        positionDefinition: { title: '사르데냐-피에몬테 왕국 국왕' },
+      } as any),
+    ).toBe(true)
+  })
+
+  it('King 등 영문 직함도 포함', () => {
+    expect(
+      isSovereignMonarchTenureForCabinetTimeline({
+        positionType: 'HEAD_OF_STATE',
+        positionDefinition: { title: 'King of Sardinia' },
+      } as any),
+    ).toBe(true)
+  })
+
+  it('총리는 제외', () => {
+    expect(
+      isSovereignMonarchTenureForCabinetTimeline({
+        positionType: 'HEAD_OF_GOVERNMENT',
+        positionDefinition: { title: '총리' },
+      } as any),
+    ).toBe(false)
+  })
+})
+
+describe('shouldHideCabinetFromExecutiveTimeline', () => {
+  it('천황·황제 등 의례적 원수 수반 행정부는 타임라인에서 숨김', () => {
+    expect(
+      shouldHideCabinetFromExecutiveTimeline({
+        positionType: 'HEAD_OF_STATE',
+        positionDefinition: { title: '일본국 천황' },
+      } as any),
+    ).toBe(true)
+  })
+
+  it('국왕·King 수반 행정부(직접 통치)는 타임라인에 표시', () => {
+    expect(
+      shouldHideCabinetFromExecutiveTimeline({
+        positionType: 'HEAD_OF_STATE',
+        positionDefinition: { title: '프로이센 국왕' },
+      } as any),
+    ).toBe(false)
+    expect(
+      shouldHideCabinetFromExecutiveTimeline({
+        positionType: 'HEAD_OF_STATE',
+        positionDefinition: { title: 'King of Prussia' },
+      } as any),
+    ).toBe(false)
+  })
+
+  it('HEAD_OF_GOVERNMENT는 숨기지 않음', () => {
+    expect(
+      shouldHideCabinetFromExecutiveTimeline({
+        positionType: 'HEAD_OF_GOVERNMENT',
+        positionDefinition: { title: '천황' },
+      } as any),
+    ).toBe(false)
   })
 })
 

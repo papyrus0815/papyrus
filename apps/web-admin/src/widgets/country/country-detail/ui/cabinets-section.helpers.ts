@@ -3,6 +3,7 @@ import type {
   RegnalEraDto,
 } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+
 import {
   CABINET_PARTY_ROLE_OPTIONS,
   TL_POSITION_BADGE_LINE_HEXES,
@@ -30,6 +31,33 @@ export function getPersonName(
     },
     true,
   )
+}
+
+/** 재임 `notes`에 저장된 `왕명: …` (역대 수반·군주 등록과 동일) */
+export function getRegnalNameFromNotes(
+  notes: string | null | undefined,
+): string | null {
+  if (!notes?.trim()) return null
+  const m =
+    notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
+    notes.match(/왕명\s*:\s*(.+)/i)
+  return m ? m[1].trim() : null
+}
+
+/**
+ * 군주·국가 원수 재임 표시명 — 등록한 군주명(왕명)이 있으면 그것을, 없으면 인물 표시명.
+ */
+export function getRegnalOrPersonDisplayName(
+  tenure: {
+    notes?: string | null
+    person?: Parameters<typeof getPersonName>[0] | null
+  } | null | undefined,
+): string {
+  if (!tenure) return '—'
+  const regnal = getRegnalNameFromNotes(tenure.notes)
+  if (regnal?.trim()) return regnal.trim()
+  if (tenure.person) return getPersonName(tenure.person)
+  return '—'
 }
 
 /** 인물 출신 한 줄 — API `birthCity` / `birthAdminDivision` / `birthPlaceText` */
@@ -629,7 +657,10 @@ function headTenureTitleBundleForSovereignCheck(
   }
 }
 
-/** 직함 번들에 `천황`·`황제`·`술탄`·`차르`만 군주로 본다 (`notes` 제외). 총리 직함이면 제외 */
+/**
+ * 직함 번들에 군주·황제 계열 표기가 있으면 참 (`notes` 제외).
+ * 총리 직함이면 제외. (구버전은 천황·황제·술탄·차르만 봐서 유럽 국왕·King 등이 행정부 타임라인 군주 띠에서 빠졌음)
+ */
 function tenureBundleHasSovereignMonarchTitle(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
 ): boolean {
@@ -638,12 +669,36 @@ function tenureBundleHasSovereignMonarchTitle(
   if (/내각총리|內閣總理|内閣総理|首相|총리대신|Prime\s+Minister/i.test(tb)) {
     return false
   }
-  return /천황|황제|술탄|차르/.test(tb)
+  return (
+    /천황|황제|皇帝|술탄|Sultan|차르|Tsar|국왕|国王|大公|대공|Archduke|Grand\s+Duke/i.test(
+      tb,
+    ) ||
+    /\b(?:King|Queen|Kaiser|Kaiserin|König|Königin|Emperor|Empress|Tsarina|Shah|Shahbanu)\b/i.test(
+      tb,
+    ) ||
+    /(?:^|[\s·\-/])(?:Re|Rey|Roi|Reine)\b/i.test(tb)
+  )
+}
+
+/**
+ * 행정부 타임라인에서만 숨길 때 쓰는 좁은 직함 판별.
+ * 총리가 실질 수반인 체제에서 원수 내각 행이 겹치는 경우(천황·황제·술탄·차르 등)만 숨긴다.
+ * 국왕·King·Kaiser 등 유럽식 군주 직접 통치 내각은 그리드에 남긴다.
+ */
+function tenureBundleHasCeremonialHeadCabinetHideTitle(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+): boolean {
+  if (!head) return false
+  const tb = headTenureTitleBundleForSovereignCheck(head)
+  if (/내각총리|內閣總理|内閣総理|首相|총리대신|Prime\s+Minister/i.test(tb)) {
+    return false
+  }
+  return /천황|황제|皇帝|天皇|술탄|Sultan|차르|Tsar|Tsarina/i.test(tb)
 }
 
 /**
  * 내각(행정부) 타임라인에서 숨길 수반인지 — `HEAD_OF_STATE`(또는 타입 없음)이면서
- * 번들에 `천황`·`황제`·`술탄`·`차르`만 있을 때. (연호·재위번호만으로는 제외하지 않음 — 총리 등 오탐 방지)
+ * 의례적 원수(천황·황제·술탄·차르 등)로만 판별. 국왕 직함 수반 행정부는 표시한다.
  */
 export function shouldHideCabinetFromExecutiveTimeline(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
@@ -655,11 +710,11 @@ export function shouldHideCabinetFromExecutiveTimeline(
     return false
   }
 
-  return tenureBundleHasSovereignMonarchTitle(head)
+  return tenureBundleHasCeremonialHeadCabinetHideTitle(head)
 }
 
 /**
- * 타임라인 군주 색·연호·기간 겹침 — 위 네 표기가 직함 번들에 있을 때만.
+ * 타임라인 군주 색·연호·기간 겹침 — 직함 번들이 군주·황제 계열로 판별될 때.
  */
 export function isSovereignMonarchTenureForCabinetTimeline(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
@@ -880,12 +935,14 @@ function monarchCaptionFromTenure(
   return t
 }
 
-/** 타임라인 군주 범례 — 인물명 우선, 없으면 연호만(직함·천황 등 단독 표기는 쓰지 않음) */
+/** 타임라인 군주 범례 — 등록 왕명(군주명) 우선, 다음 인물명, 없으면 연호 */
 export function sovereignLegendPersonLabelFromMonarchTenure(
   m: GovernmentHeadTenureInCabinetList | null | undefined,
   pivotIso: string | null | undefined,
 ): string {
   if (!m) return '—'
+  const regnal = getRegnalNameFromNotes(m.notes)
+  if (regnal?.trim()) return regnal.trim()
   const nm = getPersonName(m.person)
   if (nm && nm !== '—') return nm
   const iso = (pivotIso ?? m.startDate ?? '').trim()

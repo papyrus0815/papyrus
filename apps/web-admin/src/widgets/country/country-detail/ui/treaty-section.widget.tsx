@@ -5,7 +5,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
 import {
   FiChevronLeft,
+  FiEdit2,
   FiFileText,
+  FiGlobe,
   FiImage,
   FiPlus,
   FiTrash2,
@@ -22,19 +24,28 @@ import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import type { CountryResponseDto } from '@/shared/api/countries'
+import { getAllCountries } from '@/shared/api/countries'
+import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import {
   type AddTreatyImageDto,
   type CreateTreatyDto,
-  type CreateTreatySignatoryDto,
   type CreateTreatyTermDto,
   TREATY_PARTICIPATION_LABELS,
   TREATY_TYPE_LABELS,
   type TreatyDto,
   type TreatyParticipationType,
+  type TreatySignatoryDto,
   type TreatyType,
   treatyApi,
 } from '@/shared/api/treaty'
+import {
+  personCareerApi,
+  type CabinetListItemDto,
+} from '@/shared/api/person-career'
 import { uploadImage } from '@/shared/api/upload'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
@@ -555,6 +566,31 @@ const FieldLabel = styled.label`
   margin-bottom: 5px;
 `
 
+const FieldHint = styled.p`
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.ts!.textMuted};
+  line-height: 1.45;
+`
+
+const PickCountryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid ${({ theme }) => theme.ts!.borderMid};
+  background: ${({ theme }) => theme.ts!.card};
+  color: ${({ theme }) => theme.ts!.text};
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  &:hover {
+    border-color: ${({ theme }) => theme.ts!.main};
+    color: ${({ theme }) => theme.ts!.main};
+  }
+`
+
 const Input = styled.input`
   width: 100%;
   padding: 9px 12px;
@@ -815,6 +851,36 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
 // 조약 생성 모달
 // ──────────────────────────────────────────────
 
+function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const s = String(iso).trim()
+  if (s.length >= 10) return s.slice(0, 10)
+  return s
+}
+
+function cabinetListLabel(c: CabinetListItemDto): string {
+  const head = c?.headTenure
+  const tn = head?.termNumber ?? head?.regnalNumber
+  const sub = head?.subTermNumber
+  const term =
+    tn != null ? (sub != null ? `제${tn}대 ${sub}기` : `제${tn}대`) : ''
+  const p = head?.person
+  const pn = p
+    ? getPersonDisplayName({
+        name: p.name ?? '',
+        surname: p.surname,
+        middleName: (p as { middleName?: string | null }).middleName,
+        country: (
+          p as {
+            country?: { defaultNameDisplayOrder?: string | null } | null
+          }
+        ).country,
+      })
+    : ''
+  const nm = c?.name?.trim()
+  return [nm, term, pn].filter(Boolean).join(' · ') || '행정부'
+}
+
 const TreatyCreateModal: React.FC<{
   country: UnifiedCountry
   onClose: () => void
@@ -831,10 +897,52 @@ const TreatyCreateModal: React.FC<{
   const [location, setLocation] = useState('')
   const [summary, setSummary] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
+  const [sigCountryId, setSigCountryId] = useState<string | null>(() =>
+    country.type === 'modern' ? country.id : null,
+  )
+  const [sigHistoricalCountryId, setSigHistoricalCountryId] = useState<
+    string | null
+  >(() => (country.type === 'historical' ? country.id : null))
+  const [sigCountryLabel, setSigCountryLabel] = useState(() => country.name)
+  const [linkCabinetId, setLinkCabinetId] = useState('')
+
+  const countryIdForCabinets =
+    country.type === 'modern' ? country.id : undefined
+  const historicalCountryIdForCabinets =
+    country.type === 'historical' ? country.id : undefined
+
+  const { data: modernCountries = [] } = useQuery({
+    queryKey: ['treaty-modal-countries'],
+    queryFn: () => getAllCountries(),
+    staleTime: 60_000,
+  })
+  const { data: historicalCountries = [] } = useQuery({
+    queryKey: ['treaty-modal-hist-countries'],
+    queryFn: () => getAllHistoricalCountries(),
+    staleTime: 60_000,
+  })
+  const { data: countryCabinets = [] } = useQuery({
+    queryKey: [
+      'cabinets-for-treaty-create',
+      countryIdForCabinets,
+      historicalCountryIdForCabinets,
+    ],
+    queryFn: () =>
+      personCareerApi.getCabinets({
+        countryId: countryIdForCabinets,
+        historicalCountryId: historicalCountryIdForCabinets,
+      }),
+    staleTime: 60_000,
+  })
 
   const handleSubmit = async () => {
     if (!name.trim() || !signDate.trim()) {
       toast.error('조약명과 서명일은 필수입니다.')
+      return
+    }
+    if (!sigCountryId && !sigHistoricalCountryId) {
+      toast.error('이 조약에 포함될 국가(현대 또는 역사)를 선택하세요.')
       return
     }
     setSubmitting(true)
@@ -852,10 +960,12 @@ const TreatyCreateModal: React.FC<{
         summary: summary.trim() || null,
         signatories: [
           {
-            countryId: country.type === 'modern' ? country.id : null,
-            historicalCountryId:
-              country.type === 'historical' ? country.id : null,
+            countryId: sigCountryId,
+            historicalCountryId: sigHistoricalCountryId,
             participationType: 'SIGNATORY',
+            ...(linkCabinetId.trim()
+              ? { cabinetId: linkCabinetId.trim() }
+              : {}),
           },
         ],
       }
@@ -880,6 +990,71 @@ const TreatyCreateModal: React.FC<{
         </ModalHeader>
         <ModalBody>
           <FormRows>
+            <Field>
+              <FieldLabel>참여 국가 (첫 서명국)</FieldLabel>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <PickCountryBtn
+                  type="button"
+                  onClick={() => setCountryPickerOpen(true)}
+                >
+                  <FiGlobe size={14} />
+                  {sigCountryLabel || '국가 선택'}
+                </PickCountryBtn>
+                {(sigCountryId || sigHistoricalCountryId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSigCountryId(null)
+                      setSigHistoricalCountryId(null)
+                      setSigCountryLabel('')
+                    }}
+                    style={{
+                      fontSize: 12,
+                      color: '#64748b',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    선택 해제
+                  </button>
+                )}
+              </div>
+              <FieldHint>
+                조약 등록 시 이 국가가 첫 서명국으로 들어갑니다. 목록에서 다른
+                국가로 바꿀 수 있습니다.
+              </FieldHint>
+            </Field>
+            <Field>
+              <FieldLabel>행정부 연결 (선택)</FieldLabel>
+              <Select
+                value={linkCabinetId}
+                onChange={(e) => setLinkCabinetId(e.target.value)}
+              >
+                <option value="">
+                  연결 안 함 — 행정부 상세「체결 조약」에는 나오지 않음
+                </option>
+                {countryCabinets.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {cabinetListLabel(c)}
+                  </option>
+                ))}
+              </Select>
+              <FieldHint>
+                행정부 상세의 체결 조약 목록은 서명국에 행정부 ID가 있을 때만
+                표시됩니다. 여기서 고르면 국가 조약 탭에서 등록해도 해당
+                행정부에 보입니다. 나중에 행정부 화면「조약 연결」로도 할 수
+                있습니다.
+              </FieldHint>
+            </Field>
             <Field>
               <FieldLabel>
                 조약명 <Required>*</Required>
@@ -991,6 +1166,223 @@ const TreatyCreateModal: React.FC<{
           </SubmitBtn>
         </ModalFooter>
       </Modal>
+      <CountrySelectModal
+        isOpen={countryPickerOpen}
+        onClose={() => setCountryPickerOpen(false)}
+        title="참여 국가 선택"
+        modernCountries={modernCountries as CountryResponseDto[]}
+        historicalCountries={
+          historicalCountries as HistoricalCountryResponseDto[]
+        }
+        onSelect={(c) => {
+          setSigCountryId(c.isHistorical ? null : c.id)
+          setSigHistoricalCountryId(c.isHistorical ? c.id : null)
+          setSigCountryLabel(c.name)
+          setCountryPickerOpen(false)
+        }}
+      />
+    </Overlay>
+  )
+}
+
+// ──────────────────────────────────────────────
+// 조약 수정 모달
+// ──────────────────────────────────────────────
+
+const TreatyEditModal: React.FC<{
+  treaty: TreatyDto
+  onClose: () => void
+  onSaved: () => void
+}> = ({ treaty, onClose, onSaved }) => {
+  const [name, setName] = useState(treaty.name)
+  const [alias, setAlias] = useState(treaty.alias ?? '')
+  const [type, setType] = useState<TreatyType>(treaty.type)
+  const [signDate, setSignDate] = useState(() => toDateInputValue(treaty.signDate))
+  const [effectiveDate, setEffectiveDate] = useState(() =>
+    toDateInputValue(treaty.effectiveDate),
+  )
+  const [expiryDate, setExpiryDate] = useState(() =>
+    toDateInputValue(treaty.expiryDate),
+  )
+  const [violationDate, setViolationDate] = useState(() =>
+    toDateInputValue(treaty.violationDate),
+  )
+  const [violationReason, setViolationReason] = useState(
+    treaty.violationReason ?? '',
+  )
+  const [location, setLocation] = useState(treaty.location ?? '')
+  const [summary, setSummary] = useState(treaty.summary ?? '')
+  const [background, setBackground] = useState(treaty.background ?? '')
+  const [aftermath, setAftermath] = useState(treaty.aftermath ?? '')
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !signDate.trim()) {
+      toast.error('조약명과 서명일은 필수입니다.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await treatyApi.update(treaty.id, {
+        name: name.trim(),
+        alias: alias.trim() || null,
+        type,
+        signDate,
+        effectiveDate: effectiveDate || null,
+        expiryDate: expiryDate || null,
+        violationDate: violationDate || null,
+        violationReason: violationReason.trim() || null,
+        location: location.trim() || null,
+        summary: summary.trim() || null,
+        background: background.trim() || null,
+        aftermath: aftermath.trim() || null,
+      })
+      toast.success('조약이 수정되었습니다.')
+      onSaved()
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, '수정 중 오류가 발생했습니다.'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Overlay onClick={onClose}>
+      <Modal onClick={(e) => e.stopPropagation()}>
+        <ModalHeader>
+          <ModalTitle>조약 수정</ModalTitle>
+          <CloseBtn onClick={onClose}>
+            <FiX size={18} />
+          </CloseBtn>
+        </ModalHeader>
+        <ModalBody>
+          <FormRows>
+            <Field>
+              <FieldLabel>
+                조약명 <Required>*</Required>
+              </FieldLabel>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="조약 정식 명칭"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>별칭 (선택)</FieldLabel>
+              <Input
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                placeholder="통칭·약칭"
+              />
+            </Field>
+            <Row2>
+              <Field>
+                <FieldLabel>
+                  조약 유형 <Required>*</Required>
+                </FieldLabel>
+                <Select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as TreatyType)}
+                >
+                  {(
+                    Object.entries(TREATY_TYPE_LABELS) as [TreatyType, string][]
+                  ).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel>서명 장소 (선택)</FieldLabel>
+                <Input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="예: 모스크바"
+                />
+              </Field>
+            </Row2>
+            <Row2>
+              <Field>
+                <FieldLabel>
+                  서명일 <Required>*</Required>
+                </FieldLabel>
+                <Input
+                  type="date"
+                  value={signDate}
+                  onChange={(e) => setSignDate(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>발효일 (선택)</FieldLabel>
+                <Input
+                  type="date"
+                  value={effectiveDate}
+                  onChange={(e) => setEffectiveDate(e.target.value)}
+                />
+              </Field>
+            </Row2>
+            <Row2>
+              <Field>
+                <FieldLabel>만료일 (선택)</FieldLabel>
+                <Input
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>파기일 (선택)</FieldLabel>
+                <Input
+                  type="date"
+                  value={violationDate}
+                  onChange={(e) => setViolationDate(e.target.value)}
+                />
+              </Field>
+            </Row2>
+            {violationDate && (
+              <Field>
+                <FieldLabel>파기 사유 (선택)</FieldLabel>
+                <Input
+                  value={violationReason}
+                  onChange={(e) => setViolationReason(e.target.value)}
+                  placeholder="파기 이유"
+                />
+              </Field>
+            )}
+            <Field>
+              <FieldLabel>개요 (선택)</FieldLabel>
+              <Textarea
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                rows={3}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>배경 (선택)</FieldLabel>
+              <Textarea
+                value={background}
+                onChange={(e) => setBackground(e.target.value)}
+                rows={3}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>결과 · 여파 (선택)</FieldLabel>
+              <Textarea
+                value={aftermath}
+                onChange={(e) => setAftermath(e.target.value)}
+                rows={3}
+              />
+            </Field>
+          </FormRows>
+        </ModalBody>
+        <ModalFooter>
+          <CancelBtn onClick={onClose}>취소</CancelBtn>
+          <SubmitBtn onClick={handleSubmit} disabled={submitting}>
+            {submitting ? '저장 중…' : '저장'}
+          </SubmitBtn>
+        </ModalFooter>
+      </Modal>
     </Overlay>
   )
 }
@@ -1004,7 +1396,7 @@ const TreatyDetail: React.FC<{
   country: UnifiedCountry
   onBack: () => void
   onInvalidate: () => void
-}> = ({ treatyId, country, onBack, onInvalidate }) => {
+}> = ({ treatyId, country: _country, onBack, onInvalidate }) => {
   const qc = useQueryClient()
   const ts = useTheme().ts!
 
@@ -1014,7 +1406,11 @@ const TreatyDetail: React.FC<{
   })
 
   const [addSignatoryOpen, setAddSignatoryOpen] = useState(false)
+  const [editSignatory, setEditSignatory] = useState<TreatySignatoryDto | null>(
+    null,
+  )
   const [addTermOpen, setAddTermOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
 
   const invalidateTreaty = useCallback(() => {
@@ -1266,20 +1662,43 @@ const TreatyDetail: React.FC<{
                       <SignatoryBadge $type={s.participationType}>
                         {TREATY_PARTICIPATION_LABELS[s.participationType]}
                       </SignatoryBadge>
-                      <button
-                        onClick={() => handleDeleteSignatory(s.id)}
+                      <div
                         style={{
                           float: 'right',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: ts.textMuted,
-                          padding: 0,
+                          display: 'flex',
+                          gap: 6,
+                          alignItems: 'center',
                         }}
-                        title="삭제"
                       >
-                        <FiTrash2 size={12} />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditSignatory(s)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: ts.textMuted,
+                            padding: 0,
+                          }}
+                          title="서명국 수정"
+                        >
+                          <FiEdit2 size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSignatory(s.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: ts.textMuted,
+                            padding: 0,
+                          }}
+                          title="삭제"
+                        >
+                          <FiTrash2 size={12} />
+                        </button>
+                      </div>
                     </SignatoryCard>
                   )
                 })}
@@ -1420,6 +1839,9 @@ const TreatyDetail: React.FC<{
 
             {/* 액션 */}
             <ActionBar>
+              <ActionBtn $variant="ghost" onClick={() => setEditOpen(true)}>
+                <FiEdit2 size={12} /> 조약 수정
+              </ActionBtn>
               <ActionBtn $variant="danger" onClick={handleDeleteTreaty}>
                 <FiTrash2 size={12} /> 조약 삭제
               </ActionBtn>
@@ -1440,6 +1862,18 @@ const TreatyDetail: React.FC<{
         />
       )}
 
+      {editSignatory && (
+        <EditSignatoryModal
+          key={editSignatory.id}
+          signatory={editSignatory}
+          onClose={() => setEditSignatory(null)}
+          onSaved={() => {
+            setEditSignatory(null)
+            invalidateTreaty()
+          }}
+        />
+      )}
+
       {/* 조항 추가 모달 */}
       {addTermOpen && (
         <AddTermModal
@@ -1448,6 +1882,17 @@ const TreatyDetail: React.FC<{
           onClose={() => setAddTermOpen(false)}
           onAdded={() => {
             setAddTermOpen(false)
+            invalidateTreaty()
+          }}
+        />
+      )}
+
+      {editOpen && (
+        <TreatyEditModal
+          treaty={treaty}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => {
+            setEditOpen(false)
             invalidateTreaty()
           }}
         />
@@ -1465,8 +1910,12 @@ const AddSignatoryModal: React.FC<{
   onClose: () => void
   onAdded: () => void
 }> = ({ treatyId, onClose, onAdded }) => {
-  const [countryId, setCountryId] = useState('')
-  const [historicalCountryId, setHistoricalCountryId] = useState('')
+  const [countryId, setCountryId] = useState<string | null>(null)
+  const [historicalCountryId, setHistoricalCountryId] = useState<
+    string | null
+  >(null)
+  const [countryLabel, setCountryLabel] = useState('')
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
   const [personId, setPersonId] = useState('')
   const [cabinetId, setCabinetId] = useState('')
   const [role, setRole] = useState('')
@@ -1476,14 +1925,28 @@ const AddSignatoryModal: React.FC<{
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // 국가/인물 검색을 위한 간단 텍스트 입력 (실제 구현에서는 SelectModal 사용)
+  const { data: modernCountries = [] } = useQuery({
+    queryKey: ['treaty-modal-countries'],
+    queryFn: () => getAllCountries(),
+    staleTime: 60_000,
+  })
+  const { data: historicalCountries = [] } = useQuery({
+    queryKey: ['treaty-modal-hist-countries'],
+    queryFn: () => getAllHistoricalCountries(),
+    staleTime: 60_000,
+  })
+
   const handleSubmit = async () => {
+    if (!countryId && !historicalCountryId) {
+      toast.error('현대 국가 또는 역사적 국가를 선택하세요.')
+      return
+    }
     setSubmitting(true)
     try {
       await treatyApi.addSignatory({
         treatyId,
-        countryId: countryId || null,
-        historicalCountryId: historicalCountryId || null,
+        countryId,
+        historicalCountryId,
         personId: personId || null,
         cabinetId: cabinetId || null,
         role: role || null,
@@ -1512,20 +1975,46 @@ const AddSignatoryModal: React.FC<{
         <ModalBody>
           <FormRows>
             <Field>
-              <FieldLabel>현대 국가 ID (선택)</FieldLabel>
-              <Input
-                value={countryId}
-                onChange={(e) => setCountryId(e.target.value)}
-                placeholder="국가 ID를 입력하세요"
-              />
-            </Field>
-            <Field>
-              <FieldLabel>역사적 국가 ID (선택)</FieldLabel>
-              <Input
-                value={historicalCountryId}
-                onChange={(e) => setHistoricalCountryId(e.target.value)}
-                placeholder="역사적 국가 ID를 입력하세요"
-              />
+              <FieldLabel>국가 (현대 또는 역사) *</FieldLabel>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <PickCountryBtn
+                  type="button"
+                  onClick={() => setCountryPickerOpen(true)}
+                >
+                  <FiGlobe size={14} />
+                  {countryLabel || '국가 선택'}
+                </PickCountryBtn>
+                {(countryId || historicalCountryId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCountryId(null)
+                      setHistoricalCountryId(null)
+                      setCountryLabel('')
+                    }}
+                    style={{
+                      fontSize: 12,
+                      color: '#64748b',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    선택 해제
+                  </button>
+                )}
+              </div>
+              <FieldHint>
+                목록에서 현대 국가 또는 역사적 국가를 고릅니다.
+              </FieldHint>
             </Field>
             <Field>
               <FieldLabel>서명 인물 ID (선택)</FieldLabel>
@@ -1601,6 +2090,244 @@ const AddSignatoryModal: React.FC<{
           </SubmitBtn>
         </ModalFooter>
       </Modal>
+      <CountrySelectModal
+        isOpen={countryPickerOpen}
+        onClose={() => setCountryPickerOpen(false)}
+        title="서명국 · 참여국 선택"
+        modernCountries={modernCountries as CountryResponseDto[]}
+        historicalCountries={
+          historicalCountries as HistoricalCountryResponseDto[]
+        }
+        onSelect={(c) => {
+          setCountryId(c.isHistorical ? null : c.id)
+          setHistoricalCountryId(c.isHistorical ? c.id : null)
+          setCountryLabel(c.name)
+          setCountryPickerOpen(false)
+        }}
+      />
+    </Overlay>
+  )
+}
+
+function signatoryFormInit(s: TreatySignatoryDto) {
+  return {
+    countryId: s.countryId ?? s.country?.id ?? null,
+    historicalCountryId:
+      s.historicalCountryId ?? s.historicalCountry?.id ?? null,
+    countryLabel: s.country?.name ?? s.historicalCountry?.name ?? '',
+    personId: s.personId ?? '',
+    cabinetId: s.cabinetId ?? '',
+    role: s.role ?? '',
+    participationType: s.participationType,
+    signedAt: toDateInputValue(s.signedAt),
+    note: s.note ?? '',
+  }
+}
+
+// ──────────────────────────────────────────────
+// 서명국 수정 모달
+// ──────────────────────────────────────────────
+
+const EditSignatoryModal: React.FC<{
+  signatory: TreatySignatoryDto
+  onClose: () => void
+  onSaved: () => void
+}> = ({ signatory, onClose, onSaved }) => {
+  const init = signatoryFormInit(signatory)
+  const [countryId, setCountryId] = useState(init.countryId)
+  const [historicalCountryId, setHistoricalCountryId] = useState<
+    string | null
+  >(init.historicalCountryId)
+  const [countryLabel, setCountryLabel] = useState(init.countryLabel)
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false)
+  const [personId, setPersonId] = useState(init.personId)
+  const [cabinetId, setCabinetId] = useState(init.cabinetId)
+  const [role, setRole] = useState(init.role)
+  const [participationType, setParticipationType] =
+    useState<TreatyParticipationType>(init.participationType)
+  const [signedAt, setSignedAt] = useState(init.signedAt)
+  const [note, setNote] = useState(init.note)
+  const [submitting, setSubmitting] = useState(false)
+
+  const { data: modernCountries = [] } = useQuery({
+    queryKey: ['treaty-modal-countries'],
+    queryFn: () => getAllCountries(),
+    staleTime: 60_000,
+  })
+  const { data: historicalCountries = [] } = useQuery({
+    queryKey: ['treaty-modal-hist-countries'],
+    queryFn: () => getAllHistoricalCountries(),
+    staleTime: 60_000,
+  })
+
+  const handleSubmit = async () => {
+    if (!countryId && !historicalCountryId) {
+      toast.error('현대 국가 또는 역사적 국가를 선택하세요.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await treatyApi.updateSignatory(signatory.id, {
+        countryId,
+        historicalCountryId,
+        personId: personId || null,
+        cabinetId: cabinetId || null,
+        role: role || null,
+        participationType,
+        signedAt: signedAt || null,
+        note: note || null,
+      })
+      toast.success('서명국 정보가 저장되었습니다.')
+      onSaved()
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, '저장 중 오류가 발생했습니다.'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Overlay onClick={onClose}>
+      <Modal onClick={(e) => e.stopPropagation()}>
+        <ModalHeader>
+          <ModalTitle>서명국 · 참여국 수정</ModalTitle>
+          <CloseBtn onClick={onClose}>
+            <FiX size={18} />
+          </CloseBtn>
+        </ModalHeader>
+        <ModalBody>
+          <FormRows>
+            <Field>
+              <FieldLabel>국가 (현대 또는 역사) *</FieldLabel>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <PickCountryBtn
+                  type="button"
+                  onClick={() => setCountryPickerOpen(true)}
+                >
+                  <FiGlobe size={14} />
+                  {countryLabel || '국가 선택'}
+                </PickCountryBtn>
+                {(countryId || historicalCountryId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCountryId(null)
+                      setHistoricalCountryId(null)
+                      setCountryLabel('')
+                    }}
+                    style={{
+                      fontSize: 12,
+                      color: '#64748b',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    선택 해제
+                  </button>
+                )}
+              </div>
+              <FieldHint>
+                목록에서 현대 국가 또는 역사적 국가를 고릅니다.
+              </FieldHint>
+            </Field>
+            <Field>
+              <FieldLabel>서명 인물 ID (선택)</FieldLabel>
+              <Input
+                value={personId}
+                onChange={(e) => setPersonId(e.target.value)}
+                placeholder="예: 몰로토프, 리벤트로프의 인물 ID"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>소속 행정부 ID (선택)</FieldLabel>
+              <Input
+                value={cabinetId}
+                onChange={(e) => setCabinetId(e.target.value)}
+                placeholder="예: 스탈린 행정부 ID"
+              />
+            </Field>
+            <Row2>
+              <Field>
+                <FieldLabel>역할/직책 (선택)</FieldLabel>
+                <Input
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  placeholder="예: 외무인민위원"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>참여 유형</FieldLabel>
+                <Select
+                  value={participationType}
+                  onChange={(e) =>
+                    setParticipationType(
+                      e.target.value as TreatyParticipationType,
+                    )
+                  }
+                >
+                  {(
+                    Object.entries(TREATY_PARTICIPATION_LABELS) as [
+                      TreatyParticipationType,
+                      string,
+                    ][]
+                  ).map(([v, l]) => (
+                    <option key={v} value={v}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </Row2>
+            <Field>
+              <FieldLabel>서명일 (선택)</FieldLabel>
+              <Input
+                type="date"
+                value={signedAt}
+                onChange={(e) => setSignedAt(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>비고 (선택)</FieldLabel>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder="추가 메모"
+              />
+            </Field>
+          </FormRows>
+        </ModalBody>
+        <ModalFooter>
+          <CancelBtn onClick={onClose}>취소</CancelBtn>
+          <SubmitBtn onClick={handleSubmit} disabled={submitting}>
+            {submitting ? '저장 중…' : '저장'}
+          </SubmitBtn>
+        </ModalFooter>
+      </Modal>
+      <CountrySelectModal
+        isOpen={countryPickerOpen}
+        onClose={() => setCountryPickerOpen(false)}
+        title="서명국 · 참여국 선택"
+        modernCountries={modernCountries as CountryResponseDto[]}
+        historicalCountries={
+          historicalCountries as HistoricalCountryResponseDto[]
+        }
+        onSelect={(c) => {
+          setCountryId(c.isHistorical ? null : c.id)
+          setHistoricalCountryId(c.isHistorical ? c.id : null)
+          setCountryLabel(c.name)
+          setCountryPickerOpen(false)
+        }}
+      />
     </Overlay>
   )
 }

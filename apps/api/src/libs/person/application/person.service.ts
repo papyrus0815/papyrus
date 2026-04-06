@@ -312,7 +312,9 @@ export class PersonService {
   }
 
   /**
-   * 국가원수/왕위 재임 기록 추가. 수반(HEAD_OF_STATE/HEAD_OF_GOVERNMENT) 재임 시 행정부(Cabinet) 자동 생성.
+   * 국가원수/왕위 재임 기록 추가.
+   * 정부 수반·국가 원수 재임(HEAD_OF_STATE/HEAD_OF_GOVERNMENT)은 기본적으로 행정부(Cabinet)를 자동 생성.
+   * dto.sovereignReignOnly === true 이면 재위(군주 등)만 기록하고 내각 행은 만들지 않음.
    * @param accountId 로그인 계정 ID — 계정별 행정부·각료 구분용
    */
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
@@ -320,7 +322,11 @@ export class PersonService {
     const person = tenure?.person
     const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
     await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenure?.startDate ? String(tenure.startDate) : undefined)
-    if (tenure && (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')) {
+    if (
+      tenure &&
+      !dto.sovereignReignOnly &&
+      (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')
+    ) {
       const existing = await this.personRepository.findCabinetByHeadTenureId(tenure.id)
       if (!existing) {
         await this.personRepository.createCabinet({ headTenureId: tenure.id }, accountId)

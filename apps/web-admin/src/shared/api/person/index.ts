@@ -131,7 +131,7 @@ export const personApi = {
     return Array.isArray(result) ? result : []
   },
 
-  /** 국가별 인물 전체 (countryId 소속 + 해당 국가 재임 인물). GET /persons/by-country/:countryId */
+  /** 국가 페이지 리스트용: person.countryId 소속 + 해당 국가(·연결 역사국) 재임 + affiliation. GET /persons/by-country/:countryId */
   getByCountryId: async (countryId: string) => {
     const conn = getApiConnection()
     const url = `${apiConnection.host}/persons/by-country/${encodeURIComponent(countryId)}`

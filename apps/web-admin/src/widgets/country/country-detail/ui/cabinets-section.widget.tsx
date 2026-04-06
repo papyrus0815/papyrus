@@ -49,6 +49,7 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import {
   type CabinetListItemDto,
+  type CreateGovernmentPositionTenureDto,
   type GovernmentCabinetTenureItem,
   type GovernmentHeadTenureInCabinetList,
   type TenureAchievementByEventLinkRow,
@@ -133,9 +134,9 @@ import {
   formatCabinetTermBadge,
 } from './cabinets-section-timeline'
 import {
+  HEAD_POSITION_TYPES,
   CABINET_SECTION_MAIN as MAIN,
   CABINET_SECTION_MAIN_HOVER as MAIN_HOVER,
-  HEAD_POSITION_TYPES,
   MINISTER_POSITION_TYPES,
   TL_COL_PAD_X,
   TL_FIRST_COL_EXTRA_SHIFT_X,
@@ -170,12 +171,14 @@ import {
   paletteForCabinetListItem,
   resolveReignEraLineForCabinetHead,
   shouldHideCabinetFromExecutiveTimeline,
+  getRegnalOrPersonDisplayName,
   sovereignLegendPersonLabelFromMonarchTenure,
   stripHtmlToPlain,
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
 import { RegisterCabinetModal } from './register-cabinet-modal'
+import { RegisterMonarchModal } from './register-monarch-modal'
 import { TenureHistoryHorizTimeline } from './tenure-history-horiz-timeline'
 import { TreatyLinkModal } from './treaty-link-modal'
 
@@ -320,9 +323,9 @@ export function CabinetsSection({
         ? ({
             kind: 'modern' as const,
             modernCountryId: country.id,
-            linkedHistoricalCountryIds: (
-              country.historicalCountries ?? []
-            ).map((h) => h.id).filter((x): x is string => Boolean(x)),
+            linkedHistoricalCountryIds: (country.historicalCountries ?? [])
+              .map((h) => h.id)
+              .filter((x): x is string => Boolean(x)),
           } as const)
         : ({
             kind: 'historical' as const,
@@ -381,6 +384,10 @@ export function CabinetsSection({
   const [newHeadEndReason, setNewHeadEndReason] = useState<string>('')
   const [newHeadEndReasonDetail, setNewHeadEndReasonDetail] = useState('')
   const [newHeadNotes, setNewHeadNotes] = useState('')
+  const [registerMonarchModalOpen, setRegisterMonarchModalOpen] =
+    useState(false)
+  const [registerMonarchSubmitting, setRegisterMonarchSubmitting] =
+    useState(false)
   const [deletingCabinetId, setDeletingCabinetId] = useState<string | null>(
     null,
   )
@@ -612,10 +619,11 @@ export function CabinetsSection({
         countryTenures as readonly GovernmentHeadTenureInCabinetList[],
         cabinetTimelineCountryScope,
       )
+      const monarchPersonRaw = monarchTenure
+        ? getRegnalOrPersonDisplayName(monarchTenure)
+        : '—'
       const monarchPersonSearch =
-        monarchTenure?.person != null
-          ? getPersonName(monarchTenure.person)
-          : ''
+        monarchPersonRaw !== '—' ? monarchPersonRaw : ''
       return [
         personName,
         posTitle,
@@ -669,15 +677,12 @@ export function CabinetsSection({
       if (line) m.set(c.id, line)
     }
     return m
-  }, [
-    timelineCabinetsMerged,
-    countryTenures,
-    cabinetTimelineCountryScope,
-  ])
+  }, [timelineCabinetsMerged, countryTenures, cabinetTimelineCountryScope])
 
   /** 군주별 색·라벨 — 타임라인 칸·가로 띠·범례(상단 「군주 재위」 블록 없음) */
   const cabinetTimelineMonarchVisuals = useMemo(() => {
-    const tenures = countryTenures as readonly GovernmentHeadTenureInCabinetList[]
+    const tenures =
+      countryTenures as readonly GovernmentHeadTenureInCabinetList[]
     const scope = cabinetTimelineCountryScope
     const monarchOrder = new Map<string, number>()
     let nextOrd = 0
@@ -722,8 +727,7 @@ export function CabinetsSection({
         return {
           key: monId,
           label,
-          lineHex:
-            TL_TERRITORY_PALETTE[ord % TL_TERRITORY_PALETTE.length].line,
+          lineHex: TL_TERRITORY_PALETTE[ord % TL_TERRITORY_PALETTE.length].line,
         }
       })
     return { byCabinetId, legend }
@@ -791,11 +795,7 @@ export function CabinetsSection({
       tenures,
       cabinetTimelineCountryScope,
     )
-  }, [
-    timelineCabinetsMerged,
-    countryTenures,
-    cabinetTimelineCountryScope,
-  ])
+  }, [timelineCabinetsMerged, countryTenures, cabinetTimelineCountryScope])
 
   const isMinisterMatched = (t: GovernmentCabinetTenureItem) => {
     const q = ministerSearchQuery.trim().toLowerCase()
@@ -852,6 +852,7 @@ export function CabinetsSection({
     enabled:
       (!!countryId || !!historicalCountryId) &&
       (registerCabinetModalOpen ||
+        registerMonarchModalOpen ||
         !!editingCabinet ||
         personSelectOpen ||
         !!addMinisterCabinet),
@@ -866,8 +867,16 @@ export function CabinetsSection({
   const headPositionOptions = useMemo(
     () =>
       (positionDefinitions as any[]).filter(
-        (d: any) =>
-          d.positionType && HEAD_POSITION_TYPES.has(d.positionType),
+        (d: any) => d.positionType && HEAD_POSITION_TYPES.has(d.positionType),
+      ),
+    [positionDefinitions],
+  )
+
+  /** 군주 등록 모달 — 직위 유형이 국가 원수(HEAD_OF_STATE)인 정의만 */
+  const headOfStatePositionOptions = useMemo(
+    () =>
+      (positionDefinitions as any[]).filter(
+        (d: any) => d.positionType === 'HEAD_OF_STATE',
       ),
     [positionDefinitions],
   )
@@ -1147,9 +1156,7 @@ export function CabinetsSection({
       t.positionDefinition?.positionType ??
       t.position?.positionType
     return (
-      pt &&
-      HEAD_POSITION_TYPES.has(pt) &&
-      !headTenureIdsWithCabinet.has(t.id)
+      pt && HEAD_POSITION_TYPES.has(pt) && !headTenureIdsWithCabinet.has(t.id)
     )
   })
 
@@ -1186,6 +1193,44 @@ export function CabinetsSection({
     setNewHeadEndReasonDetail('')
     setNewHeadNotes('')
   }, [])
+
+  /** 국가 원수 재임만 등록 (행정부 미생성) — 역대 수반 등록 폼과 동일 필드 */
+  const handleRegisterMonarch = async (dto: CreateGovernmentPositionTenureDto) => {
+    const defOk =
+      dto.positionType === 'HEAD_OF_STATE' &&
+      dto.positionDefinitionId &&
+      headOfStatePositionOptions.some((d: any) => d.id === dto.positionDefinitionId)
+    if (!defOk) {
+      toast.error('국가 원수 직위 정의만 등록할 수 있습니다.')
+      return
+    }
+    setRegisterMonarchSubmitting(true)
+    try {
+      await personCareerApi.addGovernmentPositionTenure(dto)
+      toast.success('군주(국가 원수) 재임이 등록되었습니다.')
+      setRegisterMonarchModalOpen(false)
+      queryClient.invalidateQueries({
+        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
+      })
+      queryClient.invalidateQueries({
+        queryKey: [
+          'tenures-by-country-for-cabinet',
+          countryId,
+          historicalCountryId,
+        ],
+      })
+      queryClient.invalidateQueries({
+        queryKey: ['tenures-by-country', countryId, historicalCountryId],
+      })
+      queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.'
+      toast.error(msg)
+    } finally {
+      setRegisterMonarchSubmitting(false)
+    }
+  }
 
   /** 새 수반 재임 생성 후 행정부까지 한 번에 등록 */
   const handleRegisterNewHeadAndCabinet = async () => {
@@ -1737,6 +1782,13 @@ export function CabinetsSection({
                       <FiPlus size={14} />
                       행정부 등록
                     </CabS.CabListRegisterBtn>
+                    <CabS.CabListMonarchRegisterBtn
+                      type="button"
+                      onClick={() => setRegisterMonarchModalOpen(true)}
+                    >
+                      <FiPlus size={14} />
+                      군주 등록
+                    </CabS.CabListMonarchRegisterBtn>
                   </CabS.CabListControlsRow>
                 </CabS.CabListToolbar>
               </CabS.CabListToolbarShell>
@@ -1761,7 +1813,7 @@ export function CabinetsSection({
                       <EmptyStateSpotlight
                         icon={<FiUsers size={30} strokeWidth={1.75} />}
                         title="등록된 행정부가 없습니다"
-                        description="행정부는 수반(국가원수·정부수반)의 재임 기록을 기반으로 생성됩니다."
+                        description="행정부는 수반(국가원수·정부수반) 재임으로 생성됩니다. 군주 재위만 등록한 경우 이 목록은 비어 있을 수 있으며, 재임은 행정조직「역대 수반」에서 확인할 수 있습니다."
                         primaryAction={{
                           label: '새 수반과 함께 등록',
                           onClick: () => {
@@ -2068,9 +2120,8 @@ export function CabinetsSection({
                                           )
                                         : null
                                       const cardReignLineOnly =
-                                        reignEraLineByCabinetId.get(
-                                          item.id,
-                                        ) ?? null
+                                        reignEraLineByCabinetId.get(item.id) ??
+                                        null
                                       /** 연도 아래 — 연호만(천황·총리 등 직함 문구 없음) */
                                       const yearAxisEraLine = cardReignLineOnly
                                       const cellLabelAriaOpts: Parameters<
@@ -2299,8 +2350,7 @@ export function CabinetsSection({
                                                             lineHeight: 1.35,
                                                             maxWidth:
                                                               TL_THUMB + 12,
-                                                            padding:
-                                                              '4px 9px',
+                                                            padding: '4px 9px',
                                                             borderRadius: 9999,
                                                             boxSizing:
                                                               'border-box',
@@ -5031,6 +5081,21 @@ export function CabinetsSection({
             setRegisterTargetHistoricalCountryId
           }
           resetNewHeadForm={resetNewHeadForm}
+        />
+      )}
+
+      {registerMonarchModalOpen && (
+        <RegisterMonarchModal
+          country={country}
+          isHistorical={isHistorical}
+          countryId={countryId}
+          historicalCountryId={historicalCountryId}
+          headOfStatePositionOptions={headOfStatePositionOptions}
+          submitting={registerMonarchSubmitting}
+          onClose={() => {
+            if (!registerMonarchSubmitting) setRegisterMonarchModalOpen(false)
+          }}
+          onSubmit={handleRegisterMonarch}
         />
       )}
 

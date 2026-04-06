@@ -78,6 +78,84 @@ export const CabinetFormDesc = styled.div`
     color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#374151')};
   }
 `
+
+/** 군주 등록 모달 — 행정부 등록 모달과 동일한 너비·중립 톤 */
+export const MonarchModalBox = styled(ModalBox)`
+  max-width: 920px;
+  min-height: 0;
+  max-height: 90vh;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: monarchModalUp 0.22s ease;
+  @keyframes monarchModalUp {
+    from {
+      transform: translateY(14px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+`
+
+export const MonarchModalHeader = styled(ModalHeader)`
+  align-items: flex-start;
+  gap: 12px;
+`
+
+export const MonarchModalHeaderText = styled.div`
+  flex: 1;
+  min-width: 0;
+`
+
+export const MonarchModalBody = styled(ModalBody)`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 24px 28px 28px;
+`
+
+export const MonarchFormSectionTitle = styled.h3`
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a8a29e' : '#78716c')};
+`
+
+/** 군주 모달 — 직위 정의 없음 등 경고 (주황 계열과 구분) */
+export const MonarchFormDescWarning = styled.div`
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.35)' : 'rgba(220, 38, 38, 0.28)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.1)' : 'rgba(254, 226, 226, 0.65)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fecaca' : '#991b1b')};
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#dc2626')};
+    margin-top: 1px;
+  }
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fee2e2' : '#7f1d1d')};
+  }
+`
+
 /** 탭: register-form-layout과 동일 (pill 20px, 배경 #f1f5f9, 활성 흰색+인디고) */
 export const CabinetTabWrap = styled.div`
   margin-bottom: 24px;
@@ -972,6 +1050,36 @@ export const CabListRegisterBtn = styled.button`
   &:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45);
+  }
+`
+
+/** 군주 등록 — 행정부 등록 옆 보조 CTA (윤곽선) */
+export const CabListMonarchRegisterBtn = styled.button`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  min-height: 40px;
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.primary};
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    box-shadow 0.2s;
+  &:hover {
+    background: rgba(99, 102, 241, 0.08);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
   }
 `
 

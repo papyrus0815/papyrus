@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 import { dynastyApi } from '@/shared/api/dynasty'
-import { getPersonsByTenureCountry, getAllPersons, type PersonResponseDto as Person } from '@/shared/api/persons'
+import { personApi } from '@/shared/api/person'
+import { type PersonResponseDto as Person } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { PersonList } from './person/person-list'
 import { PersonDetailView } from './person/person-detail-view'
@@ -31,7 +32,7 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
     const fetchPersons = async () => {
       setIsLoading(true)
       try {
-        const data = await getPersonsByTenureCountry({ countryId })
+        const data = await personApi.getByCountryId(countryId)
         setPersons(data)
       } catch {
         setPersons([])
