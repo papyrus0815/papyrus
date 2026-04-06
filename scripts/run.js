@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import path from 'path'
 import fs from 'fs'
+import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -30,6 +30,7 @@ function showHelp() {
   migrate-deploy - 미적용 마이그레이션만 적용 (비대화형/CI용)
   generate  - Prisma 클라이언트 생성
   reset     - 데이터베이스 리셋
+  backup    - MySQL 수동 덤프 (docker/mysql/backups, gzip)
 
 🏗️  빌드 (build/)
   nestia    - Nestia API 빌드
@@ -69,8 +70,8 @@ async function main() {
 
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     showHelp()
-    
-return
+
+    return
   }
 
   const scriptPath = args[0]

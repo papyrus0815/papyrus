@@ -25,6 +25,7 @@
     "db:migrate:deploy": "node scripts/run.js database/migrate-deploy",
     "db:generate": "node scripts/run.js database/generate",
     "db:reset": "node scripts/run.js database/reset",
+    "db:backup": "node scripts/run.js database/backup",
     "docker:up": "node scripts/run.js docker/up",
     "docker:up:env": "node scripts/run.js docker/up --env",
     "docker:up:https": "node scripts/run.js docker/up --https",

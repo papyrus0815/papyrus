@@ -88,6 +88,7 @@ coverage/
 # ========================================
 # 로컬 mysqldump 등 (커밋하지 않음)
 backups/*.sql
+docker/mysql/backups/*.sql.gz
 *.db
 *.sqlite
 *.sqlite3
