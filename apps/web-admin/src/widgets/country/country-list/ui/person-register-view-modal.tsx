@@ -45,6 +45,12 @@ export function PersonRegisterViewModal({
 
   const handleSuccess = (personId?: string) => {
     queryClient.invalidateQueries({ queryKey: personKeys.all })
+    if (personId) {
+      queryClient.invalidateQueries({
+        queryKey: personKeys.detailFull(personId),
+      })
+      queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) })
+    }
     onSuccess?.(personId ?? '')
     onClose()
   }

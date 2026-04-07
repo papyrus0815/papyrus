@@ -186,6 +186,8 @@ export class PersonController {
     biography: string | null
     profileImageUrl: string | null
     countryId: string | null
+    fatherId: string | null
+    motherId: string | null
     country: any
     dynasty: any
     religion: any
@@ -294,8 +296,10 @@ export class PersonController {
       birthAdminDivision: person.birthAdminDivision ? { id: person.birthAdminDivision.id, name: person.birthAdminDivision.name } : null,
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
       countryId: person.countryId ?? null,
-      father: person.father,
-      mother: person.mother,
+      fatherId: person.fatherId ?? null,
+      motherId: person.motherId ?? null,
+      father: person.father != null ? serializeBigInt(person.father) : null,
+      mother: person.mother != null ? serializeBigInt(person.mother) : null,
       children,
       foundedCompanies: person.foundedCompanies || [],
       companies: person.Company || [],

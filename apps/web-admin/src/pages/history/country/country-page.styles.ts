@@ -290,15 +290,15 @@ export const HeaderStatValue = styled.div`
 
 // ─── 대시보드 메뉴 콘텐츠 패널 ────────────────────────────────────────────────
 
-export const DashboardMenuContentPanel = styled.div`
+export const DashboardMenuContentPanel = styled.div<{ $wide?: boolean }>`
   padding: 32px 24px;
   min-height: 100%;
   background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+  align-items: ${({ $wide }) => ($wide ? 'stretch' : 'center')};
+  justify-content: ${({ $wide }) => ($wide ? 'flex-start' : 'center')};
+  text-align: ${({ $wide }) => ($wide ? 'left' : 'center')};
 `
 
 export const DashboardMenuContentTitle = styled.h3`
@@ -306,6 +306,23 @@ export const DashboardMenuContentTitle = styled.h3`
   font-size: 18px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 행정부 대시보드: 제목·설명 왼쪽 정렬 */
+export const DashboardAdministrationIntro = styled.div`
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto 4px;
+  text-align: left;
+  align-self: center;
+`
+
+export const DashboardAdministrationDesc = styled.p`
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.5;
+  max-width: none;
 `
 
 export const DashboardMenuContentDesc = styled.p`
@@ -351,6 +368,93 @@ export const DashboardMenuContentButton = styled.button`
             color: ${theme.colors.primary};
           }
         `}
+`
+
+export const DashboardCabinetListWrap = styled.div`
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto 16px;
+  align-self: center;
+  max-height: min(440px, 52vh);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+`
+
+export const DashboardCabinetRow = styled.button`
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.04);
+          color: ${theme.colors.text.primary};
+
+          &:hover {
+            background: rgba(99, 106, 242, 0.12);
+            border-color: rgba(99, 106, 242, 0.35);
+          }
+        `
+      : css`
+          border: 1px solid ${theme.colors.border.default};
+          background: ${theme.colors.background.secondary};
+          color: ${theme.colors.text.primary};
+
+          &:hover {
+            border-color: ${theme.colors.primary};
+            background: ${theme.colors.background.primary};
+          }
+        `}
+`
+
+export const DashboardCabinetRowTitle = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  margin-bottom: 4px;
+`
+
+export const DashboardCabinetRowMeta = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.45;
+`
+
+export const DashboardCabinetEmpty = styled.p`
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.5;
+  text-align: center;
+  align-self: center;
+  max-width: 400px;
+`
+
+export const DashboardCabinetLoading = styled.p`
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  text-align: center;
+  align-self: center;
+`
+
+export const DashboardMenuActions = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  width: 100%;
 `
 
 // ─── 모바일 UI (CountryMobileUI.tsx 전용) ─────────────────────────────────────

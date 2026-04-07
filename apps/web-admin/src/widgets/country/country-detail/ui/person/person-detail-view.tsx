@@ -6,6 +6,7 @@ import styled, { css } from 'styled-components'
 
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
+import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
 
 interface PersonDetailViewProps {
   person: any
@@ -176,6 +177,22 @@ export function PersonDetailView({
                   <InfoCardValue>{person.dynasty.name}</InfoCardValue>
                 </InfoCard>
               )}
+              {person.father && (
+                <InfoCard>
+                  <InfoCardLabel>아버지</InfoCardLabel>
+                  <InfoCardValue>
+                    {getPersonDisplayName(person.father)}
+                  </InfoCardValue>
+                </InfoCard>
+              )}
+              {person.mother && (
+                <InfoCard>
+                  <InfoCardLabel>어머니</InfoCardLabel>
+                  <InfoCardValue>
+                    {getPersonDisplayName(person.mother)}
+                  </InfoCardValue>
+                </InfoCard>
+              )}
             </InfoGrid>
 
             {/* 전기 */}
@@ -199,50 +216,17 @@ export function PersonDetailView({
           >
             {!person.father &&
             !person.mother &&
+            !person.spouse &&
             (!person.children || person.children.length === 0) ? (
               <EmptyState>가족 정보가 없습니다</EmptyState>
             ) : (
-              <GenealogySection>
-                <SectionTitle>가족 관계</SectionTitle>
-                {(person.father || person.mother) && (
-                  <FamilyGroup>
-                    <FamilyGroupTitle>부모</FamilyGroupTitle>
-                    <FamilyGrid>
-                      {person.father && (
-                        <FamilyCard>
-                          <FamilyName>
-                            {getPersonDisplayName(person.father)}
-                          </FamilyName>
-                          <FamilyMeta>아버지</FamilyMeta>
-                        </FamilyCard>
-                      )}
-                      {person.mother && (
-                        <FamilyCard>
-                          <FamilyName>
-                            {getPersonDisplayName(person.mother)}
-                          </FamilyName>
-                          <FamilyMeta>어머니</FamilyMeta>
-                        </FamilyCard>
-                      )}
-                    </FamilyGrid>
-                  </FamilyGroup>
-                )}
-                {person.children && person.children.length > 0 && (
-                  <FamilyGroup>
-                    <FamilyGroupTitle>
-                      자녀 ({person.children.length}명)
-                    </FamilyGroupTitle>
-                    <FamilyGrid>
-                      {person.children.map((child: any) => (
-                        <FamilyCard key={child.id}>
-                          <FamilyName>{getPersonDisplayName(child)}</FamilyName>
-                          <FamilyMeta>자녀</FamilyMeta>
-                        </FamilyCard>
-                      ))}
-                    </FamilyGrid>
-                  </FamilyGroup>
-                )}
-              </GenealogySection>
+              <PersonGenealogyInfographic
+                ego={person}
+                father={person.father}
+                mother={person.mother}
+                spouse={person.spouse}
+                children={person.children}
+              />
             )}
           </TabContent>
         )}
@@ -849,76 +833,6 @@ const EmptyState = styled.div`
   font-weight: 500;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const GenealogySection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`
-
-const SectionTitle = styled.h3`
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const FamilyGroup = styled.div`
-  border-radius: ${RADIUS_CARD}px;
-  padding: 18px 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-        `
-      : css`
-          background: #fff;
-          border: 1px solid #e5e7eb;
-        `}
-`
-
-const FamilyGroupTitle = styled.h4`
-  margin: 0 0 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const FamilyGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-`
-
-const FamilyCard = styled.div`
-  padding: 12px 14px;
-  border-radius: ${RADIUS_BTN}px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-`
-
-const FamilyName = styled.div`
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const FamilyMeta = styled.div`
-  font-size: 12px;
-  font-weight: 400;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 

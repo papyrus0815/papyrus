@@ -889,6 +889,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             nameDisplayOrder: true,
             birthDate: true,
             deathDate: true,
+            profileImageUrl: true,
+            profileImages: {
+              select: { url: true, priority: true },
+              orderBy: [{ priority: Prisma.SortOrder.asc }],
+              take: 1,
+            },
           },
         },
         mother: {
@@ -899,6 +905,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             nameDisplayOrder: true,
             birthDate: true,
             deathDate: true,
+            profileImageUrl: true,
+            profileImages: {
+              select: { url: true, priority: true },
+              orderBy: [{ priority: Prisma.SortOrder.asc }],
+              take: 1,
+            },
           },
         },
         childrenFromFather: {
@@ -909,6 +921,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             nameDisplayOrder: true,
             birthDate: true,
             deathDate: true,
+            profileImageUrl: true,
+            profileImages: {
+              select: { url: true, priority: true },
+              orderBy: [{ priority: Prisma.SortOrder.asc }],
+              take: 1,
+            },
           },
         },
         childrenFromMother: {
@@ -919,6 +937,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             nameDisplayOrder: true,
             birthDate: true,
             deathDate: true,
+            profileImageUrl: true,
+            profileImages: {
+              select: { url: true, priority: true },
+              orderBy: [{ priority: Prisma.SortOrder.asc }],
+              take: 1,
+            },
           },
         },
         spouseRelationsAsPerson: {
@@ -935,11 +959,22 @@ export class PersonPrismaRepository implements IPersonRepository {
                 nameDisplayOrder: true,
                 birthDate: true,
                 deathDate: true,
+                profileImageUrl: true,
+                profileImages: {
+                  select: { url: true, priority: true },
+                  orderBy: [{ priority: Prisma.SortOrder.asc }],
+                  take: 1,
+                },
               },
             },
           },
         },
         nicknames: true,
+        profileImages: {
+          select: { url: true, priority: true },
+          orderBy: [{ priority: Prisma.SortOrder.asc }],
+          take: 1,
+        },
         birthCity: { select: { id: true, name: true } },
         deathCity: { select: { id: true, name: true } },
         birthAdminDivision: { select: { id: true, name: true } },

@@ -495,8 +495,8 @@ export function PersonRegisterView({
         setDynastyId(p.dynastyId ?? '')
         setReligionId(p.religionId ?? '')
         setJobId(p.jobId ?? '')
-        setFatherId(p.fatherId ?? '')
-        setMotherId(p.motherId ?? '')
+        setFatherId(p.fatherId ?? p.father?.id ?? '')
+        setMotherId(p.motherId ?? p.mother?.id ?? '')
         setSpouseId(p.spouseRelations?.[0]?.spouse?.id ?? p.spouseId ?? '')
         if (p.birthYear != null || p.birthDate) {
           if (p.birthYear != null) {

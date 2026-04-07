@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { FiGlobe, FiPlus, FiSearch } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { personKeys } from '@/entities/person/api'
 import { useHistoricalCountries } from '@/entities/historical-country/api'
 import { useCountries } from '@/features/country/api'
 import { GovernmentPositionType } from '@/shared/api/government-positions'
@@ -859,14 +860,25 @@ export function PersonListContent({
         initialCountryId,
         editPersonId: editingPersonId,
         onSuccess: (personId) => {
+          const wasEditing = editingPersonId != null
           if (invalidateKeys.length > 0) {
             queryClient.invalidateQueries({
               queryKey: invalidateKeys as string[],
             })
           }
+          if (personId) {
+            queryClient.invalidateQueries({
+              queryKey: personKeys.detailFull(personId),
+            })
+            queryClient.invalidateQueries({
+              queryKey: personKeys.detail(personId),
+            })
+          }
           setShowRegisterForm(false)
           setEditingPersonId(null)
-          setSelectedPersonId(null)
+          if (!wasEditing) {
+            setSelectedPersonId(null)
+          }
         },
       })}
       <AnimatePresence mode="wait">

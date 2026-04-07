@@ -659,6 +659,24 @@ export const PersonInnerPillBtn = styled.button<{ $active?: boolean }>`
         `}
 `
 
+/**
+ * 국가 상세 인물 서브탭 본문 — TabContentPane이 padding:0이라 헤더·필·리스트에 좌우·상하 여백 부여.
+ * 히스토리 대시보드 PersonTabContentWrap(36px 32px 48px)과 동일 계열.
+ */
+export const PersonTabPaneInset = styled.div`
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 16px 16px 40px;
+  }
+`
+
 /** 인물 탭 공통 헤더 — 전체 사건(EventsTimelineSection)과 동일: paddingBottom 24px, 다음 요소와 gap 32px */
 export const PersonTabSharedHeader = styled.header`
   padding: 0 0 20px;

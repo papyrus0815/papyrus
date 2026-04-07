@@ -76,6 +76,9 @@ export const pathKeys = {
     /** 연대표/대시보드 — 통계 뷰 (전 세계 국가 통계) */
     dashboard: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}`,
+    /** 연대표/대시보드 — 행정부 다국가 비교 */
+    dashboardAdministration: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/${ROUTES.HISTORY.DASHBOARD_ADMINISTRATION}`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
   },
 

@@ -18,7 +18,10 @@ export type { Era }
  */
 export const personKeys = {
   all: ['persons'] as const,
+  /** GET /persons/:id (요약) */
   detail: (id: string) => ['persons', id] as const,
+  /** GET /persons/:id/detail (관계·재임 등 포함 상세) */
+  detailFull: (id: string) => ['person-detail', id] as const,
 }
 
 /**
@@ -87,6 +90,9 @@ export function useUpdatePerson() {
       queryClient.invalidateQueries({
         queryKey: personKeys.detail(variables.id),
       })
+      queryClient.invalidateQueries({
+        queryKey: personKeys.detailFull(variables.id),
+      })
     },
   })
 }
@@ -101,8 +107,11 @@ export function useDeletePerson() {
     mutationFn: async (id: string) => {
       await personsApi.deletePerson(id)
     },
-    onSuccess: () => {
+    onSuccess: (_void, deletedId) => {
       queryClient.invalidateQueries({ queryKey: personKeys.all })
+      queryClient.invalidateQueries({
+        queryKey: personKeys.detailFull(deletedId),
+      })
     },
   })
 }

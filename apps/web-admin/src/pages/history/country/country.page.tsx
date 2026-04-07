@@ -41,8 +41,11 @@ import {
   useUpdateHistoricalCountry,
 } from '@/features/historical-country'
 import { DashboardEventDetailPage } from '@/pages/history/country/dashboard-event-detail.page'
+import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllEvents } from '@/shared/api/events'
+import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { pathKeys } from '@/shared/router'
 import { CountryDashboard } from '@/widgets/country/country-dashboard/ui/country-dashboard'
 import { CountryDetail } from '@/widgets/country/country-detail/ui/country-detail.widget'
@@ -58,31 +61,27 @@ import {
 } from '@/widgets/country/country-list/ui/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
 import { PersonDashboardSection } from '@/widgets/country/person-dashboard-section/ui/person-dashboard-section'
+import { AdministrationCabinetComparison } from '@/widgets/country/administration-cabinet-comparison/administration-cabinet-comparison.widget'
 import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 import * as S from './country-page.styles'
 
-/** 대시보드 메뉴 선택 시 오른쪽 컨텐츠 (통계·가문·민족·전체사건·인물 제외 — 해당 뷰는 각각 전용 섹션으로 렌더) */
+type DashboardMenuOnlyView = Exclude<
+  DashboardContentView,
+  'stats' | 'person' | 'dynasty' | 'ethnicity' | 'events'
+>
+
+/** 저원·군사 등 단순 안내 패널 (행정부는 별도 위젯) */
 function DashboardMenuContent({
   view,
   onNavigateFullPage,
-  onNavigateAdministration,
-  hasSelectedCountry,
 }: {
-  view: Exclude<
-    DashboardContentView,
-    'stats' | 'person' | 'dynasty' | 'ethnicity' | 'events'
-  >
+  view: Exclude<DashboardMenuOnlyView, 'administration'>
   onNavigateFullPage: (path: string) => void
-  onNavigateAdministration: () => void
-  hasSelectedCountry: boolean
 }) {
   const configs: Record<
-    Exclude<
-      DashboardContentView,
-      'stats' | 'person' | 'dynasty' | 'ethnicity' | 'events'
-    >,
+    Exclude<DashboardMenuOnlyView, 'administration'>,
     { title: string; desc: string; fullPath?: string; fullLabel?: string }
   > = {
     legislature: {
@@ -97,12 +96,6 @@ function DashboardMenuContent({
       fullPath: '',
       fullLabel: '',
     },
-    administration: {
-      title: '행정부',
-      desc: '국가 상세 > 행정조직 > 중앙부처 탭에서 해당 국가의 중앙부처를 등록·관리합니다.',
-      fullPath: '',
-      fullLabel: '',
-    },
   }
   const config = configs[view]
   if (!config) return null
@@ -111,16 +104,6 @@ function DashboardMenuContent({
     <S.DashboardMenuContentPanel>
       <S.DashboardMenuContentTitle>{title}</S.DashboardMenuContentTitle>
       <S.DashboardMenuContentDesc>{desc}</S.DashboardMenuContentDesc>
-      {view === 'administration' && (
-        <S.DashboardMenuContentButton
-          type="button"
-          onClick={onNavigateAdministration}
-        >
-          {hasSelectedCountry
-            ? '선택 국가 행정조직 열기'
-            : '국가를 먼저 선택하세요'}
-        </S.DashboardMenuContentButton>
-      )}
       {fullPath && fullLabel && (
         <S.DashboardMenuContentButton
           type="button"
@@ -202,6 +185,9 @@ export default function CountryPage() {
     )
   /** 연대표/대시보드 통계 뷰 URL (/history/dashboard) */
   const isDashboardStatsUrl = /\/history\/dashboard\/?$/.test(location.pathname)
+  /** 연대표/대시보드 행정부 비교 뷰 URL (/history/dashboard/administration) */
+  const isDashboardAdministrationUrl =
+    /\/history\/dashboard\/administration\/?$/.test(location.pathname)
 
   // ==================== API Hooks ====================
   // 현대 국가 데이터
@@ -553,12 +539,19 @@ export default function CountryPage() {
     if (isEventsUrl && countryIdFromUrl) setDashboardContentView('events')
   }, [isEventsUrl, countryIdFromUrl])
 
-  // 연대표/대시보드 인물·연대표·통계 URL 진입 시 뷰 동기화
+  // 연대표/대시보드 인물·연대표·행정부·통계 URL 진입 시 뷰 동기화
   useEffect(() => {
     if (isDashboardPersonsUrl) setDashboardContentView('person')
     else if (isDashboardEventsUrl) setDashboardContentView('events')
+    else if (isDashboardAdministrationUrl)
+      setDashboardContentView('administration')
     else if (isDashboardStatsUrl) setDashboardContentView('stats')
-  }, [isDashboardPersonsUrl, isDashboardEventsUrl, isDashboardStatsUrl])
+  }, [
+    isDashboardPersonsUrl,
+    isDashboardEventsUrl,
+    isDashboardAdministrationUrl,
+    isDashboardStatsUrl,
+  ])
 
   // 역대 수반은 행정조직 탭으로 통합: /persons?tab=heads → /government (URL 정리)
   useEffect(() => {
@@ -579,6 +572,7 @@ export default function CountryPage() {
     useState<DashboardContentView>(() => {
       if (isDashboardPersonsUrl) return 'person'
       if (isDashboardEventsUrl) return 'events'
+      if (isDashboardAdministrationUrl) return 'administration'
       if (isDashboardStatsUrl) return 'stats'
       return 'stats'
     })
@@ -594,6 +588,12 @@ export default function CountryPage() {
     }[]
   >([])
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
+
+  /** 대시보드「행정부」비교용 선택 국가들 (모달 복수 선택, 좌측 목록과 무관) */
+  const [administrationDashboardTerritories, setAdministrationDashboardTerritories] =
+    useState<UnifiedCountry[]>([])
+  const [administrationCountryModalOpen, setAdministrationCountryModalOpen] =
+    useState(false)
 
   const handleToggleListCollapsed = useCallback(() => {
     setListCollapsed((prev) => {
@@ -694,6 +694,87 @@ export default function CountryPage() {
 
     return undefined
   }, [unifiedCountries, selectedId, apiHistoricalCountries])
+
+  /** 국가 선택 모달에서 고른 id → UnifiedCountry (행정부 대시보드용) */
+  const resolveUnifiedCountryByModalPick = useCallback(
+    (id: string, isHistorical: boolean): UnifiedCountry | undefined => {
+      if (!isHistorical) {
+        const modernCountry = unifiedCountries.find((c) => c.id === id)
+        if (modernCountry?.type === 'modern') return modernCountry
+        return undefined
+      }
+      for (const country of unifiedCountries) {
+        if (country.type === 'modern' && country.historicalCountries) {
+          const historical = country.historicalCountries.find((h) => h.id === id)
+          if (historical) return historicalToUnified(historical)
+        }
+      }
+      const fromApi = (apiHistoricalCountries ?? []).find((hc) => hc.id === id)
+      if (fromApi) return historicalToUnified(fromApi as HistoricalCountry)
+      return undefined
+    },
+    [unifiedCountries, apiHistoricalCountries],
+  )
+
+  const handleAdministrationCountryModalSelect = useCallback(
+    (pick: { id: string; name: string; isHistorical: boolean }) => {
+      const resolved = resolveUnifiedCountryByModalPick(
+        pick.id,
+        pick.isHistorical,
+      )
+      if (!resolved) {
+        toast.error('선택한 국가 정보를 불러오지 못했습니다.')
+        return
+      }
+      const pickHist = pick.isHistorical
+      setAdministrationDashboardTerritories((prev) => {
+        const exists = prev.some(
+          (c) => c.id === pick.id && (c.type === 'historical') === pickHist,
+        )
+        if (exists) {
+          return prev.filter(
+            (c) => !(c.id === pick.id && (c.type === 'historical') === pickHist),
+          )
+        }
+        return [...prev, resolved]
+      })
+    },
+    [resolveUnifiedCountryByModalPick],
+  )
+
+  const removeAdministrationTerritory = useCallback((t: UnifiedCountry) => {
+    setAdministrationDashboardTerritories((prev) =>
+      prev.filter((c) => !(c.id === t.id && c.type === t.type)),
+    )
+  }, [])
+
+  const reorderAdministrationTerritories = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return
+      setAdministrationDashboardTerritories((prev) => {
+        if (
+          fromIndex < 0 ||
+          fromIndex >= prev.length ||
+          toIndex < 0 ||
+          toIndex >= prev.length
+        ) {
+          return prev
+        }
+        const next = [...prev]
+        const [item] = next.splice(fromIndex, 1)
+        next.splice(toIndex, 0, item)
+        return next
+      })
+    },
+    [],
+  )
+
+  const handleNavigateAdministrationGovernment = useCallback(
+    (territoryId: string) => {
+      navigate(pathKeys.history.countryGovernment(territoryId))
+    },
+    [navigate],
+  )
 
   /** 탭별 카운트 (미사용 - 향후 확장용) */
   const countUnassigned = useMemo(
@@ -1198,7 +1279,13 @@ export default function CountryPage() {
                 if (selectedId)
                   navigate(pathKeys.history.countryEvents(selectedId))
                 else navigate(pathKeys.history.dashboardEvents())
-              } else if (id === 'stats') navigate(pathKeys.history.dashboard())
+              }               else if (id === 'stats') navigate(pathKeys.history.dashboard())
+              else if (id === 'administration') {
+                navigate(pathKeys.history.dashboardAdministration())
+                if (administrationDashboardTerritories.length === 0) {
+                  setAdministrationCountryModalOpen(true)
+                }
+              }
             }}
             collapsed={listCollapsed}
             onToggleCollapse={handleToggleListCollapsed}
@@ -1284,20 +1371,27 @@ export default function CountryPage() {
                       )
                     ) : dashboardContentView === 'person' ? (
                       <PersonDashboardSection />
+                    ) : dashboardContentView === 'administration' ? (
+                      <AdministrationCabinetComparison
+                        territories={administrationDashboardTerritories}
+                        onOpenCountryPicker={() =>
+                          setAdministrationCountryModalOpen(true)
+                        }
+                        onNavigateGovernment={
+                          handleNavigateAdministrationGovernment
+                        }
+                        onRemoveTerritory={removeAdministrationTerritory}
+                        onReorderTerritories={reorderAdministrationTerritories}
+                      />
                     ) : (
                       <DashboardMenuContent
-                        view={dashboardContentView}
+                        view={
+                          dashboardContentView as Exclude<
+                            DashboardMenuOnlyView,
+                            'administration'
+                          >
+                        }
                         onNavigateFullPage={navigate}
-                        hasSelectedCountry={Boolean(selectedId)}
-                        onNavigateAdministration={() => {
-                          if (!selectedId) {
-                            toast('좌측 목록에서 국가를 먼저 선택해 주세요.')
-                            return
-                          }
-                          navigate(
-                            pathKeys.history.countryGovernment(selectedId),
-                          )
-                        }}
                       />
                     )}
                   </motion.div>
@@ -1403,6 +1497,19 @@ export default function CountryPage() {
       />
 
       {/* 역사적 국가 등록/수정 모달 (인물 등록 모달과 동일 디자인) */}
+      <CountrySelectModal
+        isOpen={administrationCountryModalOpen}
+        onClose={() => setAdministrationCountryModalOpen(false)}
+        title="비교할 국가 선택 (여러 개 선택 가능)"
+        multiSelect
+        selectedCountryIds={administrationDashboardTerritories.map((c) => c.id)}
+        modernCountries={(apiCountries ?? []) as CountryResponseDto[]}
+        historicalCountries={
+          (apiHistoricalCountries ?? []) as HistoricalCountryResponseDto[]
+        }
+        onSelect={handleAdministrationCountryModalSelect}
+      />
+
       <HistoricalCountryFormModal
         isOpen={editingHistorical !== null}
         onClose={() => {

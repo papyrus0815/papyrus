@@ -10,18 +10,18 @@ import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
 import * as CountryDetailStyles from './country-detail.styles'
 import * as CountryStyles from './country-detail.styles'
+import { CountryElectionsSection } from './country-elections-section.widget'
+import { CountryLawsSection } from './country-laws-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
 import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { LinkedHistoricalCountriesSection } from './linked-historical-countries-section.widget'
-import { TreatySectionWidget } from './treaty-section.widget'
 import { LoadingOverlay } from './loading-overlay'
 import { MapRegionSection } from './map-region-section.widget'
 import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
 import { PersonListSection } from './person-list-section.widget'
 import { PersonStatsSection } from './person-stats-section.widget'
-import { CountryElectionsSection } from './country-elections-section.widget'
-import { CountryLawsSection } from './country-laws-section.widget'
+import { TreatySectionWidget } from './treaty-section.widget'
 
 // 목업 데이터 (지도 및 지역 탭용)
 const mockCities = [
@@ -394,103 +394,107 @@ function CountryDetailInner({
 
                       {activeSubTab === 'person' && (
                         <CountryStyles.TabContentPane>
-                          <CountryDetailStyles.PersonTabSharedHeader>
-                            <CountryDetailStyles.PersonTabSharedHeaderLeft>
-                              <CountryDetailStyles.PersonTabSharedTitle>
-                                {personInnerTab === 'stats'
-                                  ? '인물 통계'
-                                  : personInnerTab === 'list' &&
-                                      listShowingDetail
-                                    ? '인물 상세'
-                                    : '인물 리스트'}
-                              </CountryDetailStyles.PersonTabSharedTitle>
-                              <CountryDetailStyles.PersonTabSharedDesc>
-                                {personInnerTab === 'stats'
-                                  ? '총 인물 수, 역할·세기별 분포, 최근 등록 인물을 한눈에 볼 수 있습니다.'
-                                  : personInnerTab === 'list' &&
-                                      listShowingDetail
-                                    ? '기본 정보, 가계도, 활동, 저작을 확인할 수 있습니다.'
-                                    : '이름·약력·가문 검색, 필터로 찾을 수 있습니다.'}
-                              </CountryDetailStyles.PersonTabSharedDesc>
-                            </CountryDetailStyles.PersonTabSharedHeaderLeft>
-                            <CountryDetailStyles.PersonTabSharedHeaderRight>
-                              {personInnerTab === 'stats' && (
-                                <CountryDetailStyles.HeaderActionButton
-                                  type="button"
-                                  onClick={() => setCategoryCrudModalOpen(true)}
-                                  aria-label="관직 카테고리 관리"
-                                  title="관직 카테고리 관리"
-                                >
-                                  <FiSettings size={15} />
-                                  관직 카테고리
-                                </CountryDetailStyles.HeaderActionButton>
-                              )}
-                              {personInnerTab === 'list' && (
-                                <CountryDetailStyles.HeaderIconButton
-                                  type="button"
-                                  onClick={() =>
-                                    setPersonRegisterTrigger((r) => r + 1)
-                                  }
-                                  aria-label="인물 등록"
-                                >
-                                  <FiPlus size={16} />
-                                </CountryDetailStyles.HeaderIconButton>
-                              )}
-                            </CountryDetailStyles.PersonTabSharedHeaderRight>
-                          </CountryDetailStyles.PersonTabSharedHeader>
-                          <CountryDetailStyles.PersonInnerPillNav
-                            role="tablist"
-                            aria-label="인물 하위 메뉴"
-                          >
-                            <CountryDetailStyles.PersonInnerPillBtn
-                              type="button"
-                              role="tab"
-                              aria-selected={personInnerTab === 'stats'}
-                              $active={personInnerTab === 'stats'}
-                              onClick={() => {
-                                setPersonInnerTab('stats')
-                                setListShowingDetail(false)
-                                onPersonInnerTabChange?.('stats')
-                              }}
+                          <CountryDetailStyles.PersonTabPaneInset>
+                            <CountryDetailStyles.PersonTabSharedHeader>
+                              <CountryDetailStyles.PersonTabSharedHeaderLeft>
+                                <CountryDetailStyles.PersonTabSharedTitle>
+                                  {personInnerTab === 'stats'
+                                    ? '인물 통계'
+                                    : personInnerTab === 'list' &&
+                                        listShowingDetail
+                                      ? '인물 상세'
+                                      : '인물 리스트'}
+                                </CountryDetailStyles.PersonTabSharedTitle>
+                                <CountryDetailStyles.PersonTabSharedDesc>
+                                  {personInnerTab === 'stats'
+                                    ? '총 인물 수, 역할·세기별 분포, 최근 등록 인물을 한눈에 볼 수 있습니다.'
+                                    : personInnerTab === 'list' &&
+                                        listShowingDetail
+                                      ? '기본 정보, 가계도, 활동, 저작을 확인할 수 있습니다.'
+                                      : '이름·약력·가문 검색, 필터로 찾을 수 있습니다.'}
+                                </CountryDetailStyles.PersonTabSharedDesc>
+                              </CountryDetailStyles.PersonTabSharedHeaderLeft>
+                              <CountryDetailStyles.PersonTabSharedHeaderRight>
+                                {personInnerTab === 'stats' && (
+                                  <CountryDetailStyles.HeaderActionButton
+                                    type="button"
+                                    onClick={() =>
+                                      setCategoryCrudModalOpen(true)
+                                    }
+                                    aria-label="관직 카테고리 관리"
+                                    title="관직 카테고리 관리"
+                                  >
+                                    <FiSettings size={15} />
+                                    관직 카테고리
+                                  </CountryDetailStyles.HeaderActionButton>
+                                )}
+                                {personInnerTab === 'list' && (
+                                  <CountryDetailStyles.HeaderIconButton
+                                    type="button"
+                                    onClick={() =>
+                                      setPersonRegisterTrigger((r) => r + 1)
+                                    }
+                                    aria-label="인물 등록"
+                                  >
+                                    <FiPlus size={16} />
+                                  </CountryDetailStyles.HeaderIconButton>
+                                )}
+                              </CountryDetailStyles.PersonTabSharedHeaderRight>
+                            </CountryDetailStyles.PersonTabSharedHeader>
+                            <CountryDetailStyles.PersonInnerPillNav
+                              role="tablist"
+                              aria-label="인물 하위 메뉴"
                             >
-                              통계·최근 인물
-                            </CountryDetailStyles.PersonInnerPillBtn>
-                            <CountryDetailStyles.PersonInnerPillBtn
-                              type="button"
-                              role="tab"
-                              aria-selected={personInnerTab === 'list'}
-                              $active={personInnerTab === 'list'}
-                              onClick={() => {
-                                setPersonInnerTab('list')
-                                setListShowingDetail(false)
-                                onPersonInnerTabChange?.('list')
-                              }}
-                            >
-                              인물 리스트
-                            </CountryDetailStyles.PersonInnerPillBtn>
-                          </CountryDetailStyles.PersonInnerPillNav>
-                          {personInnerTab === 'stats' && (
-                            <PersonStatsSection
-                              countryId={country.id}
-                              noOverlap
-                              hideHeader
-                              categoryModalOpen={categoryCrudModalOpen}
-                              onCategoryModalOpenChange={
-                                setCategoryCrudModalOpen
-                              }
-                            />
-                          )}
-                          {personInnerTab === 'list' && (
-                            <PersonListSection
-                              countryId={country.id}
-                              onViewChange={(view) =>
-                                setListShowingDetail(view === 'detail')
-                              }
-                              hideMainHeader
-                              hideCreateButton
-                              registerTrigger={personRegisterTrigger}
-                            />
-                          )}
+                              <CountryDetailStyles.PersonInnerPillBtn
+                                type="button"
+                                role="tab"
+                                aria-selected={personInnerTab === 'stats'}
+                                $active={personInnerTab === 'stats'}
+                                onClick={() => {
+                                  setPersonInnerTab('stats')
+                                  setListShowingDetail(false)
+                                  onPersonInnerTabChange?.('stats')
+                                }}
+                              >
+                                통계·최근 인물
+                              </CountryDetailStyles.PersonInnerPillBtn>
+                              <CountryDetailStyles.PersonInnerPillBtn
+                                type="button"
+                                role="tab"
+                                aria-selected={personInnerTab === 'list'}
+                                $active={personInnerTab === 'list'}
+                                onClick={() => {
+                                  setPersonInnerTab('list')
+                                  setListShowingDetail(false)
+                                  onPersonInnerTabChange?.('list')
+                                }}
+                              >
+                                인물 리스트
+                              </CountryDetailStyles.PersonInnerPillBtn>
+                            </CountryDetailStyles.PersonInnerPillNav>
+                            {personInnerTab === 'stats' && (
+                              <PersonStatsSection
+                                countryId={country.id}
+                                noOverlap
+                                hideHeader
+                                categoryModalOpen={categoryCrudModalOpen}
+                                onCategoryModalOpenChange={
+                                  setCategoryCrudModalOpen
+                                }
+                              />
+                            )}
+                            {personInnerTab === 'list' && (
+                              <PersonListSection
+                                countryId={country.id}
+                                onViewChange={(view) =>
+                                  setListShowingDetail(view === 'detail')
+                                }
+                                hideMainHeader
+                                hideCreateButton
+                                registerTrigger={personRegisterTrigger}
+                              />
+                            )}
+                          </CountryDetailStyles.PersonTabPaneInset>
                         </CountryStyles.TabContentPane>
                       )}
                     </motion.div>
