@@ -3321,10 +3321,13 @@ export const HistoryArticleEditBtn = styled.button`
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : '#cbd5e1'};
   }
 `
-/* 제목/날짜 영역: 100% width */
+/* 제목/날짜 영역 — 본문 열(HistoryArticleInner 720px)과 가로 정렬 */
 export const HistoryArticleMetaSection = styled.div`
   padding: 4px 0 12px;
   width: 100%;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
   box-sizing: border-box;
 `
 export const HistoryHeadlineRow = styled.div`
@@ -3413,7 +3416,7 @@ export const HistoryMetaDateInput = styled.input`
       theme.mode === 'dark' ? '#818cf8' : '#6366f1'};
   }
 `
-/* 본문 영역: 가운데 정렬, max-width 680px */
+/* 본문 영역: 가운데 정렬, max-width 720px */
 export const HistoryArticleInner = styled.div`
   max-width: 720px;
   width: 100%;
@@ -3538,6 +3541,9 @@ export const HistoryArticleSaveBtn = styled.button<{ $isRegister?: boolean }>`
 `
 /** RichTextEditor 본문(EditorContent)과 동일한 타이포·간격 — 수평선은 hr + .prose-hr 모두 지원 */
 export const HistoryArticleProse = styled(RichTextReadView)`
+    /* RichTextEditor showTitle=false 일 때 EditorContent padding(16px 28px)과 본문 폭 일치 */
+  padding: 16px 28px;
+  box-sizing: border-box;
   /* RichTextReadView Root의 pre-wrap은 figure/img 블록과 맞지 않아 뷰에서 이미지가 안 보이는 경우가 있음 */
   white-space: normal;
   font-family:
@@ -3698,7 +3704,18 @@ export const HistoryArticleEmpty = styled.p`
   color: ${({ theme }) =>
     getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
   margin: 0;
-  padding: 6px 0 16px;
+  padding: 6px 28px 16px;
+  box-sizing: border-box;
+`
+
+/** 재임 본문 안내 문구 — 에디터 본문 영역(좌우 28px)과 정렬 */
+export const HistoryArticleBodyHint = styled.p`
+  margin: 0 0 10px;
+  padding: 0 28px;
+  box-sizing: border-box;
+  font-size: 12px;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
 `
 
 /** 재임 기록 본문 — 용어(.term) / 가문 클릭 시 툴팁 (다른 리치텍스트 뷰와 동일 z-index) */

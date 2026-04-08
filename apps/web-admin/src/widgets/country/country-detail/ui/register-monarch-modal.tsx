@@ -7,7 +7,7 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
 import { toast } from 'react-hot-toast'
 import { FiChevronDown, FiInfo, FiSave, FiX } from 'react-icons/fi'
-import type { CreateGovernmentPositionTenureDto } from '@/shared/api/person-career'
+import type { CreateSovereignReignDto } from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
@@ -53,7 +53,7 @@ export function RegisterMonarchModal({
   headOfStatePositionOptions: { id: string; title: string; titleEn?: string | null }[]
   submitting: boolean
   onClose: () => void
-  onSubmit: (dto: CreateGovernmentPositionTenureDto) => void | Promise<void>
+  onSubmit: (dto: CreateSovereignReignDto) => void | Promise<void>
 }) {
   const [selectedAffinityHistoricalId, setSelectedAffinityHistoricalId] =
     useState<string | null>(null)
@@ -155,9 +155,8 @@ export function RegisterMonarchModal({
       regnalNumber.trim() === ''
         ? undefined
         : parseInt(regnalNumber.trim(), 10) || undefined
-    const payload: CreateGovernmentPositionTenureDto = {
+    const payload: CreateSovereignReignDto = {
       personId: selectedPersonId,
-      positionType: 'HEAD_OF_STATE',
       positionDefinitionId: selectedPositionDefinition.id,
       countryId: selectedAffinityHistoricalId
         ? undefined
@@ -170,8 +169,6 @@ export function RegisterMonarchModal({
       regnalNumber: num,
       notes: notesValue,
       showPositionInfo: showOnEventsPage,
-      /** 군주 재위는 행정부(내각)가 아님 — Cabinet(행정부) 레코드를 만들지 않음 */
-      sovereignReignOnly: true,
     }
     await onSubmit(payload)
   }

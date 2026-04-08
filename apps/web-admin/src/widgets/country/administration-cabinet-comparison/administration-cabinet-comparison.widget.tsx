@@ -160,6 +160,21 @@ function formatTenureYearRange(head: {
   return `${sy}년 ${sm}월 — ${ey}년 ${em}월`
 }
 
+/** 수반 재임 대수 — termNumber(의원·대통령 등) 우선, 없으면 regnalNumber(군주 등) */
+function formatCabinetTermLabel(
+  head: CabinetListItemDto['headTenure'],
+): string | null {
+  const tn = head?.termNumber
+  const rn = head?.regnalNumber
+  const st = head?.subTermNumber
+  let core: string | null = null
+  if (tn != null && tn > 0) core = `제${tn}대`
+  else if (rn != null && rn > 0) core = `제${rn}대`
+  if (!core) return null
+  if (st != null && st > 0) return `${core} ${st}기`
+  return core
+}
+
 function headProfileThumbSrc(
   head: CabinetListItemDto['headTenure'],
 ): string | undefined {
@@ -171,10 +186,14 @@ const CabinetMiniBlock = memo(function CabinetMiniBlock({
   cab,
   nameOpts,
   stretch,
+  territoryId,
+  onNavigateGovernment,
 }: {
   cab: CabinetListItemDto
   nameOpts: Parameters<typeof getPersonDisplayName>[1] | undefined
   stretch: boolean
+  territoryId: string
+  onNavigateGovernment: (territoryId: string) => void
 }) {
   const [thumbFailed, setThumbFailed] = useState(false)
   const head = cab.headTenure
@@ -190,11 +209,24 @@ const CabinetMiniBlock = memo(function CabinetMiniBlock({
       )
     : '—'
   const cabName = cab.name?.trim() || head?.title?.trim() || '이름 없는 행정부'
+  const termLabel = head ? formatCabinetTermLabel(head) : null
   const tenureYears = head ? formatTenureYearRange(head) : '—'
   const tenureNote = head?.endDate ? '' : ' (재임 중)'
   const profileAlt = head?.person
     ? `${personName} 프로필 사진`
     : '수반 프로필 사진'
+
+  const navigate = useCallback(() => {
+    onNavigateGovernment(territoryId)
+  }, [onNavigateGovernment, territoryId])
+
+  const ariaLabel = [
+    termLabel,
+    cabName,
+    '행정조직·행정부 상세로 이동',
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   const thumbNode =
     thumbSrc && !thumbFailed ? (
@@ -211,12 +243,20 @@ const CabinetMiniBlock = memo(function CabinetMiniBlock({
     )
 
   return (
-    <S.MiniCabinet $stretch={stretch}>
+    <S.MiniCabinet
+      type="button"
+      $stretch={stretch}
+      aria-label={ariaLabel}
+      onClick={navigate}
+    >
       <S.MiniCabinetContent $centered={stretch}>
         {stretch ? (
           <>
             <S.MiniCabinetThumb $large>{thumbNode}</S.MiniCabinetThumb>
             <S.MiniCabinetTitle>{cabName}</S.MiniCabinetTitle>
+            {termLabel ? (
+              <S.MiniCabinetTerm>{termLabel}</S.MiniCabinetTerm>
+            ) : null}
             <S.MiniCabinetMeta>
               수반 {personName}
               <br />
@@ -229,6 +269,9 @@ const CabinetMiniBlock = memo(function CabinetMiniBlock({
             <S.MiniCabinetThumb>{thumbNode}</S.MiniCabinetThumb>
             <S.MiniCabinetTextCol>
               <S.MiniCabinetTitle>{cabName}</S.MiniCabinetTitle>
+              {termLabel ? (
+                <S.MiniCabinetTerm>{termLabel}</S.MiniCabinetTerm>
+              ) : null}
               <S.MiniCabinetMeta>
                 수반 {personName}
                 <br />
@@ -397,7 +440,7 @@ export function AdministrationCabinetComparison({
   const anyLoading = queries.some((q) => q.isLoading)
 
   const sectionDescription =
-    '연도별로 한 행씩 비교하고, 같은 내각이 이어지면 셀이 세로로 붙습니다. 국가 열 머리글을 드래그해 순서를 바꿀 수 있습니다.'
+    '연도별로 한 행씩 비교하고, 같은 내각이 이어지면 셀이 세로로 붙습니다. 카드에 수반 재임 대수(제N대)가 있으면 표시되며, 카드를 누르면 해당 국가 행정조직(행정부) 상세로 이동합니다. 국가 열 머리글은 드래그해 순서를 바꿀 수 있습니다.'
 
   return (
     <S.WideShell>
@@ -721,6 +764,8 @@ export function AdministrationCabinetComparison({
                                 cab={cab}
                                 nameOpts={nameOpts}
                                 stretch={false}
+                                territoryId={t.id}
+                                onNavigateGovernment={onNavigateGovernment}
                               />
                             ))}
                           </S.CellDataInner>
@@ -749,6 +794,8 @@ export function AdministrationCabinetComparison({
                             cab={cab}
                             nameOpts={nameOpts}
                             stretch={stretch}
+                            territoryId={t.id}
+                            onNavigateGovernment={onNavigateGovernment}
                           />
                         </S.CellDataInner>
                       )}

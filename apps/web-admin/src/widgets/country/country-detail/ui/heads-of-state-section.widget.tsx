@@ -76,6 +76,10 @@ import {
   type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
 
+import {
+  adminTenureHintFromRow,
+  dedupeHeadsOfStateTenuresForDisplay,
+} from './heads-of-state-tenure-dedup'
 import { LineageTree } from './lineage-tree.widget'
 
 const HEADS_POSITION_TYPES = new Set([
@@ -134,7 +138,9 @@ function HeadsTlCard({
   dynastyName,
   achievements,
   lineColor,
+  textColor,
   isDark,
+  adminTenureHint,
 }: {
   thumbUrl: string | null
   personName: string
@@ -149,6 +155,8 @@ function HeadsTlCard({
   lineColor: string
   textColor: string
   isDark: boolean
+  /** 재위 행에만: 동일 기간 행정부 수반 재임이 숨겨졌을 때 안내 */
+  adminTenureHint?: string | null
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -224,6 +232,19 @@ function HeadsTlCard({
         >
           {titleText}
         </div>
+        {adminTenureHint ? (
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 500,
+              color: isDark ? 'rgba(148,163,184,0.95)' : '#64748b',
+              marginTop: 4,
+              lineHeight: 1.35,
+            }}
+          >
+            {adminTenureHint}
+          </div>
+        ) : null}
         <div
           style={{
             marginTop: 5,
@@ -414,6 +435,8 @@ export function HeadsOfStateSection({
   )
   /** 수반 등록 시 이 재임으로 행정부도 함께 만들기 (국가원수·정부수반만 표시) */
   const [createCabinetWithTenure, setCreateCabinetWithTenure] = useState(false)
+  /** 국가원수(HEAD_OF_STATE)만 — 재위만 기록(군주 등록과 동일, 행정부 수반 후보 제외) */
+  const [sovereignReignOnlyForm, setSovereignReignOnlyForm] = useState(false)
 
   /** 현대 국가일 때 하위 역사적 국가 목록 (이 현대 국가에 연결된 역사적 국가) */
   const { data: subordinateHistoricalFromApi = [] } =
@@ -481,6 +504,22 @@ export function HeadsOfStateSection({
         ? [...(countryTenures as any[]), ...popeTenures]
         : [...(countryTenures as any[])],
     [countryTenures, popeTenures, showGlobalPope],
+  )
+
+  /** 목록·계보 표시용: 국왕 재위 + 행정부 수반 재임 이중 행은 재위만 노출 */
+  const tenuresUi = React.useMemo(
+    () => dedupeHeadsOfStateTenuresForDisplay(tenures as any[]),
+    [tenures],
+  )
+
+  const resolveHeadTenureIdForCabinetModal = React.useCallback(
+    (tenureId: string) => {
+      const row =
+        tenuresUi.find((t: any) => t.id === tenureId) ??
+        tenures.find((t: any) => t.id === tenureId)
+      return row?._displayLinkedHeadTenure?.id ?? tenureId
+    },
+    [tenuresUi, tenures],
   )
 
   // 최소 1초 로딩 표시 후 부드럽게 전환
@@ -603,7 +642,7 @@ export function HeadsOfStateSection({
       return '(기타)'
     }
     const map = new Map<string, any[]>()
-    tenures.forEach((t: any) => {
+    tenuresUi.forEach((t: any) => {
       const countryName = getCountryNameForTenure(t)
       const positionLabel = getPositionLabel(t)
       const key =
@@ -637,7 +676,7 @@ export function HeadsOfStateSection({
         if (rankA !== rankB) return rankA - rankB
         return a.label.localeCompare(b.label, 'ko')
       })
-  }, [tenures, positionDefinitions, getCountryNameForTenure])
+  }, [tenuresUi, positionDefinitions, getCountryNameForTenure])
 
   /** UI 표시용 라벨: 구분점(·) 제거 */
   const toDisplayPositionLabel = React.useCallback(
@@ -653,6 +692,8 @@ export function HeadsOfStateSection({
   const editingTenure = editingTenureId
     ? tenures.find((t: any) => t.id === editingTenureId)
     : null
+  const editingIsSovereignReign =
+    editingTenure != null && (editingTenure as any).recordKind === 'SOVEREIGN_REIGN'
 
   React.useEffect(() => {
     if (!editingTenureId || !editingTenure) return
@@ -691,7 +732,12 @@ export function HeadsOfStateSection({
     setRegnalName(getRegnalNameFromNotes(t.notes) || '')
     setShowOnEventsPage(t.showPositionInfo !== false)
     setSelectedAffinityHistoricalId(t.historicalCountryId ?? null)
+    setSovereignReignOnlyForm((t as any).recordKind === 'SOVEREIGN_REIGN')
   }, [editingTenureId, editingTenure, positionDefinitions])
+
+  useEffect(() => {
+    if (sovereignReignOnlyForm) setCreateCabinetWithTenure(false)
+  }, [sovereignReignOnlyForm])
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -708,8 +754,39 @@ export function HeadsOfStateSection({
       const notesValue = regnalName.trim()
         ? `왕명: ${regnalName.trim()}`
         : undefined
+      const editingRow = editingTenureId
+        ? (tenures.find((t: any) => t.id === editingTenureId) as any)
+        : null
+      const editAsSovereign = editingRow?.recordKind === 'SOVEREIGN_REIGN'
+      const useSovereignPath =
+        resolvedPositionType === 'HEAD_OF_STATE' &&
+        sovereignReignOnlyForm &&
+        !!def?.id
+
+      const sovereignPayload = {
+        personId: selectedPersonId,
+        positionDefinitionId: def?.id,
+        countryId: selectedAffinityHistoricalId
+          ? undefined
+          : (countryId ?? undefined),
+        historicalCountryId:
+          selectedAffinityHistoricalId ?? historicalCountryId ?? undefined,
+        startDate,
+        endDate: endDate || undefined,
+        termNumber:
+          regnalNumber.trim() === ''
+            ? undefined
+            : parseInt(regnalNumber, 10) || undefined,
+        regnalNumber:
+          regnalNumber.trim() === ''
+            ? undefined
+            : parseInt(regnalNumber, 10) || undefined,
+        notes: notesValue,
+        showPositionInfo: showOnEventsPage,
+      }
+
       // 정의 선택 시 직함은 2차 카테고리(Definition)에만 두고 Tenure에는 저장하지 않음
-      const payload = {
+      const tenurePayload = {
         personId: selectedPersonId,
         positionType: resolvedPositionType as any,
         positionDefinitionId: def?.id || undefined,
@@ -733,15 +810,37 @@ export function HeadsOfStateSection({
         notes: notesValue,
         showPositionInfo: showOnEventsPage,
       }
+
       if (editingTenureId) {
-        await personCareerApi.updateGovernmentPositionTenure(
-          editingTenureId,
-          payload,
-        )
-        toast.success('재임 기록이 수정되었습니다.')
+        if (editAsSovereign) {
+          await personCareerApi.updateSovereignReign(
+            editingTenureId,
+            sovereignPayload,
+          )
+          toast.success('재위 기록이 수정되었습니다.')
+        } else {
+          await personCareerApi.updateGovernmentPositionTenure(
+            editingTenureId,
+            tenurePayload,
+          )
+          toast.success('재임 기록이 수정되었습니다.')
+        }
+      } else if (useSovereignPath) {
+        await personCareerApi.addSovereignReign(sovereignPayload)
+        toast.success('재위 기록이 추가되었습니다.')
+        queryClient.invalidateQueries({
+          queryKey: ['cabinets-by-country', countryId, historicalCountryId],
+        })
+        queryClient.invalidateQueries({
+          queryKey: [
+            'tenures-by-country-for-cabinet',
+            countryId,
+            historicalCountryId,
+          ],
+        })
       } else {
         const created = (await personCareerApi.addGovernmentPositionTenure(
-          payload,
+          tenurePayload,
         )) as {
           id: string
           countryId?: string | null
@@ -789,14 +888,27 @@ export function HeadsOfStateSection({
     setRegnalName('')
     setShowOnEventsPage(true)
     setCreateCabinetWithTenure(false)
+    setSovereignReignOnlyForm(false)
   }
 
   const handleDeleteTenure = async () => {
     if (!editingTenureId) return
-    if (!window.confirm('이 재임 기록을 삭제하시겠습니까?')) return
+    const row = tenures.find((t: any) => t.id === editingTenureId) as any
+    const isSov = row?.recordKind === 'SOVEREIGN_REIGN'
+    if (
+      !window.confirm(
+        isSov ? '이 재위 기록을 삭제하시겠습니까?' : '이 재임 기록을 삭제하시겠습니까?',
+      )
+    )
+      return
     try {
-      await personCareerApi.deleteGovernmentPositionTenure(editingTenureId)
-      toast.success('재임 기록이 삭제되었습니다.')
+      if (isSov) {
+        await personCareerApi.deleteSovereignReign(editingTenureId)
+        toast.success('재위 기록이 삭제되었습니다.')
+      } else {
+        await personCareerApi.deleteGovernmentPositionTenure(editingTenureId)
+        toast.success('재임 기록이 삭제되었습니다.')
+      }
       resetForm()
       setView('list')
       refetch()
@@ -945,6 +1057,8 @@ export function HeadsOfStateSection({
       toast.error('제목을 입력하세요.')
       return
     }
+    const hostRow = tenures.find((t: any) => t.id === tenureId) as any
+    const achievementIsSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
     setAchievementSubmitting(true)
     try {
       const dto = {
@@ -955,12 +1069,23 @@ export function HeadsOfStateSection({
         showOnEventsPage: achievementShowOnEventsPage,
       }
       if (editingAchievementId) {
-        await personCareerApi.updateTenureAchievement(
-          tenureId,
-          editingAchievementId,
-          dto,
-        )
+        if (achievementIsSovereign) {
+          await personCareerApi.updateSovereignReignAchievement(
+            tenureId,
+            editingAchievementId,
+            dto,
+          )
+        } else {
+          await personCareerApi.updateTenureAchievement(
+            tenureId,
+            editingAchievementId,
+            dto,
+          )
+        }
         toast.success('업적이 수정되었습니다.')
+      } else if (achievementIsSovereign) {
+        await personCareerApi.createSovereignReignAchievement(tenureId, dto)
+        toast.success('업적·한일이 등록되었습니다.')
       } else {
         await personCareerApi.createTenureAchievement(tenureId, dto)
         toast.success('업적·한일이 등록되었습니다.')
@@ -987,8 +1112,17 @@ export function HeadsOfStateSection({
     achievementId: string,
   ) => {
     if (!window.confirm('이 업적을 삭제하시겠습니까?')) return
+    const hostRow = tenures.find((t: any) => t.id === tenureId) as any
+    const achievementHostIsSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
     try {
-      await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
+      if (achievementHostIsSovereign) {
+        await personCareerApi.deleteSovereignReignAchievement(
+          tenureId,
+          achievementId,
+        )
+      } else {
+        await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
+      }
       if (editingAchievementId === achievementId) resetAchievementForm()
       toast.success('업적이 삭제되었습니다.')
       queryClient.invalidateQueries({
@@ -1014,7 +1148,7 @@ export function HeadsOfStateSection({
       effectivePositionLabel != null
         ? (tenuresByPosition.find((g) => g.label === effectivePositionLabel)
             ?.tenures ?? [])
-        : tenures
+        : tenuresUi
     return [...source].sort((a: any, b: any) => {
       const orderA = a.termNumber ?? a.regnalNumber ?? 0
       const orderB = b.termNumber ?? b.regnalNumber ?? 0
@@ -1023,7 +1157,7 @@ export function HeadsOfStateSection({
       const startB = b.startDate ? new Date(b.startDate).getTime() : 0
       return startA - startB
     })
-  }, [tenures, tenuresByPosition, effectivePositionLabel])
+  }, [tenuresUi, tenuresByPosition, effectivePositionLabel])
 
   /** 계보 표시 가능한 직책 그룹(재임이 하나 이상인 직책. 대수 없어도 표시 가능) */
   const lineageEligibleGroups = React.useMemo(
@@ -1602,20 +1736,20 @@ export function HeadsOfStateSection({
                               ? `${(country as { name: string }).name} 역대 수반 계보`
                               : '역대 수반 계보'
                           : '재임 목록'}
-                        {tenures.length > 0 && (
+                        {tenuresUi.length > 0 && (
                           <span className="count">
                             {selectedPositionFilter != null
                               ? (tenuresByPosition.find(
                                   (g) => g.label === selectedPositionFilter,
                                 )?.tenures.length ?? 0)
-                              : tenures.length}
+                              : tenuresUi.length}
                             건
                           </span>
                         )}
                       </ListTitle>
                     </ListHeadLeft>
                     {/* 목록 검색창 — 목록 뷰일 때만 노출 */}
-                    {listViewMode === 'list' && tenures.length > 0 && (
+                    {listViewMode === 'list' && tenuresUi.length > 0 && (
                       <TenureSearchWrap>
                         <TenureSearchIcon>
                           <FiSearch size={14} />
@@ -1663,7 +1797,7 @@ export function HeadsOfStateSection({
                               pointerEvents: 'none',
                             }}
                           >
-                            {tenures.length}개
+                            {tenuresUi.length}개
                           </span>
                         )}
                       </TenureSearchWrap>
@@ -1711,7 +1845,7 @@ export function HeadsOfStateSection({
                       <FiSettings size={16} />
                     </SettingsButton>
                   </ListHead>
-                  {tenures.length === 0 ? (
+                  {tenuresUi.length === 0 ? (
                     <EmptyState>
                       <EmptyIconWrap>
                         <FiUser size={40} />
@@ -1749,7 +1883,9 @@ export function HeadsOfStateSection({
                           }
                           positionHeaders={mergedLineageAll.positionHeaders}
                           onCardClick={(tenureId) => {
-                            setCabinetModalTenureId(tenureId)
+                            setCabinetModalTenureId(
+                              resolveHeadTenureIdForCabinetModal(tenureId),
+                            )
                           }}
                         />
                       ) : (
@@ -1762,7 +1898,9 @@ export function HeadsOfStateSection({
                           getRegnalNameFromNotes={getRegnalNameFromNotes}
                           getDynastyNameForTenure={getDynastyNameForTenure}
                           onCardClick={(tenureId) => {
-                            setCabinetModalTenureId(tenureId)
+                            setCabinetModalTenureId(
+                              resolveHeadTenureIdForCabinetModal(tenureId),
+                            )
                           }}
                         />
                       )}
@@ -2189,6 +2327,9 @@ export function HeadsOfStateSection({
                                                         lineColor={p.line}
                                                         textColor={p.textColor}
                                                         isDark={isDark}
+                                                        adminTenureHint={adminTenureHintFromRow(
+                                                          t,
+                                                        )}
                                                       />
                                                     </div>
                                                   ) : (
@@ -2341,6 +2482,9 @@ export function HeadsOfStateSection({
                                                         lineColor={p.line}
                                                         textColor={p.textColor}
                                                         isDark={isDark}
+                                                        adminTenureHint={adminTenureHintFromRow(
+                                                          t,
+                                                        )}
                                                       />
                                                     </div>
                                                   ) : (
@@ -2612,6 +2756,35 @@ export function HeadsOfStateSection({
                             </EventsPageCheckWrap>
                           </FieldControl>
                         </FieldRow>
+                        {selectedPositionDefinition?.positionType ===
+                          'HEAD_OF_STATE' && (
+                          <FieldRow>
+                            <FieldLabel>행정부 연동</FieldLabel>
+                            <FieldControl>
+                              <EventsPageCheckWrap>
+                                <CheckboxLabelRow>
+                                  <input
+                                    type="checkbox"
+                                    id="heads-sovereign-reign-only-edit"
+                                    checked={sovereignReignOnlyForm}
+                                    disabled={editingIsSovereignReign}
+                                    onChange={(e) =>
+                                      setSovereignReignOnlyForm(e.target.checked)
+                                    }
+                                  />
+                                  <label htmlFor="heads-sovereign-reign-only-edit">
+                                    재위만 기록 (행정부 수반과 분리)
+                                  </label>
+                                </CheckboxLabelRow>
+                                <FieldHint>
+                                  군주 등록과 동일합니다. 체크 시 내각이 자동
+                                  생성되지 않고, 행정부 등록의 수반 후보에도
+                                  나오지 않습니다.
+                                </FieldHint>
+                              </EventsPageCheckWrap>
+                            </FieldControl>
+                          </FieldRow>
+                        )}
                       </FormRows>
                       <FormActions>
                         {editingTenureId && (
@@ -2979,6 +3152,34 @@ export function HeadsOfStateSection({
                         </EventsPageCheckWrap>
                       </FieldControl>
                     </FieldRow>
+                    {selectedPositionDefinition?.positionType ===
+                      'HEAD_OF_STATE' && (
+                      <FieldRow>
+                        <FieldLabel>행정부 연동</FieldLabel>
+                        <FieldControl>
+                          <EventsPageCheckWrap>
+                            <CheckboxLabelRow>
+                              <input
+                                type="checkbox"
+                                id="heads-sovereign-reign-only-new"
+                                checked={sovereignReignOnlyForm}
+                                onChange={(e) =>
+                                  setSovereignReignOnlyForm(e.target.checked)
+                                }
+                              />
+                              <label htmlFor="heads-sovereign-reign-only-new">
+                                재위만 기록 (행정부 수반과 분리)
+                              </label>
+                            </CheckboxLabelRow>
+                            <FieldHint>
+                              군주 등록과 동일합니다. 체크 시 내각이 자동
+                              생성되지 않고, 행정부 등록의 수반 후보에도 나오지
+                              않습니다.
+                            </FieldHint>
+                          </EventsPageCheckWrap>
+                        </FieldControl>
+                      </FieldRow>
+                    )}
                     {(selectedPositionDefinition?.positionType ===
                       'HEAD_OF_STATE' ||
                       selectedPositionDefinition?.positionType ===
@@ -2992,9 +3193,12 @@ export function HeadsOfStateSection({
                                 type="checkbox"
                                 id="heads-create-cabinet-with-tenure"
                                 checked={createCabinetWithTenure}
-                                onChange={(e) =>
-                                  setCreateCabinetWithTenure(e.target.checked)
-                                }
+                                disabled={sovereignReignOnlyForm}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                  setCreateCabinetWithTenure(next)
+                                  if (next) setSovereignReignOnlyForm(false)
+                                }}
                               />
                               <label htmlFor="heads-create-cabinet-with-tenure">
                                 이 재임으로 행정부도 만들기
@@ -3002,7 +3206,8 @@ export function HeadsOfStateSection({
                             </CheckboxLabelRow>
                             <FieldHint>
                               체크하면 행정조직 탭에서 이 수반의 내각에 각료를
-                              바로 추가할 수 있습니다.
+                              바로 추가할 수 있습니다. 재위만 기록과 함께 쓸 수
+                              없습니다.
                             </FieldHint>
                           </EventsPageCheckWrap>
                         </FieldControl>

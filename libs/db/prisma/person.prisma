@@ -225,6 +225,7 @@ model Person {
   /// 선거 후보 이력
   electionCandidacies ElectionCandidacy[] @relation("ElectionCandidacies")
   GovernmentTenures        GovernmentPositionTenure[] @relation("PersonGovernmentTenure")
+  sovereignReigns          SovereignReign[]           @relation("PersonSovereignReign")
   treatySignatories        TreatySignatory[]          @relation("TreatySignatoryPerson")
 
   // 🆕 정규화된 군사 사건 관계

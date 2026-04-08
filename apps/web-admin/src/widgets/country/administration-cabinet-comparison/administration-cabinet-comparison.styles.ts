@@ -574,7 +574,8 @@ export const CellDataInner = styled.div`
   align-items: stretch;
 `
 
-export const MiniCabinet = styled.div<{ $stretch?: boolean }>`
+/** 행정부 카드 — 클릭 시 해당 국가 행정조직(/government)으로 이동 */
+export const MiniCabinet = styled.button<{ $stretch?: boolean }>`
   width: 100%;
   max-width: 100%;
   padding: ${({ $stretch }) => ($stretch ? '12px 14px' : '10px 12px')};
@@ -582,7 +583,15 @@ export const MiniCabinet = styled.div<{ $stretch?: boolean }>`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
   box-shadow: none;
-  transition: border-color 0.2s ease;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color 0.2s ease,
+    background 0.15s ease;
   ${({ $stretch }) =>
     $stretch &&
     css`
@@ -596,9 +605,17 @@ export const MiniCabinet = styled.div<{ $stretch?: boolean }>`
 
   &:hover {
     border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : theme.colors.background.secondary};
   }
 
-  &:focus-within {
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
     ${({ theme }) =>
       theme.mode === 'dark'
         ? css`
@@ -679,6 +696,16 @@ export const MiniCabinetTitle = styled.div`
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.35;
+`
+
+/** 수반 재임 대수(제N대) — termNumber / regnalNumber */
+export const MiniCabinetTerm = styled.div`
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.3;
 `
 
 export const MiniCabinetMeta = styled.div`

@@ -75,6 +75,8 @@ export interface PersonResponseDto {
   isAlive?: boolean
   // 정부 직위 재임 기록
   governmentTenures?: any[]
+  /** 군주·재위 전용 기록 (SovereignReign — 행정부 재임과 별도 테이블) */
+  sovereignReigns?: any[]
   createdAt: string
   updatedAt: string
   /** 등록 계정 ID (소유권 검사용, 선택 노출) */

@@ -19,6 +19,7 @@ import { ApiTags } from '@nestjs/swagger'
 import { PersonService } from '../application/person.service'
 import {
   CreateGovernmentPositionTenureDto,
+  CreateSovereignReignDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
@@ -393,6 +394,59 @@ export class GovernmentPositionController {
     await this.personService.deleteGovernmentPositionTenure(id)
   }
 
+  /** 군주·재위 전용 기록 추가 (SovereignReign — 행정부와 별도 테이블) */
+  @Post('sovereign-reigns')
+  async addSovereignReign(@Req() req: Request, @Body() dto: CreateSovereignReignDto): Promise<any> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.addSovereignReign(dto, accountId)
+    return serializeBigInt(result)
+  }
+
+  @Put('sovereign-reigns/:id')
+  async updateSovereignReign(
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateSovereignReignDto>,
+  ): Promise<any> {
+    const result = await this.personService.updateSovereignReign(id, dto)
+    return serializeBigInt(result)
+  }
+
+  @Delete('sovereign-reigns/:id')
+  async deleteSovereignReign(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteSovereignReign(id)
+  }
+
+  @Post('sovereign-reigns/:sovereignReignId/achievements')
+  async addSovereignReignAchievement(
+    @Param('sovereignReignId') sovereignReignId: string,
+    @Body() dto: CreateTenureAchievementDto,
+  ): Promise<any> {
+    const result = await this.personService.createSovereignReignAchievement(sovereignReignId, dto)
+    return serializeBigInt(result)
+  }
+
+  @Patch('sovereign-reigns/:sovereignReignId/achievements/:achievementId')
+  async updateSovereignReignAchievement(
+    @Param('sovereignReignId') sovereignReignId: string,
+    @Param('achievementId') achievementId: string,
+    @Body() dto: UpdateTenureAchievementDto,
+  ): Promise<any> {
+    const result = await this.personService.updateSovereignReignAchievement(
+      sovereignReignId,
+      achievementId,
+      dto,
+    )
+    return serializeBigInt(result)
+  }
+
+  @Delete('sovereign-reigns/:sovereignReignId/achievements/:achievementId')
+  async deleteSovereignReignAchievement(
+    @Param('sovereignReignId') sovereignReignId: string,
+    @Param('achievementId') achievementId: string,
+  ): Promise<void> {
+    await this.personService.deleteSovereignReignAchievement(sovereignReignId, achievementId)
+  }
+
   /**
    * 재임 업적·한일 추가 (사건과 별도 개념, 재위 기간 중 한 일)
    */
@@ -462,6 +516,15 @@ export class GovernmentPositionController {
     @Body() dto: CreateRegnalEraDto,
   ): Promise<any> {
     const result = await this.personService.createRegnalEra(tenureId, dto)
+    return serializeBigInt(result)
+  }
+
+  @Post('sovereign-reigns/:sovereignReignId/regnal-eras')
+  async addSovereignReignRegnalEra(
+    @Param('sovereignReignId') sovereignReignId: string,
+    @Body() dto: CreateRegnalEraDto,
+  ): Promise<any> {
+    const result = await this.personService.createRegnalEraForSovereignReign(sovereignReignId, dto)
     return serializeBigInt(result)
   }
 

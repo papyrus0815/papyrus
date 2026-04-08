@@ -296,6 +296,9 @@ model Event {
   /// 재임 기록에서 이 사건을 정본으로 참조
   tenureAchievements TenureAchievement[] @relation("TenureAchievementEvent")
 
+  /// 재위(SovereignReign) 업적에서 이 사건을 정본으로 참조
+  sovereignReignAchievements SovereignReignAchievement[] @relation("SovereignReignAchievementEvent")
+
   /// 이 사건을 축으로 묶인 다국 행정부 그룹 (CabinetLinkageGroup.eventId)
   cabinetLinkageGroups CabinetLinkageGroup[] @relation("CabinetLinkageEvent")
 

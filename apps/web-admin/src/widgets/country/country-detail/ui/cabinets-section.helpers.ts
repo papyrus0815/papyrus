@@ -713,16 +713,37 @@ export function shouldHideCabinetFromExecutiveTimeline(
   return tenureBundleHasCeremonialHeadCabinetHideTitle(head)
 }
 
+/** `government_position_tenure` 줄만 — 군주 테이블(`SOVEREIGN_REIGN`) 행은 제외 */
+function isLegacyTenureMonarchForCabinetTimeline(
+  head: GovernmentHeadTenureInCabinetList | null | undefined,
+): boolean {
+  if (!head) return false
+  if ((head as { recordKind?: string }).recordKind === 'SOVEREIGN_REIGN')
+    return false
+  const pt = head.positionType ?? head.positionDefinition?.positionType ?? null
+  if (pt === 'HEAD_OF_GOVERNMENT') return false
+  return tenureBundleHasSovereignMonarchTitle(head)
+}
+
+function tenureRowPersonId(
+  t: GovernmentHeadTenureInCabinetList,
+): string | null {
+  const row = t as { personId?: string | null; person?: { id?: string | null } }
+  if (row.personId && typeof row.personId === 'string') return row.personId
+  if (row.person?.id) return row.person.id
+  return null
+}
+
 /**
- * 타임라인 군주 색·연호·기간 겹침 — 직함 번들이 군주·황제 계열로 판별될 때.
+ * 타임라인 군주 색·연호·기간 겹침 — 군주 테이블 병합 행 또는 직함 번들 판별.
  */
 export function isSovereignMonarchTenureForCabinetTimeline(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
 ): boolean {
   if (!head) return false
-  const pt = head.positionType ?? head.positionDefinition?.positionType ?? null
-  if (pt === 'HEAD_OF_GOVERNMENT') return false
-  return tenureBundleHasSovereignMonarchTitle(head)
+  if ((head as { recordKind?: string }).recordKind === 'SOVEREIGN_REIGN')
+    return true
+  return isLegacyTenureMonarchForCabinetTimeline(head)
 }
 
 function lastUtcDayInMonth(year: number, month1to12: number): number {
@@ -799,6 +820,53 @@ function headTenureDateRangeMs(tenure: {
   return { start, end: Math.max(start, end) }
 }
 
+function tenureRangesOverlap(
+  a: GovernmentHeadTenureInCabinetList,
+  b: GovernmentHeadTenureInCabinetList,
+): boolean {
+  const ra = headTenureDateRangeMs(a)
+  const rb = headTenureDateRangeMs(b)
+  if (!ra || !rb) return false
+  return ra.start <= rb.end && rb.start <= ra.end
+}
+
+/**
+ * 타임라인·범례·겹침 계산용 군주 후보 목록.
+ * - API 병합 행 중 `recordKind === 'SOVEREIGN_REIGN'`(군주 테이블)은 항상 포함.
+ * - 같은 사람·기간이 군주 테이블에 있으면, 겹치는 재임(legacy) 군주 줄은 제외(이중 표시 방지).
+ */
+export function effectiveMonarchTenuresForCabinetTimeline(
+  allCountryTenures:
+    | readonly GovernmentHeadTenureInCabinetList[]
+    | null
+    | undefined,
+): GovernmentHeadTenureInCabinetList[] {
+  if (!allCountryTenures?.length) return []
+  const list = [...allCountryTenures]
+  const sovereignRows = list.filter(
+    (t) => (t as { recordKind?: string }).recordKind === 'SOVEREIGN_REIGN',
+  )
+  const legacyCandidates = list.filter((t) =>
+    isLegacyTenureMonarchForCabinetTimeline(t),
+  )
+  const keptLegacy: GovernmentHeadTenureInCabinetList[] = []
+  for (const t of legacyCandidates) {
+    const pid = tenureRowPersonId(t)
+    let shadowed = false
+    if (pid) {
+      for (const s of sovereignRows) {
+        if (tenureRowPersonId(s) !== pid) continue
+        if (tenureRangesOverlap(t, s)) {
+          shadowed = true
+          break
+        }
+      }
+    }
+    if (!shadowed) keptLegacy.push(t)
+  }
+  return [...sovereignRows, ...keptLegacy]
+}
+
 /**
  * 국가 상세 「행정부」타임라인의 국가 범위.
  * 현대국가 페이지: `countryId`만 있는 총리 재임과 `historicalCountryId`만 있는 천황 재임을 한 묶음으로 본다.
@@ -868,7 +936,10 @@ export function executiveHeadOverlapsMonarchReignInCountry(
   const execRange = headTenureDateRangeMs(execHead)
   if (!execRange) return false
 
-  for (const m of allCountryTenures) {
+  const monarchPool = effectiveMonarchTenuresForCabinetTimeline(
+    allCountryTenures,
+  )
+  for (const m of monarchPool) {
     if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
     if (!headTenuresMatchForMonarchOverlap(m, execHead, scope)) continue
     const mRange = headTenureDateRangeMs(m)
@@ -968,9 +1039,12 @@ export function overlappingMonarchTenureForExecutiveHead(
   const execRange = headTenureDateRangeMs(execHead)
   if (!execRange) return null
 
+  const monarchPool = effectiveMonarchTenuresForCabinetTimeline(
+    allCountryTenures,
+  )
   let best: GovernmentHeadTenureInCabinetList | null = null
   let bestOverlap = -1
-  for (const m of allCountryTenures) {
+  for (const m of monarchPool) {
     if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
     if (!headTenuresMatchForMonarchOverlap(m, execHead, scope)) continue
     const mRange = headTenureDateRangeMs(m)
@@ -1055,7 +1129,10 @@ export function monarchReignLegendForCabinetTimeline(
   const out: MonarchReignLegendItem[] = []
   const seen = new Set<string>()
 
-  for (const m of allCountryTenures) {
+  const monarchPool = effectiveMonarchTenuresForCabinetTimeline(
+    allCountryTenures,
+  )
+  for (const m of monarchPool) {
     if (!isSovereignMonarchTenureForCabinetTimeline(m) || !m.startDate) continue
     if (!tenureInCabinetTimelineCountryScope(m, scope)) continue
     const mr = headTenureDateRangeMs(m)
@@ -1101,12 +1178,15 @@ export function cabinetTimelineHeaderYearRange(
   }
 
   if (allCountryTenures?.length) {
+    const monarchPool = effectiveMonarchTenuresForCabinetTimeline(
+      allCountryTenures,
+    )
     for (const c of timelineCabinets) {
       const h = c.headTenure
       if (!h?.startDate || shouldHideCabinetFromExecutiveTimeline(h)) continue
       const execRange = headTenureDateRangeMs(h)
       if (!execRange) continue
-      for (const m of allCountryTenures) {
+      for (const m of monarchPool) {
         if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
         if (!headTenuresMatchForMonarchOverlap(m, h, scope)) continue
         const mRange = headTenureDateRangeMs(m)
@@ -1159,7 +1239,8 @@ export function resolveReignEraLineForCabinetHead(
   }
 
   if (!countryTenures?.length) return null
-  const monarchs = countryTenures.filter((t) => {
+  const monarchPool = effectiveMonarchTenuresForCabinetTimeline(countryTenures)
+  const monarchs = monarchPool.filter((t) => {
     if (!tenureCoversIsoDate(t, iso)) return false
     if (!isSovereignMonarchTenureForCabinetTimeline(t)) return false
     if (scope) {

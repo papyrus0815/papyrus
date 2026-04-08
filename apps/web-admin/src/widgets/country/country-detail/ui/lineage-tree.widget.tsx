@@ -6,6 +6,8 @@ import React, { useMemo } from 'react'
 import { FiUser } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { adminTenureHintFromRow } from './heads-of-state-tenure-dedup'
+
 const TIMELINE_WIDTH = 88
 /** 타임라인 막대와 카드 영역 사이 여백(px) */
 const TIMELINE_TO_CARD_GAP = 40
@@ -1133,6 +1135,7 @@ export function LineageTree({
                   const parentDisplay =
                     parentRegnal ||
                     (parentTenure ? getPersonName(parentTenure.person) : '')
+                  const linkedHeadHint = adminTenureHintFromRow(t)
 
                   return (
                     <TreeCardYearBased
@@ -1183,6 +1186,9 @@ export function LineageTree({
                       )}
                       {!isCompactCard && titleText && titleText !== '—' && (
                         <TreeCardTitle>{titleText}</TreeCardTitle>
+                      )}
+                      {!isCompactCard && linkedHeadHint && (
+                        <TreeCardAdminHint>{linkedHeadHint}</TreeCardAdminHint>
                       )}
                     </TreeCardYearBased>
                   )
@@ -1280,6 +1286,7 @@ export function LineageTree({
                       const parentDisplay =
                         parentRegnal ||
                         (parentTenure ? getPersonName(parentTenure.person) : '')
+                      const linkedHeadHint = adminTenureHintFromRow(t)
 
                       const isFirstColOfGroup =
                         pos != null && separatorColsSet.has(pos.col)
@@ -1343,6 +1350,11 @@ export function LineageTree({
                             )}
                             {titleText && titleText !== '—' && (
                               <TreeCardTitle>{titleText}</TreeCardTitle>
+                            )}
+                            {linkedHeadHint && (
+                              <TreeCardAdminHint>
+                                {linkedHeadHint}
+                              </TreeCardAdminHint>
                             )}
                           </TreeCard>
                         </TreeCardWrap>
@@ -1462,14 +1474,17 @@ const PositionHeaderCell = styled.div`
   justify-content: flex-start;
   font-size: 13px;
   font-weight: 700;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#1e1b4b'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#1e1b4b')};
   letter-spacing: -0.02em;
   box-sizing: border-box;
   padding: 0 16px;
-  background: ${({ theme }) => theme.mode === 'dark'
-    ? 'rgba(99,102,241,0.12)'
-    : 'linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%)'};
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : '#ddd6fe'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99,102,241,0.12)'
+      : 'linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : '#ddd6fe'};
   border-radius: 10px;
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
@@ -1509,7 +1524,12 @@ const TimelineBar = styled.div`
   bottom: 0;
   width: 2px;
   margin-left: -1px;
-  background: linear-gradient(180deg, #ddd6fe 0%, #a78bfa 40%, ${TIMELINE_ACCENT} 100%);
+  background: linear-gradient(
+    180deg,
+    #ddd6fe 0%,
+    #a78bfa 40%,
+    ${TIMELINE_ACCENT} 100%
+  );
   border-radius: 999px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
 `
@@ -1526,7 +1546,7 @@ const TimelineNode = styled.span`
   border-radius: 50%;
   background: ${TIMELINE_ACCENT};
   box-shadow:
-    0 0 0 2px ${({ theme }) => theme.mode === 'dark' ? '#1a1a2e' : '#fff'},
+    0 0 0 2px ${({ theme }) => (theme.mode === 'dark' ? '#1a1a2e' : '#fff')},
     0 0 0 4px rgba(124, 58, 237, 0.2);
   flex-shrink: 0;
 `
@@ -1556,12 +1576,15 @@ const TimelineLabelWrap = styled.span`
 const TimelineLabel = styled.span`
   font-size: 11px;
   font-weight: 700;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#a78bfa' : '#4c1d95'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a78bfa' : '#4c1d95')};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   padding: 2px 8px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.15)' : '#faf5ff'};
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.35)' : '#ddd6fe'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(124,58,237,0.15)' : '#faf5ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(124,58,237,0.35)' : '#ddd6fe'};
   border-radius: 999px;
   display: inline-block;
   box-shadow: 0 1px 2px rgba(124, 58, 237, 0.08);
@@ -1674,14 +1697,18 @@ const TreeCardYearBased = styled.div`
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
   padding: 14px 14px 12px;
-  background: ${({ theme }) => theme.mode === 'dark'
-    ? 'rgba(255,255,255,0.05)'
-    : 'linear-gradient(160deg, #fff 0%, #f8faff 100%)'};
-  border: 1.5px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.05)'
+      : 'linear-gradient(160deg, #fff 0%, #f8faff 100%)'};
+  border: 1.5px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 14px;
-  box-shadow: ${({ theme }) => theme.mode === 'dark'
-    ? '0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(99,102,241,0.08)'
-    : '0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(99,102,241,0.04)'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(99,102,241,0.08)'
+      : '0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(99,102,241,0.04)'};
   cursor: pointer;
   transition:
     box-shadow 0.2s ease,
@@ -1716,14 +1743,18 @@ const TreeCard = styled.div`
   width: ${CARD_WIDTH}px;
   min-height: ${CARD_HEIGHT}px;
   padding: 14px 14px 12px;
-  background: ${({ theme }) => theme.mode === 'dark'
-    ? 'rgba(255,255,255,0.05)'
-    : 'linear-gradient(160deg, #fff 0%, #f8faff 100%)'};
-  border: 1.5px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.05)'
+      : 'linear-gradient(160deg, #fff 0%, #f8faff 100%)'};
+  border: 1.5px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 14px;
-  box-shadow: ${({ theme }) => theme.mode === 'dark'
-    ? '0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(99,102,241,0.08)'
-    : '0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(99,102,241,0.04)'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(99,102,241,0.08)'
+      : '0 1px 3px rgba(15,23,42,0.06), 0 4px 12px rgba(99,102,241,0.04)'};
   cursor: pointer;
   transition:
     box-shadow 0.2s ease,
@@ -1810,11 +1841,14 @@ const TreeCardReign = styled.div`
   align-items: center;
   padding: 2px 9px;
   border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.35)' : '#ddd6fe'};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(124,58,237,0.12)' : '#f5f3ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(124,58,237,0.35)' : '#ddd6fe'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(124,58,237,0.12)' : '#f5f3ff'};
   font-size: 11px;
   font-weight: 700;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#a78bfa' : '#4c1d95'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a78bfa' : '#4c1d95')};
   margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -1858,8 +1892,11 @@ const TreeCardRelation = styled.div`
   gap: 4px;
   margin-top: auto;
   padding: 4px 8px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e9ecef'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e9ecef'};
   border-radius: 6px;
   font-size: 10px;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1881,12 +1918,24 @@ const TreeCardTitle = styled.div`
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 600;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#94a3b8' : '#374151'};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f3f4f6'};
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#374151')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f3f4f6'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
   border-radius: 6px;
   line-height: 1.4;
   letter-spacing: 0.01em;
+`
+
+const TreeCardAdminHint = styled.div`
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.95)' : '#64748b'};
 `
 
 const TreeCardAvatar = styled.div<{ $hasImage?: boolean }>`

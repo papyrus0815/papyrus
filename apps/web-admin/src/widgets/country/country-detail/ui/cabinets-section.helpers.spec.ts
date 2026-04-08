@@ -1,6 +1,7 @@
 import {
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
+  effectiveMonarchTenuresForCabinetTimeline,
   isSovereignMonarchTenureForCabinetTimeline,
   lineColorForCabinetHeadPositionBadge,
   shouldHideCabinetFromExecutiveTimeline,
@@ -135,6 +136,51 @@ describe('isSovereignMonarchTenureForCabinetTimeline', () => {
         positionDefinition: { title: '총리' },
       } as any),
     ).toBe(false)
+  })
+
+  it('recordKind SOVEREIGN_REIGN 이면 직함 없어도 군주 후보', () => {
+    expect(
+      isSovereignMonarchTenureForCabinetTimeline({
+        recordKind: 'SOVEREIGN_REIGN',
+        startDate: '1840-01-01',
+      } as any),
+    ).toBe(true)
+  })
+})
+
+describe('effectiveMonarchTenuresForCabinetTimeline', () => {
+  it('군주 테이블 행과 겹치는 legacy 군주 재임은 한 번만', () => {
+    const sovereign = {
+      id: 'sr-1',
+      recordKind: 'SOVEREIGN_REIGN',
+      personId: 'p1',
+      startDate: '1840-06-07',
+      endDate: '1861-01-02',
+      positionDefinition: { title: '국왕' },
+    } as any
+    const legacyDup = {
+      id: 't-1',
+      recordKind: 'TENURE',
+      personId: 'p1',
+      startDate: '1840-06-07',
+      endDate: '1861-01-02',
+      positionType: 'HEAD_OF_STATE',
+      positionDefinition: { title: '프로이센 국왕' },
+    } as any
+    const out = effectiveMonarchTenuresForCabinetTimeline([sovereign, legacyDup])
+    expect(out.map((x) => x.id)).toEqual(['sr-1'])
+  })
+
+  it('군주 테이블 행이 없으면 legacy 군주 재임 유지', () => {
+    const legacy = {
+      id: 't-1',
+      positionType: 'HEAD_OF_STATE',
+      positionDefinition: { title: 'King' },
+      startDate: '1840-01-01',
+    } as any
+    expect(effectiveMonarchTenuresForCabinetTimeline([legacy]).map((x) => x.id)).toEqual([
+      't-1',
+    ])
   })
 })
 

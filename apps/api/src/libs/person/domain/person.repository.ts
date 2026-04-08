@@ -11,6 +11,7 @@ import {
   CreateEducationDto,
   CreateGovernmentPositionDefinitionDto,
   CreateGovernmentPositionTenureDto,
+  CreateSovereignReignDto,
   CreateLegalCareerDto,
   CreateMediaCareerDto,
   CreateMedicalCareerDto,
@@ -297,8 +298,28 @@ export interface IPersonRepository {
     tenureId: string,
     achievementId: string,
   ): Promise<void>
-  /** 연호·시대명 (재임당 1:N) */
-  createRegnalEra(tenureId: string, dto: CreateRegnalEraDto): Promise<any>
+  createSovereignReignAchievement(
+    sovereignReignId: string,
+    dto: CreateTenureAchievementDto,
+  ): Promise<any>
+  updateSovereignReignAchievement(
+    sovereignReignId: string,
+    achievementId: string,
+    dto: UpdateTenureAchievementDto,
+  ): Promise<any>
+  deleteSovereignReignAchievement(
+    sovereignReignId: string,
+    achievementId: string,
+  ): Promise<void>
+  /** 연호·시대명 — 재임(GovernmentPositionTenure) 또는 재위(SovereignReign) 중 하나 */
+  createRegnalEra(
+    parent: { tenureId: string } | { sovereignReignId: string },
+    dto: CreateRegnalEraDto,
+  ): Promise<any>
+  addSovereignReign(dto: CreateSovereignReignDto, accountId?: string): Promise<any>
+  updateSovereignReign(id: string, dto: Partial<CreateSovereignReignDto>): Promise<any>
+  deleteSovereignReign(id: string): Promise<void>
+  findSovereignReignById(id: string): Promise<any | null>
   updateRegnalEra(id: string, dto: UpdateRegnalEraDto): Promise<any>
   deleteRegnalEra(id: string): Promise<void>
   /**

@@ -22,6 +22,7 @@ import {
   CreateEducationDto,
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
+  CreateSovereignReignDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
@@ -314,7 +315,7 @@ export class PersonService {
   /**
    * 국가원수/왕위 재임 기록 추가.
    * 정부 수반·국가 원수 재임(HEAD_OF_STATE/HEAD_OF_GOVERNMENT)은 기본적으로 행정부(Cabinet)를 자동 생성.
-   * dto.sovereignReignOnly === true 이면 재위(군주 등)만 기록하고 내각 행은 만들지 않음.
+   * 군주 재위만 기록할 때는 addSovereignReign을 사용합니다.
    * @param accountId 로그인 계정 ID — 계정별 행정부·각료 구분용
    */
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
@@ -324,7 +325,6 @@ export class PersonService {
     await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenure?.startDate ? String(tenure.startDate) : undefined)
     if (
       tenure &&
-      !dto.sovereignReignOnly &&
       (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')
     ) {
       const existing = await this.personRepository.findCabinetByHeadTenureId(tenure.id)
@@ -355,6 +355,44 @@ export class PersonService {
     const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
     await this.personRepository.deleteGovernmentPositionTenure(id)
     await this.notificationService.notifyTenure(label, EventMethod.DELETE, tenure?.personId)
+  }
+
+  /** 군주·재위 전용 기록 추가 (SovereignReign — 행정부와 별도 테이블) */
+  async addSovereignReign(dto: CreateSovereignReignDto, accountId?: string): Promise<any> {
+    const row = await this.personRepository.addSovereignReign(dto, accountId)
+    const person = row?.person
+    const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
+    await this.notificationService.notifyTenure(
+      label,
+      EventMethod.CREATE,
+      row?.personId ?? row?.id,
+      row?.startDate ? String(row.startDate) : undefined,
+    )
+    return row
+  }
+
+  async updateSovereignReign(id: string, dto: Partial<CreateSovereignReignDto>): Promise<any> {
+    const row = await this.personRepository.updateSovereignReign(id, dto)
+    const person = row?.person
+    const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
+    await this.notificationService.notifyTenure(
+      label,
+      EventMethod.UPDATE,
+      row?.personId ?? row?.id,
+      row?.startDate ? String(row.startDate) : undefined,
+    )
+    return row
+  }
+
+  async deleteSovereignReign(id: string): Promise<void> {
+    const row = await this.personRepository.findSovereignReignById(id)
+    if (!row) {
+      throw new NotFoundException('재위 기록을 찾을 수 없습니다.')
+    }
+    const person = row?.person
+    const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
+    await this.personRepository.deleteSovereignReign(id)
+    await this.notificationService.notifyTenure(label, EventMethod.DELETE, row?.personId)
   }
 
   /**
@@ -411,6 +449,10 @@ export class PersonService {
     headTenureId: string
     name?: string | null
   }, accountId?: string): Promise<any> {
+    const head = await this.personRepository.findTenureById(dto.headTenureId)
+    if (!head) {
+      throw new NotFoundException('수반 재임을 찾을 수 없습니다.')
+    }
     return this.personRepository.createCabinet(dto, accountId)
   }
 
@@ -518,12 +560,49 @@ export class PersonService {
     return this.personRepository.deleteTenureAchievement(tenureId, achievementId)
   }
 
+  async createSovereignReignAchievement(
+    sovereignReignId: string,
+    dto: CreateTenureAchievementDto,
+  ): Promise<any> {
+    return this.personRepository.createSovereignReignAchievement(sovereignReignId, dto)
+  }
+
+  async updateSovereignReignAchievement(
+    sovereignReignId: string,
+    achievementId: string,
+    dto: UpdateTenureAchievementDto,
+  ): Promise<any> {
+    return this.personRepository.updateSovereignReignAchievement(
+      sovereignReignId,
+      achievementId,
+      dto,
+    )
+  }
+
+  async deleteSovereignReignAchievement(
+    sovereignReignId: string,
+    achievementId: string,
+  ): Promise<void> {
+    return this.personRepository.deleteSovereignReignAchievement(sovereignReignId, achievementId)
+  }
+
   async createRegnalEra(tenureId: string, dto: CreateRegnalEraDto): Promise<any> {
     try {
-      return await this.personRepository.createRegnalEra(tenureId, dto)
+      return await this.personRepository.createRegnalEra({ tenureId }, dto)
     } catch (e: any) {
       if (e?.message === 'GovernmentPositionTenure not found') {
         throw new NotFoundException('재임을 찾을 수 없습니다.')
+      }
+      throw e
+    }
+  }
+
+  async createRegnalEraForSovereignReign(sovereignReignId: string, dto: CreateRegnalEraDto): Promise<any> {
+    try {
+      return await this.personRepository.createRegnalEra({ sovereignReignId }, dto)
+    } catch (e: any) {
+      if (e?.message === 'SovereignReign not found') {
+        throw new NotFoundException('재위 기록을 찾을 수 없습니다.')
       }
       throw e
     }

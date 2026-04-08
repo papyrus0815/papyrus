@@ -339,6 +339,8 @@ export function TenureRegisterPanel({
     ? (personTenures as any[]).find((t: any) => t.id === tenureId)
     : null
 
+  const editingIsSovereign = (editingTenure as any)?.recordKind === 'SOVEREIGN_REIGN'
+
   const selectedDef = positionDefinitionId
     ? (positionDefinitions as any[]).find((d: any) => d.id === positionDefinitionId)
     : null
@@ -461,8 +463,24 @@ export function TenureRegisterPanel({
     setSubmitting(true)
     try {
       if (isEdit && tenureId) {
-        await personCareerApi.updateGovernmentPositionTenure(tenureId, payload)
-        toast.success('재임 기록이 수정되었습니다.')
+        if (editingIsSovereign) {
+          await personCareerApi.updateSovereignReign(tenureId, {
+            personId,
+            countryId: historicalCountryId ? undefined : countryId || undefined,
+            historicalCountryId: historicalCountryId || undefined,
+            positionDefinitionId: positionDefinitionId || undefined,
+            startDate,
+            endDate: endDate || undefined,
+            termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+            subTermNumber: subTermNumber.trim() ? parseInt(subTermNumber, 10) || undefined : undefined,
+            regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+            showPositionInfo: showOnEvents,
+          })
+          toast.success('재위 기록이 수정되었습니다.')
+        } else {
+          await personCareerApi.updateGovernmentPositionTenure(tenureId, payload)
+          toast.success('재임 기록이 수정되었습니다.')
+        }
       } else {
         await personCareerApi.addGovernmentPositionTenure({
           ...payload,
@@ -486,8 +504,13 @@ export function TenureRegisterPanel({
     if (!window.confirm('이 재임 기록을 삭제하시겠습니까?')) return
     setSubmitting(true)
     try {
-      await personCareerApi.deleteGovernmentPositionTenure(tenureId)
-      toast.success('재임 기록이 삭제되었습니다.')
+      if (editingIsSovereign) {
+        await personCareerApi.deleteSovereignReign(tenureId)
+        toast.success('재위 기록이 삭제되었습니다.')
+      } else {
+        await personCareerApi.deleteGovernmentPositionTenure(tenureId)
+        toast.success('재임 기록이 삭제되었습니다.')
+      }
       onClose()
       queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
       queryClient.invalidateQueries({ queryKey: ['person-tenures', personId] })

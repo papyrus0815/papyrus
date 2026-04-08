@@ -34,6 +34,7 @@ import {
   CreateEducationDto,
   CreatePersonAwardDto,
   CreateGovernmentPositionTenureDto,
+  CreateSovereignReignDto,
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
@@ -346,6 +347,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       isAlive: person.isAlive ?? false,
       // 정부 직위 재임 기록
       governmentTenures: person.GovernmentTenures ? serializeBigInt(person.GovernmentTenures) : undefined,
+      sovereignReigns: person.sovereignReigns ? serializeBigInt(person.sovereignReigns) : undefined,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
       accountId: person.accountId ?? undefined,
@@ -2614,45 +2616,101 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 동일 사건(eventId)에 연결된 재임 업적 전부 — 여러 국가 행정부와 같은 사건을 엮었을 때 목록
    */
   async findTenureAchievementsByEventId(eventId: string): Promise<any[]> {
-    const list = await this.prisma.tenureAchievement.findMany({
-      where: { eventId },
-      include: {
-        event: {
-          select: { id: true, title: true },
-        },
-        tenure: {
-          include: {
-            person: {
-              select: {
-                id: true,
-                name: true,
-                surname: true,
-                middleName: true,
-                nameDisplayOrder: true,
-              },
-            },
-            country: {
-              select: {
-                id: true,
-                name: true,
-                flagEmoji: true,
-                defaultNameDisplayOrder: true,
-              },
-            },
-            historicalCountry: { select: { id: true, name: true } },
-            cabinet: { select: { id: true, name: true } },
-            positionDefinition: {
-              select: {
-                title: true,
-                category: { select: { id: true, name: true, nameEn: true } },
-                organization: { select: { id: true, name: true } },
-              },
-            },
-          },
+    const tenureInclude = {
+      person: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          middleName: true,
+          nameDisplayOrder: true,
         },
       },
-      orderBy: [{ createdAt: 'asc' }],
+      country: {
+        select: {
+          id: true,
+          name: true,
+          flagEmoji: true,
+          defaultNameDisplayOrder: true,
+        },
+      },
+      historicalCountry: { select: { id: true, name: true } },
+      cabinet: { select: { id: true, name: true } },
+      positionDefinition: {
+        select: {
+          title: true,
+          category: { select: { id: true, name: true, nameEn: true } },
+          organization: { select: { id: true, name: true } },
+        },
+      },
+    } as const
+
+    const sovereignReignInclude = {
+      person: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          middleName: true,
+          nameDisplayOrder: true,
+        },
+      },
+      country: {
+        select: {
+          id: true,
+          name: true,
+          flagEmoji: true,
+          defaultNameDisplayOrder: true,
+        },
+      },
+      historicalCountry: { select: { id: true, name: true } },
+      positionDefinition: {
+        select: {
+          title: true,
+          category: { select: { id: true, name: true, nameEn: true } },
+          organization: { select: { id: true, name: true } },
+        },
+      },
+    } as const
+
+    const [tenureRows, sovereignRows] = await Promise.all([
+      this.prisma.tenureAchievement.findMany({
+        where: { eventId },
+        include: {
+          event: {
+            select: { id: true, title: true },
+          },
+          tenure: {
+            include: tenureInclude,
+          },
+        },
+        orderBy: [{ createdAt: 'asc' }],
+      }),
+      this.prisma.sovereignReignAchievement.findMany({
+        where: { eventId },
+        include: {
+          event: {
+            select: { id: true, title: true },
+          },
+          sovereignReign: {
+            include: sovereignReignInclude,
+          },
+        },
+        orderBy: [{ createdAt: 'asc' }],
+      }),
+    ])
+
+    const mappedTenure = tenureRows.map((row) => ({
+      ...row,
+      recordKind: 'TENURE_ACHIEVEMENT',
+    }))
+    const mappedSovereign = sovereignRows.map((row) => this.mapSovereignReignAchievementRow(row))
+    const merged = [...mappedTenure, ...mappedSovereign].sort((a, b) => {
+      const ca = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()
+      const cb = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()
+      return ca - cb
     })
+
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
       if (typeof obj === 'bigint') return obj.toString()
@@ -2665,57 +2723,119 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
-    return serializeBigInt(list)
+    return serializeBigInt(merged)
   }
 
   /**
    * 사건 페이지에 표시할 업적 목록 (showOnEventsPage=true)
    */
   async findAchievementsForEventsPage(): Promise<any[]> {
-    const list = await this.prisma.tenureAchievement.findMany({
-      where: { showOnEventsPage: true },
-      include: {
-        event: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            startDate: true,
-            endDate: true,
-            deletedAt: true,
-          },
+    const tenureAchievementInclude = {
+      event: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          startDate: true,
+          endDate: true,
+          deletedAt: true,
         },
-        tenure: {
-          include: {
-            person: {
-              select: {
-                id: true,
-                name: true,
-                surname: true,
-                middleName: true,
-                nameDisplayOrder: true,
-              },
+      },
+      tenure: {
+        include: {
+          person: {
+            select: {
+              id: true,
+              name: true,
+              surname: true,
+              middleName: true,
+              nameDisplayOrder: true,
             },
-            country: {
-          select: {
-            id: true,
-            name: true,
-            flagEmoji: true,
-            defaultNameDisplayOrder: true,
           },
-        },
-            historicalCountry: { select: { id: true, name: true } },
-            positionDefinition: {
-              select: {
-                title: true,
-                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
-              },
+          country: {
+            select: {
+              id: true,
+              name: true,
+              flagEmoji: true,
+              defaultNameDisplayOrder: true,
+            },
+          },
+          historicalCountry: { select: { id: true, name: true } },
+          positionDefinition: {
+            select: {
+              title: true,
+              category: { select: { id: true, name: true, nameEn: true } },
+              organization: { select: { id: true, name: true } },
             },
           },
         },
       },
-      orderBy: [{ startDate: 'asc' }, { orderNum: 'asc' }],
-    })
+    } as const
+
+    const sovereignAchievementInclude = {
+      event: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          startDate: true,
+          endDate: true,
+          deletedAt: true,
+        },
+      },
+      sovereignReign: {
+        include: {
+          person: {
+            select: {
+              id: true,
+              name: true,
+              surname: true,
+              middleName: true,
+              nameDisplayOrder: true,
+            },
+          },
+          country: {
+            select: {
+              id: true,
+              name: true,
+              flagEmoji: true,
+              defaultNameDisplayOrder: true,
+            },
+          },
+          historicalCountry: { select: { id: true, name: true } },
+          positionDefinition: {
+            select: {
+              title: true,
+              category: { select: { id: true, name: true, nameEn: true } },
+              organization: { select: { id: true, name: true } },
+            },
+          },
+        },
+      },
+    } as const
+
+    const [tenureList, sovereignList] = await Promise.all([
+      this.prisma.tenureAchievement.findMany({
+        where: { showOnEventsPage: true },
+        include: tenureAchievementInclude,
+        orderBy: [{ startDate: 'asc' }, { orderNum: 'asc' }],
+      }),
+      this.prisma.sovereignReignAchievement.findMany({
+        where: { showOnEventsPage: true },
+        include: sovereignAchievementInclude,
+        orderBy: [{ startDate: 'asc' }, { orderNum: 'asc' }],
+      }),
+    ])
+
+    const mappedTenure = tenureList.map((row) => ({
+      ...row,
+      recordKind: 'TENURE_ACHIEVEMENT',
+    }))
+    const mappedSovereign = sovereignList.map((row) => this.mapSovereignReignAchievementRow(row))
+    const merged = [...mappedTenure, ...mappedSovereign].sort((a, b) =>
+      this.sortAchievementsForEventsPageMerged(a, b),
+    )
+
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
       if (typeof obj === 'bigint') return obj.toString()
@@ -2728,7 +2848,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
-    return serializeBigInt(list)
+    return serializeBigInt(merged)
   }
 
   /**
@@ -2781,17 +2901,111 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
   }
 
-  async createRegnalEra(tenureId: string, dto: CreateRegnalEraDto): Promise<any> {
-    const tenure = await this.prisma.governmentPositionTenure.findUnique({
-      where: { id: tenureId },
-      select: { id: true },
+  async createSovereignReignAchievement(
+    sovereignReignId: string,
+    dto: CreateTenureAchievementDto,
+  ): Promise<any> {
+    const achievement = await this.prisma.sovereignReignAchievement.create({
+      data: {
+        sovereignReignId,
+        title: dto.title,
+        description: dto.description ?? undefined,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        orderNum: dto.orderNum ?? 0,
+        showOnEventsPage: dto.showOnEventsPage ?? true,
+        eventId: dto.eventId ?? undefined,
+      },
     })
-    if (!tenure) {
-      throw new Error('GovernmentPositionTenure not found')
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(achievement)
+  }
+
+  async updateSovereignReignAchievement(
+    sovereignReignId: string,
+    achievementId: string,
+    dto: UpdateTenureAchievementDto,
+  ): Promise<any> {
+    const data: any = {}
+    if (dto.title !== undefined) data.title = dto.title
+    if (dto.description !== undefined) data.description = dto.description
+    if (dto.startDate !== undefined) data.startDate = dto.startDate ? new Date(dto.startDate) : null
+    if (dto.endDate !== undefined) data.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.orderNum !== undefined) data.orderNum = dto.orderNum
+    if (dto.showOnEventsPage !== undefined) data.showOnEventsPage = dto.showOnEventsPage
+    if (dto.eventId !== undefined) data.eventId = dto.eventId
+    const existing = await this.prisma.sovereignReignAchievement.findFirst({
+      where: { id: achievementId, sovereignReignId },
+    })
+    if (!existing) {
+      throw new Error('SovereignReignAchievement not found')
+    }
+    const achievement = await this.prisma.sovereignReignAchievement.update({
+      where: { id: achievementId },
+      data,
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (obj instanceof Date) return obj.toISOString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(achievement)
+  }
+
+  async deleteSovereignReignAchievement(
+    sovereignReignId: string,
+    achievementId: string,
+  ): Promise<void> {
+    await this.prisma.sovereignReignAchievement.deleteMany({
+      where: { id: achievementId, sovereignReignId },
+    })
+  }
+
+  async createRegnalEra(
+    parent: { tenureId: string } | { sovereignReignId: string },
+    dto: CreateRegnalEraDto,
+  ): Promise<any> {
+    const tenureId = 'tenureId' in parent ? parent.tenureId : undefined
+    const sovereignReignId = 'sovereignReignId' in parent ? parent.sovereignReignId : undefined
+    if (tenureId) {
+      const tenure = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id: tenureId },
+        select: { id: true },
+      })
+      if (!tenure) {
+        throw new Error('GovernmentPositionTenure not found')
+      }
+    } else if (sovereignReignId) {
+      const sr = await this.prisma.sovereignReign.findUnique({
+        where: { id: sovereignReignId },
+        select: { id: true },
+      })
+      if (!sr) {
+        throw new Error('SovereignReign not found')
+      }
     }
     const row = await this.prisma.regnalEra.create({
       data: {
-        tenureId,
+        tenureId: tenureId ?? null,
+        sovereignReignId: sovereignReignId ?? null,
         eraName: dto.eraName.trim(),
         eraNameEn: dto.eraNameEn?.trim() || null,
         startYear: dto.startYear,
@@ -3008,23 +3222,48 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 수정 페이지에서 경력을 확실히 불러오기 위해 전용 API로 사용
    */
   async findTenuresByPersonId(personId: string): Promise<any[]> {
-    const tenures = await this.prisma.governmentPositionTenure.findMany({
-      where: { personId },
-      include: {
-        positionDefinition: true,
-        country: true,
-        historicalCountry: true,
-        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-        electionCandidacy: {
-          select: {
-            id: true,
-            election: { select: { id: true, name: true, pollDate: true } },
-            party: { select: { id: true, name: true } },
-          },
+    const tenureInclude = {
+      positionDefinition: true,
+      country: true,
+      historicalCountry: true,
+      achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+      electionCandidacy: {
+        select: {
+          id: true,
+          election: { select: { id: true, name: true, pollDate: true } },
+          party: { select: { id: true, name: true } },
         },
       },
-      orderBy: { startDate: 'desc' },
+    } as const
+
+    const [tenures, reigns] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: { personId },
+        include: tenureInclude,
+        orderBy: { startDate: 'desc' },
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: { personId },
+        include: {
+          positionDefinition: true,
+          country: true,
+          historicalCountry: true,
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+        },
+        orderBy: { startDate: 'desc' },
+      }),
+    ])
+
+    const merged = [
+      ...tenures.map((t) => ({ ...t, recordKind: 'TENURE' })),
+      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(r)),
+    ]
+    merged.sort((a, b) => {
+      const da = a.startDate instanceof Date ? a.startDate.toISOString() : String(a.startDate)
+      const db = b.startDate instanceof Date ? b.startDate.toISOString() : String(b.startDate)
+      return db.localeCompare(da)
     })
+
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
       if (typeof obj === 'bigint') return obj.toString()
@@ -3037,7 +3276,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
-    return serializeBigInt(tenures)
+    return serializeBigInt(merged)
   }
 
   /**
@@ -3067,22 +3306,15 @@ export class PersonPrismaRepository implements IPersonRepository {
     return serializeBigInt(rows)
   }
 
-  /**
-   * 국가 또는 역사적 국가별 재임 기록 조회 (연대표 국가 페이지 수장 목록용)
-   * - 현대 국가(countryId)일 때: 해당 국가 + 이 현대 국가에 연결된 모든 역사적 국가의 재임 기록 포함 (하위 국가 인물 모두 표시)
-   * - 역사적 국가(historicalCountryId)만 조회 시: 해당 역사적 국가만
-   */
-  async findTenuresByCountry(params: {
+  private async buildCountryScopeWhere(params: {
     countryId?: string
     historicalCountryId?: string
-  }): Promise<any[]> {
+  }): Promise<any | null> {
     const { countryId, historicalCountryId } = params
-    if (!countryId && !historicalCountryId) return []
-
+    if (!countryId && !historicalCountryId) return null
     let where: any = historicalCountryId
       ? { historicalCountryId }
       : { countryId: countryId! }
-
     if (countryId) {
       const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
         .findMany({
@@ -3099,55 +3331,148 @@ export class PersonPrismaRepository implements IPersonRepository {
         }
       }
     }
+    return where
+  }
 
-    const tenures = await this.prisma.governmentPositionTenure.findMany({
-      where,
-      include: {
-        positionDefinition: true,
-        country: true,
-        historicalCountry: true,
-        person: {
-          select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            profileImageUrl: true,
-            templeName: true,
-            regnalName: true,
-            posthumousName: true,
-            fatherId: true,
-            motherId: true,
-            dynastyId: true,
-            dynasty: { select: { id: true, name: true } },
-            countryId: true,
-            country: {
-              select: {
-                id: true,
-                name: true,
-                defaultNameDisplayOrder: true,
-              },
-            },
-            birthCityId: true,
-            birthAdminDivisionId: true,
-            birthPlaceText: true,
-            birthCity: { select: { id: true, name: true } },
-            birthAdminDivision: { select: { id: true, name: true } },
-          },
+  /** SovereignReign → 역대 수반 목록 API와 동일한 형태(업적 tenureId 호환) */
+  private mapSovereignReignToChronologyItem(sr: any): any {
+    const achievements = (sr.achievements ?? []).map((a: any) => ({
+      ...a,
+      tenureId: sr.id,
+    }))
+    return {
+      ...sr,
+      recordKind: 'SOVEREIGN_REIGN',
+      positionType: 'HEAD_OF_STATE',
+      title: sr.positionDefinition?.title ?? null,
+      titleEn: sr.positionDefinition?.titleEn ?? null,
+      position: sr.positionDefinition ?? null,
+      achievements,
+      electionCandidacy: null,
+      mandateSource: 'UNKNOWN',
+    }
+  }
+
+  /** 업적 API 응답의 `tenure` 블록용 — 중첩 업적 순환 방지 */
+  private mapSovereignReignAsAchievementParentTenure(sr: any): any {
+    if (!sr) return sr
+    return this.mapSovereignReignToChronologyItem({ ...sr, achievements: [] })
+  }
+
+  private mapSovereignReignAchievementRow(row: any): any {
+    const { sovereignReign, ...rest } = row
+    return {
+      ...rest,
+      tenureId: row.sovereignReignId,
+      recordKind: 'SOVEREIGN_REIGN_ACHIEVEMENT',
+      tenure: this.mapSovereignReignAsAchievementParentTenure(sovereignReign),
+    }
+  }
+
+  private sortAchievementsForEventsPageMerged(a: any, b: any): number {
+    const sa = a.startDate
+      ? a.startDate instanceof Date
+        ? a.startDate.toISOString()
+        : String(a.startDate)
+      : ''
+    const sb = b.startDate
+      ? b.startDate instanceof Date
+        ? b.startDate.toISOString()
+        : String(b.startDate)
+      : ''
+    if (sa !== sb) return sa.localeCompare(sb)
+    const oa = a.orderNum ?? 0
+    const ob = b.orderNum ?? 0
+    return oa - ob
+  }
+
+  /**
+   * 국가 또는 역사적 국가별 재임 기록 조회 (연대표 국가 페이지 수장 목록용)
+   * GovernmentPositionTenure + SovereignReign(군주 재위) 병합. `recordKind`: TENURE | SOVEREIGN_REIGN
+   */
+  async findTenuresByCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<any[]> {
+    const where = await this.buildCountryScopeWhere(params)
+    if (!where) return []
+
+    const headPersonSelect = {
+      id: true,
+      name: true,
+      surname: true,
+      middleName: true,
+      nameDisplayOrder: true,
+      profileImageUrl: true,
+      templeName: true,
+      regnalName: true,
+      posthumousName: true,
+      fatherId: true,
+      motherId: true,
+      dynastyId: true,
+      dynasty: { select: { id: true, name: true } },
+      countryId: true,
+      country: {
+        select: {
+          id: true,
+          name: true,
+          defaultNameDisplayOrder: true,
         },
-        electionCandidacy: {
-          select: {
-            id: true,
-            election: { select: { id: true, name: true, pollDate: true } },
-            party: { select: { id: true, name: true } },
-          },
-        },
-        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-        regnalEras: REGNAL_ERAS_ORDER,
       },
-      orderBy: { startDate: 'desc' },
+      birthCityId: true,
+      birthAdminDivisionId: true,
+      birthPlaceText: true,
+      birthCity: { select: { id: true, name: true } },
+      birthAdminDivision: { select: { id: true, name: true } },
+    } as const
+
+    const tenureInclude = {
+      positionDefinition: true,
+      country: true,
+      historicalCountry: true,
+      cabinet: { select: { id: true, name: true } },
+      person: { select: headPersonSelect },
+      electionCandidacy: {
+        select: {
+          id: true,
+          election: { select: { id: true, name: true, pollDate: true } },
+          party: { select: { id: true, name: true } },
+        },
+      },
+      achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+      regnalEras: REGNAL_ERAS_ORDER,
+    } as const
+
+    const [tenures, reigns] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where,
+        include: tenureInclude,
+        orderBy: { startDate: 'desc' },
+      }),
+      this.prisma.sovereignReign.findMany({
+        where,
+        include: {
+          positionDefinition: true,
+          country: true,
+          historicalCountry: true,
+          person: { select: headPersonSelect },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+          regnalEras: REGNAL_ERAS_ORDER,
+        },
+        orderBy: { startDate: 'desc' },
+      }),
+    ])
+
+    const merged = [
+      ...tenures.map((t) => ({ ...t, recordKind: 'TENURE' })),
+      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(r)),
+    ]
+    merged.sort((a, b) => {
+      const da = a.startDate instanceof Date ? a.startDate.toISOString() : String(a.startDate)
+      const db = b.startDate instanceof Date ? b.startDate.toISOString() : String(b.startDate)
+      return db.localeCompare(da)
     })
+
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
       if (typeof obj === 'bigint') return obj.toString()
@@ -3160,7 +3485,132 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
-    return serializeBigInt(tenures)
+    return serializeBigInt(merged)
+  }
+
+  async addSovereignReign(dto: CreateSovereignReignDto, accountId?: string): Promise<any> {
+    const countryFields = await this.resolveTenureCountryFields({
+      countryId: dto.countryId,
+      historicalCountryId: dto.historicalCountryId,
+    })
+    const row = await this.prisma.sovereignReign.create({
+      data: {
+        personId: dto.personId,
+        ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
+        ...(countryFields.historicalCountryId != null && {
+          historicalCountryId: countryFields.historicalCountryId,
+        }),
+        positionDefinitionId: dto.positionDefinitionId ?? undefined,
+        termNumber: dto.termNumber,
+        subTermNumber: dto.subTermNumber,
+        regnalNumber: dto.regnalNumber,
+        startDate: new Date(dto.startDate),
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        appointmentMethod: dto.appointmentMethod as any,
+        endReason: dto.endReason as any,
+        endReasonDetail: dto.endReasonDetail,
+        notes: dto.notes,
+        showPositionInfo: dto.showPositionInfo !== false,
+        ...(accountId != null && { accountId }),
+      },
+      include: {
+        positionDefinition: true,
+        country: true,
+        historicalCountry: true,
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+        regnalEras: REGNAL_ERAS_ORDER,
+      },
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(row)
+  }
+
+  async updateSovereignReign(id: string, dto: Partial<CreateSovereignReignDto>): Promise<any> {
+    const updateData: any = {}
+    if (dto.countryId !== undefined || dto.historicalCountryId !== undefined) {
+      const countryFields = await this.resolveTenureCountryFields({
+        countryId: dto.countryId,
+        historicalCountryId: dto.historicalCountryId,
+      })
+      updateData.countryId = countryFields.countryId ?? null
+      updateData.historicalCountryId = countryFields.historicalCountryId ?? null
+    }
+    if (dto.personId !== undefined) updateData.personId = dto.personId
+    if (dto.positionDefinitionId !== undefined)
+      updateData.positionDefinitionId = dto.positionDefinitionId || null
+    if (dto.termNumber !== undefined) updateData.termNumber = dto.termNumber
+    if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
+    if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
+    if (dto.startDate) updateData.startDate = new Date(dto.startDate)
+    if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
+    if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any
+    if (dto.endReasonDetail !== undefined) updateData.endReasonDetail = dto.endReasonDetail
+    if (dto.notes !== undefined) updateData.notes = dto.notes
+    if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
+
+    const row = await this.prisma.sovereignReign.update({
+      where: { id },
+      data: updateData,
+      include: {
+        positionDefinition: true,
+        country: true,
+        historicalCountry: true,
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+        regnalEras: REGNAL_ERAS_ORDER,
+      },
+    })
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(row)
+  }
+
+  async deleteSovereignReign(id: string): Promise<void> {
+    await this.prisma.sovereignReign.delete({ where: { id } })
+  }
+
+  async findSovereignReignById(id: string): Promise<any | null> {
+    const row = await this.prisma.sovereignReign.findUnique({
+      where: { id },
+      include: {
+        positionDefinition: true,
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+      },
+    })
+    if (!row) return null
+    const serializeBigInt = (obj: any): any => {
+      if (obj === null || obj === undefined) return obj
+      if (typeof obj === 'bigint') return obj.toString()
+      if (Array.isArray(obj)) return obj.map(serializeBigInt)
+      if (typeof obj === 'object') {
+        const result: any = {}
+        for (const key in obj) result[key] = serializeBigInt(obj[key])
+        return result
+      }
+      return obj
+    }
+    return serializeBigInt(row)
   }
 
   /**
@@ -3168,41 +3618,71 @@ export class PersonPrismaRepository implements IPersonRepository {
    * countryId, historicalCountryId가 모두 null인 tenure
    */
   async findGlobalTenures(): Promise<any[]> {
-    const tenures = await this.prisma.governmentPositionTenure.findMany({
-      where: {
-        countryId: null,
-        historicalCountryId: null,
-      },
-      include: {
-        positionDefinition: true,
-        country: true,
-        historicalCountry: true,
-        person: {
-          select: {
-            id: true,
-            name: true,
-            surname: true,
-            middleName: true,
-            nameDisplayOrder: true,
-            profileImageUrl: true,
-            birthCityId: true,
-            birthAdminDivisionId: true,
-            birthPlaceText: true,
-            birthCity: { select: { id: true, name: true } },
-            birthAdminDivision: { select: { id: true, name: true } },
+    const globalWhere = {
+      countryId: null,
+      historicalCountryId: null,
+    }
+
+    const personSelect = {
+      id: true,
+      name: true,
+      surname: true,
+      middleName: true,
+      nameDisplayOrder: true,
+      profileImageUrl: true,
+      birthCityId: true,
+      birthAdminDivisionId: true,
+      birthPlaceText: true,
+      birthCity: { select: { id: true, name: true } },
+      birthAdminDivision: { select: { id: true, name: true } },
+    } as const
+
+    const [tenures, reigns] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: globalWhere,
+        include: {
+          positionDefinition: true,
+          country: true,
+          historicalCountry: true,
+          person: {
+            select: personSelect,
           },
-        },
-        electionCandidacy: {
-          select: {
-            id: true,
-            election: { select: { id: true, name: true, pollDate: true } },
-            party: { select: { id: true, name: true } },
+          electionCandidacy: {
+            select: {
+              id: true,
+              election: { select: { id: true, name: true, pollDate: true } },
+              party: { select: { id: true, name: true } },
+            },
           },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
         },
-        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-      },
-      orderBy: { startDate: 'desc' },
+        orderBy: { startDate: 'desc' },
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: globalWhere,
+        include: {
+          positionDefinition: true,
+          country: true,
+          historicalCountry: true,
+          person: {
+            select: personSelect,
+          },
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+        },
+        orderBy: { startDate: 'desc' },
+      }),
+    ])
+
+    const merged = [
+      ...tenures.map((t) => ({ ...t, recordKind: 'TENURE' })),
+      ...reigns.map((r) => this.mapSovereignReignToChronologyItem(r)),
+    ]
+    merged.sort((a, b) => {
+      const da = a.startDate instanceof Date ? a.startDate.toISOString() : String(a.startDate)
+      const db = b.startDate instanceof Date ? b.startDate.toISOString() : String(b.startDate)
+      return db.localeCompare(da)
     })
+
     const serializeBigInt = (obj: any): any => {
       if (obj === null || obj === undefined) return obj
       if (typeof obj === 'bigint') return obj.toString()
@@ -3215,7 +3695,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
-    return serializeBigInt(tenures)
+    return serializeBigInt(merged)
   }
 
   /**
@@ -3249,12 +3729,22 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
     }
 
-    const tenures = await this.prisma.governmentPositionTenure.findMany({
-      where: tenureWhere,
-      select: { personId: true },
-      distinct: ['personId'],
-    })
-    const personIds = tenures.map((t) => t.personId)
+    const [tenureRows, reignRows] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: tenureWhere,
+        select: { personId: true },
+        distinct: ['personId'],
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: tenureWhere,
+        select: { personId: true },
+        distinct: ['personId'],
+      }),
+    ])
+    const personIdSet = new Set<string>()
+    for (const t of tenureRows) personIdSet.add(t.personId)
+    for (const r of reignRows) personIdSet.add(r.personId)
+    const personIds = [...personIdSet]
     if (personIds.length === 0) return []
 
     const persons = await this.prisma.person.findMany({
@@ -3286,6 +3776,28 @@ export class PersonPrismaRepository implements IPersonRepository {
             title: true,
             startDate: true,
             endDate: true,
+            positionDefinition: {
+              select: {
+                id: true,
+                title: true,
+                positionType: true,
+                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
+              },
+            },
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: 'desc' },
+        },
+        sovereignReigns: {
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            termNumber: true,
+            regnalNumber: true,
+            notes: true,
+            showPositionInfo: true,
             positionDefinition: {
               select: {
                 id: true,

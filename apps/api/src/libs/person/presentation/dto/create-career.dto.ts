@@ -755,13 +755,63 @@ export class CreateGovernmentPositionTenureDto {
   @IsOptional()
   @IsIn(['UNKNOWN', 'ELECTION', 'APPOINTMENT', 'SUCCESSION', 'HEREDITARY', 'OTHER'])
   mandateSource?: 'UNKNOWN' | 'ELECTION' | 'APPOINTMENT' | 'SUCCESSION' | 'HEREDITARY' | 'OTHER'
+}
 
-  /**
-   * 군주·국가 원수의 재위만 기록하는 경우 true.
-   * 행정부(내각)의 수반이 아니므로 Cabinet(행정부) 행을 만들지 않음.
-   * false/생략이면 국가원수·정부수반 재임 추가 시 기존처럼 내각(Cabinet)이 자동 생성될 수 있음.
-   */
+/**
+ * 군주·재위 전용 기록 (SovereignReign 테이블) — 행정부(Cabinet)와 별도
+ */
+export class CreateSovereignReignDto {
+  @IsString()
+  personId!: string
+
+  @IsOptional()
+  @IsString()
+  countryId?: string
+
+  @IsOptional()
+  @IsString()
+  historicalCountryId?: string
+
+  @IsOptional()
+  @IsString()
+  positionDefinitionId?: string
+
+  @IsOptional()
+  @IsNumber()
+  termNumber?: number
+
+  @IsOptional()
+  @IsNumber()
+  subTermNumber?: number
+
+  @IsOptional()
+  @IsNumber()
+  regnalNumber?: number
+
+  @IsDateString()
+  startDate!: string
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
+
+  @IsOptional()
+  @IsString()
+  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER'
+
+  @IsOptional()
+  @IsString()
+  endReason?: 'TERM_COMPLETED' | 'RESIGNATION' | 'ABDICATION' | 'SUCCESSION_TRANSFER' | 'REMOVAL' | 'IMPEACHMENT' | 'DEATH_IN_OFFICE' | 'OVERTHROWN' | 'WAR_DEFEAT' | 'STATE_DISSOLVED' | 'OTHER'
+
+  @IsOptional()
+  @IsString()
+  endReasonDetail?: string
+
+  @IsOptional()
+  @IsString()
+  notes?: string
+
   @IsOptional()
   @IsBoolean()
-  sovereignReignOnly?: boolean
+  showPositionInfo?: boolean
 }

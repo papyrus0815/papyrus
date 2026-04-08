@@ -170,8 +170,10 @@ export function RegisterCabinetModal({
                 <FiInfo size={20} />
                 <span>
                   이 국가의 <strong>수반(국가원수·정부수반) 재임</strong> 중,
-                  아직 행정부가 연결되지 않은 재임만 표시됩니다. 항목을 선택하면
-                  해당 재임으로 행정부가 생성됩니다.
+                  아직 행정부가 연결되지 않은 재임만 표시됩니다.{' '}
+                  <strong>군주 등록</strong>으로 만든 재위 전용 재임은 행정부와
+                  분리되어 여기에 나오지 않습니다. 항목을 선택하면 해당 재임으로
+                  행정부가 생성됩니다.
                 </span>
               </CabS.CabinetFormDesc>
               {headTenuresForRegister.length === 0 ? (

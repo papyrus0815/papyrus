@@ -50,6 +50,7 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import {
   type CabinetListItemDto,
   type CreateGovernmentPositionTenureDto,
+  type CreateSovereignReignDto,
   type GovernmentCabinetTenureItem,
   type GovernmentHeadTenureInCabinetList,
   type TenureAchievementByEventLinkRow,
@@ -192,6 +193,19 @@ function tenureIdForAchievement(
     : fallbackTenureId
 }
 
+function achievementRowIsSovereign(row: TenureAchievementByEventLinkRow) {
+  return (
+    row.recordKind === 'SOVEREIGN_REIGN_ACHIEVEMENT' ||
+    row.tenure?.recordKind === 'SOVEREIGN_REIGN'
+  )
+}
+
+/** 국가 · (재위 | 행정부) · 인물 줄의 가운데 구간 */
+function relatedAchievementAdminLabel(row: TenureAchievementByEventLinkRow) {
+  if (achievementRowIsSovereign(row)) return '재위'
+  return row.tenure?.cabinet?.name?.trim() || '행정부 미지정'
+}
+
 /** 동일 사건(eventId)을 다른 나라 행정부 재임에도 연결했을 때 목록 (공유 가시화) */
 function RelatedAchievementsBySameEventBlock({
   eventId,
@@ -215,6 +229,14 @@ function RelatedAchievementsBySameEventBlock({
     (a) => a.id !== currentAchievementId,
   )
   if (isLoading || others.length === 0) return null
+  const anySovereign = others.some(achievementRowIsSovereign)
+  const anyCabinetTenure = others.some((o) => !achievementRowIsSovereign(o))
+  const blockTitle =
+    anySovereign && anyCabinetTenure
+      ? '같은 묶음에 속한 다른 기록'
+      : anySovereign
+        ? '같은 묶음에 속한 다른 재위'
+        : '같은 묶음에 속한 다른 나라 행정부'
   return (
     <div
       style={{
@@ -228,7 +250,7 @@ function RelatedAchievementsBySameEventBlock({
       }}
     >
       <div style={{ fontWeight: 700, marginBottom: 8, color: textMuted }}>
-        같은 묶음에 속한 다른 나라 행정부
+        {blockTitle}
       </div>
       <ul
         style={{
@@ -242,11 +264,11 @@ function RelatedAchievementsBySameEventBlock({
           const t = row.tenure
           const country =
             t?.country?.name ?? t?.historicalCountry?.name ?? '국가 미상'
-          const cab = t?.cabinet?.name?.trim() || '행정부 미지정'
+          const mid = relatedAchievementAdminLabel(row)
           const person = t?.person ? getPersonName(t.person) : '—'
           return (
             <li key={row.id}>
-              {country} · {cab} · {person} — {row.title}
+              {country} · {mid} · {person} — {row.title}
             </li>
           )
         })}
@@ -1156,7 +1178,10 @@ export function CabinetsSection({
       t.positionDefinition?.positionType ??
       t.position?.positionType
     return (
-      pt && HEAD_POSITION_TYPES.has(pt) && !headTenureIdsWithCabinet.has(t.id)
+      pt &&
+      HEAD_POSITION_TYPES.has(pt) &&
+      !headTenureIdsWithCabinet.has(t.id) &&
+      t.recordKind !== 'SOVEREIGN_REIGN'
     )
   })
 
@@ -1195,9 +1220,8 @@ export function CabinetsSection({
   }, [])
 
   /** 국가 원수 재임만 등록 (행정부 미생성) — 역대 수반 등록 폼과 동일 필드 */
-  const handleRegisterMonarch = async (dto: CreateGovernmentPositionTenureDto) => {
+  const handleRegisterMonarch = async (dto: CreateSovereignReignDto) => {
     const defOk =
-      dto.positionType === 'HEAD_OF_STATE' &&
       dto.positionDefinitionId &&
       headOfStatePositionOptions.some((d: any) => d.id === dto.positionDefinitionId)
     if (!defOk) {
@@ -1206,7 +1230,7 @@ export function CabinetsSection({
     }
     setRegisterMonarchSubmitting(true)
     try {
-      await personCareerApi.addGovernmentPositionTenure(dto)
+      await personCareerApi.addSovereignReign(dto)
       toast.success('군주(국가 원수) 재임이 등록되었습니다.')
       setRegisterMonarchModalOpen(false)
       queryClient.invalidateQueries({
@@ -1813,7 +1837,7 @@ export function CabinetsSection({
                       <EmptyStateSpotlight
                         icon={<FiUsers size={30} strokeWidth={1.75} />}
                         title="등록된 행정부가 없습니다"
-                        description="행정부는 수반(국가원수·정부수반) 재임으로 생성됩니다. 군주 재위만 등록한 경우 이 목록은 비어 있을 수 있으며, 재임은 행정조직「역대 수반」에서 확인할 수 있습니다."
+                        description="행정부는 정부 수반(내각)용 재임으로만 연결됩니다. 군주 등록은 재위 기록만 남기며 행정부 수반 목록과 섞이지 않습니다. 군주 재위만 있는 경우 이 목록은 비어 있을 수 있고, 재임은 행정조직「역대 수반」에서 확인할 수 있습니다."
                         primaryAction={{
                           label: '새 수반과 함께 등록',
                           onClick: () => {
@@ -2988,7 +3012,7 @@ export function CabinetsSection({
 
                                   <CabS.HistoryArticleDivider />
 
-                                  {/* 본문 영역: max-width 680px 가운데 */}
+                                  {/* 본문 영역: max-width 720px 가운데 */}
                                   <CabS.HistoryArticleInner>
                                     <CabS.HistoryArticleContentBar>
                                       {!editingHistoryContent &&
@@ -3013,19 +3037,13 @@ export function CabinetsSection({
 
                                     {selAch.eventId &&
                                       showCabinetHeadTenureHistoryActions && (
-                                        <p
-                                          style={{
-                                            margin: '0 0 10px',
-                                            fontSize: 12,
-                                            color: C.textMuted,
-                                          }}
-                                        >
+                                        <CabS.HistoryArticleBodyHint>
                                           본문 표시: 재임 칸과 사건 정본이 둘 다
                                           있으면 보통은 재임 칸을 쓰고, 이미지가
                                           한쪽에만 있으면 그쪽을 보여 줍니다.
                                           편집·저장은 항상 이 재임 칸 본문만
                                           바뀝니다.
-                                        </p>
+                                        </CabS.HistoryArticleBodyHint>
                                       )}
 
                                     {editingHistoryContent &&
@@ -4121,7 +4139,7 @@ export function CabinetsSection({
 
                                     <CabS.HistoryArticleDivider />
 
-                                    {/* 본문 영역: max-width 680px 가운데 */}
+                                    {/* 본문 영역: max-width 720px 가운데 */}
                                     <CabS.HistoryArticleInner>
                                       <CabS.HistoryArticleContentBar>
                                         {!editingHistoryContent && (
@@ -4144,19 +4162,13 @@ export function CabinetsSection({
                                       </CabS.HistoryArticleContentBar>
 
                                       {selAch.eventId && (
-                                        <p
-                                          style={{
-                                            margin: '0 0 10px',
-                                            fontSize: 12,
-                                            color: C.textMuted,
-                                          }}
-                                        >
+                                        <CabS.HistoryArticleBodyHint>
                                           본문 표시: 재임 칸과 사건 정본이 둘 다
                                           있으면 보통은 재임 칸을 쓰고, 이미지가
                                           한쪽에만 있으면 그쪽을 보여 줍니다.
                                           편집·저장은 항상 이 재임 칸 본문만
                                           바뀝니다.
-                                        </p>
+                                        </CabS.HistoryArticleBodyHint>
                                       )}
 
                                       {editingHistoryContent ? (

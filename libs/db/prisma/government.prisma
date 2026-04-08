@@ -161,6 +161,7 @@ model GovernmentPositionDefinition {
   organization Organization?                     @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
   tenures             GovernmentPositionTenure[]
+  sovereignReigns   SovereignReign[]           @relation("SovereignReignPositionDef")
   treatySignatories TreatySignatory[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -236,6 +237,80 @@ model Cabinet {
   @@index([accountId], name: "idx_cabinet_accountId")
   @@index([linkageGroupId], name: "idx_cabinet_linkageGroupId")
   @@map("cabinet")
+}
+
+// ========================
+// SovereignReign (군주·재위 전용 — 행정부 수반과 별도 테이블)
+// ========================
+/// 국가원수로서의 재위만 기록. Cabinet·GovernmentPositionTenure 수반과 연결되지 않음.
+model SovereignReign {
+  id String @id @default(uuid()) @db.Char(36)
+
+  personId String @map("person_id") @db.Char(36)
+  person   Person @relation("PersonSovereignReign", fields: [personId], references: [id], onDelete: Cascade)
+
+  countryId String? @map("country_id") @db.Char(36)
+  country   Country? @relation("SovereignReignCountry", fields: [countryId], references: [id], onDelete: SetNull)
+
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("SovereignReignHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  positionDefinitionId String? @map("position_definition_id") @db.Char(36)
+  positionDefinition   GovernmentPositionDefinition? @relation("SovereignReignPositionDef", fields: [positionDefinitionId], references: [id], onDelete: SetNull)
+
+  termNumber    Int? @map("term_number")
+  subTermNumber Int? @map("sub_term_number")
+  regnalNumber  Int? @map("regnal_number")
+
+  startDate DateTime @map("start_date")
+  endDate   DateTime? @map("end_date")
+
+  appointmentMethod AppointmentMethod? @map("appointment_method")
+  endReason         TenureEndReason?   @map("end_reason")
+  endReasonDetail   String?            @map("end_reason_detail") @db.Text
+  notes             String?            @db.Text
+
+  showPositionInfo Boolean @default(false) @map("show_position_info")
+  accountId        String? @map("account_id") @db.Char(36)
+  account          Account? @relation("AccountSovereignReigns", fields: [accountId], references: [id], onDelete: SetNull)
+
+  regnalEras   RegnalEra[]                 @relation("SovereignReignRegnalEras")
+  achievements SovereignReignAchievement[] @relation("SovereignReignAchievements")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_sovereign_reign_personId")
+  @@index([countryId], name: "idx_sovereign_reign_countryId")
+  @@index([historicalCountryId], name: "idx_sovereign_reign_histCountryId")
+  @@index([positionDefinitionId], name: "idx_sovereign_reign_posDefId")
+  @@index([accountId], name: "idx_sovereign_reign_accountId")
+  @@index([startDate], name: "idx_sovereign_reign_startDate")
+  @@map("sovereign_reign")
+}
+
+/// 재위(SovereignReign) 기간 업적 — tenure_achievement와 동일 역할, 테이블만 분리
+model SovereignReignAchievement {
+  id               String         @id @default(uuid()) @db.Char(36)
+  sovereignReignId String         @map("sovereign_reign_id") @db.Char(36)
+  sovereignReign   SovereignReign @relation("SovereignReignAchievements", fields: [sovereignReignId], references: [id], onDelete: Cascade)
+
+  eventId String? @map("event_id") @db.Char(36)
+  event   Event?  @relation("SovereignReignAchievementEvent", fields: [eventId], references: [id], onDelete: SetNull)
+
+  title       String    @db.VarChar(200)
+  description String?   @db.Text
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  orderNum    Int?      @default(0) @map("order_num")
+  showOnEventsPage Boolean @default(true) @map("show_on_events_page")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([sovereignReignId], name: "idx_sov_reign_ach_sovereignReignId")
+  @@index([eventId], name: "idx_sov_reign_ach_eventId")
+  @@map("sovereign_reign_achievement")
 }
 
 // ========================
@@ -408,20 +483,16 @@ model TenureAchievement {
 // RegnalEra (연호)
 // ========================
 /// 동아시아 군주의 연호를 기록합니다.
-/// 한 군주가 여러 연호를 사용할 수 있으며, 중요 사건이나 재위 기간 구분에 사용됩니다.
-/// 
-/// 예시:
-/// - 청나라 강희제: 康熙 (1662-1722, 61년간 단일 연호)
-/// - 청나라 건륭제: 乾隆 (1736-1795, 60년간 단일 연호)
-/// - 명나라 만력제: 萬曆 (1573-1620, 48년간 단일 연호)
-/// - 조선 세종: 세종 연간 (묘호이자 연호처럼 사용, 1418-1450)
-/// - 명나라 홍무제: 洪武 → 건문제: 建文 (단명)
+/// `tenureId` 또는 `sovereignReignId` 중 하나만 설정 (재임 기록 또는 재위 전용 기록).
 model RegnalEra {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 재임 기록 ID (GovernmentPositionTenure)
-  tenureId String @map("tenure_id") @db.Char(36)
+  /// 재임 기록 ID (정부 재임 — 행정부·수반 계열)
+  tenureId String? @map("tenure_id") @db.Char(36)
+
+  /// 재위 전용 기록 ID (군주 등 — SovereignReign)
+  sovereignReignId String? @map("sovereign_reign_id") @db.Char(36)
 
   /// 연호명 (예: 康熙, 乾隆, 建文, 洪武)
   eraName String @map("era_name") @db.VarChar(50)
@@ -451,13 +522,15 @@ model RegnalEra {
   changeReason String? @map("change_reason") @db.VarChar(200)
 
   //--- 관계 필드
-  tenure GovernmentPositionTenure @relation("TenureRegnalEras", fields: [tenureId], references: [id], onDelete: Cascade)
+  tenure         GovernmentPositionTenure? @relation("TenureRegnalEras", fields: [tenureId], references: [id], onDelete: Cascade)
+  sovereignReign SovereignReign?           @relation("SovereignReignRegnalEras", fields: [sovereignReignId], references: [id], onDelete: Cascade)
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([tenureId], name: "idx_regnal_era_tenure")
+  @@index([sovereignReignId], name: "idx_regnal_era_sovereignReignId")
   @@index([startYear], name: "idx_regnal_era_start")
   @@map("regnal_era")
 }

@@ -479,6 +479,9 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
   const queryClient = useQueryClient()
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingRecordKind, setEditingRecordKind] = useState<'TENURE' | 'SOVEREIGN_REIGN' | null>(
+    null,
+  )
   const [personSelectModalOpen, setPersonSelectModalOpen] = useState(false)
   const [positionModalOpen, setPositionModalOpen] = useState(false)
   const [startDateModalOpen, setStartDateModalOpen] = useState(false)
@@ -537,6 +540,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
 
   const resetForm = () => {
     setEditingId(null)
+    setEditingRecordKind(null)
     setSelectedPersonId('')
     setSelectedPositionDefId(null)
     setStartDate('')
@@ -578,6 +582,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
 
   const handleEdit = (t: any) => {
     setEditingId(t.id)
+    setEditingRecordKind(t.recordKind === 'SOVEREIGN_REIGN' ? 'SOVEREIGN_REIGN' : 'TENURE')
     setSelectedPersonId(t.personId)
     const defId = t.positionDefinitionId ?? t.positionDefinition?.id
     if (defId) {
@@ -640,8 +645,22 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
         showPositionInfo: showOnEventsPage,
       }
       if (editingId) {
-        await personCareerApi.updateGovernmentPositionTenure(editingId, payload)
-        toast.success('수정되었습니다.')
+        if (editingRecordKind === 'SOVEREIGN_REIGN') {
+          await personCareerApi.updateSovereignReign(editingId, {
+            personId: selectedPersonId,
+            positionDefinitionId: isOtherPosition ? undefined : selectedPositionDefId ?? undefined,
+            startDate: startDate + 'T00:00:00.000Z',
+            endDate: endDate ? endDate + 'T23:59:59.999Z' : undefined,
+            termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+            regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+            notes: notesValue,
+            showPositionInfo: showOnEventsPage,
+          })
+          toast.success('수정되었습니다.')
+        } else {
+          await personCareerApi.updateGovernmentPositionTenure(editingId, payload)
+          toast.success('수정되었습니다.')
+        }
       } else {
         await personCareerApi.addGovernmentPositionTenure(payload)
         toast.success('등록되었습니다.')
@@ -659,7 +678,11 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
     if (!editingId) return
     if (!window.confirm('이 전역 수반 기록을 삭제하시겠습니까?')) return
     try {
-      await personCareerApi.deleteGovernmentPositionTenure(editingId)
+      if (editingRecordKind === 'SOVEREIGN_REIGN') {
+        await personCareerApi.deleteSovereignReign(editingId)
+      } else {
+        await personCareerApi.deleteGovernmentPositionTenure(editingId)
+      }
       toast.success('삭제되었습니다.')
       queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
       handleBack()
