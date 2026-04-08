@@ -50,7 +50,6 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import {
   type CabinetListItemDto,
   type CreateGovernmentPositionTenureDto,
-  type CreateSovereignReignDto,
   type GovernmentCabinetTenureItem,
   type GovernmentHeadTenureInCabinetList,
   type TenureAchievementByEventLinkRow,
@@ -75,6 +74,8 @@ import {
   useRichTextTooltipEscape,
 } from '@/shared/hooks/use-rich-text-prose-click'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
@@ -117,7 +118,6 @@ import {
   SubmitButton,
   TabButton,
   TabNavigation,
-  Textarea,
 } from '@/shared/ui/register-form-layout'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
@@ -191,6 +191,32 @@ function tenureIdForAchievement(
   return typeof ach.tenureId === 'string' && ach.tenureId.trim()
     ? ach.tenureId
     : fallbackTenureId
+}
+
+/** RichTextEditor HTML — 시각적 빈 본문이면 저장하지 않음 */
+function optionalCabinetTenureRichText(
+  html: string | null | undefined,
+): string | undefined {
+  const trimmed = (html ?? '').trim()
+  if (!trimmed) return undefined
+  const safe = sanitizeRichTextHtml(trimmed)
+  if (typeof document === 'undefined') {
+    const stripped = safe
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .trim()
+    return stripped === '' ? undefined : safe
+  }
+  const div = document.createElement('div')
+  div.innerHTML = safe
+  const text = div.textContent?.replace(/\u00a0/g, ' ').trim() ?? ''
+  return text === '' ? undefined : safe
+}
+
+function cabinetTenureDetailHasContent(
+  html: string | null | undefined,
+): boolean {
+  return optionalCabinetTenureRichText(html) !== undefined
 }
 
 function achievementRowIsSovereign(row: TenureAchievementByEventLinkRow) {
@@ -407,8 +433,6 @@ export function CabinetsSection({
   const [newHeadEndReasonDetail, setNewHeadEndReasonDetail] = useState('')
   const [newHeadNotes, setNewHeadNotes] = useState('')
   const [registerMonarchModalOpen, setRegisterMonarchModalOpen] =
-    useState(false)
-  const [registerMonarchSubmitting, setRegisterMonarchSubmitting] =
     useState(false)
   const [deletingCabinetId, setDeletingCabinetId] = useState<string | null>(
     null,
@@ -1219,42 +1243,22 @@ export function CabinetsSection({
     setNewHeadNotes('')
   }, [])
 
-  /** 국가 원수 재임만 등록 (행정부 미생성) — 역대 수반 등록 폼과 동일 필드 */
-  const handleRegisterMonarch = async (dto: CreateSovereignReignDto) => {
-    const defOk =
-      dto.positionDefinitionId &&
-      headOfStatePositionOptions.some((d: any) => d.id === dto.positionDefinitionId)
-    if (!defOk) {
-      toast.error('국가 원수 직위 정의만 등록할 수 있습니다.')
-      return
-    }
-    setRegisterMonarchSubmitting(true)
-    try {
-      await personCareerApi.addSovereignReign(dto)
-      toast.success('군주(국가 원수) 재임이 등록되었습니다.')
-      setRegisterMonarchModalOpen(false)
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: [
-          'tenures-by-country-for-cabinet',
-          countryId,
-          historicalCountryId,
-        ],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['tenures-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.'
-      toast.error(msg)
-    } finally {
-      setRegisterMonarchSubmitting(false)
-    }
-  }
+  const invalidateAfterMonarchRegister = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: ['cabinets-by-country', countryId, historicalCountryId],
+    })
+    queryClient.invalidateQueries({
+      queryKey: [
+        'tenures-by-country-for-cabinet',
+        countryId,
+        historicalCountryId,
+      ],
+    })
+    queryClient.invalidateQueries({
+      queryKey: ['tenures-by-country', countryId, historicalCountryId],
+    })
+    queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
+  }, [queryClient, countryId, historicalCountryId])
 
   /** 새 수반 재임 생성 후 행정부까지 한 번에 등록 */
   const handleRegisterNewHeadAndCabinet = async () => {
@@ -1447,11 +1451,13 @@ export function CabinetsSection({
         ...(mode === 'appointment'
           ? {
               appointmentMethod: (editingAppointmentMethod || undefined) as any,
-              notes: editingNotes.trim() || undefined,
+              notes: optionalCabinetTenureRichText(editingNotes),
             }
           : {
               endReason: (editingEndReason || undefined) as any,
-              endReasonDetail: editingEndReasonDetail.trim() || undefined,
+              endReasonDetail: optionalCabinetTenureRichText(
+                editingEndReasonDetail,
+              ),
             }),
       })
       toast.success('저장되었습니다.')
@@ -1704,6 +1710,7 @@ export function CabinetsSection({
 
   return (
     <CabS.CabinetsSectionRoot>
+      <CabS.CabinetDetailPrintGlobalStyle />
       {/* ── 포스트 상세 패턴: list view(카드 그리드) / detail view(행정부 상세) ── */}
       {/* wait 제거: 리스트·상세 DOM이 커서 exit 끝날 때까지 다음 뷰가 안 뜨면 체감 지연이 큼 → sync + 짧은 opacity만 */}
       <AnimatePresence mode="sync" initial={false}>
@@ -2596,6 +2603,7 @@ export function CabinetsSection({
           <motion.div
             ref={cabinetDetailViewRootRef}
             key="cab-detail-view"
+            data-cabinet-print-root=""
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2627,6 +2635,7 @@ export function CabinetsSection({
                   setPersonSelectOpen={setPersonSelectOpen}
                   handleDeleteCabinet={handleDeleteCabinet}
                   onEditCabinet={() => handleOpenEditCabinet(selectedCabinet)}
+                  onPrint={() => window.print()}
                 />
                 {selectedMinisterId
                   ? /* ── 각료 상세 뷰 ── */
@@ -3442,7 +3451,10 @@ export function CabinetsSection({
                                         }}
                                       >
                                         <FiPlus size={12} />
-                                        {head?.appointmentMethod || head?.notes
+                                        {head?.appointmentMethod ||
+                                        cabinetTenureDetailHasContent(
+                                          head?.notes,
+                                        )
                                           ? '수정'
                                           : '등록'}
                                       </button>
@@ -3516,34 +3528,32 @@ export function CabinetsSection({
                                         >
                                           취임 배경 / 비고
                                         </label>
-                                        <textarea
-                                          value={editingNotes}
-                                          onChange={(e) =>
-                                            setEditingNotes(e.target.value)
-                                          }
-                                          rows={3}
-                                          placeholder="취임 배경, 특이 사항 등"
-                                          style={{
-                                            maxWidth: 500,
-                                            height: 200,
-                                            width: '100%',
-                                            padding: '8px 10px',
-                                            fontSize: 13,
-                                            resize: 'vertical',
-                                            border: `1.5px solid ${C.badgeBorder}`,
-                                            borderRadius: 8,
-                                            background: C.inputBg,
-                                            color: C.text,
-                                            outline: 'none',
-                                            fontFamily: 'inherit',
-                                            lineHeight: 1.6,
-                                            boxSizing: 'border-box',
-                                            display: 'block',
-                                          }}
-                                        />
+                                        <CabS.HeadTenureInfoEditorWrap>
+                                          <RichTextEditor
+                                            value={editingNotes}
+                                            onChange={setEditingNotes}
+                                            showTitle={false}
+                                            placeholder="취임 배경, 특이 사항 등"
+                                            onImageUpload={async (file) => {
+                                              const result = await uploadImage(
+                                                file,
+                                                'persons',
+                                              )
+                                              return (
+                                                getUploadImageUrl(
+                                                  result.url,
+                                                ) ||
+                                                (result.url ?? '')
+                                              )
+                                            }}
+                                          />
+                                        </CabS.HeadTenureInfoEditorWrap>
                                       </div>
                                     </div>
-                                  ) : head?.appointmentMethod || head?.notes ? (
+                                  ) : head?.appointmentMethod ||
+                                    cabinetTenureDetailHasContent(
+                                      head?.notes,
+                                    ) ? (
                                     <>
                                       <CabS.HeadTenureInfoBadge
                                         $type="appointment"
@@ -3556,14 +3566,29 @@ export function CabinetsSection({
                                           head.appointmentMethod
                                         ] ?? head.appointmentMethod}
                                       </CabS.HeadTenureInfoBadge>
-                                      {head.notes && (
+                                      {cabinetTenureDetailHasContent(
+                                        head.notes,
+                                      ) && (
                                         <CabS.HeadTenureInfoRow $block>
                                           <CabS.HeadTenureInfoLabel>
                                             취임 배경 / 비고
                                           </CabS.HeadTenureInfoLabel>
-                                          <CabS.HeadTenureInfoText>
-                                            {head.notes}
-                                          </CabS.HeadTenureInfoText>
+                                          {isLikelyRichTextHtml(head.notes) ? (
+                                            <CabS.HeadTenureInfoRichColumn
+                                              onClick={handleHistoryProseClick}
+                                              role="presentation"
+                                            >
+                                              <CabS.HeadTenureInfoRichProse
+                                                html={String(head.notes ?? '')}
+                                              />
+                                            </CabS.HeadTenureInfoRichColumn>
+                                          ) : (
+                                            <CabS.HeadTenureInfoRichColumn>
+                                              <CabS.HeadTenureInfoText>
+                                                {head.notes}
+                                              </CabS.HeadTenureInfoText>
+                                            </CabS.HeadTenureInfoRichColumn>
+                                          )}
                                         </CabS.HeadTenureInfoRow>
                                       )}
                                     </>
@@ -3702,7 +3727,9 @@ export function CabinetsSection({
                                       >
                                         <FiPlus size={12} />
                                         {head?.endReason ||
-                                        head?.endReasonDetail
+                                        cabinetTenureDetailHasContent(
+                                          head?.endReasonDetail,
+                                        )
                                           ? '수정'
                                           : '등록'}
                                       </button>
@@ -3774,37 +3801,32 @@ export function CabinetsSection({
                                         >
                                           퇴임 상세
                                         </label>
-                                        <textarea
-                                          value={editingEndReasonDetail}
-                                          onChange={(e) =>
-                                            setEditingEndReasonDetail(
-                                              e.target.value,
-                                            )
-                                          }
-                                          rows={3}
-                                          placeholder="퇴임 경위, 상세 내용 등"
-                                          style={{
-                                            maxWidth: 500,
-                                            height: 200,
-                                            width: '100%',
-                                            padding: '8px 10px',
-                                            fontSize: 13,
-                                            resize: 'vertical',
-                                            border: `1.5px solid ${C.badgeBorder}`,
-                                            borderRadius: 8,
-                                            background: C.inputBg,
-                                            color: C.text,
-                                            outline: 'none',
-                                            fontFamily: 'inherit',
-                                            lineHeight: 1.6,
-                                            boxSizing: 'border-box',
-                                            display: 'block',
-                                          }}
-                                        />
+                                        <CabS.HeadTenureInfoEditorWrap>
+                                          <RichTextEditor
+                                            value={editingEndReasonDetail}
+                                            onChange={setEditingEndReasonDetail}
+                                            showTitle={false}
+                                            placeholder="퇴임 경위, 상세 내용 등"
+                                            onImageUpload={async (file) => {
+                                              const result = await uploadImage(
+                                                file,
+                                                'persons',
+                                              )
+                                              return (
+                                                getUploadImageUrl(
+                                                  result.url,
+                                                ) ||
+                                                (result.url ?? '')
+                                              )
+                                            }}
+                                          />
+                                        </CabS.HeadTenureInfoEditorWrap>
                                       </div>
                                     </div>
                                   ) : head?.endReason ||
-                                    head?.endReasonDetail ? (
+                                    cabinetTenureDetailHasContent(
+                                      head?.endReasonDetail,
+                                    ) ? (
                                     <>
                                       <CabS.HeadTenureInfoBadge
                                         $type="end"
@@ -3816,14 +3838,33 @@ export function CabinetsSection({
                                         {END_REASON_LABEL[head.endReason] ??
                                           head.endReason}
                                       </CabS.HeadTenureInfoBadge>
-                                      {head.endReasonDetail && (
+                                      {cabinetTenureDetailHasContent(
+                                        head.endReasonDetail,
+                                      ) && (
                                         <CabS.HeadTenureInfoRow $block>
                                           <CabS.HeadTenureInfoLabel>
                                             퇴임 상세
                                           </CabS.HeadTenureInfoLabel>
-                                          <CabS.HeadTenureInfoText>
-                                            {head.endReasonDetail}
-                                          </CabS.HeadTenureInfoText>
+                                          {isLikelyRichTextHtml(
+                                            head.endReasonDetail,
+                                          ) ? (
+                                            <CabS.HeadTenureInfoRichColumn
+                                              onClick={handleHistoryProseClick}
+                                              role="presentation"
+                                            >
+                                              <CabS.HeadTenureInfoRichProse
+                                                html={String(
+                                                  head.endReasonDetail ?? '',
+                                                )}
+                                              />
+                                            </CabS.HeadTenureInfoRichColumn>
+                                          ) : (
+                                            <CabS.HeadTenureInfoRichColumn>
+                                              <CabS.HeadTenureInfoText>
+                                                {head.endReasonDetail}
+                                              </CabS.HeadTenureInfoText>
+                                            </CabS.HeadTenureInfoRichColumn>
+                                          )}
                                         </CabS.HeadTenureInfoRow>
                                       )}
                                     </>
@@ -5096,20 +5137,16 @@ export function CabinetsSection({
         />
       )}
 
-      {registerMonarchModalOpen && (
-        <RegisterMonarchModal
-          country={country}
-          isHistorical={isHistorical}
-          countryId={countryId}
-          historicalCountryId={historicalCountryId}
-          headOfStatePositionOptions={headOfStatePositionOptions}
-          submitting={registerMonarchSubmitting}
-          onClose={() => {
-            if (!registerMonarchSubmitting) setRegisterMonarchModalOpen(false)
-          }}
-          onSubmit={handleRegisterMonarch}
-        />
-      )}
+      <RegisterMonarchModal
+        isOpen={registerMonarchModalOpen}
+        country={country}
+        isHistorical={isHistorical}
+        countryId={countryId}
+        historicalCountryId={historicalCountryId}
+        headOfStatePositionOptions={headOfStatePositionOptions}
+        onClose={() => setRegisterMonarchModalOpen(false)}
+        onSuccess={invalidateAfterMonarchRegister}
+      />
 
       {editingCabinet && (
         <ModalOverlay

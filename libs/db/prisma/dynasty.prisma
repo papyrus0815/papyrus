@@ -48,8 +48,7 @@ model Dynasty {
   /// 가문 종료일 (멸문 또는 권력 상실)
   endDate DateTime? @map("end_date")
 
-  /// 썸네일
-  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+  /// 대표 썸네일은 `attachment` 테이블(ownerType=DYNASTY, title=dynasty-thumbnail)에 저장
 
   //--- 관계 필드
   /// 이 가문에 속한 인물들

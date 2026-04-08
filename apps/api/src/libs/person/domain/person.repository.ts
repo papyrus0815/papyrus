@@ -11,16 +11,15 @@ import {
   CreateEducationDto,
   CreateGovernmentPositionDefinitionDto,
   CreateGovernmentPositionTenureDto,
-  CreateSovereignReignDto,
   CreateLegalCareerDto,
   CreateMediaCareerDto,
   CreateMedicalCareerDto,
   CreateMilitaryCareerDto,
   CreatePersonAwardDto,
-  CreateReligiousCareerDto,
-  CreateTenureAchievementDto,
   CreateRegnalEraDto,
-  UpdateRegnalEraDto,
+  CreateReligiousCareerDto,
+  CreateSovereignReignDto,
+  CreateTenureAchievementDto,
   LegalCareerResponseDto,
   MediaCareerResponseDto,
   MedicalCareerResponseDto,
@@ -30,6 +29,7 @@ import {
   PersonResponseDto,
   ReligiousCareerResponseDto,
   UpdateGovernmentPositionDefinitionDto,
+  UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
 } from '../presentation/dto'
 
@@ -158,12 +158,24 @@ export interface IPersonRepository {
   findPersonsByCountryId(countryId: string): Promise<PersonResponseDto[]>
 
   /**
+   * 가문별 인물 목록 (person.dynastyId = dynastyId, accountId 무관)
+   */
+  findPersonsByDynastyId(dynastyId: string): Promise<PersonResponseDto[]>
+
+  /**
    * 해당 현대 국가 또는 연결된 역사적 국가에 소속(affiliation)이 있는 인물 조회
    * (PersonCountryAffiliation: 출생지·시민권·봉사국 등)
    */
   findPersonsByAffiliationInCountry(
     countryId: string,
   ): Promise<PersonResponseDto[]>
+
+  /**
+   * 현대 국가별 연결 인물 수 (Person.countryId·재임·소속 합집합 — 국가 상세「전체 인물」과 동일)
+   */
+  findModernCountryPersonCounts(): Promise<
+    Array<{ countryId: string; count: number }>
+  >
 
   /**
    * ID로 인물 조회 (accountId 있으면 해당 계정 소유만 반환)
@@ -316,8 +328,14 @@ export interface IPersonRepository {
     parent: { tenureId: string } | { sovereignReignId: string },
     dto: CreateRegnalEraDto,
   ): Promise<any>
-  addSovereignReign(dto: CreateSovereignReignDto, accountId?: string): Promise<any>
-  updateSovereignReign(id: string, dto: Partial<CreateSovereignReignDto>): Promise<any>
+  addSovereignReign(
+    dto: CreateSovereignReignDto,
+    accountId?: string,
+  ): Promise<any>
+  updateSovereignReign(
+    id: string,
+    dto: Partial<CreateSovereignReignDto>,
+  ): Promise<any>
   deleteSovereignReign(id: string): Promise<void>
   findSovereignReignById(id: string): Promise<any | null>
   updateRegnalEra(id: string, dto: UpdateRegnalEraDto): Promise<any>

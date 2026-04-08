@@ -103,6 +103,16 @@ export class PersonController {
   }
 
   /**
+   * 대시보드용: 현대 국가별 실제 등록 인물 수 (주 국적·재임·소속 합집합, 국가 상세 인물 목록과 동일)
+   */
+  @Get('dashboard/person-counts-by-modern-country')
+  async getPersonCountsByModernCountry(): Promise<
+    Array<{ countryId: string; count: number }>
+  > {
+    return this.personService.findModernCountryPersonCounts()
+  }
+
+  /**
    * ID로 인물 조회 (본인 등록분만)
    */
   @Get(':id')

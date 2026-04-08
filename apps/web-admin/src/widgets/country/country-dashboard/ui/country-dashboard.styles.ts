@@ -66,21 +66,36 @@ export const GlobalDashboard = styled.div`
   min-height: calc(100vh - var(--header-height));
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 0;
   overflow-y: auto;
   animation: ${fadeSlideIn} 0.35s ease;
+  max-width: 1320px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 1024px) {
     padding: 24px 28px 36px;
-    gap: 28px;
   }
   @media (max-width: 768px) {
     padding: 20px 20px 28px;
-    gap: 24px;
   }
   @media (max-width: 480px) {
     padding: 16px 16px 24px;
-    gap: 20px;
+  }
+`
+
+/** 페이지 주요 블록(요약 / 최근 활동 / 상세 통계) 구분 */
+export const DashboardSection = styled.section<{ $flushTop?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  margin-top: ${({ $flushTop }) => ($flushTop ? '0' : '36px')};
+
+  @media (max-width: 768px) {
+    margin-top: ${({ $flushTop }) => ($flushTop ? '0' : '28px')};
+    gap: 16px;
   }
 `
 
@@ -220,14 +235,23 @@ export const HeroSubtitle = styled.p`
 
 // ─── 섹션 타이틀 ──────────────────────────────────────────────────────────────
 
-export const DashboardSectionTitle = styled.div<{ $mt?: string }>`
+export const DashboardSectionTitle = styled.div`
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 24px 0 18px;
+  padding: 0 0 14px;
+  margin: 0 0 2px;
   border-bottom: 2px solid ${({ theme }) => theme.colors.border.light};
-  margin-bottom: 6px;
-  ${({ $mt }) => $mt && `margin-top: ${$mt};`}
+`
+
+/** 같은 대섹션 안에서 하위 구분(예: 국가 비교) */
+export const DashboardSubsectionTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 12px;
+  margin: 8px 0 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const SectionTitleIcon = styled.div`
@@ -270,19 +294,13 @@ export const SectionTitleText = styled.h2`
 
 export const GlobalMetricsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  width: 100%;
 
-  @media (min-width: 769px) and (max-width: 1024px) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  @media (max-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-  @media (max-width: 480px) {
+  @media (max-width: 520px) {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 10px;
   }
 `
 
@@ -375,28 +393,30 @@ export const GlobalMetricSubtext = styled.div`
 
 export const GlobalDashboardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  width: 100%;
+  align-items: stretch;
 
-  @media (min-width: 769px) and (max-width: 1024px) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
     grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  @media (max-width: 480px) {
-    gap: 10px;
+    gap: 16px;
   }
 `
 
-export const GlobalWidget = styled.div`
+export const GlobalWidget = styled.div<{ $fullWidth?: boolean }>`
   border-radius: 20px;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0;
+
+  ${({ $fullWidth }) =>
+    $fullWidth &&
+    css`
+      grid-column: 1 / -1;
+    `}
   position: relative;
   overflow: hidden;
   transition:
@@ -581,6 +601,7 @@ export const DashboardTableWrap = styled.div`
   border-radius: 20px;
   overflow: hidden;
   position: relative;
+  padding: 20px 20px 12px;
 
   ${({ theme }) => liquidCard(theme)}
 `
@@ -781,4 +802,97 @@ export const EmptyGlobalDesc = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.6;
   max-width: 360px;
+`
+
+// ─── Recharts 인포그래픽 (등록 인물 / 국가 비교) ───────────────────────────────
+
+export const InfographicEmpty = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  padding: 32px 20px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: center;
+`
+
+export const InfographicSplit = styled.div`
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 8px 28px;
+  width: 100%;
+  align-items: center;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+export const DonutWrap = styled.div`
+  position: relative;
+  width: 100%;
+  min-height: 260px;
+`
+
+export const DonutCenter = styled.div`
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  max-width: 120px;
+`
+
+export const DonutCenterValue = styled.div`
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  line-height: 1.15;
+`
+
+export const DonutCenterLabel = styled.div`
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  letter-spacing: 0.02em;
+`
+
+export const DonutCenterHint = styled.div`
+  margin-top: 8px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const BarPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 260px;
+`
+
+export const BarPanelTitle = styled.div`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  padding-left: 4px;
+`
+
+export const ScatterChartWrap = styled.div`
+  width: 100%;
+  min-height: 420px;
+`
+
+export const ScatterFootnote = styled.p`
+  margin: 0;
+  padding: 0 8px 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `

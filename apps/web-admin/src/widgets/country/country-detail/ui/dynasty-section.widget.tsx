@@ -1,7 +1,7 @@
 /**
  * 가문 섹션 — 행정조직 페이지와 동일한 구조·스타일 참조
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
   useDynasties,
@@ -9,12 +9,17 @@ import {
   useUpdateDynasty,
   useDeleteDynasty,
 } from '@/features/dynasty/use-dynasties.hook'
-import { getUploadImageUrl } from '@/shared/api/upload'
+import {
+  getUploadImageUrl,
+  uploadImage,
+  validateImageFile,
+} from '@/shared/api/upload'
 import type { Dynasty } from '@/shared/api/dynasty'
 import {
   PillTabButton,
   PillTabNav,
 } from '@/shared/ui/tab/tab.styles'
+import { DynastyMembersInfographicModal } from './dynasty-members-infographic-modal'
 
 const MAIN = '#6366f1'
 
@@ -31,9 +36,15 @@ export function DynastySection() {
     description: '',
     startDate: '',
     endDate: '',
-    thumbnailUrl: '',
   })
+  /** 서버에 저장된 `/uploads/...` 경로 (업로드 API 응답 url) */
+  const [thumbPath, setThumbPath] = useState('')
+  const [thumbRemoved, setThumbRemoved] = useState(false)
+  const [thumbUploading, setThumbUploading] = useState(false)
+  const thumbInitialRef = useRef('')
+  const thumbInputRef = useRef<HTMLInputElement>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [membersModal, setMembersModal] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     if (editing) {
@@ -42,10 +53,16 @@ export function DynastySection() {
         description: editing.description ?? '',
         startDate: editing.startDate ? new Date(editing.startDate).toISOString().split('T')[0] : '',
         endDate: editing.endDate ? new Date(editing.endDate).toISOString().split('T')[0] : '',
-        thumbnailUrl: editing.thumbnailUrl ?? '',
       })
+      const t = editing.thumbnailUrl ?? ''
+      thumbInitialRef.current = t
+      setThumbPath(t)
+      setThumbRemoved(false)
     } else {
-      setForm({ name: '', description: '', startDate: '', endDate: '', thumbnailUrl: '' })
+      setForm({ name: '', description: '', startDate: '', endDate: '' })
+      thumbInitialRef.current = ''
+      setThumbPath('')
+      setThumbRemoved(false)
     }
     setFormError(null)
   }, [editing, view])
@@ -70,12 +87,23 @@ export function DynastySection() {
       return
     }
     try {
+      const thumbPayload: { thumbnailUrl?: string | null } = {}
+      if (!editing) {
+        if (thumbPath.trim()) thumbPayload.thumbnailUrl = thumbPath.trim()
+      } else if (thumbRemoved) {
+        thumbPayload.thumbnailUrl = null
+      } else {
+        const cur = thumbPath.trim()
+        const initial = (thumbInitialRef.current ?? '').trim()
+        if (cur && cur !== initial) thumbPayload.thumbnailUrl = cur
+      }
+
       const payload = {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         startDate: form.startDate.trim() || undefined,
         endDate: form.endDate.trim() || undefined,
-        thumbnailUrl: form.thumbnailUrl.trim() || undefined,
+        ...thumbPayload,
       }
       if (editing) {
         await updateDynasty.mutateAsync({ id: editing.id, data: payload })
@@ -255,19 +283,91 @@ export function DynastySection() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
                   <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>썸네일</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <input
-                      type="text"
-                      value={form.thumbnailUrl}
-                      onChange={(e) => setForm((f) => ({ ...f, thumbnailUrl: e.target.value }))}
-                      placeholder="이미지 URL 입력"
-                      style={{ width: '100%', maxWidth: 380, padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827', background: '#fff', outline: 'none' }}
+                      ref={thumbInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (!file) return
+                        try {
+                          validateImageFile(file)
+                        } catch (err) {
+                          setFormError((err as Error).message)
+                          return
+                        }
+                        setThumbUploading(true)
+                        setFormError(null)
+                        try {
+                          const r = await uploadImage(file, 'dynasties')
+                          setThumbPath(r.url)
+                          setThumbRemoved(false)
+                        } catch (err) {
+                          setFormError((err as Error).message)
+                        } finally {
+                          setThumbUploading(false)
+                        }
+                      }}
                     />
-                    {form.thumbnailUrl && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        disabled={thumbUploading}
+                        onClick={() => thumbInputRef.current?.click()}
+                        style={{
+                          padding: '10px 16px',
+                          borderRadius: 12,
+                          border: '1px solid #e5e7eb',
+                          background: '#fff',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: '#374151',
+                          cursor: thumbUploading ? 'wait' : 'pointer',
+                        }}
+                      >
+                        {thumbUploading ? '업로드 중…' : '이미지 선택'}
+                      </button>
+                      {(thumbPath || (editing && thumbInitialRef.current && !thumbRemoved)) && (
+                        <button
+                          type="button"
+                          disabled={thumbUploading}
+                          onClick={() => {
+                            setThumbPath('')
+                            setThumbRemoved(true)
+                          }}
+                          style={{
+                            padding: '10px 16px',
+                            borderRadius: 12,
+                            border: '1px solid #fecaca',
+                            background: '#fef2f2',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: '#dc2626',
+                            cursor: thumbUploading ? 'wait' : 'pointer',
+                          }}
+                        >
+                          썸네일 제거
+                        </button>
+                      )}
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                      JPG·PNG·WebP 등 이미지 파일을 업로드합니다. (최대 10MB)
+                    </p>
+                    {!thumbRemoved && thumbPath ? (
                       <div style={{ marginTop: 4, width: '100%', maxWidth: 280, aspectRatio: '16/10', borderRadius: 14, overflow: 'hidden', background: '#fafafa' }}>
-                        <img src={getUploadImageUrl(form.thumbnailUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                        <img
+                          src={getUploadImageUrl(thumbPath)}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={(ev) => {
+                            ev.currentTarget.style.display = 'none'
+                          }}
+                        />
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -438,7 +538,14 @@ export function DynastySection() {
                             )}
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 10, marginTop: 'auto', paddingTop: 4 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 'auto', paddingTop: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setMembersModal({ id: dynasty.id, name: dynasty.name })}
+                            style={{ padding: '10px 18px', fontSize: 13, cursor: 'pointer', border: '1px solid #c7d2fe', borderRadius: 12, background: '#eef2ff', fontWeight: 600, color: '#4f46e5' }}
+                          >
+                            인물 인포그래픽
+                          </button>
                           <button
                             type="button"
                             onClick={() => openEdit(dynasty)}
@@ -464,6 +571,14 @@ export function DynastySection() {
           </>
         )}
       </section>
+      {membersModal ? (
+        <DynastyMembersInfographicModal
+          dynastyId={membersModal.id}
+          dynastyName={membersModal.name}
+          isOpen
+          onClose={() => setMembersModal(null)}
+        />
+      ) : null}
     </div>
   )
 }

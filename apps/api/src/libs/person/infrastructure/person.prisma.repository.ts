@@ -671,6 +671,58 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 가문별 인물 목록 (dynastyId 일치, 대시보드 가문 인포그래픽용)
+   */
+  async findPersonsByDynastyId(dynastyId: string): Promise<PersonResponseDto[]> {
+    const persons = await this.prisma.person.findMany({
+      where: { dynastyId },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
+      include: {
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            isoCode: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
+        dynasty: { select: { id: true, name: true } },
+        job: { select: { id: true, title: true } },
+        birthCity: { select: { id: true, name: true } },
+        deathCity: { select: { id: true, name: true } },
+        birthAdminDivision: { select: { id: true, name: true } },
+        deathAdminDivision: { select: { id: true, name: true } },
+        GovernmentTenures: {
+          select: {
+            id: true,
+            positionType: true,
+            title: true,
+            startDate: true,
+            endDate: true,
+            positionDefinition: {
+              select: {
+                id: true,
+                title: true,
+                positionType: true,
+                category: { select: { id: true, name: true, nameEn: true } },
+                organization: { select: { id: true, name: true } },
+              },
+            },
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: 'desc' },
+        },
+      },
+    })
+    return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  /**
    * 해당 현대 국가 또는 연결된 역사적 국가에 소속(affiliation)이 있는 인물 조회
    * Person.countryId가 아닌 PersonCountryAffiliation 기준 (독일 → 신성로마제국 연결 인물 포함)
    */
@@ -745,6 +797,94 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  /**
+   * 현대 국가와 연결된 인물 ID 합집합 (findPersonsByCountry와 동일 기준, 전체 Person 로드 없음)
+   */
+  private async collectPersonIdsLinkedToModernCountry(
+    countryId: string,
+  ): Promise<Set<string>> {
+    const merged = new Set<string>()
+
+    const direct = await this.prisma.person.findMany({
+      where: { countryId },
+      select: { id: true },
+    })
+    for (const r of direct) merged.add(r.id)
+
+    const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+      .findMany({
+        where: { modernCountryId: countryId },
+        select: { historicalCountryId: true },
+      })
+      .then((rows) => rows.map((r) => r.historicalCountryId))
+
+    const tenureWhere =
+      linkedHistoricalIds.length > 0
+        ? {
+            OR: [
+              { countryId },
+              { historicalCountryId: { in: linkedHistoricalIds } },
+            ],
+          }
+        : { countryId }
+
+    const [tenureRows, reignRows] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: tenureWhere,
+        select: { personId: true },
+        distinct: ['personId'],
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: tenureWhere,
+        select: { personId: true },
+        distinct: ['personId'],
+      }),
+    ])
+    for (const t of tenureRows) merged.add(t.personId)
+    for (const r of reignRows) merged.add(r.personId)
+
+    const affiliationWhere =
+      linkedHistoricalIds.length > 0
+        ? {
+            OR: [
+              { countryId },
+              { historicalCountryId: { in: linkedHistoricalIds } },
+            ],
+          }
+        : { countryId }
+
+    const affs = await this.prisma.personCountryAffiliation.findMany({
+      where: affiliationWhere,
+      select: { personId: true },
+      distinct: ['personId'],
+    })
+    for (const a of affs) merged.add(a.personId)
+
+    return merged
+  }
+
+  async findModernCountryPersonCounts(): Promise<
+    Array<{ countryId: string; count: number }>
+  > {
+    const rows = await this.prisma.country.findMany({
+      select: { id: true },
+      orderBy: { name: 'asc' },
+    })
+    const CHUNK = 16
+    const out: Array<{ countryId: string; count: number }> = []
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK)
+      const part = await Promise.all(
+        chunk.map(async (c) => ({
+          countryId: c.id,
+          count: (await this.collectPersonIdsLinkedToModernCountry(c.id)).size,
+        })),
+      )
+      out.push(...part)
+    }
+    return out
   }
 
   /**

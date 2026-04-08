@@ -6,6 +6,8 @@
 import styled, { css } from 'styled-components'
 import type { DefaultTheme } from 'styled-components'
 
+import { UnderlineTabNav } from '@/shared/ui/underline-tabs'
+
 // ─── 공통 헬퍼 ───────────────────────────────────────────────────────────────
 
 /** 다크 전용 backdrop-filter */
@@ -160,126 +162,26 @@ export const SidebarTabBody = styled.div`
   overflow: hidden;
 `
 
-// ─── 탭 바 ───────────────────────────────────────────────────────────────────
+// ─── 사이드바 모드 탭 (국가 상세 OverviewSubTabs와 동일: 언더라인 탭) ─────────
 
-export const TabBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0;
-  padding: 4px;
-  border-radius: 12px;
-  overflow-x: auto;
-  overscroll-behavior: contain;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-        `
-      : css`
-          background: ${theme.colors.background.tertiary};
-          border: 1px solid ${theme.colors.border.default};
-        `}
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
-  @media (max-width: 768px) {
-    display: none;
-  }
+export const SidebarModeTabNav = styled(UnderlineTabNav)`
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 `
 
-export const TabButton = styled.button<{ $active?: boolean }>`
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: none;
-  font-size: 13px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  position: relative;
-  white-space: nowrap;
-  transition:
-    color 0.16s ease,
-    background 0.16s ease,
-    box-shadow 0.2s ease;
-
-  ${({ $active, theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: ${$active ? 'rgba(255, 255, 255, 0.1)' : 'transparent'};
-          color: ${$active ? '#ffffff' : theme.colors.text.secondary};
-          font-weight: ${$active ? '600' : '500'};
-          box-shadow: ${$active
-            ? '0 4px 12px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.08)'
-            : 'none'};
-          backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
-          -webkit-backdrop-filter: ${$active ? 'blur(8px)' : 'none'};
-
-          &:hover {
-            color: #ffffff;
-            background: ${$active
-              ? 'rgba(255, 255, 255, 0.14)'
-              : 'rgba(255, 255, 255, 0.06)'};
-          }
-        `
-      : css`
-          background: ${$active
-            ? theme.colors.background.primary
-            : 'transparent'};
-          color: ${$active ? theme.colors.active : theme.colors.text.secondary};
-          font-weight: ${$active ? '600' : '500'};
-          box-shadow: ${$active
-            ? `0 2px 8px ${theme.colors.shadow.md}`
-            : 'none'};
-
-          &:hover {
-            color: ${$active ? theme.colors.active : theme.colors.text.primary};
-            background: ${$active
-              ? theme.colors.background.primary
-              : theme.colors.background.secondary};
-          }
-        `}
-
-  @media (max-width: 768px) {
-    padding: 6px 10px;
-    font-size: 12px;
-    gap: 5px;
-  }
-  @media (max-width: 480px) {
-    padding: 5px 8px;
-    font-size: 11px;
-  }
-`
-
-export const TabBadge = styled.span`
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 106, 242, 0.2)'
-      : 'rgba(99, 102, 241, 0.12)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 106, 242, 0.3)'
-        : 'rgba(99, 102, 241, 0.2)'};
-  color: ${({ theme }) => theme.colors.primary};
-  font-size: 11px;
+/** 국가 개수 — 필터 칩 배지 대신 타이포만으로 정리 */
+export const SidebarTabCount = styled.span<{ $active?: boolean }>`
+  margin-left: 6px;
+  font-size: 12px;
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family:
-    'Roboto',
-    -apple-system,
-    sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.tertiary};
+  opacity: ${({ $active }) => ($active ? 0.95 : 0.8)};
 `
 
 // ─── 컨트롤 / 필터 ────────────────────────────────────────────────────────────
@@ -1196,122 +1098,6 @@ export const AddButtonIcon = styled.div`
   align-items: center;
   justify-content: center;
   font-size: 16px;
-`
-
-// ─── 사이드바 대시보드 요약 ────────────────────────────────────────────────────
-
-export const DashboardSidebarSectionTitle = styled.h2`
-  margin: 0;
-  padding: 14px 20px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  letter-spacing: 0.02em;
-  background: transparent;
-  border-bottom: none;
-`
-
-export const DashboardSummary = styled.div`
-  padding: 0 16px 20px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  overflow-y: auto;
-  background: transparent;
-`
-
-export const SummaryCard = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 14px 10px;
-  border-radius: 12px;
-  position: relative;
-  overflow: hidden;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.15s ease;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          ${darkBlur(16)}
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow:
-            0 2px 8px rgba(0, 0, 0, 0.35),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
-          &::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            background: linear-gradient(
-              135deg,
-              rgba(255, 255, 255, 0.03) 0%,
-              transparent 60%
-            );
-            pointer-events: none;
-          }
-        `
-      : css`
-          background: ${theme.colors.background.primary};
-          border: 1px solid ${theme.colors.border.light};
-          box-shadow: 0 1px 4px ${theme.colors.shadow.sm};
-        `}
-
-  &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 106, 242, 0.35)'
-        : theme.colors.border.default};
-    transform: translateY(-2px);
-    box-shadow: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? '0 6px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)'
-        : `0 4px 12px ${theme.colors.shadow.md}`};
-  }
-`
-
-export const SummaryIcon = styled.div`
-  width: 26px;
-  height: 26px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  flex-shrink: 0;
-  opacity: 0.9;
-  position: relative;
-  z-index: 1;
-
-  svg {
-    width: 22px;
-    height: 22px;
-  }
-`
-
-export const SummaryValue = styled.div`
-  font-size: 20px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  margin-bottom: 2px;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
-  position: relative;
-  z-index: 1;
-`
-
-export const SummaryLabel = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  position: relative;
-  z-index: 1;
 `
 
 // ─── 사이드바 대시보드 메뉴 ───────────────────────────────────────────────────

@@ -103,13 +103,13 @@ const CompactBadge = styled.div`
     letter-spacing: -0.01em;
   }
 `
-const CompactTabBar = styled(CountryStyles.TabBar)`
+const CompactTabBar = styled(S.PersonInnerTabBar)`
   padding: 0;
   margin: 0;
   flex: 1;
   min-width: 0;
 `
-const CompactTabButton = styled(CountryStyles.TabButton)`
+const CompactTabButton = styled(S.PersonInnerTabButton)`
   padding: 8px 12px;
   font-size: 12px;
 `

@@ -3,7 +3,7 @@
  */
 import React from 'react'
 
-import { FiChevronLeft, FiEdit2, FiTrash2 } from 'react-icons/fi'
+import { FiChevronLeft, FiEdit2, FiPrinter, FiTrash2 } from 'react-icons/fi'
 
 import {
   formatCabinetHeadBreadcrumbLabel,
@@ -44,6 +44,8 @@ export type CabinetDetailChromeProps = {
   handleDeleteCabinet: (cabinetId: string, e: React.MouseEvent) => void
   /** 행정부 메타·수반 재임 수정 모달 (상단 툴바) */
   onEditCabinet?: () => void
+  /** 현재 화면(행정부 상세·재임 기록) 인쇄 */
+  onPrint?: () => void
 }
 
 export function CabinetDetailChrome({
@@ -70,6 +72,7 @@ export function CabinetDetailChrome({
   setPersonSelectOpen,
   handleDeleteCabinet,
   onEditCabinet,
+  onPrint,
 }: CabinetDetailChromeProps) {
   const cabinetSubtitle =
     selectedCabinet &&
@@ -166,6 +169,16 @@ export function CabinetDetailChrome({
           aria-label="행정부·각료 작업"
           style={{ flexShrink: 0, alignSelf: 'flex-start', paddingTop: 2 }}
         >
+          {selectedCabinet && onPrint ? (
+            <DetailHeaderIconBtn
+              type="button"
+              aria-label="인쇄"
+              title="인쇄"
+              onClick={() => onPrint()}
+            >
+              <FiPrinter size={17} strokeWidth={2} />
+            </DetailHeaderIconBtn>
+          ) : null}
           {selectedMinisterId &&
             !selectedHistoryId &&
             (() => {

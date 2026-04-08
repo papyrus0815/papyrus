@@ -102,6 +102,29 @@ export class PersonService {
   }
 
   /**
+   * 가문에 소속된 인물 목록 (person.dynastyId 일치, 출생년 오름차순·미상은 뒤)
+   */
+  async findPersonsByDynasty(dynastyId: string): Promise<PersonResponseDto[]> {
+    const list = await this.personRepository.findPersonsByDynastyId(dynastyId)
+    const rank = (y: number | null | undefined) =>
+      y != null && Number.isFinite(y) ? y : Number.MAX_SAFE_INTEGER
+    return [...list].sort((a, b) => {
+      const d = rank(a.birthYear) - rank(b.birthYear)
+      if (d !== 0) return d
+      return (a.name || '').localeCompare(b.name || '', 'ko')
+    })
+  }
+
+  /**
+   * 대시보드용: 모든 현대 국가별 등록 인물 수 (국가 페이지 인물 합집합과 동일 기준)
+   */
+  async findModernCountryPersonCounts(): Promise<
+    Array<{ countryId: string; count: number }>
+  > {
+    return this.personRepository.findModernCountryPersonCounts()
+  }
+
+  /**
    * 해당 국가(또는 연결된 역사적 국가)에 재임이 있는 인물만 조회
    */
   async findPersonsWithTenureInCountry(params: {

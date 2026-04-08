@@ -9,12 +9,13 @@ import {
   type UnifiedCountry,
 } from '@/entities/country/model/unified-types'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
 
 import { useCountryListState } from '../country-list-state.context'
 import * as S from './country-list.styles'
 import { PersonRegisterViewModal } from './person-register-view-modal'
 
-// Dashboard summary SVG icons
+// 대시보드 메뉴·등록 모달 SVG 아이콘
 const IconGlobe = () => (
   <svg
     viewBox="0 0 24 24"
@@ -26,31 +27,6 @@ const IconGlobe = () => (
   >
     <circle cx="12" cy="12" r="10" />
     <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-  </svg>
-)
-const IconBuilding = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h6" />
-  </svg>
-)
-const IconFlag = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-    <line x1="4" y1="22" x2="4" y2="15" />
   </svg>
 )
 const IconPeople = () => (
@@ -67,7 +43,6 @@ const IconPeople = () => (
     <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 )
-// Dashboard menu SVG icons
 const IconExecutive = () => (
   <svg
     viewBox="0 0 24 24"
@@ -394,43 +369,32 @@ function CountryListInner({
             <>
               <S.ControlsRow>
                 <S.ControlsLeft>
-                  <S.TabBar>
-                    <S.TabButton
+                  <S.SidebarModeTabNav
+                    role="tablist"
+                    aria-label="국가 영역 보기 전환"
+                  >
+                    <UnderlineTabButton
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === 'dashboard'}
                       $active={activeTab === 'dashboard'}
                       onClick={() => handleTabChange('dashboard')}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"
-                          fill="currentColor"
-                        />
-                      </svg>
                       대시보드
-                    </S.TabButton>
-                    <S.TabButton
+                    </UnderlineTabButton>
+                    <UnderlineTabButton
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTab === 'list'}
                       $active={activeTab === 'list'}
                       onClick={() => handleTabChange('list')}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                      >
-                        <path
-                          d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"
-                          fill="currentColor"
-                        />
-                      </svg>
                       국가 목록
-                      <S.TabBadge>{countries.length}</S.TabBadge>
-                    </S.TabButton>
-                  </S.TabBar>
+                      <S.SidebarTabCount $active={activeTab === 'list'}>
+                        {countries.length}
+                      </S.SidebarTabCount>
+                    </UnderlineTabButton>
+                  </S.SidebarModeTabNav>
                 </S.ControlsLeft>
                 <S.ControlsRight>
                   <S.AddIconButton onClick={handleAddClick} title="국가 등록">
@@ -579,70 +543,6 @@ function CountryListInner({
                         overflow: 'auto',
                       }}
                     >
-                      <S.DashboardSidebarSectionTitle>
-                        전 세계 국가 통계
-                      </S.DashboardSidebarSectionTitle>
-                      <S.DashboardSummary>
-                        <S.SummaryCard>
-                          <S.SummaryIcon>
-                            <IconGlobe />
-                          </S.SummaryIcon>
-                          <S.SummaryValue>{countries.length}</S.SummaryValue>
-                          <S.SummaryLabel>총 국가</S.SummaryLabel>
-                        </S.SummaryCard>
-
-                        <S.SummaryCard>
-                          <S.SummaryIcon>
-                            <IconBuilding />
-                          </S.SummaryIcon>
-                          <S.SummaryValue>
-                            {
-                              filtered.filter(
-                                (country) => country.type === 'historical',
-                              ).length
-                            }
-                          </S.SummaryValue>
-                          <S.SummaryLabel>역사적 국가</S.SummaryLabel>
-                        </S.SummaryCard>
-
-                        <S.SummaryCard>
-                          <S.SummaryIcon>
-                            <IconFlag />
-                          </S.SummaryIcon>
-                          <S.SummaryValue>
-                            {
-                              filtered.filter(
-                                (country) => country.type === 'modern',
-                              ).length
-                            }
-                          </S.SummaryValue>
-                          <S.SummaryLabel>현대 국가</S.SummaryLabel>
-                        </S.SummaryCard>
-
-                        <S.SummaryCard>
-                          <S.SummaryIcon>
-                            <IconPeople />
-                          </S.SummaryIcon>
-                          <S.SummaryValue>
-                            {Math.round(
-                              filtered
-                                .filter(
-                                  (country) =>
-                                    country.type === 'modern' &&
-                                    country.population,
-                                )
-                                .reduce(
-                                  (sum, country) =>
-                                    sum + (Number(country.population) || 0),
-                                  0,
-                                ) / 1_000_000_000,
-                            )}
-                            B
-                          </S.SummaryValue>
-                          <S.SummaryLabel>총 인구</S.SummaryLabel>
-                        </S.SummaryCard>
-                      </S.DashboardSummary>
-
                       <S.DashboardMenu>
                         <S.DashboardMenuTitle>메뉴</S.DashboardMenuTitle>
                         {DASHBOARD_MENU_ITEMS.map(

@@ -28,6 +28,7 @@ export const UPLOAD_IMAGE_CATEGORIES = [
   'events',
   'ministries',
   'political-parties',
+  'dynasties',
   'attachments',
 ] as const
 export type UploadImageCategory = (typeof UPLOAD_IMAGE_CATEGORIES)[number]
@@ -122,7 +123,7 @@ export class UploadController {
     required: false,
     enum: UPLOAD_IMAGE_CATEGORIES,
     description:
-      '용도별 폴더. 미지정 시 attachments. countries|persons|events|ministries|attachments',
+      '용도별 폴더. 미지정 시 attachments. countries|persons|events|ministries|political-parties|dynasties|attachments',
   })
   @ApiBody({
     schema: {

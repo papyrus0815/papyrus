@@ -130,3 +130,51 @@ export async function getAllPersonsWithGovernmentPositions(): Promise<any[]> {
     throw error
   }
 }
+
+export type ModernCountryPersonCountRow = {
+  countryId: string
+  count: number
+}
+
+async function personsRequestJson<T>(path: string): Promise<T> {
+  const conn = getApiConnection()
+  const base = conn.host.replace(/\/$/, '')
+  const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
+  const headers = new Headers()
+  headers.set('Content-Type', 'application/json')
+  if (conn.headers) {
+    for (const [headerKey, headerValue] of Object.entries(conn.headers)) {
+      if (headerValue != null && headerValue !== '')
+        headers.set(headerKey, String(headerValue))
+    }
+  }
+  const fetchFn = conn.fetch ?? fetch
+  const res = await fetchFn(url, {
+    method: 'GET',
+    headers,
+    credentials: conn.options?.credentials ?? 'include',
+  })
+  if (!res.ok) {
+    let msg = res.statusText
+    try {
+      const body = await res.text()
+      if (body) msg = body
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg)
+  }
+  return res.json() as Promise<T>
+}
+
+/**
+ * 대시보드용: 현대 국가별 연결 인물 수 (국가 상세「전체 인물」과 동일 합집합)
+ */
+export async function getModernCountryPersonCounts(): Promise<
+  ModernCountryPersonCountRow[]
+> {
+  const data = await personsRequestJson<ModernCountryPersonCountRow[]>(
+    '/persons/dashboard/person-counts-by-modern-country',
+  )
+  return Array.isArray(data) ? data : []
+}

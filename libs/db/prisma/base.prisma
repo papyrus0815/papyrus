@@ -49,6 +49,8 @@ enum AttachmentOwner {
   ADMINISTRATION_DEPARTMENT
   /// 기관 계획·조율 이벤트
   ADMINISTRATION_DEPARTMENT_EVENT
+  /// 가문(왕조·귀족 혈통)
+  DYNASTY
 }
 
 /// Aggregate(이벤트) 대상 타입

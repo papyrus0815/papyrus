@@ -1,31 +1,44 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
+import { AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
+import { FiChevronDown, FiInfo, FiSave, FiX } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
-import { toast } from 'react-hot-toast'
-import { FiChevronDown, FiInfo, FiSave, FiX } from 'react-icons/fi'
-import type { CreateSovereignReignDto } from '@/shared/api/person-career'
+import {
+  personCareerApi,
+  type CreateRegnalEraDto,
+  type CreateSovereignReignDto,
+} from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
+import { FormInput } from '@/shared/ui/form-input/form-input'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import {
-  ModalCloseButton,
-  ModalOverlay,
-  ModalSubtitle,
-  ModalTitle,
-} from '@/shared/ui/modal/modal.styles'
+  PersonRegisterModalBox,
+  PersonRegisterModalCancelBtn,
+  PersonRegisterModalCloseBtn,
+  PersonRegisterModalField,
+  PersonRegisterModalFormDesc,
+  PersonRegisterModalFormScroll,
+  PersonRegisterModalHeader,
+  PersonRegisterModalLabel,
+  PersonRegisterModalOverlay,
+  PersonRegisterModalPrimaryBtn,
+  PersonRegisterModalStickyFooter,
+  PersonRegisterModalTitle,
+} from '@/shared/ui/person-register-modal/person-register-modal-shell'
 import {
   FieldControl,
   FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
-  FormSectionInner,
-  Input,
   Required,
 } from '@/shared/ui/register-form-layout'
 import {
@@ -33,28 +46,137 @@ import {
   type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
 
-import * as CabS from './cabinets-section.styled'
-import * as Ms from './register-monarch-modal.styles'
+/** 인물 등록 모달 `SelectBtn`과 동일 스펙 */
+const ModalSelectBtn = styled.button<{ $hasValue?: boolean }>`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  font-size: 15px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  color: ${({ $hasValue, theme }) =>
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+  &:focus {
+    border-color: #6366f1;
+  }
+`
+
+const StyledFormInput = styled(FormInput)`
+  padding: 12px 14px;
+  font-size: 15px;
+  border-radius: 8px;
+`
+
+const WarningBox = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251, 191, 36, 0.12)' : '#fffbeb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(251, 191, 36, 0.35)' : '#fde68a'};
+  border-radius: 8px;
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #d97706;
+  }
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const EraYmdRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+
+  input {
+    width: 96px;
+    min-width: 0;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    border-radius: 8px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+    color: ${({ theme }) => theme.colors.text.primary};
+    box-sizing: border-box;
+  }
+  input:first-of-type {
+    width: 112px;
+  }
+  input:focus {
+    outline: none;
+    border-color: #6366f1;
+  }
+`
+
+const CheckboxRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  input[type='checkbox'] {
+    width: 18px;
+    height: 18px;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+  label {
+    font-size: 14px;
+    color: ${({ theme }) => theme.colors.text.primary};
+    cursor: pointer;
+    user-select: none;
+  }
+`
+
+function parseOptionalInt(raw: string): number | undefined {
+  const trimmed = raw.trim()
+  if (!trimmed) return undefined
+  const parsed = parseInt(trimmed, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
 
 export function RegisterMonarchModal({
+  isOpen,
   country,
   isHistorical,
   countryId,
   historicalCountryId,
   headOfStatePositionOptions,
-  submitting,
   onClose,
-  onSubmit,
+  onSuccess,
 }: {
+  isOpen: boolean
   country: UnifiedCountry
   isHistorical: boolean
   countryId: string | undefined
   historicalCountryId: string | undefined
-  headOfStatePositionOptions: { id: string; title: string; titleEn?: string | null }[]
-  submitting: boolean
+  headOfStatePositionOptions: {
+    id: string
+    title: string
+    titleEn?: string | null
+  }[]
   onClose: () => void
-  onSubmit: (dto: CreateSovereignReignDto) => void | Promise<void>
+  onSuccess?: () => void
 }) {
+  const [submitting, setSubmitting] = useState(false)
   const [selectedAffinityHistoricalId, setSelectedAffinityHistoricalId] =
     useState<string | null>(null)
   const [personSelectModalOpen, setPersonSelectModalOpen] = useState(false)
@@ -71,6 +193,17 @@ export function RegisterMonarchModal({
   const [regnalNumber, setRegnalNumber] = useState('')
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
 
+  const [includeRegnalEra, setIncludeRegnalEra] = useState(false)
+  const [eraName, setEraName] = useState('')
+  const [eraNameEn, setEraNameEn] = useState('')
+  const [eraStartYear, setEraStartYear] = useState('')
+  const [eraStartMonth, setEraStartMonth] = useState('')
+  const [eraStartDay, setEraStartDay] = useState('')
+  const [eraEndYear, setEraEndYear] = useState('')
+  const [eraEndMonth, setEraEndMonth] = useState('')
+  const [eraEndDay, setEraEndDay] = useState('')
+  const [eraChangeReason, setEraChangeReason] = useState('')
+
   const { data: subordinateHistoricalFromApi = [] } =
     useHistoricalCountriesByModernCountry(countryId ?? '')
   const subordinateHistorical =
@@ -85,20 +218,30 @@ export function RegisterMonarchModal({
   const { data: allPersonsForModal = [] } = useQuery({
     queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
-    enabled: personSelectModalOpen || !!selectedPersonId,
+    enabled: isOpen && (personSelectModalOpen || !!selectedPersonId),
   })
+
+  useEffect(() => {
+    if (!isOpen) {
+      setPositionTitleModalOpen(false)
+      setAffinityCountryModalOpen(false)
+      setPersonSelectModalOpen(false)
+    }
+  }, [isOpen])
 
   const positionTitleOptions: SelectOption<string>[] = useMemo(
     () =>
-      headOfStatePositionOptions.map((d) => ({
-        value: d.id,
-        label: d.title,
+      headOfStatePositionOptions.map((posDef) => ({
+        value: posDef.id,
+        label: posDef.title,
       })),
     [headOfStatePositionOptions],
   )
 
   const selectedPositionDefinition = selectedPositionDefinitionId
-    ? headOfStatePositionOptions.find((d) => d.id === selectedPositionDefinitionId)
+    ? headOfStatePositionOptions.find(
+        (posDef) => posDef.id === selectedPositionDefinitionId,
+      )
     : null
 
   const positionTitleLabel = selectedPositionDefinition
@@ -109,7 +252,7 @@ export function RegisterMonarchModal({
     if (!selectedPersonId) return null
     return (
       (allPersonsForModal as { id: string }[]).find(
-        (p) => p.id === selectedPersonId,
+        (personRow) => personRow.id === selectedPersonId,
       ) ?? null
     )
   }, [allPersonsForModal, selectedPersonId])
@@ -123,6 +266,16 @@ export function RegisterMonarchModal({
     setEndDate('')
     setRegnalNumber('')
     setShowOnEventsPage(true)
+    setIncludeRegnalEra(false)
+    setEraName('')
+    setEraNameEn('')
+    setEraStartYear('')
+    setEraStartMonth('')
+    setEraStartDay('')
+    setEraEndYear('')
+    setEraEndMonth('')
+    setEraEndDay('')
+    setEraChangeReason('')
   }, [])
 
   const close = () => {
@@ -134,8 +287,42 @@ export function RegisterMonarchModal({
 
   const handlePositionTitleSelect = (value: string) => {
     setPositionTitleModalOpen(false)
-    const def = headOfStatePositionOptions.find((d) => d.id === value)
-    if (def) setSelectedPositionDefinitionId(def.id)
+    const posDef = headOfStatePositionOptions.find(
+      (option) => option.id === value,
+    )
+    if (posDef) setSelectedPositionDefinitionId(posDef.id)
+  }
+
+  const buildRegnalEraDto = (): CreateRegnalEraDto | null => {
+    if (!includeRegnalEra) return null
+    if (!eraName.trim() || !eraStartYear.trim()) return null
+    const sy = parseInt(eraStartYear.trim(), 10)
+    if (!Number.isFinite(sy) || sy < 1) return null
+    const sm = parseOptionalInt(eraStartMonth)
+    const sd = parseOptionalInt(eraStartDay)
+    const ey = parseOptionalInt(eraEndYear)
+    const em = parseOptionalInt(eraEndMonth)
+    const ed = parseOptionalInt(eraEndDay)
+    if (eraStartMonth.trim() !== '' && sm === undefined) return null
+    if (eraStartDay.trim() !== '' && sd === undefined) return null
+    if (eraEndYear.trim() !== '' && ey === undefined) return null
+    if (eraEndMonth.trim() !== '' && em === undefined) return null
+    if (eraEndDay.trim() !== '' && ed === undefined) return null
+    if (sm != null && (sm < 1 || sm > 12)) return null
+    if (sd != null && (sd < 1 || sd > 31)) return null
+    if (em != null && (em < 1 || em > 12)) return null
+    if (ed != null && (ed < 1 || ed > 31)) return null
+    return {
+      eraName: eraName.trim(),
+      eraNameEn: eraNameEn.trim() || null,
+      startYear: sy,
+      startMonth: eraStartMonth.trim() === '' ? null : sm ?? null,
+      startDay: eraStartDay.trim() === '' ? null : sd ?? null,
+      endYear: eraEndYear.trim() === '' ? null : ey ?? null,
+      endMonth: eraEndMonth.trim() === '' ? null : em ?? null,
+      endDay: eraEndDay.trim() === '' ? null : ed ?? null,
+      changeReason: eraChangeReason.trim() || null,
+    }
   }
 
   const handleSave = async () => {
@@ -148,6 +335,26 @@ export function RegisterMonarchModal({
       toast.error('인물, 직책명, 취임일을 입력해 주세요.')
       return
     }
+    const defOk = headOfStatePositionOptions.some(
+      (posDef) => posDef.id === selectedPositionDefinitionId,
+    )
+    if (!defOk) {
+      toast.error('국가 원수 직위 정의만 등록할 수 있습니다.')
+      return
+    }
+
+    if (includeRegnalEra) {
+      if (!eraName.trim() || !eraStartYear.trim()) {
+        toast.error('연호를 쓰려면 연호명과 시작 연도를 입력하세요.')
+        return
+      }
+      const dto = buildRegnalEraDto()
+      if (!dto) {
+        toast.error('연호 날짜(연·월·일)를 올바르게 입력하세요.')
+        return
+      }
+    }
+
     const notesValue = regnalName.trim()
       ? `왕명: ${regnalName.trim()}`
       : undefined
@@ -170,7 +377,53 @@ export function RegisterMonarchModal({
       notes: notesValue,
       showPositionInfo: showOnEventsPage,
     }
-    await onSubmit(payload)
+
+    setSubmitting(true)
+    try {
+      const result = await personCareerApi.addSovereignReign(payload)
+      const sovereignId =
+        result && typeof result === 'object' && 'id' in result
+          ? String((result as { id: string }).id)
+          : null
+      if (!sovereignId) {
+        throw new Error('재위 ID를 받지 못했습니다.')
+      }
+
+      const eraDto = buildRegnalEraDto()
+      if (includeRegnalEra && eraDto) {
+        await personCareerApi.createRegnalEraForSovereignReign(
+          sovereignId,
+          eraDto,
+        )
+      }
+
+      toast.success(
+        includeRegnalEra && eraDto
+          ? '군주 재위와 연호가 등록되었습니다.'
+          : '군주(국가 원수) 재임이 등록되었습니다.',
+      )
+      onSuccess?.()
+      resetForm()
+      onClose()
+    } catch (caught: unknown) {
+      const msg =
+        caught &&
+        typeof caught === 'object' &&
+        'response' in caught &&
+        caught.response &&
+        typeof caught.response === 'object' &&
+        'data' in caught.response &&
+        caught.response.data &&
+        typeof caught.response.data === 'object' &&
+        'message' in caught.response.data
+          ? String((caught.response.data as { message: string }).message)
+          : caught instanceof Error
+            ? caught.message
+            : '등록에 실패했습니다.'
+      toast.error(msg)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const canSave =
@@ -180,152 +433,166 @@ export function RegisterMonarchModal({
     headOfStatePositionOptions.length > 0
 
   const content = (
-    <ModalOverlay
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="monarch-modal-title"
-      onClick={(e) => e.target === e.currentTarget && close()}
-    >
-      <CabS.MonarchModalBox onClick={(e) => e.stopPropagation()}>
-        <CabS.MonarchModalHeader>
-          <CabS.MonarchModalHeaderText>
-            <ModalTitle id="monarch-modal-title">군주 등록</ModalTitle>
-            <ModalSubtitle>
-              행정부(내각)를 만들지 않습니다. 국가 원수 재위 기간만 등록합니다.
-            </ModalSubtitle>
-          </CabS.MonarchModalHeaderText>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              flexShrink: 0,
-            }}
+    <AnimatePresence>
+      {isOpen && (
+        <PersonRegisterModalOverlay
+          key="monarch-register-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={close}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="monarch-modal-title"
+        >
+          <PersonRegisterModalBox
+            key="monarch-register-box"
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.2 }}
+            onClick={(e) => e.stopPropagation()}
+            $maxWidth="min(880px, 96vw)"
+            $minHeight="auto"
           >
-            <Ms.MonarchSaveButton
-              type="button"
-              disabled={submitting || !canSave}
-              onClick={() => handleSave()}
-            >
-              <FiSave size={16} />
-              {submitting ? '저장 중…' : '저장'}
-            </Ms.MonarchSaveButton>
-            <ModalCloseButton type="button" onClick={close} aria-label="닫기">
-              <FiX size={22} strokeWidth={2} />
-            </ModalCloseButton>
-          </div>
-        </CabS.MonarchModalHeader>
-        <CabS.MonarchModalBody>
-          <FormSectionInner>
-            {headOfStatePositionOptions.length === 0 && (
-              <CabS.MonarchFormDescWarning>
-                <FiInfo size={20} />
-                <span>
-                  이 국가 범위에 <strong>국가 원수</strong> 직위 정의가 없습니다.
-                  국가 상세의 직위 정의에서 먼저 추가해 주세요.
-                </span>
-              </CabS.MonarchFormDescWarning>
-            )}
-            <Ms.MonarchSubSectionTitle>기본정보</Ms.MonarchSubSectionTitle>
-            <Ms.MonarchSectionHint>
-              재임 기간·직책·인물 등 기본 정보를 입력합니다.
-            </Ms.MonarchSectionHint>
-            <FormRows>
-              {!isHistorical && hasSubordinateHistorical && (
+            <PersonRegisterModalHeader>
+              <PersonRegisterModalTitle id="monarch-modal-title">
+                군주 등록
+              </PersonRegisterModalTitle>
+              <PersonRegisterModalCloseBtn
+                type="button"
+                onClick={close}
+                aria-label="닫기"
+                disabled={submitting}
+              >
+                <FiX size={20} />
+              </PersonRegisterModalCloseBtn>
+            </PersonRegisterModalHeader>
+
+            <PersonRegisterModalFormScroll>
+              <PersonRegisterModalFormDesc>
+                행정부(내각)를 만들지 않습니다. 국가 원수 재위 기간만
+                등록합니다.
+              </PersonRegisterModalFormDesc>
+
+              {headOfStatePositionOptions.length === 0 && (
+                <WarningBox>
+                  <FiInfo size={20} />
+                  <span>
+                    이 국가 범위에 <strong>국가 원수</strong> 직위 정의가
+                    없습니다. 국가 상세의 직위 정의에서 먼저 추가해 주세요.
+                  </span>
+                </WarningBox>
+              )}
+
+              <FormRows>
+                {!isHistorical && hasSubordinateHistorical && (
+                  <FieldRow>
+                    <FieldLabel>소속 국가</FieldLabel>
+                    <FieldControl>
+                      <ModalSelectBtn
+                        type="button"
+                        onClick={() => setAffinityCountryModalOpen(true)}
+                        $hasValue
+                      >
+                        <span>
+                          {selectedAffinityHistoricalId
+                            ? (
+                                subordinateHistorical as {
+                                  id: string
+                                  name: string
+                                }[]
+                              ).find(
+                                (hist) =>
+                                  hist.id === selectedAffinityHistoricalId,
+                              )?.name ?? '역사적 국가'
+                            : `현대 국가 (현재: ${country.name})`}
+                        </span>
+                        <FiChevronDown size={20} />
+                      </ModalSelectBtn>
+                      <FieldHint>
+                        현대 국가 또는 연결된 하위 역사적 국가 중 하나를
+                        선택하세요.
+                      </FieldHint>
+                    </FieldControl>
+                  </FieldRow>
+                )}
+
+                <PersonSelectField
+                  label="인물"
+                  required
+                  hint="재임 기록에 연결할 인물을 선택하세요."
+                  value={selectedPersonId}
+                  selectedPerson={selectedPerson}
+                  persons={allPersonsForModal as { id: string }[]}
+                  isModalOpen={personSelectModalOpen}
+                  onModalOpenChange={setPersonSelectModalOpen}
+                  onSelect={setSelectedPersonId}
+                  placeholder="인물 선택"
+                />
+
                 <FieldRow>
-                  <FieldLabel>소속 국가</FieldLabel>
+                  <FieldLabel>
+                    직책명 <Required aria-label="필수" />
+                  </FieldLabel>
                   <FieldControl>
-                    <Ms.MonarchSelectTriggerButton
+                    <ModalSelectBtn
                       type="button"
-                      onClick={() => setAffinityCountryModalOpen(true)}
-                      $hasValue
+                      onClick={() => setPositionTitleModalOpen(true)}
+                      $hasValue={selectedPositionDefinitionId != null}
+                      disabled={headOfStatePositionOptions.length === 0}
                     >
-                      <span>
-                        {selectedAffinityHistoricalId
-                          ? ((subordinateHistorical as { id: string; name: string }[]).find(
-                              (h) => h.id === selectedAffinityHistoricalId,
-                            )?.name ?? '역사적 국가')
-                          : `현대 국가 (현재: ${country.name})`}
-                      </span>
+                      <span>{positionTitleLabel}</span>
                       <FiChevronDown size={20} />
-                    </Ms.MonarchSelectTriggerButton>
+                    </ModalSelectBtn>
+                  </FieldControl>
+                </FieldRow>
+
+                <FieldRow>
+                  <FieldLabel>왕명</FieldLabel>
+                  <FieldControl>
+                    <StyledFormInput
+                      value={regnalName}
+                      onChange={(e) => setRegnalName(e.target.value)}
+                      placeholder="예: 세종, 루이 14세, 강희"
+                    />
+                  </FieldControl>
+                </FieldRow>
+
+                <DateRangeField
+                  label="취임일 · 퇴임일"
+                  required
+                  startValue={startDate}
+                  endValue={endDate}
+                  onStartChange={setStartDate}
+                  onEndChange={setEndDate}
+                  startPlaceholder="취임일"
+                  endPlaceholder="퇴임일 (선택)"
+                  openEndAfterStart
+                />
+
+                <FieldRow>
+                  <FieldLabel>대수/재위번호</FieldLabel>
+                  <FieldControl>
+                    <StyledFormInput
+                      type="number"
+                      min={1}
+                      value={regnalNumber}
+                      onChange={(e) => setRegnalNumber(e.target.value)}
+                      placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
+                      title="역대 순번"
+                    />
                     <FieldHint>
-                      현대 국가 또는 연결된 하위 역사적 국가 중 하나를 선택하세요.
+                      역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대)
+                      등 숫자만 입력
                     </FieldHint>
                   </FieldControl>
                 </FieldRow>
-              )}
-              <PersonSelectField
-                label="인물"
-                required
-                hint="재임 기록에 연결할 인물을 선택하세요."
-                value={selectedPersonId}
-                selectedPerson={selectedPerson}
-                persons={allPersonsForModal as any}
-                isModalOpen={personSelectModalOpen}
-                onModalOpenChange={setPersonSelectModalOpen}
-                onSelect={setSelectedPersonId}
-                placeholder="인물 선택"
-              />
-              <FieldRow>
-                <FieldLabel>
-                  직책명 <Required aria-label="필수" />
-                </FieldLabel>
-                <FieldControl>
-                  <Ms.MonarchSelectTriggerButton
-                    type="button"
-                    onClick={() => setPositionTitleModalOpen(true)}
-                    $hasValue={selectedPositionDefinitionId != null}
-                    disabled={headOfStatePositionOptions.length === 0}
-                  >
-                    <span>{positionTitleLabel}</span>
-                    <FiChevronDown size={20} />
-                  </Ms.MonarchSelectTriggerButton>
-                </FieldControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>왕명</FieldLabel>
-                <FieldControl>
-                  <Input
-                    value={regnalName}
-                    onChange={(e) => setRegnalName(e.target.value)}
-                    placeholder="예: 세종, 루이 14세, 강희"
-                  />
-                </FieldControl>
-              </FieldRow>
-              <DateRangeField
-                label="취임일 · 퇴임일"
-                required
-                startValue={startDate}
-                endValue={endDate}
-                onStartChange={setStartDate}
-                onEndChange={setEndDate}
-                startPlaceholder="취임일"
-                endPlaceholder="퇴임일 (선택)"
-                openEndAfterStart
-              />
-              <FieldRow>
-                <FieldLabel>대수/재위번호</FieldLabel>
-                <FieldControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={regnalNumber}
-                    onChange={(e) => setRegnalNumber(e.target.value)}
-                    placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
-                    title="역대 순번"
-                  />
-                  <FieldHint>
-                    역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대) 등
-                    숫자만 입력
-                  </FieldHint>
-                </FieldControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>사건 페이지 노출</FieldLabel>
-                <FieldControl>
-                  <Ms.MonarchEventsPageCheckWrap>
-                    <Ms.MonarchCheckboxLabelRow>
+
+                <FieldRow>
+                  <FieldLabel>사건 페이지 노출</FieldLabel>
+                  <FieldControl>
+                    <CheckboxRow style={{ marginBottom: 0 }}>
                       <input
                         type="checkbox"
                         id="monarch-register-show-on-events"
@@ -337,29 +604,157 @@ export function RegisterMonarchModal({
                       <label htmlFor="monarch-register-show-on-events">
                         연대표·사건 목록에 표시
                       </label>
-                    </Ms.MonarchCheckboxLabelRow>
+                    </CheckboxRow>
                     <FieldHint>
                       역대 수반 토글 시 목록에 포함됩니다.
                     </FieldHint>
-                  </Ms.MonarchEventsPageCheckWrap>
-                </FieldControl>
-              </FieldRow>
-            </FormRows>
-            <Ms.MonarchFormActions>
-              <Ms.MonarchResetButton
+                  </FieldControl>
+                </FieldRow>
+
+                <PersonRegisterModalField style={{ marginTop: 8 }}>
+                  <CheckboxRow>
+                    <input
+                      type="checkbox"
+                      id="monarch-include-era"
+                      checked={includeRegnalEra}
+                      onChange={(e) => setIncludeRegnalEra(e.target.checked)}
+                    />
+                    <label htmlFor="monarch-include-era">
+                      연호 함께 등록 (元号·일본 연호 등)
+                    </label>
+                  </CheckboxRow>
+                  <PersonRegisterModalFormDesc style={{ marginBottom: 16 }}>
+                    체크 후 연호명·시작 연도를 입력하면 재위 저장 직후 같은
+                    재위에 연호가 붙습니다.
+                  </PersonRegisterModalFormDesc>
+
+                  {includeRegnalEra && (
+                    <>
+                      <PersonRegisterModalLabel>연호명 (필수)</PersonRegisterModalLabel>
+                      <StyledFormInput
+                        value={eraName}
+                        onChange={(e) => setEraName(e.target.value)}
+                        placeholder="예: 昭和, 康熙"
+                        style={{ marginBottom: 16 }}
+                      />
+                      <PersonRegisterModalLabel>
+                        영문·로마자 (선택)
+                      </PersonRegisterModalLabel>
+                      <StyledFormInput
+                        value={eraNameEn}
+                        onChange={(e) => setEraNameEn(e.target.value)}
+                        placeholder="예: Shōwa, Kangxi"
+                        style={{ marginBottom: 16 }}
+                      />
+                      <PersonRegisterModalLabel>
+                        시작: 연도(필수) · 월 · 일
+                      </PersonRegisterModalLabel>
+                      <EraYmdRow style={{ marginBottom: 16 }}>
+                        <input
+                          type="number"
+                          min={1}
+                          value={eraStartYear}
+                          onChange={(e) => setEraStartYear(e.target.value)}
+                          placeholder="연도"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          max={12}
+                          value={eraStartMonth}
+                          onChange={(e) => setEraStartMonth(e.target.value)}
+                          placeholder="월"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          max={31}
+                          value={eraStartDay}
+                          onChange={(e) => setEraStartDay(e.target.value)}
+                          placeholder="일"
+                        />
+                      </EraYmdRow>
+                      <PersonRegisterModalLabel>
+                        종료: 연도 · 월 · 일 (선택)
+                      </PersonRegisterModalLabel>
+                      <EraYmdRow style={{ marginBottom: 8 }}>
+                        <input
+                          type="number"
+                          min={1}
+                          value={eraEndYear}
+                          onChange={(e) => setEraEndYear(e.target.value)}
+                          placeholder="연도"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          max={12}
+                          value={eraEndMonth}
+                          onChange={(e) => setEraEndMonth(e.target.value)}
+                          placeholder="월"
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          max={31}
+                          value={eraEndDay}
+                          onChange={(e) => setEraEndDay(e.target.value)}
+                          placeholder="일"
+                        />
+                      </EraYmdRow>
+                      <FieldHint style={{ marginBottom: 16 }}>
+                        종료를 비우면 재위 종료까지로 해석해 표시할 수 있습니다.
+                      </FieldHint>
+                      <PersonRegisterModalLabel>
+                        변경 사유 (선택)
+                      </PersonRegisterModalLabel>
+                      <StyledFormInput
+                        value={eraChangeReason}
+                        onChange={(e) => setEraChangeReason(e.target.value)}
+                        placeholder="예: 즉위, 개원"
+                      />
+                    </>
+                  )}
+                </PersonRegisterModalField>
+              </FormRows>
+            </PersonRegisterModalFormScroll>
+
+            <PersonRegisterModalStickyFooter>
+              <PersonRegisterModalCancelBtn
                 type="button"
                 onClick={resetForm}
                 disabled={submitting}
               >
                 초기화
-              </Ms.MonarchResetButton>
-            </Ms.MonarchFormActions>
-          </FormSectionInner>
-        </CabS.MonarchModalBody>
-      </CabS.MonarchModalBox>
+              </PersonRegisterModalCancelBtn>
+              <PersonRegisterModalPrimaryBtn
+                type="button"
+                disabled={submitting || !canSave}
+                onClick={() => handleSave()}
+              >
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <FiSave size={16} />
+                  {submitting ? '저장 중…' : '저장'}
+                </span>
+              </PersonRegisterModalPrimaryBtn>
+            </PersonRegisterModalStickyFooter>
+          </PersonRegisterModalBox>
+        </PersonRegisterModalOverlay>
+      )}
+    </AnimatePresence>
+  )
 
+  return createPortal(
+    <>
+      {content}
       <SelectModal
-        isOpen={positionTitleModalOpen}
+        isOpen={isOpen && positionTitleModalOpen}
         onClose={() => setPositionTitleModalOpen(false)}
         title="직책명 선택"
         options={positionTitleOptions}
@@ -369,7 +764,7 @@ export function RegisterMonarchModal({
 
       {!isHistorical && hasSubordinateHistorical && (
         <CountrySearchModal
-          isOpen={affinityCountryModalOpen}
+          isOpen={isOpen && affinityCountryModalOpen}
           onClose={() => setAffinityCountryModalOpen(false)}
           title="소속 국가 선택"
           placeholder="국가명으로 검색..."
@@ -377,23 +772,32 @@ export function RegisterMonarchModal({
             {
               id: '',
               name: `현대 국가 (현재: ${country.name})`,
-              flagEmoji: (country as { flagEmoji?: string | null }).flagEmoji ?? null,
+              flagEmoji:
+                (country as { flagEmoji?: string | null }).flagEmoji ?? null,
             },
           ]}
-          historicalCountries={(subordinateHistorical as any[]).map((h: any) => ({
-            id: h.id,
-            name: h.name,
-            flagEmoji: h.flagEmoji ?? null,
-            enName: h.enName,
-            startYear: h.startYear,
-            endYear: h.endYear,
+          historicalCountries={(
+            subordinateHistorical as {
+              id: string
+              name: string
+              flagEmoji?: string | null
+              enName?: string
+              startYear?: number
+              endYear?: number
+            }[]
+          ).map((hist) => ({
+            id: hist.id,
+            name: hist.name,
+            flagEmoji: hist.flagEmoji ?? null,
+            enName: hist.enName,
+            startYear: hist.startYear,
+            endYear: hist.endYear,
           }))}
           selectedCountryId={selectedAffinityHistoricalId ?? ''}
           onSelect={({ id }) => setSelectedAffinityHistoricalId(id || null)}
         />
       )}
-    </ModalOverlay>
+    </>,
+    document.body,
   )
-
-  return createPortal(content, document.body)
 }

@@ -24,7 +24,7 @@ export const dynastyApi = {
     description?: string
     startDate?: string
     endDate?: string
-    thumbnailUrl?: string
+    thumbnailUrl?: string | null
   }) => {
     return await dynastiesApi.create(apiConnection, data)
   },
@@ -36,7 +36,7 @@ export const dynastyApi = {
       description?: string
       startDate?: string
       endDate?: string
-      thumbnailUrl?: string
+      thumbnailUrl?: string | null
     },
   ) => {
     return await dynastiesApi.update(apiConnection, id, data)

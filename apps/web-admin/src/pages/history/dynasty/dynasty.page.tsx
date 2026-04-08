@@ -7,12 +7,15 @@ import {
 } from '@/features/dynasty/use-dynasties.hook'
 import { DynastyForm } from './components/dynasty-form'
 import type { Dynasty } from '@/shared/api/dynasty'
+import { getUploadImageUrl } from '@/shared/api/upload'
+import { DynastyMembersInfographicModal } from '@/widgets/country/country-detail/ui/dynasty-members-infographic-modal'
 
 export const DynastyPage = () => {
   const { data: dynasties = [], isLoading } = useDynasties()
   const deleteDynasty = useDeleteDynasty()
   const [selectedDynasty, setSelectedDynasty] = useState<Dynasty | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [membersModal, setMembersModal] = useState<{ id: string; name: string } | null>(null)
 
   const handleCreate = () => {
     setSelectedDynasty(null)
@@ -77,7 +80,7 @@ export const DynastyPage = () => {
                   <CardHeader>
                     {dynasty.thumbnailUrl ? (
                       <DynastyImage>
-                        <img src={dynasty.thumbnailUrl} alt={dynasty.name} />
+                        <img src={getUploadImageUrl(dynasty.thumbnailUrl)} alt={dynasty.name} />
                       </DynastyImage>
                     ) : (
                       <DynastyImagePlaceholder>
@@ -114,6 +117,18 @@ export const DynastyPage = () => {
                   </DynastyInfo>
 
                   <DynastyActions>
+                    <InfographicButton
+                      type="button"
+                      onClick={() => setMembersModal({ id: dynasty.id, name: dynasty.name })}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                      인물 인포그래픽
+                    </InfographicButton>
                     <ActionButton onClick={() => handleEdit(dynasty)}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -153,6 +168,15 @@ export const DynastyPage = () => {
           <DynastyForm dynasty={selectedDynasty} onClose={handleCloseForm} />
         )}
       </AnimatePresence>
+
+      {membersModal ? (
+        <DynastyMembersInfographicModal
+          dynastyId={membersModal.id}
+          dynastyName={membersModal.name}
+          isOpen
+          onClose={() => setMembersModal(null)}
+        />
+      ) : null}
     </Container>
   )
 }
@@ -392,6 +416,28 @@ const ActionButton = styled.button`
       background: #f8fafc;
       border-color: #cbd5e1;
       transform: translateY(-1px);
+    }
+  `}
+`
+
+const InfographicButton = styled(ActionButton)`
+  flex: 1.15;
+  ${({ theme }) => theme.mode === 'dark' ? css`
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.35);
+    background: rgba(99, 102, 241, 0.12);
+    &:hover {
+      color: #c7d2fe;
+      background: rgba(99, 102, 241, 0.2);
+      border-color: rgba(99, 102, 241, 0.45);
+    }
+  ` : css`
+    color: #4f46e5;
+    border-color: #c7d2fe;
+    background: #eef2ff;
+    &:hover {
+      background: #e0e7ff;
+      border-color: #a5b4fc;
     }
   `}
 `

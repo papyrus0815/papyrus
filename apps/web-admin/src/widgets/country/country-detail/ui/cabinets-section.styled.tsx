@@ -3,7 +3,7 @@
  */
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import styled, { css } from 'styled-components'
+import styled, { createGlobalStyle, css } from 'styled-components'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { glassCardMixin } from '@/shared/styles/mixins'
@@ -3500,6 +3500,19 @@ export const HistoryArticleEditorWrap = styled.div`
   min-height: 240px;
   margin-bottom: 12px;
 `
+
+/** 행정부 상세 취임·퇴임 서술 — 재임 본문(720px)보다 가로만 좁게 (편집·읽기 공통), 가운데 정렬 */
+export const HeadTenureInfoRichColumn = styled.div`
+  width: 100%;
+  max-width: min(100%, 520px);
+  min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+`
+export const HeadTenureInfoEditorWrap = styled(HeadTenureInfoRichColumn)`
+  margin-bottom: 8px;
+`
 export const HistoryArticleEditActions = styled.div`
   display: flex;
   align-items: center;
@@ -3698,6 +3711,23 @@ export const HistoryArticleProse = styled(RichTextReadView)`
     background: rgba(15, 118, 110, 0.12);
   }
 `
+
+/** 행정부 상세 취임·퇴임 서술 — 재임 본문과 동일 마크업, 인라인 블록용 */
+export const HeadTenureInfoRichProse = styled(HistoryArticleProse)`
+  padding: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  h1 {
+    font-size: 1.35em;
+  }
+  h2 {
+    font-size: 1.2em;
+  }
+  h3 {
+    font-size: 1.1em;
+  }
+`
+
 export const HistoryArticleEmpty = styled.p`
   font-family: ${NYT_FONT};
   font-size: 14px;
@@ -4483,4 +4513,38 @@ export const TlItemBirthRow = styled.div<{
   justify-content: ${(p) => (p.$thumbOnEnd ? 'flex-end' : 'flex-start')};
   flex-wrap: wrap;
   gap: 6px;
+`
+
+/** 행정부 상세·재임 기록 — 인쇄 시 본문 영역만 출력(나머지 UI는 숨김) */
+export const CabinetDetailPrintGlobalStyle = createGlobalStyle`
+  @media print {
+    @page {
+      margin: 12mm;
+    }
+    body * {
+      visibility: hidden;
+    }
+    [data-cabinet-print-root],
+    [data-cabinet-print-root] * {
+      visibility: visible;
+    }
+    [data-cabinet-print-root] {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100%;
+      max-width: 100%;
+      z-index: 99999;
+      margin: 0;
+      padding: 0;
+      background: #fff !important;
+      color: #0f172a !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    [data-cabinet-print-root] button,
+    [data-cabinet-print-root] [data-print-hide] {
+      display: none !important;
+    }
+  }
 `

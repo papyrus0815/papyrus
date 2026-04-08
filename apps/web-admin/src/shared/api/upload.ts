@@ -95,6 +95,7 @@ export type UploadImageCategory =
   | 'events'
   | 'ministries'
   | 'political-parties'
+  | 'dynasties'
   | 'attachments'
 
 /**

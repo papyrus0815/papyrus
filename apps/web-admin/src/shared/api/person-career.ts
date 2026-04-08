@@ -433,10 +433,13 @@ export type GovernmentCabinetTenureItem = {
   achievements?: GovernmentTenureAchievementItem[]
 }
 
-/** 수반 재임의 연호·시대명 (동아시아 연호, 유럽식 재위 시대명 등) */
+/** 수반 재임·재위의 연호·시대명 (동아시아 元号, 일본 연호 등) */
 export type RegnalEraDto = {
   id: string
-  tenureId: string
+  /** 행정부 재임(`GovernmentPositionTenure`)에 붙은 경우 */
+  tenureId?: string | null
+  /** 재위 전용(`SovereignReign`)에 붙은 경우 */
+  sovereignReignId?: string | null
   eraName: string
   eraNameEn?: string | null
   startYear: number

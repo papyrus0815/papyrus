@@ -25,7 +25,7 @@ import {
   modernToUnified,
 } from '@/entities/country/model/unified-types'
 import type { HistoricalCountry } from '@/entities/historical-country/api'
-import { usePersons } from '@/entities/person/api'
+import { useModernCountryPersonCounts, usePersons } from '@/entities/person/api'
 import { useContinents } from '@/features/continent/use-continents.hook'
 import {
   useCountries,
@@ -576,6 +576,22 @@ export default function CountryPage() {
       if (isDashboardStatsUrl) return 'stats'
       return 'stats'
     })
+
+  const {
+    data: modernCountryPersonCountRows,
+    isLoading: isLoadingModernCountryPersonCounts,
+  } = useModernCountryPersonCounts({
+    enabled: activeTab === 'dashboard' && dashboardContentView === 'stats',
+  })
+
+  const personCountByModernCountryId = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const row of modernCountryPersonCountRows ?? []) {
+      m[row.countryId] = row.count
+    }
+    return m
+  }, [modernCountryPersonCountRows])
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [recentEvents, setRecentEvents] = useState<
     {
@@ -1310,6 +1326,10 @@ export default function CountryPage() {
                         registrationFeed={registrationFeed}
                         recentEvents={recentEvents}
                         countryRegistrationFeed={countryRegistrationFeed}
+                        personCountByModernCountryId={
+                          personCountByModernCountryId
+                        }
+                        isLoadingPersonCounts={isLoadingModernCountryPersonCounts}
                         onRegistrationPersonClick={(item) => {
                           if (item.type === 'person' && item.countryId) {
                             navigate(

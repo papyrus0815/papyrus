@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
@@ -10,6 +10,12 @@ import { useCountryListState } from '@/widgets/country/country-list/country-list
 
 import { formatEventPeriod, formatRelativeTime } from '../relative-time'
 import * as S from './country-dashboard.styles'
+import {
+  ContinentDistributionInfographic,
+  CountryComparisonScatter,
+  MetricRankingInfographic,
+  PersonsInfographic,
+} from './dashboard-infographics'
 
 /** 전 세계 국가 수 기준 (UN 회원국·옵저버 등 통상 인용치) */
 const TOTAL_COUNTRIES_IN_WORLD = 195
@@ -239,9 +245,6 @@ const EventList = styled.ul`
   }
 `
 
-/** API Country에 gdpUsdBn이 있을 수 있음 */
-type CountryWithOptionalGdp = Country & { gdpUsdBn?: number | null }
-
 /** 국기 이미지 또는 이모지 폴백 (이미지 로드 실패 시 이모지 표시) */
 function CountryFeedFlag({
   thumbnailUrl,
@@ -309,6 +312,9 @@ interface CountryDashboardProps {
   registrationFeed?: RegistrationFeedItem[]
   recentEvents?: RecentEventItem[]
   countryRegistrationFeed?: CountryRegistrationFeedItem[]
+  /** 현대 국가 ID → 연결 인물 수 (주 국적·재임·소속 합집합, 국가 상세 인물 목록과 동일) */
+  personCountByModernCountryId?: Record<string, number>
+  isLoadingPersonCounts?: boolean
   /** 등록 현황에서 인물 카드 클릭 시 (해당 국가 인물 리스트로 이동용) */
   onRegistrationPersonClick?: (item: RegistrationFeedItem) => void
 }
@@ -322,6 +328,8 @@ export function CountryDashboard({
   registrationFeed = [],
   recentEvents = [],
   countryRegistrationFeed = [],
+  personCountByModernCountryId: personCountByModernCountryIdProp,
+  isLoadingPersonCounts = false,
   onRegistrationPersonClick,
 }: CountryDashboardProps) {
   const listState = useCountryListState()
@@ -330,6 +338,16 @@ export function CountryDashboard({
   const filtered = filteredProp ?? listState.filtered
   const continents = continentsProp ?? listState.continents
   const metrics = getSummaryMetrics(countries)
+  const personCountByModernCountryId = personCountByModernCountryIdProp ?? {}
+
+  const countriesWithLinkedPersons = useMemo(
+    () =>
+      countries.filter((c) => (personCountByModernCountryId[c.id] ?? 0) > 0)
+        .length,
+    [countries, personCountByModernCountryId],
+  )
+
+  const dashMetricPlaceholder = isLoadingPersonCounts ? '…' : '0'
 
   // Always show Global Dashboard
   return (
@@ -346,32 +364,33 @@ export function CountryDashboard({
         </S.EmptyGlobalState>
       ) : (
         <>
-          <S.GlobalDashboardHero>
-            <S.HeroContent>
-              <S.HeroIcon>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-              </S.HeroIcon>
-              <S.HeroTextGroup>
-                <S.HeroTitle>전 세계 국가 통계</S.HeroTitle>
-                <S.HeroSubtitle>
-                  {countries.length}개 국가의 데이터를 한눈에 확인하세요
-                </S.HeroSubtitle>
-              </S.HeroTextGroup>
-            </S.HeroContent>
-          </S.GlobalDashboardHero>
+          <S.DashboardSection $flushTop>
+            <S.GlobalDashboardHero>
+              <S.HeroContent>
+                <S.HeroIcon>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                </S.HeroIcon>
+                <S.HeroTextGroup>
+                  <S.HeroTitle>전 세계 국가 통계</S.HeroTitle>
+                  <S.HeroSubtitle>
+                    {countries.length}개 국가의 데이터를 한눈에 확인하세요
+                  </S.HeroSubtitle>
+                </S.HeroTextGroup>
+              </S.HeroContent>
+            </S.GlobalDashboardHero>
 
-          {/* Global Metrics */}
-          <S.GlobalMetricsGrid>
+            {/* Global Metrics */}
+            <S.GlobalMetricsGrid>
             <S.GlobalMetricCard>
               <S.GlobalMetricIcon>
                 <svg
@@ -478,6 +497,44 @@ export function CountryDashboard({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </S.GlobalMetricIcon>
+              <S.GlobalMetricContent>
+                <S.GlobalMetricLabel>인물이 연결된 국가</S.GlobalMetricLabel>
+                <S.GlobalMetricValue>
+                  {isLoadingPersonCounts
+                    ? dashMetricPlaceholder
+                    : countriesWithLinkedPersons}
+                  <span
+                    style={{
+                      margin: '0 2px',
+                      color: theme.colors.text.tertiary,
+                      fontWeight: 500,
+                    }}
+                  >
+                    /
+                  </span>
+                  {countries.length}
+                </S.GlobalMetricValue>
+                <S.GlobalMetricSubtext>
+                  주 국적·재임·소속 기준 1명 이상 (국가 상세 인물 목록과 동일)
+                </S.GlobalMetricSubtext>
+              </S.GlobalMetricContent>
+            </S.GlobalMetricCard>
+
+            <S.GlobalMetricCard>
+              <S.GlobalMetricIcon>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" />
                 </svg>
               </S.GlobalMetricIcon>
@@ -489,10 +546,30 @@ export function CountryDashboard({
                 <S.GlobalMetricSubtext>명/km²</S.GlobalMetricSubtext>
               </S.GlobalMetricContent>
             </S.GlobalMetricCard>
-          </S.GlobalMetricsGrid>
+            </S.GlobalMetricsGrid>
+          </S.DashboardSection>
 
-          {/* 등록 현황 | 사건 | 국가(현대·역사적) 등록 현황 (3열) */}
-          <ThreeCol>
+          <S.DashboardSection>
+            <S.DashboardSectionTitle>
+              <S.SectionTitleIcon>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ width: 20, height: 20 }}
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+              </S.SectionTitleIcon>
+              <S.SectionTitleText>최근 활동</S.SectionTitleText>
+            </S.DashboardSectionTitle>
+
+            {/* 등록 현황 | 사건 | 국가(현대·역사적) 등록 현황 (3열) */}
+            <ThreeCol>
             <FeedPanel>
               <FeedPanelTitle>등록 현황</FeedPanelTitle>
               {registrationFeed.length === 0 ? (
@@ -622,27 +699,29 @@ export function CountryDashboard({
                 </BoardList>
               )}
             </FeedPanel>
-          </ThreeCol>
+            </ThreeCol>
+          </S.DashboardSection>
 
-          <S.DashboardSectionTitle>
-            <S.SectionTitleIcon>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ width: 20, height: 20 }}
-              >
-                <path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" />
-              </svg>
-            </S.SectionTitleIcon>
-            <S.SectionTitleText>상세 통계</S.SectionTitleText>
-          </S.DashboardSectionTitle>
+          <S.DashboardSection>
+            <S.DashboardSectionTitle>
+              <S.SectionTitleIcon>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ width: 20, height: 20 }}
+                >
+                  <path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3" />
+                </svg>
+              </S.SectionTitleIcon>
+              <S.SectionTitleText>상세 통계</S.SectionTitleText>
+            </S.DashboardSectionTitle>
 
-          {/* Continent Distribution & Rankings */}
-          <S.GlobalDashboardGrid>
+            {/* 대륙·순위 2×2 → 등록 인물 전체 너비 */}
+            <S.GlobalDashboardGrid>
             <S.GlobalWidget>
               <S.GlobalWidgetHeader>
                 <S.GlobalWidgetIcon>
@@ -660,27 +739,10 @@ export function CountryDashboard({
                 <S.GlobalWidgetTitle>대륙별 분포</S.GlobalWidgetTitle>
               </S.GlobalWidgetHeader>
               <S.GlobalWidgetContent>
-                <S.BarChartList>
-                  {continents.map((continent) => {
-                    const count = countries.filter(
-                      (country) => country.continentId === continent.id,
-                    ).length
-                    const percent = countries.length
-                      ? (count / countries.length) * 100
-                      : 0
-                    return (
-                      <S.BarChartRow key={continent.id}>
-                        <S.BarChartLabel>{continent.name}</S.BarChartLabel>
-                        <S.BarChartTrack>
-                          <S.BarChartFill $percent={percent} />
-                        </S.BarChartTrack>
-                        <S.BarChartValue>
-                          {count}개국 ({percent.toFixed(1)}%)
-                        </S.BarChartValue>
-                      </S.BarChartRow>
-                    )
-                  })}
-                </S.BarChartList>
+                <ContinentDistributionInfographic
+                  continents={continents}
+                  countries={countries}
+                />
               </S.GlobalWidgetContent>
             </S.GlobalWidget>
 
@@ -703,47 +765,11 @@ export function CountryDashboard({
                 <S.GlobalWidgetTitle>인구 상위 국가</S.GlobalWidgetTitle>
               </S.GlobalWidgetHeader>
               <S.GlobalWidgetContent>
-                <S.BarChartList>
-                  {(() => {
-                    const totalPop = countries.reduce(
-                      (sum, c) => sum + (Number(c.population) || 0),
-                      0,
-                    )
-                    return [...countries]
-                      .sort(
-                        (a, b) =>
-                          (Number(b.population) || 0) -
-                          (Number(a.population) || 0),
-                      )
-                      .slice(0, RANKING_TOP_N)
-                      .map((country, index) => {
-                        const rank = index + 1
-                        const pop = Number(country.population) || 0
-                        const percent =
-                          totalPop > 0 ? (pop / totalPop) * 100 : 0
-                        return (
-                          <S.BarChartRow key={country.id}>
-                            <S.BarChartRank $rank={rank}>{rank}</S.BarChartRank>
-                            <S.BarChartLabel>
-                              {country.flagEmoji} {country.name}
-                            </S.BarChartLabel>
-                            <S.BarChartTrack>
-                              <S.BarChartFill
-                                $percent={percent}
-                                $rank={
-                                  rank <= 3 ? (rank as 1 | 2 | 3) : undefined
-                                }
-                              />
-                            </S.BarChartTrack>
-                            <S.BarChartValue>
-                              {(pop / 1_000_000).toFixed(1)}M (
-                              {percent.toFixed(1)}%)
-                            </S.BarChartValue>
-                          </S.BarChartRow>
-                        )
-                      })
-                  })()}
-                </S.BarChartList>
+                <MetricRankingInfographic
+                  countries={countries}
+                  kind="population"
+                  topN={RANKING_TOP_N}
+                />
               </S.GlobalWidgetContent>
             </S.GlobalWidget>
 
@@ -764,61 +790,11 @@ export function CountryDashboard({
                 <S.GlobalWidgetTitle>GDP 순위</S.GlobalWidgetTitle>
               </S.GlobalWidgetHeader>
               <S.GlobalWidgetContent>
-                <S.BarChartList>
-                  {(() => {
-                    const withGdp = (countries as CountryWithOptionalGdp[])
-                      .filter(
-                        (c) => c.gdpUsdBn != null && Number(c.gdpUsdBn) > 0,
-                      )
-                      .sort(
-                        (a, b) =>
-                          (Number(b.gdpUsdBn) || 0) - (Number(a.gdpUsdBn) || 0),
-                      )
-                      .slice(0, RANKING_TOP_N)
-                    if (withGdp.length === 0) {
-                      return (
-                        <S.BarChartRow>
-                          <S.BarChartLabel
-                            style={{
-                              maxWidth: 'none',
-                              color: theme.colors.text.tertiary,
-                            }}
-                          >
-                            GDP 데이터가 있는 국가가 없습니다
-                          </S.BarChartLabel>
-                        </S.BarChartRow>
-                      )
-                    }
-                    const totalGdp = withGdp.reduce(
-                      (sum, c) => sum + (Number(c.gdpUsdBn) || 0),
-                      0,
-                    )
-                    return withGdp.map((country, index) => {
-                      const rank = index + 1
-                      const gdp = Number(country.gdpUsdBn) || 0
-                      const percent = totalGdp > 0 ? (gdp / totalGdp) * 100 : 0
-                      return (
-                        <S.BarChartRow key={country.id}>
-                          <S.BarChartRank $rank={rank}>{rank}</S.BarChartRank>
-                          <S.BarChartLabel>
-                            {country.flagEmoji} {country.name}
-                          </S.BarChartLabel>
-                          <S.BarChartTrack>
-                            <S.BarChartFill
-                              $percent={percent}
-                              $rank={
-                                rank <= 3 ? (rank as 1 | 2 | 3) : undefined
-                              }
-                            />
-                          </S.BarChartTrack>
-                          <S.BarChartValue>
-                            {gdp.toLocaleString()}B ({percent.toFixed(1)}%)
-                          </S.BarChartValue>
-                        </S.BarChartRow>
-                      )
-                    })
-                  })()}
-                </S.BarChartList>
+                <MetricRankingInfographic
+                  countries={countries}
+                  kind="gdp"
+                  topN={RANKING_TOP_N}
+                />
               </S.GlobalWidgetContent>
             </S.GlobalWidget>
 
@@ -839,174 +815,68 @@ export function CountryDashboard({
                 <S.GlobalWidgetTitle>면적 순위</S.GlobalWidgetTitle>
               </S.GlobalWidgetHeader>
               <S.GlobalWidgetContent>
-                <S.BarChartList>
-                  {(() => {
-                    const totalArea = countries.reduce(
-                      (sum, c) => sum + (c.areaSqKm || 0),
-                      0,
-                    )
-                    return [...countries]
-                      .sort((a, b) => (b.areaSqKm || 0) - (a.areaSqKm || 0))
-                      .slice(0, RANKING_TOP_N)
-                      .map((country, index) => {
-                        const rank = index + 1
-                        const area = country.areaSqKm || 0
-                        const percent =
-                          totalArea > 0 ? (area / totalArea) * 100 : 0
-                        return (
-                          <S.BarChartRow key={country.id}>
-                            <S.BarChartRank $rank={rank}>{rank}</S.BarChartRank>
-                            <S.BarChartLabel>
-                              {country.flagEmoji} {country.name}
-                            </S.BarChartLabel>
-                            <S.BarChartTrack>
-                              <S.BarChartFill
-                                $percent={percent}
-                                $rank={
-                                  rank <= 3 ? (rank as 1 | 2 | 3) : undefined
-                                }
-                              />
-                            </S.BarChartTrack>
-                            <S.BarChartValue>
-                              {area.toLocaleString()} ({percent.toFixed(1)}%)
-                            </S.BarChartValue>
-                          </S.BarChartRow>
-                        )
-                      })
-                  })()}
-                </S.BarChartList>
+                <MetricRankingInfographic
+                  countries={countries}
+                  kind="area"
+                  topN={RANKING_TOP_N}
+                />
               </S.GlobalWidgetContent>
             </S.GlobalWidget>
-          </S.GlobalDashboardGrid>
+            </S.GlobalDashboardGrid>
 
-          <S.DashboardSectionTitle $mt="32px">
-            <S.SectionTitleIcon>
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ width: 20, height: 20 }}
-              >
-                <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </svg>
-            </S.SectionTitleIcon>
-            <S.SectionTitleText>국가 비교 목록</S.SectionTitleText>
-          </S.DashboardSectionTitle>
+            <S.GlobalWidget>
+              <S.GlobalWidgetHeader>
+                <S.GlobalWidgetIcon>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </S.GlobalWidgetIcon>
+                <S.GlobalWidgetTitle>등록 인물 인포그래픽</S.GlobalWidgetTitle>
+              </S.GlobalWidgetHeader>
+              <S.GlobalWidgetContent>
+                <PersonsInfographic
+                  countries={countries}
+                  personCountByModernCountryId={personCountByModernCountryId}
+                  isLoading={isLoadingPersonCounts}
+                />
+              </S.GlobalWidgetContent>
+            </S.GlobalWidget>
 
-          <S.DashboardTableWrap>
-            <S.DashboardTable>
-              <S.DashboardTableHead>
-                <tr>
-                  <S.DashboardTh>국가</S.DashboardTh>
-                  <S.DashboardTh>ISO</S.DashboardTh>
-                  <S.DashboardTh>수도</S.DashboardTh>
-                  <S.DashboardTh>대륙</S.DashboardTh>
-                  <S.DashboardTh align="right">인구</S.DashboardTh>
-                  <S.DashboardTh align="right">GDP (B)</S.DashboardTh>
-                  <S.DashboardTh align="right">면적 (km²)</S.DashboardTh>
-                  <S.DashboardTh align="right">인구밀도</S.DashboardTh>
-                </tr>
-              </S.DashboardTableHead>
-              <tbody>
-                {filtered.map((country) => {
-                  const continent = continents.find(
-                    (cont) => cont.id === country.continentId,
-                  )
-                  const density =
-                    country.population != null && country.areaSqKm != null
-                      ? (
-                          Number(country.population) / Number(country.areaSqKm)
-                        ).toFixed(1)
-                      : '-'
+            <S.DashboardSubsectionTitle>
+              <S.SectionTitleIcon>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ width: 20, height: 20 }}
+                >
+                  <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              </S.SectionTitleIcon>
+              <S.SectionTitleText>국가 비교 그래프</S.SectionTitleText>
+            </S.DashboardSubsectionTitle>
 
-                  // 현대 국가만 편집 가능
-                  const isModernCountry = country.type === 'modern'
-                  const handleClick = () => {
-                    if (isModernCountry && onCountryEdit) {
-                      // UnifiedCountry를 Country로 변환
-                      const modernCountry: Country = {
-                        id: country.id,
-                        name: country.name,
-                        fullName: country.fullName ?? undefined,
-                        localName: country.localName,
-                        isoCode: country.isoCode,
-                        flagEmoji: country.flagEmoji,
-                        capital: country.capital,
-                        population: country.population,
-                        areaSqKm: country.areaSqKm,
-                        thumbnailUrl: country.thumbnailUrl || undefined,
-                        continentId: country.continentId,
-                        defaultNameDisplayOrder:
-                          country.defaultNameDisplayOrder ?? undefined,
-                      }
-                      onCountryEdit(modernCountry)
-                    }
-                  }
-
-                  return (
-                    <S.DashboardTr
-                      key={country.id}
-                      onClick={handleClick}
-                      style={{
-                        cursor: isModernCountry ? 'pointer' : 'default',
-                      }}
-                    >
-                      <S.DashboardTd>
-                        <S.CountryCell>
-                          <S.CountryFlag>
-                            {country.flagEmoji || '🏳️'}
-                          </S.CountryFlag>
-                          <S.CountryInfo>
-                            <S.CountryName>{country.name}</S.CountryName>
-                            {country.localName && (
-                              <S.CountryLocalName>
-                                {country.localName}
-                              </S.CountryLocalName>
-                            )}
-                          </S.CountryInfo>
-                        </S.CountryCell>
-                      </S.DashboardTd>
-                      <S.DashboardTd>
-                        <S.IsoCode>{country.isoCode || '-'}</S.IsoCode>
-                      </S.DashboardTd>
-                      <S.DashboardTd>{country.capital || '-'}</S.DashboardTd>
-                      <S.DashboardTd>
-                        <S.ContinentBadge>
-                          {continent?.name || '-'}
-                        </S.ContinentBadge>
-                      </S.DashboardTd>
-                      <S.DashboardTd align="right">
-                        {country.population
-                          ? Number(country.population).toLocaleString()
-                          : '-'}
-                      </S.DashboardTd>
-                      <S.DashboardTd align="right">
-                        {country.type === 'modern'
-                          ? (() => {
-                              const c = countries.find(
-                                (x) => x.id === country.id,
-                              ) as CountryWithOptionalGdp | undefined
-                              return c?.gdpUsdBn != null
-                                ? Number(c.gdpUsdBn).toLocaleString()
-                                : '-'
-                            })()
-                          : '-'}
-                      </S.DashboardTd>
-                      <S.DashboardTd align="right">
-                        {country.areaSqKm
-                          ? country.areaSqKm.toLocaleString()
-                          : '-'}
-                      </S.DashboardTd>
-                      <S.DashboardTd align="right">{density}</S.DashboardTd>
-                    </S.DashboardTr>
-                  )
-                })}
-              </tbody>
-            </S.DashboardTable>
-          </S.DashboardTableWrap>
+            <S.DashboardTableWrap>
+              <CountryComparisonScatter
+                filtered={filtered}
+                personCountByModernCountryId={personCountByModernCountryId}
+                isLoadingPersonCounts={isLoadingPersonCounts}
+                onModernCountryClick={onCountryEdit}
+              />
+            </S.DashboardTableWrap>
+          </S.DashboardSection>
         </>
       )}
     </S.GlobalDashboard>

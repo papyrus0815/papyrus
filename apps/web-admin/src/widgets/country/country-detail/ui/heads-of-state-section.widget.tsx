@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast'
 import {
   FiArrowLeft,
   FiAward,
+  FiBook,
   FiCalendar,
   FiChevronDown,
   FiChevronRight,
@@ -29,7 +30,11 @@ import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
-import { personCareerApi } from '@/shared/api/person-career'
+import {
+  type CreateRegnalEraDto,
+  type RegnalEraDto,
+  personCareerApi,
+} from '@/shared/api/person-career'
 import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { uploadImage } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -101,6 +106,40 @@ const POSITION_TYPE_ORDER: Record<string, number> = {
 }
 
 const OTHER_POSITION_VALUE = 'OTHER'
+
+function formatRegnalEraDatePart(
+  year?: number | null,
+  monthValue?: number | null,
+  dayValue?: number | null,
+): string {
+  if (year == null) return ''
+  if (monthValue != null && dayValue != null)
+    return `${year}-${String(monthValue).padStart(2, '0')}-${String(dayValue).padStart(2, '0')}`
+  if (monthValue != null)
+    return `${year}-${String(monthValue).padStart(2, '0')}`
+  return String(year)
+}
+
+function formatRegnalEraRangeLabel(era: RegnalEraDto): string {
+  const start = formatRegnalEraDatePart(
+    era.startYear,
+    era.startMonth,
+    era.startDay,
+  )
+  const end = formatRegnalEraDatePart(era.endYear, era.endMonth, era.endDay)
+  if (start && end) return `${start} ~ ${end}`
+  if (start) return `${start} ~ (종료 미입력)`
+  return ''
+}
+
+function tenureRowSupportsRegnalEras(t: unknown): boolean {
+  if (!t || typeof t !== 'object') return false
+  const row = t as Record<string, unknown>
+  if (row.recordKind === 'SOVEREIGN_REIGN') return true
+  const posDef = row.positionDefinition as Record<string, unknown> | undefined
+  const pt = row.positionType ?? posDef?.positionType
+  return pt === 'HEAD_OF_STATE'
+}
 
 /** 특정 직책 계보도에서 선 연결 없음용 */
 const emptyMap = new Map<string, string[]>()
@@ -429,10 +468,24 @@ export function HeadsOfStateSection({
   const [editingAchievementId, setEditingAchievementId] = useState<
     string | null
   >(null)
-  /** 수정 폼 탭: 기본정보 | 업적 */
-  const [tenureFormTab, setTenureFormTab] = useState<'basic' | 'achievement'>(
-    'basic',
+  /** 연호 폼 */
+  const [editingRegnalEraId, setEditingRegnalEraId] = useState<string | null>(
+    null,
   )
+  const [regnalEraName, setRegnalEraName] = useState('')
+  const [regnalEraNameEn, setRegnalEraNameEn] = useState('')
+  const [regnalEraStartYear, setRegnalEraStartYear] = useState('')
+  const [regnalEraStartMonth, setRegnalEraStartMonth] = useState('')
+  const [regnalEraStartDay, setRegnalEraStartDay] = useState('')
+  const [regnalEraEndYear, setRegnalEraEndYear] = useState('')
+  const [regnalEraEndMonth, setRegnalEraEndMonth] = useState('')
+  const [regnalEraEndDay, setRegnalEraEndDay] = useState('')
+  const [regnalEraChangeReason, setRegnalEraChangeReason] = useState('')
+  const [regnalEraSubmitting, setRegnalEraSubmitting] = useState(false)
+  /** 수정 폼 탭: 기본정보 | 업적 | 연호 */
+  const [tenureFormTab, setTenureFormTab] = useState<
+    'basic' | 'achievement' | 'regnalEra'
+  >('basic')
   /** 수반 등록 시 이 재임으로 행정부도 함께 만들기 (국가원수·정부수반만 표시) */
   const [createCabinetWithTenure, setCreateCabinetWithTenure] = useState(false)
   /** 국가원수(HEAD_OF_STATE)만 — 재위만 기록(군주 등록과 동일, 행정부 수반 후보 제외) */
@@ -693,7 +746,13 @@ export function HeadsOfStateSection({
     ? tenures.find((t: any) => t.id === editingTenureId)
     : null
   const editingIsSovereignReign =
-    editingTenure != null && (editingTenure as any).recordKind === 'SOVEREIGN_REIGN'
+    editingTenure != null &&
+    (editingTenure as any).recordKind === 'SOVEREIGN_REIGN'
+
+  const editingHostSupportsRegnalEras = React.useMemo(
+    () => editingTenure != null && tenureRowSupportsRegnalEras(editingTenure),
+    [editingTenure],
+  )
 
   React.useEffect(() => {
     if (!editingTenureId || !editingTenure) return
@@ -733,6 +792,16 @@ export function HeadsOfStateSection({
     setShowOnEventsPage(t.showPositionInfo !== false)
     setSelectedAffinityHistoricalId(t.historicalCountryId ?? null)
     setSovereignReignOnlyForm((t as any).recordKind === 'SOVEREIGN_REIGN')
+    setEditingRegnalEraId(null)
+    setRegnalEraName('')
+    setRegnalEraNameEn('')
+    setRegnalEraStartYear('')
+    setRegnalEraStartMonth('')
+    setRegnalEraStartDay('')
+    setRegnalEraEndYear('')
+    setRegnalEraEndMonth('')
+    setRegnalEraEndDay('')
+    setRegnalEraChangeReason('')
   }, [editingTenureId, editingTenure, positionDefinitions])
 
   useEffect(() => {
@@ -897,7 +966,9 @@ export function HeadsOfStateSection({
     const isSov = row?.recordKind === 'SOVEREIGN_REIGN'
     if (
       !window.confirm(
-        isSov ? '이 재위 기록을 삭제하시겠습니까?' : '이 재임 기록을 삭제하시겠습니까?',
+        isSov
+          ? '이 재위 기록을 삭제하시겠습니까?'
+          : '이 재임 기록을 삭제하시겠습니까?',
       )
     )
       return
@@ -1125,6 +1196,163 @@ export function HeadsOfStateSection({
       }
       if (editingAchievementId === achievementId) resetAchievementForm()
       toast.success('업적이 삭제되었습니다.')
+      queryClient.invalidateQueries({
+        queryKey: ['tenures-by-country', countryId, historicalCountryId],
+      })
+    } catch (err: any) {
+      toast.error(err?.message ?? '삭제에 실패했습니다.')
+    }
+  }
+
+  const resetRegnalEraForm = React.useCallback(() => {
+    setEditingRegnalEraId(null)
+    setRegnalEraName('')
+    setRegnalEraNameEn('')
+    setRegnalEraStartYear('')
+    setRegnalEraStartMonth('')
+    setRegnalEraStartDay('')
+    setRegnalEraEndYear('')
+    setRegnalEraEndMonth('')
+    setRegnalEraEndDay('')
+    setRegnalEraChangeReason('')
+  }, [])
+
+  const startEditRegnalEra = React.useCallback((era: RegnalEraDto) => {
+    setEditingRegnalEraId(era.id)
+    setRegnalEraName(era.eraName ?? '')
+    setRegnalEraNameEn(era.eraNameEn ?? '')
+    setRegnalEraStartYear(era.startYear != null ? String(era.startYear) : '')
+    setRegnalEraStartMonth(era.startMonth != null ? String(era.startMonth) : '')
+    setRegnalEraStartDay(era.startDay != null ? String(era.startDay) : '')
+    setRegnalEraEndYear(era.endYear != null ? String(era.endYear) : '')
+    setRegnalEraEndMonth(era.endMonth != null ? String(era.endMonth) : '')
+    setRegnalEraEndDay(era.endDay != null ? String(era.endDay) : '')
+    setRegnalEraChangeReason(era.changeReason ?? '')
+  }, [])
+
+  const parseOptionalMdPart = (s: string): number | undefined => {
+    const t = s.trim()
+    if (!t) return undefined
+    const n = parseInt(t, 10)
+    return Number.isFinite(n) ? n : undefined
+  }
+
+  const handleRegnalEraSubmit = async () => {
+    if (!editingTenureId) return
+    if (!regnalEraName.trim()) {
+      toast.error('연호명을 입력하세요.')
+      return
+    }
+    const sy = parseInt(regnalEraStartYear.trim(), 10)
+    if (!Number.isFinite(sy) || sy < 1) {
+      toast.error('시작 연도는 1 이상의 숫자로 입력하세요.')
+      return
+    }
+    const hostRow = tenures.find((t: any) => t.id === editingTenureId) as any
+    if (!tenureRowSupportsRegnalEras(hostRow)) {
+      toast.error('이 재임에는 연호를 붙일 수 없습니다.')
+      return
+    }
+    const sm = parseOptionalMdPart(regnalEraStartMonth)
+    const sd = parseOptionalMdPart(regnalEraStartDay)
+    const ey = parseOptionalMdPart(regnalEraEndYear)
+    const em = parseOptionalMdPart(regnalEraEndMonth)
+    const ed = parseOptionalMdPart(regnalEraEndDay)
+    const checkMd = (
+      label: string,
+      v: number | undefined,
+      raw: string,
+    ): boolean => {
+      if (raw.trim() === '') return true
+      if (v === undefined) {
+        toast.error(`${label}은(는) 올바른 숫자여야 합니다.`)
+        return false
+      }
+      return true
+    }
+    if (!checkMd('시작 월', sm, regnalEraStartMonth)) return
+    if (!checkMd('시작 일', sd, regnalEraStartDay)) return
+    if (!checkMd('종료 연도', ey, regnalEraEndYear)) return
+    if (!checkMd('종료 월', em, regnalEraEndMonth)) return
+    if (!checkMd('종료 일', ed, regnalEraEndDay)) return
+    if (sm != null && (sm < 1 || sm > 12)) {
+      toast.error('시작 월은 1–12 사이여야 합니다.')
+      return
+    }
+    if (sd != null && (sd < 1 || sd > 31)) {
+      toast.error('시작 일은 1–31 사이여야 합니다.')
+      return
+    }
+    if (em != null && (em < 1 || em > 12)) {
+      toast.error('종료 월은 1–12 사이여야 합니다.')
+      return
+    }
+    if (ed != null && (ed < 1 || ed > 31)) {
+      toast.error('종료 일은 1–31 사이여야 합니다.')
+      return
+    }
+
+    const base: CreateRegnalEraDto = {
+      eraName: regnalEraName.trim(),
+      eraNameEn: regnalEraNameEn.trim() || null,
+      startYear: sy,
+      startMonth: regnalEraStartMonth.trim() === '' ? null : (sm ?? null),
+      startDay: regnalEraStartDay.trim() === '' ? null : (sd ?? null),
+      endYear: regnalEraEndYear.trim() === '' ? null : (ey ?? null),
+      endMonth: regnalEraEndMonth.trim() === '' ? null : (em ?? null),
+      endDay: regnalEraEndDay.trim() === '' ? null : (ed ?? null),
+      changeReason: regnalEraChangeReason.trim() || null,
+    }
+
+    setRegnalEraSubmitting(true)
+    try {
+      if (editingRegnalEraId) {
+        const patch: Partial<CreateRegnalEraDto> = {
+          eraName: base.eraName,
+          eraNameEn: base.eraNameEn,
+          startYear: base.startYear,
+          startMonth: base.startMonth,
+          startDay: base.startDay,
+          endYear: base.endYear,
+          endMonth: base.endMonth,
+          endDay: base.endDay,
+          changeReason: base.changeReason,
+        }
+        await personCareerApi.updateRegnalEra(editingRegnalEraId, patch)
+        toast.success('연호가 수정되었습니다.')
+      } else {
+        const isSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
+        if (isSovereign) {
+          await personCareerApi.createRegnalEraForSovereignReign(
+            editingTenureId,
+            base,
+          )
+        } else {
+          await personCareerApi.createRegnalEra(editingTenureId, base)
+        }
+        toast.success('연호가 등록되었습니다.')
+      }
+      resetRegnalEraForm()
+      queryClient.invalidateQueries({
+        queryKey: ['tenures-by-country', countryId, historicalCountryId],
+      })
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ??
+        err?.message ??
+        (editingRegnalEraId ? '수정에 실패했습니다.' : '등록에 실패했습니다.')
+      toast.error(msg)
+    } finally {
+      setRegnalEraSubmitting(false)
+    }
+  }
+
+  const handleDeleteRegnalEra = async (eraId: string) => {
+    if (!window.confirm('이 연호를 삭제하시겠습니까?')) return
+    try {
+      await personCareerApi.deleteRegnalEra(eraId)
+      if (editingRegnalEraId === eraId) resetRegnalEraForm()
+      toast.success('연호가 삭제되었습니다.')
       queryClient.invalidateQueries({
         queryKey: ['tenures-by-country', countryId, historicalCountryId],
       })
@@ -2603,6 +2831,16 @@ export function HeadsOfStateSection({
                       <FiAward size={16} />
                       업적
                     </TabButton>
+                    {editingHostSupportsRegnalEras && (
+                      <TabButton
+                        type="button"
+                        $active={tenureFormTab === 'regnalEra'}
+                        onClick={() => setTenureFormTab('regnalEra')}
+                      >
+                        <FiBook size={16} />
+                        연호
+                      </TabButton>
+                    )}
                   </TabNavigation>
                   {tenureFormTab === 'basic' && (
                     <TabPanel>
@@ -2769,7 +3007,9 @@ export function HeadsOfStateSection({
                                     checked={sovereignReignOnlyForm}
                                     disabled={editingIsSovereignReign}
                                     onChange={(e) =>
-                                      setSovereignReignOnlyForm(e.target.checked)
+                                      setSovereignReignOnlyForm(
+                                        e.target.checked,
+                                      )
                                     }
                                   />
                                   <label htmlFor="heads-sovereign-reign-only-edit">
@@ -3001,6 +3241,242 @@ export function HeadsOfStateSection({
                       </AchievementSectionBlock>
                     </TabPanel>
                   )}
+                  {tenureFormTab === 'regnalEra' &&
+                    editingTenureId &&
+                    editingHostSupportsRegnalEras && (
+                      <TabPanel>
+                        <AchievementSectionBlock>
+                          <SubSectionTitle>
+                            <FiBook size={20} />
+                            연호
+                          </SubSectionTitle>
+                          <AchievementSectionHint>
+                            재위 전용 기록·국가원수 재임에 元号·연호 구간을
+                            붙입니다. 일본 연호(예: 昭和), 중국·조선 연호 등
+                            시작 연도는 필수입니다.
+                          </AchievementSectionHint>
+                          {(() => {
+                            const row = tenures.find(
+                              (t: any) => t.id === editingTenureId,
+                            ) as any
+                            const eras = (
+                              (row?.regnalEras ?? []) as RegnalEraDto[]
+                            )
+                              .slice()
+                              .sort(
+                                (eraA, eraB) => eraA.startYear - eraB.startYear,
+                              )
+                            return (
+                              <>
+                                {eras.length > 0 && (
+                                  <AchievementCardList>
+                                    {eras.map((era) => (
+                                      <AchievementCard key={era.id}>
+                                        <AchievementCardContent>
+                                          <strong className="title">
+                                            {era.eraName}
+                                            {era.eraNameEn ? (
+                                              <span
+                                                style={{
+                                                  fontWeight: 400,
+                                                  color: '#64748b',
+                                                  marginLeft: 8,
+                                                }}
+                                              >
+                                                ({era.eraNameEn})
+                                              </span>
+                                            ) : null}
+                                          </strong>
+                                          <span className="date">
+                                            {formatRegnalEraRangeLabel(era)}
+                                          </span>
+                                          {era.changeReason ? (
+                                            <span
+                                              className="date"
+                                              style={{
+                                                display: 'block',
+                                                marginTop: 4,
+                                              }}
+                                            >
+                                              사유: {era.changeReason}
+                                            </span>
+                                          ) : null}
+                                        </AchievementCardContent>
+                                        <AchievementCardActions>
+                                          <EditAchievementButton
+                                            type="button"
+                                            onClick={() =>
+                                              startEditRegnalEra(era)
+                                            }
+                                            title="연호 수정"
+                                          >
+                                            <FiEdit2 size={16} />
+                                          </EditAchievementButton>
+                                          <DeleteAchievementButton
+                                            type="button"
+                                            onClick={() =>
+                                              handleDeleteRegnalEra(era.id)
+                                            }
+                                            title="연호 삭제"
+                                          >
+                                            <FiTrash2 size={16} />
+                                          </DeleteAchievementButton>
+                                        </AchievementCardActions>
+                                      </AchievementCard>
+                                    ))}
+                                  </AchievementCardList>
+                                )}
+                                <AchievementInlineForm>
+                                  <AchievementField>
+                                    <label>연호명 (필수)</label>
+                                    <AchievementTitleInputWrap>
+                                      <RegisterInput
+                                        type="text"
+                                        value={regnalEraName}
+                                        onChange={(e) =>
+                                          setRegnalEraName(e.target.value)
+                                        }
+                                        placeholder="예: 昭和, 康熙, 建文"
+                                      />
+                                    </AchievementTitleInputWrap>
+                                  </AchievementField>
+                                  <AchievementField>
+                                    <label>영문·로마자 (선택)</label>
+                                    <AchievementTitleInputWrap>
+                                      <RegisterInput
+                                        type="text"
+                                        value={regnalEraNameEn}
+                                        onChange={(e) =>
+                                          setRegnalEraNameEn(e.target.value)
+                                        }
+                                        placeholder="예: Shōwa, Kangxi"
+                                      />
+                                    </AchievementTitleInputWrap>
+                                  </AchievementField>
+                                  <AchievementField>
+                                    <label>시작: 연도(필수) · 월 · 일</label>
+                                    <RegnalEraYmdRow>
+                                      <RegisterInput
+                                        type="number"
+                                        min={1}
+                                        value={regnalEraStartYear}
+                                        onChange={(e) =>
+                                          setRegnalEraStartYear(e.target.value)
+                                        }
+                                        placeholder="연도"
+                                      />
+                                      <RegisterInput
+                                        type="number"
+                                        min={1}
+                                        max={12}
+                                        value={regnalEraStartMonth}
+                                        onChange={(e) =>
+                                          setRegnalEraStartMonth(e.target.value)
+                                        }
+                                        placeholder="월"
+                                      />
+                                      <RegisterInput
+                                        type="number"
+                                        min={1}
+                                        max={31}
+                                        value={regnalEraStartDay}
+                                        onChange={(e) =>
+                                          setRegnalEraStartDay(e.target.value)
+                                        }
+                                        placeholder="일"
+                                      />
+                                    </RegnalEraYmdRow>
+                                  </AchievementField>
+                                  <AchievementField>
+                                    <label>종료: 연도 · 월 · 일 (선택)</label>
+                                    <RegnalEraYmdRow>
+                                      <RegisterInput
+                                        type="number"
+                                        min={1}
+                                        value={regnalEraEndYear}
+                                        onChange={(e) =>
+                                          setRegnalEraEndYear(e.target.value)
+                                        }
+                                        placeholder="연도"
+                                      />
+                                      <RegisterInput
+                                        type="number"
+                                        min={1}
+                                        max={12}
+                                        value={regnalEraEndMonth}
+                                        onChange={(e) =>
+                                          setRegnalEraEndMonth(e.target.value)
+                                        }
+                                        placeholder="월"
+                                      />
+                                      <RegisterInput
+                                        type="number"
+                                        min={1}
+                                        max={31}
+                                        value={regnalEraEndDay}
+                                        onChange={(e) =>
+                                          setRegnalEraEndDay(e.target.value)
+                                        }
+                                        placeholder="일"
+                                      />
+                                    </RegnalEraYmdRow>
+                                    <FieldHint style={{ marginTop: 8 }}>
+                                      비우면 재위·재임 종료 시점까지로 해석해
+                                      표시할 수 있습니다.
+                                    </FieldHint>
+                                  </AchievementField>
+                                  <AchievementField>
+                                    <label>변경 사유 (선택)</label>
+                                    <AchievementTitleInputWrap>
+                                      <RegisterInput
+                                        type="text"
+                                        value={regnalEraChangeReason}
+                                        onChange={(e) =>
+                                          setRegnalEraChangeReason(
+                                            e.target.value,
+                                          )
+                                        }
+                                        placeholder="예: 즉위, 개원, 재난"
+                                      />
+                                    </AchievementTitleInputWrap>
+                                  </AchievementField>
+                                  <AchievementInlineActions>
+                                    {editingRegnalEraId && (
+                                      <button
+                                        type="button"
+                                        className="cancel"
+                                        onClick={() => resetRegnalEraForm()}
+                                        disabled={regnalEraSubmitting}
+                                      >
+                                        취소
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      className="submit"
+                                      onClick={() => handleRegnalEraSubmit()}
+                                      disabled={
+                                        regnalEraSubmitting ||
+                                        !regnalEraName.trim() ||
+                                        !regnalEraStartYear.trim()
+                                      }
+                                    >
+                                      {regnalEraSubmitting
+                                        ? editingRegnalEraId
+                                          ? '수정 중…'
+                                          : '등록 중…'
+                                        : editingRegnalEraId
+                                          ? '수정 완료'
+                                          : '연호 추가'}
+                                    </button>
+                                  </AchievementInlineActions>
+                                </AchievementInlineForm>
+                              </>
+                            )
+                          })()}
+                        </AchievementSectionBlock>
+                      </TabPanel>
+                    )}
                 </>
               ) : (
                 <>
@@ -4450,6 +4926,28 @@ const TEXT_MUTED = '#6b7280'
 
 const AchievementTitleInputWrap = styled.div`
   max-width: 480px;
+`
+
+const RegnalEraYmdRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+
+  input {
+    width: 96px;
+    min-width: 0;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    box-sizing: border-box;
+  }
+  input:first-of-type {
+    width: 112px;
+  }
 `
 
 const AchievementField = styled.div`

@@ -21,11 +21,15 @@ export type Person = {
   middleNameMeaning?: string | null
   birthEra?: Era | null
   birthDate?: string | null
+  birthYear?: number | null
   deathEra?: Era | null
   deathDate?: string | null
+  deathYear?: number | null
   gender?: string | null
   biography?: string | null
   profileImageUrl?: string | null
+  isAlive?: boolean | null
+  regnalName?: string | null
   countryId?: string | null
   birthCityId?: string | null
   deathCityId?: string | null
@@ -135,6 +139,23 @@ export const personApi = {
   getByCountryId: async (countryId: string) => {
     const conn = getApiConnection()
     const url = `${apiConnection.host}/persons/by-country/${encodeURIComponent(countryId)}`
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(conn.headers?.Authorization && { Authorization: conn.headers.Authorization }),
+      },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return (Array.isArray(data) ? data : data?.data ?? []) as Person[]
+  },
+
+  /** 가문 소속 인물 (dynastyId). GET /persons/by-dynasty/:dynastyId */
+  getByDynastyId: async (dynastyId: string) => {
+    const conn = getApiConnection()
+    const url = `${apiConnection.host}/persons/by-dynasty/${encodeURIComponent(dynastyId)}`
     const res = await fetch(url, {
       method: 'GET',
       headers: {

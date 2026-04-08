@@ -22,6 +22,8 @@ export const personKeys = {
   detail: (id: string) => ['persons', id] as const,
   /** GET /persons/:id/detail (관계·재임 등 포함 상세) */
   detailFull: (id: string) => ['person-detail', id] as const,
+  /** GET /persons/dashboard/person-counts-by-modern-country */
+  modernCountryPersonCounts: ['persons', 'modern-country-person-counts'] as const,
 }
 
 /**
@@ -34,6 +36,18 @@ export function usePersons() {
       const response = await personsApi.getAllPersons()
       return response as Person[]
     },
+  })
+}
+
+/**
+ * 현대 국가별 연결 인물 수 (대시보드 통계)
+ */
+export function useModernCountryPersonCounts(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: personKeys.modernCountryPersonCounts,
+    queryFn: () => personsApi.getModernCountryPersonCounts(),
+    staleTime: 60_000,
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -64,6 +78,9 @@ export function useCreatePerson() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: personKeys.all })
+      queryClient.invalidateQueries({
+        queryKey: personKeys.modernCountryPersonCounts,
+      })
     },
   })
 }
@@ -88,6 +105,9 @@ export function useUpdatePerson() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: personKeys.all })
       queryClient.invalidateQueries({
+        queryKey: personKeys.modernCountryPersonCounts,
+      })
+      queryClient.invalidateQueries({
         queryKey: personKeys.detail(variables.id),
       })
       queryClient.invalidateQueries({
@@ -109,6 +129,9 @@ export function useDeletePerson() {
     },
     onSuccess: (_void, deletedId) => {
       queryClient.invalidateQueries({ queryKey: personKeys.all })
+      queryClient.invalidateQueries({
+        queryKey: personKeys.modernCountryPersonCounts,
+      })
       queryClient.invalidateQueries({
         queryKey: personKeys.detailFull(deletedId),
       })

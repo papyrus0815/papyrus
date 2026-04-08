@@ -153,8 +153,8 @@ model Attachment {
   /// 파일 제목
   title String @db.VarChar(100)
 
-  /// 파일 경로
-  filePath String @map("file_path") @db.VarChar(100)
+  /// 파일 경로 (업로드 루트 기준 상대 `images/...` 또는 레거시 절대 `/uploads/...` URL)
+  filePath String @map("file_path") @db.VarChar(500)
 
   /// 파일 유형 (예: mime)
   fileType String @map("file_type") @db.VarChar(100)

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { PersonController } from './presentation/person.controller'
 import { PersonByCountryController } from './presentation/person-by-country.controller'
+import { PersonByDynastyController } from './presentation/person-by-dynasty.controller'
 import { GovernmentPositionController } from './presentation/government-position.controller'
 import { PersonService } from './application/person.service'
 import { PersonPrismaRepository } from './infrastructure/person.prisma.repository'
@@ -12,7 +13,12 @@ import { UploadModule } from '../shared/upload/upload.module'
  */
 @Module({
   imports: [NotificationModule, UploadModule],
-  controllers: [PersonController, PersonByCountryController, GovernmentPositionController],
+  controllers: [
+    PersonController,
+    PersonByCountryController,
+    PersonByDynastyController,
+    GovernmentPositionController,
+  ],
   providers: [PersonService, PersonPrismaRepository],
   exports: [PersonService],
 })

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import styled, { css } from 'styled-components'
 import { motion } from 'framer-motion'
 import {
@@ -6,6 +6,11 @@ import {
   useUpdateDynasty,
 } from '@/features/dynasty/use-dynasties.hook'
 import type { Dynasty } from '@/shared/api/dynasty'
+import {
+  getUploadImageUrl,
+  uploadImage,
+  validateImageFile,
+} from '@/shared/api/upload'
 
 interface DynastyFormProps {
   dynasty?: Dynasty | null
@@ -22,8 +27,12 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
     description: '',
     startDate: '',
     endDate: '',
-    thumbnailUrl: '',
   })
+  const [thumbPath, setThumbPath] = useState('')
+  const [thumbRemoved, setThumbRemoved] = useState(false)
+  const [thumbUploading, setThumbUploading] = useState(false)
+  const thumbInitialRef = useRef('')
+  const thumbInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (dynasty) {
@@ -32,8 +41,16 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
         description: dynasty.description || '',
         startDate: dynasty.startDate ? new Date(dynasty.startDate).toISOString().split('T')[0] : '',
         endDate: dynasty.endDate ? new Date(dynasty.endDate).toISOString().split('T')[0] : '',
-        thumbnailUrl: dynasty.thumbnailUrl || '',
       })
+      const t = dynasty.thumbnailUrl || ''
+      thumbInitialRef.current = t
+      setThumbPath(t)
+      setThumbRemoved(false)
+    } else {
+      setFormData({ name: '', description: '', startDate: '', endDate: '' })
+      thumbInitialRef.current = ''
+      setThumbPath('')
+      setThumbRemoved(false)
     }
   }, [dynasty])
 
@@ -41,12 +58,23 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
     e.preventDefault()
     setError(null)
 
+    const thumbPart: { thumbnailUrl?: string | null } = {}
+    if (!dynasty) {
+      if (thumbPath.trim()) thumbPart.thumbnailUrl = thumbPath.trim()
+    } else if (thumbRemoved) {
+      thumbPart.thumbnailUrl = null
+    } else {
+      const cur = thumbPath.trim()
+      const initial = (thumbInitialRef.current || '').trim()
+      if (cur && cur !== initial) thumbPart.thumbnailUrl = cur
+    }
+
     const data = {
       name: formData.name,
       description: formData.description || undefined,
       startDate: formData.startDate || undefined,
       endDate: formData.endDate || undefined,
-      thumbnailUrl: formData.thumbnailUrl || undefined,
+      ...thumbPart,
     }
 
     try {
@@ -125,13 +153,81 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
           </FormRow>
 
           <FormGroup>
-            <Label>썸네일 URL</Label>
-            <Input type="text" name="thumbnailUrl" value={formData.thumbnailUrl} onChange={handleChange} placeholder="https://example.com/image.jpg" />
-            {formData.thumbnailUrl && (
+            <Label>썸네일</Label>
+            <input
+              ref={thumbInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (!file) return
+                try {
+                  validateImageFile(file)
+                } catch (err) {
+                  setError((err as Error).message)
+                  return
+                }
+                setThumbUploading(true)
+                setError(null)
+                try {
+                  const r = await uploadImage(file, 'dynasties')
+                  setThumbPath(r.url)
+                  setThumbRemoved(false)
+                } catch (err) {
+                  setError((err as Error).message)
+                } finally {
+                  setThumbUploading(false)
+                }
+              }}
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              <button
+                type="button"
+                disabled={thumbUploading}
+                onClick={() => thumbInputRef.current?.click()}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  border: '1px solid #e2e8f0',
+                  background: 'transparent',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: thumbUploading ? 'wait' : 'pointer',
+                  color: 'inherit',
+                }}
+              >
+                {thumbUploading ? '업로드 중…' : '이미지 선택'}
+              </button>
+              {(thumbPath || (dynasty?.thumbnailUrl && !thumbRemoved)) && (
+                <button
+                  type="button"
+                  disabled={thumbUploading}
+                  onClick={() => {
+                    setThumbPath('')
+                    setThumbRemoved(true)
+                  }}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: 10,
+                    border: '1px solid rgba(220,38,38,0.35)',
+                    background: 'rgba(220,38,38,0.08)',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: thumbUploading ? 'wait' : 'pointer',
+                    color: '#f87171',
+                  }}
+                >
+                  썸네일 제거
+                </button>
+              )}
+            </div>
+            {!thumbRemoved && thumbPath ? (
               <ImagePreview>
-                <img src={formData.thumbnailUrl} alt="Preview" />
+                <img src={getUploadImageUrl(thumbPath)} alt="Preview" />
               </ImagePreview>
-            )}
+            ) : null}
           </FormGroup>
 
           <FormActions>
