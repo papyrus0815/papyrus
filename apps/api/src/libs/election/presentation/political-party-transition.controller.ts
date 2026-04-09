@@ -15,6 +15,20 @@ import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
+export interface CreatePoliticalPartyTransitionBody {
+  fromPartyId: string
+  toPartyId: string
+  kind: string
+  effectiveDate?: string | null
+  notes?: string | null
+}
+
+export interface UpdatePoliticalPartyTransitionBody {
+  kind?: string
+  effectiveDate?: string | null
+  notes?: string | null
+}
+
 /**
  * 정당 전신·후신(계보) — 합당·분당은 여러 행으로 표현
  */
@@ -27,14 +41,8 @@ export class PoliticalPartyTransitionController {
   @Post()
   async create(
     @Body()
-    body: {
-      fromPartyId: string
-      toPartyId: string
-      kind: string
-      effectiveDate?: string | null
-      notes?: string | null
-    },
-  ) {
+    body: CreatePoliticalPartyTransitionBody,
+  ): Promise<any> {
     if (body.fromPartyId === body.toPartyId) {
       throw new BadRequestException('출발 정당과 도착 정당은 달라야 합니다.')
     }
@@ -81,12 +89,8 @@ export class PoliticalPartyTransitionController {
   async update(
     @Param('id') id: string,
     @Body()
-    body: {
-      kind?: string
-      effectiveDate?: string | null
-      notes?: string | null
-    },
-  ) {
+    body: UpdatePoliticalPartyTransitionBody,
+  ): Promise<any> {
     const existing = await this.prisma.politicalPartyTransition.findUnique({
       where: { id },
     })
@@ -117,7 +121,7 @@ export class PoliticalPartyTransitionController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string): Promise<any> {
     await this.prisma.politicalPartyTransition.delete({ where: { id } })
   }
 

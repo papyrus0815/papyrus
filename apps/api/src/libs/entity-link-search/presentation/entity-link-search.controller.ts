@@ -3,21 +3,12 @@ import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { PrismaService } from '@prisma/prisma.service'
 
-export type EntityLinkSearchItemDto = {
-  type:
-    | 'person'
-    | 'event'
-    | 'country'
-    | 'historicalCountry'
-    | 'dynasty'
-    | 'militaryUnit'
-    | 'politicalParty'
-  id: string
-  name: string
-  subtitle?: string | null
-  /** 정당 → 국가 상세 이동용 */
-  countryId?: string | null
-}
+import {
+  EntityLinkSearchItemDto,
+  EntityLinkSearchResponseDto,
+} from './entity-link-search.dto'
+
+export { EntityLinkSearchItemDto, EntityLinkSearchResponseDto }
 
 function displayPersonName(p: {
   name: string
@@ -48,7 +39,7 @@ export class EntityLinkSearchController {
   async search(
     @Query('q') q?: string,
     @Query('countryId') countryId?: string,
-  ): Promise<{ items: EntityLinkSearchItemDto[] }> {
+  ): Promise<EntityLinkSearchResponseDto> {
     const term = (q ?? '').trim()
     if (term.length < 1) {
       return { items: [] }

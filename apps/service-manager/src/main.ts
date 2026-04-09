@@ -491,7 +491,7 @@ async function updateTrayMenu() {
               const result = await dialog.showOpenDialog({
                 properties: ['openDirectory'],
                 title: 'Papyrus 프로젝트 폴더 선택',
-                defaultPath: '/Users/yendoo/dev/papyrus',
+                defaultPath: '/Users/taeyoung/Desktop/project/papyrus',
               })
 
               if (!result.canceled && result.filePaths.length > 0) {
@@ -594,7 +594,7 @@ function registerIpcHandlers() {
   // Docker 제어
   ipcMain.handle('service:startDocker', async () => {
     const projectRoot =
-      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
     console.log(`🐳 [IPC] Docker 시작 요청 (프로젝트 경로: ${projectRoot})`)
     const result = await serviceManager.dockerManager.startDocker(projectRoot)
     // Docker 시작 후 상태 업데이트
@@ -637,7 +637,7 @@ function registerIpcHandlers() {
   // API 서버 제어
   ipcMain.handle('service:startApi', async () => {
     const projectRoot =
-      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
     console.log(`🚀 [IPC] API 서버 시작 요청 (프로젝트 경로: ${projectRoot})`)
     return await serviceManager.papyrusServerManager.startApiServer(projectRoot)
   })
@@ -650,7 +650,7 @@ function registerIpcHandlers() {
   // 관리자 웹 서버 제어
   ipcMain.handle('service:startWebAdmin', async () => {
     const projectRoot =
-      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
     console.log(
       `🚀 [IPC] 관리자 웹 서버 시작 요청 (프로젝트 경로: ${projectRoot})`,
     )
@@ -1115,7 +1115,7 @@ function registerIpcHandlers() {
     console.log('📋 [IPC] 환경 변수 파일 목록 조회 요청')
     try {
       const projectRoot =
-        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+        serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
       const envFiles: string[] = []
 
       const files = ['env.development', 'env.production', 'env.test']
@@ -1138,7 +1138,7 @@ function registerIpcHandlers() {
     console.log(`📖 [IPC] 환경 변수 읽기 요청: ${fileName}`)
     try {
       const projectRoot =
-        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+        serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
       const filePath = path.join(projectRoot, fileName)
 
       if (!fs.existsSync(filePath)) {
@@ -1202,7 +1202,7 @@ function registerIpcHandlers() {
       console.log(`✏️ [IPC] 환경 변수 쓰기 요청: ${fileName}`)
       try {
         const projectRoot =
-          serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+          serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
         const filePath = path.join(projectRoot, fileName)
 
         // 기존 파일 읽기 (주석 및 섹션 구조 유지)
@@ -1283,7 +1283,7 @@ function registerIpcHandlers() {
       console.log(`🗑️ [IPC] 환경 변수 삭제 요청: ${fileName} - ${key}`)
       try {
         const projectRoot =
-          serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+          serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
         const filePath = path.join(projectRoot, fileName)
 
         if (!fs.existsSync(filePath)) {
@@ -1347,7 +1347,7 @@ function registerIpcHandlers() {
     const fs = require('fs')
 
     const projectRoot =
-      serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+      serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
     const apiPath = path.join(projectRoot, 'apps/api')
     const startTime = new Date()
     let isSuccess = false
@@ -1431,7 +1431,7 @@ function registerIpcHandlers() {
 
     try {
       const projectRoot =
-        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+        serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
       const sdkPath = path.join(projectRoot, 'apps/api/src/api')
       const swaggerPath = path.join(projectRoot, 'apps/api/swagger.json')
 
@@ -1512,7 +1512,7 @@ function registerIpcHandlers() {
 
       // 실패 로그 저장
       const projectRoot =
-        serviceManager['projectRoot'] || '/Users/yendoo/dev/papyrus'
+        serviceManager['projectRoot'] || '/Users/taeyoung/Desktop/project/papyrus'
       const logDir = path.join(projectRoot, 'logs/nestia/validate')
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true })
@@ -1690,7 +1690,7 @@ app.whenReady().then(async () => {
 
   // 프로젝트 루트 설정 (환경 변수 또는 기본값)
   const projectRoot =
-    process.env.PAPYRUS_PROJECT_ROOT || '/Users/yendoo/dev/papyrus'
+    process.env.PAPYRUS_PROJECT_ROOT || '/Users/taeyoung/Desktop/project/papyrus'
   serviceManager.setProjectRoot(projectRoot)
   prismaManager.setProjectRoot(projectRoot)
   console.log(`📁 프로젝트 루트: ${projectRoot}`)

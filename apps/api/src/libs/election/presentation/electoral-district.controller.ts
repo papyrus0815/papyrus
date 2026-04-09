@@ -15,6 +15,26 @@ import { AuthGuard } from '@nestjs/passport'
 import { PrismaService } from '@prisma/prisma.service'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
+export interface CreateElectoralDistrictBody {
+  name: string
+  code?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  parentId?: string | null
+  administrativeDivisionId?: string | null
+  notes?: string | null
+}
+
+export interface UpdateElectoralDistrictBody {
+  name?: string
+  code?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  parentId?: string | null
+  administrativeDivisionId?: string | null
+  notes?: string | null
+}
+
 @ApiTags('electoral-districts')
 @Controller('electoral-districts')
 @UseGuards(AuthGuard('jwt'))
@@ -25,7 +45,7 @@ export class ElectoralDistrictController {
   async list(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
-  ) {
+  ): Promise<any> {
     const where: Record<string, unknown> = {}
     if (countryId) where.countryId = countryId
     if (historicalCountryId) where.historicalCountryId = historicalCountryId
@@ -37,7 +57,7 @@ export class ElectoralDistrictController {
   }
 
   @Get(':id')
-  async getById(@Param('id') id: string) {
+  async getById(@Param('id') id: string): Promise<any> {
     const row = await this.prisma.electoralDistrict.findUnique({ where: { id } })
     if (!row) throw new NotFoundException('선거구를 찾을 수 없습니다.')
     return serializeElectionBigInt(row)
@@ -46,16 +66,8 @@ export class ElectoralDistrictController {
   @Post()
   async create(
     @Body()
-    body: {
-      name: string
-      code?: string | null
-      countryId?: string | null
-      historicalCountryId?: string | null
-      parentId?: string | null
-      administrativeDivisionId?: string | null
-      notes?: string | null
-    },
-  ) {
+    body: CreateElectoralDistrictBody,
+  ): Promise<any> {
     const row = await this.prisma.electoralDistrict.create({
       data: {
         name: body.name,
@@ -74,16 +86,8 @@ export class ElectoralDistrictController {
   async update(
     @Param('id') id: string,
     @Body()
-    body: Partial<{
-      name: string
-      code: string | null
-      countryId: string | null
-      historicalCountryId: string | null
-      parentId: string | null
-      administrativeDivisionId: string | null
-      notes: string | null
-    }>,
-  ) {
+    body: UpdateElectoralDistrictBody,
+  ): Promise<any> {
     const data: Record<string, unknown> = {}
     if (body.name !== undefined) data.name = body.name
     if (body.code !== undefined) data.code = body.code
@@ -102,7 +106,7 @@ export class ElectoralDistrictController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string): Promise<any> {
     await this.prisma.electoralDistrict.delete({ where: { id } })
   }
 }

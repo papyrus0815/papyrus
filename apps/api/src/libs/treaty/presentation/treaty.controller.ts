@@ -165,7 +165,7 @@ export class TreatyController {
 
   @Get()
   @ApiOperation({ summary: '조약 목록 (필터·검색·페이지네이션)' })
-  async findAll(@Query() query: FindTreatiesQueryDto) {
+  async findAll(@Query() query: FindTreatiesQueryDto): Promise<any> {
     const parts: Prisma.TreatyWhereInput[] = []
 
     if (query.cabinetId) {
@@ -218,7 +218,7 @@ export class TreatyController {
 
   @Get(':id')
   @ApiOperation({ summary: '조약 단건' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string): Promise<any> {
     const treaty = await this.prisma.treaty.findUnique({
       where: { id },
       include: TREATY_INCLUDE,
@@ -233,7 +233,7 @@ export class TreatyController {
   @ApiBearerAuth()
   @Post()
   @ApiOperation({ summary: '조약 생성 (선택: signatories 로 일괄 트랜잭션)' })
-  async create(@Body() dto: CreateTreatyBodyDto, @Request() req: any) {
+  async create(@Body() dto: CreateTreatyBodyDto, @Request() req: any): Promise<any> {
     const accountId = req.user?.accountId ?? req.user?.id ?? undefined
     const name = dto.name.trim()
 
@@ -310,7 +310,7 @@ export class TreatyController {
   @ApiBearerAuth()
   @Put(':id')
   @ApiOperation({ summary: '조약 수정' })
-  async update(@Param('id') id: string, @Body() dto: UpdateTreatyBodyDto) {
+  async update(@Param('id') id: string, @Body() dto: UpdateTreatyBodyDto): Promise<any> {
     const exists = await this.prisma.treaty.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('조약을 찾을 수 없습니다.')
 
@@ -355,7 +355,7 @@ export class TreatyController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '조약 삭제 (서명·조항·이미지 CASCADE)' })
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string): Promise<any> {
     const exists = await this.prisma.treaty.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('조약을 찾을 수 없습니다.')
     await this.prisma.treaty.delete({ where: { id } })
@@ -369,7 +369,7 @@ export class TreatyController {
   @ApiBearerAuth()
   @Post('signatories')
   @ApiOperation({ summary: '서명국 추가' })
-  async addSignatory(@Body() dto: CreateTreatySignatoryBodyDto) {
+  async addSignatory(@Body() dto: CreateTreatySignatoryBodyDto): Promise<any> {
     this.validateSignatoryCountryXor(dto)
     await this.assertPositionDefinitionExists(dto.positionDefinitionId ?? null)
 
@@ -395,7 +395,7 @@ export class TreatyController {
   @ApiBearerAuth()
   @Put('signatories/:id')
   @ApiOperation({ summary: '서명국 수정' })
-  async updateSignatory(@Param('id') id: string, @Body() dto: UpdateTreatySignatoryBodyDto) {
+  async updateSignatory(@Param('id') id: string, @Body() dto: UpdateTreatySignatoryBodyDto): Promise<any> {
     const exists = await this.prisma.treatySignatory.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('서명국 정보를 찾을 수 없습니다.')
 
@@ -437,7 +437,7 @@ export class TreatyController {
   @Delete('signatories/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '서명국 삭제' })
-  async removeSignatory(@Param('id') id: string) {
+  async removeSignatory(@Param('id') id: string): Promise<any> {
     const exists = await this.prisma.treatySignatory.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('서명국 정보를 찾을 수 없습니다.')
     await this.prisma.treatySignatory.delete({ where: { id } })
@@ -451,7 +451,7 @@ export class TreatyController {
   @ApiBearerAuth()
   @Post('terms')
   @ApiOperation({ summary: '조항 추가' })
-  async addTerm(@Body() dto: CreateTreatyTermBodyDto) {
+  async addTerm(@Body() dto: CreateTreatyTermBodyDto): Promise<any> {
     const term = await this.prisma.treatyTerm.create({
       data: {
         treatyId: dto.treatyId,
@@ -468,7 +468,7 @@ export class TreatyController {
   @ApiBearerAuth()
   @Put('terms/:id')
   @ApiOperation({ summary: '조항 수정' })
-  async updateTerm(@Param('id') id: string, @Body() dto: UpdateTreatyTermBodyDto) {
+  async updateTerm(@Param('id') id: string, @Body() dto: UpdateTreatyTermBodyDto): Promise<any> {
     const exists = await this.prisma.treatyTerm.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('조항을 찾을 수 없습니다.')
 
@@ -489,7 +489,7 @@ export class TreatyController {
   @Delete('terms/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '조항 삭제' })
-  async removeTerm(@Param('id') id: string) {
+  async removeTerm(@Param('id') id: string): Promise<any> {
     const exists = await this.prisma.treatyTerm.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('조항을 찾을 수 없습니다.')
     await this.prisma.treatyTerm.delete({ where: { id } })
@@ -503,7 +503,7 @@ export class TreatyController {
   @ApiBearerAuth()
   @Post('images')
   @ApiOperation({ summary: '조약 이미지 추가' })
-  async addImage(@Body() dto: AddTreatyImageBodyDto) {
+  async addImage(@Body() dto: AddTreatyImageBodyDto): Promise<any> {
     if (dto.isPrimary) {
       await this.prisma.treatyImage.updateMany({
         where: { treatyId: dto.treatyId, isPrimary: true },
@@ -528,7 +528,7 @@ export class TreatyController {
   @Delete('images/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '조약 이미지 삭제' })
-  async removeImage(@Param('id') id: string) {
+  async removeImage(@Param('id') id: string): Promise<any> {
     const exists = await this.prisma.treatyImage.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('이미지를 찾을 수 없습니다.')
     await this.prisma.treatyImage.delete({ where: { id } })

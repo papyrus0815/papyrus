@@ -44,7 +44,7 @@ export class HealthController {
   }
 
   @Get('ready')
-  @ApiOperation({ summary: '준비 상태 확인 (Kubernetes readiness probe)' })
+  @ApiOperation({ summary: '준비 상태 확인 (Kubernetes readiness probe): Promise<any>' })
   @ApiResponse({ status: 200, description: '서비스 준비 완료' })
   async ready(): Promise<{ status: string }> {
     const isReady = await this.healthService.isReady()

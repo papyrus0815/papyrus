@@ -37,6 +37,24 @@ function parseOptionalPositiveInt(
   return { ok: false, message: '조·항 번호 형식이 올바르지 않습니다.' }
 }
 
+export interface CreateLawBody {
+  name: string
+  summary?: string | null
+  articleNumber?: number | null
+  paragraphNumber?: number | null
+  lawTypeId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+}
+
+export interface UpdateLawBody {
+  name?: string
+  summary?: string | null
+  articleNumber?: number | null
+  paragraphNumber?: number | null
+  lawTypeId?: string | null
+}
+
 /**
  * 법령 최소 CRUD — 선거·정당과의 연결에서 `lawId` 선택용
  */
@@ -50,7 +68,7 @@ export class LawController {
   async list(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
-  ) {
+  ): Promise<any> {
     const where: Prisma.LawWhereInput = {}
     if (countryId) where.countryId = countryId
     if (historicalCountryId) where.historicalCountryId = historicalCountryId
@@ -67,16 +85,8 @@ export class LawController {
   @Post()
   async create(
     @Body()
-    body: {
-      name: string
-      summary?: string | null
-      articleNumber?: number | null
-      paragraphNumber?: number | null
-      lawTypeId?: string | null
-      countryId?: string | null
-      historicalCountryId?: string | null
-    },
-  ) {
+    body: CreateLawBody,
+  ): Promise<any> {
     const article = parseOptionalPositiveInt(body.articleNumber)
     if (!article.ok) throw new BadRequestException(article.message)
     const paragraph = parseOptionalPositiveInt(body.paragraphNumber)
@@ -107,14 +117,8 @@ export class LawController {
   async update(
     @Param('id') id: string,
     @Body()
-    body: Partial<{
-      name: string
-      summary: string | null
-      articleNumber: number | null
-      paragraphNumber: number | null
-      lawTypeId: string | null
-    }>,
-  ) {
+    body: UpdateLawBody,
+  ): Promise<any> {
     const existing = await this.prisma.law.findUnique({ where: { id } })
     if (!existing) throw new NotFoundException('법령을 찾을 수 없습니다.')
     const data: Prisma.LawUpdateInput = {}
@@ -155,7 +159,7 @@ export class LawController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string): Promise<any> {
     const existing = await this.prisma.law.findUnique({ where: { id } })
     if (!existing) throw new NotFoundException('법령을 찾을 수 없습니다.')
     await this.prisma.$transaction([

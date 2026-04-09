@@ -69,6 +69,14 @@ function toResponse(row: {
   }
 }
 
+export interface SetCountryEthnicitiesBody {
+  ethnicityIds: string[]
+}
+
+export interface SetHistoricalCountryEthnicitiesBody {
+  ethnicityIds: string[]
+}
+
 @ApiTags('ethnicities')
 @Controller('ethnicities')
 @UseGuards(AuthGuard('jwt'))
@@ -112,7 +120,7 @@ export class EthnicityController {
   @Put('country/:countryId')
   async setCountryEthnicities(
     @Param('countryId') countryId: string,
-    @Body() body: { ethnicityIds: string[] },
+    @Body() body: SetCountryEthnicitiesBody,
   ): Promise<EthnicityResponseDto[]> {
     const country = await this.prisma.country.findUnique({ where: { id: countryId } })
     if (!country) throw new NotFoundException(`Country with id ${countryId} not found`)
@@ -137,7 +145,7 @@ export class EthnicityController {
   @Put('historical-country/:historicalCountryId')
   async setHistoricalCountryEthnicities(
     @Param('historicalCountryId') historicalCountryId: string,
-    @Body() body: { ethnicityIds: string[] },
+    @Body() body: SetHistoricalCountryEthnicitiesBody,
   ): Promise<EthnicityResponseDto[]> {
     const hist = await this.prisma.historicalCountry.findUnique({
       where: { id: historicalCountryId },

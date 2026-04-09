@@ -17,6 +17,14 @@ import { PrismaService } from '@prisma/prisma.service'
 import { Request } from 'express'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
+export interface CreateCabinetPoliticalPartyBody {
+  partyId: string
+  role: string
+  notes?: string | null
+  provenance?: string
+  electionPartyResultId?: string | null
+}
+
 /**
  * 행정부(Cabinet)와 정당의 연정·여당 관계
  * 경로: /government-positions/cabinets/...
@@ -51,7 +59,7 @@ export class CabinetPoliticalPartyController {
   }
 
   @Get(':cabinetId/political-parties')
-  async list(@Param('cabinetId') cabinetId: string, @Req() req: Request) {
+  async list(@Param('cabinetId') cabinetId: string, @Req() req: Request): Promise<any> {
     await this.ensureCabinetAccess(cabinetId, req)
     const rows = await this.prisma.cabinetPoliticalParty.findMany({
       where: { cabinetId },
@@ -75,14 +83,8 @@ export class CabinetPoliticalPartyController {
     @Param('cabinetId') cabinetId: string,
     @Req() req: Request,
     @Body()
-    body: {
-      partyId: string
-      role: string
-      notes?: string | null
-      provenance?: string
-      electionPartyResultId?: string | null
-    },
-  ) {
+    body: CreateCabinetPoliticalPartyBody,
+  ): Promise<any> {
     await this.ensureCabinetAccess(cabinetId, req)
 
     const cabinet = await this.prisma.cabinet.findUnique({
@@ -168,7 +170,7 @@ export class CabinetPoliticalPartyController {
     @Param('cabinetId') cabinetId: string,
     @Param('linkId') linkId: string,
     @Req() req: Request,
-  ) {
+  ): Promise<any> {
     await this.ensureCabinetAccess(cabinetId, req)
     const existing = await this.prisma.cabinetPoliticalParty.findFirst({
       where: { id: linkId, cabinetId },

@@ -51,7 +51,7 @@ export class ServiceManager {
 
     // 프로젝트 루트 자동 감지
     this.projectRoot =
-      process.env.PAPYRUS_PROJECT_ROOT || '/Users/yendoo/dev/papyrus'
+      process.env.PAPYRUS_PROJECT_ROOT || '/Users/taeyoung/Desktop/project/papyrus'
     console.log('📁 프로젝트 루트:', this.projectRoot)
   }
 

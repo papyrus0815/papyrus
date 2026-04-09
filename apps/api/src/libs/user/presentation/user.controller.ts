@@ -37,7 +37,7 @@ export class UserController {
    * 현재 사용자 정보 조회
    */
   @Get('me')
-  // @UseGuards(JwtAuthGuard) // TODO: JWT Guard 추가
+  // @UseGuards(JwtAuthGuard): any // TODO: JWT Guard 추가
   async getMe(@Request() req: any): Promise<UserResponseDto> {
     // TODO: req.user.id에서 userId 가져오기
     const userId = req.user?.id || 'temp_user_id'
@@ -97,7 +97,7 @@ export class UserController {
    * 프로필 업데이트
    */
   @Put('me')
-  // @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard): any
   async updateProfile(@Request() req: any, @Body() dto: UpdateProfileDto): Promise<UserResponseDto> {
     const userId = req.user?.id || 'temp_user_id'
     const user = await this.userService.updateProfile(userId, dto)
@@ -108,7 +108,7 @@ export class UserController {
    * 비밀번호 변경
    */
   @Put('me/password')
-  // @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard): any
   async changePassword(@Request() req: any, @Body() dto: ChangePasswordDto): Promise<{ message: string }> {
     const userId = req.user?.id || 'temp_user_id'
     await this.userService.changePassword(userId, dto.oldPassword, dto.newPassword)
@@ -119,7 +119,7 @@ export class UserController {
    * 계정 비활성화 (탈퇴)
    */
   @Delete('me')
-  // @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard): any
   async deactivate(@Request() req: any): Promise<{ message: string }> {
     const userId = req.user?.id || 'temp_user_id'
     await this.userService.deactivate(userId)

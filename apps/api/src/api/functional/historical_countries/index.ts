@@ -12,8 +12,14 @@ import type { CreateHistoricalCountryDto } from "../../../libs/historical-countr
 import type { HistoricalCountryResponseDto } from "../../../libs/historical-country/presentation/dto/historical-country.response";
 import type { UpdateHistoricalCountryDto } from "../../../libs/historical-country/presentation/dto/update-historical-country.dto";
 
+export * as by_ids from "./by_ids/index";
+export * as transitions from "./transitions/index";
+export * as memberships from "./memberships/index";
+export * as relations from "./relations/index";
+
 /**
- * 역사적 국가 목록 조회 (본인 등록분만)
+ * 역사적 국가 목록 조회 (본인 등록분만).
+ * 쿼리: entityKind (STATE|REGIME|PERIOD), stateType (예: SHOGUNATE) 로 필터 가능.
  *
  * @returns 역사적 국가 목록
  * @tag historical-countries
@@ -25,11 +31,13 @@ import type { UpdateHistoricalCountryDto } from "../../../libs/historical-countr
  */
 export async function getAllHistoricalCountries(
   connection: IConnection,
+  entityKind?: string,
+  stateType?: string,
 ): Promise<getAllHistoricalCountries.Output> {
   return PlainFetcher.fetch(connection, {
     ...getAllHistoricalCountries.METADATA,
     template: getAllHistoricalCountries.METADATA.path,
-    path: getAllHistoricalCountries.path(),
+    path: getAllHistoricalCountries.path(entityKind, stateType),
   });
 }
 export namespace getAllHistoricalCountries {
@@ -46,7 +54,21 @@ export namespace getAllHistoricalCountries {
     status: 200,
   } as const;
 
-  export const path = () => "/historical-countries";
+  export const path = (entityKind?: string, stateType?: string) => {
+    const variables: URLSearchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries({
+      entityKind: entityKind,
+      stateType: stateType,
+    } as any))
+      if (undefined === value) continue;
+      else if (Array.isArray(value))
+        value.forEach((elem: any) => variables.append(key, String(elem)));
+      else variables.set(key, String(value));
+    const location: string = "/historical-countries";
+    return 0 === variables.size
+      ? location
+      : `${location}?${variables.toString()}`;
+  };
 }
 
 /**

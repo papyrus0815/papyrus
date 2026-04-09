@@ -55,7 +55,7 @@ export class CurationController {
   async findMany(
     @Query('page') page: string = '1',
     @Query('pageSize') pageSize: string = '20',
-    @Query('status') status?: string,
+    @Query('status') status: string = '',
     @Query('orderBy') orderBy: 'createdAt' | 'publishedAt' | 'viewCount' | 'likeCount' = 'publishedAt',
     @Query('order') order: 'asc' | 'desc' = 'desc',
   ): Promise<PaginatedCurationResponse> {

@@ -29,14 +29,19 @@ export async function seedAdministrationDepartmentCategories(
   console.log('\n📋 행정 부처 카테고리 시딩 시작...')
 
   for (const category of ADMINISTRATION_DEPARTMENT_CATEGORIES) {
-    await prisma.administrationDepartmentCategory.upsert({
+    const existing = await prisma.administrationDepartmentCategory.findFirst({
       where: { name: category.name },
-      update: { nameEn: category.nameEn },
-      create: {
-        name: category.name,
-        nameEn: category.nameEn,
-      },
     })
+    if (existing) {
+      await prisma.administrationDepartmentCategory.update({
+        where: { id: existing.id },
+        data: { nameEn: category.nameEn },
+      })
+    } else {
+      await prisma.administrationDepartmentCategory.create({
+        data: { name: category.name, nameEn: category.nameEn },
+      })
+    }
     console.log(`  ✅ 부처 카테고리: ${category.name}${category.nameEn ? ` (${category.nameEn})` : ''}`)
   }
 

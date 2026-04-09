@@ -41,6 +41,20 @@ const serializeBigInt = (obj: any): any => {
   return obj
 }
 
+export interface CreateCabinetBody {
+  headTenureId: string
+  name?: string | null
+}
+
+export interface UpdateCabinetBody {
+  name?: string | null
+}
+
+export interface LinkCabinetWithOtherBody {
+  otherCabinetId: string
+  eventId: string
+}
+
 /**
  * 정부 직위/왕위 관리 컨트롤러
  */
@@ -200,10 +214,7 @@ export class GovernmentPositionController {
   async createCabinet(
     @Req() req: Request,
     @Body()
-    body: {
-      headTenureId: string
-      name?: string | null
-    },
+    body: CreateCabinetBody,
   ): Promise<any> {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const cabinet = await this.personService.createCabinet(body, accountId)
@@ -270,7 +281,7 @@ export class GovernmentPositionController {
   async updateCabinet(
     @Req() req: Request,
     @Param('cabinetId') cabinetId: string,
-    @Body() body: { name?: string | null },
+    @Body() body: UpdateCabinetBody,
   ): Promise<any> {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const cabinet = await this.personService.updateCabinet(cabinetId, body, accountId)
@@ -325,7 +336,7 @@ export class GovernmentPositionController {
   async linkCabinetWithOther(
     @Req() req: Request,
     @Param('cabinetId') cabinetId: string,
-    @Body() body: { otherCabinetId: string; eventId: string },
+    @Body() body: LinkCabinetWithOtherBody,
   ): Promise<any> {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const other = body?.otherCabinetId?.trim()

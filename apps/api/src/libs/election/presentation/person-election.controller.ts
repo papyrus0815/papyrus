@@ -44,7 +44,7 @@ export class PersonElectionController {
 
   @Get(':personId/political-party-memberships')
   @ApiOperation({ summary: '인물 당원 소속 목록' })
-  async listMemberships(@Param('personId') personId: string, @Req() req: Request) {
+  async listMemberships(@Param('personId') personId: string, @Req() req: Request): Promise<any> {
     await this.ensurePersonOwned(personId, req)
     const rows = await this.prisma.politicalPartyMembership.findMany({
       where: { personId },
@@ -63,7 +63,7 @@ export class PersonElectionController {
     @Param('personId') personId: string,
     @Req() req: Request,
     @Body() body: CreatePartyMembershipDto,
-  ) {
+  ): Promise<any> {
     await this.ensurePersonOwned(personId, req)
 
     const startParsed = membershipInputToDate(
@@ -110,7 +110,7 @@ export class PersonElectionController {
     @Param('membershipId') membershipId: string,
     @Req() req: Request,
     @Body() body: UpdatePartyMembershipDto,
-  ) {
+  ): Promise<any> {
     await this.ensurePersonOwned(personId, req)
     const existing = await this.prisma.politicalPartyMembership.findFirst({
       where: { id: membershipId, personId },
@@ -175,7 +175,7 @@ export class PersonElectionController {
     @Param('personId') personId: string,
     @Param('membershipId') membershipId: string,
     @Req() req: Request,
-  ) {
+  ): Promise<any> {
     await this.ensurePersonOwned(personId, req)
     const existing = await this.prisma.politicalPartyMembership.findFirst({
       where: { id: membershipId, personId },
@@ -186,7 +186,7 @@ export class PersonElectionController {
 
   @Get(':personId/election-candidacies')
   @ApiOperation({ summary: '인물 선거 후보 이력' })
-  async listCandidacies(@Param('personId') personId: string, @Req() req: Request) {
+  async listCandidacies(@Param('personId') personId: string, @Req() req: Request): Promise<any> {
     await this.ensurePersonOwned(personId, req)
     const rows = await this.prisma.electionCandidacy.findMany({
       where: { personId },

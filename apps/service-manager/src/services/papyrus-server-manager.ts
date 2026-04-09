@@ -58,7 +58,7 @@ export class PapyrusServerManager {
   private webAdminProcess: ChildProcess | null = null
   private readonly webAdminPort: number = 3000
   private readonly apiPort: number = 8000
-  private projectRoot: string = '/Users/yendoo/dev/papyrus'
+  private projectRoot: string = '/Users/taeyoung/Desktop/project/papyrus'
   private apiLogBuffer: LineBuffer = new LineBuffer()
   private webAdminLogBuffer: LineBuffer = new LineBuffer()
 

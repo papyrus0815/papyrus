@@ -113,6 +113,16 @@ export type UpdateAdministrationDepartmentEventDto = {
   thumbnailUrl?: string | null
 }
 
+export interface CreateAdministrationDepartmentCategoryBody {
+  name: string
+  nameEn?: string | null
+}
+
+export interface UpdateAdministrationDepartmentCategoryBody {
+  name?: string
+  nameEn?: string | null
+}
+
 @ApiTags('administration-departments')
 @Controller('administration-departments')
 @UseGuards(AuthGuard('jwt'))
@@ -189,7 +199,7 @@ export class AdministrationDepartmentController {
    */
   @Post('categories')
   async createCategory(
-    @Body() body: { name: string; nameEn?: string | null },
+    @Body() body: CreateAdministrationDepartmentCategoryBody,
   ): Promise<AdministrationDepartmentCategoryDto> {
     const row = await this.prisma.administrationDepartmentCategory.create({
       data: { name: body.name, nameEn: body.nameEn ?? undefined },
@@ -203,7 +213,7 @@ export class AdministrationDepartmentController {
   @Patch('categories/:id')
   async updateCategory(
     @Param('id') id: string,
-    @Body() body: { name?: string; nameEn?: string | null },
+    @Body() body: UpdateAdministrationDepartmentCategoryBody,
   ): Promise<AdministrationDepartmentCategoryDto> {
     const row = await this.prisma.administrationDepartmentCategory.update({
       where: { id },

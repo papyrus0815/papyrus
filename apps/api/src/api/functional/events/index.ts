@@ -37,11 +37,12 @@ export async function getAllEvents(
   offset?: string,
   limit?: string,
   createdSinceDays?: string,
+  countryId?: string,
 ): Promise<getAllEvents.Output> {
   return PlainFetcher.fetch(connection, {
     ...getAllEvents.METADATA,
     template: getAllEvents.METADATA.path,
-    path: getAllEvents.path(offset, limit, createdSinceDays),
+    path: getAllEvents.path(offset, limit, createdSinceDays, countryId),
   });
 }
 export namespace getAllEvents {
@@ -62,12 +63,14 @@ export namespace getAllEvents {
     offset?: string,
     limit?: string,
     createdSinceDays?: string,
+    countryId?: string,
   ) => {
     const variables: URLSearchParams = new URLSearchParams();
     for (const [key, value] of Object.entries({
       offset: offset,
       limit: limit,
       createdSinceDays: createdSinceDays,
+      countryId: countryId,
     } as any))
       if (undefined === value) continue;
       else if (Array.isArray(value))

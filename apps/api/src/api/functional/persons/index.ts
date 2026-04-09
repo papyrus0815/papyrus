@@ -15,11 +15,17 @@ import type {
 } from "../../../libs/person/presentation/dto";
 
 export * as with_government_positions from "./with_government_positions/index";
+export * as dashboard from "./dashboard/index";
 export * as tenures from "./tenures/index";
+export * as human_relationships from "./human_relationships/index";
 export * as detail from "./detail/index";
 export * as careers from "./careers/index";
 export * as educations from "./educations/index";
 export * as awards from "./awards/index";
+export * as by_dynasty from "./by_dynasty/index";
+export * as by_country from "./by_country/index";
+export * as political_party_memberships from "./political_party_memberships/index";
+export * as election_candidacies from "./election_candidacies/index";
 
 /**
  * 인물 목록 조회 (본인 등록분만)

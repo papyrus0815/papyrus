@@ -16,11 +16,12 @@ import type { Primitive } from "typia";
  */
 export async function uploadImage(
   connection: IConnection,
+  category?: string,
 ): Promise<uploadImage.Output> {
   return PlainFetcher.fetch(connection, {
     ...uploadImage.METADATA,
     template: uploadImage.METADATA.path,
-    path: uploadImage.path(),
+    path: uploadImage.path(category),
   });
 }
 export namespace uploadImage {
@@ -43,5 +44,18 @@ export namespace uploadImage {
     status: 200,
   } as const;
 
-  export const path = () => "/upload/image";
+  export const path = (category?: string) => {
+    const variables: URLSearchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries({
+      category: category,
+    } as any))
+      if (undefined === value) continue;
+      else if (Array.isArray(value))
+        value.forEach((elem: any) => variables.append(key, String(elem)));
+      else variables.set(key, String(value));
+    const location: string = "/upload/image";
+    return 0 === variables.size
+      ? location
+      : `${location}?${variables.toString()}`;
+  };
 }

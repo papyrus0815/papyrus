@@ -76,27 +76,44 @@ export class CountryPrismaRepository implements CountryRepository {
         },
       })
 
-    return connections.map((conn) => ({
-      id: conn.historicalCountry.id,
-      name: conn.historicalCountry.name,
-      enName: conn.historicalCountry.enName,
-      thumbnailUrl: conn.historicalCountry.thumbnailUrl,
-      stateType: conn.historicalCountry.stateType,
-      startEra: conn.historicalCountry.startEra,
-      startYear: conn.historicalCountry.startYear,
-      startMonth: conn.historicalCountry.startMonth,
-      startDay: conn.historicalCountry.startDay,
-      endEra: conn.historicalCountry.endEra,
-      endYear: conn.historicalCountry.endYear,
-      endMonth: conn.historicalCountry.endMonth,
-      endDay: conn.historicalCountry.endDay,
-      latitude: conn.historicalCountry.latitude
-        ? Number(conn.historicalCountry.latitude)
-        : null,
-      longitude: conn.historicalCountry.longitude
-        ? Number(conn.historicalCountry.longitude)
-        : null,
-    }))
+    return connections
+      .map((conn) => ({
+        id: conn.historicalCountry.id,
+        name: conn.historicalCountry.name,
+        enName: conn.historicalCountry.enName,
+        thumbnailUrl: conn.historicalCountry.thumbnailUrl,
+        stateType: conn.historicalCountry.stateType,
+        startEra: conn.historicalCountry.startEra,
+        startYear: conn.historicalCountry.startYear,
+        startMonth: conn.historicalCountry.startMonth,
+        startDay: conn.historicalCountry.startDay,
+        endEra: conn.historicalCountry.endEra,
+        endYear: conn.historicalCountry.endYear,
+        endMonth: conn.historicalCountry.endMonth,
+        endDay: conn.historicalCountry.endDay,
+        latitude: conn.historicalCountry.latitude
+          ? Number(conn.historicalCountry.latitude)
+          : null,
+        longitude: conn.historicalCountry.longitude
+          ? Number(conn.historicalCountry.longitude)
+          : null,
+      }))
+      .sort((a, b) => {
+        // 시작일이 최근일수록 위로 (BC는 아래, AD는 최근 연도가 위).
+        // BC는 음수, AD는 양수로 환산해 비교.
+        const toNum = (era: string | null, year: number | null) => {
+          if (year == null) return Number.NEGATIVE_INFINITY
+          return era === 'BC' ? -year : year
+        }
+        const av = toNum(a.startEra, a.startYear)
+        const bv = toNum(b.startEra, b.startYear)
+        if (av !== bv) return bv - av
+        // 동률이면 월·일도 내림차순
+        return (
+          (b.startMonth ?? 0) - (a.startMonth ?? 0) ||
+          (b.startDay ?? 0) - (a.startDay ?? 0)
+        )
+      })
   }
 
   async create(data: Omit<Country, 'id'>): Promise<Country> {
@@ -161,8 +178,8 @@ export class CountryPrismaRepository implements CountryRepository {
   }
 
   private toEntity(data: any): Country {
-    const historicalCountries = data.historicalConnections?.map(
-      (conn: any) => ({
+    const historicalCountries = data.historicalConnections
+      ?.map((conn: any) => ({
         id: conn.historicalCountry.id,
         name: conn.historicalCountry.name,
         enName: conn.historicalCountry.enName,
@@ -182,8 +199,21 @@ export class CountryPrismaRepository implements CountryRepository {
         longitude: conn.historicalCountry.longitude
           ? Number(conn.historicalCountry.longitude)
           : null,
-      }),
-    )
+      }))
+      .sort((a: any, b: any) => {
+        // 시작일이 최근일수록 위로 (BC는 음수, AD는 양수로 환산해 비교)
+        const toNum = (era: string | null, year: number | null) => {
+          if (year == null) return Number.NEGATIVE_INFINITY
+          return era === 'BC' ? -year : year
+        }
+        const av = toNum(a.startEra, a.startYear)
+        const bv = toNum(b.startEra, b.startYear)
+        if (av !== bv) return bv - av
+        return (
+          (b.startMonth ?? 0) - (a.startMonth ?? 0) ||
+          (b.startDay ?? 0) - (a.startDay ?? 0)
+        )
+      })
 
     return new Country({
       id: data.id,

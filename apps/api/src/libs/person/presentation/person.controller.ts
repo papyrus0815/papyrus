@@ -46,6 +46,11 @@ import {
   UpdatePersonHumanRelationshipDto,
 } from './dto'
 
+export interface PersonCountByModernCountry {
+  countryId: string
+  count: number
+}
+
 /**
  * 인물 관리 컨트롤러 (개인 정보 플랫폼: 로그인한 계정 소유 데이터만)
  */
@@ -106,9 +111,7 @@ export class PersonController {
    * 대시보드용: 현대 국가별 실제 등록 인물 수 (주 국적·재임·소속 합집합, 국가 상세 인물 목록과 동일)
    */
   @Get('dashboard/person-counts-by-modern-country')
-  async getPersonCountsByModernCountry(): Promise<
-    Array<{ countryId: string; count: number }>
-  > {
+  async getPersonCountsByModernCountry(): Promise<PersonCountByModernCountry[]> {
     return this.personService.findModernCountryPersonCounts()
   }
 
@@ -135,7 +138,7 @@ export class PersonController {
    * 인물 간 인간관계 목록 (멘토·친밀도 등)
    */
   @Get(':id/human-relationships')
-  async getHumanRelationships(@Param('id') id: string, @Request() req: any) {
+  async getHumanRelationships(@Param('id') id: string, @Request() req: any): Promise<any> {
     const accountId = req.user?.id ?? req.user?.sub
     return this.personService.findHumanRelationships(id, accountId)
   }
@@ -148,7 +151,7 @@ export class PersonController {
     @Param('id') id: string,
     @Body() dto: CreatePersonHumanRelationshipDto,
     @Request() req: any,
-  ) {
+  ): Promise<any> {
     const accountId = req.user?.id ?? req.user?.sub
     return this.personService.createHumanRelationship(id, dto, accountId)
   }
@@ -159,7 +162,7 @@ export class PersonController {
     @Param('relationshipId') relationshipId: string,
     @Body() dto: UpdatePersonHumanRelationshipDto,
     @Request() req: any,
-  ) {
+  ): Promise<any> {
     const accountId = req.user?.id ?? req.user?.sub
     return this.personService.updateHumanRelationship(personId, relationshipId, dto, accountId)
   }

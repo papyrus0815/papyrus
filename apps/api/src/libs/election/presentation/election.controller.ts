@@ -65,6 +65,110 @@ const CLOSURE_KIND_VALUES = new Set<string>(
   Object.values(LegislatureTermClosureKind),
 )
 
+export interface UpdateElectionBody {
+  name?: string
+  shortName?: string | null
+  electionType?: string
+  status?: string
+  pollDate?: string
+  pollEndDate?: string | null
+  legislatureTermStart?: string | null
+  legislatureTermEnd?: string | null
+  resultingLegislatureClosureKind?: string | null
+  resultingLegislatureClosureDate?: string | null
+  resultingLegislatureDissolutionNotes?: string | null
+  voterTurnoutPercent?: string | number | null
+  totalSeats?: number | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  scopeAdministrativeDivisionId?: string | null
+  convocationOrdinal?: number | null
+  description?: string | null
+  eventId?: string | null
+}
+
+export interface CreateCandidacyBody {
+  personId?: string | null
+  partyId?: string | null
+  electoralDistrictId?: string | null
+  nominationType: string
+  ballotOrder?: number | null
+  listRank?: number | null
+  withdrawnDate?: string | null
+  notes?: string | null
+}
+
+export interface UpdateCandidacyBody {
+  personId?: string | null
+  partyId?: string | null
+  electoralDistrictId?: string | null
+  nominationType?: string
+  ballotOrder?: number | null
+  listRank?: number | null
+  withdrawnDate?: string | null
+  notes?: string | null
+}
+
+export interface UpsertCandidacyResultBody {
+  votes?: string | null
+  voteSharePercent?: string | null
+  resultRank?: number | null
+  elected?: boolean
+  seatsWon?: number | null
+  notes?: string | null
+}
+
+export interface CreateBallotOptionBody {
+  label: string
+  shortLabel?: string | null
+  sortOrder?: number
+  notes?: string | null
+}
+
+export interface UpdateBallotOptionBody {
+  label?: string
+  shortLabel?: string | null
+  sortOrder?: number
+  notes?: string | null
+}
+
+export interface UpsertBallotOptionResultBody {
+  votes?: string | null
+  voteSharePercent?: string | null
+  notes?: string | null
+}
+
+export interface UpsertPartyResultBody {
+  votes?: string | null
+  voteSharePercent?: string | null
+  seatsWon?: number | null
+  notes?: string | null
+}
+
+export interface CreateElectionBody {
+  name: string
+  shortName?: string | null
+  electionType: string
+  status?: string
+  pollDate: string
+  pollEndDate?: string | null
+  legislatureTermStart?: string | null
+  legislatureTermEnd?: string | null
+  resultingLegislatureClosureKind?: string | null
+  resultingLegislatureClosureDate?: string | null
+  resultingLegislatureDissolutionNotes?: string | null
+  voterTurnoutPercent?: string | number | null
+  totalSeats?: number | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  scopeAdministrativeDivisionId?: string | null
+  convocationOrdinal?: number | null
+  description?: string | null
+  /** 사건(Event) 정본 연결 */
+  eventId?: string | null
+  accountId?: string | null
+}
+
 @ApiTags('elections')
 @Controller('elections')
 @UseGuards(AuthGuard('jwt'))
@@ -79,7 +183,7 @@ export class ElectionController {
     @Query('hasPartyResults') hasPartyResults?: string,
     /** 콤마로 구분한 `ElectionType` 값 (예: `PRESIDENTIAL_OR_HEAD,PARLIAMENTARY_PROPORTIONAL`) */
     @Query('electionTypes') electionTypesRaw?: string,
-  ) {
+  ): Promise<any> {
     const where: Prisma.ElectionWhereInput = {}
     if (countryId) where.countryId = countryId
     if (historicalCountryId) where.historicalCountryId = historicalCountryId
@@ -117,7 +221,7 @@ export class ElectionController {
   }
 
   @Get(':electionId/candidacies')
-  async listCandidacies(@Param('electionId') electionId: string) {
+  async listCandidacies(@Param('electionId') electionId: string): Promise<any> {
     const rows = await this.prisma.electionCandidacy.findMany({
       where: { electionId },
       include: {
@@ -135,17 +239,8 @@ export class ElectionController {
   async createCandidacy(
     @Param('electionId') electionId: string,
     @Body()
-    body: {
-      personId?: string | null
-      partyId?: string | null
-      electoralDistrictId?: string | null
-      nominationType: string
-      ballotOrder?: number | null
-      listRank?: number | null
-      withdrawnDate?: string | null
-      notes?: string | null
-    },
-  ) {
+    body: CreateCandidacyBody,
+  ): Promise<any> {
     await this.ensureElection(electionId)
     const row = await this.prisma.electionCandidacy.create({
       data: {
@@ -174,17 +269,8 @@ export class ElectionController {
     @Param('electionId') electionId: string,
     @Param('candidacyId') candidacyId: string,
     @Body()
-    body: Partial<{
-      personId: string | null
-      partyId: string | null
-      electoralDistrictId: string | null
-      nominationType: string
-      ballotOrder: number | null
-      listRank: number | null
-      withdrawnDate: string | null
-      notes: string | null
-    }>,
-  ) {
+    body: UpdateCandidacyBody,
+  ): Promise<any> {
     const existing = await this.prisma.electionCandidacy.findFirst({
       where: { id: candidacyId, electionId },
     })
@@ -217,7 +303,7 @@ export class ElectionController {
   async deleteCandidacy(
     @Param('electionId') electionId: string,
     @Param('candidacyId') candidacyId: string,
-  ) {
+  ): Promise<any> {
     const existing = await this.prisma.electionCandidacy.findFirst({
       where: { id: candidacyId, electionId },
     })
@@ -230,15 +316,8 @@ export class ElectionController {
     @Param('electionId') electionId: string,
     @Param('candidacyId') candidacyId: string,
     @Body()
-    body: {
-      votes?: string | null
-      voteSharePercent?: string | null
-      resultRank?: number | null
-      elected?: boolean
-      seatsWon?: number | null
-      notes?: string | null
-    },
-  ) {
+    body: UpsertCandidacyResultBody,
+  ): Promise<any> {
     const existing = await this.prisma.electionCandidacy.findFirst({
       where: { id: candidacyId, electionId },
     })
@@ -279,7 +358,7 @@ export class ElectionController {
   }
 
   @Get(':electionId/ballot-options')
-  async listBallotOptions(@Param('electionId') electionId: string) {
+  async listBallotOptions(@Param('electionId') electionId: string): Promise<any> {
     await this.ensureElection(electionId)
     const rows = await this.prisma.electionBallotOption.findMany({
       where: { electionId },
@@ -293,13 +372,8 @@ export class ElectionController {
   async createBallotOption(
     @Param('electionId') electionId: string,
     @Body()
-    body: {
-      label: string
-      shortLabel?: string | null
-      sortOrder?: number
-      notes?: string | null
-    },
-  ) {
+    body: CreateBallotOptionBody,
+  ): Promise<any> {
     await this.ensureElection(electionId)
     const row = await this.prisma.electionBallotOption.create({
       data: {
@@ -319,13 +393,8 @@ export class ElectionController {
     @Param('electionId') electionId: string,
     @Param('optionId') optionId: string,
     @Body()
-    body: Partial<{
-      label: string
-      shortLabel: string | null
-      sortOrder: number
-      notes: string | null
-    }>,
-  ) {
+    body: UpdateBallotOptionBody,
+  ): Promise<any> {
     const existing = await this.prisma.electionBallotOption.findFirst({
       where: { id: optionId, electionId },
     })
@@ -347,7 +416,7 @@ export class ElectionController {
   async deleteBallotOption(
     @Param('electionId') electionId: string,
     @Param('optionId') optionId: string,
-  ) {
+  ): Promise<any> {
     const existing = await this.prisma.electionBallotOption.findFirst({
       where: { id: optionId, electionId },
     })
@@ -360,12 +429,8 @@ export class ElectionController {
     @Param('electionId') electionId: string,
     @Param('optionId') optionId: string,
     @Body()
-    body: {
-      votes?: string | null
-      voteSharePercent?: string | null
-      notes?: string | null
-    },
-  ) {
+    body: UpsertBallotOptionResultBody,
+  ): Promise<any> {
     const opt = await this.prisma.electionBallotOption.findFirst({
       where: { id: optionId, electionId },
     })
@@ -403,13 +468,8 @@ export class ElectionController {
     @Param('electionId') electionId: string,
     @Param('partyId') partyId: string,
     @Body()
-    body: {
-      votes?: string | null
-      voteSharePercent?: string | null
-      seatsWon?: number | null
-      notes?: string | null
-    },
-  ) {
+    body: UpsertPartyResultBody,
+  ): Promise<any> {
     await this.ensureElection(electionId)
     const party = await this.prisma.politicalParty.findUnique({ where: { id: partyId } })
     if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
@@ -461,7 +521,7 @@ export class ElectionController {
   async deletePartyResult(
     @Param('electionId') electionId: string,
     @Param('partyId') partyId: string,
-  ) {
+  ): Promise<any> {
     await this.ensureElection(electionId)
     try {
       await this.prisma.electionPartyResult.delete({
@@ -475,7 +535,7 @@ export class ElectionController {
   }
 
   @Get(':id')
-  async getById(@Param('id') id: string) {
+  async getById(@Param('id') id: string): Promise<any> {
     const row = await this.prisma.election.findUnique({
       where: { id },
       include: electionInclude,
@@ -525,30 +585,8 @@ export class ElectionController {
   @Post()
   async create(
     @Body()
-    body: {
-      name: string
-      shortName?: string | null
-      electionType: string
-      status?: string
-      pollDate: string
-      pollEndDate?: string | null
-      legislatureTermStart?: string | null
-      legislatureTermEnd?: string | null
-      resultingLegislatureClosureKind?: string | null
-      resultingLegislatureClosureDate?: string | null
-      resultingLegislatureDissolutionNotes?: string | null
-      voterTurnoutPercent?: string | number | null
-      totalSeats?: number | null
-      countryId?: string | null
-      historicalCountryId?: string | null
-      scopeAdministrativeDivisionId?: string | null
-      convocationOrdinal?: number | null
-      description?: string | null
-      /** 사건(Event) 정본 연결 */
-      eventId?: string | null
-      accountId?: string | null
-    },
-  ) {
+    body: CreateElectionBody,
+  ): Promise<any> {
     const row = await this.prisma.election.create({
       data: {
         name: body.name,
@@ -596,28 +634,8 @@ export class ElectionController {
   async update(
     @Param('id') id: string,
     @Body()
-    body: Partial<{
-      name: string
-      shortName: string | null
-      electionType: string
-      status: string
-      pollDate: string
-      pollEndDate: string | null
-      legislatureTermStart: string | null
-      legislatureTermEnd: string | null
-      resultingLegislatureClosureKind: string | null
-      resultingLegislatureClosureDate: string | null
-      resultingLegislatureDissolutionNotes: string | null
-      voterTurnoutPercent: string | number | null
-      totalSeats: number | null
-      countryId: string | null
-      historicalCountryId: string | null
-      scopeAdministrativeDivisionId: string | null
-      convocationOrdinal: number | null
-      description: string | null
-      eventId: string | null
-    }>,
-  ) {
+    body: UpdateElectionBody,
+  ): Promise<any> {
     const data: Record<string, unknown> = {}
     if (body.name !== undefined) data.name = body.name
     if (body.shortName !== undefined) data.shortName = body.shortName
@@ -671,7 +689,7 @@ export class ElectionController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string): Promise<any> {
     await this.prisma.election.delete({ where: { id } })
   }
 

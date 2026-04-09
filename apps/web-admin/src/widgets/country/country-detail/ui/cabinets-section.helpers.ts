@@ -304,8 +304,9 @@ export function territoryKeyFromHead(
     (typeof raw.country_id === 'string' ? raw.country_id : null) ??
     head.country?.id ??
     null
-  if (hid) return `h:${hid}`
+  // 같은 현대 국가 내에서는 모든 행정부가 동일 색이어야 함 → 현대 국가 우선.
   if (cid) return `c:${cid}`
+  if (hid) return `h:${hid}`
   const name =
     head.historicalCountry?.name?.trim() || head.country?.name?.trim() || null
   if (name) return `n:${name}`
@@ -336,10 +337,8 @@ export function territoryKeyFromCabinet(
     | null
     | undefined,
 ): string {
-  const base = territoryKeyFromHead(cabinet?.headTenure)
-  const extra = cabinet?.name?.trim()
-  if (extra) return `${base}|name:${extra}`
-  return base
+  // 동일 국가는 동일 색이어야 하므로 행정부 명칭으로 분기하지 않음.
+  return territoryKeyFromHead(cabinet?.headTenure)
 }
 
 /**

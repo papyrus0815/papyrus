@@ -22,6 +22,44 @@ import {
 } from '../domain/party-top-leaders.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
+export interface AddPartyLawBody {
+  lawId: string
+  relevanceNote?: string | null
+  sortOrder?: number
+}
+
+export interface CreatePoliticalPartyBody {
+  name: string
+  shortName?: string | null
+  localName?: string | null
+  ideology?: string | null
+  position?: string | null
+  description?: string | null
+  foundedDate?: string | null
+  dissolvedDate?: string | null
+  logoUrl?: string | null
+  headquartersCityId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  brandColor?: string | null
+}
+
+export interface UpdatePoliticalPartyBody {
+  name?: string
+  shortName?: string | null
+  localName?: string | null
+  ideology?: string | null
+  position?: string | null
+  description?: string | null
+  foundedDate?: string | null
+  dissolvedDate?: string | null
+  logoUrl?: string | null
+  headquartersCityId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  brandColor?: string | null
+}
+
 /**
  * 정당 CRUD (선거·당원 UI에서 선택용)
  */
@@ -35,7 +73,7 @@ export class PoliticalPartyController {
   async list(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
-  ) {
+  ): Promise<any> {
     const where: Record<string, unknown> = {}
     if (countryId) where.countryId = countryId
     if (historicalCountryId) where.historicalCountryId = historicalCountryId
@@ -48,7 +86,7 @@ export class PoliticalPartyController {
 
   /** `:id`보다 먼저 등록 — `lineage`가 id로 오인되지 않도록 */
   @Get(':id/lineage')
-  async getLineage(@Param('id') id: string) {
+  async getLineage(@Param('id') id: string): Promise<any> {
     const row = await this.prisma.politicalParty.findUnique({ where: { id } })
     if (!row) throw new NotFoundException('정당을 찾을 수 없습니다.')
     const [outgoing, incoming] = await Promise.all([
@@ -81,7 +119,7 @@ export class PoliticalPartyController {
    * 이 정당과 연결된 국가원수·정부수반 재임 (당선 선거 정당 또는 재임 기간과 겹치는 당원 소속)
    */
   @Get(':id/top-leaders')
-  async listTopLeaders(@Param('id') id: string) {
+  async listTopLeaders(@Param('id') id: string): Promise<any> {
     const party = await this.prisma.politicalParty.findUnique({
       where: { id },
       select: { id: true, countryId: true, historicalCountryId: true },
@@ -197,7 +235,7 @@ export class PoliticalPartyController {
   }
 
   @Get(':id/laws')
-  async listPartyLaws(@Param('id') id: string) {
+  async listPartyLaws(@Param('id') id: string): Promise<any> {
     await this.ensureParty(id)
     const rows = await this.prisma.politicalPartyLaw.findMany({
       where: { partyId: id },
@@ -221,12 +259,8 @@ export class PoliticalPartyController {
   async addPartyLaw(
     @Param('id') id: string,
     @Body()
-    body: {
-      lawId: string
-      relevanceNote?: string | null
-      sortOrder?: number
-    },
-  ) {
+    body: AddPartyLawBody,
+  ): Promise<any> {
     const party = await this.prisma.politicalParty.findUnique({
       where: { id },
       select: { id: true, countryId: true, historicalCountryId: true },
@@ -261,7 +295,7 @@ export class PoliticalPartyController {
   async removePartyLaw(
     @Param('id') id: string,
     @Param('linkId') linkId: string,
-  ) {
+  ): Promise<any> {
     const existing = await this.prisma.politicalPartyLaw.findFirst({
       where: { id: linkId, partyId: id },
     })
@@ -270,7 +304,7 @@ export class PoliticalPartyController {
   }
 
   @Get(':id')
-  async getById(@Param('id') id: string) {
+  async getById(@Param('id') id: string): Promise<any> {
     const row = await this.prisma.politicalParty.findUnique({ where: { id } })
     if (!row) throw new NotFoundException('정당을 찾을 수 없습니다.')
     return serializeElectionBigInt(row)
@@ -279,22 +313,8 @@ export class PoliticalPartyController {
   @Post()
   async create(
     @Body()
-    body: {
-      name: string
-      shortName?: string | null
-      localName?: string | null
-      ideology?: string | null
-      position?: string | null
-      description?: string | null
-      foundedDate?: string | null
-      dissolvedDate?: string | null
-      logoUrl?: string | null
-      headquartersCityId?: string | null
-      countryId?: string | null
-      historicalCountryId?: string | null
-      brandColor?: string | null
-    },
-  ) {
+    body: CreatePoliticalPartyBody,
+  ): Promise<any> {
     const row = await this.prisma.politicalParty.create({
       data: {
         name: body.name,
@@ -319,22 +339,8 @@ export class PoliticalPartyController {
   async update(
     @Param('id') id: string,
     @Body()
-    body: Partial<{
-      name: string
-      shortName: string | null
-      localName: string | null
-      ideology: string | null
-      position: string | null
-      description: string | null
-      foundedDate: string | null
-      dissolvedDate: string | null
-      logoUrl: string | null
-      headquartersCityId: string | null
-      countryId: string | null
-      historicalCountryId: string | null
-      brandColor: string | null
-    }>,
-  ) {
+    body: UpdatePoliticalPartyBody,
+  ): Promise<any> {
     const data: Record<string, unknown> = {}
     if (body.name !== undefined) data.name = body.name
     if (body.shortName !== undefined) data.shortName = body.shortName
@@ -360,7 +366,7 @@ export class PoliticalPartyController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string): Promise<any> {
     await this.prisma.politicalParty.delete({ where: { id } })
   }
 
