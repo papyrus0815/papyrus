@@ -180,7 +180,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       'denominationId',
       'fatherId',
       'motherId',
-      'jobId',
     ] as const
     const out = { ...data } as T & Record<string, unknown>
     for (const key of fkKeys) {
@@ -191,17 +190,22 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 응답용 출생 국가 ID: Person.countryId가 있으면 그대로, 없으면 BIRTH_PLACE 소속의 historicalCountryId 또는 countryId 반환
+   * 응답용 출생 국가 ID: CITIZENSHIP priority=0 소속 우선, 없으면 person.countryId, 마지막으로 BIRTH_PLACE 소속
    */
   private getEffectiveBirthCountryId(person: any): string | null {
+    const affiliations = person.countryAffiliations as Array<{ affiliationType: string; priority?: number | null; historicalCountryId?: string | null; countryId?: string | null }> | undefined
+    const main = affiliations
+      ?.filter((a) => String(a.affiliationType) === 'CITIZENSHIP')
+      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))[0]
+    if (main?.historicalCountryId) return main.historicalCountryId
+    if (main?.countryId) return main.countryId
     if (person.countryId) return person.countryId
-    const affiliations = person.countryAffiliations as Array<{ affiliationType: string; historicalCountryId?: string | null; countryId?: string | null }> | undefined
     const birth = affiliations?.find((a) => String(a.affiliationType) === 'BIRTH_PLACE')
     return birth?.historicalCountryId ?? birth?.countryId ?? null
   }
 
   /**
-   * 이름 표시 순서용 country 블록: Person.country(FK) 우선, 없으면 출생 소속의 현대 국가 또는 역사→현대 연결.
+   * 이름 표시 순서용 country 블록: CITIZENSHIP priority=0 소속 우선, 없으면 person.country(FK), 마지막으로 BIRTH_PLACE 소속.
    */
   private resolveCountryBlockForName(person: any): {
     id: string
@@ -210,6 +214,35 @@ export class PersonPrismaRepository implements IPersonRepository {
     isoCode: string | null
     defaultNameDisplayOrder: string | null
   } | null {
+    type AffiliationEntry = {
+      affiliationType: string
+      priority?: number | null
+      country?: { id: string; name: string; flagEmoji: string | null; isoCode: string | null; defaultNameDisplayOrder: string | null } | null
+      historicalCountry?: { id: string; name: string; modernConnections?: Array<{ modernCountry: { id: string; name: string; flagEmoji: string | null; isoCode: string | null; defaultNameDisplayOrder: string | null } }> } | null
+    }
+    const affiliations = person.countryAffiliations as AffiliationEntry[] | undefined
+
+    // 1. CITIZENSHIP priority=0 소속 우선
+    const main = affiliations
+      ?.filter((a) => String(a.affiliationType) === 'CITIZENSHIP')
+      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))[0]
+    if (main?.historicalCountry != null) {
+      const hc = main.historicalCountry
+      const mc = hc.modernConnections?.[0]?.modernCountry
+      return {
+        id: hc.id,
+        name: hc.name,
+        flagEmoji: mc?.flagEmoji ?? null,
+        isoCode: mc?.isoCode ?? null,
+        defaultNameDisplayOrder: mc?.defaultNameDisplayOrder ?? null,
+      }
+    }
+    if (main?.country != null) {
+      const c = main.country
+      return { id: c.id, name: c.name, flagEmoji: c.flagEmoji ?? null, isoCode: c.isoCode ?? null, defaultNameDisplayOrder: c.defaultNameDisplayOrder ?? null }
+    }
+
+    // 2. person.country FK (현대 국가)
     if (person.country != null) {
       return {
         id: person.country.id,
@@ -219,52 +252,16 @@ export class PersonPrismaRepository implements IPersonRepository {
         defaultNameDisplayOrder: person.country.defaultNameDisplayOrder ?? null,
       }
     }
-    const affiliations = person.countryAffiliations as
-      | Array<{
-          affiliationType: string
-          country?: {
-            id: string
-            name: string
-            flagEmoji: string | null
-            isoCode: string | null
-            defaultNameDisplayOrder: string | null
-          } | null
-          historicalCountry?: {
-            modernConnections?: Array<{
-              modernCountry: {
-                id: string
-                name: string
-                flagEmoji: string | null
-                isoCode: string | null
-                defaultNameDisplayOrder: string | null
-              }
-            }>
-          } | null
-        }>
-      | undefined
-    const birth = affiliations?.find(
-      (a) => String(a.affiliationType) === 'BIRTH_PLACE',
-    )
+
+    // 3. BIRTH_PLACE 소속
+    const birth = affiliations?.find((a) => String(a.affiliationType) === 'BIRTH_PLACE')
     if (birth?.country != null) {
       const c = birth.country
-      return {
-        id: c.id,
-        name: c.name,
-        flagEmoji: c.flagEmoji ?? null,
-        isoCode: c.isoCode ?? null,
-        defaultNameDisplayOrder: c.defaultNameDisplayOrder ?? null,
-      }
+      return { id: c.id, name: c.name, flagEmoji: c.flagEmoji ?? null, isoCode: c.isoCode ?? null, defaultNameDisplayOrder: c.defaultNameDisplayOrder ?? null }
     }
-    const mc =
-      birth?.historicalCountry?.modernConnections?.[0]?.modernCountry
+    const mc = birth?.historicalCountry?.modernConnections?.[0]?.modernCountry
     if (mc != null) {
-      return {
-        id: mc.id,
-        name: mc.name,
-        flagEmoji: mc.flagEmoji ?? null,
-        isoCode: mc.isoCode ?? null,
-        defaultNameDisplayOrder: mc.defaultNameDisplayOrder ?? null,
-      }
+      return { id: mc.id, name: mc.name, flagEmoji: mc.flagEmoji ?? null, isoCode: mc.isoCode ?? null, defaultNameDisplayOrder: mc.defaultNameDisplayOrder ?? null }
     }
     return null
   }
@@ -311,10 +308,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       biography: person.biography,
       profileImageUrl: person.profileImageUrl,
       // 왕/군주 관련 필드
-      regnalName: person.regnalName,
+      regnalName: person.regnalName || (() => {
+        const notes = (person as any).sovereignReigns?.[0]?.notes as string | null | undefined
+        if (!notes) return null
+        const m = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || notes.match(/왕명\s*:\s*(.+)/i)
+        return m ? m[1].trim() : null
+      })() || null,
       templeName: person.templeName,
       posthumousName: person.posthumousName,
-      preEnthronementTitle: person.preEnthronementTitle ?? null,
       // 관계
       dynastyId: person.dynastyId,
       dynasty:
@@ -322,14 +323,11 @@ export class PersonPrismaRepository implements IPersonRepository {
           ? { id: person.dynasty.id, name: person.dynasty.name }
           : null,
       religionId: person.religionId,
+      religion: person.religion != null ? { id: person.religion.id, name: person.religion.name } : null,
       denominationId: person.denominationId,
+      denomination: person.denomination != null ? { id: person.denomination.id, name: person.denomination.name } : null,
       fatherId: person.fatherId,
       motherId: person.motherId,
-      jobId: person.jobId,
-      job:
-        person.job != null
-          ? { id: person.job.id, title: person.job.title }
-          : null,
       countryId: this.getEffectiveBirthCountryId(person),
       country: this.resolveCountryBlockForName(person),
       birthCityId: person.birthCityId ?? null,
@@ -613,6 +611,11 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
           orderBy: { startDate: 'desc' },
         },
+        sovereignReigns: {
+          select: { notes: true },
+          take: 1,
+          orderBy: { startDate: 'desc' as const },
+        },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))
@@ -665,6 +668,11 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
           orderBy: { startDate: 'desc' },
         },
+        sovereignReigns: {
+          select: { notes: true },
+          take: 1,
+          orderBy: { startDate: 'desc' as const },
+        },
       },
     })
     return persons.map((p) => this.mapToPersonResponse(p))
@@ -716,6 +724,11 @@ export class PersonPrismaRepository implements IPersonRepository {
             historicalCountry: { select: { id: true, name: true } },
           },
           orderBy: { startDate: 'desc' },
+        },
+        sovereignReigns: {
+          select: { notes: true },
+          take: 1,
+          orderBy: { startDate: 'desc' as const },
         },
       },
     })
@@ -793,6 +806,11 @@ export class PersonPrismaRepository implements IPersonRepository {
             historicalCountry: { select: { id: true, name: true } },
           },
           orderBy: { startDate: 'desc' },
+        },
+        sovereignReigns: {
+          select: { notes: true },
+          take: 1,
+          orderBy: { startDate: 'desc' as const },
         },
       },
     })
@@ -954,61 +972,34 @@ export class PersonPrismaRepository implements IPersonRepository {
    * ID로 인물 조회
    */
   async findById(id: string, accountId?: string): Promise<PersonResponseDto | null> {
+    const personInclude = {
+      countryAffiliations: {
+        include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+      },
+      country: {
+        select: {
+          id: true,
+          name: true,
+          flagEmoji: true,
+          isoCode: true,
+          defaultNameDisplayOrder: true,
+        },
+      },
+      dynasty: { select: { id: true, name: true } },
+      religion: { select: { id: true, name: true } },
+      denomination: { select: { id: true, name: true } },
+      GovernmentTenures: {
+        include: {
+          positionDefinition: true,
+          country: true,
+          historicalCountry: true,
+        },
+        orderBy: { startDate: 'desc' as const },
+      },
+    }
     const person = accountId != null
-      ? await this.prisma.person.findFirst({
-          where: { id, accountId },
-          include: {
-            countryAffiliations: {
-              include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
-            },
-            country: {
-              select: {
-                id: true,
-                name: true,
-                flagEmoji: true,
-                isoCode: true,
-                defaultNameDisplayOrder: true,
-              },
-            },
-            dynasty: { select: { id: true, name: true } },
-            job: { select: { id: true, title: true } },
-            GovernmentTenures: {
-              include: {
-                positionDefinition: true,
-                country: true,
-                historicalCountry: true,
-              },
-              orderBy: { startDate: 'desc' },
-            },
-          },
-        })
-      : await this.prisma.person.findUnique({
-          where: { id },
-          include: {
-            countryAffiliations: {
-              include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
-            },
-            country: {
-              select: {
-                id: true,
-                name: true,
-                flagEmoji: true,
-                isoCode: true,
-                defaultNameDisplayOrder: true,
-              },
-            },
-            dynasty: { select: { id: true, name: true } },
-            job: { select: { id: true, title: true } },
-            GovernmentTenures: {
-              include: {
-                positionDefinition: true,
-                country: true,
-                historicalCountry: true,
-              },
-              orderBy: { startDate: 'desc' },
-            },
-          },
-        })
+      ? await this.prisma.person.findFirst({ where: { id, accountId }, include: personInclude })
+      : await this.prisma.person.findUnique({ where: { id }, include: personInclude })
     return person ? this.mapToPersonResponse(person) : null
   }
 
@@ -1029,6 +1020,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             name: true,
             surname: true,
             nameDisplayOrder: true,
+            regnalName: true,
+            gender: true,
+            dynasty: { select: { id: true, name: true } },
             birthDate: true,
             deathDate: true,
             profileImageUrl: true,
@@ -1036,6 +1030,32 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: { url: true, priority: true },
               orderBy: [{ priority: Prisma.SortOrder.asc }],
               take: 1,
+            },
+            // 친조부모
+            father: {
+              select: {
+                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                gender: true, dynasty: { select: { id: true, name: true } },
+                birthDate: true, deathDate: true, profileImageUrl: true,
+                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
+              },
+            },
+            mother: {
+              select: {
+                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                gender: true, dynasty: { select: { id: true, name: true } },
+                birthDate: true, deathDate: true, profileImageUrl: true,
+                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
+              },
+            },
+            // 형제자매 (부의 자녀)
+            childrenFromFather: {
+              select: {
+                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                gender: true, dynasty: { select: { id: true, name: true } },
+                birthDate: true, deathDate: true, profileImageUrl: true,
+                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
+              },
             },
           },
         },
@@ -1045,6 +1065,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             name: true,
             surname: true,
             nameDisplayOrder: true,
+            regnalName: true,
+            gender: true,
+            dynasty: { select: { id: true, name: true } },
             birthDate: true,
             deathDate: true,
             profileImageUrl: true,
@@ -1052,6 +1075,32 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: { url: true, priority: true },
               orderBy: [{ priority: Prisma.SortOrder.asc }],
               take: 1,
+            },
+            // 외조부모
+            father: {
+              select: {
+                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                gender: true, dynasty: { select: { id: true, name: true } },
+                birthDate: true, deathDate: true, profileImageUrl: true,
+                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
+              },
+            },
+            mother: {
+              select: {
+                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                gender: true, dynasty: { select: { id: true, name: true } },
+                birthDate: true, deathDate: true, profileImageUrl: true,
+                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
+              },
+            },
+            // 형제자매 (모의 자녀)
+            childrenFromMother: {
+              select: {
+                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                gender: true, dynasty: { select: { id: true, name: true } },
+                birthDate: true, deathDate: true, profileImageUrl: true,
+                profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
+              },
             },
           },
         },
@@ -1061,6 +1110,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             name: true,
             surname: true,
             nameDisplayOrder: true,
+            regnalName: true,
+            gender: true,
+            dynasty: { select: { id: true, name: true } },
             birthDate: true,
             deathDate: true,
             profileImageUrl: true,
@@ -1068,6 +1120,33 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: { url: true, priority: true },
               orderBy: [{ priority: Prisma.SortOrder.asc }],
               take: 1,
+            },
+            // 자녀의 배우자 (가계도에 표시)
+            spouseRelationsAsPerson: {
+              select: {
+                id: true,
+                marriageStartDate: true,
+                marriageEndDate: true,
+                spouse: {
+                  select: {
+                    id: true,
+                    name: true,
+                    surname: true,
+                    nameDisplayOrder: true,
+                    regnalName: true,
+                    gender: true,
+                    dynasty: { select: { id: true, name: true } },
+                    birthDate: true,
+                    deathDate: true,
+                    profileImageUrl: true,
+                    profileImages: {
+                      select: { url: true, priority: true },
+                      orderBy: [{ priority: Prisma.SortOrder.asc }],
+                      take: 1,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -1077,6 +1156,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             name: true,
             surname: true,
             nameDisplayOrder: true,
+            regnalName: true,
+            gender: true,
+            dynasty: { select: { id: true, name: true } },
             birthDate: true,
             deathDate: true,
             profileImageUrl: true,
@@ -1084,6 +1166,33 @@ export class PersonPrismaRepository implements IPersonRepository {
               select: { url: true, priority: true },
               orderBy: [{ priority: Prisma.SortOrder.asc }],
               take: 1,
+            },
+            // 자녀의 배우자 (가계도에 표시)
+            spouseRelationsAsPerson: {
+              select: {
+                id: true,
+                marriageStartDate: true,
+                marriageEndDate: true,
+                spouse: {
+                  select: {
+                    id: true,
+                    name: true,
+                    surname: true,
+                    nameDisplayOrder: true,
+                    regnalName: true,
+                    gender: true,
+                    dynasty: { select: { id: true, name: true } },
+                    birthDate: true,
+                    deathDate: true,
+                    profileImageUrl: true,
+                    profileImages: {
+                      select: { url: true, priority: true },
+                      orderBy: [{ priority: Prisma.SortOrder.asc }],
+                      take: 1,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -1099,6 +1208,37 @@ export class PersonPrismaRepository implements IPersonRepository {
                 name: true,
                 surname: true,
                 nameDisplayOrder: true,
+                regnalName: true,
+                gender: true,
+                dynasty: { select: { id: true, name: true } },
+                birthDate: true,
+                deathDate: true,
+                profileImageUrl: true,
+                profileImages: {
+                  select: { url: true, priority: true },
+                  orderBy: [{ priority: Prisma.SortOrder.asc }],
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+        // 역방향 배우자 관계 (현재 인물이 spouseId 쪽에 등록된 경우)
+        spouseRelationsAsSpouse: {
+          select: {
+            id: true,
+            marriageStartDate: true,
+            marriageEndDate: true,
+            note: true,
+            person: {
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+                nameDisplayOrder: true,
+                regnalName: true,
+                gender: true,
+                dynasty: { select: { id: true, name: true } },
                 birthDate: true,
                 deathDate: true,
                 profileImageUrl: true,
@@ -1320,7 +1460,25 @@ export class PersonPrismaRepository implements IPersonRepository {
           orderBy: {
             startDate: Prisma.SortOrder.desc,
           },
-        }
+        },
+        sovereignReigns: {
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            notes: true,
+            regnalNumber: true,
+            positionDefinition: {
+              select: { id: true, title: true },
+            },
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        countryAffiliations: {
+          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+        },
     }
     return accountId != null
       ? this.prisma.person.findFirst({ where, include })
@@ -1330,31 +1488,27 @@ export class PersonPrismaRepository implements IPersonRepository {
   /**
    * 인물 생성
    * FK 필드 정리 + countryId는 Country에 있을 때만 Person에 저장.
-   * 역사적 국가 ID면 Person.countryId는 넣지 않고, PersonCountryAffiliation(BIRTH_PLACE)에만 저장.
+   * 역사적 국가 ID면 Person.countryId는 넣지 않고, PersonCountryAffiliation(CITIZENSHIP, priority=0)에 저장.
    */
   async create(data: CreatePersonData): Promise<PersonResponseDto> {
     const sanitized = this.sanitizePersonFkFields(data) as CreatePersonData & Record<string, unknown>
-    const birthId = sanitized.countryId
-    let birthHistoricalCountryId: string | null = null
 
-    if (birthId) {
+    let mainHistoricalId: string | undefined
+
+    if (sanitized.countryId) {
       const inCountry = await this.prisma.country.findUnique({
-        where: { id: birthId },
+        where: { id: sanitized.countryId as string },
         select: { id: true },
       })
-      if (inCountry) {
-        // 현대 국가 → Person.countryId 유지
-      } else {
+      if (!inCountry) {
         const inHistorical = await this.prisma.historicalCountry.findUnique({
-          where: { id: birthId },
+          where: { id: sanitized.countryId as string },
           select: { id: true },
         })
         if (inHistorical) {
-          birthHistoricalCountryId = birthId
-          delete sanitized.countryId
-        } else {
-          delete sanitized.countryId
+          mainHistoricalId = sanitized.countryId as string
         }
+        delete sanitized.countryId
       }
     }
 
@@ -1377,14 +1531,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       })
     }
 
-    if (birthHistoricalCountryId) {
+    // 역사 국가인 경우 CITIZENSHIP priority=0 소속 생성
+    if (mainHistoricalId) {
       await this.prisma.personCountryAffiliation.create({
         data: {
           personId: person.id,
-          historicalCountryId: birthHistoricalCountryId,
-          countryId: null,
-          affiliationType: 'BIRTH_PLACE',
+          affiliationType: 'CITIZENSHIP' as any,
           priority: 0,
+          historicalCountryId: mainHistoricalId,
         },
       })
     }
@@ -1407,71 +1561,52 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
       },
     })
-    return created ? this.mapToPersonResponse(created) : this.mapToPersonResponse(person)
+    if (!created) throw new Error(`Created person ${person.id} not found on re-fetch`)
+    return this.mapToPersonResponse(created)
   }
 
   /**
    * 인물 수정
    * FK 필드 정리 + countryId는 Country에 있을 때만 반영.
-   * 역사적 국가면 Person.countryId는 비우고, BIRTH_PLACE만 PersonCountryAffiliation에 반영.
+   * 역사적 국가면 Person.countryId는 비우고, CITIZENSHIP priority=0 PersonCountryAffiliation에 반영.
    */
   async update(id: string, data: UpdatePersonData): Promise<PersonResponseDto> {
     const sanitized = this.sanitizePersonFkFields(data) as UpdatePersonData & Record<string, unknown>
-    const birthIdInput = data.countryId
-    const birthId = sanitized.countryId
-    let birthHistoricalCountryId: string | null = null
 
-    if (birthId) {
+    // undefined = 변경 없음, null = 명시적 삭제, string = 역사 국가 ID
+    let mainHistoricalId: string | null | undefined
+
+    if (sanitized.countryId) {
       const inCountry = await this.prisma.country.findUnique({
-        where: { id: birthId },
+        where: { id: sanitized.countryId as string },
         select: { id: true },
       })
-      if (inCountry) {
-        // 현대 국가 → Person.countryId 유지
-      } else {
+      if (!inCountry) {
         const inHistorical = await this.prisma.historicalCountry.findUnique({
-          where: { id: birthId },
+          where: { id: sanitized.countryId as string },
           select: { id: true },
         })
         if (inHistorical) {
-          birthHistoricalCountryId = birthId
-          delete sanitized.countryId
+          mainHistoricalId = sanitized.countryId as string
+          ;(sanitized as any).countryId = null
         } else {
           delete sanitized.countryId
         }
       }
+    } else if (sanitized.countryId === null || (sanitized as any).countryId === '') {
+      ;(sanitized as any).countryId = null
+      mainHistoricalId = null
     }
 
     const spouseRelations = (sanitized as UpdatePersonData).spouseRelations
     delete (sanitized as Record<string, unknown>).spouseRelations
 
-    // 출생국가를 비웠을 때( null / '' ) Person.countryId를 null로 반영
     const updateData = { ...sanitized } as Parameters<PrismaService['person']['update']>[0]['data']
-    if (birthIdInput !== undefined && (birthIdInput === null || birthIdInput === '')) {
-      ;(updateData as Record<string, unknown>).countryId = null
-    }
 
     const person = await this.prisma.person.update({
       where: { id },
       data: updateData,
     })
-
-    if (birthIdInput !== undefined) {
-      await this.prisma.personCountryAffiliation.deleteMany({
-        where: { personId: id, affiliationType: 'BIRTH_PLACE' },
-      })
-      if (birthHistoricalCountryId) {
-        await this.prisma.personCountryAffiliation.create({
-          data: {
-            personId: id,
-            historicalCountryId: birthHistoricalCountryId,
-            countryId: null,
-            affiliationType: 'BIRTH_PLACE',
-            priority: 0,
-          },
-        })
-      }
-    }
 
     if (spouseRelations !== undefined) {
       await this.prisma.personSpouse.deleteMany({ where: { personId: id } })
@@ -1484,6 +1619,32 @@ export class PersonPrismaRepository implements IPersonRepository {
             marriageEndDate: s.marriageEndDate ?? null,
             note: s.note ?? null,
           })),
+        })
+      }
+    }
+
+    // 역사 국가 변경 시 CITIZENSHIP priority=0 소속 upsert
+    if (mainHistoricalId !== undefined) {
+      const existing = await this.prisma.personCountryAffiliation.findFirst({
+        where: { personId: id, affiliationType: 'CITIZENSHIP' as any, priority: 0 },
+      })
+      if (mainHistoricalId === null) {
+        if (existing?.historicalCountryId) {
+          await this.prisma.personCountryAffiliation.delete({ where: { id: existing.id } })
+        }
+      } else if (existing) {
+        await this.prisma.personCountryAffiliation.update({
+          where: { id: existing.id },
+          data: { historicalCountryId: mainHistoricalId, countryId: null },
+        })
+      } else {
+        await this.prisma.personCountryAffiliation.create({
+          data: {
+            personId: id,
+            affiliationType: 'CITIZENSHIP' as any,
+            priority: 0,
+            historicalCountryId: mainHistoricalId,
+          },
         })
       }
     }
@@ -1506,7 +1667,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
       },
     })
-    return updated ? this.mapToPersonResponse(updated) : this.mapToPersonResponse(person)
+    if (!updated) throw new Error(`Updated person ${id} not found on re-fetch`)
+    return this.mapToPersonResponse(updated)
   }
 
   /**
@@ -3452,23 +3614,41 @@ export class PersonPrismaRepository implements IPersonRepository {
   }): Promise<any | null> {
     const { countryId, historicalCountryId } = params
     if (!countryId && !historicalCountryId) return null
-    let where: any = historicalCountryId
-      ? { historicalCountryId }
-      : { countryId: countryId! }
-    if (countryId) {
-      const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+
+    if (historicalCountryId) {
+      // 역사적 국가로 조회 시: 해당 historicalCountryId 레코드 +
+      // 이 역사 국가에 연결된 현대 국가(countryId)로 저장된 레코드도 포함
+      const modernLinks = await this.prisma.historicalCountryModernCountry
         .findMany({
-          where: { modernCountryId: countryId },
-          select: { historicalCountryId: true },
+          where: { historicalCountryId },
+          select: { modernCountryId: true },
         })
-        .then((rows) => rows.map((r) => r.historicalCountryId))
-      if (linkedHistoricalIds.length > 0) {
-        where = {
+        .then((rows) => rows.map((r) => r.modernCountryId))
+      if (modernLinks.length > 0) {
+        return {
           OR: [
-            { countryId },
-            { historicalCountryId: { in: linkedHistoricalIds } },
+            { historicalCountryId },
+            { countryId: { in: modernLinks } },
           ],
         }
+      }
+      return { historicalCountryId }
+    }
+
+    // 현대 국가로 조회 시: 연결된 역사 국가들까지 OR 확장
+    let where: any = { countryId: countryId! }
+    const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+      .findMany({
+        where: { modernCountryId: countryId },
+        select: { historicalCountryId: true },
+      })
+      .then((rows) => rows.map((r) => r.historicalCountryId))
+    if (linkedHistoricalIds.length > 0) {
+      where = {
+        OR: [
+          { countryId },
+          { historicalCountryId: { in: linkedHistoricalIds } },
+        ],
       }
     }
     return where
@@ -4012,5 +4192,194 @@ export class PersonPrismaRepository implements IPersonRepository {
       education: person.educations.map(e => this.mapToPersonEducationResponse(e)),
       awards: person.awards.map(a => this.mapToPersonAwardResponse(a)),
     }
+  }
+
+  /**
+   * 전체 가계도 BFS 탐색
+   * ego → 부모(2세대 위) → 증조부모(3세대 위) → 자녀(1세대 아래) → 손자녀(2세대 아래)
+   * + 형제자매, 각 인물의 배우자
+   */
+  async findFamilyTree(personId: string, accountId?: string) {
+    // ── 공통 select ───────────────────────────────────────────────────
+    const PERSON_SELECT = {
+      id: true, name: true, surname: true, middleName: true,
+      nameDisplayOrder: true, gender: true, regnalName: true,
+      profileImageUrl: true, birthDate: true, deathDate: true,
+      fatherId: true, motherId: true,
+      dynasty: { select: { id: true, name: true } },
+      spouseRelationsAsPerson: { select: { spouseId: true } },
+      spouseRelationsAsSpouse: { select: { personId: true } },
+    }
+
+    const nodeMap        = new Map<string, any>()
+    const parentChildSet = new Set<string>()  // "parentId__childId"
+    const spouseSet      = new Set<string>()  // sorted "a__b"
+
+    const addPCEdge     = (p: string, c: string) => parentChildSet.add(`${p}__${c}`)
+    const addSpouseEdge = (a: string, b: string) => spouseSet.add([a, b].sort().join('__'))
+
+    const getSpouseIds = (p: any): string[] => [
+      ...(p?.spouseRelationsAsPerson ?? []).map((r: any) => r.spouseId  as string),
+      ...(p?.spouseRelationsAsSpouse ?? []).map((r: any) => r.personId as string),
+    ]
+
+    /** 아직 nodeMap에 없는 id만 DB에서 가져와 등록 */
+    const fetchBatch = async (ids: string[]): Promise<void> => {
+      const unique = [...new Set(ids)].filter(id => id && !nodeMap.has(id))
+      if (!unique.length) return
+      const persons = await this.prisma.person.findMany({
+        where: { id: { in: unique } },
+        select: PERSON_SELECT,
+      })
+      for (const p of persons) {
+        nodeMap.set(p.id, p)
+        if (p.fatherId) addPCEdge(p.fatherId, p.id)
+        if (p.motherId) addPCEdge(p.motherId, p.id)
+        for (const r of p.spouseRelationsAsPerson ?? []) addSpouseEdge(p.id, r.spouseId)
+        for (const r of p.spouseRelationsAsSpouse ?? []) addSpouseEdge(p.id, r.personId)
+      }
+    }
+
+    // ── Step 1: ego ───────────────────────────────────────────────────
+    await fetchBatch([personId])
+    const ego = nodeMap.get(personId)
+    if (!ego) return { egoId: personId, nodes: [], edges: [] }
+
+    // ── Step 2: 부모 + 명시적 배우자 ─────────────────────────────────
+    const egoParentIds        = [ego.fatherId, ego.motherId].filter(Boolean) as string[]
+    const egoExplicitSpouseIds = getSpouseIds(ego)
+    await fetchBatch([...egoParentIds, ...egoExplicitSpouseIds])
+
+    // ── Step 3: 조부모 + 증조부모 ─────────────────────────────────────
+    const gpIds: string[] = []
+    for (const pid of egoParentIds) {
+      const p = nodeMap.get(pid)
+      if (p?.fatherId) gpIds.push(p.fatherId)
+      if (p?.motherId) gpIds.push(p.motherId)
+    }
+    await fetchBatch(gpIds)
+
+    const ggpIds: string[] = []
+    for (const gpId of gpIds) {
+      const gp = nodeMap.get(gpId)
+      if (gp?.fatherId) ggpIds.push(gp.fatherId)
+      if (gp?.motherId) ggpIds.push(gp.motherId)
+    }
+    await fetchBatch(ggpIds)
+
+    // ── Step 4: ego의 자녀 (ego 또는 명시 배우자가 부모인 자녀) ───────
+    const childQueryConds: Prisma.PersonWhereInput[] = [
+      { fatherId: personId }, { motherId: personId },
+      ...egoExplicitSpouseIds.flatMap(sid => [{ fatherId: sid }, { motherId: sid }]),
+    ]
+    const childRows = await this.prisma.person.findMany({
+      where: { OR: childQueryConds },
+      select: { id: true },
+    })
+    const childIds = childRows.map(r => r.id)
+    await fetchBatch(childIds)
+
+    // ── Step 5: 자녀의 다른 쪽 부모 → 추론 배우자 ─────────────────────
+    // 배우자 관계가 DB에 명시적으로 없어도 자녀를 통해 배우자를 추론
+    // 예: 자녀의 fatherId가 할아버지인데 spouse relation이 없는 경우
+    const inferredSpouseIds: string[] = []
+    for (const cid of childIds) {
+      const child = nodeMap.get(cid)
+      if (!child) continue
+      if (child.fatherId && child.fatherId !== personId) inferredSpouseIds.push(child.fatherId)
+      if (child.motherId && child.motherId !== personId) inferredSpouseIds.push(child.motherId)
+    }
+    await fetchBatch(inferredSpouseIds)
+    // 추론된 배우자에 대해 spouse 엣지 추가
+    for (const sid of inferredSpouseIds) {
+      if (nodeMap.has(sid)) addSpouseEdge(personId, sid)
+    }
+
+    // 모든 실질적 배우자 (명시 + 추론)
+    const allEgoSpouseIds = [
+      ...new Set([
+        ...egoExplicitSpouseIds,
+        ...inferredSpouseIds.filter(id => nodeMap.has(id)),
+      ]),
+    ]
+
+    // ── Step 7: 형제자매 ─────────────────────────────────────────────
+    const sibOrConds: Prisma.PersonWhereInput[] = egoParentIds.flatMap(pid => [
+      { fatherId: pid }, { motherId: pid },
+    ])
+    if (sibOrConds.length > 0) {
+      const sibRows = await this.prisma.person.findMany({
+        where: { OR: sibOrConds, NOT: { id: personId } },
+        select: { id: true },
+        take: 40,
+      })
+      await fetchBatch(sibRows.map(r => r.id))
+    }
+
+    // ── Step 8: 손자녀 ───────────────────────────────────────────────
+    const gcOrConds: Prisma.PersonWhereInput[] = childIds.flatMap(cid => [
+      { fatherId: cid }, { motherId: cid },
+    ])
+    if (gcOrConds.length > 0) {
+      const gcRows = await this.prisma.person.findMany({
+        where: { OR: gcOrConds },
+        select: { id: true },
+        take: 60,
+      })
+      await fetchBatch(gcRows.map(r => r.id))
+    }
+
+    // ── Step 9: 수집된 모든 인물의 배우자 ────────────────────────────
+    const allSpouseIds: string[] = []
+    for (const [, p] of nodeMap) {
+      for (const sid of getSpouseIds(p)) allSpouseIds.push(sid)
+    }
+    await fetchBatch(allSpouseIds)
+
+    // ── Step 10: ego 배우자의 부모 (처가/시가) ────────────────────────
+    const spouseParentIds: string[] = []
+    for (const sid of allEgoSpouseIds) {
+      const s = nodeMap.get(sid)
+      if (s?.fatherId) spouseParentIds.push(s.fatherId)
+      if (s?.motherId) spouseParentIds.push(s.motherId)
+    }
+    await fetchBatch(spouseParentIds)
+
+    // ── Step 11: 배우자 부모의 배우자 (처가/시가 부부쌍) ─────────────
+    const spouseParentSpouseIds: string[] = []
+    for (const pid of spouseParentIds) {
+      const p = nodeMap.get(pid)
+      for (const sid of getSpouseIds(p ?? {})) spouseParentSpouseIds.push(sid)
+    }
+    await fetchBatch(spouseParentSpouseIds)
+
+    // ── 결과 구성 ─────────────────────────────────────────────────────
+    const nodes = [...nodeMap.values()].map(p => ({
+      id:              p.id              as string,
+      name:            p.name            as string,
+      surname:         (p.surname        ?? null) as string | null,
+      middleName:      (p.middleName     ?? null) as string | null,
+      nameDisplayOrder:(p.nameDisplayOrder ?? null) as string | null,
+      gender:          (p.gender         ?? null) as string | null,
+      regnalName:      (p.regnalName     ?? null) as string | null,
+      profileImageUrl: (p.profileImageUrl ?? null) as string | null,
+      birthYear:  p.birthDate  ? (p.birthDate  instanceof Date ? p.birthDate  : new Date(p.birthDate )).getFullYear() : null,
+      deathYear:  p.deathDate  ? (p.deathDate  instanceof Date ? p.deathDate  : new Date(p.deathDate )).getFullYear() : null,
+      dynasty: p.dynasty ? { id: p.dynasty.id as string, name: p.dynasty.name as string } : null,
+    }))
+
+    const edges: { source: string; target: string; type: 'parent-child' | 'spouse' }[] = []
+    for (const key of parentChildSet) {
+      const [src, tgt] = key.split('__')
+      if (nodeMap.has(src) && nodeMap.has(tgt))
+        edges.push({ source: src, target: tgt, type: 'parent-child' })
+    }
+    for (const key of spouseSet) {
+      const [a, b] = key.split('__')
+      if (nodeMap.has(a) && nodeMap.has(b))
+        edges.push({ source: a, target: b, type: 'spouse' })
+    }
+
+    return { egoId: personId, nodes, edges }
   }
 }

@@ -18,6 +18,8 @@ import { eventPageRoute } from '@/pages/events/event-route'
 import { historyPageRoute } from '@/pages/history/history.route'
 import { layoutLoader } from '@/pages/layout/layout.loader'
 import Layout from '@/pages/layout/layout.ui'
+import { genealogyRoute } from '@/pages/genealogy/genealogy.route'
+import { personsRoute } from '@/pages/persons/person.route'
 import { loginPageRoute } from '@/pages/login/login-page.route'
 import { page404Route } from '@/pages/page-404/page-404.route'
 // history, panels 제거됨 (연관 위젯 파일 정리)
@@ -125,6 +127,8 @@ const appRouterConfig = [
             path: 'services',
             element: <ServiceManagerPage />,
           },
+          // 전체 가계도 (독립 전체화면)
+          genealogyRoute,
         ],
       },
       {
@@ -136,6 +140,8 @@ const appRouterConfig = [
           dashboardRoute,
           // 이벤트 페이지 라우트
           eventPageRoute,
+          // 인물 상세 라우트
+          personsRoute,
           // 행정기구·조직 라우트
           ...organizationsRoutes,
           // 민족 라우트
