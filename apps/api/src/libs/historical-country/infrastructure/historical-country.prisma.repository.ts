@@ -36,6 +36,9 @@ export class HistoricalCountryPrismaRepository
         { startDay: 'desc' },
         { name: 'asc' },
       ],
+      include: {
+        modernConnections: { select: { modernCountryId: true } },
+      },
     })
 
     return countries.map((country) => this.toEntity(country as any))
@@ -245,6 +248,9 @@ export class HistoricalCountryPrismaRepository
       endDay: data.endDay,
       stateType: data.stateType,
       entityKind: data.entityKind ?? null,
+      parentModernCountryIds: data.modernConnections
+        ? (data.modernConnections as Array<{ modernCountryId: string }>).map((c) => c.modernCountryId)
+        : undefined,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     })

@@ -27,6 +27,8 @@ export class HistoricalCountry {
   stateType: HistoricalStateType
   /** 정치체 성격: 주권 국가 / 정권 / 시대. null이면 과거 주권 국가로 간주 */
   entityKind: HistoricalEntityKind | null
+  /** 연결된 현대 국가 ID 목록 (목록 조회 시 포함) */
+  parentModernCountryIds?: string[]
   createdAt: Date
   updatedAt: Date
 
@@ -47,6 +49,7 @@ export class HistoricalCountry {
     endDay?: number | null
     stateType: HistoricalStateType
     entityKind?: HistoricalEntityKind | null
+    parentModernCountryIds?: string[]
     createdAt: Date
     updatedAt: Date
   }) {
@@ -66,6 +69,7 @@ export class HistoricalCountry {
     this.endDay = data.endDay ?? null
     this.stateType = data.stateType
     this.entityKind = data.entityKind ?? null
+    this.parentModernCountryIds = data.parentModernCountryIds
     this.createdAt = data.createdAt
     this.updatedAt = data.updatedAt
   }

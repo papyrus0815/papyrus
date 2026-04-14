@@ -10,7 +10,18 @@ import {
   seedCountries,
   seedEventCategories,
   seedGovernmentPositionDefinitions,
-  seedHistoricalCountries,
+  seedGermanyHistoricalCountries,
+  seedGermanyHistoricalCountryRelations,
+  seedBritainHistoricalCountries,
+  seedBritainHistoricalCountryRelations,
+  seedRussiaHistoricalCountries,
+  seedRussiaHistoricalCountryRelations,
+  seedBritainMonarchs,
+  seedPrussiaGermanyMonarchs,
+  seedHohenzollernDynasty,
+  seedWiveDynasties,
+  seedRussiaEmperors,
+  seedRomanovDynasty,
 } from './seeds'
 
 const options = {
@@ -50,16 +61,49 @@ async function main() {
         // 2. 국가 시딩
         await seedCountries(prisma, continentMap)
 
-        // 3. 역사적 국가 시딩
-        await seedHistoricalCountries(prisma)
+        // 3. 독일 역사 국가 시딩
+        await seedGermanyHistoricalCountries(prisma)
 
-        // 4. 관직 정의 시딩 (1차·2차 한 테이블: 국가원수/정부수반 + 국왕, 황제, 대통령 등)
+        // 3-1. 독일 역사 국가 계승·소속 관계 시딩
+        await seedGermanyHistoricalCountryRelations(prisma)
+
+        // 4. 영국 역사 국가 시딩
+        await seedBritainHistoricalCountries(prisma)
+
+        // 4-1. 영국 역사 국가 계승·소속 관계 시딩
+        await seedBritainHistoricalCountryRelations(prisma)
+
+        // 5. 러시아 역사 국가 시딩
+        await seedRussiaHistoricalCountries(prisma)
+
+        // 5-1. 러시아 역사 국가 계승·소속 관계 시딩
+        await seedRussiaHistoricalCountryRelations(prisma)
+
+        // 6. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
 
-        // 6. 이벤트 카테고리 시딩
+        // 6. 영국 군주 시딩
+        await seedBritainMonarchs(prisma)
+
+        // 7. 프로이센·독일 제국 군주 시딩
+        await seedPrussiaGermanyMonarchs(prisma)
+
+        // 8. 호엔촐레른 가문 + 부인 + 관계 시딩
+        await seedHohenzollernDynasty(prisma)
+
+        // 9. 부인 출신 가문 + 국가 소속 시딩
+        await seedWiveDynasties(prisma)
+
+        // 10. 러시아 제국 황제 시딩
+        await seedRussiaEmperors(prisma)
+
+        // 11. 로마노프 왕조 + 황후 + 관계 시딩
+        await seedRomanovDynasty(prisma)
+
+        // 12. 이벤트 카테고리 시딩
         await seedEventCategories(prisma)
 
-        // 6-1. 행정 부처 카테고리 시딩 (국방·외교 등)
+        // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)
 
         // 7. 어드민 계정 시딩

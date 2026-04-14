@@ -65,7 +65,9 @@ export class HistoricalCountryController {
         : undefined
     const countries =
       await this.historicalCountryService.getAllHistoricalCountries(accountId, filter)
-    return countries.map((country) => this.toResponseDto(country))
+    return countries.map((country) =>
+      this.toResponseDto(country, country.parentModernCountryIds),
+    )
   }
 
   /**

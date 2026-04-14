@@ -1,0 +1,129 @@
+import {
+  HistoricalMembershipRole,
+  TransitionEventType,
+  TransitionScope,
+} from '@prisma/client'
+
+import { PrismaService } from '../prisma.service'
+
+const TRANSITIONS: {
+  predecessor: string
+  successor: string
+  eventType: TransitionEventType
+  transitionScope: TransitionScope
+}[] = [
+  // 앵글로색슨 → 잉글랜드 왕국
+  { predecessor: '웨식스 왕국', successor: '잉글랜드 왕국', eventType: TransitionEventType.UNIFICATION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '머시아 왕국', successor: '잉글랜드 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '노섬브리아 왕국', successor: '잉글랜드 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '이스트앵글리아 왕국', successor: '잉글랜드 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '켄트 왕국', successor: '잉글랜드 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+
+  // 아일랜드 영주권 → 아일랜드 왕국
+  { predecessor: '아일랜드 영주권', successor: '아일랜드 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+
+  // 잉글랜드 + 스코틀랜드 → 그레이트브리튼 왕국 (1707 합방)
+  { predecessor: '잉글랜드 왕국', successor: '그레이트브리튼 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '스코틀랜드 왕국', successor: '그레이트브리튼 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+
+  // 그레이트브리튼 + 아일랜드 → 연합왕국 (1801 합방)
+  { predecessor: '그레이트브리튼 왕국', successor: '그레이트브리튼 및 아일랜드 연합왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '아일랜드 왕국', successor: '그레이트브리튼 및 아일랜드 연합왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+]
+
+const MEMBERSHIPS: {
+  parent: string
+  member: string
+  role: HistoricalMembershipRole
+  isLeadingMember?: boolean
+}[] = [
+  // 그레이트브리튼 왕국 구성
+  { parent: '그레이트브리튼 왕국', member: '잉글랜드 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER, isLeadingMember: true },
+  { parent: '그레이트브리튼 왕국', member: '스코틀랜드 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+
+  // 연합왕국 구성
+  { parent: '그레이트브리튼 및 아일랜드 연합왕국', member: '그레이트브리튼 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER, isLeadingMember: true },
+  { parent: '그레이트브리튼 및 아일랜드 연합왕국', member: '아일랜드 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+
+  // 웨일스 → 잉글랜드 왕국 소속
+  { parent: '잉글랜드 왕국', member: '웨일스 공국', role: HistoricalMembershipRole.VASSAL_STATE },
+
+  // 아일랜드 영주권 → 잉글랜드 왕국 소속
+  { parent: '잉글랜드 왕국', member: '아일랜드 영주권', role: HistoricalMembershipRole.VASSAL_STATE },
+]
+
+export async function seedBritainHistoricalCountryRelations(
+  prisma: PrismaService,
+): Promise<void> {
+  console.log('\n🔗 영국 역사 국가 계승·소속 관계 시딩 시작...')
+
+  // 이름 → id 맵 구축
+  const nameToId = new Map<string, string>()
+  const allNames = new Set([
+    ...TRANSITIONS.map((t) => t.predecessor),
+    ...TRANSITIONS.map((t) => t.successor),
+    ...MEMBERSHIPS.map((m) => m.parent),
+    ...MEMBERSHIPS.map((m) => m.member),
+  ])
+  for (const name of allNames) {
+    const found = await prisma.historicalCountry.findFirst({ where: { name } })
+    if (found) nameToId.set(name, found.id)
+    else console.warn(`  ⚠️  찾을 수 없음: ${name}`)
+  }
+
+  // ── 계승 관계 ──────────────────────────────────────────────────────
+  console.log('\n  📜 계승 관계 등록...')
+  let transitionCount = 0
+  for (const t of TRANSITIONS) {
+    const predecessorId = nameToId.get(t.predecessor)
+    const successorId = nameToId.get(t.successor)
+    if (!predecessorId || !successorId) continue
+
+    const exists = await prisma.historicalCountryTransition.findFirst({
+      where: { predecessorId, successorId },
+    })
+    if (!exists) {
+      await prisma.historicalCountryTransition.create({
+        data: {
+          predecessorId,
+          successorId,
+          eventType: t.eventType,
+          transitionScope: t.transitionScope,
+        },
+      })
+      console.log(`    ✅ ${t.predecessor} → ${t.successor} (${t.eventType})`)
+      transitionCount++
+    } else {
+      console.log(`    ♻️  ${t.predecessor} → ${t.successor}`)
+    }
+  }
+
+  // ── 소속 관계 ──────────────────────────────────────────────────────
+  console.log('\n  🏛️  소속 관계 등록...')
+  let membershipCount = 0
+  for (const m of MEMBERSHIPS) {
+    const parentId = nameToId.get(m.parent)
+    const memberId = nameToId.get(m.member)
+    if (!parentId || !memberId) continue
+
+    const exists = await prisma.historicalCountryMembership.findFirst({
+      where: { historicalCountryId: parentId, memberCountryId: memberId },
+    })
+    if (!exists) {
+      await prisma.historicalCountryMembership.create({
+        data: {
+          historicalCountryId: parentId,
+          memberCountryId: memberId,
+          role: m.role,
+          isLeadingMember: m.isLeadingMember ?? false,
+        },
+      })
+      console.log(`    ✅ [${m.parent}] ← ${m.member}${m.isLeadingMember ? ' (주축)' : ''}`)
+      membershipCount++
+    } else {
+      console.log(`    ♻️  [${m.parent}] ← ${m.member}`)
+    }
+  }
+
+  console.log(`\n✅ 계승 관계 ${transitionCount}건, 소속 관계 ${membershipCount}건 완료\n`)
+}
