@@ -456,6 +456,7 @@ export class HistoricalCountryController {
       enName: country.enName,
       nameOrigin: country.nameOrigin,
       description: country.description,
+      history: country.history ?? null,
       thumbnailUrl: country.thumbnailUrl,
 
       // 존속 시작 정보

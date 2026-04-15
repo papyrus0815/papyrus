@@ -33,6 +33,9 @@ export const ROUTES = {
     DASHBOARD_ADMINISTRATION: 'administration',
   },
 
+  // Genealogy (standalone full-screen)
+  GENEALOGY: 'genealogy',
+
   // Error Pages
   PAGE_404: '404',
 } as const

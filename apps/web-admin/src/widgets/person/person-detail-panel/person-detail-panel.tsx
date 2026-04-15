@@ -1,21 +1,22 @@
 /**
  * 인물 상세 패널 (리스트 페이지 우측 컨텐츠 영역)
  */
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import {
+  FiAlertTriangle,
   FiArrowLeft,
-  FiBook,
-  FiBriefcase,
   FiCalendar,
+  FiCamera,
   FiEdit2,
   FiFlag,
   FiInfo,
   FiPlus,
+  FiTrash2,
   FiUsers,
   FiX,
 } from 'react-icons/fi'
@@ -24,8 +25,9 @@ import styled, { css } from 'styled-components'
 
 import { personKeys } from '@/entities/person/api'
 import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
-import { updatePerson } from '@/shared/api/persons'
+import { deletePerson, updatePerson } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
+import { getPersonFamilyTree } from '@/shared/api/persons-family-tree'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import {
@@ -43,6 +45,7 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
+import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
 import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
 import {
@@ -50,13 +53,96 @@ import {
   PersonPoliticsSection,
 } from '@/widgets/person/person-politics-section/person-politics-section'
 
-type TabType =
-  | 'overview'
-  | 'genealogy'
-  | 'politics'
-  | 'activities'
-  | 'events'
-  | 'works'
+type TabType = 'overview' | 'genealogy' | 'politics' | 'events'
+
+/** 인물 상세 API 응답의 실질적 shape (persons-detail은 any 반환이므로 이 컴포넌트 내에서 타입 선언) */
+interface PersonDetailData {
+  id: string
+  name: string
+  surname?: string | null
+  middleName?: string | null
+  nameDisplayOrder?: string | null
+  birthYear?: number | null
+  birthMonth?: number | null
+  birthDay?: number | null
+  birthEra?: string | null
+  deathYear?: number | null
+  deathMonth?: number | null
+  deathDay?: number | null
+  deathEra?: string | null
+  gender?: string | null
+  biography?: string | null
+  profileImageUrl?: string | null
+  regnalName?: string | null
+  templeName?: string | null
+  posthumousName?: string | null
+  createdAt?: string | null
+  isAlive?: boolean | null
+  isDeathDateUnknown?: boolean | null
+  dynastyId?: string | null
+  religionId?: string | null
+  countryId?: string | null
+  country?: {
+    id: string
+    name: string
+    flagEmoji?: string | null
+    isoCode?: string | null
+    thumbnailUrl?: string | null
+    defaultNameDisplayOrder?: string | null
+  } | null
+  dynasty?: { id: string; name: string } | null
+  father?: (PersonNameFields & {
+    id?: string
+    gender?: string | null
+    profileImageUrl?: string | null
+    profileImages?: { url?: string | null }[] | null
+    dynasty?: { id?: string; name?: string | null } | null
+    birthDate?: string | Date | null
+    deathDate?: string | Date | null
+    father?: (PersonNameFields & { id?: string; gender?: string | null; profileImageUrl?: string | null; profileImages?: { url?: string | null }[] | null; dynasty?: { id?: string; name?: string | null } | null; birthDate?: string | Date | null; deathDate?: string | Date | null }) | null
+    mother?: (PersonNameFields & { id?: string; gender?: string | null; profileImageUrl?: string | null; profileImages?: { url?: string | null }[] | null; dynasty?: { id?: string; name?: string | null } | null; birthDate?: string | Date | null; deathDate?: string | Date | null }) | null
+  }) | null
+  mother?: (PersonNameFields & {
+    id?: string
+    gender?: string | null
+    profileImageUrl?: string | null
+    profileImages?: { url?: string | null }[] | null
+    dynasty?: { id?: string; name?: string | null } | null
+    birthDate?: string | Date | null
+    deathDate?: string | Date | null
+    father?: (PersonNameFields & { id?: string; gender?: string | null; profileImageUrl?: string | null; profileImages?: { url?: string | null }[] | null; dynasty?: { id?: string; name?: string | null } | null; birthDate?: string | Date | null; deathDate?: string | Date | null }) | null
+    mother?: (PersonNameFields & { id?: string; gender?: string | null; profileImageUrl?: string | null; profileImages?: { url?: string | null }[] | null; dynasty?: { id?: string; name?: string | null } | null; birthDate?: string | Date | null; deathDate?: string | Date | null }) | null
+  }) | null
+  spouse?: PersonNameFields | null
+  siblings?: Array<PersonNameFields & {
+    id?: string; gender?: string | null; profileImageUrl?: string | null;
+    profileImages?: { url?: string | null }[] | null;
+    dynasty?: { id?: string; name?: string | null } | null;
+    birthDate?: string | Date | null; deathDate?: string | Date | null;
+  }> | null
+  spouseRelations?: Array<PersonNameFields & {
+    id?: string; gender?: string | null; profileImageUrl?: string | null;
+    profileImages?: { url?: string | null }[] | null;
+    dynasty?: { id?: string; name?: string | null } | null;
+    birthDate?: string | Date | null; deathDate?: string | Date | null;
+    marriageStartDate?: string | null; marriageEndDate?: string | null;
+  }> | null
+  governmentPositions?: unknown[]
+  governmentTenures?: unknown[]
+  sovereignReigns?: Array<{
+    id: string
+    startDate?: string | null
+    endDate?: string | null
+    notes?: string | null
+    regnalNumber?: number | null
+    positionDefinition?: { id?: string; title?: string | null } | null
+    country?: { id?: string; name?: string | null } | null
+    historicalCountry?: { id?: string; name?: string | null } | null
+  }> | null
+  humanRelationships?: unknown[]
+  events?: unknown[]
+  electionCandidacies?: unknown[]
+}
 
 /** "YYYY년 M월 D일" 형식 (월·일 없으면 년만) */
 function formatDateKo(
@@ -157,9 +243,15 @@ export function PersonDetailPanel({
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
+  const [sovereignReignModalOpen, setSovereignReignModalOpen] = useState(false)
+  const [editingReignId, setEditingReignId] = useState<string | null>(null)
   const [editingBiography, setEditingBiography] = useState(false)
   const [biographyDraft, setBiographyDraft] = useState('')
   const [savingBiography, setSavingBiography] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deletingPerson, setDeletingPerson] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
   /** 루트 패널: 전기 인물 링크 → 모달 스택(같은 오버레이에서 인물 전환, 중첩 모달 방지) */
   const [personLinkStack, setPersonLinkStack] = useState<string[]>([])
   const [termTooltip, setTermTooltip] =
@@ -175,6 +267,13 @@ export function PersonDetailPanel({
     queryKey: personKeys.detailFull(personId),
     queryFn: () => getPersonDetailById(personId),
     enabled: !!personId,
+  })
+
+  const { data: familyTreeData } = useQuery({
+    queryKey: ['person-family-tree', personId],
+    queryFn: () => getPersonFamilyTree(personId),
+    enabled: !!personId,
+    staleTime: 5 * 60 * 1000,
   })
 
   const modalTopId =
@@ -197,6 +296,64 @@ export function PersonDetailPanel({
   const pushPersonToModalStack = useCallback((id: string) => {
     setPersonLinkStack((prev) => [...prev, id])
   }, [])
+
+  /** 인물 관련 모든 쿼리 캐시 무효화 (아바타 변경·삭제·수정 후 공통 호출) */
+  const invalidatePersonCaches = useCallback(
+    (withDetail = true) =>
+      Promise.all([
+        ...(withDetail
+          ? [
+              queryClient.invalidateQueries({ queryKey: personKeys.detailFull(personId) }),
+              queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) }),
+            ]
+          : []),
+        queryClient.invalidateQueries({ queryKey: personKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['persons-by-country'] }),
+        queryClient.invalidateQueries({ queryKey: ['persons-by-dynasty'] }),
+        queryClient.invalidateQueries({ queryKey: ['persons-by-tenure-country'] }),
+      ]),
+    [personId, queryClient],
+  )
+
+  const handleAvatarFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      // reset so same file can be re-selected
+      e.target.value = ''
+      setUploadingAvatar(true)
+      try {
+        const result = await uploadImage(file, 'persons')
+        await updatePerson(personId, { profileImageUrl: result.url })
+        await invalidatePersonCaches(true)
+        toast.success('프로필 사진이 변경되었습니다.')
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : '사진 업로드에 실패했습니다.',
+        )
+      } finally {
+        setUploadingAvatar(false)
+      }
+    },
+    [personId, invalidatePersonCaches],
+  )
+
+  const handleDeleteConfirm = useCallback(async () => {
+    setDeletingPerson(true)
+    try {
+      await deletePerson(personId)
+      await invalidatePersonCaches(false)
+      toast.success('인물이 삭제되었습니다.')
+      setDeleteConfirmOpen(false)
+      onClose()
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : '인물 삭제에 실패했습니다.',
+      )
+    } finally {
+      setDeletingPerson(false)
+    }
+  }, [personId, invalidatePersonCaches, onClose])
 
   const { handleProseClick: handleBioProseClick } = useRichTextProseClick({
     navigate,
@@ -243,22 +400,41 @@ export function PersonDetailPanel({
     )
   }
 
-  const fullName = getPersonDisplayName(person)
-  const birthYearText = person.birthYear
-    ? `${person.birthYear}${person.birthEra === 'BC' ? ' BC' : ''}`
+  // API가 any를 반환하므로 정의된 타입으로 단일 캐스팅
+  const p = person as unknown as PersonDetailData
+  const fullName = getPersonDisplayName(p)
+
+  // 군주 등록 여부 및 군주명
+  // RegisterMonarchModal은 왕명을 notes에 "왕명: <name>" 형식으로 저장
+  function parseRegnalNameFromNotes(notes: string | null | undefined): string | null {
+    if (!notes?.trim()) return null
+    const m = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || notes.match(/왕명\s*:\s*(.+)/i)
+    return m ? m[1].trim() : null
+  }
+  const firstReign = p.sovereignReigns?.[0]
+  const monarchName =
+    p.templeName ||
+    p.regnalName ||
+    parseRegnalNameFromNotes(firstReign?.notes) ||
+    null
+  const monarchPositionTitle =
+    firstReign?.positionDefinition?.title || null
+
+  const birthYearText = p.birthYear
+    ? `${p.birthYear}${p.birthEra === 'BC' ? ' BC' : ''}`
     : '?'
-  const deathYearText = person.deathYear
-    ? `${person.deathYear}${person.deathEra === 'BC' ? ' BC' : ''}`
+  const deathYearText = p.deathYear
+    ? `${p.deathYear}${p.deathEra === 'BC' ? ' BC' : ''}`
     : null
-  const isDeceased = person.deathYear != null
+  const isDeceased = p.deathYear != null
   const currentYear = new Date().getFullYear()
   const ageAtDeath =
-    isDeceased && person.birthYear != null && person.deathYear != null
-      ? person.deathYear - person.birthYear
+    isDeceased && p.birthYear != null && p.deathYear != null
+      ? p.deathYear - p.birthYear
       : null
   const currentAge =
-    !isDeceased && person.birthYear != null && person.birthEra !== 'BC'
-      ? currentYear - person.birthYear
+    !isDeceased && p.birthYear != null && p.birthEra !== 'BC'
+      ? currentYear - p.birthYear
       : null
   const lifespanText = isDeceased
     ? `${birthYearText} ~ ${deathYearText}${ageAtDeath != null ? ` · 사망 · ${ageAtDeath}세` : ' · 사망'}`
@@ -266,16 +442,16 @@ export function PersonDetailPanel({
 
   /** 이름 밑: 년월일~년월일 (출생~사망 또는 출생~생존) */
   const birthDateStr = formatDateKo(
-    person.birthYear ?? undefined,
-    person.birthMonth ?? undefined,
-    person.birthDay ?? undefined,
-    person.birthEra,
+    p.birthYear ?? undefined,
+    p.birthMonth ?? undefined,
+    p.birthDay ?? undefined,
+    p.birthEra,
   )
   const deathDateStr = formatDateKo(
-    person.deathYear ?? undefined,
-    person.deathMonth ?? undefined,
-    person.deathDay ?? undefined,
-    person.deathEra,
+    p.deathYear ?? undefined,
+    p.deathMonth ?? undefined,
+    p.deathDay ?? undefined,
+    p.deathEra,
   )
   const rangeStr = [birthDateStr, deathDateStr].filter(Boolean).join(' ~ ')
   const subtitleLifespan = isDeceased
@@ -289,41 +465,27 @@ export function PersonDetailPanel({
         : '생존'
 
   const genderLabel =
-    person.gender === 'MALE'
-      ? '남'
-      : person.gender === 'FEMALE'
-        ? '여'
-        : (person.gender ?? '—')
+    p.gender === 'MALE' ? '남' : p.gender === 'FEMALE' ? '여' : (p.gender ?? '—')
 
   const backLabel = closeLabel
 
   /** API가 governmentPositions 또는 governmentTenures 중 하나로 내려줄 수 있음 */
-  const tenuresList =
-    person.governmentPositions ?? person.governmentTenures ?? []
+  const tenuresList = (p.governmentPositions ?? p.governmentTenures ?? []) as unknown[]
 
-  const detailWithFamily = person as {
-    father?: PersonNameFields | null
-    mother?: PersonNameFields | null
-    spouse?: PersonNameFields | null
-  }
-  const familyFather = detailWithFamily.father
-  const familyMother = detailWithFamily.mother
-  const familySpouse = detailWithFamily.spouse
+  const familyFather = p.father
+  const familyMother = p.mother
+  const familySpouse = p.spouse
   const hasFamilyOnOverview =
     familyFather != null || familyMother != null || familySpouse != null
 
-  const countryFlagSrc = person.country
-    ? (person.country as { thumbnailUrl?: string }).thumbnailUrl
-      ? getUploadImageUrl(
-          (person.country as { thumbnailUrl?: string }).thumbnailUrl,
-        ) || (person.country as { thumbnailUrl?: string }).thumbnailUrl
-      : (person.country as { isoCode?: string }).isoCode
-        ? `https://flagcdn.com/w80/${((person.country as { isoCode?: string }).isoCode || '').toLowerCase()}.png`
-        : null
-    : null
+  const countryFlagSrc = p.country?.thumbnailUrl
+    ? getUploadImageUrl(p.country.thumbnailUrl) || p.country.thumbnailUrl
+    : p.country?.isoCode
+      ? `https://flagcdn.com/w80/${p.country.isoCode.toLowerCase()}.png`
+      : null
 
   const registeredAtLabel = (() => {
-    const raw = (person as any).createdAt
+    const raw = p.createdAt
     if (!raw) return null
     try {
       const d = new Date(raw)
@@ -370,6 +532,16 @@ export function PersonDetailPanel({
                 <FiEdit2 size={13} />
                 수정
               </OutlineButton>
+              <DeleteButton
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  setDeleteConfirmOpen(true)
+                }}
+              >
+                <FiTrash2 size={13} />
+                삭제
+              </DeleteButton>
             </HeaderActions>
           </TopNavBar>
         )}
@@ -377,7 +549,20 @@ export function PersonDetailPanel({
         {/* 헤더: 썸네일 + 이름 */}
         <HeaderRow>
           <HeaderLeft>
-            <PersonAvatar>
+            {/* 숨긴 파일 입력 */}
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleAvatarFileChange}
+            />
+            <AvatarButton
+              type="button"
+              $loading={uploadingAvatar}
+              aria-label="프로필 사진 변경"
+              onClick={() => !uploadingAvatar && avatarInputRef.current?.click()}
+            >
               {person.profileImageUrl ? (
                 <img
                   src={
@@ -389,16 +574,37 @@ export function PersonDetailPanel({
               ) : (
                 <FiUsers size={24} aria-hidden />
               )}
-            </PersonAvatar>
+              <AvatarOverlay aria-hidden>
+                {uploadingAvatar ? (
+                  <AvatarSpinner />
+                ) : (
+                  <FiCamera size={20} strokeWidth={2} />
+                )}
+              </AvatarOverlay>
+            </AvatarButton>
             <HeaderTitleBlock>
               <PageTitleRow>
-                {countryFlagSrc ? (
-                  <CountryFlagImg src={countryFlagSrc} alt="" aria-hidden />
-                ) : person.country?.name ? (
-                  <CountryBracket>[{person.country.name}]</CountryBracket>
-                ) : null}
                 <PageTitle>{fullName}</PageTitle>
               </PageTitleRow>
+              {p.country?.name && (
+                <DetailCountryRow>
+                  {countryFlagSrc ? (
+                    <CountryFlagImg src={countryFlagSrc} alt="" aria-hidden />
+                  ) : p.country?.flagEmoji ? (
+                    <DetailCountryFlagEmoji>{p.country.flagEmoji}</DetailCountryFlagEmoji>
+                  ) : null}
+                  <DetailCountryName>{p.country.name}</DetailCountryName>
+                </DetailCountryRow>
+              )}
+              {monarchName && (
+                <MonarchTitleRow>
+                  <MonarchCrownIcon>♛</MonarchCrownIcon>
+                  <MonarchNameLabel>{monarchName}</MonarchNameLabel>
+                  {monarchPositionTitle && (
+                    <MonarchPositionBadge>{monarchPositionTitle}</MonarchPositionBadge>
+                  )}
+                </MonarchTitleRow>
+              )}
               <PageSubtitle>{subtitleLifespan}</PageSubtitle>
               {registeredAtLabel && (
                 <RegisteredByline>등록 {registeredAtLabel}</RegisteredByline>
@@ -415,63 +621,39 @@ export function PersonDetailPanel({
                 <KpiLabel>국가</KpiLabel>
                 <KpiValue>{person.country.name}</KpiValue>
               </KpiItem>
-              <KpiDivider />
             </>
           )}
           {(person.gender === 'MALE' || person.gender === 'FEMALE') && (
-            <>
-              <KpiItem>
-                <KpiLabel>성별</KpiLabel>
-                <KpiValue>{genderLabel}</KpiValue>
-              </KpiItem>
-              <KpiDivider />
-            </>
+            <KpiItem>
+              <KpiLabel>성별</KpiLabel>
+              <KpiValue>{genderLabel}</KpiValue>
+            </KpiItem>
           )}
-          <KpiItem>
-            <KpiLabel>저작</KpiLabel>
-            <KpiValue>{person.books?.length ?? 0}건</KpiValue>
-          </KpiItem>
-          <KpiDivider />
           <KpiItem>
             <KpiLabel>정부 직위</KpiLabel>
             <KpiValue>{tenuresList.length}건</KpiValue>
           </KpiItem>
-          <KpiDivider />
           <KpiItem>
             <KpiLabel>주요 사건</KpiLabel>
             <KpiValue>{person.events?.length ?? 0}건</KpiValue>
           </KpiItem>
-          <KpiDivider />
-          <KpiItem>
-            <KpiLabel>조직 활동</KpiLabel>
-            <KpiValue>{person.organizationRoles?.length ?? 0}건</KpiValue>
-          </KpiItem>
           {person.dynasty && (
-            <>
-              <KpiDivider />
-              <KpiItem>
-                <KpiLabel>가문</KpiLabel>
-                <KpiValue>{person.dynasty.name}</KpiValue>
-              </KpiItem>
-            </>
+            <KpiItem>
+              <KpiLabel>가문</KpiLabel>
+              <KpiValue>{person.dynasty.name}</KpiValue>
+            </KpiItem>
           )}
           {person.religion && (
-            <>
-              <KpiDivider />
-              <KpiItem>
-                <KpiLabel>종교</KpiLabel>
-                <KpiValue>{person.religion.name}</KpiValue>
-              </KpiItem>
-            </>
+            <KpiItem>
+              <KpiLabel>종교</KpiLabel>
+              <KpiValue>{person.religion.name}</KpiValue>
+            </KpiItem>
           )}
           {person.spouse && (
-            <>
-              <KpiDivider />
-              <KpiItem>
-                <KpiLabel>배우자</KpiLabel>
-                <KpiValue>{getPersonDisplayName(person.spouse)}</KpiValue>
-              </KpiItem>
-            </>
+            <KpiItem>
+              <KpiLabel>배우자</KpiLabel>
+              <KpiValue>{getPersonDisplayName(person.spouse)}</KpiValue>
+            </KpiItem>
           )}
         </KpiStrip>
 
@@ -522,20 +704,6 @@ export function PersonDetailPanel({
           <TabBtn
             type="button"
             role="tab"
-            id="person-detail-tab-activities"
-            aria-selected={activeTab === 'activities'}
-            $active={activeTab === 'activities'}
-            onClick={() => {
-              playClickSound()
-              setActiveTab('activities')
-            }}
-          >
-            <FiBriefcase size={14} />
-            활동
-          </TabBtn>
-          <TabBtn
-            type="button"
-            role="tab"
             id="person-detail-tab-events"
             aria-selected={activeTab === 'events'}
             $active={activeTab === 'events'}
@@ -546,20 +714,6 @@ export function PersonDetailPanel({
           >
             <FiCalendar size={14} />
             사건
-          </TabBtn>
-          <TabBtn
-            type="button"
-            role="tab"
-            id="person-detail-tab-works"
-            aria-selected={activeTab === 'works'}
-            $active={activeTab === 'works'}
-            onClick={() => {
-              playClickSound()
-              setActiveTab('works')
-            }}
-          >
-            <FiBook size={14} />
-            저작
           </TabBtn>
         </TabNav>
 
@@ -596,8 +750,7 @@ export function PersonDetailPanel({
                     )}
                   </SectionLabelRow>
                   {tenuresList.length > 0 ? (
-                    <TenureListWrap>
-                      <TenureList>
+                    <TenureList>
                         {tenuresList.map((tenure: any) => {
                           const positionTitle =
                             tenure.positionDefinition?.title ??
@@ -680,8 +833,7 @@ export function PersonDetailPanel({
                             </TenureRow>
                           )
                         })}
-                      </TenureList>
-                    </TenureListWrap>
+                    </TenureList>
                   ) : (
                     <TenureEmpty>
                       {embedInModal ? (
@@ -711,44 +863,115 @@ export function PersonDetailPanel({
                   tenureId={editingTenureId ?? undefined}
                 />
 
-                {hasFamilyOnOverview ? (
-                  <section aria-label="부모·배우자">
-                    <SectionLabel>가족</SectionLabel>
-                    <ListBlock>
-                      {familyFather != null || familyMother != null ? (
-                        <>
-                          <ListRowGroupLabel>부모</ListRowGroupLabel>
-                          {familyFather != null && (
-                            <ListRow>
-                              <ListRowPrimary>
-                                {getPersonDisplayName(familyFather)}
-                              </ListRowPrimary>
-                              <ListRowMeta>아버지</ListRowMeta>
-                            </ListRow>
+                <OverviewSectionDivider />
+
+                {/* 군주 재위 섹션 */}
+                <section aria-label="군주 재위">
+                  <SectionLabelRow>
+                    <SectionLabel>군주 재위</SectionLabel>
+                    {!embedInModal && (
+                      <TenureAddButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setEditingReignId(null)
+                          setSovereignReignModalOpen(true)
+                        }}
+                      >
+                        <FiPlus size={14} />
+                        군주 등록
+                      </TenureAddButton>
+                    )}
+                  </SectionLabelRow>
+                  {(() => {
+                    const reigns = (p.sovereignReigns ?? []) as NonNullable<typeof p.sovereignReigns>
+                    if (reigns.length === 0) {
+                      return (
+                        <TenureEmpty>
+                          {embedInModal ? (
+                            '등록된 재위 기록이 없습니다.'
+                          ) : (
+                            <>
+                              등록된 재위 기록이 없습니다.{' '}
+                              <strong>군주 등록</strong>으로 재위 기간을 추가하세요.
+                            </>
                           )}
-                          {familyMother != null && (
-                            <ListRow>
-                              <ListRowPrimary>
-                                {getPersonDisplayName(familyMother)}
-                              </ListRowPrimary>
-                              <ListRowMeta>어머니</ListRowMeta>
-                            </ListRow>
-                          )}
-                        </>
-                      ) : null}
-                      {familySpouse != null && (
-                        <>
-                          <ListRowGroupLabel>배우자</ListRowGroupLabel>
-                          <ListRow>
-                            <ListRowPrimary>
-                              {getPersonDisplayName(familySpouse)}
-                            </ListRowPrimary>
-                          </ListRow>
-                        </>
-                      )}
-                    </ListBlock>
-                  </section>
-                ) : null}
+                        </TenureEmpty>
+                      )
+                    }
+                    return (
+                      <ReignCardList>
+                        {reigns.map((reign) => {
+                          const posTitle = reign.positionDefinition?.title ?? '군주'
+                          const countryName =
+                            reign.historicalCountry?.name ?? reign.country?.name ?? null
+                          const startStr = formatIsoDateKo(reign.startDate)
+                          const endStr = reign.endDate ? formatIsoDateKo(reign.endDate) : null
+                          const regnalNoteMatch = (reign.notes ?? '').match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || (reign.notes ?? '').match(/왕명\s*:\s*(.+)/i)
+                          const regnalNameFromNote = regnalNoteMatch ? regnalNoteMatch[1].trim() : null
+                          return (
+                            <ReignCard key={reign.id}>
+                              <ReignCardAccent />
+                              <ReignCardBody>
+                                <ReignCardTopRow>
+                                  <ReignCrownIcon>♛</ReignCrownIcon>
+                                  <ReignCardTitle>
+                                    {regnalNameFromNote
+                                      ? `${regnalNameFromNote} · ${posTitle}`
+                                      : posTitle}
+                                    {reign.regnalNumber != null && (
+                                      <ReignOrdinal>{reign.regnalNumber}대</ReignOrdinal>
+                                    )}
+                                  </ReignCardTitle>
+                                  {!embedInModal && (
+                                    <ReignEditBtn
+                                      type="button"
+                                      onClick={() => {
+                                        playClickSound()
+                                        setEditingReignId(reign.id)
+                                        setSovereignReignModalOpen(true)
+                                      }}
+                                    >
+                                      <FiEdit2 size={11} />
+                                    </ReignEditBtn>
+                                  )}
+                                </ReignCardTopRow>
+                                <ReignCardMetaRow>
+                                  {countryName && (
+                                    <ReignMetaChip>{countryName}</ReignMetaChip>
+                                  )}
+                                  {(startStr || endStr) && (
+                                    <ReignMetaChip $muted>
+                                      {startStr || '?'}
+                                      {' – '}
+                                      {endStr ?? '현재'}
+                                    </ReignMetaChip>
+                                  )}
+                                </ReignCardMetaRow>
+                              </ReignCardBody>
+                            </ReignCard>
+                          )
+                        })}
+                      </ReignCardList>
+                    )
+                  })()}
+                </section>
+
+                <SovereignReignRegisterPanel
+                  personId={person.id}
+                  open={sovereignReignModalOpen}
+                  onClose={() => {
+                    setSovereignReignModalOpen(false)
+                    setEditingReignId(null)
+                  }}
+                  onSuccess={() => {
+                    setSovereignReignModalOpen(false)
+                    setEditingReignId(null)
+                  }}
+                  reignId={editingReignId}
+                />
+
+                <OverviewSectionDivider />
 
                 <PersonHumanRelationshipsSection
                   personId={person.id}
@@ -760,6 +983,8 @@ export function PersonDetailPanel({
                     ).humanRelationships
                   }
                 />
+
+                <OverviewSectionDivider />
 
                 <section aria-label="전기">
                   <BioSectionLabelRow>
@@ -881,6 +1106,7 @@ export function PersonDetailPanel({
                   {!person.father &&
                   !person.mother &&
                   !person.spouse &&
+                  (!person.spouseRelations || person.spouseRelations.length === 0) &&
                   (!person.children || person.children.length === 0) ? (
                     <EmptyState>가족 정보가 없습니다</EmptyState>
                   ) : (
@@ -888,9 +1114,34 @@ export function PersonDetailPanel({
                       ego={person}
                       father={person.father}
                       mother={person.mother}
+                      paternalGrandfather={person.father?.father}
+                      paternalGrandmother={person.father?.mother}
+                      maternalGrandfather={person.mother?.father}
+                      maternalGrandmother={person.mother?.mother}
                       spouse={person.spouse}
+                      spouses={(person.spouseRelations ?? []).map((r: any) => r.spouse).filter(Boolean)}
+                      siblings={person.siblings}
                       children={person.children}
+                      familyTreeData={familyTreeData}
+                      onPersonClick={
+                        embedInModal
+                          ? onLinkedPersonClick
+                          : pushPersonToModalStack
+                      }
                     />
+                  )}
+                  {!embedInModal && (
+                    <FullGenealogyLinkRow>
+                      <FullGenealogyLink
+                        onClick={() => {
+                          playClickSound()
+                          window.open(`/genealogy/${person.id}/`, '_blank')
+                        }}
+                      >
+                        <FiUsers size={14} strokeWidth={1.75} />
+                        전체 가계도 보기
+                      </FullGenealogyLink>
+                    </FullGenealogyLinkRow>
                   )}
                 </section>
               </TabContent>
@@ -930,115 +1181,6 @@ export function PersonDetailPanel({
               </TabContent>
             )}
 
-            {activeTab === 'activities' && (
-              <TabContent
-                key="activities"
-                role="tabpanel"
-                id="person-detail-panel-activities"
-                aria-labelledby="person-detail-tab-activities"
-                as={motion.div}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-              >
-                <section aria-label="활동">
-                  <SectionLabel>활동</SectionLabel>
-                  {(!person.militaryCommands ||
-                    person.militaryCommands.length === 0) &&
-                  (!person.organizationRoles ||
-                    person.organizationRoles.length === 0) &&
-                  tenuresList.length === 0 ? (
-                    <EmptyState>활동 정보가 없습니다</EmptyState>
-                  ) : (
-                    <>
-                      {tenuresList.length > 0 && (
-                        <TenureSectionCard>
-                          <TenureSectionLabel>
-                            정부 직위 ({tenuresList.length}건)
-                          </TenureSectionLabel>
-                          {tenuresList.map((tenure: any) => {
-                            const positionTitle =
-                              tenure.positionDefinition?.title ??
-                              tenure.position?.title ??
-                              tenure.title ??
-                              '직책'
-                            const countryName =
-                              tenure.country?.name ??
-                              tenure.historicalCountry?.name ??
-                              null
-                            const startStr = tenure.startDate
-                              ? new Date(tenure.startDate).toLocaleDateString(
-                                  'ko-KR',
-                                  {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                  },
-                                )
-                              : null
-                            const endStr = tenure.endDate
-                              ? new Date(tenure.endDate).toLocaleDateString(
-                                  'ko-KR',
-                                  {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric',
-                                  },
-                                )
-                              : null
-                            const period =
-                              [startStr, endStr].filter(Boolean).join(' ~ ') ||
-                              '—'
-                            const termNum =
-                              tenure.termNumber ?? tenure.regnalNumber
-                            return (
-                              <TenureItem key={tenure.id}>
-                                <TenurePositionTitle>
-                                  {positionTitle}
-                                </TenurePositionTitle>
-                                <TenureMetaRow>
-                                  {countryName && (
-                                    <TenureCountryBadge>
-                                      {countryName}
-                                    </TenureCountryBadge>
-                                  )}
-                                  {termNum != null && (
-                                    <TenureTerm>제{termNum}대</TenureTerm>
-                                  )}
-                                  <TenurePeriod>{period}</TenurePeriod>
-                                </TenureMetaRow>
-                              </TenureItem>
-                            )
-                          })}
-                        </TenureSectionCard>
-                      )}
-                      {(person.militaryCommands?.length > 0 ||
-                        person.organizationRoles?.length > 0) && (
-                        <ListBlock>
-                          {person.militaryCommands?.map((cmd: any) => (
-                            <ListRow key={cmd.id}>
-                              <ListRowPrimary>{cmd.unit?.name}</ListRowPrimary>
-                              <ListRowMeta>
-                                {cmd.rank} · {cmd.role}
-                              </ListRowMeta>
-                            </ListRow>
-                          ))}
-                          {person.organizationRoles?.map((role: any) => (
-                            <ListRow key={role.id}>
-                              <ListRowPrimary>
-                                {role.organization?.name}
-                              </ListRowPrimary>
-                              <ListRowMeta>{role.roleTitle}</ListRowMeta>
-                            </ListRow>
-                          ))}
-                        </ListBlock>
-                      )}
-                    </>
-                  )}
-                </section>
-              </TabContent>
-            )}
 
             {activeTab === 'events' && (
               <TabContent
@@ -1076,41 +1218,62 @@ export function PersonDetailPanel({
               </TabContent>
             )}
 
-            {activeTab === 'works' && (
-              <TabContent
-                key="works"
-                role="tabpanel"
-                id="person-detail-panel-works"
-                aria-labelledby="person-detail-tab-works"
-                as={motion.div}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.2 }}
-              >
-                <section aria-label="저작">
-                  <SectionLabel>저작</SectionLabel>
-                  {!person.books || person.books.length === 0 ? (
-                    <EmptyState>저작물 정보가 없습니다</EmptyState>
-                  ) : (
-                    <ListBlock>
-                      {person.books.map((book: any) => (
-                        <ListRow key={book.id}>
-                          <ListRowPrimary>{book.title}</ListRowPrimary>
-                          <ListRowMeta>
-                            {book.publishedYear &&
-                              `${book.publishedYear}년 출판`}
-                          </ListRowMeta>
-                        </ListRow>
-                      ))}
-                    </ListBlock>
-                  )}
-                </section>
-              </TabContent>
-            )}
           </AnimatePresence>
         </TabContentArea>
       </PanelRoot>
+
+      <AnimatePresence>
+        {deleteConfirmOpen && (
+          <DeleteConfirmOverlay
+            key="delete-confirm-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => !deletingPerson && setDeleteConfirmOpen(false)}
+            role="presentation"
+          >
+            <DeleteConfirmDialog
+              key="delete-confirm-dialog"
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-confirm-title"
+            >
+              <DeleteConfirmIconWrap>
+                <FiAlertTriangle size={28} strokeWidth={1.75} />
+              </DeleteConfirmIconWrap>
+              <DeleteConfirmTitle id="delete-confirm-title">인물 삭제</DeleteConfirmTitle>
+              <DeleteConfirmPersonName>{fullName}</DeleteConfirmPersonName>
+              <DeleteConfirmDesc>
+                이 인물을 삭제하면 프로필 사진을 포함한 모든 데이터가 영구적으로 제거됩니다.
+                <br />이 작업은 되돌릴 수 없습니다.
+              </DeleteConfirmDesc>
+              <DeleteConfirmActions>
+                <DeleteConfirmCancelBtn
+                  type="button"
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  disabled={deletingPerson}
+                >
+                  취소
+                </DeleteConfirmCancelBtn>
+                <DeleteConfirmDeleteBtn
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  disabled={deletingPerson}
+                  $loading={deletingPerson}
+                >
+                  {deletingPerson ? '삭제 중...' : '삭제'}
+                </DeleteConfirmDeleteBtn>
+              </DeleteConfirmActions>
+            </DeleteConfirmDialog>
+          </DeleteConfirmOverlay>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {!embedInModal && personLinkStack.length > 0 && modalTopId && (
@@ -1238,10 +1401,7 @@ const BioMentionModalPanel = styled(motion.div)`
   border: ${({ theme }) =>
     theme.mode === 'dark' ? '1px solid rgba(255,255,255,0.1)' : 'none'};
   border-radius: 24px;
-  box-shadow:
-    0 32px 64px -16px rgba(0, 0, 0, 0.2),
-    0 16px 32px -16px rgba(0, 0, 0, 0.1),
-    0 0 0 1px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
   width: 100%;
   max-width: 740px;
   height: 68vh;
@@ -1316,11 +1476,11 @@ const BioMentionModalClose = styled.button`
     color 0.2s ease,
     background 0.2s ease,
     box-shadow 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) => theme.colors.background.tertiary};
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+    box-shadow: none;
   }
   &:active {
     transform: scale(0.97);
@@ -1369,9 +1529,7 @@ const BioTermTooltipPopover = styled.div<{ $x: number; $y: number }>`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   font-size: 13px;
   line-height: 1.5;
@@ -1403,9 +1561,7 @@ const BioDynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   font-size: 13px;
   line-height: 1.5;
@@ -1414,7 +1570,7 @@ const BioDynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
     display: block;
     margin-bottom: 6px;
     font-size: 12px;
-    color: #6d28d9;
+    color: #6366f1;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     max-width: 100%;
@@ -1440,59 +1596,63 @@ const TopNavBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
 `
 
 const HeaderRow = styled.header`
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
+  text-align: center;
   gap: 16px;
-  padding: 20px 24px;
-  border-radius: 16px;
+  padding: 36px 32px 28px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+  background: transparent;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-        `
-      : css`
-          background: #ffffff;
-        `}
+  box-shadow: none;
 `
 
 const HeaderLeft = styled.div`
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
+  width: 100%;
 `
 
-const PersonAvatar = styled.div`
-  width: 72px;
-  height: 72px;
-  border-radius: 14px;
+const AvatarButton = styled.button<{ $loading?: boolean }>`
+  position: relative;
+  width: 132px;
+  height: 132px;
+  border-radius: 9999px;
   overflow: hidden;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 44px;
+  font-weight: 700;
+  cursor: ${({ $loading }) => ($loading ? 'wait' : 'pointer')};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.1)'
-        : 'rgba(226, 232, 240, 0.8)'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.6)' : '#94a3b8'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f8fafc'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  padding: 0;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : '#94a3b8'};
+  }
 
   img {
     width: 100%;
@@ -1500,16 +1660,54 @@ const PersonAvatar = styled.div`
     object-fit: cover;
     object-position: top center;
   }
+
+  svg {
+    opacity: 0.9;
+  }
+
+  &:hover > span {
+    opacity: 1;
+  }
+`
+
+const AvatarOverlay = styled.span`
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+`
+
+const AvatarSpinner = styled.span`
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: avatarSpin 0.7s linear infinite;
+  @keyframes avatarSpin {
+    to { transform: rotate(360deg); }
+  }
 `
 
 const HeaderTitleBlock = styled.div`
   min-width: 0;
-  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 `
 
 const PageTitleRow = styled.div`
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
 `
@@ -1520,40 +1718,125 @@ const CountryFlagImg = styled.img`
   object-fit: cover;
   border-radius: 3px;
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  box-shadow: none;
 `
 
 const CountryBracket = styled.span`
   font-size: 11px;
   font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 5px;
+  padding: 3px 8px;
+  border-radius: 8px;
   letter-spacing: 0.02em;
-  color: #7c3aed;
-  background: rgba(124, 58, 237, 0.08);
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+`
+
+const DetailCountryRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 100px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.1);
+        `
+      : css`
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+        `}
+`
+
+const DetailCountryFlagEmoji = styled.span`
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+`
+
+const DetailCountryName = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(203,213,225,0.9)' : '#475569'};
 `
 
 const PageTitle = styled.h1`
   margin: 0;
-  font-size: 21px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
   line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.text.primary};
+  text-align: center;
+  word-break: keep-all;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   @media (max-width: 640px) {
-    font-size: 18px;
+    font-size: 19px;
     white-space: normal;
   }
 `
 
+const MonarchTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+`
+
+const MonarchCrownIcon = styled.span`
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+`
+
+const MonarchNameLabel = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.9)' : 'rgba(160,110,0,0.95)'};
+  letter-spacing: 0.02em;
+`
+
+const MonarchPositionBadge = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 100px;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.85)' : 'rgba(140,95,0,0.9)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.12)' : 'rgba(251,191,36,0.18)'};
+  border: 1px solid ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.25)' : 'rgba(251,191,36,0.4)'};
+`
+
+const PageSubtitleInline = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 14px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.secondary : '#64748b'};
+
+  svg {
+    color: #6366f1;
+    flex-shrink: 0;
+  }
+`
+
 const PageSubtitle = styled.p`
-  margin: 5px 0 0;
-  font-size: 12.5px;
+  margin: 8px 0 0;
+  font-size: 13px;
   line-height: 1.5;
-  font-weight: 400;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
@@ -1570,101 +1853,333 @@ const RegisteredByline = styled.p`
 const BackToListButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0;
+  gap: 8px;
+  padding: 10px 16px;
   font-size: 13px;
-  font-weight: 500;
-  background: none;
-  border: none;
+  font-weight: 700;
+  border-radius: 12px;
   cursor: pointer;
-  transition: color 0.15s;
   flex-shrink: 0;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-  }
+  color: #6366f1;
+  transition: all 0.2s ease;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          &:hover {
+            background: rgba(99, 102, 241, 0.12);
+            transform: translateY(-1px);
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          &:hover {
+            background: rgba(99, 102, 241, 0.06);
+            border-color: rgba(99, 102, 241, 0.35);
+            transform: translateY(-1px);
+            box-shadow: none;
+          }
+        `}
 `
 
 const OutlineButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0;
+  gap: 8px;
+  padding: 10px 16px;
   font-size: 13px;
-  font-weight: 500;
-  background: none;
-  border: none;
+  font-weight: 700;
+  border-radius: 12px;
   cursor: pointer;
-  transition: color 0.15s;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-  }
-`
-
-const KpiStrip = styled.div<{ $compact?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: ${(p) => (p.$compact ? 12 : 22)}px;
-  flex-wrap: wrap;
-  padding: ${(p) => (p.$compact ? '12px 18px' : '14px 22px')};
-  border-radius: 13px;
-  margin-bottom: 40px;
+  color: #6366f1;
+  transition: all 0.2s ease;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          &:hover {
+            background: rgba(99, 102, 241, 0.12);
+            transform: translateY(-1px);
+          }
         `
       : css`
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          &:hover {
+            background: rgba(99, 102, 241, 0.06);
+            border-color: rgba(99, 102, 241, 0.35);
+            transform: translateY(-1px);
+            box-shadow: none;
+          }
         `}
 `
 
-const KpiItem = styled.div`
+const DeleteButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          color: rgba(252, 165, 165, 0.9);
+          background: rgba(239, 68, 68, 0.08);
+          border: 1px solid rgba(239, 68, 68, 0.25);
+          &:hover {
+            background: rgba(239, 68, 68, 0.16);
+            border-color: rgba(239, 68, 68, 0.45);
+            transform: translateY(-1px);
+          }
+        `
+      : css`
+          color: #dc2626;
+          background: rgba(239, 68, 68, 0.06);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          &:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.35);
+            transform: translateY(-1px);
+          }
+        `}
+`
+
+/* ── 삭제 확인 모달 ────────────────────────────────────────────── */
+
+const DeleteConfirmOverlay = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+`
+
+const DeleteConfirmDialog = styled(motion.div)`
+  width: 100%;
+  max-width: 380px;
+  border-radius: 20px;
+  padding: 32px 28px 24px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  text-align: center;
+  z-index: ${Z_INDEX.MODAL_CONTENT};
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(28, 28, 32, 0.97);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid rgba(239, 68, 68, 0.15);
+          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+        `}
 `
 
-const KpiLabel = styled.span`
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+const DeleteConfirmIconWrap = styled.div`
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: #ef4444;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(239, 68, 68, 0.12);
+          border: 1px solid rgba(239, 68, 68, 0.22);
+        `
+      : css`
+          background: rgba(239, 68, 68, 0.08);
+          border: 1px solid rgba(239, 68, 68, 0.18);
+        `}
 `
 
-const KpiValue = styled.span`
-  font-size: 13.5px;
+const DeleteConfirmTitle = styled.h2`
+  margin: 0 0 6px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
+  letter-spacing: -0.025em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const KpiDivider = styled.span`
-  width: 1px;
-  height: 26px;
-  flex-shrink: 0;
-  background: ${({ theme }) =>
+const DeleteConfirmPersonName = styled.p`
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ef4444;
+`
+
+const DeleteConfirmDesc = styled.p`
+  margin: 0 0 24px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const DeleteConfirmActions = styled.div`
+  display: flex;
+  gap: 10px;
+  width: 100%;
+`
+
+const DeleteConfirmCancelBtn = styled.button`
+  flex: 1;
+  padding: 12px 0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+  ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.1)'
-      : 'linear-gradient(to bottom, transparent, #cbd5e1 30%, #cbd5e1 70%, transparent)'};
+      ? css`
+          background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: ${theme.colors.text.primary};
+          &:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+        `
+      : css`
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #475569;
+          &:hover:not(:disabled) { background: #e9eef5; }
+        `}
+`
+
+const DeleteConfirmDeleteBtn = styled.button<{ $loading?: boolean }>`
+  flex: 1;
+  padding: 12px 0;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  border: none;
+  background: #ef4444;
+  color: #ffffff;
+  opacity: ${({ $loading }) => ($loading ? 0.7 : 1)};
+  &:disabled { cursor: not-allowed; }
+  &:hover:not(:disabled) {
+    background: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+  }
+`
+
+/**
+ * 인물 핵심 정보 대시보드 — 헤더 아래 한 줄.
+ * 카드 중첩 없이, 하나의 줄(divider) 안에서 라벨 위 / 값 아래 형식으로
+ * 균등하게 나열. 정보가 적어도 빈약해 보이지 않도록 큰 타이포 + 넉넉한 패딩.
+ */
+const KpiStrip = styled.div<{ $compact?: boolean }>`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 28px;
+  padding: 22px 4px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+`
+
+const KpiItem = styled.div`
+  flex: 1 1 0;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 18px;
+  text-align: center;
+
+  & + & {
+    border-left: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
+  }
+  @media (max-width: 640px) {
+    flex-basis: 50%;
+    & + & {
+      border-left: none;
+    }
+  }
+`
+
+const KpiLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
+`
+
+const KpiValue = styled.span`
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  word-break: keep-all;
 `
 
 const SectionLabel = styled.div`
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.8px;
+  color: #6366f1;
+`
+
+const FullGenealogyLinkRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+`
+
+const FullGenealogyLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.07);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  &:hover {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+  }
 `
 
 const SectionLabelRow = styled.div`
@@ -1673,69 +2188,218 @@ const SectionLabelRow = styled.div`
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+`
+
+/** 개요 탭 섹션(직책 / 인간관계 / 전기) 사이 구분선 */
+const OverviewSectionDivider = styled.hr`
+  margin: 32px 0;
+  border: none;
+  height: 1px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08) 20%, rgba(255,255,255,0.08) 80%, transparent)'
+      : 'linear-gradient(90deg, transparent, #e2e8f0 20%, #e2e8f0 80%, transparent)'};
 `
 
 const TenureAddButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0;
+  padding: 7px 13px;
   font-size: 13px;
-  font-weight: 500;
-  background: none;
-  border: none;
+  font-weight: 600;
+  border-radius: 10px;
   cursor: pointer;
-  transition: color 0.15s;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-  }
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+  color: #6366f1;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(99, 102, 241, 0.08);
+          border: 1px solid rgba(99, 102, 241, 0.25);
+          &:hover {
+            background: rgba(99, 102, 241, 0.14);
+            border-color: rgba(99, 102, 241, 0.45);
+            transform: translateY(-1px);
+          }
+        `
+      : css`
+          background: rgba(99, 102, 241, 0.06);
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          &:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.4);
+            transform: translateY(-1px);
+          }
+        `}
 `
 
 const TenureEmpty = styled.p`
   margin: 0;
-  padding: 18px 20px;
+  padding: 8px 0;
   font-size: 13px;
-  line-height: 1.5;
-  border-radius: 11px;
-  border: 1.5px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  text-align: center;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.02)'
-      : 'rgba(248, 250, 252, 0.5)'};
+  line-height: 1.6;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
   strong {
-    color: ${({ theme }) => theme.colors.text.secondary};
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.secondary : '#475569'};
     font-weight: 600;
   }
 `
 
-const SectionCard = styled.div`
+/* ── 군주 재위 카드 ──────────────────────────── */
+const ReignCardList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const ReignCard = styled.div`
+  display: flex;
+  align-items: stretch;
   border-radius: 14px;
-  padding: 22px 24px;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 2px 8px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          &:hover { background: rgba(255,255,255,0.06); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+        `
+      : css`
+          background: #fff;
+          border: 1px solid #f1f5f9;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+          &:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        `}
+`
+
+const ReignCardAccent = styled.div`
+  width: 4px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+`
+
+const ReignCardBody = styled.div`
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ReignCardTopRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+`
+
+const ReignCrownIcon = styled.span`
+  font-size: 14px;
+  line-height: 1;
+  color: #d97706;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(217,119,6,0.3));
+`
+
+const ReignCardTitle = styled.div`
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  ${({ theme }) =>
+    theme.mode === 'dark' ? `color: ${theme.colors.text.primary};` : `color: #1e293b;`}
+`
+
+const ReignOrdinal = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
+  border-radius: 6px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+`
+
+const ReignEditBtn = styled.button`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: transparent;
+          color: ${theme.colors.text.tertiary};
+          &:hover { background: rgba(255,255,255,0.08); color: ${theme.colors.text.primary}; }
+        `
+      : css`
+          background: transparent;
+          color: #94a3b8;
+          &:hover { background: #f1f5f9; color: #475569; }
+        `}
+`
+
+const ReignCardMetaRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const ReignMetaChip = styled.span<{ $muted?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 2px 7px;
+  ${({ theme, $muted }) =>
+    theme.mode === 'dark'
+      ? $muted
+        ? `background: rgba(255,255,255,0.05); color: ${theme.colors.text.tertiary};`
+        : `background: rgba(217,119,6,0.12); color: #fbbf24;`
+      : $muted
+        ? `background: #f8fafc; color: #64748b;`
+        : `background: rgba(217,119,6,0.08); color: #92400e;`}
+`
+
+const SectionCard = styled.div`
+  border-radius: 20px;
+  padding: 24px 28px;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.04);
           border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
+          box-shadow: none;
         `
       : css`
-          background: #fff;
-          border: 1px solid #e2e8f0;
+          background: #ffffff;
+          border: 1px solid rgba(20, 19, 34, 0.08);
+          box-shadow: none;
         `}
 `
 
@@ -1749,19 +2413,15 @@ const BioSectionLabelRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  margin-bottom: 14px;
 `
 
 const BioSectionLabel = styled.div`
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.8px;
+  color: #6366f1;
 `
 
 const BioText = styled.div`
@@ -1808,22 +2468,20 @@ const BioEditActions = styled.div`
 const PrimaryButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 16px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #6366f1;
   border: none;
-  border-radius: 9px;
+  border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.28);
-  transition:
-    box-shadow 0.15s,
-    opacity 0.15s;
+  box-shadow: none;
+  transition: all 0.2s ease;
   &:hover:not(:disabled) {
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.38);
-    opacity: 0.95;
+    transform: translateY(-1px);
+    box-shadow: none;
   }
   &:disabled {
     opacity: 0.5;
@@ -1902,25 +2560,28 @@ const ErrorDesc = styled.div`
 
 const CloseBtn = styled.button`
   margin-top: 10px;
-  padding: 9px 18px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #6366f1;
   border: none;
-  border-radius: 9px;
+  border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-  transition: opacity 0.15s;
+  box-shadow: none;
+  transition: all 0.2s ease;
   &:hover {
-    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: none;
   }
 `
 
 const HeaderActions = styled.div`
   display: flex;
   gap: 8px;
-  margin-left: auto;
   align-items: center;
   flex-shrink: 0;
 `
@@ -1928,29 +2589,28 @@ const HeaderActions = styled.div`
 const TabNav = styled.nav`
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 4px 6px;
-  margin-bottom: 48px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 10px;
+  margin-bottom: 24px;
   width: 100%;
-  max-width: 100%;
   min-width: 0;
-  border-radius: 13px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
+  border-radius: 20px;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: none;
         `
       : css`
-          background: #f1f5f9;
-          border: 1px solid rgba(226, 232, 240, 0.55);
+          background: #ffffff;
+          border: 1px solid rgba(20, 19, 34, 0.08);
+          box-shadow: none;
         `}
 `
 
@@ -1959,56 +2619,59 @@ const TabBtn = styled.button<{ $active: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 15px;
-  border-radius: 9px;
+  gap: 8px;
+  padding: 10px 18px;
   border: none;
-  font-size: 12.5px;
-  font-weight: ${({ $active }) => ($active ? '700' : '500')};
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? '700' : '600')};
   cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s,
-    box-shadow 0.15s;
   white-space: nowrap;
+  border-radius: 12px;
+  transition: all 0.2s ease;
 
   ${({ $active, theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: ${$active ? 'rgba(99, 106, 242, 0.25)' : 'transparent'};
-          color: ${$active ? '#ffffff' : theme.colors.text.secondary};
-          box-shadow: ${$active ? '0 1px 5px rgba(99, 106, 242, 0.3)' : 'none'};
+          color: ${$active ? '#ffffff' : 'rgba(255,255,255,0.55)'};
+          background: ${$active
+            ? '#6366f1'
+            : 'transparent'};
+          box-shadow: none;
           svg {
             flex-shrink: 0;
-            opacity: ${$active ? 1 : 0.6};
+            opacity: ${$active ? 1 : 0.7};
           }
           &:hover {
-            color: #ffffff;
-            background: ${$active
-              ? 'rgba(99, 106, 242, 0.3)'
-              : 'rgba(255,255,255,0.08)'};
+            ${!$active &&
+            css`
+              color: #a5b4fc;
+              background: rgba(99, 102, 241, 0.12);
+            `}
           }
         `
       : css`
-          background: ${$active ? '#ffffff' : 'transparent'};
-          color: ${$active ? '#4f46e5' : '#64748b'};
-          box-shadow: ${$active
-            ? '0 1px 5px rgba(79, 70, 229, 0.14), 0 0 0 1px rgba(99, 102, 241, 0.1)'
-            : 'none'};
+          color: ${$active ? '#ffffff' : '#64748b'};
+          background: ${$active
+            ? '#6366f1'
+            : 'transparent'};
+          box-shadow: none;
           svg {
             flex-shrink: 0;
-            opacity: ${$active ? 1 : 0.6};
+            opacity: ${$active ? 1 : 0.7};
           }
           &:hover {
-            color: ${$active ? '#4f46e5' : '#334155'};
-            background: ${$active ? '#ffffff' : 'rgba(255,255,255,0.65)'};
+            ${!$active &&
+            css`
+              color: #6366f1;
+              background: rgba(99, 102, 241, 0.08);
+            `}
           }
         `}
 
   @media (max-width: 768px) {
-    padding: 7px 11px;
+    padding: 9px 14px;
     font-size: 12px;
-    gap: 5px;
+    gap: 6px;
   }
 `
 
@@ -2025,38 +2688,39 @@ const TabContent = styled.div`
 `
 
 const ListBlock = styled.div`
-  border-radius: 13px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.04);
           border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
+          box-shadow: none;
         `
       : css`
-          background: #fff;
-          border: 1px solid rgba(226, 232, 240, 0.65);
+          background: #ffffff;
+          border: 1px solid rgba(20, 19, 34, 0.08);
+          box-shadow: none;
         `}
 `
 
 const ListRowGroupLabel = styled.div`
-  padding: 8px 16px;
-  font-size: 9.5px;
+  padding: 10px 20px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.08)'
+      : 'rgba(99, 102, 241, 0.04)'};
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : 'rgba(226, 232, 240, 0.65)'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
+        ? 'rgba(99, 102, 241, 0.15)'
+        : 'rgba(99, 102, 241, 0.1)'};
 `
 
 const ListRow = styled.div`
@@ -2064,33 +2728,33 @@ const ListRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 14px 20px;
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.05)'
-        : 'rgba(226, 232, 240, 0.45)'};
-  min-height: 44px;
-  transition: background 0.12s;
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(226, 232, 240, 0.6)'};
+  transition: background 0.15s;
   &:last-child {
     border-bottom: none;
   }
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : 'rgba(248, 250, 252, 0.7)'};
+        ? 'rgba(255,255,255,0.03)'
+        : 'rgba(99, 102, 241, 0.04)'};
   }
 `
 
 const ListRowLabel = styled.div`
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   flex-shrink: 0;
   min-width: 60px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
 `
 
 const ListRowPrimary = styled.div`
@@ -2098,14 +2762,16 @@ const ListRowPrimary = styled.div`
   font-weight: 600;
   flex: 1;
   min-width: 0;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
 `
 
 const ListRowMeta = styled.div`
   font-size: 12px;
   font-weight: 500;
   flex-shrink: 0;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.secondary : '#64748b'};
 `
 
 const TenureListWrap = styled.div`
@@ -2116,41 +2782,41 @@ const TenureList = styled.ul`
   list-style: none;
   margin: 0;
   padding: 0;
-  border-radius: 13px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1.5px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-        `
-      : css`
-          background: #fff;
-          border: 1.5px solid #e8ecf8;
-        `}
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 `
 
 const TenureRow = styled.li`
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f0f2f7'};
-  transition: background 0.12s;
-  &:last-child {
-    border-bottom: none;
-  }
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafbff'};
-  }
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1.5px solid rgba(255, 255, 255, 0.08);
+          &:hover {
+            border-color: rgba(99, 102, 241, 0.35);
+            background: rgba(99, 102, 241, 0.08);
+            transform: translateX(4px);
+          }
+        `
+      : css`
+          background: #fafbfc;
+          border: 1.5px solid #e2e8f0;
+          &:hover {
+            background: #ffffff;
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateX(4px);
+            box-shadow: none;
+          }
+        `}
 `
 
 const TenureRowMain = styled.div`
@@ -2159,69 +2825,89 @@ const TenureRowMain = styled.div`
 `
 
 const TenureRowTitle = styled.div`
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  line-height: 1.35;
-  margin-bottom: 6px;
-  color: ${({ theme }) => theme.colors.text.primary};
+  line-height: 1.3;
+  margin-bottom: 8px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
 `
 
 const TenureRowMeta = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
-  font-size: 11.5px;
+  gap: 6px 8px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.4;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const TenureRowMetaItem = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           color: ${theme.colors.text.secondary};
         `
       : css`
-          background: #f1f5f9;
-          color: #475569;
+          background: rgba(99, 102, 241, 0.06);
+          border: 1px solid rgba(99, 102, 241, 0.12);
+          color: #64748b;
         `}
 `
 
 const TenureRowAgeBadge = styled.span`
-  padding: 2px 8px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: #7c3aed;
-  background: ${({ theme }) =>
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 8px;
+
+  ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(124, 58, 237, 0.18)'
-      : 'rgba(124, 58, 237, 0.08)'};
-  border-radius: 5px;
+      ? css`
+          color: #a5b4fc;
+          background: rgba(99, 102, 241, 0.18);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+        `
+      : css`
+          color: #6366f1;
+          background: rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.2);
+        `}
 `
 
 const TenureRowSub = styled.div`
-  margin-top: 7px;
-  font-size: 11px;
-  font-weight: 500;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 11.5px;
   line-height: 1.6;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
-  padding: 6px 10px;
-  border-radius: 7px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+  gap: 4px 12px;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          color: ${theme.colors.text.tertiary};
+        `
+      : css`
+          background: rgba(99, 102, 241, 0.03);
+          border: 1px solid rgba(99, 102, 241, 0.08);
+          color: #64748b;
+        `}
 
   span::before {
     content: '·';
@@ -2237,88 +2923,99 @@ const TenureRowEditBtn = styled.button`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
+  gap: 5px;
+  padding: 6px 12px;
   font-size: 11.5px;
-  font-weight: 600;
-  border-radius: 7px;
+  font-weight: 700;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.12s;
   color: #6366f1;
-  background: ${({ theme }) =>
+  transition: all 0.2s ease;
+
+  ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.12)'
-      : 'rgba(99, 102, 241, 0.07)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.25)'
-        : 'rgba(99, 102, 241, 0.18)'};
-  &:hover {
-    background: rgba(99, 102, 241, 0.18);
-  }
+      ? css`
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(99, 102, 241, 0.3);
+          &:hover {
+            background: rgba(99, 102, 241, 0.15);
+            transform: translateY(-1px);
+            box-shadow: none;
+          }
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid rgba(99, 102, 241, 0.2);
+          &:hover {
+            background: rgba(99, 102, 241, 0.08);
+            transform: translateY(-1px);
+            box-shadow: none;
+          }
+        `}
 `
 
 const TenureSectionCard = styled.div`
   max-width: 720px;
-  border-radius: 13px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.04);
           border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
+          box-shadow: none;
         `
       : css`
-          background: #fff;
-          border: 1px solid rgba(226, 232, 240, 0.65);
+          background: #ffffff;
+          border: 1px solid rgba(20, 19, 34, 0.08);
+          box-shadow: none;
         `}
 `
 
 const TenureSectionLabel = styled.div`
-  padding: 10px 16px;
-  font-size: 9.5px;
+  padding: 12px 20px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.08)'
+      : 'rgba(99, 102, 241, 0.04)'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.15)'
+        : 'rgba(99, 102, 241, 0.1)'};
+`
+
+const TenureItem = styled.div`
+  padding: 16px 20px;
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.06)'
-        : 'rgba(226, 232, 240, 0.65)'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
-`
-
-const TenureItem = styled.div`
-  padding: 14px 16px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.05)'
-        : 'rgba(226, 232, 240, 0.45)'};
-  transition: background 0.12s;
+        : 'rgba(226, 232, 240, 0.6)'};
+  transition: background 0.15s;
   &:last-child {
     border-bottom: none;
   }
   &:hover {
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : 'rgba(248, 250, 252, 0.5)'};
+        ? 'rgba(255,255,255,0.03)'
+        : 'rgba(99, 102, 241, 0.04)'};
   }
 `
 
 const TenurePositionTitle = styled.div`
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
-  margin-bottom: 5px;
-  color: ${({ theme }) => theme.colors.text.primary};
+  margin-bottom: 6px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
 `
 
 const TenureMetaRow = styled.div`
@@ -2331,27 +3028,38 @@ const TenureMetaRow = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const TenureCountryBadge = styled.span`
-  padding: 1.5px 7px;
+const chipStyles = css`
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #4f46e5;
-  background: ${({ theme }) =>
+
+  ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(79, 70, 229, 0.18)'
-      : 'rgba(79, 70, 229, 0.07)'};
-  border-radius: 5px;
+      ? css`
+          background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: ${theme.colors.text.secondary};
+        `
+      : css`
+          background: rgba(99, 102, 241, 0.06);
+          border: 1px solid rgba(99, 102, 241, 0.12);
+          color: #64748b;
+        `}
+`
+
+const TenureCountryBadge = styled.span`
+  ${chipStyles}
 `
 
 const TenurePeriod = styled.span`
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  ${chipStyles}
 `
 
 const TenureTerm = styled.span`
-  font-weight: 500;
-  font-size: 10.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${chipStyles}
 `
 
 const TenureSub = styled.div`
@@ -2362,17 +3070,20 @@ const TenureSub = styled.div`
 `
 
 const EmptyState = styled.div`
-  padding: 40px 20px;
+  padding: 40px 24px;
   text-align: center;
   font-size: 13px;
   font-weight: 500;
-  border-radius: 13px;
-  border: 1.5px dashed
+  border-radius: 16px;
+  border: 1px dashed
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.3)'
+        : 'rgba(99, 102, 241, 0.2)'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255,255,255,0.02)'
-      : 'rgba(248, 250, 252, 0.4)'};
+      : 'rgba(99, 102, 241, 0.02)'};
 `

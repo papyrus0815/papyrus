@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { motion } from 'framer-motion'
-import { FiPlus, FiSettings, FiX } from 'react-icons/fi'
+import { AnimatePresence, motion } from 'framer-motion'
+import { FiCheck, FiFilter, FiPlus, FiSettings, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
@@ -78,8 +78,64 @@ const HeaderActionBtn = styled.button`
 const CountryFilterSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: #f8f9fc;
+          border: 1px solid #e8eaf0;
+        `}
+`
+
+const FilterHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`
+
+const FilterLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`color: rgba(255,255,255,0.3);`
+      : css`color: #9ca3af;`}
+`
+
+const ActiveCountBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(99,106,242,0.3);
+          color: #a5b4fc;
+        `
+      : css`
+          background: #e0e7ff;
+          color: #4f46e5;
+        `}
 `
 
 const ModernCountryRow = styled.div`
@@ -89,144 +145,208 @@ const ModernCountryRow = styled.div`
   gap: 6px;
 `
 
-const ModernCountryChip = styled.button<{ $active?: boolean; $hasFilter?: boolean }>`
+const ModernCountryChip = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 12.5px;
+  gap: 6px;
+  padding: 6px 14px 6px 10px;
+  border-radius: 22px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
   position: relative;
 
   ${({ theme, $active }) =>
     theme.mode === 'dark'
       ? css`
-          border: 1px solid ${$active ? 'rgba(99,106,242,0.6)' : 'rgba(255,255,255,0.1)'};
-          background: ${$active ? 'rgba(99,106,242,0.18)' : 'rgba(255,255,255,0.05)'};
-          color: ${$active ? '#a5b4fc' : theme.colors.text.secondary};
+          border: 1px solid ${$active ? 'rgba(99,106,242,0.55)' : 'rgba(255,255,255,0.1)'};
+          background: ${$active ? 'rgba(99,106,242,0.2)' : 'rgba(255,255,255,0.05)'};
+          color: ${$active ? '#c7d2fe' : theme.colors.text.secondary};
+          box-shadow: ${$active ? '0 0 0 3px rgba(99,106,242,0.12)' : 'none'};
           &:hover {
-            border-color: rgba(99,106,242,0.5);
-            background: rgba(99,106,242,0.12);
-            color: #a5b4fc;
+            border-color: rgba(99,106,242,0.45);
+            background: rgba(99,106,242,0.14);
+            color: #c7d2fe;
           }
         `
       : css`
-          border: 1px solid ${$active ? '#6366f1' : theme.colors.border.default};
-          background: ${$active ? '#eef2ff' : theme.colors.background.secondary};
-          color: ${$active ? '#4f46e5' : '#374151'};
+          border: 1px solid ${$active ? '#818cf8' : '#e2e4ea'};
+          background: ${$active ? '#eef2ff' : '#ffffff'};
+          color: ${$active ? '#4338ca' : '#4b5563'};
+          box-shadow: ${$active
+            ? '0 0 0 3px rgba(99,102,241,0.1)'
+            : '0 1px 2px rgba(0,0,0,0.05)'};
           &:hover {
-            border-color: #6366f1;
-            background: #eef2ff;
-            color: #4f46e5;
+            border-color: #818cf8;
+            background: #f0f3ff;
+            color: #4338ca;
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.08);
           }
         `}
 `
 
-const ActiveFilterDot = styled.span`
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #6366f1;
-  margin-left: 2px;
+const ChipFlag = styled.span`
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
 `
 
-const HistoricalCountryRow = styled.div`
+const ChipCountBadge = styled.span<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  margin-left: 2px;
+  transition: all 0.15s ease;
+
+  ${({ theme, $active }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$active ? 'rgba(99,106,242,0.35)' : 'rgba(255,255,255,0.1)'};
+          color: ${$active ? '#a5b4fc' : 'rgba(255,255,255,0.4)'};
+        `
+      : css`
+          background: ${$active ? '#dde4ff' : '#f0f0f5'};
+          color: ${$active ? '#4338ca' : '#9ca3af'};
+        `}
+`
+
+const HistoricalCountryRow = styled(motion.div)`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 10px;
+  margin-top: 2px;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: rgba(0, 0, 0, 0.18);
+          border: 1px solid rgba(255, 255, 255, 0.06);
         `
       : css`
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
+          background: #ffffff;
+          border: 1px solid #e2e4ea;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.04);
         `}
 `
 
 const HistoricalCountryChip = styled.button<{ $active?: boolean }>`
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 12px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-radius: 9px;
+  font-size: 12.5px;
   cursor: pointer;
   transition: all 0.15s ease;
 
   ${({ theme, $active }) =>
     theme.mode === 'dark'
       ? css`
-          border: 1px solid ${$active ? 'rgba(99,106,242,0.5)' : 'rgba(255,255,255,0.08)'};
-          background: ${$active ? 'rgba(99,106,242,0.15)' : 'rgba(255,255,255,0.04)'};
+          border: 1px solid ${$active ? 'rgba(99,106,242,0.5)' : 'rgba(255,255,255,0.07)'};
+          background: ${$active ? 'rgba(99,106,242,0.18)' : 'rgba(255,255,255,0.04)'};
           color: ${$active ? '#a5b4fc' : theme.colors.text.secondary};
           &:hover {
             border-color: rgba(99,106,242,0.4);
-            background: rgba(99,106,242,0.1);
-            color: #a5b4fc;
+            background: rgba(99,106,242,0.12);
+            color: #c7d2fe;
           }
         `
       : css`
-          border: 1px solid ${$active ? '#6366f1' : '#d1d5db'};
-          background: ${$active ? '#eef2ff' : '#ffffff'};
-          color: ${$active ? '#4f46e5' : '#374151'};
+          border: 1px solid ${$active ? '#818cf8' : '#e5e7eb'};
+          background: ${$active ? '#eef2ff' : '#f9fafb'};
+          color: ${$active ? '#4338ca' : '#374151'};
           &:hover {
-            border-color: #6366f1;
-            background: #eef2ff;
-            color: #4f46e5;
+            border-color: #818cf8;
+            background: #f0f3ff;
+            color: #4338ca;
           }
         `}
 `
 
+const HistChipInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+`
+
 const HistChipName = styled.span`
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.2;
+  font-size: 12.5px;
 `
 
 const HistChipYear = styled.span`
-  font-size: 10.5px;
-  opacity: 0.65;
-  margin-top: 1px;
+  font-size: 10px;
+  opacity: 0.55;
+  line-height: 1;
+`
+
+const HistChipCheck = styled.span<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+
+  ${({ theme, $active }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$active ? 'rgba(99,106,242,0.4)' : 'rgba(255,255,255,0.08)'};
+          color: ${$active ? '#a5b4fc' : 'rgba(255,255,255,0.2)'};
+          border: 1px solid ${$active ? 'rgba(99,106,242,0.5)' : 'rgba(255,255,255,0.1)'};
+        `
+      : css`
+          background: ${$active ? '#6366f1' : '#f3f4f6'};
+          color: ${$active ? '#ffffff' : '#d1d5db'};
+          border: 1px solid ${$active ? '#6366f1' : '#e5e7eb'};
+        `}
 `
 
 const ClearFilterBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 22px;
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  margin-left: 2px;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           background: transparent;
-          color: ${theme.colors.text.secondary};
+          color: rgba(255,255,255,0.3);
           &:hover {
             background: rgba(255, 255, 255, 0.06);
-            color: ${theme.colors.text.primary};
+            color: rgba(255,255,255,0.6);
+            border-color: rgba(255,255,255,0.15);
           }
         `
       : css`
-          border: 1px solid #d1d5db;
+          border: 1px solid #e5e7eb;
           background: transparent;
-          color: #6b7280;
+          color: #9ca3af;
           &:hover {
             background: #f3f4f6;
-            color: #374151;
+            color: #6b7280;
+            border-color: #d1d5db;
           }
         `}
 `
@@ -289,7 +409,17 @@ export function PersonDashboardSection() {
   }, [personList, filterHistIds])
 
   const handleModernChipClick = (modernId: string) => {
-    setExpandedModernId((prev) => (prev === modernId ? null : modernId))
+    const hcIds = (historicalByModern[modernId] ?? []).map((hc) => hc.id)
+    const allSelected = hcIds.length > 0 && hcIds.every((id) => filterHistIds.includes(id))
+    if (allSelected) {
+      // 전체 해제 + 접기
+      setFilterHistIds((prev) => prev.filter((id) => !hcIds.includes(id)))
+      setExpandedModernId((prev) => (prev === modernId ? null : prev))
+    } else {
+      // 전체 선택 + 펼치기
+      setFilterHistIds((prev) => [...prev.filter((id) => !hcIds.includes(id)), ...hcIds])
+      setExpandedModernId(modernId)
+    }
   }
 
   const handleHistChipClick = (histId: string) => {
@@ -389,70 +519,93 @@ export function PersonDashboardSection() {
         {/* Country filter — list 탭에서만 표시 */}
         {personInnerTab === 'list' && modernCountriesWithHistory.length > 0 && (
           <CountryFilterSection>
+            <FilterHeader>
+              <FilterLabel>
+                <FiFilter size={10} />
+                국가별 보기
+              </FilterLabel>
+              {filterHistIds.length > 0 && (
+                <ClearFilterBtn type="button" onClick={handleClearFilter}>
+                  <FiX size={11} />
+                  초기화
+                </ClearFilterBtn>
+              )}
+            </FilterHeader>
+
             <ModernCountryRow>
               {modernCountriesWithHistory.map((mc) => {
                 const hcList = historicalByModern[mc.id] ?? []
                 const hasActive = hcList.some((hc) => filterHistIds.includes(hc.id))
-                const isExpanded = expandedModernId === mc.id
+                const personCount = hcList.reduce(
+                  (sum, hc) => sum + personList.filter((p) => p.countryId === hc.id).length,
+                  0,
+                )
                 return (
                   <ModernCountryChip
                     key={mc.id}
                     type="button"
-                    $active={isExpanded}
-                    $hasFilter={hasActive}
+                    $active={hasActive}
                     onClick={() => handleModernChipClick(mc.id)}
                   >
-                    {(mc as any).flagEmoji && <span>{(mc as any).flagEmoji}</span>}
+                    {(mc as any).flagEmoji && <ChipFlag>{(mc as any).flagEmoji}</ChipFlag>}
                     {mc.name}
-                    {hasActive && <ActiveFilterDot />}
+                    <ChipCountBadge $active={hasActive}>{personCount}</ChipCountBadge>
                   </ModernCountryChip>
                 )
               })}
-              {filterHistIds.length > 0 && (
-                <ClearFilterBtn type="button" onClick={handleClearFilter}>
-                  <FiX size={12} />
-                  필터 초기화
-                </ClearFilterBtn>
-              )}
             </ModernCountryRow>
-            {expandedModernId && (historicalByModern[expandedModernId]?.length ?? 0) > 0 && (
-              <HistoricalCountryRow>
-                {(historicalByModern[expandedModernId] ?? [])
-                  .slice()
-                  .sort((a, b) => {
-                    const ay =
-                      (a as any).startEra === 'BC'
-                        ? -((a as any).startYear ?? 0)
-                        : ((a as any).startYear ?? 9999)
-                    const by_ =
-                      (b as any).startEra === 'BC'
-                        ? -((b as any).startYear ?? 0)
-                        : ((b as any).startYear ?? 9999)
-                    return ay - by_
-                  })
-                  .map((hc) => {
-                    const isActive = filterHistIds.includes(hc.id)
-                    const startYear = (hc as any).startYear
-                    const endYear = (hc as any).endYear
-                    const startEra = (hc as any).startEra
-                    const endEra = (hc as any).endEra
-                    const yearRange = startYear
-                      ? `${startEra === 'BC' ? 'BC ' : ''}${startYear}${endYear ? ` ~ ${endEra === 'BC' ? 'BC ' : ''}${endYear}` : ' ~'}`
-                      : null
-                    return (
-                      <HistoricalCountryChip
-                        key={hc.id}
-                        type="button"
-                        $active={isActive}
-                        onClick={() => handleHistChipClick(hc.id)}
-                      >
-                        <HistChipName>{hc.name}</HistChipName>
-                        {yearRange && <HistChipYear>{yearRange}</HistChipYear>}
-                      </HistoricalCountryChip>
-                    )
-                  })}
-              </HistoricalCountryRow>
-            )}
+
+            <AnimatePresence initial={false}>
+              {expandedModernId && (historicalByModern[expandedModernId]?.length ?? 0) > 0 && (
+                <HistoricalCountryRow
+                  key={expandedModernId}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  {(historicalByModern[expandedModernId] ?? [])
+                    .slice()
+                    .sort((a, b) => {
+                      const ay =
+                        (a as any).startEra === 'BC'
+                          ? -((a as any).startYear ?? 0)
+                          : ((a as any).startYear ?? 9999)
+                      const by_ =
+                        (b as any).startEra === 'BC'
+                          ? -((b as any).startYear ?? 0)
+                          : ((b as any).startYear ?? 9999)
+                      return ay - by_
+                    })
+                    .map((hc) => {
+                      const isActive = filterHistIds.includes(hc.id)
+                      const startYear = (hc as any).startYear
+                      const endYear = (hc as any).endYear
+                      const startEra = (hc as any).startEra
+                      const endEra = (hc as any).endEra
+                      const yearRange = startYear
+                        ? `${startEra === 'BC' ? 'BC ' : ''}${startYear}${endYear ? ` ~ ${endEra === 'BC' ? 'BC ' : ''}${endYear}` : ' ~'}`
+                        : null
+                      return (
+                        <HistoricalCountryChip
+                          key={hc.id}
+                          type="button"
+                          $active={isActive}
+                          onClick={() => handleHistChipClick(hc.id)}
+                        >
+                          <HistChipCheck $active={isActive}>
+                            {isActive && <FiCheck size={10} />}
+                          </HistChipCheck>
+                          <HistChipInfo>
+                            <HistChipName>{hc.name}</HistChipName>
+                            {yearRange && <HistChipYear>{yearRange}</HistChipYear>}
+                          </HistChipInfo>
+                        </HistoricalCountryChip>
+                      )
+                    })}
+                </HistoricalCountryRow>
+              )}
+            </AnimatePresence>
           </CountryFilterSection>
         )}
 

@@ -45,6 +45,13 @@ export class UpdateHistoricalCountryDto {
   description?: string | null
 
   /**
+   * 역사 서술 (자유 텍스트, 마크다운)
+   */
+  @IsOptional()
+  @IsString()
+  history?: string | null
+
+  /**
    * 썸네일 URL
    * @example "https://example.com/joseon.jpg"
    */

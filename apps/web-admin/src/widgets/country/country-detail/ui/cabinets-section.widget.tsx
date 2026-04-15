@@ -182,6 +182,7 @@ import { RegisterCabinetModal } from './register-cabinet-modal'
 import { RegisterMonarchModal } from './register-monarch-modal'
 import { TenureHistoryHorizTimeline } from './tenure-history-horiz-timeline'
 import { TreatyLinkModal } from './treaty-link-modal'
+import { CabinetEventsSection } from './cabinet-events-section.widget'
 
 /** 업적 API 호출 시: 묶음으로 병합된 항목은 실제 소유 재임 ID 사용 */
 function tenureIdForAchievement(
@@ -5010,6 +5011,11 @@ export function CabinetsSection({
                                   </CabS.CabDetailTreatyList>
                                 )}
                               </CabS.CabDetailSubSection>
+
+                              {/* 관련 사건 섹션 (CabinetEvent N:M) */}
+                              {selectedCabinetId && (
+                                <CabinetEventsSection cabinetId={selectedCabinetId} />
+                              )}
                             </>
                           )}
                         </>

@@ -7,15 +7,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiGlobe, FiPlus, FiSearch } from 'react-icons/fi'
-import styled, { css } from 'styled-components'
+import { FiPlus, FiSearch } from 'react-icons/fi'
+import styled, { css, useTheme } from 'styled-components'
 
 import { personKeys } from '@/entities/person/api'
 import { useHistoricalCountries } from '@/entities/historical-country/api'
 import { useCountries } from '@/features/country/api'
-import { GovernmentPositionType } from '@/shared/api/government-positions'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
@@ -45,7 +43,7 @@ type PersonLike = {
   dynastyId?: string | null
   dynasty?: { id: string; name: string } | null
   countryId?: string | null
-  country?: { id: string; name: string; flagEmoji?: string | null } | null
+  country?: { id: string; name: string; flagEmoji?: string | null; defaultNameDisplayOrder?: string | null; isoCode?: string | null } | null
   /** 등록일 (24시간 이내면 NEW 뱃지 표시) */
   createdAt?: string | null
   /** 사망일 미상 여부 */
@@ -67,6 +65,9 @@ type PersonLike = {
       positionType?: string
     } | null
   }> | null
+  /** 군주명 관련 */
+  regnalName?: string | null
+  templeName?: string | null
 }
 
 interface DynastyItem {
@@ -89,6 +90,11 @@ export interface PersonListContentProps {
   emptyFilterMessage?: string
   /** 리스트 ↔ 인물 상세 전환 시 호출 (상단 공통 헤더 문구 변경용) */
   onViewChange?: (view: 'list' | 'detail') => void
+  /**
+   * 제공 시 인물 카드 클릭이 인라인 상세 패널 대신 이 콜백을 호출한다.
+   * (예: 대시보드에서 /persons/:id 페이지로 네비게이션)
+   */
+  onPersonClick?: (personId: string) => void
   /** true면 타이틀·설명 행 숨김 (국가 상세 인물 탭에서 공통 헤더 사용) */
   hideMainHeader?: boolean
   /** true면 리스트 내 '인물 등록' 버튼 숨김 (헤더 우측에 배치된 경우) */
@@ -153,6 +159,42 @@ function getCentury(
 }
 
 const CENTURY_UNKNOWN = 999
+
+// ─── Position type color mapping ─────────────────────────────────────────────
+function getPositionColor(positionType: string | null | undefined): string {
+  switch (positionType) {
+    case 'HEAD_OF_STATE':
+      return '#d97706' // amber – monarchs/presidents
+    case 'HEAD_OF_GOVERNMENT':
+      return '#4f46e5' // indigo – prime ministers/chancellors
+    case 'CABINET_MINISTER':
+      return '#0891b2' // cyan – ministers
+    case 'LEGISLATOR':
+      return '#059669' // emerald – legislators
+    case 'MILITARY_COMMANDER':
+      return '#dc2626' // red – military
+    case 'JUDICIARY':
+      return '#7c3aed' // violet – judiciary
+    default:
+      return '#64748b' // slate – others
+  }
+}
+
+function getPositionBg(
+  positionType: string | null | undefined,
+  dark = false,
+): string {
+  const colorMap: Record<string, [string, string]> = {
+    HEAD_OF_STATE: ['#fef3c7', 'rgba(217,119,6,0.18)'],
+    HEAD_OF_GOVERNMENT: ['#eef2ff', 'rgba(79,70,229,0.18)'],
+    CABINET_MINISTER: ['#ecfeff', 'rgba(8,145,178,0.18)'],
+    LEGISLATOR: ['#d1fae5', 'rgba(5,150,105,0.18)'],
+    MILITARY_COMMANDER: ['#fee2e2', 'rgba(220,38,38,0.18)'],
+    JUDICIARY: ['#ede9fe', 'rgba(124,58,237,0.18)'],
+  }
+  const pair = colorMap[positionType ?? ''] ?? ['#f1f5f9', 'rgba(100,116,139,0.15)']
+  return dark ? pair[1] : pair[0]
+}
 
 // ─── Styled ───────────────────────────────────────────────────────────────────
 const ListHeader = styled.header<{ $compact?: boolean }>`
@@ -260,91 +302,192 @@ const SearchInput = styled.input`
         `}
 `
 
-const FilterSelect = styled.select`
-  padding: 8px 28px 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
+const GenderBtnGroup = styled.div`
+  display: inline-flex;
   border-radius: 8px;
-  outline: none;
-  cursor: pointer;
-  appearance: none;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-
+  overflow: hidden;
   ${({ theme }) =>
     theme.mode === 'dark'
-      ? css`
-          color: ${theme.colors.text.primary};
-          background-color: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          &:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            background-color: rgba(255, 255, 255, 0.09);
-          }
-          &:focus {
-            border-color: rgba(99, 106, 242, 0.5);
-            box-shadow: 0 0 0 3px rgba(99, 106, 242, 0.15);
-          }
-          option {
-            background: #1e1e1e;
-            color: ${theme.colors.text.primary};
-          }
-        `
-      : css`
-          color: #374151;
-          background-color: #f8fafc;
-          border: 1px solid ${BORDER_COLOR};
-          &:hover {
-            border-color: #d1d5db;
-            background-color: #fff;
-          }
-          &:focus {
-            border-color: ${FOCUS_COLOR};
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.07);
-          }
-        `}
+      ? css`border: 1px solid rgba(255,255,255,0.1);`
+      : css`border: 1px solid ${BORDER_COLOR};`}
 `
 
-const CountryFilterBtn = styled.button<{ $active?: boolean }>`
+const GenderBtn = styled.button<{ $active?: boolean; $gender?: 'all' | 'male' | 'female' }>`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 8px;
+  gap: 5px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? '600' : '400')};
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.14s, color 0.14s;
+  white-space: nowrap;
+  border: none;
+  border-right: 1px solid transparent;
+  &:last-child { border-right: none; }
 
+  ${({ theme, $active, $gender }) => {
+    if (theme.mode === 'dark') {
+      const activeBg =
+        $gender === 'male'   ? 'rgba(96,165,250,0.18)' :
+        $gender === 'female' ? 'rgba(244,114,182,0.18)' :
+                               'rgba(255,255,255,0.1)'
+      const activeColor =
+        $gender === 'male'   ? '#93c5fd' :
+        $gender === 'female' ? '#f9a8d4' :
+                               theme.colors.text.primary
+      return css`
+        background: ${$active ? activeBg : 'rgba(255,255,255,0.04)'};
+        color: ${$active ? activeColor : theme.colors.text.tertiary};
+        border-right-color: rgba(255,255,255,0.08);
+        &:hover { background: ${$active ? activeBg : 'rgba(255,255,255,0.08)'}; }
+      `
+    }
+    const activeBg =
+      $gender === 'male'   ? '#eff6ff' :
+      $gender === 'female' ? '#fdf2f8' :
+                             '#f1f5f9'
+    const activeColor =
+      $gender === 'male'   ? '#2563eb' :
+      $gender === 'female' ? '#db2777' :
+                             '#374151'
+    return css`
+      background: ${$active ? activeBg : '#f8fafc'};
+      color: ${$active ? activeColor : '#9ca3af'};
+      border-right-color: ${BORDER_COLOR};
+      &:hover { background: ${$active ? activeBg : '#f1f5f9'}; }
+    `
+  }}
+`
+
+const CountryFilterSection = styled.div`
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const ModernCountryRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+`
+
+const ModernCountryChip = styled.button<{ $active?: boolean; $hasFilter?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: ${(p) => (p.$active || p.$hasFilter ? '600' : '400')};
+  border-radius: 100px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s;
+  position: relative;
   ${(p) =>
     p.theme.mode === 'dark'
       ? css`
-          color: ${p.$active ? '#a5b4fc' : p.theme.colors.text.secondary};
-          background: ${p.$active
-            ? 'rgba(99, 106, 242, 0.15)'
-            : 'rgba(255, 255, 255, 0.06)'};
-          border: 1px solid
-            ${p.$active
-              ? 'rgba(99, 106, 242, 0.4)'
-              : 'rgba(255, 255, 255, 0.1)'};
-          &:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.1);
-          }
+          color: ${p.$active || p.$hasFilter ? '#a5b4fc' : p.theme.colors.text.secondary};
+          background: ${p.$active ? 'rgba(99,102,241,0.2)' : p.$hasFilter ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.06)'};
+          border: 1px solid ${p.$active ? 'rgba(99,102,241,0.5)' : p.$hasFilter ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.1)'};
+          &:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
         `
       : css`
-          color: ${p.$active ? '#4f46e5' : '#374151'};
-          background: ${p.$active ? '#eef2ff' : '#f8fafc'};
-          border: 1px solid ${p.$active ? '#c7d2fe' : BORDER_COLOR};
-          &:hover {
-            border-color: #d1d5db;
-            background: #fff;
-          }
+          color: ${p.$active ? '#4f46e5' : p.$hasFilter ? '#4338ca' : '#374151'};
+          background: ${p.$active ? '#eef2ff' : p.$hasFilter ? '#e0e7ff' : '#f1f5f9'};
+          border: 1px solid ${p.$active ? '#c7d2fe' : p.$hasFilter ? '#a5b4fc' : '#e2e8f0'};
+          &:hover { background: ${p.$active ? '#e0e7ff' : '#e9ecef'}; }
         `}
+`
+
+const ActiveFilterDot = styled.span`
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #6366f1;
+  flex-shrink: 0;
+`
+
+const ClearFilterBtn = styled.button`
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.14s;
+  ${(p) =>
+    p.theme.mode === 'dark'
+      ? css`
+          color: #fca5a5;
+          background: rgba(239,68,68,0.1);
+          border: 1px solid rgba(239,68,68,0.25);
+          &:hover { background: rgba(239,68,68,0.18); }
+        `
+      : css`
+          color: #dc2626;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          &:hover { background: #fee2e2; }
+        `}
+`
+
+const HistoricalCountryRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  ${(p) =>
+    p.theme.mode === 'dark'
+      ? css`
+          background: rgba(99,102,241,0.06);
+          border: 1px solid rgba(99,102,241,0.15);
+        `
+      : css`
+          background: #f5f3ff;
+          border: 1px solid #e0e7ff;
+        `}
+`
+
+const HistoricalCountryChip = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.14s;
+  ${(p) =>
+    p.theme.mode === 'dark'
+      ? css`
+          color: ${p.$active ? '#c4b5fd' : p.theme.colors.text.secondary};
+          background: ${p.$active ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.05)'};
+          border: 1px solid ${p.$active ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.1)'};
+          &:hover { background: rgba(255,255,255,0.1); }
+        `
+      : css`
+          color: ${p.$active ? '#5b21b6' : '#374151'};
+          background: ${p.$active ? '#ede9fe' : '#ffffff'};
+          border: 1px solid ${p.$active ? '#a78bfa' : '#e2e8f0'};
+          &:hover { background: ${p.$active ? '#ddd6fe' : '#f1f5f9'}; }
+        `}
+`
+
+const HistoricalChipName = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+`
+
+const HistoricalChipYear = styled.span`
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.65;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 `
 
 const CreateButton = styled.button`
@@ -369,61 +512,6 @@ const CreateButton = styled.button`
     opacity: 0.5;
     cursor: not-allowed;
   }
-`
-
-/** 관직 카테고리 필터 버튼 (주요 유형만) */
-const POSITION_CATEGORY_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: '전체' },
-  { value: GovernmentPositionType.HEAD_OF_STATE, label: '국가 원수' },
-  { value: GovernmentPositionType.HEAD_OF_GOVERNMENT, label: '정부 수반' },
-  { value: 'HEIR_APPARENT', label: '왕세자·세자' },
-  { value: 'REGENT', label: '섭정' },
-  { value: GovernmentPositionType.CABINET_MINISTER, label: '각료/장관' },
-  { value: GovernmentPositionType.LEGISLATOR, label: '의회의원' },
-  { value: GovernmentPositionType.JUDICIARY, label: '사법부' },
-  { value: GovernmentPositionType.MILITARY_COMMANDER, label: '군 지휘관' },
-  { value: GovernmentPositionType.OTHER, label: '기타' },
-]
-
-const CategoryBtn = styled.button<{ $active?: boolean }>`
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: ${(p) => (p.$active ? '600' : '400')};
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.12s;
-  white-space: nowrap;
-
-  ${(p) =>
-    p.theme.mode === 'dark'
-      ? css`
-          color: ${p.$active ? '#a5b4fc' : p.theme.colors.text.tertiary};
-          background: ${p.$active ? 'rgba(99, 106, 242, 0.2)' : 'transparent'};
-          border: 1px solid
-            ${p.$active ? 'rgba(99, 106, 242, 0.4)' : 'transparent'};
-          &:hover {
-            background: ${p.$active
-              ? 'rgba(99, 106, 242, 0.25)'
-              : 'rgba(255, 255, 255, 0.06)'};
-            color: ${p.$active ? '#c7d2fe' : p.theme.colors.text.secondary};
-          }
-        `
-      : css`
-          color: ${p.$active ? '#4f46e5' : '#64748b'};
-          background: ${p.$active ? '#eef2ff' : 'transparent'};
-          border: 1px solid ${p.$active ? '#c7d2fe' : 'transparent'};
-          &:hover {
-            background: ${p.$active ? '#e0e7ff' : '#f1f5f9'};
-            color: ${p.$active ? '#4338ca' : '#334155'};
-          }
-        `}
-`
-
-const CategoryBtnGroup = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  align-items: center;
 `
 
 // 패딩 적용하지마라.
@@ -457,105 +545,168 @@ const DetailViewWrap = styled.div`
 
 const AdaptiveGrid = styled.div`
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   @media (min-width: 1400px) {
-    gap: 18px;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 14px;
   }
-  @media (max-width: 640px) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 `
 
+/** 세기 시대 → 강조 색 */
+type EraKey = 'ancient' | 'medieval' | 'early-modern' | 'modern' | 'unknown'
+
+function getCenturyEra(century: number): EraKey {
+  if (century === CENTURY_UNKNOWN) return 'unknown'
+  if (century < 0) return 'ancient'
+  if (century <= 10) return 'medieval'
+  if (century <= 19) return 'early-modern'
+  return 'modern'
+}
+
+/** era별 dot 컬러만 유지 (배경·테두리 제거) */
+const ERA_DOT: Record<EraKey, { light: string; dark: string }> = {
+  ancient:       { light: '#7c3aed', dark: '#a78bfa' },
+  medieval:      { light: '#059669', dark: '#34d399' },
+  'early-modern':{ light: '#d97706', dark: '#fbbf24' },
+  modern:        { light: '#4f46e5', dark: '#818cf8' },
+  unknown:       { light: '#94a3b8', dark: '#64748b' },
+}
+
 const CenturySection = styled.section`
-  margin-bottom: 32px;
+  margin-bottom: 44px;
   &:last-child {
     margin-bottom: 0;
   }
 `
 
-const CenturyHeading = styled.h3`
-  margin: 0 0 14px 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+const CenturySeparator = styled.div<{ $era: EraKey }>`
+  width: 100%;
+  height: 1px;
+  margin-bottom: 22px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.1)'
+        : 'rgba(0,0,0,0.08)'} 20%,
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.13)'
+        : 'rgba(0,0,0,0.11)'} 50%,
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.1)'
+        : 'rgba(0,0,0,0.08)'} 80%,
+    transparent 100%
+  );
 `
 
+const CenturyHeadingRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+`
+
+const CenturyHeadingLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const CenturyEraDot = styled.span<{ $era: EraKey }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: ${({ $era, theme }) =>
+    theme.mode === 'dark' ? ERA_DOT[$era].dark : ERA_DOT[$era].light};
+`
+
+const CenturyHeadingLabel = styled.h3`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CenturyCountBadge = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* ── Horizontal person card ─────────────────────────────────────────── */
+
 const Card = styled.div`
-  border-radius: 10px;
-  padding: 0;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    transform 0.15s;
-  cursor: pointer;
+  border-radius: 16px;
   overflow: hidden;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  cursor: pointer;
+  min-height: 116px;
+  transition: box-shadow 0.22s ease, transform 0.22s ease;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
+          background: rgba(255, 255, 255, 0.05);
+          box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset,
+                      0 2px 12px rgba(0,0,0,0.28);
           &:hover {
-            border-color: rgba(99, 106, 242, 0.4);
-            box-shadow: 0 4px 20px rgba(99, 106, 242, 0.15);
-            transform: translateY(-1px);
-            background: rgba(255, 255, 255, 0.07);
+            transform: translateY(-2px);
+            box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset,
+                        0 10px 32px rgba(0,0,0,0.42);
           }
         `
       : css`
           background: #ffffff;
-          border: 1px solid ${BORDER_COLOR};
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
           &:hover {
-            border-color: #c7d2fe;
-            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.1);
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.06), 0 12px 28px rgba(0,0,0,0.08);
           }
         `}
 `
 
-const CardImageWrapper = styled.div`
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  max-height: 260px;
-  min-height: 160px;
+/* Left: image column */
+const CardImageSide = styled.div`
+  width: 110px;
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f3f4f6'};
 `
 
 const NewBadge = styled.span`
   position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  padding: 3px 8px;
-  font-size: 10px;
-  font-weight: 700;
+  top: 7px;
+  left: 7px;
+  z-index: 2;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 800;
   color: #fff;
-  background: #dc2626;
-  border-radius: 4px;
-  letter-spacing: 0.04em;
-  box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+  background: #ef4444;
+  border-radius: 5px;
+  letter-spacing: 0.05em;
   animation: newBadgePulse 2s ease-in-out infinite;
 
   @keyframes newBadgePulse {
-    0% {
-      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6);
-    }
-    60% {
-      box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
-    }
+    0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.55); }
+    60%  { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+    100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
   }
 `
 
@@ -566,128 +717,227 @@ const CardImage = styled.img`
   object-position: top center;
   transition: transform 0.3s ease;
   ${Card}:hover & {
-    transform: scale(1.03);
+    transform: scale(1.06);
   }
 `
 
-const CardImagePlaceholder = styled.div`
+const CardImagePlaceholder = styled.div<{ $color: string }>`
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : BORDER_COLOR};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : '#e2e8f0'};
+  background: ${({ $color, theme }) =>
+    theme.mode === 'dark'
+      ? `${$color}18`
+      : `${$color}12`};
+  color: ${({ $color }) => $color};
+  opacity: 0.55;
   svg {
     width: 36px;
     height: 36px;
   }
 `
 
+/* Right: content column */
 const CardContent = styled.div`
-  padding: 14px 16px 16px;
-`
-
-const PersonInfo = styled.div`
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px 14px 15px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  justify-content: center;
+  gap: 0;
 `
 
-const CardTitleRow = styled.div`
+const PersonNameRow = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 1px;
+  margin-bottom: 2px;
+  min-width: 0;
 `
 
 const PersonName = styled.h3`
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.01em;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 `
 
-const CardGender = styled.span`
-  font-size: 11px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  flex-shrink: 0;
-`
-
-const PersonLifespan = styled.div`
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  line-height: 1.4;
+const MonarchNameRow = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-bottom: 4px;
 `
 
-const CardDynasty = styled.div`
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/** 카드 이름 앞 국기/국가 표시 */
-const CardCountryPrefix = styled.span`
-  flex-shrink: 0;
-  font-size: 13px;
-  line-height: 1.35;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-weight: 500;
-`
-
-/** 역대 수반 단일 배지 */
-const CardHeadsBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  font-size: 10px;
+const MonarchNameText = styled.span`
+  font-size: 11px;
   font-weight: 600;
-  border-radius: 4px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.85)' : 'rgba(180,130,0,0.9)'};
   letter-spacing: 0.01em;
-  max-width: 120px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          color: #a5b4fc;
-          background: rgba(99, 106, 242, 0.2);
-        `
-      : css`
-          color: #4f46e5;
-          background: #eef2ff;
-        `}
 `
 
+const MonarchCrown = styled.span`
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+`
+
+const GenderBadge = styled.span<{ $gender: 'MALE' | 'FEMALE' }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+
+  ${({ theme, $gender }) =>
+    theme.mode === 'dark'
+      ? $gender === 'MALE'
+        ? css`color: #93c5fd; background: rgba(96,165,250,0.14); border: 1px solid rgba(96,165,250,0.25);`
+        : css`color: #f9a8d4; background: rgba(244,114,182,0.14); border: 1px solid rgba(244,114,182,0.25);`
+      : $gender === 'MALE'
+        ? css`color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe;`
+        : css`color: #db2777; background: #fdf2f8; border: 1px solid #fbcfe8;`}
+`
+
+/* Lifespan bar */
+const LifespanRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+`
+
+const LifespanYear = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+`
+
+const LifespanTrack = styled.div`
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e9ecef'};
+  position: relative;
+  overflow: hidden;
+`
+
+const LifespanFill = styled.div<{ $color: string; $pct: number }>`
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: ${({ $pct }) => $pct}%;
+  min-width: 6px;
+  background: ${({ $color }) => $color};
+  border-radius: 2px;
+  opacity: 0.75;
+`
+
+const LifespanAge = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+`
+
+/* Position badges */
 const CardBadgeRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
+  margin-bottom: 6px;
+`
+
+const CardHeadsBadge = styled.span<{ $color: string; $bg: string }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 100px;
+  letter-spacing: 0.01em;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: ${({ $color }) => $color};
+  background: ${({ $bg }) => $bg};
+`
+
+/* Country row */
+const CardCountryRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+`
+
+const CardCountryFlag = styled.span`
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+`
+
+const CardCountryName = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(148,163,184,0.85)' : '#64748b'};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+/* Meta (dynasty / birthplace) */
+const CardMetaRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 2px;
+`
+
+const CardMetaLabel = styled.span`
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.6;
+  flex-shrink: 0;
+`
+
+const CardMetaValue = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 `
 
 const CardBio = styled.p`
   margin: 5px 0 0 0;
-  font-size: 12px;
+  font-size: 11px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;
   display: -webkit-box;
@@ -696,22 +946,8 @@ const CardBio = styled.p`
   overflow: hidden;
 `
 
-const CardBirthPlace = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-weight: 400;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-`
-
-const CardBirthPlaceLabel = styled.span`
-  font-weight: 600;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
+/* Not used but keep to avoid refactor scope creep */
+const CardDivider = styled.div``
 
 const EmptyState = styled.div`
   padding: 60px 24px;
@@ -733,6 +969,7 @@ export function PersonListContent({
   emptyMessage = '등록된 인물이 없습니다.',
   emptyFilterMessage = '검색·필터 조건에 맞는 인물이 없습니다.',
   onViewChange,
+  onPersonClick,
   hideMainHeader = false,
   hideCreateButton = false,
   registerTrigger,
@@ -740,17 +977,34 @@ export function PersonListContent({
   renderRegisterModal,
 }: PersonListContentProps) {
   const queryClient = useQueryClient()
+  const theme = useTheme()
+  const isDarkMode = (theme as any)?.mode === 'dark'
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
   const [showRegisterForm, setShowRegisterForm] = useState(false)
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterGender, setFilterGender] = useState<string>('')
-  const [filterPositionType, setFilterPositionType] = useState<string>('')
   const [filterCountryIds, setFilterCountryIds] = useState<string[]>([])
-  const [showCountryModal, setShowCountryModal] = useState(false)
+  const [expandedModernId, setExpandedModernId] = useState<string | null>(null)
 
   const { data: modernCountries = [] } = useCountries()
   const { data: historicalCountries = [] } = useHistoricalCountries()
+
+  const historicalByModern = useMemo(() => {
+    const map: Record<string, typeof historicalCountries> = {}
+    historicalCountries.forEach((hc) => {
+      ;(hc as any).parentModernCountryIds?.forEach((mid: string) => {
+        if (!map[mid]) map[mid] = []
+        map[mid].push(hc)
+      })
+    })
+    return map
+  }, [historicalCountries])
+
+  const modernCountriesWithHistory = useMemo(
+    () => modernCountries.filter((mc) => (historicalByModern[mc.id]?.length ?? 0) > 0),
+    [modernCountries, historicalByModern],
+  )
 
   const filteredPersons = useMemo(() => {
     return persons.filter((person) => {
@@ -776,26 +1030,17 @@ export function PersonListContent({
         !filterGender ||
         (filterGender === 'MALE' && person.gender === 'MALE') ||
         (filterGender === 'FEMALE' && person.gender === 'FEMALE')
-      const matchPosition =
-        !filterPositionType ||
-        (person.governmentTenures?.some(
-          (t) =>
-            t.positionType === filterPositionType ||
-            t.positionDefinition?.positionType === filterPositionType,
-        ) ??
-          false)
       const matchCountry =
         filterCountryIds.length === 0 ||
         (person.countryId != null &&
           filterCountryIds.includes(person.countryId))
-      return matchSearch && matchGender && matchPosition && matchCountry
+      return matchSearch && matchGender && matchCountry
     })
   }, [
     persons,
     dynasties,
     searchQuery,
     filterGender,
-    filterPositionType,
     filterCountryIds,
   ])
 
@@ -803,14 +1048,17 @@ export function PersonListContent({
     const currentCentury = Math.ceil(new Date().getFullYear() / 100)
     const map = new Map<number, PersonLike[]>()
     filteredPersons.forEach((p) => {
-      const deathYear = p.deathYear ?? p.death_year
-      const deathEra = p.deathEra ?? p.death_era
-      // 명시적으로 생존(isAlive=true)인 경우만 현재 세기, 사망일 미상이거나 사망 연도 없으면 세기 미상
+      const birthYear = p.birthYear ?? p.birth_year
+      const birthEra = p.birthEra ?? p.birth_era
+      // 출생년도 기준으로 세기 결정. 출생년도 없으면 세기 미상
       const isAlive = p.isAlive === true
-      const key = isAlive
-        ? currentCentury
-        : (getCentury(deathYear ?? undefined, deathEra ?? undefined) ??
-          CENTURY_UNKNOWN)
+      const key =
+        birthYear != null
+          ? (getCentury(birthYear ?? undefined, birthEra ?? undefined) ??
+            CENTURY_UNKNOWN)
+          : isAlive
+            ? currentCentury
+            : CENTURY_UNKNOWN
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(p)
     })
@@ -912,7 +1160,6 @@ export function PersonListContent({
                       {filteredPersons.length}명
                       {(searchQuery.trim() ||
                         filterGender ||
-                        filterPositionType ||
                         filterCountryIds.length > 0) &&
                         ` / ${persons.length}명`}
                     </ListHeaderCount>
@@ -932,28 +1179,32 @@ export function PersonListContent({
                     aria-label="인물 검색"
                   />
                 </SearchWrap>
-                <FilterSelect
-                  value={filterGender}
-                  onChange={(e) => setFilterGender(e.target.value)}
-                  aria-label="성별 필터"
-                >
-                  <option value="">성별 전체</option>
-                  <option value="MALE">남</option>
-                  <option value="FEMALE">여</option>
-                </FilterSelect>
-                {enableCountryFilter && (
-                  <CountryFilterBtn
+                <GenderBtnGroup role="group" aria-label="성별 필터">
+                  <GenderBtn
                     type="button"
-                    $active={filterCountryIds.length > 0}
-                    onClick={() => setShowCountryModal(true)}
-                    aria-label="국가 필터"
+                    $gender="all"
+                    $active={filterGender === ''}
+                    onClick={() => setFilterGender('')}
                   >
-                    <FiGlobe size={13} />
-                    {filterCountryIds.length > 0
-                      ? `국가 ${filterCountryIds.length}개`
-                      : '국가'}
-                  </CountryFilterBtn>
-                )}
+                    전체
+                  </GenderBtn>
+                  <GenderBtn
+                    type="button"
+                    $gender="male"
+                    $active={filterGender === 'MALE'}
+                    onClick={() => setFilterGender('MALE')}
+                  >
+                    ♂ 남
+                  </GenderBtn>
+                  <GenderBtn
+                    type="button"
+                    $gender="female"
+                    $active={filterGender === 'FEMALE'}
+                    onClick={() => setFilterGender('FEMALE')}
+                  >
+                    ♀ 여
+                  </GenderBtn>
+                </GenderBtnGroup>
                 {!hideCreateButton && (
                   <CreateButton
                     type="button"
@@ -969,35 +1220,101 @@ export function PersonListContent({
                 )}
               </ToolbarRow>
             </ListHeader>
-            <ToolbarRow style={{ marginBottom: 16 }}>
-              <CategoryBtnGroup role="group" aria-label="관직 카테고리 필터">
-                {POSITION_CATEGORY_OPTIONS.map((opt) => (
-                  <CategoryBtn
-                    key={opt.value || 'all'}
-                    type="button"
-                    $active={filterPositionType === opt.value}
-                    onClick={() => setFilterPositionType(opt.value)}
-                  >
-                    {opt.label}
-                  </CategoryBtn>
-                ))}
-              </CategoryBtnGroup>
-            </ToolbarRow>
+            {enableCountryFilter && modernCountriesWithHistory.length > 0 && (
+              <CountryFilterSection>
+                <ModernCountryRow>
+                  {modernCountriesWithHistory.map((mc) => {
+                    const hcList = historicalByModern[mc.id] ?? []
+                    const hasActive = hcList.some((hc) => filterCountryIds.includes(hc.id))
+                    const isExpanded = expandedModernId === mc.id
+                    return (
+                      <ModernCountryChip
+                        key={mc.id}
+                        type="button"
+                        $active={isExpanded}
+                        $hasFilter={hasActive}
+                        onClick={() => setExpandedModernId(isExpanded ? null : mc.id)}
+                      >
+                        {(mc as any).flagEmoji && <span>{(mc as any).flagEmoji}</span>}
+                        {mc.name}
+                        {hasActive && <ActiveFilterDot />}
+                      </ModernCountryChip>
+                    )
+                  })}
+                  {filterCountryIds.length > 0 && (
+                    <ClearFilterBtn type="button" onClick={() => { setFilterCountryIds([]); setExpandedModernId(null) }}>
+                      필터 초기화
+                    </ClearFilterBtn>
+                  )}
+                </ModernCountryRow>
+                {expandedModernId && (historicalByModern[expandedModernId]?.length ?? 0) > 0 && (
+                  <HistoricalCountryRow>
+                    {(historicalByModern[expandedModernId] ?? [])
+                      .slice()
+                      .sort((a, b) => {
+                        const ay = (a as any).startEra === 'BC' ? -((a as any).startYear ?? 0) : ((a as any).startYear ?? 9999)
+                        const by_ = (b as any).startEra === 'BC' ? -((b as any).startYear ?? 0) : ((b as any).startYear ?? 9999)
+                        return ay - by_
+                      })
+                      .map((hc) => {
+                        const isActive = filterCountryIds.includes(hc.id)
+                        const startYear = (hc as any).startYear
+                        const endYear = (hc as any).endYear
+                        const startEra = (hc as any).startEra
+                        const endEra = (hc as any).endEra
+                        const yearRange = startYear
+                          ? `${startEra === 'BC' ? 'BC ' : ''}${startYear}${endYear ? ` ~ ${endEra === 'BC' ? 'BC ' : ''}${endYear}` : ' ~'}`
+                          : null
+                        return (
+                          <HistoricalCountryChip
+                            key={hc.id}
+                            type="button"
+                            $active={isActive}
+                            onClick={() =>
+                              setFilterCountryIds((prev) =>
+                                prev.includes(hc.id)
+                                  ? prev.filter((x) => x !== hc.id)
+                                  : [...prev, hc.id],
+                              )
+                            }
+                          >
+                            <HistoricalChipName>{hc.name}</HistoricalChipName>
+                            {yearRange && <HistoricalChipYear>{yearRange}</HistoricalChipYear>}
+                          </HistoricalCountryChip>
+                        )
+                      })}
+                  </HistoricalCountryRow>
+                )}
+              </CountryFilterSection>
+            )}
             {persons.length === 0 ? (
               <EmptyState>{emptyMessage}</EmptyState>
             ) : filteredPersons.length === 0 ? (
               <EmptyState>{emptyFilterMessage}</EmptyState>
             ) : (
               <ListScrollArea>
-                {personsByCentury.map(([century, list]) => (
+                {personsByCentury.map(([century, list]) => {
+                  const era = getCenturyEra(century)
+                  const centuryLabel =
+                    century === CENTURY_UNKNOWN
+                      ? '세기 미상'
+                      : century < 0
+                        ? `기원전 ${-century}세기`
+                        : `${century}세기`
+                  return (
                   <CenturySection key={century}>
-                    <CenturyHeading>
-                      {century === CENTURY_UNKNOWN
-                        ? '세기 미상'
-                        : century < 0
-                          ? `기원전 ${-century}세기`
-                          : `${century}세기`}
-                    </CenturyHeading>
+                    <CenturySeparator $era={era} />
+                    <CenturyHeadingRow>
+                      <CenturyHeadingLeft>
+                        <CenturyEraDot $era={era} />
+                        <CenturyHeadingLabel>
+                          {centuryLabel}
+                        </CenturyHeadingLabel>
+                      </CenturyHeadingLeft>
+                      <CenturyCountBadge>
+                        {list.length}명
+                      </CenturyCountBadge>
+                    </CenturyHeadingRow>
                     <AdaptiveGrid
                       as={motion.div}
                       initial={{ opacity: 0 }}
@@ -1006,15 +1323,6 @@ export function PersonListContent({
                     >
                       {list.map((person) => {
                         const fullName = getPersonDisplayName(person, true)
-                        const lifespan = formatLifespan(person)
-                        const isDeceased =
-                          person.deathYear != null || person.death_year != null
-                        const genderLabel =
-                          person.gender === 'MALE'
-                            ? '남'
-                            : person.gender === 'FEMALE'
-                              ? '여'
-                              : null
                         const bioText = (() => {
                           const raw = person.biography?.trim() || ''
                           if (!raw) return ''
@@ -1048,102 +1356,174 @@ export function PersonListContent({
                           person.birthAdminDivision?.name ??
                           person.birthPlaceText ??
                           null
+                        // ── infographic card data ──────────────────────
+                        const birthYear = person.birthYear ?? person.birth_year
+                        const deathYear = person.deathYear ?? person.death_year
+                        const ageAtDeath =
+                          birthYear != null &&
+                          deathYear != null &&
+                          (person.birthEra ?? person.birth_era) !== 'BC' &&
+                          (person.deathEra ?? person.death_era) !== 'BC'
+                            ? deathYear - birthYear
+                            : null
+                        // lifespan bar: fill % = age / 100 capped at 100
+                        const lifePct =
+                          ageAtDeath != null
+                            ? Math.min(Math.max(ageAtDeath, 4), 100)
+                            : birthYear != null
+                              ? 8 // living or unknown — show a stub
+                              : 0
+
+                        const primaryTenure = person.governmentTenures?.[0]
+                        const primaryPositionType =
+                          primaryTenure?.positionDefinition?.positionType ??
+                          primaryTenure?.positionType
+                        const accentColor = getPositionColor(primaryPositionType)
+                        const isDark = isDarkMode
+
+                        const monarchName =
+                          person.templeName ||
+                          person.regnalName ||
+                          null
+
+                        const positionTitles = Array.from(
+                          new Set(
+                            (person.governmentTenures ?? [])
+                              .map(
+                                (t) =>
+                                  t.positionDefinition?.title ?? t.title,
+                              )
+                              .filter(Boolean),
+                          ),
+                        ).slice(0, 2) as string[]
+
                         return (
                           <Card
                             key={person.id}
-                            onClick={() => setSelectedPersonId(person.id)}
+                            onClick={() =>
+                              onPersonClick
+                                ? onPersonClick(person.id)
+                                : setSelectedPersonId(person.id)
+                            }
                           >
-                            <CardImageWrapper>
+                            {/* Image — left column */}
+                            <CardImageSide>
                               {showNewBadge && <NewBadge>NEW</NewBadge>}
                               {displayImage ? (
                                 <CardImage src={displayImage} alt={fullName} />
                               ) : (
-                                <CardImagePlaceholder>
-                                  <svg
-                                    width="80"
-                                    height="80"
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                  >
+                                <CardImagePlaceholder $color={accentColor}>
+                                  <svg viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                                   </svg>
                                 </CardImagePlaceholder>
                               )}
-                            </CardImageWrapper>
+                            </CardImageSide>
+
+                            {/* Info — right column */}
                             <CardContent>
-                              <PersonInfo>
-                                <CardTitleRow>
-                                  <PersonName>
-                                    {fullName || '(이름 없음)'}
-                                  </PersonName>
-                                </CardTitleRow>
-                                <PersonLifespan>
-                                  {lifespan}
-                                  {isDeceased ? ' · 사망' : ''}
-                                </PersonLifespan>
-                                {dynastyName && (
-                                  <CardDynasty>{dynastyName}</CardDynasty>
+                              <PersonNameRow>
+                                <PersonName>{fullName || '(이름 없음)'}</PersonName>
+                                {person.gender === 'MALE' && (
+                                  <GenderBadge $gender="MALE">♂ 남</GenderBadge>
                                 )}
-                                {birthPlace && (
-                                  <CardBirthPlace>
-                                    <CardBirthPlaceLabel>
-                                      출신
-                                    </CardBirthPlaceLabel>
-                                    {birthPlace}
-                                  </CardBirthPlace>
+                                {person.gender === 'FEMALE' && (
+                                  <GenderBadge $gender="FEMALE">♀ 여</GenderBadge>
                                 )}
-                                {(person.governmentTenures?.length ?? 0) >
-                                  0 && (
-                                  <CardBadgeRow>
-                                    {Array.from(
-                                      new Set(
-                                        person
-                                          .governmentTenures!.map(
-                                            (t) =>
-                                              t.positionDefinition?.title ??
-                                              t.title,
-                                          )
-                                          .filter(Boolean),
-                                      ),
+                              </PersonNameRow>
+
+                              {person.country?.name && (
+                                <CardCountryRow>
+                                  {person.country.flagEmoji && (
+                                    <CardCountryFlag>{person.country.flagEmoji}</CardCountryFlag>
+                                  )}
+                                  <CardCountryName>{person.country.name}</CardCountryName>
+                                </CardCountryRow>
+                              )}
+
+                              {monarchName && (
+                                <MonarchNameRow>
+                                  <MonarchCrown>♛</MonarchCrown>
+                                  <MonarchNameText>{monarchName}</MonarchNameText>
+                                </MonarchNameRow>
+                              )}
+
+                              {/* Lifespan bar */}
+                              <LifespanRow>
+                                {birthYear != null ? (
+                                  <>
+                                    <LifespanYear>
+                                      {(person.birthEra ?? person.birth_era) === 'BC' ? 'BC ' : ''}
+                                      {Math.abs(birthYear)}
+                                    </LifespanYear>
+                                    <LifespanTrack>
+                                      <LifespanFill $color={accentColor} $pct={lifePct} />
+                                    </LifespanTrack>
+                                    <LifespanYear>
+                                      {deathYear != null
+                                        ? `${(person.deathEra ?? person.death_era) === 'BC' ? 'BC ' : ''}${Math.abs(deathYear)}`
+                                        : '現'}
+                                    </LifespanYear>
+                                    {ageAtDeath != null && (
+                                      <LifespanAge>· {ageAtDeath}세</LifespanAge>
+                                    )}
+                                  </>
+                                ) : (
+                                  <LifespanYear style={{ opacity: 0.35 }}>
+                                    생몰년 미상
+                                  </LifespanYear>
+                                )}
+                              </LifespanRow>
+
+                              {/* Position badges */}
+                              {positionTitles.length > 0 && (
+                                <CardBadgeRow>
+                                  {positionTitles.map((title, i) => {
+                                    const pt =
+                                      person.governmentTenures?.[i]
+                                        ?.positionDefinition?.positionType ??
+                                      person.governmentTenures?.[i]?.positionType
+                                    return (
+                                      <CardHeadsBadge
+                                        key={i}
+                                        $color={getPositionColor(pt)}
+                                        $bg={getPositionBg(pt, isDark)}
+                                      >
+                                        {title}
+                                      </CardHeadsBadge>
                                     )
-                                      .slice(0, 2)
-                                      .map((title, i) => (
-                                        <CardHeadsBadge key={i}>
-                                          {title}
-                                        </CardHeadsBadge>
-                                      ))}
-                                  </CardBadgeRow>
-                                )}
-                                {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
-                              </PersonInfo>
+                                  })}
+                                </CardBadgeRow>
+                              )}
+
+                              {/* Dynasty / birthplace */}
+                              {dynastyName && (
+                                <CardMetaRow>
+                                  <CardMetaLabel>가문</CardMetaLabel>
+                                  <CardMetaValue>{dynastyName}</CardMetaValue>
+                                </CardMetaRow>
+                              )}
+                              {birthPlace && (
+                                <CardMetaRow>
+                                  <CardMetaLabel>출신</CardMetaLabel>
+                                  <CardMetaValue>{birthPlace}</CardMetaValue>
+                                </CardMetaRow>
+                              )}
+
+                              {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
                             </CardContent>
                           </Card>
                         )
                       })}
                     </AdaptiveGrid>
                   </CenturySection>
-                ))}
+                  )
+                })}
               </ListScrollArea>
             )}
           </ListSectionWrap>
         )}
       </AnimatePresence>
-      {enableCountryFilter && (
-        <CountrySelectModal
-          isOpen={showCountryModal}
-          onClose={() => setShowCountryModal(false)}
-          title="국가 필터"
-          multiSelect
-          selectedCountryIds={filterCountryIds}
-          modernCountries={modernCountries}
-          historicalCountries={historicalCountries}
-          onSelect={({ id }) => {
-            setFilterCountryIds((prev) =>
-              prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-            )
-          }}
-        />
-      )}
     </>
   )
 }

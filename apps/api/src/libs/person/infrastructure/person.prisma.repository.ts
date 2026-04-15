@@ -342,6 +342,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
       showLifespanOnEventList: person.showLifespanOnEventList,
       isDeathDateUnknown: person.isDeathDateUnknown ?? false,
+      deathType: (person as any).deathType ?? null,
+      deathCause: (person as any).deathCause ?? null,
+      deathNote: (person as any).deathNote ?? null,
       isAlive: person.isAlive ?? false,
       // 정부 직위 재임 기록
       governmentTenures: person.GovernmentTenures ? serializeBigInt(person.GovernmentTenures) : undefined,
@@ -4267,10 +4270,18 @@ export class PersonPrismaRepository implements IPersonRepository {
     }
     await fetchBatch(ggpIds)
 
-    // ── Step 4: ego의 자녀 (ego 또는 명시 배우자가 부모인 자녀) ───────
+    // ── Step 3c: 고조부모 (4세대 위) ─────────────────────────────
+    const gggpIds: string[] = []
+    for (const ggpId of ggpIds) {
+      const ggp = nodeMap.get(ggpId)
+      if (ggp?.fatherId) gggpIds.push(ggp.fatherId)
+      if (ggp?.motherId) gggpIds.push(ggp.motherId)
+    }
+    await fetchBatch(gggpIds)
+
+    // ── Step 4: ego의 자녀 (ego가 직접 부모인 자녀만) ───────────────────
     const childQueryConds: Prisma.PersonWhereInput[] = [
       { fatherId: personId }, { motherId: personId },
-      ...egoExplicitSpouseIds.flatMap(sid => [{ fatherId: sid }, { motherId: sid }]),
     ]
     const childRows = await this.prisma.person.findMany({
       where: { OR: childQueryConds },
@@ -4280,12 +4291,16 @@ export class PersonPrismaRepository implements IPersonRepository {
     await fetchBatch(childIds)
 
     // ── Step 5: 자녀의 다른 쪽 부모 → 추론 배우자 ─────────────────────
-    // 배우자 관계가 DB에 명시적으로 없어도 자녀를 통해 배우자를 추론
-    // 예: 자녀의 fatherId가 할아버지인데 spouse relation이 없는 경우
+    // ego가 실제로 부모인 자녀에 한해서만 추론한다.
+    // 명시 배우자의 다른 관계 자녀가 childIds에 포함되지 않으므로
+    // 무관한 인물이 ego의 배우자로 잘못 연결되는 문제를 방지한다.
     const inferredSpouseIds: string[] = []
     for (const cid of childIds) {
       const child = nodeMap.get(cid)
       if (!child) continue
+      // ego가 이 자녀의 부모인 경우에만 반대편 부모를 추론 배우자로 등록
+      const egoIsParent = child.fatherId === personId || child.motherId === personId
+      if (!egoIsParent) continue
       if (child.fatherId && child.fatherId !== personId) inferredSpouseIds.push(child.fatherId)
       if (child.motherId && child.motherId !== personId) inferredSpouseIds.push(child.motherId)
     }
@@ -4293,6 +4308,20 @@ export class PersonPrismaRepository implements IPersonRepository {
     // 추론된 배우자에 대해 spouse 엣지 추가
     for (const sid of inferredSpouseIds) {
       if (nodeMap.has(sid)) addSpouseEdge(personId, sid)
+    }
+
+    // ── Step 6: 명시 배우자의 자녀 (배우자 기준) ─────────────────────
+    // ego 자녀와 겹치지 않는 배우자의 독립 자녀도 포함하여 가계도 완성도 향상
+    if (egoExplicitSpouseIds.length > 0) {
+      const spouseChildConds: Prisma.PersonWhereInput[] = egoExplicitSpouseIds.flatMap(sid => [
+        { fatherId: sid }, { motherId: sid },
+      ])
+      const spouseChildRows = await this.prisma.person.findMany({
+        where: { OR: spouseChildConds, NOT: { id: { in: [personId, ...childIds] } } },
+        select: { id: true },
+        take: 40,
+      })
+      await fetchBatch(spouseChildRows.map(r => r.id))
     }
 
     // 모든 실질적 배우자 (명시 + 추론)

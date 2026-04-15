@@ -4,7 +4,8 @@
  */
 import React, { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiChevronDown, FiUser } from 'react-icons/fi'
+import { FiChevronDown, FiLink, FiUser } from 'react-icons/fi'
+import { CabinetEventAttachModal } from '@/widgets/country/country-detail/ui/cabinet-event-attach-modal'
 import styled from 'styled-components'
 
 import * as S from '@/shared/ui/form-styles'
@@ -274,6 +275,7 @@ export function TenureRegisterPanel({
   const [subTermNumber, setSubTermNumber] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
   const [cabinetId, setCabinetId] = useState<string | null>(null)
+  const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
   const [historicalCountryModalOpen, setHistoricalCountryModalOpen] = useState(false)
@@ -709,6 +711,37 @@ export function TenureRegisterPanel({
               </FieldRow>
             )}
 
+            {(cabinetId || initialCabinetId) && (
+              <FieldRow>
+                <FieldLabel>관련 사건</FieldLabel>
+                <FieldControl>
+                  <button
+                    type="button"
+                    onClick={() => setEventAttachModalOpen(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 12px',
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: 6,
+                      color: '#1d4ed8',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <FiLink size={13} />
+                    이 행정부에 사건 등록·연결
+                  </button>
+                  <FieldHint style={{ marginTop: 6 }}>
+                    재임 중 일어난 사건을 새로 만들거나 기존 사건을 이 행정부와 연결합니다. 같은 사건을 다른 행정부에서도 다시 연결할 수 있습니다.
+                  </FieldHint>
+                </FieldControl>
+              </FieldRow>
+            )}
+
             {(!positionDefinitionId || (positionDefinitions as any[]).length === 0) && (
               <>
                 <FieldRow>
@@ -867,6 +900,17 @@ export function TenureRegisterPanel({
           setCabinetId(value || null)
         }}
       />
+
+      {eventAttachModalOpen && (cabinetId || initialCabinetId) && (
+        <CabinetEventAttachModal
+          cabinetId={(cabinetId ?? initialCabinetId) as string}
+          onClose={() => setEventAttachModalOpen(false)}
+          onAttached={() => {
+            setEventAttachModalOpen(false)
+            toast.success('사건이 이 행정부에 연결되었습니다.')
+          }}
+        />
+      )}
     </FormSidePanel>
   )
 }

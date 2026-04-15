@@ -1,6 +1,5 @@
 import React from 'react'
-import { motion } from 'framer-motion'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 import { type PersonResponseDto as Person } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
@@ -8,137 +7,232 @@ interface PersonCardProps {
   person: Person
   index: number
   onClick: () => void
-  /** 가문명 (dynastyId로 조회한 값, 있으면 표시) */
   dynastyName?: string | null
 }
 
-export function PersonCard({ person, index, onClick, dynastyName }: PersonCardProps) {
-  const fullName = getPersonDisplayName(person)
+function getPositionColor(positionType: string | null | undefined): string {
+  switch (positionType) {
+    case 'HEAD_OF_STATE':       return '#d97706'
+    case 'HEAD_OF_GOVERNMENT':  return '#4f46e5'
+    case 'CABINET_MINISTER':    return '#0891b2'
+    case 'LEGISLATOR':          return '#059669'
+    case 'MILITARY_COMMANDER':  return '#dc2626'
+    case 'JUDICIARY':           return '#7c3aed'
+    default:                    return '#64748b'
+  }
+}
 
+export function PersonCard({ person, onClick, dynastyName }: PersonCardProps) {
+  const fullName = getPersonDisplayName(person)
   const birthYear = person.birthYear
   const deathYear = person.deathYear
+  const isBirthBc = person.birthEra === 'BC'
+  const isDeathBc = person.deathEra === 'BC'
 
-  const lifespan =
-    birthYear && deathYear
-      ? `${birthYear} - ${deathYear}`
-      : birthYear
-        ? `${birthYear} - `
-        : '미상'
+  const ageAtDeath =
+    birthYear != null && deathYear != null && !isBirthBc && !isDeathBc
+      ? deathYear - birthYear
+      : null
 
+  const lifePct =
+    ageAtDeath != null
+      ? Math.min(Math.max(ageAtDeath, 4), 100)
+      : birthYear != null ? 8 : 0
+
+  const primaryTenure = (person as any).governmentTenures?.[0]
+  const primaryPositionType =
+    primaryTenure?.positionDefinition?.positionType ?? primaryTenure?.positionType
+  const accentColor = getPositionColor(primaryPositionType)
   const displayImage = person.profileImageUrl
 
   return (
     <Card onClick={onClick}>
-      <ImageWrapper>
+      <ImageSide>
         {displayImage ? (
-          <Image src={displayImage} alt={fullName} />
+          <Img src={displayImage} alt={fullName} />
         ) : (
-          <ImagePlaceholder>
-            <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+          <ImgPlaceholder $color={accentColor}>
+            <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
             </svg>
-          </ImagePlaceholder>
+          </ImgPlaceholder>
         )}
-      </ImageWrapper>
+      </ImageSide>
 
       <Content>
-        <Info>
-          <Name>{fullName}</Name>
-          <Meta>
-            <MetaBadge>{lifespan}</MetaBadge>
-          </Meta>
-          {dynastyName && (
-            <DynastyBadge title="가문">가문: {dynastyName}</DynastyBadge>
+        <Name>{fullName}</Name>
+
+        <LifespanRow>
+          {birthYear != null ? (
+            <>
+              <LifespanYear>
+                {isBirthBc ? 'BC ' : ''}{Math.abs(birthYear)}
+              </LifespanYear>
+              <LifespanTrack>
+                <LifespanFill $color={accentColor} $pct={lifePct} />
+              </LifespanTrack>
+              <LifespanYear>
+                {deathYear != null
+                  ? `${isDeathBc ? 'BC ' : ''}${Math.abs(deathYear)}`
+                  : '現'}
+              </LifespanYear>
+              {ageAtDeath != null && (
+                <LifespanAge>· {ageAtDeath}세</LifespanAge>
+              )}
+            </>
+          ) : (
+            <LifespanYear style={{ opacity: 0.35 }}>생몰년 미상</LifespanYear>
           )}
-        </Info>
+        </LifespanRow>
+
+        {dynastyName && (
+          <MetaRow>
+            <MetaLabel>가문</MetaLabel>
+            <MetaValue>{dynastyName}</MetaValue>
+          </MetaRow>
+        )}
       </Content>
     </Card>
   )
 }
 
-// Styled Components
 const Card = styled.div`
-  background: white;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   cursor: pointer;
+  min-height: 112px;
+  transition: box-shadow 0.22s ease, transform 0.22s ease;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
 
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.06), 0 12px 28px rgba(0,0,0,0.08);
   }
 `
 
-const ImageWrapper = styled.div`
+const ImageSide = styled.div`
+  width: 106px;
+  flex-shrink: 0;
   position: relative;
-  width: 100%;
-  height: 240px;
   overflow: hidden;
-  background: #2d3748;
+  background: #f3f4f6;
 `
 
-const Image = styled.img`
+const Img = styled.img`
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top center;
+  transition: transform 0.3s ease;
+  ${Card}:hover & {
+    transform: scale(1.06);
+  }
 `
 
-const ImagePlaceholder = styled.div`
+const ImgPlaceholder = styled.div<{ $color: string }>`
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.4);
+  background: ${({ $color }) => $color}12;
+  color: ${({ $color }) => $color};
+  opacity: 0.55;
+  svg {
+    width: 34px;
+    height: 34px;
+  }
 `
 
 const Content = styled.div`
-  padding: 16px 16px 20px;
-  position: relative;
-`
-
-const Info = styled.div`
+  flex: 1;
+  min-width: 0;
+  padding: 14px 15px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  gap: 0;
 `
 
 const Name = styled.h3`
-  margin: 0;
-  font-size: 16px;
-  font-weight: 500;
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 700;
   color: #111827;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const LifespanRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+`
+
+const LifespanYear = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: #9ca3af;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+`
+
+const LifespanTrack = styled.div`
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: #e9ecef;
+  position: relative;
   overflow: hidden;
 `
 
-const Meta = styled.div`
+const LifespanFill = styled.div<{ $color: string; $pct: number }>`
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: ${({ $pct }) => $pct}%;
+  min-width: 6px;
+  background: ${({ $color }) => $color};
+  border-radius: 2px;
+  opacity: 0.75;
+`
+
+const LifespanAge = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+`
+
+const MetaRow = styled.div`
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0;
+  align-items: baseline;
+  gap: 4px;
 `
 
-const MetaBadge = styled.span`
-  display: inline-block;
-  padding: 4px 10px;
-  background: #f3f4f6;
+const MetaLabel = styled.span`
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  flex-shrink: 0;
+`
+
+const MetaValue = styled.span`
+  font-size: 11px;
   color: #6b7280;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-`
-
-const DynastyBadge = styled.span`
-  display: inline-block;
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #7c3aed;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 `

@@ -30,6 +30,21 @@ export enum Era {
 }
 
 /**
+ * 사망 유형 열거형
+ */
+export enum DeathType {
+  NATURAL = 'NATURAL',
+  ILLNESS = 'ILLNESS',
+  ASSASSINATION = 'ASSASSINATION',
+  EXECUTION = 'EXECUTION',
+  BATTLE = 'BATTLE',
+  ACCIDENT = 'ACCIDENT',
+  SUICIDE = 'SUICIDE',
+  UNKNOWN = 'UNKNOWN',
+  OTHER = 'OTHER',
+}
+
+/**
  * 날짜 정보 DTO
  */
 export class DateInfoDto {
@@ -211,6 +226,29 @@ export class CreatePersonDto {
   isDeathDateUnknown?: boolean
 
   /**
+   * 사망 유형 (자연사, 병사, 암살 등)
+   */
+  @IsOptional()
+  @IsEnum(DeathType)
+  deathType?: DeathType
+
+  /**
+   * 사망 원인 상세 (예: "폐렴 합병증", "독살 의혹")
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathCause?: string | null
+
+  /**
+   * 사망 관련 메모 (맥락, 논란, 비고 등)
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathNote?: string | null
+
+  /**
    * 생존 여부
    */
   @IsOptional()
@@ -281,14 +319,6 @@ export class CreatePersonDto {
   posthumousName?: string
 
   /**
-   * 즉위 전 작호/봉호 (예: 수양대군, 충녕대군)
-   * @example "수양대군"
-   */
-  @IsOptional()
-  @IsString()
-  preEnthronementTitle?: string
-
-  /**
    * 가문 ID (선택)
    */
   @IsOptional()
@@ -322,13 +352,6 @@ export class CreatePersonDto {
   @IsOptional()
   @IsString()
   motherId?: string
-
-  /**
-   * 직업 ID (선택) - @deprecated Career 테이블 사용 권장
-   */
-  @IsOptional()
-  @IsString()
-  jobId?: string
 
   /**
    * 국가 ID (선택)

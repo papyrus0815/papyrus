@@ -239,7 +239,7 @@ export const CabinetHeadTenureCard = styled.button`
   gap: 0;
   align-items: center;
   min-height: 76px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
@@ -247,17 +247,14 @@ export const CabinetHeadTenureCard = styled.button`
   &:hover:not(:disabled) {
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#94a3b8'};
-    box-shadow: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? '0 2px 10px rgba(0,0,0,0.3)'
-        : '0 2px 6px rgba(15,23,42,0.06)'};
+    box-shadow: none;
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#fafafa'};
   }
   &:focus-visible {
     outline: none;
     border-color: #64748b;
-    box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.15);
+    box-shadow: none;
   }
   &:disabled {
     opacity: 0.6;
@@ -388,7 +385,7 @@ export const CabinetSelectTrigger = styled.button<{ $hasValue?: boolean }>`
   }
   &:focus-visible {
     border-color: #64748b;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    box-shadow: none;
   }
   span {
     flex: 1;
@@ -416,7 +413,7 @@ export const CabinetSelectNative = styled.select`
   box-sizing: border-box;
   &:focus {
     border-color: #64748b;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    box-shadow: none;
   }
   option {
     background: ${({ theme }) => (theme.mode === 'dark' ? '#1a1a1a' : '#fff')};
@@ -558,7 +555,7 @@ export const MinisterPersonTrigger = styled.button`
 
   &:focus-visible {
     outline: none;
-    box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.35);
+    box-shadow: none;
   }
 `
 export const MinisterPersonThumb = styled.div<{ $hasImage?: boolean }>`
@@ -715,7 +712,7 @@ export const CabCountryFilterTab = styled.button<{ $active?: boolean }>`
     $active
       ? theme.mode === 'dark'
         ? '#a5b4fc'
-        : '#4338ca'
+        : '#6366f1'
       : theme.mode === 'dark'
         ? '#94a3b8'
         : '#64748b'};
@@ -745,7 +742,7 @@ export const CabCountryFilterTab = styled.button<{ $active?: boolean }>`
       $active
         ? theme.mode === 'dark'
           ? '#a5b4fc'
-          : '#4338ca'
+          : '#6366f1'
         : theme.mode === 'dark'
           ? '#cbd5e1'
           : '#475569'};
@@ -952,14 +949,10 @@ export const CabListSearchInput = styled.input<{ $hasTrailing: boolean }>`
   }
   &:focus {
     outline: none;
-    border-color: #818cf8;
+    border-color: #6366f1;
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-    box-shadow: 0 0 0 3px
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.28)'
-          : 'rgba(99, 102, 241, 0.18)'};
+    box-shadow: none;
   }
 `
 export const CabListSearchClearBtn = styled.button`
@@ -987,7 +980,7 @@ export const CabListSearchClearBtn = styled.button`
   }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
+    box-shadow: none;
   }
 `
 export const CabListSearchCount = styled.span`
@@ -1039,17 +1032,17 @@ export const CabListRegisterBtn = styled.button`
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  box-shadow: none;
   transition:
     background 0.2s,
     box-shadow 0.2s;
   &:hover {
     background: ${({ theme }) => theme.colors.button.hover};
-    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.32);
+    box-shadow: none;
   }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45);
+    box-shadow: none;
   }
 `
 
@@ -1079,7 +1072,7 @@ export const CabListMonarchRegisterBtn = styled.button`
   }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+    box-shadow: none;
   }
 `
 
@@ -1172,10 +1165,7 @@ export const CabDetailTopBar = styled.div`
   border-radius: 0;
   border: none;
   background: transparent;
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 1px 0 rgba(255, 255, 255, 0.06)'
-      : '0 1px 0 rgba(15, 23, 42, 0.06)'};
+  box-shadow: none;
 `
 
 /** 상단 바 좌측: 브레드크럼 + (선택) 행정부 명칭 */
@@ -1229,10 +1219,10 @@ export const CabRegisterBtn = styled.button`
   transition:
     background 0.15s,
     box-shadow 0.15s;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.22);
+  box-shadow: none;
   &:hover {
-    background: #4f46e5;
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.32);
+    background: #6366f1;
+    box-shadow: none;
   }
 `
 
@@ -1272,10 +1262,7 @@ export const CabCard = styled.div<{ $selected?: boolean; $deleting?: boolean }>`
         : p.theme.mode === 'dark'
           ? 'rgba(255,255,255,0.08)'
           : '#e8ecf0'};
-  box-shadow: ${(p) =>
-    p.$selected
-      ? '0 0 0 2px rgba(148,163,184,0.2), 0 4px 16px rgba(15,23,42,0.08)'
-      : '0 1px 4px rgba(15,23,42,0.04)'};
+  box-shadow: none;
   transition:
     box-shadow 0.2s ease,
     border-color 0.2s ease;
@@ -1285,7 +1272,7 @@ export const CabCard = styled.div<{ $selected?: boolean; $deleting?: boolean }>`
   &:hover {
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#94a3b8'};
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+    box-shadow: none;
   }
 `
 
@@ -1349,7 +1336,7 @@ export const CabDetailBackBtn = styled.button`
   }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
+    box-shadow: none;
     color: ${({ theme }) =>
       getCabinetsSectionPalette(theme.mode === 'dark').sectionLabelTint};
   }
@@ -1401,7 +1388,7 @@ export const CabinetTimelineCellBtn = styled.button.attrs({ type: 'button' })`
   }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.45);
+    box-shadow: none;
   }
   &:disabled {
     cursor: wait;
@@ -1632,8 +1619,7 @@ export const HeadProfileBlock = styled.div`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e8ecf0'};
   border-radius: 16px;
   overflow: visible;
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark' ? 'none' : '0 1px 4px rgba(15, 23, 42, 0.04)'};
+  box-shadow: none;
 `
 export const HeadProfileAvatar = styled.div`
   position: absolute;
@@ -1654,29 +1640,18 @@ export const HeadProfileAvatar = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 12px 40px rgba(0,0,0,0.35)'
-      : '0 10px 32px rgba(15, 23, 42, 0.08)'};
+  box-shadow: none;
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
   &:hover {
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.28)' : '#94a3b8'};
-    box-shadow: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? '0 14px 44px rgba(0,0,0,0.4)'
-        : '0 12px 36px rgba(15, 23, 42, 0.1)'};
+    box-shadow: none;
   }
   &:focus-visible {
     outline: none;
-    box-shadow:
-      0 0 0 3px rgba(99, 102, 241, 0.5),
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? '0 14px 44px rgba(0,0,0,0.45)'
-          : '0 12px 36px rgba(15, 23, 42, 0.12)'};
+    box-shadow: none;
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(129,140,248,0.85)' : '#6366f1'};
   }
@@ -1705,12 +1680,12 @@ export const HeadProfileDetailChipTerm = styled.span`
   border-radius: 999px;
   letter-spacing: -0.01em;
   max-width: 100%;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#c4b5fd' : '#5b21b6')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(139, 92, 246, 0.2)' : '#ede9fe'};
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.2)' : '#ede9fe'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(167, 139, 250, 0.35)' : '#ddd6fe'};
+      theme.mode === 'dark' ? 'rgba(167, 139, 250, 0.35)' : '#e0e7ff'};
 `
 export const HeadProfileDetailChipPosition = styled.span`
   font-size: 11px;
@@ -2498,9 +2473,7 @@ export const TenureHistoryTimelineKicker = styled.p`
     border-radius: 50%;
     background: ${({ theme }) =>
       getCabinetsSectionPalette(theme.mode === 'dark').accent};
-    box-shadow: 0 0 0 3px
-      ${({ theme }) =>
-        getCabinetsSectionPalette(theme.mode === 'dark').accentBg};
+    box-shadow: none;
   }
 `
 export const TenureHistoryHorizScroll = styled.div`
@@ -2613,7 +2586,7 @@ export const TenureHistoryHorizNode = styled.div`
     return css`
       background: ${p.btnBg};
       border: 3px solid ${MAIN};
-      box-shadow: 0 0 0 2px ${p.bgMuted};
+      box-shadow: none;
     `
   }}
 `
@@ -2641,12 +2614,10 @@ export const TenureHistoryHorizCard = styled.div<{ $linkagePeer?: boolean }>`
     return css`
       border: 1px solid ${p.accentBorder};
       background: ${p.cardBg};
-      box-shadow: ${drop};
+      box-shadow: none;
       ${$linkagePeer &&
       css`
-        box-shadow:
-          inset 3px 0 0 ${MAIN},
-          ${drop};
+        box-shadow: none;
       `}
     `
   }}
@@ -2682,9 +2653,7 @@ export const TenureHistoryHorizCard = styled.div<{ $linkagePeer?: boolean }>`
       return css`
         border-color: ${p.accentSecondaryBorder};
         background: ${p.cardBgHover};
-        box-shadow: ${$linkagePeer
-          ? `inset 3px 0 0 ${MAIN}, ${hoverDrop}`
-          : hoverDrop};
+        box-shadow: none;
       `
     }}
   }
@@ -2845,7 +2814,7 @@ export const HistoryCardDeleteBtn = styled.button`
   &:focus-visible {
     opacity: 1;
     outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
+    box-shadow: none;
   }
 `
 export const HistoryCard = styled.div`
@@ -3052,7 +3021,7 @@ export const MinisterProfileAvatar = styled.div`
   justify-content: center;
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
+    box-shadow: none;
   }
 `
 export const MinisterProfileMeta = styled.div`
@@ -3188,7 +3157,7 @@ const historyArticleBtnPhysical = css`
     box-shadow 0.15s ease;
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+    box-shadow: none;
   }
   &:disabled {
     opacity: 0.45;
@@ -3219,7 +3188,7 @@ export const HistoryArticleToolbarActions = styled.div`
 /** 다국 행정부 묶기 — accent 고스트 (툴바 공통 터치 영역) */
 export const HistoryArticleToolbarSecondaryBtn = styled.button`
   ${historyArticleBtnPhysical};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#6366f1')};
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(99, 102, 241, 0.12)'
@@ -3277,7 +3246,7 @@ export const HistoryArticleBackBtn = styled.button`
   &:focus-visible {
     outline: none;
     border-radius: 4px;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+    box-shadow: none;
   }
 `
 export const HistoryArticleDeleteBtn = styled.button`
@@ -3301,7 +3270,7 @@ export const HistoryArticleDeleteBtn = styled.button`
   }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+    box-shadow: none;
   }
 `
 /** 본문 수정·추가 — neutral 고스트 (취소와 동일 계열) */
@@ -3390,7 +3359,7 @@ export const HistoryMetaInput = styled.input`
   transition: border-color 0.15s;
   &:focus {
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#818cf8' : '#6366f1'};
+      theme.mode === 'dark' ? '#6366f1' : '#6366f1'};
   }
 `
 export const HistoryMetaDateRow = styled.div`
@@ -3413,7 +3382,7 @@ export const HistoryMetaDateInput = styled.input`
   transition: border-color 0.15s;
   &:focus {
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#818cf8' : '#6366f1'};
+      theme.mode === 'dark' ? '#6366f1' : '#6366f1'};
   }
 `
 /* 본문 영역: 가운데 정렬, max-width 720px */
@@ -3468,7 +3437,7 @@ export const HistoryArticleLinkageMeta = styled.div<{
     margin-top: 4px;
   }
   & a {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
     font-weight: 600;
     text-decoration: none;
     &:hover {
@@ -3546,7 +3515,7 @@ export const HistoryArticleSaveBtn = styled.button<{ $isRegister?: boolean }>`
   color: #fff;
   background: ${(p) => (p.$isRegister ? '#059669' : '#6366f1')};
   &:hover:not(:disabled) {
-    background: ${(p) => (p.$isRegister ? '#047857' : '#4f46e5')};
+    background: ${(p) => (p.$isRegister ? '#047857' : '#6366f1')};
   }
   &:disabled {
     opacity: 0.55;
@@ -3595,7 +3564,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
   }
   h1 {
     font-size: 32px;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#6366f1')};
   }
   h2 {
     font-size: 24px;
@@ -3604,13 +3573,13 @@ export const HistoryArticleProse = styled(RichTextReadView)`
     font-size: 20px;
   }
   blockquote {
-    border-left: 4px solid #4f46e5;
+    border-left: 4px solid #6366f1;
     padding: 12px 20px;
     margin: 12px 0;
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(79,70,229,0.1)'
-        : 'rgba(79, 70, 229, 0.04)'};
+        ? 'rgba(99,102,241,0.1)'
+        : 'rgba(99, 102, 241, 0.04)'};
     border-radius: 0 12px 12px 0;
     color: ${({ theme }) =>
       getCabinetsSectionPalette(theme.mode === 'dark').textMuted};
@@ -3622,7 +3591,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
       top: 8px;
       left: 12px;
       font-size: 48px;
-      color: rgba(79, 70, 229, 0.12);
+      color: rgba(99, 102, 241, 0.12);
       font-family: Georgia, serif;
       line-height: 1;
     }
@@ -3635,33 +3604,33 @@ export const HistoryArticleProse = styled(RichTextReadView)`
     ${proseHrSmallStyles}
   }
   a {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#6366f1')};
     text-decoration: none;
-    border-bottom: 1px solid rgba(79, 70, 229, 0.3);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.3);
     cursor: pointer;
     transition:
       color 0.2s ease,
       border-color 0.2s ease;
     font-weight: 500;
     &:hover {
-      color: #4338ca;
-      border-bottom-color: #4f46e5;
-      background: rgba(79, 70, 229, 0.04);
+      color: #6366f1;
+      border-bottom-color: #6366f1;
+      background: rgba(99, 102, 241, 0.04);
     }
   }
   code {
     background: ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(99,102,241,0.15)'
-        : 'rgba(79, 70, 229, 0.08)'};
+        : 'rgba(99, 102, 241, 0.08)'};
     padding: 4px 10px;
     border-radius: 6px;
     font-size: 13px;
     font-family:
       'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Courier New', monospace;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#6366f1')};
     font-weight: 500;
-    border: 1px solid rgba(79, 70, 229, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.15);
   }
   pre {
     background: ${({ theme }) =>
@@ -3673,7 +3642,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
         getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
     overflow-x: auto;
     margin: 10px 0;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    box-shadow: none;
     code {
       background: transparent;
       padding: 0;
@@ -3686,7 +3655,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
 
   .mention,
   .entity-link {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#2563eb')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#2563eb')};
     text-decoration: none;
     cursor: pointer;
     border-radius: 2px;
@@ -3699,7 +3668,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
     text-underline-offset: 2px;
   }
   .term {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#2dd4bf' : '#0f766e')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#2dd4bf' : '#6366f1')};
     cursor: pointer;
     padding: 0 2px;
     border-radius: 3px;
@@ -3708,7 +3677,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
       color 0.15s;
   }
   .term:hover {
-    background: rgba(15, 118, 110, 0.12);
+    background: rgba(99, 102, 241, 0.12);
   }
 `
 
@@ -3772,9 +3741,7 @@ export const HistoryProseTermTooltipPopover = styled.div<{
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   font-size: 13px;
   line-height: 1.5;
@@ -3809,9 +3776,7 @@ export const HistoryProseDynastyTooltipPopover = styled.div<{
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.12),
-    0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   font-size: 13px;
   line-height: 1.5;
@@ -3820,7 +3785,7 @@ export const HistoryProseDynastyTooltipPopover = styled.div<{
     display: block;
     margin-bottom: 6px;
     font-size: 12px;
-    color: #6d28d9;
+    color: #6366f1;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     max-width: 100%;
@@ -3979,7 +3944,7 @@ export const TreatyPanelPrimaryBtn = styled.button`
   background: ${MAIN};
   color: #fff;
   white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.35);
+  box-shadow: none;
   transition: background 0.15s ease;
 
   &:hover:not(:disabled) {
@@ -4006,7 +3971,7 @@ export const TreatyPanelFooterBar = styled.div`
       ? 'rgba(15, 15, 18, 0.88)'
       : 'rgba(248, 250, 252, 0.97)'};
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  box-shadow: 0 -10px 32px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 `
 
 export const TreatyListSkeletonPulse = styled.div`
@@ -4050,7 +4015,7 @@ export const TreatyFieldModeBtn = styled.button<{ $active?: boolean }>`
         ? 'rgba(99, 102, 241, 0.22)'
         : '#eef2ff'
       : 'transparent'};
-  color: ${(p) => (p.$active ? '#4f46e5' : p.theme.colors.text.secondary)};
+  color: ${(p) => (p.$active ? '#6366f1' : p.theme.colors.text.secondary)};
   transition:
     background 0.15s ease,
     color 0.15s ease;
@@ -4086,8 +4051,8 @@ export const TreatyFormSelect = styled.select`
   outline: none;
   cursor: pointer;
   &:focus {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    border-color: #6366f1;
+    box-shadow: none;
   }
 `
 
@@ -4139,7 +4104,7 @@ export const TreatyModeTab = styled.button<{ $active?: boolean }>`
   font-size: 14px;
   font-weight: ${(p) => (p.$active ? 700 : 500)};
   color: ${(p) =>
-    p.$active ? '#4f46e5' : p.theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
+    p.$active ? '#6366f1' : p.theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
   background: none;
   border: none;
   border-bottom: 3px solid ${(p) => (p.$active ? '#6366f1' : 'transparent')};
@@ -4207,7 +4172,7 @@ export const TreatyExamplePanel = styled.details`
   border-radius: 12px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.1)' : '#f5f3ff'};
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.1)' : '#eef2ff'};
   overflow: hidden;
 
   &[open] ${TreatyExampleSummary} svg {
@@ -4315,7 +4280,7 @@ export const TlItemAvatarRing = styled.div<{ $lineColor: string }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: ${(p) => `0 4px 16px ${p.$lineColor}44`};
+  box-shadow: none;
 `
 
 export const TlItemAvatarImg = styled.img`
@@ -4374,7 +4339,7 @@ export const TlItemMonarchBadgeVisual = styled.div<{
   background: ${(p) =>
     p.$accentColor ? `${p.$accentColor}28` : `${p.$lineColor}22`};
   border: 2px solid ${(p) => (p.$accentColor ? p.$accentColor : p.$lineColor)};
-  box-shadow: ${(p) => `0 0 0 2px ${p.$panelBg}, 0 2px 8px rgba(0, 0, 0, 0.2)`};
+  box-shadow: none;
 `
 
 export const TlItemMonarchBadgeImg = styled.img`

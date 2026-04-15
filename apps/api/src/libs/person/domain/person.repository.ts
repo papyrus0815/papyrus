@@ -49,6 +49,9 @@ export interface CreatePersonData {
   deathDate?: Date
   isBirthDateUnknown?: boolean
   isDeathDateUnknown?: boolean
+  deathType?: string | null
+  deathCause?: string | null
+  deathNote?: string | null
   isAlive?: boolean
   gender?: string
   biography?: string
@@ -58,15 +61,12 @@ export interface CreatePersonData {
   regnalName?: string
   templeName?: string
   posthumousName?: string
-  /** 즉위 전 작호/봉호 (예: 수양대군, 충녕대군) */
-  preEnthronementTitle?: string
   // 관계
   dynastyId?: string
   religionId?: string
   denominationId?: string
   fatherId?: string
   motherId?: string
-  jobId?: string
   countryId?: string
   birthCityId?: string
   deathCityId?: string
@@ -105,6 +105,9 @@ export interface UpdatePersonData {
   deathDate?: Date
   isBirthDateUnknown?: boolean
   isDeathDateUnknown?: boolean
+  deathType?: string | null
+  deathCause?: string | null
+  deathNote?: string | null
   isAlive?: boolean
   gender?: string
   biography?: string
@@ -114,15 +117,12 @@ export interface UpdatePersonData {
   regnalName?: string
   templeName?: string
   posthumousName?: string
-  /** 즉위 전 작호/봉호 (예: 수양대군, 충녕대군) */
-  preEnthronementTitle?: string
   // 관계
   dynastyId?: string
   religionId?: string
   denominationId?: string
   fatherId?: string
   motherId?: string
-  jobId?: string
   countryId?: string
   birthCityId?: string
   deathCityId?: string

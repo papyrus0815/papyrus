@@ -302,6 +302,9 @@ model Event {
   /// 이 사건을 축으로 묶인 다국 행정부 그룹 (CabinetLinkageGroup.eventId)
   cabinetLinkageGroups CabinetLinkageGroup[] @relation("CabinetLinkageEvent")
 
+  /// 이 사건에 관여한 행정부들 (N:M, 역할 포함)
+  cabinetEvents CabinetEvent[] @relation("CabinetEventsEvent")
+
   /// 선거 상세 서술의 정본으로 연결 (선택)
   electionsWithNarrative Election[] @relation("ElectionEventNarrative")
 

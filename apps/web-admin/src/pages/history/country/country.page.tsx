@@ -61,6 +61,7 @@ import {
 } from '@/widgets/country/country-list/ui/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
 import { PersonDashboardSection } from '@/widgets/country/person-dashboard-section/ui/person-dashboard-section'
+import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import { AdministrationCabinetComparison } from '@/widgets/country/administration-cabinet-comparison/administration-cabinet-comparison.widget'
 import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -134,7 +135,7 @@ function DashboardMenuContent({
 export default function CountryPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const params = useParams<{ countryId?: string; eventId?: string }>()
+  const params = useParams<{ countryId?: string; eventId?: string; personId?: string }>()
   const [searchParams] = useSearchParams()
   const inHistory = location.pathname.startsWith('/history')
 
@@ -178,6 +179,9 @@ export default function CountryPage() {
   const isDashboardPersonsUrl = /\/history\/dashboard\/persons\/?$/.test(
     location.pathname,
   )
+  /** 연대표/대시보드 인물 상세 URL (/history/dashboard/persons/:personId) */
+  const isDashboardPersonDetailUrl =
+    /\/history\/dashboard\/persons\/[^/]+\/?$/.test(location.pathname)
   /** 연대표/대시보드 연대표(전체 사건) 뷰 URL (/history/dashboard/events, /events/:eventId, /events/:eventId/edit) */
   const isDashboardEventsUrl =
     /\/history\/dashboard\/events(\/[^/]+)?(\/edit)?\/?$/.test(
@@ -541,13 +545,14 @@ export default function CountryPage() {
 
   // 연대표/대시보드 인물·연대표·행정부·통계 URL 진입 시 뷰 동기화
   useEffect(() => {
-    if (isDashboardPersonsUrl) setDashboardContentView('person')
+    if (isDashboardPersonsUrl || isDashboardPersonDetailUrl) setDashboardContentView('person')
     else if (isDashboardEventsUrl) setDashboardContentView('events')
     else if (isDashboardAdministrationUrl)
       setDashboardContentView('administration')
     else if (isDashboardStatsUrl) setDashboardContentView('stats')
   }, [
     isDashboardPersonsUrl,
+    isDashboardPersonDetailUrl,
     isDashboardEventsUrl,
     isDashboardAdministrationUrl,
     isDashboardStatsUrl,
@@ -570,7 +575,7 @@ export default function CountryPage() {
   )
   const [dashboardContentView, setDashboardContentView] =
     useState<DashboardContentView>(() => {
-      if (isDashboardPersonsUrl) return 'person'
+      if (isDashboardPersonsUrl || isDashboardPersonDetailUrl) return 'person'
       if (isDashboardEventsUrl) return 'events'
       if (isDashboardAdministrationUrl) return 'administration'
       if (isDashboardStatsUrl) return 'stats'
@@ -1317,7 +1322,7 @@ export default function CountryPage() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.25, ease: 'easeInOut' }}
-                    style={{ width: '100%', height: '100%', minHeight: '100%' }}
+                    style={{ width: '100%', minHeight: '100%' }}
                   >
                     {dashboardContentView === 'stats' ? (
                       <CountryDashboard
@@ -1390,7 +1395,20 @@ export default function CountryPage() {
                         />
                       )
                     ) : dashboardContentView === 'person' ? (
-                      <PersonDashboardSection />
+                      params.personId ? (
+                        <S.PersonDetailPaneWrap>
+                          <PersonDetailPanel
+                            key={params.personId}
+                            personId={params.personId}
+                            onClose={() => navigate(pathKeys.history.dashboardPersons())}
+                            onEdit={(id) => navigate(pathKeys.persons.edit(id))}
+                            onLinkedPersonClick={(id) => navigate(pathKeys.history.dashboardPersonDetail(id))}
+                            closeLabel="뒤로"
+                          />
+                        </S.PersonDetailPaneWrap>
+                      ) : (
+                        <PersonDashboardSection />
+                      )
                     ) : dashboardContentView === 'administration' ? (
                       <AdministrationCabinetComparison
                         territories={administrationDashboardTerritories}

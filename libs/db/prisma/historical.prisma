@@ -182,6 +182,8 @@ model HistoricalCountry {
   nameOrigin   String? @map("name_origin") @db.Text
   /// 설명
   description  String? @map("description") @db.Text
+  /// 역사 서술 (자유 텍스트, 마크다운)
+  history      String? @map("history") @db.Text
   /// 대표 이미지 URL
   thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
 

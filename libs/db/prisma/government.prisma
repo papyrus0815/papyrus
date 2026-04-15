@@ -226,6 +226,8 @@ model Cabinet {
   treatySignatories TreatySignatory[]     @relation("TreatySignatoryCabinet")
   /// 연정·여당 등 이 행정부를 지지한 정당(행정부 단위 기록)
   politicalParties CabinetPoliticalParty[] @relation("CabinetPoliticalParties")
+  /// 이 행정부가 관여한 사건들 (N:M)
+  events           CabinetEvent[]          @relation("CabinetEventsCabinet")
 
   /// 다른 나라 행정부와의 묶음 (다국 행정부 연결). 묶음 그룹에 `eventId`가 있으면 그 사건 축.
   linkageGroupId String?              @map("linkage_group_id") @db.Char(36)
@@ -237,6 +239,47 @@ model Cabinet {
   @@index([accountId], name: "idx_cabinet_accountId")
   @@index([linkageGroupId], name: "idx_cabinet_linkageGroupId")
   @@map("cabinet")
+}
+
+// ========================
+// CabinetEvent (행정부 ↔ 사건 N:M)
+// ========================
+/// 한 사건에 여러 행정부가 관여한 경우 연결 (예: 헤센-카셀 위기 → 헤센-카셀/프로이센/오스트리아 내각).
+/// `EventCountryRelation`이 국가 단위 N:M인 것과 별개로, 사건이 일어난 시점의
+/// "어느 정부(행정부)가 어떤 역할로 관여했는가"를 직접 기록한다.
+model CabinetEvent {
+  id        String @id @default(uuid()) @db.Char(36)
+  cabinetId String @map("cabinet_id") @db.Char(36)
+  eventId   String @map("event_id") @db.Char(36)
+
+  /// 이 행정부가 사건에서 맡은 역할
+  role CabinetEventRole?
+
+  /// 자유 메모 (선택)
+  note String? @db.Text
+
+  cabinet Cabinet @relation("CabinetEventsCabinet", fields: [cabinetId], references: [id], onDelete: Cascade)
+  event   Event   @relation("CabinetEventsEvent", fields: [eventId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([cabinetId, eventId])
+  @@index([cabinetId], name: "idx_cabinet_event_cabinetId")
+  @@index([eventId], name: "idx_cabinet_event_eventId")
+  @@map("cabinet_event")
+}
+
+/// 사건에서 행정부의 역할
+enum CabinetEventRole {
+  /// 발단 — 사건이 시작된 쪽
+  ORIGIN
+  /// 당사자 — 직접 개입
+  PARTY
+  /// 중재자 — 조정 역할
+  MEDIATOR
+  /// 영향받음 — 직접 개입은 안 했지만 영향
+  AFFECTED
 }
 
 // ========================

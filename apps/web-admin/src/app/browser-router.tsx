@@ -140,7 +140,7 @@ const appRouterConfig = [
           dashboardRoute,
           // 이벤트 페이지 라우트
           eventPageRoute,
-          // 인물 상세 라우트
+          // 인물 상세/등록/수정 라우트
           personsRoute,
           // 행정기구·조직 라우트
           ...organizationsRoutes,

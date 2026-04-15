@@ -179,6 +179,15 @@ export class PersonController {
   }
 
   /**
+   * 전체 가계도 그래프 (BFS, ego 기준 3세대 위·2세대 아래)
+   */
+  @Get(':id/family-tree')
+  async getFamilyTree(@Param('id') id: string, @Request() req: any) {
+    const accountId = req.user?.id ?? req.user?.sub ?? undefined
+    return this.personService.getFamilyTree(id, accountId)
+  }
+
+  /**
    * ID로 인물 상세 조회 (본인 등록분만)
    */
   @Get(':id/detail')
@@ -198,6 +207,11 @@ export class PersonController {
     gender: string | null
     biography: string | null
     profileImageUrl: string | null
+    regnalName: string | null
+    templeName: string | null
+    posthumousName: string | null
+    sovereignReigns: any[]
+    dynastyId: string | null
     countryId: string | null
     fatherId: string | null
     motherId: string | null
@@ -219,6 +233,7 @@ export class PersonController {
     father: any
     mother: any
     children: any[]
+    siblings: any[]
     foundedCompanies: any[]
     companies: any[]
     books: any[]
@@ -234,6 +249,9 @@ export class PersonController {
     humanRelationships: any[]
     isBirthDateUnknown: boolean
     isDeathDateUnknown: boolean
+    deathType: string | null
+    deathCause: string | null
+    deathNote: string | null
     isAlive: boolean
     createdAt: string
     updatedAt: string
@@ -250,7 +268,11 @@ export class PersonController {
     person.childrenFromMother?.forEach((child: any) =>
       childrenMap.set(child.id, child),
     )
-    const children = Array.from(childrenMap.values())
+    // 각 자녀에 첫 배우자(spouse) 평탄화 — 가계도 렌더용
+    const children = Array.from(childrenMap.values()).map((child: any) => ({
+      ...child,
+      spouse: child.spouseRelationsAsPerson?.[0]?.spouse ?? null,
+    }))
 
     // BigInt → 문자열, Date → ISO (그대로 두면 Date가 `{}`로 직렬화되어 클라이언트에서 날짜가 사라짐)
     const serializeBigInt = (obj: any): any => {
@@ -271,6 +293,18 @@ export class PersonController {
 
       return obj
     }
+
+    // 형제자매 계산 (부·모의 자녀 중 본인 제외)
+    const siblingMap = new Map<string, any>()
+    person.father?.childrenFromFather?.forEach((s: any) => { if (s.id !== person.id) siblingMap.set(s.id, s) })
+    person.mother?.childrenFromMother?.forEach((s: any) => { if (s.id !== person.id) siblingMap.set(s.id, s) })
+    const siblings = serializeBigInt(Array.from(siblingMap.values()).map((s: any) => ({
+      id: s.id, name: s.name, surname: s.surname, nameDisplayOrder: s.nameDisplayOrder,
+      regnalName: s.regnalName ?? null,
+      gender: s.gender, dynasty: s.dynasty, birthDate: s.birthDate instanceof Date ? s.birthDate.toISOString() : s.birthDate ?? null,
+      deathDate: s.deathDate instanceof Date ? s.deathDate.toISOString() : s.deathDate ?? null,
+      profileImageUrl: s.profileImageUrl ?? null, profileImages: s.profileImages ?? [],
+    })))
 
     return {
       id: person.id,
@@ -293,11 +327,13 @@ export class PersonController {
       gender: person.gender,
       biography: person.biography,
       profileImageUrl: person.profileImageUrl,
-      country: serializeBigInt(person.country),
+      regnalName: person.regnalName ?? null,
+      templeName: person.templeName ?? null,
+      posthumousName: person.posthumousName ?? null,
+      sovereignReigns: serializeBigInt(person.sovereignReigns ?? []),
       dynasty: serializeBigInt(person.dynasty),
       religion: serializeBigInt(person.religion),
       denomination: serializeBigInt(person.denomination),
-      job: serializeBigInt(person.job),
       birthCityId: person.birthCityId ?? null,
       deathCityId: person.deathCityId ?? null,
       birthAdminDivisionId: person.birthAdminDivisionId ?? null,
@@ -308,12 +344,24 @@ export class PersonController {
       deathCity: person.deathCity ? { id: person.deathCity.id, name: person.deathCity.name } : null,
       birthAdminDivision: person.birthAdminDivision ? { id: person.birthAdminDivision.id, name: person.birthAdminDivision.name } : null,
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
-      countryId: person.countryId ?? null,
+      dynastyId: person.dynastyId ?? null,
+      job: person.job ?? null,
+      countryId: (() => {
+        // CITIZENSHIP priority=0 소속 우선 (역사적 국가 포함)
+        const affiliations: any[] = person.countryAffiliations ?? []
+        const main = affiliations
+          .filter((a: any) => String(a.affiliationType) === 'CITIZENSHIP')
+          .sort((a: any, b: any) => (a.priority ?? 999) - (b.priority ?? 999))[0]
+        if (main) return main.historicalCountryId ?? main.countryId ?? null
+        return person.countryId ?? null
+      })(),
       fatherId: person.fatherId ?? null,
       motherId: person.motherId ?? null,
+      country: serializeBigInt(person.country),
       father: person.father != null ? serializeBigInt(person.father) : null,
       mother: person.mother != null ? serializeBigInt(person.mother) : null,
-      children,
+      children: serializeBigInt(children),
+      siblings: siblings,
       foundedCompanies: person.foundedCompanies || [],
       companies: person.Company || [],
       books: person.Book || [],
@@ -324,17 +372,42 @@ export class PersonController {
       militaryCommands: person.MilitaryUnitCommander || [],
       events: person.PersonEvent || [],
       governmentPositions: person.GovernmentTenures || [],
-      spouseRelations: (person.spouseRelationsAsPerson || []).map((rel: any) => ({
-        id: rel.id,
-        marriageStartDate: rel.marriageStartDate?.toISOString?.() ?? null,
-        marriageEndDate: rel.marriageEndDate?.toISOString?.() ?? null,
-        note: rel.note,
-        spouse: rel.spouse,
-      })),
-      spouse: person.spouseRelationsAsPerson?.[0]?.spouse ?? null,
+      spouseRelations: (() => {
+        const seen = new Set<string>()
+        return [
+          ...(person.spouseRelationsAsPerson || []).map((rel: any) => ({
+            id: rel.id,
+            marriageStartDate: rel.marriageStartDate?.toISOString?.() ?? null,
+            marriageEndDate: rel.marriageEndDate?.toISOString?.() ?? null,
+            note: rel.note ?? null,
+            spouse: rel.spouse ? serializeBigInt(rel.spouse) : null,
+          })),
+          // 역방향: 현재 인물이 spouseId 쪽에 등록된 경우 — rel.person이 실제 배우자
+          ...(person.spouseRelationsAsSpouse || []).map((rel: any) => ({
+            id: rel.id,
+            marriageStartDate: rel.marriageStartDate?.toISOString?.() ?? null,
+            marriageEndDate: rel.marriageEndDate?.toISOString?.() ?? null,
+            note: rel.note ?? null,
+            spouse: rel.person ? serializeBigInt(rel.person) : null,
+          })),
+        ].filter((rel) => {
+          const spouseId = rel.spouse?.id
+          if (!spouseId) return true
+          if (seen.has(String(spouseId))) return false
+          seen.add(String(spouseId))
+          return true
+        })
+      })(),
+      spouse:
+        person.spouseRelationsAsPerson?.[0]?.spouse ??
+        person.spouseRelationsAsSpouse?.[0]?.person ??
+        null,
       humanRelationships,
       isBirthDateUnknown: person.isBirthDateUnknown ?? false,
       isDeathDateUnknown: person.isDeathDateUnknown ?? false,
+      deathType: (person as any).deathType ?? null,
+      deathCause: (person as any).deathCause ?? null,
+      deathNote: (person as any).deathNote ?? null,
       isAlive: person.isAlive ?? false,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
@@ -388,6 +461,9 @@ export class PersonController {
       deathDate,
       isBirthDateUnknown: dto.isBirthDateUnknown,
       isDeathDateUnknown: dto.isDeathDateUnknown,
+      deathType: dto.deathType ?? null,
+      deathCause: dto.deathCause ?? null,
+      deathNote: dto.deathNote ?? null,
       isAlive: dto.isAlive,
       gender: dto.gender,
       biography: dto.biography,
@@ -396,13 +472,11 @@ export class PersonController {
       regnalName: dto.regnalName,
       templeName: dto.templeName,
       posthumousName: dto.posthumousName,
-      preEnthronementTitle: dto.preEnthronementTitle,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,
       fatherId: dto.fatherId,
       motherId: dto.motherId,
-      jobId: dto.jobId,
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
@@ -466,6 +540,9 @@ export class PersonController {
       deathDate,
       isBirthDateUnknown: dto.isBirthDateUnknown,
       isDeathDateUnknown: dto.isDeathDateUnknown,
+      deathType: dto.deathType ?? null,
+      deathCause: dto.deathCause ?? null,
+      deathNote: dto.deathNote ?? null,
       isAlive: dto.isAlive,
       gender: dto.gender,
       biography: dto.biography,
@@ -474,13 +551,11 @@ export class PersonController {
       regnalName: dto.regnalName,
       templeName: dto.templeName,
       posthumousName: dto.posthumousName,
-      preEnthronementTitle: dto.preEnthronementTitle,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,
       fatherId: dto.fatherId,
       motherId: dto.motherId,
-      jobId: dto.jobId,
       countryId: dto.countryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,

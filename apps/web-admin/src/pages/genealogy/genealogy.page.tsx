@@ -340,7 +340,11 @@ function PersonNodeInner({ data }: NodeProps) {
       : null
 
   return (
-    <NodeWrap $isEgo={isEgo}>
+    <NodeWrap
+      $isEgo={isEgo}
+      onClick={() => navigate(`/persons/${person.id}/`)}
+      title={`${displayName} 상세 보기`}
+    >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Left} id="left" style={{ opacity: 0 }} />
@@ -351,7 +355,7 @@ function PersonNodeInner({ data }: NodeProps) {
       <NodeAvatar $isEgo={isEgo} $hasImg={!!src}>
         {src
           ? <img src={src} alt={displayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-          : <span style={{ fontSize: 22, fontWeight: 700, color: isEgo ? '#fff' : '#475569' }}>{initial}</span>}
+          : <span style={{ fontSize: 22, fontWeight: 700, color: isEgo ? '#fff' : 'var(--node-text, #475569)' }}>{initial}</span>}
       </NodeAvatar>
 
       {person.regnalName && (
@@ -368,10 +372,7 @@ function PersonNodeInner({ data }: NodeProps) {
 
       {isEgo && <EgoBadge>본인</EgoBadge>}
 
-      <NodeClickOverlay
-        onClick={() => navigate(`/persons/${person.id}/`)}
-        title={`${displayName} 상세 보기`}
-      />
+      <NodeClickOverlay />
     </NodeWrap>
   )
 }
@@ -597,7 +598,8 @@ const ErrorOverlay = styled.div`
   background: ${({ theme }) => theme.colors.background.primary};
 `
 
-// ─── Node styled components (theme-free, 노드는 ThemeContext 없이도 동작해야 함) ──
+// ─── Node styled components ───────────────────────────────────────
+// 라이트/다크 모드 모두 지원하기 위해 CSS 변수와 prefers-color-scheme 사용
 const NodeWrap = styled.div<{ $isEgo: boolean }>`
   position: relative;
   width: ${NODE_W}px;
@@ -611,18 +613,37 @@ const NodeWrap = styled.div<{ $isEgo: boolean }>`
   box-sizing: border-box;
   cursor: pointer;
   transition: box-shadow 0.2s, transform 0.15s;
-  background: ${({ $isEgo }) => $isEgo ? 'linear-gradient(145deg, #6366f1 0%, #818cf8 100%)' : '#fff'};
-  border: ${({ $isEgo }) => $isEgo ? '2px solid #4f46e5' : '1.5px solid #e2e8f0'};
+  background: ${({ $isEgo }) => $isEgo
+    ? 'linear-gradient(145deg, #6366f1 0%, #818cf8 100%)'
+    : 'var(--node-bg, #fff)'};
+  border: ${({ $isEgo }) => $isEgo ? '2px solid #4f46e5' : '1.5px solid var(--node-border, #e2e8f0)'};
   box-shadow: ${({ $isEgo }) => $isEgo ? '0 4px 24px rgba(99,102,241,0.35)' : '0 2px 8px rgba(0,0,0,0.06)'};
   &:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+
+  @media (prefers-color-scheme: dark) {
+    --node-bg: #1e293b;
+    --node-border: #334155;
+    --node-text: #f1f5f9;
+    --node-text-meta: #64748b;
+    --node-avatar-bg: #0f172a;
+    --node-avatar-border: #334155;
+  }
+  @media (prefers-color-scheme: light) {
+    --node-bg: #fff;
+    --node-border: #e2e8f0;
+    --node-text: #1e293b;
+    --node-text-meta: #94a3b8;
+    --node-avatar-bg: #f1f5f9;
+    --node-avatar-border: #e2e8f0;
+  }
 `
 
 const NodeAvatar = styled.div<{ $isEgo: boolean; $hasImg: boolean }>`
   width: 64px; height: 64px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; flex-shrink: 0;
-  background: ${({ $isEgo, $hasImg }) => $isEgo ? 'rgba(255,255,255,0.25)' : $hasImg ? 'transparent' : '#f1f5f9'};
-  border: ${({ $isEgo }) => $isEgo ? '2px solid rgba(255,255,255,0.5)' : '2px solid #e2e8f0'};
+  background: ${({ $isEgo, $hasImg }) => $isEgo ? 'rgba(255,255,255,0.25)' : $hasImg ? 'transparent' : 'var(--node-avatar-bg, #f1f5f9)'};
+  border: ${({ $isEgo }) => $isEgo ? '2px solid rgba(255,255,255,0.5)' : '2px solid var(--node-avatar-border, #e2e8f0)'};
 `
 
 const NodeRegnalName = styled.div`
@@ -633,12 +654,12 @@ const NodeRegnalName = styled.div`
 const NodeName = styled.div<{ $isEgo: boolean }>`
   font-size: 13px; font-weight: ${({ $isEgo }) => $isEgo ? 700 : 600};
   letter-spacing: -0.02em; text-align: center; line-height: 1.35; word-break: keep-all;
-  color: ${({ $isEgo }) => $isEgo ? '#fff' : '#1e293b'};
+  color: ${({ $isEgo }) => $isEgo ? '#fff' : 'var(--node-text, #1e293b)'};
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; max-width: 100%;
 `
 
 const NodeMeta = styled.div`
-  font-size: 11px; color: #94a3b8; text-align: center; letter-spacing: 0.01em;
+  font-size: 11px; color: var(--node-text-meta, #94a3b8); text-align: center; letter-spacing: 0.01em;
 `
 
 const NodeDynasty = styled.div`
@@ -652,6 +673,9 @@ const EgoBadge = styled.div`
   letter-spacing: 0.05em; text-transform: uppercase;
 `
 
+// pointer-events: none으로 설정하여 ReactFlow 드래그와 충돌하지 않도록 함.
+// 클릭 이벤트는 NodeWrap의 onClick으로 위임한다.
 const NodeClickOverlay = styled.div`
-  position: absolute; inset: 0; border-radius: inherit; cursor: pointer;
+  position: absolute; inset: 0; border-radius: inherit;
+  pointer-events: none;
 `

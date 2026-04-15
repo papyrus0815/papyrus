@@ -2,6 +2,8 @@
  * 인물 등록 뷰 모달(PersonRegisterViewModal)과 동일한 시각·레이어 스펙의 셸.
  * 공용 @/shared/ui/modal(glass 16px)과 구분 — 배경/블러/22px/그림자가 다름.
  */
+import React from 'react'
+
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
@@ -102,7 +104,7 @@ export const PersonRegisterModalCloseBtn = styled.button`
   }
 `
 
-export const PersonRegisterModalFormScroll = styled.div`
+const PersonRegisterModalFormScrollBase = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -120,6 +122,13 @@ export const PersonRegisterModalFormScroll = styled.div`
     border-radius: 3px;
   }
 `
+
+export const PersonRegisterModalFormScroll = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<'div'>
+>((props, ref) => (
+  <PersonRegisterModalFormScrollBase ref={ref} {...props} />
+))
 
 /** 스크롤 밖 하단 고정 — `PersonRegisterModalBox` flex 열에서 `FormScroll` 아래 */
 export const PersonRegisterModalStickyFooter = styled.div`

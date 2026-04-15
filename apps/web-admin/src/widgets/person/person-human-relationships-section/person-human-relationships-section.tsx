@@ -12,12 +12,10 @@ import { AnimatePresence } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import { FaHeart, FaRegHeart } from 'react-icons/fa'
 import {
-  FiArrowLeft,
   FiBookOpen,
   FiEdit2,
   FiTrash2,
   FiUser,
-  FiUsers,
   FiX,
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
@@ -42,18 +40,8 @@ import {
   PersonRegisterModalOverlay,
   PersonRegisterModalTitle,
 } from '@/shared/ui/person-register-modal/person-register-modal-shell'
-import {
-  BackButton,
-  FieldControl,
-  FieldLabel,
-  FieldRow,
-  FormHeader,
-  FormRows,
-  FormSectionInner,
-  SubmitButton,
-  TabButton,
-  TabNavigation,
-} from '@/shared/ui/register-form-layout/register-form-layout.styles'
+import { FieldControl } from '@/shared/ui/register-form-layout/register-form-layout.styles'
+
 
 type Props = {
   personId: string
@@ -148,6 +136,12 @@ export function PersonHumanRelationshipsSection({
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [personModalOpen, setPersonModalOpen] = useState(false)
 
+  /** 인라인 확인 다이얼로그 상태 */
+  const [confirmDialog, setConfirmDialog] = useState<{
+    message: string
+    onConfirm: () => void
+  } | null>(null)
+
   const [newRelatedId, setNewRelatedId] = useState('')
   const [newType, setNewType] = useState<PersonHumanRelationshipType>('GENERAL')
   const [newAffinity, setNewAffinity] = useState(3)
@@ -201,6 +195,14 @@ export function PersonHumanRelationshipsSection({
     queryClient.invalidateQueries({ queryKey: ['all-persons', 'human-rel'] })
   }
 
+  const resetNewForm = useCallback(() => {
+    setNewRelatedId('')
+    setNewNote('')
+    setNewType('GENERAL')
+    setNewAffinity(3)
+    setNewSubjectIsMentor(true)
+  }, [])
+
   const createMut = useMutation({
     mutationFn: async () => {
       if (!newRelatedId) throw new Error('상대 인물을 선택하세요.')
@@ -216,11 +218,7 @@ export function PersonHumanRelationshipsSection({
     onSuccess: () => {
       toast.success('저장했습니다.')
       setCreateModalOpen(false)
-      setNewRelatedId('')
-      setNewNote('')
-      setNewType('GENERAL')
-      setNewAffinity(3)
-      setNewSubjectIsMentor(true)
+      resetNewForm()
       invalidateDetail()
     },
     onError: (error: unknown) => {
@@ -260,26 +258,32 @@ export function PersonHumanRelationshipsSection({
   })
 
   const closeNewPanel = () => {
-    if (
-      isNewFormDirty &&
-      !window.confirm('입력한 내용이 저장되지 않습니다. 창을 닫을까요?')
-    ) {
+    if (isNewFormDirty) {
+      setConfirmDialog({
+        message: '입력한 내용이 저장되지 않습니다. 창을 닫을까요?',
+        onConfirm: () => {
+          setCreateModalOpen(false)
+          setPersonModalOpen(false)
+          resetNewForm()
+          setConfirmDialog(null)
+        },
+      })
       return
     }
     setCreateModalOpen(false)
     setPersonModalOpen(false)
-    setNewRelatedId('')
-    setNewNote('')
-    setNewType('GENERAL')
-    setNewAffinity(3)
-    setNewSubjectIsMentor(true)
+    resetNewForm()
   }
 
   const cancelEdit = () => {
-    if (
-      isEditFormDirty &&
-      !window.confirm('수정한 내용이 저장되지 않습니다. 취소할까요?')
-    ) {
+    if (isEditFormDirty) {
+      setConfirmDialog({
+        message: '수정한 내용이 저장되지 않습니다. 취소할까요?',
+        onConfirm: () => {
+          setEditingId(null)
+          setConfirmDialog(null)
+        },
+      })
       return
     }
     setEditingId(null)
@@ -294,12 +298,9 @@ export function PersonHumanRelationshipsSection({
   }
 
   const openCreateModal = (presetType: PersonHumanRelationshipType) => {
-    setCreateModalOpen(true)
-    setNewRelatedId('')
+    resetNewForm()
     setNewType(presetType)
-    setNewAffinity(3)
-    setNewSubjectIsMentor(true)
-    setNewNote('')
+    setCreateModalOpen(true)
   }
 
   function renderRelationshipCard(rel: RelRowModel) {
@@ -477,11 +478,13 @@ export function PersonHumanRelationshipsSection({
                 $danger
                 onClick={() => {
                   const name = getPersonDisplayName(rel.otherPerson)
-                  if (
-                    window.confirm(`「${name}」와(과)의 관계를 삭제할까요?`)
-                  ) {
-                    deleteMut.mutate(rel.id)
-                  }
+                  setConfirmDialog({
+                    message: `「${name}」와(과)의 관계를 삭제할까요?`,
+                    onConfirm: () => {
+                      deleteMut.mutate(rel.id)
+                      setConfirmDialog(null)
+                    },
+                  })
                 }}
               >
                 <FiTrash2 size={14} />
@@ -532,19 +535,6 @@ export function PersonHumanRelationshipsSection({
                 </PersonRegisterModalHeader>
                 <PersonRegisterModalFormScroll>
                   <HumanRelFormLayoutWrap>
-                    <FormHeader>
-                      <BackButton type="button" onClick={closeNewPanel}>
-                        <FiArrowLeft size={18} />
-                        목록 보기
-                      </BackButton>
-                      <SubmitButton
-                        type="submit"
-                        form="human-rel-create-form"
-                        disabled={createMut.isPending || !newRelatedId}
-                      >
-                        {createMut.isPending ? '등록 중…' : '등록'}
-                      </SubmitButton>
-                    </FormHeader>
                     <form
                       id="human-rel-create-form"
                       onSubmit={(event) => {
@@ -552,28 +542,57 @@ export function PersonHumanRelationshipsSection({
                         createMut.mutate()
                       }}
                     >
-                      <FormSectionInner>
-                        <TabNavigation>
-                          <TabButton
-                            type="button"
-                            $active={true}
-                            aria-current="page"
-                            tabIndex={0}
+                      <CreateFormBody>
+                        {personsError && (
+                          <CreateModalFormAlert role="alert">
+                            인물 목록을 불러오지 못했습니다. 새로고침 후 다시
+                            시도해 주세요.
+                          </CreateModalFormAlert>
+                        )}
+
+                        {/* 관계 종류 */}
+                        <CreateSectionCard>
+                          <CreateSectionLabel>관계 종류</CreateSectionLabel>
+                          <SegmentRow
+                            role="radiogroup"
+                            aria-label="관계 종류 선택"
                           >
-                            {newType === 'GENERAL'
-                              ? '일반 · 친밀도'
-                              : '멘토 · 스승–제자'}
-                          </TabButton>
-                        </TabNavigation>
-                        <FormRows>
-                          {personsError && (
-                            <CreateModalFormAlert role="alert">
-                              인물 목록을 불러오지 못했습니다. 새로고침 후 다시
-                              시도해 주세요.
-                            </CreateModalFormAlert>
-                          )}
+                            <Segment
+                              type="button"
+                              role="radio"
+                              aria-checked={newType === 'GENERAL'}
+                              tabIndex={newType === 'GENERAL' ? 0 : -1}
+                              $active={newType === 'GENERAL'}
+                              $tone="rose"
+                              onClick={() => setNewType('GENERAL')}
+                            >
+                              <SegmentText>
+                                <span>일반 관계</span>
+                                <small>친밀도 설정</small>
+                              </SegmentText>
+                            </Segment>
+                            <Segment
+                              type="button"
+                              role="radio"
+                              aria-checked={newType === 'MENTOR'}
+                              tabIndex={newType === 'MENTOR' ? 0 : -1}
+                              $active={newType === 'MENTOR'}
+                              $tone="violet"
+                              onClick={() => setNewType('MENTOR')}
+                            >
+                              <SegmentText>
+                                <span>멘토 · 스승–제자</span>
+                                <small>역할 설정</small>
+                              </SegmentText>
+                            </Segment>
+                          </SegmentRow>
+                        </CreateSectionCard>
+
+                        {/* 상대 인물 */}
+                        <CreateSectionCard>
+                          <CreateSectionLabel>상대 인물</CreateSectionLabel>
                           <PersonSelectField
-                            label="상대 인물"
+                            label=""
                             required
                             hint={
                               personsLoading
@@ -589,72 +608,67 @@ export function PersonHumanRelationshipsSection({
                             onSelect={(id) => setNewRelatedId(id)}
                             placeholder="인물 선택"
                           />
+                        </CreateSectionCard>
 
-                          {newType === 'MENTOR' && (
-                            <FieldRow>
-                              <FieldLabel as="div">
-                                이 인물(현재 프로필)의 역할
-                              </FieldLabel>
-                              <FieldControl>
-                                <RoleGrid>
-                                  <RolePill $active={newSubjectIsMentor}>
-                                    <HiddenRadio
-                                      name="new-mentor-role"
-                                      checked={newSubjectIsMentor}
-                                      onChange={() =>
-                                        setNewSubjectIsMentor(true)
-                                      }
-                                    />
-                                    스승(멘토)
-                                  </RolePill>
-                                  <RolePill $active={!newSubjectIsMentor}>
-                                    <HiddenRadio
-                                      name="new-mentor-role"
-                                      checked={!newSubjectIsMentor}
-                                      onChange={() =>
-                                        setNewSubjectIsMentor(false)
-                                      }
-                                    />
-                                    제자
-                                  </RolePill>
-                                </RoleGrid>
-                              </FieldControl>
-                            </FieldRow>
-                          )}
+                        {/* 이 인물의 역할 (멘토) */}
+                        {newType === 'MENTOR' && (
+                          <CreateSectionCard $tone="violet">
+                            <CreateSectionLabel>이 인물의 역할</CreateSectionLabel>
+                            <RoleGrid>
+                              <RolePill $active={newSubjectIsMentor}>
+                                <HiddenRadio
+                                  name="new-mentor-role"
+                                  checked={newSubjectIsMentor}
+                                  onChange={() => setNewSubjectIsMentor(true)}
+                                />
+                                스승(멘토)
+                              </RolePill>
+                              <RolePill $active={!newSubjectIsMentor}>
+                                <HiddenRadio
+                                  name="new-mentor-role"
+                                  checked={!newSubjectIsMentor}
+                                  onChange={() => setNewSubjectIsMentor(false)}
+                                />
+                                제자
+                              </RolePill>
+                            </RoleGrid>
+                          </CreateSectionCard>
+                        )}
 
-                          {newType === 'GENERAL' && (
-                            <FieldRow>
-                              <FieldLabel as="div">친밀도</FieldLabel>
-                              <FieldControl>
-                                <AffinityBlock>
-                                  <AffinityHeartRating
-                                    value={newAffinity}
-                                    onChange={setNewAffinity}
-                                    disabled={createMut.isPending}
-                                  />
-                                </AffinityBlock>
-                              </FieldControl>
-                            </FieldRow>
-                          )}
+                        {/* 친밀도 (일반) */}
+                        {newType === 'GENERAL' && (
+                          <CreateSectionCard $tone="rose">
+                            <CreateSectionLabel>친밀도 설정</CreateSectionLabel>
+                            <AffinityHeartRating
+                              value={newAffinity}
+                              onChange={setNewAffinity}
+                              disabled={createMut.isPending}
+                            />
+                          </CreateSectionCard>
+                        )}
 
-                          <FieldRow>
-                            <FieldLabel htmlFor="human-rel-new-note">
-                              메모 (선택)
-                            </FieldLabel>
-                            <FieldControl>
-                              <FormTextarea
-                                id="human-rel-new-note"
-                                value={newNote}
-                                onChange={(event) =>
-                                  setNewNote(event.target.value)
-                                }
-                                placeholder="기억해둘 메모 (선택)"
-                                rows={15}
-                              />
-                            </FieldControl>
-                          </FieldRow>
-                        </FormRows>
-                      </FormSectionInner>
+                        {/* 메모 */}
+                        <CreateSectionCard>
+                          <CreateSectionLabel>메모 (선택)</CreateSectionLabel>
+                          <NoteInput
+                            id="human-rel-new-note"
+                            value={newNote}
+                            onChange={(event) => setNewNote(event.target.value)}
+                            placeholder="기억해둘 메모를 입력하세요"
+                            rows={4}
+                          />
+                        </CreateSectionCard>
+
+                        {/* 하단 저장 버튼 */}
+                        <CreateFormFooter>
+                          <CreateSubmitBtn
+                            type="submit"
+                            disabled={createMut.isPending || !newRelatedId}
+                          >
+                            {createMut.isPending ? '등록 중…' : '등록하기'}
+                          </CreateSubmitBtn>
+                        </CreateFormFooter>
+                      </CreateFormBody>
                     </form>
                   </HumanRelFormLayoutWrap>
                 </PersonRegisterModalFormScroll>
@@ -666,19 +680,7 @@ export function PersonHumanRelationshipsSection({
       )}
       <Root>
         <HeaderRow>
-          <TitleBlock>
-            <HeaderIconBadge aria-hidden>
-              <FiUsers size={20} strokeWidth={2} />
-            </HeaderIconBadge>
-            <TitleText>
-              <SectionTitle>인간관계</SectionTitle>
-              <SectionDesc>
-                <strong>친밀도(일반)</strong>과{' '}
-                <strong>멘토 · 스승–제자</strong>는 서로 다른 관계로 구분됩니다.
-                아래에서도 목록이 나뉩니다.
-              </SectionDesc>
-            </TitleText>
-          </TitleBlock>
+          <SectionTitle>인간관계</SectionTitle>
           <HeaderActionGroup>
             <HeaderBtn
               type="button"
@@ -699,59 +701,60 @@ export function PersonHumanRelationshipsSection({
         </HeaderRow>
 
         <RelListStack>
-          <RelSubsection $tone="rose">
-            <RelSubsectionHead>
-              <RelSubsectionTitle>친밀도 · 일반 관계</RelSubsectionTitle>
-              <RelSubsectionCount>
-                {generalRelationships.length}
-              </RelSubsectionCount>
-            </RelSubsectionHead>
-            {generalRelationships.length === 0 ? (
-              <RelSubsectionEmpty>
-                <RelEmptyTitle>등록된 관계가 없습니다</RelEmptyTitle>
-                <RelEmptyText>
-                  상단의 <strong>일반 · 친밀도</strong>로 상대와 친밀도를 추가할
-                  수 있습니다.
-                </RelEmptyText>
-              </RelSubsectionEmpty>
-            ) : (
-              <RelSubsectionBody>
-                <RelList>
-                  {generalRelationships.map((rel) =>
-                    renderRelationshipCard(rel),
-                  )}
-                </RelList>
-              </RelSubsectionBody>
-            )}
-          </RelSubsection>
+          <RelGroupHead>
+            <RelGroupTitle>친밀도</RelGroupTitle>
+            <RelGroupCount>{generalRelationships.length}</RelGroupCount>
+          </RelGroupHead>
+          {generalRelationships.length === 0 ? (
+            <RelGroupEmpty>등록된 관계가 없습니다.</RelGroupEmpty>
+          ) : (
+            <RelList>
+              {generalRelationships.map((rel) => renderRelationshipCard(rel))}
+            </RelList>
+          )}
 
-          <RelSubsection $tone="violet">
-            <RelSubsectionHead>
-              <RelSubsectionTitle>멘토 · 스승–제자</RelSubsectionTitle>
-              <RelSubsectionCount>
-                {mentorRelationships.length}
-              </RelSubsectionCount>
-            </RelSubsectionHead>
-            {mentorRelationships.length === 0 ? (
-              <RelSubsectionEmpty>
-                <RelEmptyTitle>등록된 관계가 없습니다</RelEmptyTitle>
-                <RelEmptyText>
-                  상단의 <strong>멘토</strong>로 스승·제자 관계를 추가할 수
-                  있습니다.
-                </RelEmptyText>
-              </RelSubsectionEmpty>
-            ) : (
-              <RelSubsectionBody>
-                <RelList>
-                  {mentorRelationships.map((rel) =>
-                    renderRelationshipCard(rel),
-                  )}
-                </RelList>
-              </RelSubsectionBody>
-            )}
-          </RelSubsection>
+          <RelGroupHead>
+            <RelGroupTitle>멘토 · 스승–제자</RelGroupTitle>
+            <RelGroupCount>{mentorRelationships.length}</RelGroupCount>
+          </RelGroupHead>
+          {mentorRelationships.length === 0 ? (
+            <RelGroupEmpty>등록된 관계가 없습니다.</RelGroupEmpty>
+          ) : (
+            <RelList>
+              {mentorRelationships.map((rel) => renderRelationshipCard(rel))}
+            </RelList>
+          )}
         </RelListStack>
       </Root>
+
+      {/* 인라인 확인 다이얼로그 */}
+      {confirmDialog &&
+        createPortal(
+          <ConfirmOverlay
+            role="presentation"
+            onClick={() => setConfirmDialog(null)}
+          >
+            <ConfirmDialog
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ConfirmMessage>{confirmDialog.message}</ConfirmMessage>
+              <ConfirmActions>
+                <ConfirmCancelBtn
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                >
+                  취소
+                </ConfirmCancelBtn>
+                <ConfirmOkBtn type="button" onClick={confirmDialog.onConfirm}>
+                  확인
+                </ConfirmOkBtn>
+              </ConfirmActions>
+            </ConfirmDialog>
+          </ConfirmOverlay>,
+          document.body,
+        )}
     </>
   )
 }
@@ -841,72 +844,25 @@ function AffinityLevelReadDots({ level }: { level: number }) {
 }
 
 const Root = styled.section`
-  margin-top: 4px;
-  padding-top: 22px;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : 'rgba(226, 232, 240, 0.9)'};
+  margin-top: 0;
 `
 
 const HeaderRow = styled.div`
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-`
-
-const TitleBlock = styled.div`
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  min-width: 0;
-`
-
-const HeaderIconBadge = styled.div`
-  flex-shrink: 0;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  color: #6366f1;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(226, 232, 240, 0.95)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.1)'
-      : 'rgba(248, 250, 252, 0.95)'};
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 `
 
-const TitleText = styled.div`
-  min-width: 0;
-`
-
+/** 부모 패널의 SectionLabel과 동일 톤(11px upper, indigo) */
 const SectionTitle = styled.h3`
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const SectionDesc = styled.p`
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 56ch;
-  strong {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #6366f1;
 `
 
 const HeaderActionGroup = styled.div`
@@ -978,10 +934,37 @@ const HeaderBtn = styled.button<{
       : 'rgba(99, 102, 241, 0.06)'
   }};
   &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#cbd5e1'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+    border-color: ${({ theme, $ghost, $tone }) => {
+      if ($ghost)
+        return theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#cbd5e1'
+      if ($tone === 'rose')
+        return theme.mode === 'dark'
+          ? 'rgba(251, 113, 133, 0.55)'
+          : 'rgba(244, 63, 94, 0.5)'
+      if ($tone === 'violet')
+        return theme.mode === 'dark'
+          ? 'rgba(167, 139, 250, 0.55)'
+          : 'rgba(139, 92, 246, 0.5)'
+      return theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.45)'
+        : 'rgba(99, 102, 241, 0.4)'
+    }};
+    background: ${({ theme, $ghost, $tone }) => {
+      if ($ghost)
+        return theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'
+      if ($tone === 'rose')
+        return theme.mode === 'dark'
+          ? 'rgba(244, 63, 94, 0.14)'
+          : 'rgba(255, 228, 230, 0.85)'
+      if ($tone === 'violet')
+        return theme.mode === 'dark'
+          ? 'rgba(139, 92, 246, 0.16)'
+          : 'rgba(237, 233, 254, 0.9)'
+      return theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.1)'
+    }};
+    transform: translateY(-1px);
   }
 `
 
@@ -1151,7 +1134,6 @@ const HiddenRadio = styled.input.attrs({ type: 'radio' })`
   border: 0;
 `
 
-const AffinityBlock = styled.div``
 
 const AffinityWrap = styled.div``
 
@@ -1311,121 +1293,41 @@ const PrimaryButton = styled.button`
 const RelListStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 `
 
-/** person-detail-panel `SectionCard` / `TenureSectionCard` 계열과 통일 */
-const RelSubsection = styled.section<{ $tone: 'rose' | 'violet' }>`
-  margin: 0;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.04),
-    0 2px 8px rgba(0, 0, 0, 0.03);
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'};
-  border-left: 2px solid
-    ${({ $tone, theme }) =>
-      $tone === 'violet'
-        ? theme.mode === 'dark'
-          ? 'rgba(167, 139, 250, 0.45)'
-          : 'rgba(139, 92, 246, 0.45)'
-        : theme.mode === 'dark'
-          ? 'rgba(251, 113, 133, 0.45)'
-          : 'rgba(244, 63, 94, 0.4)'};
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-        `
-      : css`
-          background: #ffffff;
-        `}
-`
-
-const RelSubsectionHead = styled.div`
+/** 카드 안 카드 패턴 제거: 단순 그룹 헤더 한 줄 */
+const RelGroupHead = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px 12px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
-  background: transparent;
+  gap: 8px;
+  margin: 18px 0 8px;
+  &:first-child {
+    margin-top: 0;
+  }
 `
 
-const RelSubsectionTitle = styled.h4`
+const RelGroupTitle = styled.h4`
   margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const RelSubsectionCount = styled.span`
-  font-size: 12px;
+const RelGroupCount = styled.span`
+  font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  min-width: 26px;
-  text-align: center;
-  padding: 3px 9px;
-  border-radius: 8px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-`
-
-const RelSubsectionBody = styled.div`
-  padding: 12px 16px 16px;
-`
-
-const RelSubsectionEmpty = styled.div`
-  margin: 0 16px 16px;
-  padding: 22px 18px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 8px;
-  border-radius: 11px;
-  border: 1.5px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.02)'
-      : 'rgba(248, 250, 252, 0.5)'};
 `
 
-const RelEmptyTitle = styled.p`
+const RelGroupEmpty = styled.p`
   margin: 0;
+  padding: 6px 0 14px;
   font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  letter-spacing: -0.01em;
-`
-
-const RelEmptyText = styled.p`
-  margin: 0;
-  max-width: 38ch;
-  font-size: 13px;
-  line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  strong {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
 `
 
 const RelList = styled.ul`
@@ -1680,4 +1582,179 @@ const EditStack = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0;
+`
+
+/* ── 인라인 확인 다이얼로그 ─────────────────────────────────────── */
+
+const ConfirmOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+`
+
+const ConfirmDialog = styled.div`
+  width: 100%;
+  max-width: 340px;
+  border-radius: 16px;
+  padding: 24px 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(28, 28, 32, 0.98);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 20px 48px rgba(0, 0, 0, 0.14);
+        `}
+`
+
+const ConfirmMessage = styled.p`
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ConfirmActions = styled.div`
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+`
+
+const ConfirmCancelBtn = styled.button`
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: ${theme.colors.text.secondary};
+          &:hover { background: rgba(255, 255, 255, 0.12); }
+        `
+      : css`
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #475569;
+          &:hover { background: #e9eef5; }
+        `}
+`
+
+const ConfirmOkBtn = styled.button`
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  background: #6366f1;
+  color: #ffffff;
+  transition: background 0.15s;
+  &:hover { background: #4f46e5; }
+`
+
+/* ── 모달 폼 레이아웃 ────────────────────────────── */
+
+const CreateFormBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const CreateSectionCard = styled.div<{ $tone?: 'rose' | 'violet' }>`
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  ${({ theme, $tone }) => {
+    const dark = theme.mode === 'dark'
+    if ($tone === 'rose') {
+      return dark
+        ? css`
+            background: rgba(244, 63, 94, 0.07);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+          `
+        : css`
+            background: linear-gradient(145deg, rgba(255, 241, 242, 0.9) 0%, rgba(255, 255, 255, 0.5) 100%);
+            border: 1px solid rgba(251, 113, 133, 0.28);
+          `
+    }
+    if ($tone === 'violet') {
+      return dark
+        ? css`
+            background: rgba(139, 92, 246, 0.07);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+          `
+        : css`
+            background: linear-gradient(145deg, rgba(245, 243, 255, 0.9) 0%, rgba(255, 255, 255, 0.5) 100%);
+            border: 1px solid rgba(167, 139, 250, 0.28);
+          `
+    }
+    return dark
+      ? css`
+          background: rgba(255, 255, 255, 0.025);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        `
+      : css`
+          background: #fafbfc;
+          border: 1px solid #eaecf0;
+        `
+  }}
+`
+
+const CreateSectionLabel = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 12px;
+`
+
+const CreateFormFooter = styled.div`
+  padding-top: 4px;
+`
+
+const CreateSubmitBtn = styled.button`
+  width: 100%;
+  padding: 14px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 18px rgba(79, 70, 229, 0.38);
+  transition:
+    opacity 0.15s ease,
+    transform 0.12s ease,
+    box-shadow 0.15s ease;
+  &:hover:not(:disabled) {
+    opacity: 0.93;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 22px rgba(79, 70, 229, 0.45);
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
 `

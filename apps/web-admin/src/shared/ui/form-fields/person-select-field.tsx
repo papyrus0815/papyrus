@@ -72,35 +72,43 @@ export const PersonSelectField: React.FC<PersonSelectFieldProps> = ({
   onSelect,
   placeholder = '인물 선택',
 }) => {
+  const selectControl = (
+    <FieldControl $variant="person">
+      <PersonSelectButton
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && onModalOpenChange(true)}
+        $hasValue={!!value}
+      >
+        <PersonAvatar $hasImage={!!selectedPerson?.profileImageUrl}>
+          {selectedPerson?.profileImageUrl ? (
+            <img src={selectedPerson.profileImageUrl} alt="" />
+          ) : (
+            <FiUser size={22} strokeWidth={2} />
+          )}
+        </PersonAvatar>
+        <PersonLabel>
+          {value ? getDisplayName(selectedPerson) : placeholder}
+        </PersonLabel>
+        <FiChevronRight size={20} strokeWidth={2.5} />
+      </PersonSelectButton>
+      {hint && <FieldHint>{hint}</FieldHint>}
+    </FieldControl>
+  )
+
   return (
     <>
-      <FieldRow>
-        <FieldLabel>
-          {label}
-          {required && <Required aria-label="필수" />}
-        </FieldLabel>
-        <FieldControl $variant="person">
-          <PersonSelectButton
-            type="button"
-            disabled={disabled}
-            onClick={() => !disabled && onModalOpenChange(true)}
-            $hasValue={!!value}
-          >
-            <PersonAvatar $hasImage={!!selectedPerson?.profileImageUrl}>
-              {selectedPerson?.profileImageUrl ? (
-                <img src={selectedPerson.profileImageUrl} alt="" />
-              ) : (
-                <FiUser size={22} strokeWidth={2} />
-              )}
-            </PersonAvatar>
-            <PersonLabel>
-              {value ? getDisplayName(selectedPerson) : placeholder}
-            </PersonLabel>
-            <FiChevronRight size={20} strokeWidth={2.5} />
-          </PersonSelectButton>
-          {hint && <FieldHint>{hint}</FieldHint>}
-        </FieldControl>
-      </FieldRow>
+      {label !== '' ? (
+        <FieldRow>
+          <FieldLabel>
+            {label ?? '인물'}
+            {required && <Required aria-label="필수" />}
+          </FieldLabel>
+          {selectControl}
+        </FieldRow>
+      ) : (
+        selectControl
+      )}
 
       {isModalOpen && (
         <PersonSelectModal

@@ -224,7 +224,13 @@ export function PersonDetailView({
                 ego={person}
                 father={person.father}
                 mother={person.mother}
+                paternalGrandfather={person.father?.father}
+                paternalGrandmother={person.father?.mother}
+                maternalGrandfather={person.mother?.father}
+                maternalGrandmother={person.mother?.mother}
                 spouse={person.spouse}
+                spouses={(person.spouseRelations ?? []).map((r: any) => r.spouse).filter(Boolean)}
+                siblings={person.siblings}
                 children={person.children}
               />
             )}

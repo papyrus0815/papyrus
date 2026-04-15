@@ -7,6 +7,8 @@ export type PersonNameFields = {
   name: string
   surname?: string | null
   middleName?: string | null
+  /** 군주명 (재위명). 있으면 UI에서 별도 표시 */
+  regnalName?: string | null
   /** 사용 안 함(표시). 국가 기본만 사용 */
   nameDisplayOrder?: string | null
   country?: {

@@ -17,6 +17,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { Request } from 'express'
 import { ApiTags } from '@nestjs/swagger'
 import { PersonService } from '../application/person.service'
+import { PrismaClient } from '@prisma/client'
 import {
   CreateGovernmentPositionTenureDto,
   CreateSovereignReignDto,
@@ -61,7 +62,36 @@ export interface LinkCabinetWithOtherBody {
 @ApiTags('government-positions')
 @Controller('government-positions')
 export class GovernmentPositionController {
-  constructor(private readonly personService: PersonService) {}
+  constructor(
+    private readonly personService: PersonService,
+    private readonly prisma: PrismaClient,
+  ) {}
+
+  /**
+   * 행정부에 연결된 사건 목록 (CabinetEvent N:M)
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Get('cabinets/:cabinetId/events')
+  async getCabinetEvents(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+  ): Promise<any[]> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      select: { accountId: true },
+    })
+    if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없습니다.')
+    if (cabinet.accountId && accountId && cabinet.accountId !== accountId) {
+      throw new BadRequestException('이 행정부에 대한 권한이 없습니다.')
+    }
+    const rows = await this.prisma.cabinetEvent.findMany({
+      where: { cabinetId },
+      include: { event: { include: { category: true } } },
+      orderBy: { createdAt: 'asc' },
+    })
+    return rows.map(serializeBigInt)
+  }
 
   /**
    * 현대 국가별 재임 기록 (REST) - GET /government-positions/countries/:countryId/tenures

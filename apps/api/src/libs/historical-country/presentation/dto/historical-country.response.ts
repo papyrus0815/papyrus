@@ -9,6 +9,7 @@ export interface HistoricalCountryResponseDto {
   enName: string | null
   nameOrigin: string | null
   description: string | null
+  history: string | null
   thumbnailUrl: string | null
 
   // 존속 시작 정보

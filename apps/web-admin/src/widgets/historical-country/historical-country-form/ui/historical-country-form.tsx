@@ -334,6 +334,7 @@ const historicalCountrySchema = z.object({
   enName: z.string().optional(),
   nameOrigin: z.string().optional(),
   description: z.string().optional(),
+  history: z.string().optional(),
   thumbnailUrl: z.string().optional(),
   // 존속 시작
   startEra: z.enum(['BC', 'AD']).optional(),
@@ -612,6 +613,7 @@ export function HistoricalCountryForm({
           enName: (raw?.enName ?? editing.enName) || '',
           nameOrigin: (raw?.nameOrigin ?? (editing as any).nameOrigin) || '',
           description: (raw?.description ?? editing.description) || '',
+          history: (raw?.history ?? (editing as any).history) || '',
           thumbnailUrl: (raw?.thumbnailUrl ?? editing.thumbnailUrl) || '',
           startEra: era(raw?.startEra ?? raw?.start_era),
           startYear: num(raw?.startYear ?? raw?.start_year),
@@ -642,6 +644,7 @@ export function HistoricalCountryForm({
           enName: '',
           nameOrigin: '',
           description: '',
+          history: '',
           thumbnailUrl: '',
           startEra: undefined,
           startYear: undefined,
@@ -732,6 +735,7 @@ export function HistoricalCountryForm({
       enName: data.enName,
       nameOrigin: data.nameOrigin || null,
       description: data.description || null,
+      history: data.history || null,
       thumbnailUrl: data.thumbnailUrl || null,
       // 존속 시작 날짜
       startEra: data.startEra || null,
@@ -1351,6 +1355,23 @@ export function HistoricalCountryForm({
               />
               {errors.description && (
                 <S.ErrorMessage>{errors.description.message}</S.ErrorMessage>
+              )}
+            </S.FormField>
+
+            {/* 역사 서술 */}
+            <S.FormField>
+              <S.FormLabel htmlFor="history">역사</S.FormLabel>
+              <FormInput
+                as="textarea"
+                id="history"
+                rows={8}
+                placeholder="역사적 국가의 역사를 자유롭게 서술해주세요 (마크다운 지원)"
+                {...register('history')}
+                $error={!!errors.history}
+                style={{ minHeight: '180px', resize: 'vertical' }}
+              />
+              {errors.history && (
+                <S.ErrorMessage>{errors.history.message}</S.ErrorMessage>
               )}
             </S.FormField>
           </S.FormSection>

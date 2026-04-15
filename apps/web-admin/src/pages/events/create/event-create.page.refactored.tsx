@@ -58,6 +58,7 @@ import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
 import { DetailsSection } from '@/widgets/event-form/ui/details-section'
 import { LocationSection } from '@/widgets/event-form/ui/location-section'
+import { EventCabinetsSection } from '@/widgets/event-form/ui/event-cabinets-section'
 import { StepNavigation } from '@/widgets/event-form/ui/step-navigation'
 
 import type { EventBelligerentsGraph } from '../types/belligerents-graph.types'
@@ -1173,6 +1174,15 @@ export const EventCreatePageRefactored: React.FC<
               eventCategory={category}
               eventLocation={location}
               eventThumbnail={thumbnail}
+            />
+          )}
+
+          {/* ===== 관련 행정부 (CabinetEvent N:M) — 편집 모드에서만 ===== */}
+          {currentStep === FORM_STEPS.DETAILS && isEditMode && editEventId && (
+            <EventCabinetsSection
+              eventId={editEventId}
+              relatedCountryIds={relatedCountryIds}
+              relatedHistoricalCountryIds={relatedHistoricalCountryIds}
             />
           )}
 

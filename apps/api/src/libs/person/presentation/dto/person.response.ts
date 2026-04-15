@@ -1,4 +1,4 @@
-import { Era } from './create-person.dto'
+import { Era, DeathType } from './create-person.dto'
 
 /**
  * 인물 응답 DTO
@@ -28,18 +28,16 @@ export interface PersonResponseDto {
   regnalName: string | null
   templeName: string | null
   posthumousName: string | null
-  preEnthronementTitle: string | null
   // 관계
   dynastyId: string | null
   /** 가문 (목록/재임 응답에서 노출, id·name만) */
   dynasty?: { id: string; name: string } | null
   religionId: string | null
+  religion?: { id: string; name: string } | null
   denominationId: string | null
+  denomination?: { id: string; name: string } | null
   fatherId: string | null
   motherId: string | null
-  jobId: string | null
-  /** 직업 (목록/상세 표시용, id·title) */
-  job?: { id: string; title: string } | null
   countryId: string | null
   /** 소속 국가 (목록 표시용, id·name·flagEmoji·이름 표시 기본) */
   country?: {
@@ -71,6 +69,12 @@ export interface PersonResponseDto {
   showLifespanOnEventList?: boolean
   /** 사망일 미상 여부 */
   isDeathDateUnknown?: boolean
+  /** 사망 유형 */
+  deathType?: DeathType | null
+  /** 사망 원인 상세 */
+  deathCause?: string | null
+  /** 사망 관련 메모 */
+  deathNote?: string | null
   /** 생존 여부 */
   isAlive?: boolean
   // 정부 직위 재임 기록

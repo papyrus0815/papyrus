@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray } from 'class-validator'
 import { Type } from 'class-transformer'
-import { Era, DateInfoDto, SpouseRelationDto } from './create-person.dto'
+import { Era, DeathType, DateInfoDto, SpouseRelationDto } from './create-person.dto'
 
 /**
  * 인물 수정 DTO
@@ -125,6 +125,29 @@ export class UpdatePersonDto {
   isDeathDateUnknown?: boolean
 
   /**
+   * 사망 유형 (자연사, 병사, 암살 등)
+   */
+  @IsOptional()
+  @IsEnum(DeathType)
+  deathType?: DeathType
+
+  /**
+   * 사망 원인 상세 (예: "폐렴 합병증", "독살 의혹")
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathCause?: string | null
+
+  /**
+   * 사망 관련 메모 (맥락, 논란, 비고 등)
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  deathNote?: string | null
+
+  /**
    * 생존 여부
    */
   @IsOptional()
@@ -183,13 +206,6 @@ export class UpdatePersonDto {
   posthumousName?: string
 
   /**
-   * 즉위 전 작호/봉호 (예: 수양대군)
-   */
-  @IsOptional()
-  @IsString()
-  preEnthronementTitle?: string
-
-  /**
    * 가문 ID (선택)
    */
   @IsOptional()
@@ -223,13 +239,6 @@ export class UpdatePersonDto {
   @IsOptional()
   @IsString()
   motherId?: string
-
-  /**
-   * 직업 ID (선택)
-   */
-  @IsOptional()
-  @IsString()
-  jobId?: string
 
   /**
    * 국가 ID (선택)

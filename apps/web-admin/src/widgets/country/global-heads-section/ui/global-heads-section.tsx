@@ -71,7 +71,6 @@ const Wrapper = styled(motion.div)<{ $embedded?: boolean }>`
       ? `
     flex: 1;
     min-height: 0;
-    overflow: hidden;
   `
       : 'min-height: calc(100vh - 200px);'}
   position: relative;

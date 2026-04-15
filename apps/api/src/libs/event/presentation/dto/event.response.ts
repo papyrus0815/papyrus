@@ -237,6 +237,15 @@ export class EventResponseDto {
   @ApiProperty({ description: '전쟁 비용', required: false })
   warCost?: string | null
 
+  @ApiProperty({ description: '연결된 행정부 목록 (역할 포함)', required: false, type: 'array' })
+  cabinetEvents?: Array<{
+    id: string
+    cabinetId: string
+    role: 'ORIGIN' | 'PARTY' | 'MEDIATOR' | 'AFFECTED' | null
+    note: string | null
+    cabinet: any
+  }>
+
   @ApiProperty({ description: '생성일시', required: false })
   createdAt?: string
 

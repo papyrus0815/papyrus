@@ -249,9 +249,6 @@ function CountryDetailInner({
             transition={{ duration: 0.15 }}
             style={{
               width: '100%',
-              height: '100%',
-              minHeight: 0,
-              flex: 1,
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -262,22 +259,17 @@ function CountryDetailInner({
               animate={{ opacity: 1 }}
               style={{
                 gap: 0,
-                flex: 1,
-                minHeight: 0,
                 display: 'flex',
                 flexDirection: 'column',
               }}
             >
-              {/* 스크롤 영역: 탭 메뉴(위) → 국가명 컨테이너 → 콘텐츠 */}
+              {/* 스크롤은 외부 DetailPane이 담당 */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 style={{
-                  flex: 1,
-                  minHeight: 0,
                   display: 'flex',
                   flexDirection: 'column',
-                  overflow: 'auto',
                 }}
               >
                 {/* 대시보드, 역사적 국가, 행정구역, 행정조직 등 — 국가명 컨테이너 위 */}
@@ -302,8 +294,6 @@ function CountryDetailInner({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                   style={{
-                    flex: 1,
-                    minHeight: 0,
                     display: 'flex',
                     flexDirection: 'column',
                   }}
@@ -322,8 +312,6 @@ function CountryDetailInner({
                         ease: [0.25, 0.1, 0.25, 1],
                       }}
                       style={{
-                        flex: 1,
-                        minHeight: 0,
                         display: 'flex',
                         flexDirection: 'column',
                       }}

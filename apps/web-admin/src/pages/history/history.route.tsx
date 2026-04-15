@@ -52,6 +52,17 @@ export const historyPageRoute: RouteObject = {
           },
         },
         {
+          path: `${ROUTES.HISTORY.DASHBOARD}/persons/:personId`,
+          lazy: async () => {
+            const [{ countryLoader }, { default: Component }] =
+              await Promise.all([
+                import('./country/country.loader'),
+                import('./country/country.page'),
+              ])
+            return { loader: countryLoader, Component }
+          },
+        },
+        {
           path: `${ROUTES.HISTORY.DASHBOARD}/events/:eventId/edit`,
           lazy: async () => {
             const [{ countryLoader }, { default: Component }] =

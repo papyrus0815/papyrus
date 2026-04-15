@@ -64,6 +64,9 @@ export const pathKeys = {
     /** 연대표/대시보드 — 인물 뷰 (국가 미선택 시 전체 인물) */
     dashboardPersons: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/persons`,
+    /** 연대표/대시보드 — 인물 상세 (사이드바 유지) */
+    dashboardPersonDetail: (personId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/persons/${encodeURIComponent(personId)}`,
     /** 연대표/대시보드 — 연대표(전체 사건) 뷰 */
     dashboardEvents: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events`,
@@ -96,6 +99,11 @@ export const pathKeys = {
     create: () => '/persons/create/',
     edit: (personId: string) => `/persons/${personId}/edit/`,
     detail: (personId: string) => `/persons/${personId}/`,
+  },
+
+  // --- Genealogy ---
+  genealogy: {
+    full: (personId: string) => `/${ROUTES.GENEALOGY}/${encodeURIComponent(personId)}/`,
   },
 
   // --- Dynamic Routes ---

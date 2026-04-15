@@ -10,6 +10,7 @@ export class HistoricalCountry {
   enName: string
   nameOrigin: string | null
   description: string | null
+  history: string | null
   thumbnailUrl: string | null
 
   // 존속 시작 정보
@@ -38,6 +39,7 @@ export class HistoricalCountry {
     enName: string
     nameOrigin?: string | null
     description?: string | null
+    history?: string | null
     thumbnailUrl?: string | null
     startEra?: Era | null
     startYear?: number | null
@@ -58,6 +60,7 @@ export class HistoricalCountry {
     this.enName = data.enName
     this.nameOrigin = data.nameOrigin ?? null
     this.description = data.description ?? null
+    this.history = data.history ?? null
     this.thumbnailUrl = data.thumbnailUrl ?? null
     this.startEra = data.startEra ?? null
     this.startYear = data.startYear ?? null

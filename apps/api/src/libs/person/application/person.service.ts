@@ -163,6 +163,14 @@ export class PersonService {
     return person
   }
 
+  async getFamilyTree(id: string, accountId?: string) {
+    const result = await this.personRepository.findFamilyTree(id, accountId)
+    if (!result || result.nodes.length === 0) {
+      throw new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
+    }
+    return result
+  }
+
   /**
    * 인물 생성 (accountId 있으면 소유자로 저장)
    */

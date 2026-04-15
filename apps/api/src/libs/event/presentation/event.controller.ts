@@ -117,6 +117,46 @@ export class EventController {
       relatedCountries: relatedCountries.length > 0 ? relatedCountries : undefined,
       relatedHistoricalCountries: relatedHistoricalCountries.length > 0 ? relatedHistoricalCountries : undefined,
       warCost: event.warCost ?? null,
+      cabinetEvents: event.cabinetEvents
+        ? event.cabinetEvents.map((ce: any) => ({
+            id: ce.id,
+            cabinetId: ce.cabinetId,
+            role: ce.role ?? null,
+            note: ce.note ?? null,
+            cabinet: ce.cabinet
+              ? {
+                  id: ce.cabinet.id,
+                  name: ce.cabinet.name,
+                  headTenure: ce.cabinet.headTenure
+                    ? {
+                        id: ce.cabinet.headTenure.id,
+                        startDate: ce.cabinet.headTenure.startDate,
+                        endDate: ce.cabinet.headTenure.endDate,
+                        person: ce.cabinet.headTenure.person
+                          ? {
+                              id: ce.cabinet.headTenure.person.id,
+                              name: ce.cabinet.headTenure.person.name,
+                            }
+                          : null,
+                        country: ce.cabinet.headTenure.country
+                          ? {
+                              id: ce.cabinet.headTenure.country.id,
+                              name: ce.cabinet.headTenure.country.name,
+                              flagEmoji: ce.cabinet.headTenure.country.flagEmoji,
+                            }
+                          : null,
+                        historicalCountry: ce.cabinet.headTenure.historicalCountry
+                          ? {
+                              id: ce.cabinet.headTenure.historicalCountry.id,
+                              name: ce.cabinet.headTenure.historicalCountry.name,
+                            }
+                          : null,
+                      }
+                    : null,
+                }
+              : null,
+          }))
+        : undefined,
       createdAt: event.createdAt?.toISOString ? event.createdAt.toISOString() : event.createdAt,
       updatedAt: event.updatedAt?.toISOString ? event.updatedAt.toISOString() : event.updatedAt,
     }
@@ -281,6 +321,22 @@ export class EventController {
         },
         eventImages: {
           orderBy: { order: 'asc' },
+        },
+        cabinetEvents: {
+          include: {
+            cabinet: {
+              include: {
+                headTenure: {
+                  include: {
+                    person: true,
+                    country: true,
+                    historicalCountry: true,
+                    positionDefinition: true,
+                  },
+                },
+              },
+            },
+          },
         },
       },
     })
@@ -537,6 +593,127 @@ export class EventController {
   ): Promise<void> {
     const userId = req.user?.id!
     await this.eventService.permanentlyDeleteEvent(id, userId)
+  }
+
+  // ========================================================================
+  // Cabinet ↔ Event N:M 연결 (CabinetEvent)
+  // ========================================================================
+
+  /**
+   * 사건에 연결된 행정부 목록
+   */
+  @Get(':id/cabinets')
+  async getEventCabinets(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ) {
+    const userId = req.user?.id
+    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
+    if (!event) throw new Error('Event not found')
+    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 조회할 수 있습니다.')
+
+    const rows = await this.prisma.cabinetEvent.findMany({
+      where: { eventId: id },
+      include: {
+        cabinet: {
+          include: {
+            headTenure: {
+              include: {
+                person: true,
+                country: true,
+                historicalCountry: true,
+                positionDefinition: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    return rows
+  }
+
+  /**
+   * 사건에 행정부 연결
+   */
+  @Post(':id/cabinets')
+  async linkCabinetToEvent(
+    @Param('id') id: string,
+    @Body() body: { cabinetId: string; role?: 'ORIGIN' | 'PARTY' | 'MEDIATOR' | 'AFFECTED' | null; note?: string | null },
+    @Request() req?: any,
+  ) {
+    const userId = req.user?.id
+    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
+    if (!event) throw new Error('Event not found')
+    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+
+    if (!body?.cabinetId) throw new Error('cabinetId가 필요합니다.')
+
+    const created = await this.prisma.cabinetEvent.upsert({
+      where: { cabinetId_eventId: { cabinetId: body.cabinetId, eventId: id } },
+      create: {
+        cabinetId: body.cabinetId,
+        eventId: id,
+        role: (body.role ?? null) as any,
+        note: body.note ?? null,
+      },
+      update: {
+        role: (body.role ?? null) as any,
+        note: body.note ?? null,
+      },
+      include: {
+        cabinet: {
+          include: {
+            headTenure: {
+              include: { person: true, country: true, historicalCountry: true, positionDefinition: true },
+            },
+          },
+        },
+      },
+    })
+    return created
+  }
+
+  /**
+   * 사건-행정부 연결 수정 (역할/메모)
+   */
+  @Patch(':id/cabinets/:cabinetId')
+  async updateEventCabinet(
+    @Param('id') id: string,
+    @Param('cabinetId') cabinetId: string,
+    @Body() body: { role?: 'ORIGIN' | 'PARTY' | 'MEDIATOR' | 'AFFECTED' | null; note?: string | null },
+    @Request() req?: any,
+  ) {
+    const userId = req.user?.id
+    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
+    if (!event) throw new Error('Event not found')
+    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+
+    return this.prisma.cabinetEvent.update({
+      where: { cabinetId_eventId: { cabinetId, eventId: id } },
+      data: {
+        ...(body.role !== undefined ? { role: body.role as any } : {}),
+        ...(body.note !== undefined ? { note: body.note } : {}),
+      },
+    })
+  }
+
+  /**
+   * 사건에서 행정부 연결 해제
+   */
+  @Delete(':id/cabinets/:cabinetId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async unlinkCabinetFromEvent(
+    @Param('id') id: string,
+    @Param('cabinetId') cabinetId: string,
+    @Request() req?: any,
+  ): Promise<void> {
+    const userId = req.user?.id
+    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
+    if (!event) throw new Error('Event not found')
+    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+
+    await this.prisma.cabinetEvent.deleteMany({ where: { cabinetId, eventId: id } })
   }
 }
 

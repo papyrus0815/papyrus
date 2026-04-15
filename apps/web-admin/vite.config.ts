@@ -36,8 +36,10 @@ export default defineConfig(({ mode }) => ({
   appType: 'spa',
   optimizeDeps: {
     force: true,
+    include: ['@xyflow/react'],
   },
   resolve: {
+    dedupe: ['react', 'react-dom', 'styled-components'],
     alias: [
       {
         find: '@',

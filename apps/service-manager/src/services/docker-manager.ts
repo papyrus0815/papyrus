@@ -10,6 +10,21 @@ import * as path from 'path'
 
 const execAsync = promisify(exec)
 
+// Electron 앱은 macOS에서 사용자 셸의 PATH를 상속받지 않으므로
+// Docker가 설치된 일반적인 경로들을 명시적으로 포함
+const DOCKER_ENV = {
+  ...process.env,
+  PATH: [
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/Applications/Docker.app/Contents/Resources/bin',
+    process.env.PATH || '',
+  ].join(':'),
+}
+
 export interface DockerStatus {
   isInstalled: boolean
   isRunning: boolean
@@ -83,20 +98,20 @@ export class DockerManager {
 
   async isDockerInstalled(): Promise<boolean> {
     try {
-      await execAsync('docker --version')
-      
+      await execAsync('docker --version', { env: DOCKER_ENV })
+
 return true
     } catch (error) {
       console.error('❌ Docker가 설치되지 않았습니다:', error)
-      
+
 return false
     }
   }
 
   async isDockerRunning(): Promise<boolean> {
     try {
-      await execAsync('docker info')
-      
+      await execAsync('docker info', { env: DOCKER_ENV })
+
 return true
     } catch (error) {
       return false
@@ -111,6 +126,7 @@ return true
     try {
       const { stdout } = await execAsync(
         `docker ps --filter "name=^${containerName}$" --filter "status=running" --format "{{.Names}}"`,
+        { env: DOCKER_ENV },
       )
       // 정확한 이름 일치 확인 (부분 일치 방지)
       const runningContainers = stdout.trim().split('\n').filter(n => n)
@@ -219,7 +235,7 @@ return true
    */
   async isImageAvailable(imageName: string): Promise<boolean> {
     try {
-      const { stdout } = await execAsync(`docker images -q ${imageName}`)
+      const { stdout } = await execAsync(`docker images -q ${imageName}`, { env: DOCKER_ENV })
       return stdout.trim().length > 0
     } catch (error) {
       return false
@@ -236,6 +252,7 @@ return true
       // 이미지 pull 실행
       const pullProcess = spawn('docker', ['pull', imageName], {
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: DOCKER_ENV,
       })
 
       // 실시간 로그 출력
@@ -422,7 +439,7 @@ return true
         cwd: projectRoot,
         timeout: 120000,
         env: {
-          ...process.env,
+          ...DOCKER_ENV,
           ...env, // env.development의 환경 변수 추가
         },
       })
@@ -463,6 +480,7 @@ return true
       try {
         const { stdout } = await execAsync(
           'docker exec mysql mysqladmin ping -h localhost -u root -ppapyrus',
+          { env: DOCKER_ENV },
         )
 
         if (stdout.includes('mysqld is alive')) {
@@ -485,6 +503,7 @@ return
       console.log('🛑 Docker 컨테이너 중지 중...')
       const { stdout } = await execAsync('docker-compose down', {
         cwd: projectRoot,
+        env: DOCKER_ENV,
       })
       console.log('✅ Docker 컨테이너 중지 완료')
       console.log(stdout)
@@ -554,6 +573,7 @@ return
     try {
       const { stdout } = await execAsync(
         `docker logs --tail ${lines} ${containerName}`,
+        { env: DOCKER_ENV },
       )
       return stdout
     } catch (error: any) {
@@ -658,7 +678,7 @@ return
       // 1. 컨테이너 중지 및 삭제
       console.log('1️⃣ 컨테이너 중지 및 삭제...')
       try {
-        await execAsync('docker-compose down', { cwd: this.projectRoot })
+        await execAsync('docker-compose down', { cwd: this.projectRoot, env: DOCKER_ENV })
         log += '✅ 컨테이너 중지 및 삭제 완료\n'
         console.log('✅ 컨테이너 삭제 완료')
       } catch (error: any) {
@@ -669,12 +689,12 @@ return
       // 2. 볼륨 삭제 (데이터베이스 데이터 포함)
       console.log('2️⃣ 볼륨 삭제 중...')
       try {
-        const { stdout } = await execAsync('docker volume ls -q', { cwd: this.projectRoot })
+        const { stdout } = await execAsync('docker volume ls -q', { cwd: this.projectRoot, env: DOCKER_ENV })
         const volumes = stdout.trim().split('\n').filter(v => v.includes('papyrus'))
         
         for (const volume of volumes) {
           try {
-            await execAsync(`docker volume rm ${volume}`)
+            await execAsync(`docker volume rm ${volume}`, { env: DOCKER_ENV })
             log += `✅ 볼륨 삭제: ${volume}\n`
             console.log(`  ✅ ${volume}`)
           } catch (error: any) {
@@ -693,13 +713,13 @@ return
       try {
         // MySQL 이미지 삭제
         try {
-          await execAsync('docker rmi mysql:8.0', { cwd: this.projectRoot })
+          await execAsync('docker rmi mysql:8.0', { cwd: this.projectRoot, env: DOCKER_ENV })
           log += '✅ 이미지 삭제: mysql:8.0\n'
         } catch {}
 
         // Nginx 이미지 삭제
         try {
-          await execAsync('docker rmi nginx:alpine', { cwd: this.projectRoot })
+          await execAsync('docker rmi nginx:alpine', { cwd: this.projectRoot, env: DOCKER_ENV })
           log += '✅ 이미지 삭제: nginx:alpine\n'
         } catch {}
 
@@ -712,7 +732,7 @@ return
       // 4. 네트워크 정리
       console.log('4️⃣ 네트워크 정리 중...')
       try {
-        await execAsync('docker network prune -f', { cwd: this.projectRoot })
+        await execAsync('docker network prune -f', { cwd: this.projectRoot, env: DOCKER_ENV })
         log += '✅ 네트워크 정리 완료\n'
         console.log('✅ 네트워크 정리 완료')
       } catch (error: any) {

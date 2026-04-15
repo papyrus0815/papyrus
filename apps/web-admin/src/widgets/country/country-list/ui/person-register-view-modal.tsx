@@ -2,7 +2,7 @@
  * 인물 등록 뷰 모달 — 등록 버튼 눌렀을 때와 동일한 폼 디자인
  * 대시보드/국가목록 헤더 + 버튼 모달에서 "인물 등록" 선택 시 표시
  */
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -18,6 +18,8 @@ import {
   PersonRegisterModalFormScroll,
   PersonRegisterModalHeader,
   PersonRegisterModalOverlay,
+  PersonRegisterModalStickyFooter,
+  PersonRegisterModalPrimaryBtn,
   PersonRegisterModalTitle,
 } from '@/shared/ui/person-register-modal/person-register-modal-shell'
 import { PersonRegisterView } from '@/shared/ui/person-register-modal/person-register-view'
@@ -42,6 +44,14 @@ export function PersonRegisterViewModal({
   title,
 }: PersonRegisterViewModalProps) {
   const queryClient = useQueryClient()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isOpen && scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [isOpen, editPersonId])
 
   const handleSuccess = (personId?: string) => {
     queryClient.invalidateQueries({ queryKey: personKeys.all })
@@ -74,6 +84,7 @@ export function PersonRegisterViewModal({
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => e.stopPropagation()}
+            $height="960px"
           >
             <PersonRegisterModalHeader>
               <PersonRegisterModalTitle id="person-register-modal-title">
@@ -87,15 +98,31 @@ export function PersonRegisterViewModal({
                 <FiX size={20} />
               </PersonRegisterModalCloseBtn>
             </PersonRegisterModalHeader>
-            <PersonRegisterModalFormScroll>
+            <PersonRegisterModalFormScroll ref={scrollRef}>
               <PersonRegisterView
                 initialCountryId={initialCountryId}
                 editPersonId={editPersonId ?? undefined}
                 onCancel={onClose}
                 onSuccess={handleSuccess}
                 embedInCard={false}
+                onSubmittingChange={setIsSubmitting}
               />
             </PersonRegisterModalFormScroll>
+            <PersonRegisterModalStickyFooter>
+              <PersonRegisterModalPrimaryBtn
+                type="submit"
+                form="person-register-form"
+                disabled={isSubmitting}
+              >
+                {isSubmitting
+                  ? editPersonId
+                    ? '저장 중…'
+                    : '등록 중…'
+                  : editPersonId
+                    ? '저장'
+                    : '등록'}
+              </PersonRegisterModalPrimaryBtn>
+            </PersonRegisterModalStickyFooter>
           </PersonRegisterModalBox>
         </PersonRegisterModalOverlay>
       )}

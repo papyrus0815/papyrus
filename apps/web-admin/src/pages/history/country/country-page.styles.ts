@@ -1091,3 +1091,9 @@ export const DetailPaneScrollBody = styled.div`
     padding-bottom: 32px;
   }
 `
+
+/** 대시보드 인물 상세 패널 래퍼 — PersonDashboardSection과 동일한 여백 */
+export const PersonDetailPaneWrap = styled.div`
+  padding: 36px 32px 48px;
+  background: ${({ theme }) => theme.colors.background.primary};
+`

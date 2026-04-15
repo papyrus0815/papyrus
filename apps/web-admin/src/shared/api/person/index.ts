@@ -4,6 +4,17 @@ import { apiConnection, getApiConnection } from '../client'
 
 export type Era = 'BC' | 'AD'
 
+export type DeathType =
+  | 'NATURAL'
+  | 'ILLNESS'
+  | 'ASSASSINATION'
+  | 'EXECUTION'
+  | 'BATTLE'
+  | 'ACCIDENT'
+  | 'SUICIDE'
+  | 'UNKNOWN'
+  | 'OTHER'
+
 export type Person = {
   id: string
   name: string
@@ -29,6 +40,12 @@ export type Person = {
   biography?: string | null
   profileImageUrl?: string | null
   isAlive?: boolean | null
+  /** 사망 유형 */
+  deathType?: DeathType | null
+  /** 사망 원인 상세 */
+  deathCause?: string | null
+  /** 사망 관련 메모 */
+  deathNote?: string | null
   regnalName?: string | null
   countryId?: string | null
   birthCityId?: string | null
@@ -104,6 +121,12 @@ export type CreatePersonInput = {
   birthPlaceText?: string | null
   /** 사망지 직접 입력 텍스트 */
   deathPlaceText?: string | null
+  /** 사망 유형 */
+  deathType?: DeathType | null
+  /** 사망 원인 상세 */
+  deathCause?: string | null
+  /** 사망 관련 메모 */
+  deathNote?: string | null
   /** 이름 원어 (Original Name) */
   originalName?: string | null
   /** 성의 뜻 */

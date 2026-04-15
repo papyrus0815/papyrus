@@ -17,6 +17,7 @@ export interface CreateHistoricalCountryData {
   enName?: string
   nameOrigin?: string
   description?: string
+  history?: string
   thumbnailUrl?: string
   startEra?: Era
   startYear?: number
@@ -46,6 +47,7 @@ export interface UpdateHistoricalCountryData {
   enName?: string
   nameOrigin?: string | null
   description?: string | null
+  history?: string | null
   thumbnailUrl?: string | null
   startEra?: Era | null
   startYear?: number | null

@@ -33,16 +33,13 @@ export async function seedAdministrationDepartmentCategories(
       where: { name: category.name },
     })
     if (existing) {
-      await prisma.administrationDepartmentCategory.update({
-        where: { id: existing.id },
-        data: { nameEn: category.nameEn },
-      })
+      console.log(`  ⏭️  스킵: ${category.name}`)
     } else {
       await prisma.administrationDepartmentCategory.create({
         data: { name: category.name, nameEn: category.nameEn },
       })
+      console.log(`  ✅ 부처 카테고리: ${category.name}${category.nameEn ? ` (${category.nameEn})` : ''}`)
     }
-    console.log(`  ✅ 부처 카테고리: ${category.name}${category.nameEn ? ` (${category.nameEn})` : ''}`)
   }
 
   console.log(`✅ 총 ${ADMINISTRATION_DEPARTMENT_CATEGORIES.length}개 부처 카테고리 시딩 완료!\n`)
