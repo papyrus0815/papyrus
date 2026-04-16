@@ -1390,11 +1390,12 @@ export function CountryPoliticalPartiesBlock({
   const goToList = () =>
     navigate(pathKeys.history.countryElections(routeCountryId))
 
+  // 현대 국가는 연결된 역사 국가 소속 정당도 허용해야 하므로,
+  // 이미 올바른 범위로 로드된 parties 목록에 포함 여부로 판단한다.
   const wrongCountryDetail =
     !!detailParty &&
-    (historicalCountryId
-      ? detailParty.historicalCountryId !== historicalCountryId
-      : detailParty.countryId !== countryId)
+    !isLoading &&
+    !parties.some((p) => p.id === detailParty.id)
 
   return (
     <>

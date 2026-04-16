@@ -184,9 +184,30 @@ export class ElectionController {
     /** 콤마로 구분한 `ElectionType` 값 (예: `PRESIDENTIAL_OR_HEAD,PARLIAMENTARY_PROPORTIONAL`) */
     @Query('electionTypes') electionTypesRaw?: string,
   ): Promise<any> {
-    const where: Prisma.ElectionWhereInput = {}
-    if (countryId) where.countryId = countryId
-    if (historicalCountryId) where.historicalCountryId = historicalCountryId
+    let where: Prisma.ElectionWhereInput = {}
+
+    if (countryId) {
+      // 현대 국가 → 연결된 역사 국가까지 OR 포함
+      const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+        .findMany({
+          where: { modernCountryId: countryId },
+          select: { historicalCountryId: true },
+        })
+        .then((rows) => rows.map((r) => r.historicalCountryId))
+
+      if (linkedHistoricalIds.length > 0) {
+        where = {
+          OR: [
+            { countryId },
+            { historicalCountryId: { in: linkedHistoricalIds } },
+          ],
+        }
+      } else {
+        where.countryId = countryId
+      }
+    } else if (historicalCountryId) {
+      where.historicalCountryId = historicalCountryId
+    }
 
     if (hasPartyResults === 'true' || hasPartyResults === '1') {
       where.partyResults = { some: {} }

@@ -16,12 +16,22 @@ import {
   seedBritainHistoricalCountryRelations,
   seedRussiaHistoricalCountries,
   seedRussiaHistoricalCountryRelations,
+  seedSerbiaHistoricalCountries,
+  seedSerbiaHistoricalCountryRelations,
+  seedSerbiaMonarchs,
+  seedSerbiaDynasty,
+  seedItalyHistoricalCountries,
+  seedItalyHistoricalCountryRelations,
   seedBritainMonarchs,
   seedPrussiaGermanyMonarchs,
   seedHohenzollernDynasty,
   seedWiveDynasties,
   seedRussiaEmperors,
   seedRomanovDynasty,
+  seedSardiniaItalyMonarchs,
+  seedSavoyDynasty,
+  seedGermanyEmpireParties,
+  seedGermanyReichstagElections,
 } from './seeds'
 
 const options = {
@@ -79,7 +89,31 @@ async function main() {
         // 5-1. 러시아 역사 국가 계승·소속 관계 시딩
         await seedRussiaHistoricalCountryRelations(prisma)
 
-        // 6. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
+        // 6. 세르비아 역사 국가 시딩
+        await seedSerbiaHistoricalCountries(prisma)
+
+        // 6-1. 세르비아 역사 국가 계승 관계 시딩
+        await seedSerbiaHistoricalCountryRelations(prisma)
+
+        // 6-2. 세르비아 군주 시딩
+        await seedSerbiaMonarchs(prisma)
+
+        // 6-3. 세르비아 왕조 + 부인 + 관계 시딩
+        await seedSerbiaDynasty(prisma)
+
+        // 7. 이탈리아 역사 국가 시딩
+        await seedItalyHistoricalCountries(prisma)
+
+        // 7-1. 이탈리아 역사 국가 계승·소속 관계 시딩
+        await seedItalyHistoricalCountryRelations(prisma)
+
+        // 7-2. 사르데냐·이탈리아 왕국 군주 시딩
+        await seedSardiniaItalyMonarchs(prisma)
+
+        // 7-3. 사보이아 왕조 + 왕비 + 관계 시딩
+        await seedSavoyDynasty(prisma)
+
+        // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
 
         // 6. 영국 군주 시딩
@@ -100,7 +134,13 @@ async function main() {
         // 11. 로마노프 왕조 + 황후 + 관계 시딩
         await seedRomanovDynasty(prisma)
 
-        // 12. 이벤트 카테고리 시딩
+        // 12. 독일 제국 정당 시딩
+        await seedGermanyEmpireParties(prisma)
+
+        // 12-1. 독일 제국 라이히스탁 선거 시딩 (1903, 1907)
+        await seedGermanyReichstagElections(prisma)
+
+        // 13. 이벤트 카테고리 시딩
         await seedEventCategories(prisma)
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)

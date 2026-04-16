@@ -74,9 +74,31 @@ export class PoliticalPartyController {
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
   ): Promise<any> {
-    const where: Record<string, unknown> = {}
-    if (countryId) where.countryId = countryId
-    if (historicalCountryId) where.historicalCountryId = historicalCountryId
+    let where: Record<string, unknown> = {}
+
+    if (countryId) {
+      // 현대 국가 → 연결된 역사 국가까지 OR 포함
+      const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+        .findMany({
+          where: { modernCountryId: countryId },
+          select: { historicalCountryId: true },
+        })
+        .then((rows) => rows.map((r) => r.historicalCountryId))
+
+      if (linkedHistoricalIds.length > 0) {
+        where = {
+          OR: [
+            { countryId },
+            { historicalCountryId: { in: linkedHistoricalIds } },
+          ],
+        }
+      } else {
+        where.countryId = countryId
+      }
+    } else if (historicalCountryId) {
+      where.historicalCountryId = historicalCountryId
+    }
+
     const rows = await this.prisma.politicalParty.findMany({
       where: Object.keys(where).length ? where : undefined,
       orderBy: { name: 'asc' },

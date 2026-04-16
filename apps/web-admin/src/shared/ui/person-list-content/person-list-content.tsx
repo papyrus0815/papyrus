@@ -1225,15 +1225,25 @@ export function PersonListContent({
                 <ModernCountryRow>
                   {modernCountriesWithHistory.map((mc) => {
                     const hcList = historicalByModern[mc.id] ?? []
+                    const hcIds = hcList.map((hc) => hc.id)
+                    const allSelected = hcIds.length > 0 && hcIds.every((id) => filterCountryIds.includes(id))
                     const hasActive = hcList.some((hc) => filterCountryIds.includes(hc.id))
                     const isExpanded = expandedModernId === mc.id
                     return (
                       <ModernCountryChip
                         key={mc.id}
                         type="button"
-                        $active={isExpanded}
-                        $hasFilter={hasActive}
-                        onClick={() => setExpandedModernId(isExpanded ? null : mc.id)}
+                        $active={allSelected}
+                        $hasFilter={hasActive && !allSelected}
+                        onClick={() => {
+                          if (allSelected) {
+                            setFilterCountryIds([])
+                            setExpandedModernId(null)
+                          } else {
+                            setFilterCountryIds(hcIds)
+                            setExpandedModernId(mc.id)
+                          }
+                        }}
                       >
                         {(mc as any).flagEmoji && <span>{(mc as any).flagEmoji}</span>}
                         {mc.name}
