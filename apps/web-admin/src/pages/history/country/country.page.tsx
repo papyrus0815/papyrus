@@ -697,7 +697,13 @@ export default function CountryPage() {
     const modernCountry = unifiedCountries.find((c) => c.id === selectedId)
     if (modernCountry) return modernCountry
 
-    // 2. 현대 국가 하위 역사적 국가에서 찾기
+    // 2. API 전체 역사적 국가에서 찾기 (description 등 full 데이터 포함)
+    const fromApi = (apiHistoricalCountries ?? []).find(
+      (hc) => hc.id === selectedId,
+    )
+    if (fromApi) return historicalToUnified(fromApi as HistoricalCountry)
+
+    // 3. 현대 국가 하위 역사적 국가에서 찾기 (Simple DTO — fallback)
     for (const country of unifiedCountries) {
       if (country.type === 'modern' && country.historicalCountries) {
         const historical = country.historicalCountries.find(
@@ -706,12 +712,6 @@ export default function CountryPage() {
         if (historical) return historicalToUnified(historical)
       }
     }
-
-    // 3. API 전체 역사적 국가에서 찾기 (URL 직접 접근 시 미연결 과거 국가도 표시)
-    const fromApi = (apiHistoricalCountries ?? []).find(
-      (hc) => hc.id === selectedId,
-    )
-    if (fromApi) return historicalToUnified(fromApi as HistoricalCountry)
 
     return undefined
   }, [unifiedCountries, selectedId, apiHistoricalCountries])

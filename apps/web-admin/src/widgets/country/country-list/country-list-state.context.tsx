@@ -86,7 +86,7 @@ export function CountryListStateProvider({
       return result.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
     }
 
-    const result = unifiedCountries.filter((country) => {
+    const modernResult = unifiedCountries.filter((country) => {
       if (country.type !== 'modern') return false
       const matchSearch =
         !searchTextLower ||
@@ -96,6 +96,45 @@ export function CountryListStateProvider({
       const matchContinent = !continentFilter || country.continentId === continentFilter
       return matchSearch && matchContinent
     })
+
+    // 검색어가 있을 때 역사적 국가도 함께 검색
+    if (searchTextLower) {
+      const seenIds = new Set<string>()
+      const historicalMatches: UnifiedCountry[] = []
+
+      ;(apiHistoricalCountries ?? []).forEach((hc) => {
+        const unified = historicalToUnified(hc as HistoricalCountry)
+        if (
+          !seenIds.has(unified.id) &&
+          (unified.name.toLowerCase().includes(searchTextLower) ||
+            (unified.enName || '').toLowerCase().includes(searchTextLower))
+        ) {
+          seenIds.add(unified.id)
+          historicalMatches.push(unified)
+        }
+      })
+
+      unifiedCountries.forEach((country) => {
+        if (country.type === 'modern' && country.historicalCountries) {
+          country.historicalCountries.forEach((hc) => {
+            const unified = historicalToUnified(hc)
+            if (
+              !seenIds.has(unified.id) &&
+              (unified.name.toLowerCase().includes(searchTextLower) ||
+                (unified.enName || '').toLowerCase().includes(searchTextLower))
+            ) {
+              seenIds.add(unified.id)
+              historicalMatches.push(unified)
+            }
+          })
+        }
+      })
+
+      const result = [...modernResult, ...historicalMatches]
+      return result.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    }
+
+    const result = modernResult
 
     return result.sort((countryA, countryB) => {
       if (sortBy === 'name') return countryA.name.localeCompare(countryB.name, 'ko')

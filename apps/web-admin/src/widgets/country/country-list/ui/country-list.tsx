@@ -249,8 +249,12 @@ function CountryListInner({
     }
     const groups = new Map<string, typeof filtered>()
     const UNKNOWN = '__unknown__'
+    const historicalMatches: typeof filtered = []
     for (const country of filtered) {
-      if (country.type !== 'modern') continue
+      if (country.type !== 'modern') {
+        historicalMatches.push(country)
+        continue
+      }
       const key = country.continentId ?? UNKNOWN
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(country)
@@ -272,6 +276,14 @@ function CountryListInner({
         continentId: '__unknown__',
         name: '미분류',
         countries: unknownList,
+      })
+    }
+    // 검색으로 매칭된 역사적 국가가 있으면 별도 섹션으로 추가
+    if (historicalMatches.length > 0) {
+      result.push({
+        continentId: '__historical__',
+        name: '과거 국가',
+        countries: historicalMatches,
       })
     }
     return result

@@ -1,17 +1,20 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
+import { useThemeStore } from '@/shared/styles/theme.store'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { getUploadImageUrl } from '@/shared/api/upload'
+import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import * as DetailStyles from './country-detail.styles'
 import * as ListStyles from '@/widgets/country/country-list/ui/country-list.styles'
 
 const CountryStyles = { ...DetailStyles, ...ListStyles }
 
 import {
+  updateHistoricalCountry,
   getTransitionsByHistoricalCountryId,
   createHistoricalCountryTransition,
   deleteHistoricalCountryTransition,
@@ -43,6 +46,16 @@ import { CountryLawsSection } from './country-laws-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { LoadingOverlay } from './loading-overlay'
+import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read-view'
+import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import {
+  STATE_TYPE_COLORS,
+  STATE_TYPE_EMOJIS,
+  ENTITY_KIND_LABELS,
+  ENTITY_KIND_COLORS,
+  ENTITY_KIND_EMOJIS,
+} from '@/entities/historical-country/model/constants'
 
 // 역사적 국가 전용 컴팩트 스타일 (자리 최소화)
 const CompactFlagWrapper = styled(S.MiniFlagWrapper)`
@@ -288,27 +301,6 @@ export function HistoricalCountryDetail({
       setActiveTab((prev) => (prev === 'heads' ? 'overview' : prev))
   }, [initialTab])
 
-  // 존속 기간 포맷팅
-  const formatPeriod = () => {
-    const start = country.startYear
-      ? `${country.startEra === 'BC' ? '기원전 ' : ''}${country.startYear}년`
-      : '알 수 없음'
-    const end = country.endYear
-      ? `${country.endEra === 'BC' ? '기원전 ' : ''}${country.endYear}년`
-      : '현재'
-    return `${start} ~ ${end}`
-  }
-
-  // 존속 기간 계산
-  const calculateDuration = () => {
-    if (!country.startYear || !country.endYear) return null
-    const startYear =
-      country.startEra === 'BC' ? -country.startYear : country.startYear
-    const endYear = country.endEra === 'BC' ? -country.endYear : country.endYear
-    const duration = endYear - startYear
-    return duration > 0 ? `${duration}년` : null
-  }
-
   return (
     <CountryStyles.DetailPaneRelative>
       <AnimatePresence mode="wait">
@@ -337,8 +329,6 @@ export function HistoricalCountryDetail({
 
               <HistoricalCountryTabs
                 country={country}
-                period={formatPeriod()}
-                duration={calculateDuration()}
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
                 incomingCategoryLabel={incomingCategoryLabel}
@@ -616,8 +606,6 @@ function getStateTypeLabel(stateType: string): string {
 
 interface HistoricalCountryTabsProps {
   country: UnifiedCountry
-  period: string
-  duration: string | null
   activeTab: HistoricalCountryTab
   onTabChange: (tab: HistoricalCountryTab) => void
   /** 이 국가가 후임인 변천의 카테고리 라벨 (예: 계승, 세속화) */
@@ -625,9 +613,7 @@ interface HistoricalCountryTabsProps {
 }
 
 function HistoricalCountryTabs({
-  country,
-  period,
-  duration,
+  country: _country,
   activeTab,
   onTabChange,
   incomingCategoryLabel,
@@ -650,22 +636,6 @@ function HistoricalCountryTabs({
 
   return (
     <CompactStrip>
-      <CompactBadge>
-        <span>존속 기간</span>
-        <span>{period}</span>
-      </CompactBadge>
-      {duration && (
-        <CompactBadge>
-          <span>기간</span>
-          <span>{duration}</span>
-        </CompactBadge>
-      )}
-      {country.stateType && (
-        <CompactBadge>
-          <span>국가 형태</span>
-          <span>{getStateTypeLabel(country.stateType)}</span>
-        </CompactBadge>
-      )}
       {incomingCategoryLabel && (
         <CompactBadge>
           <span>변천</span>
@@ -696,112 +666,328 @@ function HistoricalOverviewSection({
   incomingCategoryLabel,
 }: {
   country: UnifiedCountry
-  /** 이 국가가 후임인 변천의 카테고리 (예: 계승, 세속화) */
   incomingCategoryLabel?: string | null
 }) {
-  // 국가 이름에서 mock 데이터 키 추출 (조선 → joseon, 고려 → goryeo)
-  const getMockDataKey = (name: string): 'joseon' | 'goryeo' | null => {
-    if (name.includes('조선')) return 'joseon'
-    if (name.includes('고려')) return 'goryeo'
-    return null
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
+
+  const entityKind = (country as any).entityKind as
+    | 'STATE'
+    | 'REGIME'
+    | 'PERIOD'
+    | null
+    | undefined
+
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  // 현재 표시할 description. country.description으로 초기화하고 저장 시 직접 교체
+  const [savedDescription, setSavedDescription] = useState<string | null | undefined>(
+    () => country.description,
+  )
+  // stale closure 방지용 ref — 항상 최신 에디터 값을 보관
+  const editorValueRef = useRef('')
+
+  // 국가 변경 시 리셋
+  useEffect(() => {
+    setSavedDescription(country.description)
+  }, [country.id, country.description])
+
+  const updateMutation = useMutation({
+    mutationFn: (description: string) =>
+      updateHistoricalCountry(country.id, { description: description || undefined }),
+    onSuccess: (_, description) => {
+      const saved = description || null
+      console.log('[OverviewSave] onSuccess description =', description, '/ saved =', saved)
+      setSavedDescription(saved)
+      setIsEditorOpen(false)
+      toast.success('개요가 저장되었습니다.')
+    },
+    onError: () => {
+      toast.error('저장 중 오류가 발생했습니다.')
+    },
+  })
+
+  const handleOpenEditor = useCallback(() => {
+    const initialValue = savedDescription ?? ''
+    editorValueRef.current = initialValue
+    setIsEditorOpen(true)
+  }, [savedDescription])
+
+  const handleSave = useCallback(() => {
+    console.log('[OverviewSave] editorValueRef.current =', editorValueRef.current)
+    updateMutation.mutate(editorValueRef.current)
+  }, [updateMutation])
+
+  const handleClose = useCallback(() => {
+    setIsEditorOpen(false)
+  }, [])
+
+  const formatPeriod = () => {
+    const start = country.startYear
+      ? `${country.startEra === 'BC' ? '기원전 ' : ''}${country.startYear}년`
+      : '알 수 없음'
+    const end = country.endYear
+      ? `${country.endEra === 'BC' ? '기원전 ' : ''}${country.endYear}년`
+      : '현재'
+    return `${start} ~ ${end}`
   }
 
-  const dataKey = getMockDataKey(country.name)
-  const mockData = dataKey ? historicalCountryMockData[dataKey] : null
+  const calculateDuration = () => {
+    if (!country.startYear || !country.endYear) return null
+    const startYear =
+      country.startEra === 'BC' ? -country.startYear : country.startYear
+    const endYear = country.endEra === 'BC' ? -country.endYear : country.endYear
+    const diff = endYear - startYear
+    return diff > 0 ? `${diff}년` : null
+  }
+
+  const period = formatPeriod()
+  const duration = calculateDuration()
+  const stateTypeColor = country.stateType
+    ? (STATE_TYPE_COLORS as Record<string, string>)[country.stateType] ?? '#6b7280'
+    : '#6b7280'
+  const stateTypeEmoji = country.stateType
+    ? (STATE_TYPE_EMOJIS as Record<string, string>)[country.stateType] ?? '🏛️'
+    : '🏛️'
+  const entityKindColor = entityKind ? ENTITY_KIND_COLORS[entityKind] : null
+  const entityKindEmoji = entityKind ? ENTITY_KIND_EMOJIS[entityKind] : null
+  const entityKindLabel = entityKind ? ENTITY_KIND_LABELS[entityKind] : null
 
   return (
     <div
       style={{
-        padding: '48px',
-        background: '#fafafa',
+        padding: '24px 28px 0',
+        background: 'transparent',
         minHeight: 'calc(100vh - 300px)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        {/* 설명 */}
-        {country.description && (
+      {/* 핵심 지표 칩 */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <OverviewStatChip label="존속 기간" value={period} color="#6366f1" isDark={isDark} />
+        {duration && <OverviewStatChip label="존속 연수" value={duration} color="#8b5cf6" isDark={isDark} />}
+        {country.stateType && (
+          <OverviewStatChip
+            label="국가 형태"
+            value={`${stateTypeEmoji} ${getStateTypeLabel(country.stateType)}`}
+            color={stateTypeColor}
+            isDark={isDark}
+          />
+        )}
+        {entityKind && entityKindLabel && (
+          <OverviewStatChip
+            label="정치체 성격"
+            value={`${entityKindEmoji ?? ''} ${entityKindLabel}`}
+            color={entityKindColor ?? '#6b7280'}
+            isDark={isDark}
+          />
+        )}
+        {incomingCategoryLabel && (
+          <OverviewStatChip label="변천" value={incomingCategoryLabel} color="#f59e0b" isDark={isDark} />
+        )}
+      </div>
+
+      {/* 개요 섹션 */}
+      {isEditorOpen ? (
+        /* 에디터 모드: 개요 카드 없이 에디터만 */
+        <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: '40px' }}>
           <div
             style={{
-              padding: '40px',
-              background: 'white',
-              border: '1px solid #f0f0f0',
-              borderRadius: '16px',
+              maxWidth: '680px',
+              width: '100%',
+              margin: '0 auto',
             }}
           >
-            <h3
+            <RichTextEditor
+              value={savedDescription ?? ''}
+              onChange={(html) => {
+                editorValueRef.current = html
+              }}
+              placeholder="역사적 국가에 대한 개요를 작성하세요..."
+              showTitle={false}
+              onImageUpload={async (file) => {
+                const result = await uploadImage(file, 'attachments')
+                return result.url ?? (result as any)
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button
+                onClick={handleClose}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '12px',
+                  border: `1px solid ${isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'}`,
+                  background: isDark ? '#1e1e3a' : 'white',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#6366f1',
+                  cursor: 'pointer',
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: updateMutation.isPending ? '#a5b4fc' : '#6366f1',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: 'white',
+                  cursor: updateMutation.isPending ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {updateMutation.isPending ? '저장 중…' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* 읽기 모드 */
+        <div style={{ paddingBottom: '40px' }}>
+          {/* 레이블 + 버튼 */}
+          <div
+            style={{
+              maxWidth: '680px',
+              width: '100%',
+              margin: '0 auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '12px',
+            }}
+          >
+            <span
               style={{
-                fontSize: '20px',
+                fontSize: '11px',
                 fontWeight: 700,
-                marginBottom: '20px',
-                color: '#111827',
-                letterSpacing: '-0.01em',
+                color: '#6366f1',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
               }}
             >
               개요
-            </h3>
-            <p
+            </span>
+            <button
+              onClick={handleOpenEditor}
               style={{
-                fontSize: '16px',
-                lineHeight: '1.8',
-                color: '#4b5563',
-                whiteSpace: 'pre-wrap',
-                margin: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                border: `1px solid ${isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'}`,
+                background: isDark ? '#1e1e3a' : 'white',
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#6366f1',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = isDark ? '#252547' : 'rgba(99,102,241,0.06)'
+                e.currentTarget.style.borderColor = 'rgba(99,102,241,0.5)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = isDark ? '#1e1e3a' : 'white'
+                e.currentTarget.style.borderColor = isDark ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'
               }}
             >
-              {country.description}
-            </p>
+              {savedDescription ? '수정' : '+ 작성'}
+            </button>
           </div>
-        )}
 
-        {/* 기본 정보 그리드 */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '20px',
-          }}
-        >
-          <InfoCard
-            label="국가 형태"
-            value={
-              country.stateType
-                ? getStateTypeLabel(country.stateType)
-                : '알 수 없음'
-            }
-            color="#667eea"
-          />
-          {incomingCategoryLabel && (
-            <InfoCard
-              label="변천"
-              value={incomingCategoryLabel}
-              color="#6366f1"
-            />
-          )}
-          <InfoCard
-            label="위치"
-            value={
-              country.latitude && country.longitude
-                ? `${Number(country.latitude).toFixed(2)}°N, ${Number(country.longitude).toFixed(2)}°E`
-                : '한반도'
-            }
-            color="#764ba2"
-          />
-          {mockData?.events && (
-            <InfoCard
-              label="주요 사건"
-              value={`${mockData.events.length}건`}
-              color="#8b5cf6"
-            />
-          )}
-          {mockData?.figures && (
-            <InfoCard
-              label="주요 인물"
-              value={`${mockData.figures.length}명`}
-              color="#a78bfa"
-            />
-          )}
+          {/* 본문 or 빈 상태 */}
+          <div style={{ maxWidth: '680px', width: '100%', margin: '0 auto' }}>
+            {savedDescription ? (
+              isLikelyRichTextHtml(savedDescription) ? (
+                <RichTextReadView html={savedDescription} />
+              ) : (
+                <p
+                  style={{
+                    fontSize: '14.5px',
+                    lineHeight: '1.85',
+                    color: isDark ? '#d1d5db' : '#374151',
+                    whiteSpace: 'pre-wrap',
+                    margin: 0,
+                  }}
+                >
+                  {savedDescription}
+                </p>
+              )
+            ) : (
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: isDark ? '#52525b' : '#9ca3af',
+                  margin: 0,
+                }}
+              >
+                개요가 없습니다. 수정 버튼으로 추가할 수 있습니다.
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// 개요 스탯 칩
+// ============================================
+
+function OverviewStatChip({
+  label,
+  value,
+  color,
+  isDark,
+}: {
+  label: string
+  value: string
+  color: string
+  isDark: boolean
+}) {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        gap: '3px',
+        padding: '10px 16px',
+        background: isDark ? '#212121' : 'white',
+        border: `1px solid ${color}${isDark ? '50' : '30'}`,
+        borderRadius: '10px',
+        minWidth: '100px',
+      }}
+    >
+      <span
+        style={{
+          fontSize: '10px',
+          fontWeight: 600,
+          color: color,
+          textTransform: 'uppercase',
+          letterSpacing: '0.07em',
+          opacity: 0.85,
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: '13px',
+          fontWeight: 700,
+          color: isDark ? '#f5f5f5' : '#111827',
+          letterSpacing: '-0.02em',
+          lineHeight: 1.3,
+        }}
+      >
+        {value}
+      </span>
     </div>
   )
 }
