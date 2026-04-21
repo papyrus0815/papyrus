@@ -1,5 +1,7 @@
 import { PrismaService } from '../prisma.service'
 
+const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
+
 export interface CountryData {
   name: string
   localName: string
@@ -171,6 +173,24 @@ const COUNTRIES: CountryData[] = [
     isoCode: 'SK',
     population: 5460185,
     areaSqKm: 49037.0,
+    continentName: '유럽',
+  },
+  {
+    name: '네덜란드',
+    localName: 'Nederland',
+    flagEmoji: '🇳🇱',
+    isoCode: 'NL',
+    population: 17811291,
+    areaSqKm: 41850.0,
+    continentName: '유럽',
+  },
+  {
+    name: '벨기에',
+    localName: 'België / Belgique',
+    flagEmoji: '🇧🇪',
+    isoCode: 'BE',
+    population: 11697557,
+    areaSqKm: 30528.0,
     continentName: '유럽',
   },
   // === Top 30 by population (추가분) ===
@@ -505,6 +525,7 @@ export async function seedCountries(
         population: country.population,
         areaSqKm: country.areaSqKm,
         continentId: continentId,
+        accountId: ACCOUNT_ID,
       },
       create: {
         name: country.name,
@@ -514,6 +535,7 @@ export async function seedCountries(
         population: country.population,
         areaSqKm: country.areaSqKm,
         continentId: continentId,
+        accountId: ACCOUNT_ID,
       },
     })
     console.log(`  ✅ 국가 생성됨: ${created.name}`)

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf, IsInt, Min, Max } from 'class-validator'
 import { Type } from 'class-transformer'
 
 /**
@@ -254,6 +254,15 @@ export class CreatePersonDto {
   @IsOptional()
   @IsBoolean()
   isAlive?: boolean
+
+  /**
+   * 역사적 영향력 (0–100)
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  influence?: number
 
   /**
    * 성별 (선택)

@@ -346,6 +346,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       deathCause: (person as any).deathCause ?? null,
       deathNote: (person as any).deathNote ?? null,
       isAlive: person.isAlive ?? false,
+      influence: (person as any).influence ?? null,
       // 정부 직위 재임 기록
       governmentTenures: person.GovernmentTenures ? serializeBigInt(person.GovernmentTenures) : undefined,
       sovereignReigns: person.sovereignReigns ? serializeBigInt(person.sovereignReigns) : undefined,

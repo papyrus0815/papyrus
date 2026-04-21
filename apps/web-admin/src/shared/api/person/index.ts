@@ -40,6 +40,8 @@ export type Person = {
   biography?: string | null
   profileImageUrl?: string | null
   isAlive?: boolean | null
+  /** 역사적 영향력 (0–100) */
+  influence?: number | null
   /** 사망 유형 */
   deathType?: DeathType | null
   /** 사망 원인 상세 */
@@ -95,6 +97,8 @@ export type CreatePersonInput = {
   deathDate?: string | null
   gender?: string | null
   biography?: string | null
+  /** 역사적 영향력 (0–100) */
+  influence?: number | null
   profileImageUrl?: string | null
   // 왕/군주 관련 필드
   regnalName?: string | null

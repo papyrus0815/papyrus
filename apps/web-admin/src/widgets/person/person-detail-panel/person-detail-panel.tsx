@@ -78,6 +78,7 @@ interface PersonDetailData {
   posthumousName?: string | null
   createdAt?: string | null
   isAlive?: boolean | null
+  influence?: number | null
   isDeathDateUnknown?: boolean | null
   dynastyId?: string | null
   religionId?: string | null
@@ -248,6 +249,9 @@ export function PersonDetailPanel({
   const [editingBiography, setEditingBiography] = useState(false)
   const [biographyDraft, setBiographyDraft] = useState('')
   const [savingBiography, setSavingBiography] = useState(false)
+  const [editingInfluence, setEditingInfluence] = useState(false)
+  const [influenceDraft, setInfluenceDraft] = useState(0)
+  const [savingInfluence, setSavingInfluence] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deletingPerson, setDeletingPerson] = useState(false)
@@ -983,6 +987,73 @@ export function PersonDetailPanel({
                     ).humanRelationships
                   }
                 />
+
+                <OverviewSectionDivider />
+
+                {/* 영향력 */}
+                <section aria-label="역사적 영향력" style={{ marginBottom: 16 }}>
+                  <BioSectionLabelRow>
+                    <BioSectionLabel>역사적 영향력</BioSectionLabel>
+                    {!editingInfluence ? (
+                      <OutlineButton
+                        type="button"
+                        onClick={() => {
+                          setInfluenceDraft(person.influence ?? 0)
+                          setEditingInfluence(true)
+                        }}
+                      >
+                        {person.influence != null ? '수정' : '설정'}
+                      </OutlineButton>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <OutlineButton
+                          type="button"
+                          disabled={savingInfluence}
+                          onClick={async () => {
+                            setSavingInfluence(true)
+                            try {
+                              await updatePerson(person.id, { influence: influenceDraft })
+                              queryClient.invalidateQueries({ queryKey: personKeys.detailFull(personId) })
+                              setEditingInfluence(false)
+                            } finally {
+                              setSavingInfluence(false)
+                            }
+                          }}
+                        >
+                          {savingInfluence ? '저장 중…' : '저장'}
+                        </OutlineButton>
+                        <OutlineButton type="button" onClick={() => setEditingInfluence(false)}>
+                          취소
+                        </OutlineButton>
+                      </div>
+                    )}
+                  </BioSectionLabelRow>
+                  {editingInfluence ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={influenceDraft}
+                        onChange={(e) => setInfluenceDraft(Number(e.target.value))}
+                        style={{ flex: 1, accentColor: '#6366f1' }}
+                      />
+                      <span style={{ minWidth: 32, textAlign: 'right', fontWeight: 700, color: '#6366f1', fontSize: 15 }}>
+                        {influenceDraft}
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                      <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(99,102,241,0.12)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${person.influence ?? 0}%`, background: '#6366f1', borderRadius: 3, transition: 'width 0.3s' }} />
+                      </div>
+                      <span style={{ minWidth: 28, textAlign: 'right', fontWeight: 700, color: '#6366f1', fontSize: 14 }}>
+                        {person.influence ?? 0}
+                      </span>
+                    </div>
+                  )}
+                </section>
 
                 <OverviewSectionDivider />
 

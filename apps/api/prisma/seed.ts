@@ -22,6 +22,8 @@ import {
   seedSerbiaDynasty,
   seedItalyHistoricalCountries,
   seedItalyHistoricalCountryRelations,
+  seedBeneluxHistoricalCountries,
+  seedBeneluxHistoricalCountryRelations,
   seedBritainMonarchs,
   seedPrussiaGermanyMonarchs,
   seedHohenzollernDynasty,
@@ -112,6 +114,12 @@ async function main() {
 
         // 7-3. 사보이아 왕조 + 왕비 + 관계 시딩
         await seedSavoyDynasty(prisma)
+
+        // 7-4. 베네룩스(네덜란드·벨기에) 역사 국가 시딩
+        await seedBeneluxHistoricalCountries(prisma)
+
+        // 7-5. 베네룩스 역사 국가 계승·소속 관계 시딩
+        await seedBeneluxHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)

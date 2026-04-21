@@ -852,28 +852,40 @@ export const FlagBadge = styled.span`
 `
 
 export const ThumbnailAvatar = styled.div<{ $size?: 'sm' | 'md' }>`
-  width: ${({ $size }) =>
-    $size === 'sm' ? 'clamp(24px, 5vw, 28px)' : 'clamp(24px, 5vw, 32px)'};
-  height: ${({ $size }) =>
-    $size === 'sm' ? 'clamp(24px, 5vw, 28px)' : 'clamp(24px, 5vw, 32px)'};
-  border-radius: 50%;
+  width: ${({ $size }) => ($size === 'sm' ? '30px' : '36px')};
+  height: ${({ $size }) => ($size === 'sm' ? '30px' : '36px')};
+  border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.12)'
-        : 'rgba(0, 0, 0, 0.08)'};
+        : 'rgba(255, 255, 255, 0.9)'};
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(255, 255, 255, 0.7)'};
+      : 'rgba(255, 255, 255, 0.85)'};
+  box-shadow: 0 2px 6px
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.06)'};
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+  }
+
+  @media (max-width: 768px) {
+    width: ${({ $size }) => ($size === 'sm' ? '28px' : '32px')};
+    height: ${({ $size }) => ($size === 'sm' ? '28px' : '32px')};
+    border-radius: 8px;
+  }
+
+  @media (max-width: 480px) {
+    width: ${({ $size }) => ($size === 'sm' ? '26px' : '30px')};
+    height: ${({ $size }) => ($size === 'sm' ? '26px' : '30px')};
   }
 `
 
@@ -918,9 +930,10 @@ export const CodeText = styled.div<{ $unread?: boolean }>`
     'Roboto',
     -apple-system,
     sans-serif;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  line-height: 1.3;
 
   @media (max-width: 768px) {
     font-size: 14px;

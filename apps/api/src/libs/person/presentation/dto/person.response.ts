@@ -77,6 +77,8 @@ export interface PersonResponseDto {
   deathNote?: string | null
   /** 생존 여부 */
   isAlive?: boolean
+  /** 역사적 영향력 (0–100) */
+  influence?: number | null
   // 정부 직위 재임 기록
   governmentTenures?: any[]
   /** 군주·재위 전용 기록 (SovereignReign — 행정부 재임과 별도 테이블) */

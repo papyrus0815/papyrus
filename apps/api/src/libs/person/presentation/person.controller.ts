@@ -182,7 +182,7 @@ export class PersonController {
    * 전체 가계도 그래프 (BFS, ego 기준 3세대 위·2세대 아래)
    */
   @Get(':id/family-tree')
-  async getFamilyTree(@Param('id') id: string, @Request() req: any) {
+  async getFamilyTree(@Param('id') id: string, @Request() req: any): Promise<any> {
     const accountId = req.user?.id ?? req.user?.sub ?? undefined
     return this.personService.getFamilyTree(id, accountId)
   }
@@ -465,6 +465,7 @@ export class PersonController {
       deathCause: dto.deathCause ?? null,
       deathNote: dto.deathNote ?? null,
       isAlive: dto.isAlive,
+      influence: dto.influence,
       gender: dto.gender,
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
@@ -544,6 +545,7 @@ export class PersonController {
       deathCause: dto.deathCause ?? null,
       deathNote: dto.deathNote ?? null,
       isAlive: dto.isAlive,
+      influence: dto.influence,
       gender: dto.gender,
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,

@@ -43,23 +43,19 @@ export const historyPageRoute: RouteObject = {
         {
           path: `${ROUTES.HISTORY.DASHBOARD}/persons`,
           lazy: async () => {
-            const [{ countryLoader }, { default: Component }] =
-              await Promise.all([
-                import('./country/country.loader'),
-                import('./country/country.page'),
-              ])
-            return { loader: countryLoader, Component }
+            const { default: Component } = await import(
+              './persons/persons-infographic.page'
+            )
+            return { Component }
           },
         },
         {
           path: `${ROUTES.HISTORY.DASHBOARD}/persons/:personId`,
           lazy: async () => {
-            const [{ countryLoader }, { default: Component }] =
-              await Promise.all([
-                import('./country/country.loader'),
-                import('./country/country.page'),
-              ])
-            return { loader: countryLoader, Component }
+            const { default: Component } = await import(
+              './persons/persons-infographic.page'
+            )
+            return { Component }
           },
         },
         {

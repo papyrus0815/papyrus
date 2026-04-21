@@ -53,6 +53,8 @@ export interface CreatePersonData {
   deathCause?: string | null
   deathNote?: string | null
   isAlive?: boolean
+  /** 역사적 영향력 (0–100) */
+  influence?: number
   gender?: string
   biography?: string
   profileImageUrl?: string
@@ -109,6 +111,8 @@ export interface UpdatePersonData {
   deathCause?: string | null
   deathNote?: string | null
   isAlive?: boolean
+  /** 역사적 영향력 (0–100) */
+  influence?: number | null
   gender?: string
   biography?: string
   profileImageUrl?: string | null

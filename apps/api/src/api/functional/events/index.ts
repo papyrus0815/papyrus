@@ -18,6 +18,7 @@ export * as parent from "./parent/index";
 export * as deleted from "./deleted/index";
 export * as restore from "./restore/index";
 export * as permanent from "./permanent/index";
+export * as cabinets from "./cabinets/index";
 
 /**
  * 모든 사건 조회 (페이징 지원)

@@ -606,7 +606,7 @@ export class EventController {
   async getEventCabinets(
     @Param('id') id: string,
     @Request() req?: any,
-  ) {
+  ): Promise<any[]> {
     const userId = req.user?.id
     const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
     if (!event) throw new Error('Event not found')
@@ -641,7 +641,7 @@ export class EventController {
     @Param('id') id: string,
     @Body() body: { cabinetId: string; role?: 'ORIGIN' | 'PARTY' | 'MEDIATOR' | 'AFFECTED' | null; note?: string | null },
     @Request() req?: any,
-  ) {
+  ): Promise<any> {
     const userId = req.user?.id
     const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
     if (!event) throw new Error('Event not found')
@@ -683,7 +683,7 @@ export class EventController {
     @Param('cabinetId') cabinetId: string,
     @Body() body: { role?: 'ORIGIN' | 'PARTY' | 'MEDIATOR' | 'AFFECTED' | null; note?: string | null },
     @Request() req?: any,
-  ) {
+  ): Promise<any> {
     const userId = req.user?.id
     const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
     if (!event) throw new Error('Event not found')

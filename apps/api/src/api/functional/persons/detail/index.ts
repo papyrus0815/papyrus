@@ -47,6 +47,11 @@ export namespace getDetailById {
     gender: string | null;
     biography: string | null;
     profileImageUrl: string | null;
+    regnalName: string | null;
+    templeName: string | null;
+    posthumousName: string | null;
+    sovereignReigns: any[];
+    dynastyId: string | null;
     countryId: string | null;
     fatherId: string | null;
     motherId: string | null;
@@ -68,6 +73,7 @@ export namespace getDetailById {
     father: any;
     mother: any;
     children: any[];
+    siblings: any[];
     foundedCompanies: any[];
     companies: any[];
     books: any[];
@@ -83,6 +89,9 @@ export namespace getDetailById {
     humanRelationships: any[];
     isBirthDateUnknown: boolean;
     isDeathDateUnknown: boolean;
+    deathType: string | null;
+    deathCause: string | null;
+    deathNote: string | null;
     isAlive: boolean;
     createdAt: string;
     updatedAt: string;

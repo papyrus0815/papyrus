@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray, IsInt, Min, Max } from 'class-validator'
 import { Type } from 'class-transformer'
 import { Era, DeathType, DateInfoDto, SpouseRelationDto } from './create-person.dto'
 
@@ -153,6 +153,15 @@ export class UpdatePersonDto {
   @IsOptional()
   @IsBoolean()
   isAlive?: boolean
+
+  /**
+   * 역사적 영향력 (0–100)
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  influence?: number | null
 
   /**
    * 성별 (선택)

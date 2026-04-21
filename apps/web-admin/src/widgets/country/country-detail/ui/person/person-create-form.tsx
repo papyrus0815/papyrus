@@ -31,6 +31,7 @@ interface FormData {
   deathMonth: string
   deathDay: string
   biography: string
+  influence: string
   profileImageUrl: string
   countryId: string
   dynastyId: string
@@ -66,6 +67,7 @@ export function PersonCreateForm({
     deathMonth: '',
     deathDay: '',
     biography: '',
+    influence: '',
     profileImageUrl: '',
     countryId: countryId,
     dynastyId: '',
@@ -204,6 +206,7 @@ export function PersonCreateForm({
         deathEra: formData.deathYear ? formData.deathEra : null,
         deathDate: deathDate,
         biography: formData.biography.trim() || null,
+        influence: formData.influence !== '' ? parseInt(formData.influence, 10) : undefined,
         profileImageUrl: formData.profileImageUrl.trim() || null,
         countryId: formData.countryId || null,
       }
@@ -444,6 +447,27 @@ export function PersonCreateForm({
                   </DateGroup>
                 </DateRow>
                 {errors.deathDate && <ErrorMsg>{errors.deathDate}</ErrorMsg>}
+              </SectionCard>
+
+              <SectionCard>
+                <CardHeader>
+                  <CardTitle>역사적 영향력</CardTitle>
+                  <CardDesc>이 인물의 역사적 영향력을 설정하세요 (0 = 없음, 100 = 매우 높음)</CardDesc>
+                </CardHeader>
+                <FormGroup>
+                  <InfluenceRow>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={formData.influence === '' ? 0 : parseInt(formData.influence, 10)}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, influence: e.target.value }))}
+                      style={{ flex: 1 }}
+                    />
+                    <InfluenceValue>{formData.influence === '' ? 0 : formData.influence}</InfluenceValue>
+                  </InfluenceRow>
+                </FormGroup>
               </SectionCard>
 
               <SectionCard>
@@ -1084,4 +1108,22 @@ const Spinner = styled.div`
       transform: rotate(360deg);
     }
   }
+`
+
+const InfluenceRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  input[type='range'] {
+    accent-color: #6366f1;
+  }
+`
+
+const InfluenceValue = styled.span`
+  min-width: 36px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  color: #6366f1;
 `

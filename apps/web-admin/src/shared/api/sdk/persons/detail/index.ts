@@ -39,6 +39,7 @@ export namespace getDetailById {
     deathDay: number | null;
     gender: string | null;
     biography: string | null;
+    influence: number | null;
     profileImageUrl: string | null;
     country: any;
     dynasty: any;
