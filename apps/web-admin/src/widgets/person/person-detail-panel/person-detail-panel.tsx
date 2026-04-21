@@ -1,7 +1,7 @@
 /**
  * 인물 상세 패널 (리스트 페이지 우측 컨텐츠 영역)
  */
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -10,6 +10,8 @@ import { toast } from 'react-hot-toast'
 import {
   FiAlertTriangle,
   FiArrowLeft,
+  FiAward,
+  FiBookOpen,
   FiCalendar,
   FiCamera,
   FiEdit2,
@@ -17,6 +19,7 @@ import {
   FiInfo,
   FiPlus,
   FiTrash2,
+  FiTrendingUp,
   FiUsers,
   FiX,
 } from 'react-icons/fi'
@@ -28,6 +31,10 @@ import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-rela
 import { deletePerson, updatePerson } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonFamilyTree } from '@/shared/api/persons-family-tree'
+import {
+  type PersonLifeEvent,
+  listPersonLifeEvents,
+} from '@/shared/api/person-life-events'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import {
@@ -46,6 +53,8 @@ import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
+import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
+import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
 import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
 import {
@@ -135,6 +144,7 @@ interface PersonDetailData {
     startDate?: string | null
     endDate?: string | null
     notes?: string | null
+    regnalName?: string | null
     regnalNumber?: number | null
     positionDefinition?: { id?: string; title?: string | null } | null
     country?: { id?: string; name?: string | null } | null
@@ -246,6 +256,8 @@ export function PersonDetailPanel({
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
   const [sovereignReignModalOpen, setSovereignReignModalOpen] = useState(false)
   const [editingReignId, setEditingReignId] = useState<string | null>(null)
+  const [lifeEventModalOpen, setLifeEventModalOpen] = useState(false)
+  const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
   const [editingBiography, setEditingBiography] = useState(false)
   const [biographyDraft, setBiographyDraft] = useState('')
   const [savingBiography, setSavingBiography] = useState(false)
@@ -279,6 +291,85 @@ export function PersonDetailPanel({
     enabled: !!personId,
     staleTime: 5 * 60 * 1000,
   })
+
+  const { data: lifeEvents = [] } = useQuery({
+    queryKey: ['person-life-events', personId],
+    queryFn: () => listPersonLifeEvents(personId),
+    enabled: !!personId,
+  })
+
+  // ── 타임라인 인포그래픽용 파생 데이터 (참조 안정) ──
+  const timelineFather = useMemo(() => {
+    const f = (person as any)?.father
+    if (!f) return null
+    return {
+      id: f.id,
+      name: getPersonDisplayName(f, true),
+      birthDate: f.birthDate ? String(f.birthDate) : null,
+      deathDate: f.deathDate ? String(f.deathDate) : null,
+    }
+  }, [person])
+
+  const timelineMother = useMemo(() => {
+    const m = (person as any)?.mother
+    if (!m) return null
+    return {
+      id: m.id,
+      name: getPersonDisplayName(m, true),
+      birthDate: m.birthDate ? String(m.birthDate) : null,
+      deathDate: m.deathDate ? String(m.deathDate) : null,
+    }
+  }, [person])
+
+  const timelineChildren = useMemo(() => {
+    const list = ((person as any)?.children ?? []) as any[]
+    return list.map((c) => ({
+      id: c.id,
+      name: getPersonDisplayName(c, true),
+      birthDate: c.birthDate ? String(c.birthDate) : null,
+      deathDate: c.deathDate ? String(c.deathDate) : null,
+    }))
+  }, [person])
+
+  const timelineSpouses = useMemo(() => {
+    const list = ((person as any)?.spouseRelations ?? []) as any[]
+    return list.map((r) => {
+      const sp = r.spouse ?? r
+      return {
+        id: sp.id,
+        name: getPersonDisplayName(sp, true),
+        birthDate: sp.birthDate ? String(sp.birthDate) : null,
+        deathDate: sp.deathDate ? String(sp.deathDate) : null,
+        marriageStartDate: r.marriageStartDate ?? null,
+      }
+    })
+  }, [person])
+
+  const timelineSiblings = useMemo(() => {
+    const list = ((person as any)?.siblings ?? []) as any[]
+    return list.map((s) => ({
+      id: s.id,
+      name: getPersonDisplayName(s, true),
+      birthDate: s.birthDate ? String(s.birthDate) : null,
+      deathDate: s.deathDate ? String(s.deathDate) : null,
+    }))
+  }, [person])
+
+  const timelineReigns = useMemo(
+    () => ((person as any)?.sovereignReigns ?? []) as any[],
+    [person],
+  )
+  const timelineTenures = useMemo(
+    () =>
+      ((person as any)?.governmentPositions ??
+        (person as any)?.governmentTenures ??
+        []) as any[],
+    [person],
+  )
+  const timelineEvents = useMemo(
+    () => ((person as any)?.events ?? []) as any[],
+    [person],
+  )
 
   const modalTopId =
     !embedInModal && personLinkStack.length > 0
@@ -408,18 +499,12 @@ export function PersonDetailPanel({
   const p = person as unknown as PersonDetailData
   const fullName = getPersonDisplayName(p)
 
-  // 군주 등록 여부 및 군주명
-  // RegisterMonarchModal은 왕명을 notes에 "왕명: <name>" 형식으로 저장
-  function parseRegnalNameFromNotes(notes: string | null | undefined): string | null {
-    if (!notes?.trim()) return null
-    const m = notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || notes.match(/왕명\s*:\s*(.+)/i)
-    return m ? m[1].trim() : null
-  }
+  // 군주 등록 여부 및 군주명 — SovereignReign.regnalName 정식 필드 우선
   const firstReign = p.sovereignReigns?.[0]
   const monarchName =
     p.templeName ||
     p.regnalName ||
-    parseRegnalNameFromNotes(firstReign?.notes) ||
+    firstReign?.regnalName ||
     null
   const monarchPositionTitle =
     firstReign?.positionDefinition?.title || null
@@ -613,6 +698,33 @@ export function PersonDetailPanel({
               {registeredAtLabel && (
                 <RegisteredByline>등록 {registeredAtLabel}</RegisteredByline>
               )}
+              {(() => {
+                // 가족 구성 요약 뱃지 (부/모/배우자/자녀 수)
+                const badges: Array<{ key: string; label: string }> = []
+                if (p.father) badges.push({ key: 'father', label: '부' })
+                if (p.mother) badges.push({ key: 'mother', label: '모' })
+                const spouseCount = (p.spouseRelations ?? []).length
+                if (spouseCount > 0)
+                  badges.push({
+                    key: 'spouses',
+                    label: `배우자 ${spouseCount}`,
+                  })
+                const childrenCount =
+                  ((person as any).children ?? []).length ?? 0
+                if (childrenCount > 0)
+                  badges.push({
+                    key: 'children',
+                    label: `자녀 ${childrenCount}`,
+                  })
+                if (badges.length === 0) return null
+                return (
+                  <FamilyBadgeRow>
+                    {badges.map((b) => (
+                      <FamilyBadge key={b.key}>{b.label}</FamilyBadge>
+                    ))}
+                  </FamilyBadgeRow>
+                )
+              })()}
             </HeaderTitleBlock>
           </HeaderLeft>
         </HeaderRow>
@@ -620,12 +732,10 @@ export function PersonDetailPanel({
         {/* 기본정보 + 요약: 생몰·국가·성별·가문·종교·배우자·저작·정부직위·사건·조직 */}
         <KpiStrip $compact={embedInModal}>
           {person.country && (
-            <>
-              <KpiItem>
-                <KpiLabel>국가</KpiLabel>
-                <KpiValue>{person.country.name}</KpiValue>
-              </KpiItem>
-            </>
+            <KpiItem>
+              <KpiLabel>국가</KpiLabel>
+              <KpiValue>{person.country.name}</KpiValue>
+            </KpiItem>
           )}
           {(person.gender === 'MALE' || person.gender === 'FEMALE') && (
             <KpiItem>
@@ -633,14 +743,51 @@ export function PersonDetailPanel({
               <KpiValue>{genderLabel}</KpiValue>
             </KpiItem>
           )}
-          <KpiItem>
-            <KpiLabel>정부 직위</KpiLabel>
-            <KpiValue>{tenuresList.length}건</KpiValue>
-          </KpiItem>
-          <KpiItem>
-            <KpiLabel>주요 사건</KpiLabel>
-            <KpiValue>{person.events?.length ?? 0}건</KpiValue>
-          </KpiItem>
+          {(() => {
+            if (p.birthYear == null) return null
+            const span = isDeceased
+              ? ageAtDeath != null
+                ? `${ageAtDeath}년`
+                : null
+              : currentAge != null
+                ? `${currentAge}년 (생존 중)`
+                : null
+            if (!span) return null
+            return (
+              <KpiItem>
+                <KpiLabel>생존 기간</KpiLabel>
+                <KpiValue>{span}</KpiValue>
+              </KpiItem>
+            )
+          })()}
+          {(() => {
+            // 재임 + 재위 총 연수
+            const allTenures = [
+              ...tenuresList,
+              ...((p.sovereignReigns ?? []) as any[]),
+            ]
+            if (allTenures.length === 0) return null
+            const totalDays = allTenures.reduce((acc, t: any) => {
+              const s = t.startDate ? new Date(t.startDate).getTime() : null
+              const e = t.endDate ? new Date(t.endDate).getTime() : Date.now()
+              if (s == null) return acc
+              return acc + Math.max(0, e - s)
+            }, 0)
+            const years = Math.round(totalDays / (365.25 * 86_400_000))
+            if (years <= 0) return null
+            return (
+              <KpiItem>
+                <KpiLabel>재임·재위 총</KpiLabel>
+                <KpiValue>약 {years}년</KpiValue>
+              </KpiItem>
+            )
+          })()}
+          {person.influence != null && (
+            <KpiItem>
+              <KpiLabel>영향력</KpiLabel>
+              <KpiValue>{person.influence}</KpiValue>
+            </KpiItem>
+          )}
           {person.dynasty && (
             <KpiItem>
               <KpiLabel>가문</KpiLabel>
@@ -653,12 +800,28 @@ export function PersonDetailPanel({
               <KpiValue>{person.religion.name}</KpiValue>
             </KpiItem>
           )}
-          {person.spouse && (
-            <KpiItem>
-              <KpiLabel>배우자</KpiLabel>
-              <KpiValue>{getPersonDisplayName(person.spouse)}</KpiValue>
-            </KpiItem>
-          )}
+          {(() => {
+            const rels = (p.spouseRelations ?? []) as any[]
+            const names = rels
+              .map((r) => {
+                const sp = r.spouse ?? r
+                return getPersonDisplayName(sp, true)
+              })
+              .filter((n) => n && n !== '이름 없음')
+            const displayName =
+              names.length > 0
+                ? names.join(' · ')
+                : person.spouse
+                  ? getPersonDisplayName(person.spouse)
+                  : null
+            if (!displayName) return null
+            return (
+              <KpiItem>
+                <KpiLabel>배우자 {names.length > 1 ? `(${names.length})` : ''}</KpiLabel>
+                <KpiValue>{displayName}</KpiValue>
+              </KpiItem>
+            )
+          })()}
         </KpiStrip>
 
         {/* 탭 네비게이션 */}
@@ -717,7 +880,7 @@ export function PersonDetailPanel({
             }}
           >
             <FiCalendar size={14} />
-            사건
+            연보
           </TabBtn>
         </TabNav>
 
@@ -736,427 +899,445 @@ export function PersonDetailPanel({
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.2 }}
               >
-                <section aria-label="등록된 직책">
-                  <SectionLabelRow>
-                    <SectionLabel>등록된 직책</SectionLabel>
-                    {!embedInModal && (
-                      <TenureAddButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setEditingTenureId(null)
-                          setTenureModalOpen(true)
-                        }}
-                      >
-                        <FiPlus size={14} />
-                        수반 등록
-                      </TenureAddButton>
-                    )}
-                  </SectionLabelRow>
-                  {tenuresList.length > 0 ? (
-                    <TenureList>
-                        {tenuresList.map((tenure: any) => {
-                          const positionTitle =
-                            tenure.positionDefinition?.title ??
-                            tenure.title ??
-                            '직책'
-                          const countryName =
-                            tenure.country?.name ??
-                            tenure.historicalCountry?.name ??
-                            null
-                          const startStr = formatIsoDateKo(tenure.startDate)
-                          const endStr = tenure.endDate
-                            ? formatIsoDateKo(tenure.endDate)
-                            : null
-                          const period = startStr
-                            ? endStr
-                              ? `${startStr} ~ ${endStr}`
-                              : `${startStr} ~ 현재`
-                            : '—'
-                          const termNum =
-                            tenure.termNumber ?? tenure.regnalNumber
-                          const appointmentMethod = tenure.appointmentMethod
-                          const endReason =
-                            tenure.endReason ?? tenure.endReasonDetail
-                          const notes = tenure.notes
-                          const ageAtStart = getAgeAtDate(
-                            person.birthYear,
-                            person.birthMonth,
-                            person.birthDay,
-                            tenure.startDate,
-                          )
-                          return (
-                            <TenureRow key={tenure.id}>
-                              <TenureRowMain>
-                                <TenureRowTitle>{positionTitle}</TenureRowTitle>
-                                <TenureRowMeta>
-                                  {countryName && (
-                                    <TenureRowMetaItem>
-                                      {countryName}
-                                    </TenureRowMetaItem>
-                                  )}
-                                  {termNum != null && (
-                                    <TenureRowMetaItem>
-                                      제{termNum}대
-                                    </TenureRowMetaItem>
-                                  )}
-                                  <TenureRowMetaItem>
-                                    {period}
-                                  </TenureRowMetaItem>
-                                  {ageAtStart != null && (
-                                    <TenureRowAgeBadge>
-                                      {ageAtStart}세에 취임
-                                    </TenureRowAgeBadge>
-                                  )}
-                                </TenureRowMeta>
-                                {(appointmentMethod || endReason || notes) && (
-                                  <TenureRowSub>
-                                    {appointmentMethod && (
-                                      <span>취임: {appointmentMethod}</span>
-                                    )}
-                                    {endReason && (
-                                      <span>퇴임: {endReason}</span>
-                                    )}
-                                    {notes && <span>{notes}</span>}
-                                  </TenureRowSub>
-                                )}
-                              </TenureRowMain>
-                              {!embedInModal && (
-                                <TenureRowEditBtn
-                                  type="button"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setEditingTenureId(tenure.id)
-                                    setTenureModalOpen(true)
-                                  }}
-                                >
-                                  <FiEdit2 size={12} />
-                                  수정
-                                </TenureRowEditBtn>
-                              )}
-                            </TenureRow>
-                          )
-                        })}
-                    </TenureList>
-                  ) : (
-                    <TenureEmpty>
-                      {embedInModal ? (
-                        '등록된 재임 기록이 없습니다.'
-                      ) : (
-                        <>
-                          등록된 재임 기록이 없습니다.{' '}
-                          <strong>수반 등록</strong>
-                          으로 직책·국가·기간을 추가하세요.
-                        </>
-                      )}
-                    </TenureEmpty>
-                  )}
-                </section>
-
-                <TenureRegisterPanel
-                  personId={person.id}
-                  open={tenureModalOpen}
-                  onClose={() => {
-                    setTenureModalOpen(false)
-                    setEditingTenureId(null)
-                  }}
-                  onSuccess={() => {
-                    setTenureModalOpen(false)
-                    setEditingTenureId(null)
-                  }}
-                  tenureId={editingTenureId ?? undefined}
-                />
-
-                <OverviewSectionDivider />
-
-                {/* 군주 재위 섹션 */}
-                <section aria-label="군주 재위">
-                  <SectionLabelRow>
-                    <SectionLabel>군주 재위</SectionLabel>
-                    {!embedInModal && (
-                      <TenureAddButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setEditingReignId(null)
-                          setSovereignReignModalOpen(true)
-                        }}
-                      >
-                        <FiPlus size={14} />
-                        군주 등록
-                      </TenureAddButton>
-                    )}
-                  </SectionLabelRow>
-                  {(() => {
-                    const reigns = (p.sovereignReigns ?? []) as NonNullable<typeof p.sovereignReigns>
-                    if (reigns.length === 0) {
-                      return (
-                        <TenureEmpty>
-                          {embedInModal ? (
-                            '등록된 재위 기록이 없습니다.'
-                          ) : (
-                            <>
-                              등록된 재위 기록이 없습니다.{' '}
-                              <strong>군주 등록</strong>으로 재위 기간을 추가하세요.
-                            </>
-                          )}
-                        </TenureEmpty>
-                      )
-                    }
-                    return (
-                      <ReignCardList>
-                        {reigns.map((reign) => {
-                          const posTitle = reign.positionDefinition?.title ?? '군주'
-                          const countryName =
-                            reign.historicalCountry?.name ?? reign.country?.name ?? null
-                          const startStr = formatIsoDateKo(reign.startDate)
-                          const endStr = reign.endDate ? formatIsoDateKo(reign.endDate) : null
-                          const regnalNoteMatch = (reign.notes ?? '').match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || (reign.notes ?? '').match(/왕명\s*:\s*(.+)/i)
-                          const regnalNameFromNote = regnalNoteMatch ? regnalNoteMatch[1].trim() : null
-                          return (
-                            <ReignCard key={reign.id}>
-                              <ReignCardAccent />
-                              <ReignCardBody>
-                                <ReignCardTopRow>
-                                  <ReignCrownIcon>♛</ReignCrownIcon>
-                                  <ReignCardTitle>
-                                    {regnalNameFromNote
-                                      ? `${regnalNameFromNote} · ${posTitle}`
-                                      : posTitle}
-                                    {reign.regnalNumber != null && (
-                                      <ReignOrdinal>{reign.regnalNumber}대</ReignOrdinal>
-                                    )}
-                                  </ReignCardTitle>
-                                  {!embedInModal && (
-                                    <ReignEditBtn
-                                      type="button"
-                                      onClick={() => {
-                                        playClickSound()
-                                        setEditingReignId(reign.id)
-                                        setSovereignReignModalOpen(true)
-                                      }}
-                                    >
-                                      <FiEdit2 size={11} />
-                                    </ReignEditBtn>
-                                  )}
-                                </ReignCardTopRow>
-                                <ReignCardMetaRow>
-                                  {countryName && (
-                                    <ReignMetaChip>{countryName}</ReignMetaChip>
-                                  )}
-                                  {(startStr || endStr) && (
-                                    <ReignMetaChip $muted>
-                                      {startStr || '?'}
-                                      {' – '}
-                                      {endStr ?? '현재'}
-                                    </ReignMetaChip>
-                                  )}
-                                </ReignCardMetaRow>
-                              </ReignCardBody>
-                            </ReignCard>
-                          )
-                        })}
-                      </ReignCardList>
-                    )
-                  })()}
-                </section>
-
-                <SovereignReignRegisterPanel
-                  personId={person.id}
-                  open={sovereignReignModalOpen}
-                  onClose={() => {
-                    setSovereignReignModalOpen(false)
-                    setEditingReignId(null)
-                  }}
-                  onSuccess={() => {
-                    setSovereignReignModalOpen(false)
-                    setEditingReignId(null)
-                  }}
-                  reignId={editingReignId}
-                />
-
-                <OverviewSectionDivider />
-
-                <PersonHumanRelationshipsSection
-                  personId={person.id}
-                  relationships={
-                    (
-                      person as {
-                        humanRelationships?: PersonHumanRelationshipItem[]
-                      }
-                    ).humanRelationships
-                  }
-                />
-
-                <OverviewSectionDivider />
-
-                {/* 영향력 */}
-                <section aria-label="역사적 영향력" style={{ marginBottom: 16 }}>
-                  <BioSectionLabelRow>
-                    <BioSectionLabel>역사적 영향력</BioSectionLabel>
-                    {!editingInfluence ? (
-                      <OutlineButton
-                        type="button"
-                        onClick={() => {
-                          setInfluenceDraft(person.influence ?? 0)
-                          setEditingInfluence(true)
-                        }}
-                      >
-                        {person.influence != null ? '수정' : '설정'}
-                      </OutlineButton>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6 }}>
+                <OverviewSections>
+                  {/* 1. 전기 — 가장 중요한 서술 정보 */}
+                  <section aria-label="전기">
+                    <OverviewSectionHeaderRow>
+                      <OverviewSectionHeading>
+                        <FiBookOpen size={14} strokeWidth={2.2} />
+                        <span>전기</span>
+                      </OverviewSectionHeading>
+                      {!editingBiography && person.biography && !embedInModal && (
                         <OutlineButton
                           type="button"
-                          disabled={savingInfluence}
-                          onClick={async () => {
-                            setSavingInfluence(true)
-                            try {
-                              await updatePerson(person.id, { influence: influenceDraft })
-                              queryClient.invalidateQueries({ queryKey: personKeys.detailFull(personId) })
-                              setEditingInfluence(false)
-                            } finally {
-                              setSavingInfluence(false)
-                            }
+                          onClick={() => {
+                            playClickSound()
+                            setBiographyDraft(
+                              biographyToEditorValue(person.biography),
+                            )
+                            setEditingBiography(true)
                           }}
                         >
-                          {savingInfluence ? '저장 중…' : '저장'}
+                          <FiEdit2 size={14} />
+                          수정
                         </OutlineButton>
-                        <OutlineButton type="button" onClick={() => setEditingInfluence(false)}>
-                          취소
-                        </OutlineButton>
-                      </div>
-                    )}
-                  </BioSectionLabelRow>
-                  {editingInfluence ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={influenceDraft}
-                        onChange={(e) => setInfluenceDraft(Number(e.target.value))}
-                        style={{ flex: 1, accentColor: '#6366f1' }}
-                      />
-                      <span style={{ minWidth: 32, textAlign: 'right', fontWeight: 700, color: '#6366f1', fontSize: 15 }}>
-                        {influenceDraft}
-                      </span>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                      <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(99,102,241,0.12)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${person.influence ?? 0}%`, background: '#6366f1', borderRadius: 3, transition: 'width 0.3s' }} />
-                      </div>
-                      <span style={{ minWidth: 28, textAlign: 'right', fontWeight: 700, color: '#6366f1', fontSize: 14 }}>
-                        {person.influence ?? 0}
-                      </span>
-                    </div>
-                  )}
-                </section>
-
-                <OverviewSectionDivider />
-
-                <section aria-label="전기">
-                  <BioSectionLabelRow>
-                    <BioSectionLabel>전기</BioSectionLabel>
-                    {!editingBiography ? (
-                      <OutlineButton
+                      )}
+                    </OverviewSectionHeaderRow>
+                    {editingBiography ? (
+                      <SectionCardBio>
+                        <BioEditorWrap>
+                          <RichTextEditor
+                            value={biographyDraft}
+                            onChange={setBiographyDraft}
+                            showTitle={false}
+                            placeholder="전기(약력)를 입력하세요. 서식·이미지를 넣을 수 있습니다."
+                            onImageUpload={async (file) => {
+                              const result = await uploadImage(file, 'persons')
+                              return result.url
+                            }}
+                          />
+                          <BioEditActions>
+                            <OutlineButton
+                              type="button"
+                              onClick={() => {
+                                playClickSound()
+                                setEditingBiography(false)
+                                setBiographyDraft('')
+                              }}
+                              disabled={savingBiography}
+                            >
+                              취소
+                            </OutlineButton>
+                            <PrimaryButton
+                              type="button"
+                              onClick={async () => {
+                                playClickSound()
+                                setSavingBiography(true)
+                                try {
+                                  await updatePerson(person.id, {
+                                    biography:
+                                      biographyDraft?.trim() || undefined,
+                                  })
+                                  await queryClient.invalidateQueries({
+                                    queryKey: personKeys.detailFull(personId),
+                                  })
+                                  setEditingBiography(false)
+                                  setBiographyDraft('')
+                                  toast.success('전기가 저장되었습니다.')
+                                } catch (err: unknown) {
+                                  toast.error(
+                                    err instanceof Error
+                                      ? err.message
+                                      : '전기 저장에 실패했습니다.',
+                                  )
+                                } finally {
+                                  setSavingBiography(false)
+                                }
+                              }}
+                              disabled={savingBiography}
+                            >
+                              {savingBiography ? '저장 중…' : '저장'}
+                            </PrimaryButton>
+                          </BioEditActions>
+                        </BioEditorWrap>
+                      </SectionCardBio>
+                    ) : person.biography ? (
+                      <SectionCardBio>
+                        <BioProse>
+                          {isLikelyRichTextHtml(person.biography) ? (
+                            <div
+                              onClick={handleBioProseClick}
+                              role="presentation"
+                            >
+                              <BioContent html={person.biography ?? ''} />
+                            </div>
+                          ) : (
+                            <BioText>{person.biography}</BioText>
+                          )}
+                        </BioProse>
+                      </SectionCardBio>
+                    ) : !embedInModal ? (
+                      <BioEmptyClickable
                         type="button"
                         onClick={() => {
                           playClickSound()
-                          setBiographyDraft(
-                            biographyToEditorValue(person.biography),
-                          )
+                          setBiographyDraft(biographyToEditorValue(null))
                           setEditingBiography(true)
                         }}
                       >
-                        <FiEdit2 size={14} />
-                        {person.biography ? '수정' : '추가'}
-                      </OutlineButton>
-                    ) : null}
-                  </BioSectionLabelRow>
-                  {editingBiography ? (
-                    <SectionCardBio>
-                      <BioEditorWrap>
-                        <RichTextEditor
-                          value={biographyDraft}
-                          onChange={setBiographyDraft}
-                          showTitle={false}
-                          placeholder="전기(약력)를 입력하세요. 서식·이미지를 넣을 수 있습니다."
-                          onImageUpload={async (file) => {
-                            const result = await uploadImage(file, 'persons')
-                            return result.url
+                        <BioEmptyTitle>이 인물의 전기를 기록해보세요</BioEmptyTitle>
+                        <BioEmptyDesc>
+                          생애·업적·영향을 자유롭게 서술할 수 있습니다. 서식·이미지 지원.
+                        </BioEmptyDesc>
+                        <BioEmptyCta>+ 전기 작성 시작</BioEmptyCta>
+                      </BioEmptyClickable>
+                    ) : (
+                      <SectionCardBio>
+                        <BioEmptyHint>전기(약력)가 없습니다.</BioEmptyHint>
+                      </SectionCardBio>
+                    )}
+                  </section>
+
+                  {/* 2. 역사적 영향력 */}
+                  <section aria-label="역사적 영향력">
+                    <OverviewSectionHeaderRow>
+                      <OverviewSectionHeading>
+                        <FiTrendingUp size={14} strokeWidth={2.2} />
+                        <span>역사적 영향력</span>
+                      </OverviewSectionHeading>
+                      {!embedInModal && !editingInfluence && (
+                        <OutlineButton
+                          type="button"
+                          onClick={() => {
+                            setInfluenceDraft(person.influence ?? 0)
+                            setEditingInfluence(true)
                           }}
-                        />
-                        <BioEditActions>
+                        >
+                          {person.influence != null ? '수정' : '설정'}
+                        </OutlineButton>
+                      )}
+                      {editingInfluence && (
+                        <InlineActions>
                           <OutlineButton
                             type="button"
-                            onClick={() => {
-                              playClickSound()
-                              setEditingBiography(false)
-                              setBiographyDraft('')
+                            disabled={savingInfluence}
+                            onClick={async () => {
+                              setSavingInfluence(true)
+                              try {
+                                await updatePerson(person.id, {
+                                  influence: influenceDraft,
+                                })
+                                queryClient.invalidateQueries({
+                                  queryKey: personKeys.detailFull(personId),
+                                })
+                                setEditingInfluence(false)
+                              } finally {
+                                setSavingInfluence(false)
+                              }
                             }}
-                            disabled={savingBiography}
+                          >
+                            {savingInfluence ? '저장 중…' : '저장'}
+                          </OutlineButton>
+                          <OutlineButton
+                            type="button"
+                            onClick={() => setEditingInfluence(false)}
                           >
                             취소
                           </OutlineButton>
-                          <PrimaryButton
-                            type="button"
-                            onClick={async () => {
-                              playClickSound()
-                              setSavingBiography(true)
-                              try {
-                                await updatePerson(person.id, {
-                                  biography:
-                                    biographyDraft?.trim() || undefined,
-                                })
-                                await queryClient.invalidateQueries({
-                                  queryKey: personKeys.detailFull(personId),
-                                })
-                                setEditingBiography(false)
-                                setBiographyDraft('')
-                                toast.success('전기가 저장되었습니다.')
-                              } catch (err: unknown) {
-                                toast.error(
-                                  err instanceof Error
-                                    ? err.message
-                                    : '전기 저장에 실패했습니다.',
-                                )
-                              } finally {
-                                setSavingBiography(false)
-                              }
-                            }}
-                            disabled={savingBiography}
-                          >
-                            {savingBiography ? '저장 중…' : '저장'}
-                          </PrimaryButton>
-                        </BioEditActions>
-                      </BioEditorWrap>
-                    </SectionCardBio>
-                  ) : person.biography ? (
-                    <SectionCardBio>
-                      <BioProse>
-                        {isLikelyRichTextHtml(person.biography) ? (
-                          <div
-                            onClick={handleBioProseClick}
-                            role="presentation"
-                          >
-                            <BioContent html={person.biography ?? ''} />
-                          </div>
-                        ) : (
-                          <BioText>{person.biography}</BioText>
+                        </InlineActions>
+                      )}
+                    </OverviewSectionHeaderRow>
+                    {editingInfluence ? (
+                      <InfluenceBlock>
+                        <InfluenceSliderRow>
+                          <InfluenceSliderInput
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={influenceDraft}
+                            onChange={(e) =>
+                              setInfluenceDraft(Number(e.target.value))
+                            }
+                            aria-valuenow={influenceDraft}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label="역사적 영향력"
+                          />
+                          <InfluenceValue>{influenceDraft}</InfluenceValue>
+                        </InfluenceSliderRow>
+                        <InfluenceAnchorRow>
+                          {INFLUENCE_ANCHORS.map((a) => (
+                            <InfluenceAnchor
+                              key={a.value}
+                              $active={influenceDraft >= a.value}
+                            >
+                              <b>{a.value}</b>
+                              <span>{a.label}</span>
+                            </InfluenceAnchor>
+                          ))}
+                        </InfluenceAnchorRow>
+                      </InfluenceBlock>
+                    ) : (
+                      <InfluenceBlock>
+                        <InfluenceSliderRow>
+                          <InfluenceBar>
+                            <InfluenceFill $pct={person.influence ?? 0} />
+                          </InfluenceBar>
+                          <InfluenceValue>{person.influence ?? 0}</InfluenceValue>
+                        </InfluenceSliderRow>
+                        <InfluenceAnchorRow>
+                          {INFLUENCE_ANCHORS.map((a) => (
+                            <InfluenceAnchor
+                              key={a.value}
+                              $active={(person.influence ?? 0) >= a.value}
+                            >
+                              <b>{a.value}</b>
+                              <span>{a.label}</span>
+                            </InfluenceAnchor>
+                          ))}
+                        </InfluenceAnchorRow>
+                      </InfluenceBlock>
+                    )}
+                  </section>
+
+                  {/* 3. 재임·재위 통합 */}
+                  <section aria-label="재임·재위">
+                    <OverviewSectionHeaderRow>
+                      <OverviewSectionHeading>
+                        <FiAward size={14} strokeWidth={2.2} />
+                        <span>재임·재위</span>
+                        {tenuresList.length + (p.sovereignReigns?.length ?? 0) > 0 && (
+                          <CountMuted>
+                            {tenuresList.length + (p.sovereignReigns?.length ?? 0)}
+                          </CountMuted>
                         )}
-                      </BioProse>
-                    </SectionCardBio>
-                  ) : (
-                    <SectionCardBio>
-                      <BioEmptyHint>
-                        전기(약력)가 없습니다. 수정 버튼으로 추가할 수 있습니다.
-                      </BioEmptyHint>
-                    </SectionCardBio>
-                  )}
-                </section>
+                      </OverviewSectionHeading>
+                      {!embedInModal && (
+                        <UnifiedActionRow>
+                          <TenureAddButton
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              setEditingTenureId(null)
+                              setTenureModalOpen(true)
+                            }}
+                          >
+                            <FiPlus size={12} />
+                            수반
+                          </TenureAddButton>
+                          <TenureAddButton
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              setEditingReignId(null)
+                              setSovereignReignModalOpen(true)
+                            }}
+                          >
+                            <FiPlus size={12} />
+                            군주
+                          </TenureAddButton>
+                        </UnifiedActionRow>
+                      )}
+                    </OverviewSectionHeaderRow>
+                    {(() => {
+                      type CombinedItem =
+                        | { kind: 'tenure'; data: any }
+                        | { kind: 'reign'; data: any }
+                      const combined: CombinedItem[] = [
+                        ...tenuresList.map(
+                          (t: any): CombinedItem => ({ kind: 'tenure', data: t }),
+                        ),
+                        ...((p.sovereignReigns ?? []).map(
+                          (r): CombinedItem => ({ kind: 'reign', data: r }),
+                        )),
+                      ]
+                      combined.sort((a, b) => {
+                        const ta = a.data.startDate
+                          ? new Date(a.data.startDate).getTime()
+                          : 0
+                        const tb = b.data.startDate
+                          ? new Date(b.data.startDate).getTime()
+                          : 0
+                        return ta - tb
+                      })
+
+                      if (combined.length === 0) {
+                        return (
+                          <TenureEmpty>
+                            {embedInModal ? (
+                              '등록된 재임·재위 기록이 없습니다.'
+                            ) : (
+                              <>
+                                등록된 재임·재위 기록이 없습니다. 위{' '}
+                                <strong>수반·군주 버튼</strong>으로 추가하세요.
+                              </>
+                            )}
+                          </TenureEmpty>
+                        )
+                      }
+
+                      return (
+                        <UnifiedCardList>
+                          {combined.map((item) => {
+                            const isReign = item.kind === 'reign'
+                            const d = item.data
+                            const posTitle =
+                              d.positionDefinition?.title ?? d.title ?? '직책'
+                            const countryName =
+                              d.historicalCountry?.name ?? d.country?.name ?? null
+                            const startStr = formatIsoDateKo(d.startDate)
+                            const endStr = d.endDate ? formatIsoDateKo(d.endDate) : null
+                            const termNum = d.termNumber ?? d.regnalNumber
+                            const ageAtStart = getAgeAtDate(
+                              person.birthYear,
+                              person.birthMonth,
+                              person.birthDay,
+                              d.startDate,
+                            )
+                            const ageAtEnd = d.endDate
+                              ? getAgeAtDate(
+                                  person.birthYear,
+                                  person.birthMonth,
+                                  person.birthDay,
+                                  d.endDate,
+                                )
+                              : null
+                            const mainTitle = isReign && d.regnalName
+                              ? `${d.regnalName} · ${posTitle}`
+                              : posTitle
+                            return (
+                              <UnifiedCard key={`${item.kind}-${d.id}`} $kind={item.kind}>
+                                <UnifiedCardMain>
+                                  <UnifiedCardTopRow>
+                                    <UnifiedKindBadge $kind={item.kind}>
+                                      {isReign ? '재위' : '재임'}
+                                    </UnifiedKindBadge>
+                                    <UnifiedCardTitle>
+                                      {mainTitle}
+                                      {termNum != null && (
+                                        <UnifiedOrdinal>
+                                          {isReign ? `${termNum}대` : `제${termNum}대`}
+                                        </UnifiedOrdinal>
+                                      )}
+                                    </UnifiedCardTitle>
+                                  </UnifiedCardTopRow>
+                                  <UnifiedMetaRow>
+                                    {countryName && (
+                                      <UnifiedMetaChip>{countryName}</UnifiedMetaChip>
+                                    )}
+                                    {(startStr || endStr) && (
+                                      <UnifiedMetaChip $muted>
+                                        {startStr || '?'} – {endStr ?? '현재'}
+                                      </UnifiedMetaChip>
+                                    )}
+                                    {ageAtStart != null && (
+                                      <UnifiedAgeBadge>
+                                        {ageAtStart}세에 취임
+                                      </UnifiedAgeBadge>
+                                    )}
+                                    {ageAtEnd != null && (
+                                      <UnifiedAgeBadge>
+                                        {ageAtEnd}세에 퇴임
+                                      </UnifiedAgeBadge>
+                                    )}
+                                  </UnifiedMetaRow>
+                                  {!isReign &&
+                                    (d.appointmentMethod || d.endReason || d.endReasonDetail || d.notes) && (
+                                      <UnifiedSubRow>
+                                        {d.appointmentMethod && <span>취임: {d.appointmentMethod}</span>}
+                                        {(d.endReason || d.endReasonDetail) && (
+                                          <span>퇴임: {d.endReason ?? d.endReasonDetail}</span>
+                                        )}
+                                        {d.notes && <span>{d.notes}</span>}
+                                      </UnifiedSubRow>
+                                    )}
+                                </UnifiedCardMain>
+                                {!embedInModal && (
+                                  <UnifiedEditBtn
+                                    type="button"
+                                    aria-label="수정"
+                                    onClick={() => {
+                                      playClickSound()
+                                      if (isReign) {
+                                        setEditingReignId(d.id)
+                                        setSovereignReignModalOpen(true)
+                                      } else {
+                                        setEditingTenureId(d.id)
+                                        setTenureModalOpen(true)
+                                      }
+                                    }}
+                                  >
+                                    <FiEdit2 size={12} />
+                                  </UnifiedEditBtn>
+                                )}
+                              </UnifiedCard>
+                            )
+                          })}
+                        </UnifiedCardList>
+                      )
+                    })()}
+                  </section>
+
+                  <TenureRegisterPanel
+                    personId={person.id}
+                    open={tenureModalOpen}
+                    onClose={() => {
+                      setTenureModalOpen(false)
+                      setEditingTenureId(null)
+                    }}
+                    onSuccess={() => {
+                      setTenureModalOpen(false)
+                      setEditingTenureId(null)
+                    }}
+                    tenureId={editingTenureId ?? undefined}
+                  />
+                  <SovereignReignRegisterPanel
+                    personId={person.id}
+                    open={sovereignReignModalOpen}
+                    onClose={() => {
+                      setSovereignReignModalOpen(false)
+                      setEditingReignId(null)
+                    }}
+                    onSuccess={() => {
+                      setSovereignReignModalOpen(false)
+                      setEditingReignId(null)
+                    }}
+                    reignId={editingReignId}
+                  />
+
+                  {/* 4. 인간관계 */}
+                  <PersonHumanRelationshipsSection
+                    personId={person.id}
+                    relationships={
+                      (
+                        person as {
+                          humanRelationships?: PersonHumanRelationshipItem[]
+                        }
+                      ).humanRelationships
+                    }
+                  />
+                </OverviewSections>
               </TabContent>
             )}
 
@@ -1265,26 +1446,63 @@ export function PersonDetailPanel({
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.2 }}
               >
-                <section aria-label="주요 사건">
-                  <SectionLabel>주요 사건</SectionLabel>
-                  {!person.events || person.events.length === 0 ? (
-                    <EmptyState>사건 정보가 없습니다</EmptyState>
-                  ) : (
-                    <ListBlock>
-                      {person.events.map((evt: any) => (
-                        <ListRow key={evt.id}>
-                          <ListRowPrimary>{evt.event?.title}</ListRowPrimary>
-                          <ListRowMeta>
-                            {evt.event?.startDate &&
-                              new Date(evt.event.startDate).toLocaleDateString(
-                                'ko-KR',
-                              )}
-                            {evt.role && ` · ${evt.role}`}
-                          </ListRowMeta>
-                        </ListRow>
-                      ))}
-                    </ListBlock>
-                  )}
+                <section aria-label="연보">
+                  <SectionLabelRow>
+                    <SectionLabel>연보 · 통합 타임라인</SectionLabel>
+                    {!embedInModal && (
+                      <TenureAddButton
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setEditingLifeEvent(null)
+                          setLifeEventModalOpen(true)
+                        }}
+                      >
+                        <FiPlus size={14} />
+                        연보 추가
+                      </TenureAddButton>
+                    )}
+                  </SectionLabelRow>
+                  <PersonLifeTimelineInfographic
+                    birthDate={
+                      p.birthYear != null
+                        ? `${String(p.birthYear).padStart(4, '0')}-${String(p.birthMonth ?? 1).padStart(2, '0')}-${String(p.birthDay ?? 1).padStart(2, '0')}`
+                        : null
+                    }
+                    deathDate={
+                      p.deathYear != null
+                        ? `${String(p.deathYear).padStart(4, '0')}-${String(p.deathMonth ?? 1).padStart(2, '0')}-${String(p.deathDay ?? 1).padStart(2, '0')}`
+                        : null
+                    }
+                    birthEra={p.birthEra ?? null}
+                    deathEra={p.deathEra ?? null}
+                    isAlive={p.isAlive ?? null}
+                    reigns={timelineReigns}
+                    tenures={timelineTenures}
+                    events={timelineEvents}
+                    lifeEvents={lifeEvents}
+                    father={timelineFather}
+                    mother={timelineMother}
+                    children={timelineChildren}
+                    spouses={timelineSpouses}
+                    siblings={timelineSiblings}
+                    onStartEditLife={(le) => {
+                      setEditingLifeEvent(le)
+                      setLifeEventModalOpen(true)
+                    }}
+                    onFamilyPersonClick={
+                      embedInModal ? onLinkedPersonClick : pushPersonToModalStack
+                    }
+                    onAddLifeEvent={
+                      !embedInModal
+                        ? () => {
+                            playClickSound()
+                            setEditingLifeEvent(null)
+                            setLifeEventModalOpen(true)
+                          }
+                        : undefined
+                    }
+                  />
                 </section>
               </TabContent>
             )}
@@ -1292,6 +1510,20 @@ export function PersonDetailPanel({
           </AnimatePresence>
         </TabContentArea>
       </PanelRoot>
+
+      <PersonLifeEventFormModal
+        open={lifeEventModalOpen}
+        personId={person.id}
+        lifeEvent={editingLifeEvent}
+        onClose={() => {
+          setLifeEventModalOpen(false)
+          setEditingLifeEvent(null)
+        }}
+        onSuccess={() => {
+          setLifeEventModalOpen(false)
+          setEditingLifeEvent(null)
+        }}
+      />
 
       <AnimatePresence>
         {deleteConfirmOpen && (
@@ -2193,9 +2425,22 @@ const KpiItem = styled.div`
       ${({ theme }) =>
         theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
   }
-  @media (max-width: 640px) {
-    flex-basis: 50%;
-    & + & {
+  @media (max-width: 760px) {
+    flex: 1 1 33.333%;
+    min-width: 0;
+    padding: 10px 12px;
+    &:nth-child(3n+1) {
+      border-left: none;
+    }
+  }
+  @media (max-width: 480px) {
+    flex: 1 1 50%;
+    &:nth-child(3n+1) {
+      border-left: 1px solid
+        ${({ theme }) =>
+          theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
+    }
+    &:nth-child(2n+1) {
       border-left: none;
     }
   }
@@ -2261,15 +2506,393 @@ const SectionLabelRow = styled.div`
   margin-bottom: 14px;
 `
 
-/** 개요 탭 섹션(직책 / 인간관계 / 전기) 사이 구분선 */
-const OverviewSectionDivider = styled.hr`
-  margin: 32px 0;
-  border: none;
-  height: 1px;
+const FamilyBadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+`
+
+const FamilyBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.secondary : '#475569'};
+`
+
+/** 개요 탭 섹션 래퍼 — 섹션 간 일관된 수직 리듬 (divider 대체) */
+const OverviewSections = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+`
+
+const OverviewSectionHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+`
+
+const OverviewSectionHeading = styled.h3`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const CountMuted = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+const InlineActions = styled.div`
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+`
+
+const UnifiedActionRow = styled.div`
+  display: inline-flex;
+  gap: 6px;
+`
+
+// ─── 재임·재위 통합 카드 ───────────────────────────────────────
+const UnifiedCardList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const unifiedKindColor = {
+  tenure: { base: '#4338ca', softBg: 'rgba(99,102,241,0.1)', text: '#4338ca' },
+  reign: { base: '#0f766e', softBg: 'rgba(20,184,166,0.1)', text: '#0f766e' },
+} as const
+
+const UnifiedCard = styled.div<{ $kind: 'tenure' | 'reign' }>`
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
+  overflow: hidden;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 16px;
+    bottom: 16px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: ${({ $kind }) => unifiedKindColor[$kind].base};
+    opacity: 0.85;
+  }
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.18);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+  }
+
+  @media (max-width: 560px) {
+    padding: 14px 16px;
+  }
+`
+
+const UnifiedCardMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+`
+
+const UnifiedCardTopRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+`
+
+const UnifiedKindBadge = styled.span<{ $kind: 'tenure' | 'reign' }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 9px 3px 8px;
+  border-radius: 999px;
+  background: ${({ $kind }) => unifiedKindColor[$kind].softBg};
+  color: ${({ $kind }) => unifiedKindColor[$kind].text};
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${({ $kind }) => unifiedKindColor[$kind].base};
+    flex-shrink: 0;
+  }
+`
+
+const UnifiedCardTitle = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  min-width: 0;
+  word-break: break-word;
+`
+
+const UnifiedOrdinal = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+const UnifiedMetaRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+`
+
+const UnifiedMetaChip = styled.span<{ $muted?: boolean }>`
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  background: ${({ theme, $muted }) =>
+    $muted
+      ? 'transparent'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.05)'
+        : 'rgba(15,23,42,0.045)'};
+  color: ${({ theme, $muted }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
+`
+
+const UnifiedAgeBadge = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.09)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
+`
+
+const UnifiedSubRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-top: 2px;
+`
+
+const UnifiedEditBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  ${UnifiedCard}:hover & {
+    opacity: 1;
+  }
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)'};
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  }
+`
+
+// ─── 영향력 블록 ────────────────────────────────────────────
+const INFLUENCE_ANCHORS: Array<{ value: number; label: string }> = [
+  { value: 0, label: '미미' },
+  { value: 25, label: '지역' },
+  { value: 50, label: '국가' },
+  { value: 75, label: '대륙' },
+  { value: 100, label: '시대' },
+]
+
+const InfluenceBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px 2px;
+`
+
+const InfluenceSliderRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`
+
+const InfluenceSliderInput = styled.input`
+  flex: 1;
+  accent-color: #6366f1;
+`
+
+const InfluenceBar = styled.div`
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.1)'};
+  overflow: hidden;
+`
+
+const InfluenceFill = styled.div<{ $pct: number }>`
+  height: 100%;
+  width: ${({ $pct }) => Math.max(0, Math.min(100, $pct))}%;
+  background: linear-gradient(90deg, #6366f1 0%, #4f46e5 100%);
+  border-radius: 4px;
+  transition: width 0.3s;
+`
+
+const InfluenceValue = styled.span`
+  min-width: 30px;
+  text-align: right;
+  font-weight: 700;
+  font-size: 15px;
+  color: #6366f1;
+  font-variant-numeric: tabular-nums;
+`
+
+const InfluenceAnchorRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 0 2px;
+`
+
+const InfluenceAnchor = styled.div<{ $active: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4338ca'
+      : theme.colors.text.tertiary};
+  b {
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+`
+
+// ─── 전기 빈 상태 CTA ────────────────────────────────────────
+const BioEmptyClickable = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 36px 28px;
+  border-radius: 16px;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.12)'
+        : 'rgba(99,102,241,0.2)'};
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08) 20%, rgba(255,255,255,0.08) 80%, transparent)'
-      : 'linear-gradient(90deg, transparent, #e2e8f0 20%, #e2e8f0 80%, transparent)'};
+      ? 'rgba(255,255,255,0.02)'
+      : 'rgba(99,102,241,0.02)'};
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.18)'
+        : 'rgba(99,102,241,0.35)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.035)'
+        : 'rgba(99,102,241,0.04)'};
+  }
+  &:active {
+    transform: translateY(1px);
+  }
+`
+
+const BioEmptyTitle = styled.div`
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.secondary : '#475569'};
+`
+
+const BioEmptyDesc = styled.div`
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const BioEmptyCta = styled.span`
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #6366f1;
 `
 
 const TenureAddButton = styled.button`
@@ -3158,3 +3781,4 @@ const EmptyState = styled.div`
       ? 'rgba(255,255,255,0.02)'
       : 'rgba(99, 102, 241, 0.02)'};
 `
+

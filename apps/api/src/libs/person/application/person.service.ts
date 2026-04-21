@@ -26,6 +26,8 @@ import {
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
+  CreatePersonLifeEventDto,
+  UpdatePersonLifeEventDto,
   UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
@@ -424,6 +426,66 @@ export class PersonService {
     const label = person ? `${personDisplayName(person)} - 재위` : '재위 기록'
     await this.personRepository.deleteSovereignReign(id)
     await this.notificationService.notifyTenure(label, EventMethod.DELETE, row?.personId)
+  }
+
+  /** 인물 연보(PersonLifeEvent) 생성 — 자유 서술형 시간축 */
+  async addPersonLifeEvent(
+    dto: CreatePersonLifeEventDto,
+    accountId?: string,
+  ): Promise<any> {
+    const person = await this.prisma.person.findUnique({
+      where: { id: dto.personId },
+      select: { accountId: true },
+    })
+    if (!person) {
+      throw new NotFoundException('인물을 찾을 수 없습니다.')
+    }
+    if (
+      accountId != null &&
+      person.accountId != null &&
+      person.accountId !== accountId
+    ) {
+      throw new ForbiddenException('본인이 등록한 인물에만 연보를 추가할 수 있습니다.')
+    }
+    return this.personRepository.addPersonLifeEvent(dto, accountId)
+  }
+
+  async updatePersonLifeEvent(
+    id: string,
+    dto: UpdatePersonLifeEventDto,
+    accountId?: string,
+  ): Promise<any> {
+    const existing = await this.personRepository.findPersonLifeEventById(id)
+    if (!existing) {
+      throw new NotFoundException('연보 기록을 찾을 수 없습니다.')
+    }
+    if (
+      accountId != null &&
+      existing.accountId != null &&
+      existing.accountId !== accountId
+    ) {
+      throw new ForbiddenException('본인이 등록한 연보만 수정할 수 있습니다.')
+    }
+    return this.personRepository.updatePersonLifeEvent(id, dto)
+  }
+
+  async deletePersonLifeEvent(id: string, accountId?: string): Promise<void> {
+    const existing = await this.personRepository.findPersonLifeEventById(id)
+    if (!existing) {
+      throw new NotFoundException('연보 기록을 찾을 수 없습니다.')
+    }
+    if (
+      accountId != null &&
+      existing.accountId != null &&
+      existing.accountId !== accountId
+    ) {
+      throw new ForbiddenException('본인이 등록한 연보만 삭제할 수 있습니다.')
+    }
+    await this.personRepository.deletePersonLifeEvent(id)
+  }
+
+  async findPersonLifeEventsByPersonId(personId: string): Promise<any[]> {
+    return this.personRepository.findPersonLifeEventsByPersonId(personId)
   }
 
   /**

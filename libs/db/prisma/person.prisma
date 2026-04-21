@@ -137,6 +137,9 @@ model Person {
   /// 생존 중 여부
   isAlive Boolean @default(false) @map("is_alive")
 
+  /// 역사적 영향력 (0–100)
+  influence Int? @map("influence")
+
   /// 성별
   gender String? @db.VarChar(10)
 
@@ -248,6 +251,7 @@ model Person {
   electionCandidacies ElectionCandidacy[] @relation("ElectionCandidacies")
   GovernmentTenures        GovernmentPositionTenure[] @relation("PersonGovernmentTenure")
   sovereignReigns          SovereignReign[]           @relation("PersonSovereignReign")
+  lifeEvents               PersonLifeEvent[]          @relation("PersonLifeEvents")
   treatySignatories        TreatySignatory[]          @relation("TreatySignatoryPerson")
 
   // 🆕 정규화된 군사 사건 관계
@@ -273,6 +277,54 @@ model Person {
   @@index([birthCityId], name: "idx_person_birthCityId")
   @@index([deathCityId], name: "idx_person_deathCityId")
   @@map("person")
+}
+
+// ========================
+// PersonLifeEvent (인물 연보)
+// ========================
+/// 인물의 연도별 개인사/활동 기록. 재위(SovereignReign)·행정부 재임(GovernmentPositionTenure)·
+/// 공식 사건(Event) 외의 자유 서술형 기록 — 예: "1820년 파리 유학", "1835년 저서 출간".
+model PersonLifeEvent {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 FK
+  personId String @map("person_id") @db.Char(36)
+  person   Person @relation("PersonLifeEvents", fields: [personId], references: [id], onDelete: Cascade)
+
+  /// 제목 (예: "파리 유학")
+  title String @db.VarChar(200)
+
+  /// 상세 설명
+  description String? @db.Text
+
+  /// 카테고리 (자유 문자열 — 예: EDUCATION, TRAVEL, PUBLICATION, EXILE, AWARD, PERSONAL, OTHER)
+  category String? @db.VarChar(30)
+
+  /// 시작일
+  startDate          DateTime? @map("start_date")
+  /// 시작일 정밀도: year/month/day. null이면 day
+  startDatePrecision String?   @map("start_date_precision") @db.VarChar(10)
+
+  /// 종료일 (단일 시점이면 null)
+  endDate          DateTime? @map("end_date")
+  /// 종료일 정밀도
+  endDatePrecision String?   @map("end_date_precision") @db.VarChar(10)
+
+  /// 같은 시점의 여러 이벤트 정렬용
+  sortOrder Int? @default(0) @map("sort_order")
+
+  /// 등록 계정
+  accountId String?  @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountPersonLifeEvents", fields: [accountId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_person_life_event_personId")
+  @@index([accountId], name: "idx_person_life_event_accountId")
+  @@index([startDate], name: "idx_person_life_event_startDate")
+  @@map("person_life_event")
 }
 
 // ========================

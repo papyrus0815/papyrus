@@ -198,9 +198,11 @@ export function SovereignReignRegisterPanel({
     setCountryId(r.countryId ?? r.country?.id ?? '')
     setHistoricalCountryId(r.historicalCountryId ?? r.historicalCountry?.id ?? null)
     setPositionDefinitionId(r.positionDefinitionId ?? r.positionDefinition?.id ?? null)
-    // notes에서 "왕명: <name>" 파싱 (RegisterMonarchModal과 동일 형식)
-    const m = (r.notes ?? '').match(/왕명\s*:\s*(.+?)(?:\n|$)/i) || (r.notes ?? '').match(/왕명\s*:\s*(.+)/i)
-    setRegnalName(m ? m[1].trim() : '')
+    // regnalName 필드 우선, 없으면 legacy notes에서 "왕명: X" 파싱
+    const legacyMatch =
+      (r.notes ?? '').match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
+      (r.notes ?? '').match(/왕명\s*:\s*(.+)/i)
+    setRegnalName(r.regnalName ?? (legacyMatch ? legacyMatch[1].trim() : ''))
     setStartDate(r.startDate ? r.startDate.slice(0, 10) : '')
     setEndDate(r.endDate ? r.endDate.slice(0, 10) : '')
     setRegnalNumber(r.regnalNumber != null ? String(r.regnalNumber) : '')
@@ -230,7 +232,6 @@ export function SovereignReignRegisterPanel({
     if (!canSubmit || submitting) return
     setSubmitting(true)
     try {
-      const notesValue = regnalName.trim() ? `왕명: ${regnalName.trim()}` : undefined
       const dto = {
         personId,
         countryId: countryId || undefined,
@@ -239,7 +240,7 @@ export function SovereignReignRegisterPanel({
         startDate,
         endDate: endDate || undefined,
         regnalNumber: regnalNumber ? Number(regnalNumber) : undefined,
-        notes: notesValue,
+        regnalName: regnalName.trim() || undefined,
       }
       if (isEdit && reignId) {
         await personCareerApi.updateSovereignReign(reignId, dto)

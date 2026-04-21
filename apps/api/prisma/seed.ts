@@ -145,7 +145,7 @@ async function main() {
         // 12. 독일 제국 정당 시딩
         await seedGermanyEmpireParties(prisma)
 
-        // 12-1. 독일 제국 라이히스탁 선거 시딩 (1903, 1907)
+        // 12-1. 독일 제국 라이히스탁 선거 시딩 (1898, 1903, 1907)
         await seedGermanyReichstagElections(prisma)
 
         // 13. 이벤트 카테고리 시딩

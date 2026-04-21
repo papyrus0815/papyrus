@@ -83,6 +83,8 @@ export interface PersonResponseDto {
   governmentTenures?: any[]
   /** 군주·재위 전용 기록 (SovereignReign — 행정부 재임과 별도 테이블) */
   sovereignReigns?: any[]
+  /** 인물 연보 (PersonLifeEvent — 자유 서술형 시간축) */
+  lifeEvents?: any[]
   createdAt: string
   updatedAt: string
   /** 등록 계정 ID (소유권 검사용, 선택 노출) */

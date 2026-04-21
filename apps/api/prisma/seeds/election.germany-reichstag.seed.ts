@@ -31,6 +31,82 @@ const ELECTIONS: {
     notes?: string
   }[]
 }[] = [
+  // ── 1898년 라이히스탁 선거 (제10대) ──────────────────────────────────────
+  {
+    name: '1898년 독일 제국 라이히스탁 선거',
+    shortName: '1898년 라이히스탁 선거',
+    electionType: ElectionType.PARLIAMENTARY_CONSTITUENCY,
+    status: ElectionStatus.FINALIZED,
+    pollDate: new Date('1898-06-16'),
+    voterTurnoutPercent: 68.06,
+    totalSeats: 397,
+    convocationOrdinal: 10,
+    legislatureTermStart: new Date('1898-12-03'),
+    legislatureTermEnd: new Date('1903-05-05'),
+    resultingLegislatureClosureKind: LegislatureTermClosureKind.FULL_TERM,
+    description:
+      '제10대 라이히스탁 선거. 호엔로에-쉴링스퓌르스트 수상기에 치러졌으며, 빌헬름 2세의 "세계정치(Weltpolitik)"와 티르피츠의 제1차 함대법(1898) 통과를 배경으로 한다. 사회민주당(SPD)이 27.2% 득표로 최다 득표 정당이 되었으나 소선거구 2라운드제의 구조상 56석에 그쳤고, 중앙당이 102석으로 원내 제1당을 유지. 5년 임기 만료에 따라 1903년 5월 5일 카이저의 형식적 해산 조칙으로 차기 선거가 실시됨.',
+    partyResults: [
+      // 총 의석 397석 중 주요 9개 정당 344석 (나머지 53석: 독일사회개혁당·바이에른농민당·엘자스·구엘프·독일농민연합 등)
+      {
+        partyName: '사회민주당',
+        votes: 2107076n,
+        voteSharePercent: 27.18,
+        seatsWon: 56,
+        notes: '득표 순위 1위이나 소선거구 결선 구조상 의석 수는 제한됨',
+      },
+      {
+        partyName: '중앙당',
+        votes: 1454042n,
+        voteSharePercent: 18.76,
+        seatsWon: 102,
+      },
+      {
+        partyName: '국민자유당',
+        votes: 997147n,
+        voteSharePercent: 12.86,
+        seatsWon: 48,
+      },
+      {
+        partyName: '독일보수당',
+        votes: 830341n,
+        voteSharePercent: 10.71,
+        seatsWon: 53,
+      },
+      {
+        partyName: '자유사상국민당',
+        votes: 558314n,
+        voteSharePercent: 7.2,
+        seatsWon: 29,
+      },
+      {
+        partyName: '자유보수당',
+        votes: 337601n,
+        voteSharePercent: 4.35,
+        seatsWon: 22,
+      },
+      {
+        partyName: '폴란드파',
+        votes: 236461n,
+        voteSharePercent: 3.05,
+        seatsWon: 14,
+        notes: '폴란드 독립파(Koło Polskie)와 폴란드 궁정파 원내 통합 기준',
+      },
+      {
+        partyName: '자유사상연합',
+        votes: 195682n,
+        voteSharePercent: 2.52,
+        seatsWon: 12,
+      },
+      {
+        partyName: '독일국민당',
+        votes: 106396n,
+        voteSharePercent: 1.37,
+        seatsWon: 8,
+      },
+    ],
+  },
+
   // ── 1903년 라이히스탁 선거 (제11대) ──────────────────────────────────────
   {
     name: '1903년 독일 제국 라이히스탁 선거',

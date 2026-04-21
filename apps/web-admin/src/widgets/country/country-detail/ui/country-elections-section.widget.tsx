@@ -2,7 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
 import { toast } from 'react-hot-toast'
 import {
@@ -16,10 +21,15 @@ import {
   FiInfo,
   FiLayers,
   FiPlus,
+  FiSliders,
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
-import { useNavigate, useParams } from 'react-router-dom'
+import {
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
 import { useCountry } from '@/entities/country/api'
@@ -156,15 +166,11 @@ import {
   DetailToolbar,
   ElectedBadge,
   ElectionChartTooltip,
-  ElectionComparisonLabelIcon,
-  ElectionComparisonMetaLine,
-  ElectionComparisonSectionBlock,
   ElectionDetailBadgeRow,
   ElectionDetailCountryMeta,
   ElectionDetailEmptyCard,
   ElectionDetailEmptyTitle,
   ElectionDetailHeaderMain,
-  ElectionDetailHelpNote,
   ElectionDetailPanelStack,
   ElectionDetailStatCard,
   ElectionDetailStatLabel,
@@ -184,7 +190,6 @@ import {
   EmptyHint,
   InlineTextInput,
   ListColumn,
-  PartyLegendDeltaHint,
   PartyMetricSegmentBtn,
   PartyMetricSegmentedGroup,
   PartyDescEmptyHint,
@@ -205,16 +210,13 @@ import {
   PartyMetricTitleTight,
   PartyMetricToolbarRow,
   PartyResultDeltaTd,
-  PartyShareDonutClip,
   PartyShareDonutHole,
   PartyShareDonutSectorGroup,
   PartyShareDonutSectorPath,
   PartyShareDonutSliceSvg,
-  PartyShareDonutInner,
   PartyShareDonutLayout,
   PartyShareDonutRing,
   PartyShareInfographic,
-  PartyShareInfographicTitle,
   PartyShareLegend,
   PartyShareLegendBody,
   PartyShareLegendItem,
@@ -245,7 +247,6 @@ import {
   SectionHeaderRow,
   SectionHeaderRowNarrative,
   SectionHeaderRowSubsection,
-  SectionHeaderRowWrapTight,
   SplitMainRow,
   SubsectionAddBtn,
   SubsectionLabel,
@@ -821,10 +822,10 @@ function partyResultSliceFill(
 }
 
 /**
- * 상단 반원 도넛(9시→12시→3시) 조각 — viewBox 0 0 100 100 기준 링 부채꼴 path.
- * `startDeg`/`endDeg`는 그래프와 동일한 0~180 반원 파라미터.
+ * 전원(360°) 도넛 조각 — 0°=12시 방향, 시계방향 증가.
+ * viewBox 0 0 100 100 기준 링 부채꼴 path.
  */
-function partyShareSemicircleSectorPathD(
+function partyCircleSectorPathD(
   cx: number,
   cy: number,
   outerR: number,
@@ -833,7 +834,20 @@ function partyShareSemicircleSectorPathD(
   endDeg: number,
 ): string {
   if (endDeg <= startDeg + 0.0001) return ''
-  const rad = (deg: number) => (Math.PI * (180 + deg)) / 180
+  // 단일 조각이 정확히 360°면 두 개의 반원을 이어 완전 원으로 그린다
+  const span = endDeg - startDeg
+  if (span >= 359.999) {
+    return `
+      M ${cx} ${cy - outerR}
+      A ${outerR} ${outerR} 0 1 1 ${cx} ${cy + outerR}
+      A ${outerR} ${outerR} 0 1 1 ${cx} ${cy - outerR}
+      M ${cx} ${cy - innerR}
+      A ${innerR} ${innerR} 0 1 0 ${cx} ${cy + innerR}
+      A ${innerR} ${innerR} 0 1 0 ${cx} ${cy - innerR}
+      Z
+    `
+  }
+  const rad = (deg: number) => ((deg - 90) * Math.PI) / 180
   const t0 = rad(startDeg)
   const t1 = rad(endDeg)
   const ox0 = cx + outerR * Math.cos(t0)
@@ -844,8 +858,7 @@ function partyShareSemicircleSectorPathD(
   const iy0 = cy + innerR * Math.sin(t0)
   const ix1 = cx + innerR * Math.cos(t1)
   const iy1 = cy + innerR * Math.sin(t1)
-  const span = t1 - t0
-  const largeArc = span > Math.PI - 0.0001 ? 1 : 0
+  const largeArc = span > 180 ? 1 : 0
   return `M ${ox0} ${oy0} A ${outerR} ${outerR} 0 ${largeArc} 1 ${ox1} ${oy1} L ${ix1} ${iy1} A ${innerR} ${innerR} 0 ${largeArc} 0 ${ix0} ${iy0} Z`
 }
 
@@ -876,6 +889,104 @@ function formatPartyDonutSliceHoverTitle(
     s.row.seatsWon != null ? `의석 ${s.row.seatsWon}석` : null,
   ].filter(Boolean) as string[]
   return parts.join(' · ')
+}
+
+/** 정당 집계 합계·잔여(기타) 요약 */
+type PartyResultsSummary = {
+  votesSum: bigint
+  votesKnownCount: number
+  voteShareSum: number
+  voteShareKnownCount: number
+  seatsSum: number
+  seatsKnownCount: number
+  otherSeats: number | null
+  otherVoteShare: number | null
+  seatsMismatch:
+    | { kind: 'over'; diff: number }
+    | { kind: 'under'; diff: number }
+    | null
+  voteShareMismatch: { diff: number; over: boolean } | null
+}
+
+function computePartyResultsSummary(
+  rows: ElectionPartyResultDto[],
+  totalSeats: number | null | undefined,
+): PartyResultsSummary {
+  let votesSum = 0n
+  let votesKnownCount = 0
+  let voteShareSum = 0
+  let voteShareKnownCount = 0
+  let seatsSum = 0
+  let seatsKnownCount = 0
+
+  for (const row of rows) {
+    const voteStr =
+      row.votes != null ? String(row.votes).trim().replace(/[\s,]/g, '') : ''
+    if (voteStr && /^\d+$/.test(voteStr)) {
+      try {
+        votesSum += BigInt(voteStr)
+        votesKnownCount += 1
+      } catch {
+        /* ignore */
+      }
+    }
+    const vsRaw =
+      row.voteSharePercent != null
+        ? String(row.voteSharePercent).trim()
+        : ''
+    const vsNum = Number(vsRaw)
+    if (vsRaw !== '' && Number.isFinite(vsNum) && vsNum >= 0) {
+      voteShareSum += vsNum
+      voteShareKnownCount += 1
+    }
+    if (row.seatsWon != null && Number.isFinite(row.seatsWon)) {
+      seatsSum += row.seatsWon
+      seatsKnownCount += 1
+    }
+  }
+
+  const totalSeatsNum =
+    totalSeats != null && Number.isFinite(totalSeats) && totalSeats > 0
+      ? totalSeats
+      : null
+  const otherSeats =
+    totalSeatsNum != null && totalSeatsNum - seatsSum > 0
+      ? totalSeatsNum - seatsSum
+      : null
+  const otherVoteShare =
+    voteShareKnownCount > 0 && 100 - voteShareSum > 0.05
+      ? Math.round((100 - voteShareSum) * 100) / 100
+      : null
+
+  let seatsMismatch: PartyResultsSummary['seatsMismatch'] = null
+  if (totalSeatsNum != null) {
+    if (seatsSum > totalSeatsNum) {
+      seatsMismatch = { kind: 'over', diff: seatsSum - totalSeatsNum }
+    } else if (seatsSum < totalSeatsNum) {
+      seatsMismatch = { kind: 'under', diff: totalSeatsNum - seatsSum }
+    }
+  }
+
+  let voteShareMismatch: PartyResultsSummary['voteShareMismatch'] = null
+  if (voteShareKnownCount > 0) {
+    const diff = Math.round((voteShareSum - 100) * 100) / 100
+    if (Math.abs(diff) > 0.5) {
+      voteShareMismatch = { diff: Math.abs(diff), over: diff > 0 }
+    }
+  }
+
+  return {
+    votesSum,
+    votesKnownCount,
+    voteShareSum,
+    voteShareKnownCount,
+    seatsSum,
+    seatsKnownCount,
+    otherSeats,
+    otherVoteShare,
+    seatsMismatch,
+    voteShareMismatch,
+  }
 }
 
 /** TabContentPane과 맞물려 빈 상태(EmptyStateFill)가 남는 높이를 채우도록 */
@@ -914,6 +1025,384 @@ async function uploadElectionRichTextImage(file: File): Promise<string> {
   return getUploadImageUrl(result.url) || result.url || ''
 }
 
+/** 정당 집계 합계 행 */
+const PartyTotalsRow = styled.tr`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.08)' : '#f1f5f9'};
+  & td {
+    padding: 10px 12px;
+    border-top: 2px solid ${({ theme }) => theme.colors.border.default};
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+    font-weight: 600;
+    font-size: 12.5px;
+    color: ${({ theme }) => theme.colors.text.primary};
+    vertical-align: middle;
+  }
+`
+
+/** 기타(잔여) 행 — 더 낮은 강조 */
+const PartyOtherRow = styled.tr`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafbfc'};
+  & td {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-style: italic;
+    padding: 10px 12px;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+`
+
+/** 합계/무결성 경고·정상 배지 라인 */
+const PartyValidationBanner = styled.div<{ $tone: 'ok' | 'warn' | 'error' }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ $tone, theme }) =>
+    $tone === 'error'
+      ? 'var(--negative, #dc2626)'
+      : $tone === 'warn'
+        ? theme.mode === 'dark'
+          ? '#fbbf24'
+          : '#b45309'
+        : 'var(--positive, #16a34a)'};
+  background: ${({ $tone, theme }) =>
+    $tone === 'error'
+      ? theme.mode === 'dark'
+        ? 'rgba(220,38,38,0.15)'
+        : '#fef2f2'
+      : $tone === 'warn'
+        ? theme.mode === 'dark'
+          ? 'rgba(251,191,36,0.12)'
+          : '#fefce8'
+        : theme.mode === 'dark'
+          ? 'rgba(22,163,74,0.12)'
+          : '#f0fdf4'};
+  border: 1px solid
+    ${({ $tone, theme }) =>
+      $tone === 'error'
+        ? theme.mode === 'dark'
+          ? 'rgba(220,38,38,0.35)'
+          : '#fecaca'
+        : $tone === 'warn'
+          ? theme.mode === 'dark'
+            ? 'rgba(251,191,36,0.28)'
+            : '#fde68a'
+          : theme.mode === 'dark'
+            ? 'rgba(22,163,74,0.28)'
+            : '#bbf7d0'};
+  & strong {
+    font-weight: 700;
+  }
+`
+
+const PartyValidationList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+/** 후보 사퇴 배지 */
+const CandidacyWithdrawnBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(220,38,38,0.18)' : '#fef2f2'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(220,38,38,0.3)' : '#fecaca'};
+  border-radius: 999px;
+  white-space: nowrap;
+`
+
+/** 투표 안 부제목(약칭) */
+const BallotOptionShortLabel = styled.span`
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 전원 도넛용 컨테이너 — 반원 Clip을 대체해 완전한 원 표시 */
+const FullCircleDonutClip = styled.div`
+  width: min(240px, 100%);
+  aspect-ratio: 1 / 1;
+  max-width: 260px;
+  margin: 0 auto;
+  position: relative;
+  flex-shrink: 0;
+`
+
+const FullCircleDonutInner = styled.div`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+`
+
+/** 정당 색 dot — 이름 왼쪽에 4px 블록 */
+const PartyColorDot = styled.span<{ $fill: string }>`
+  display: inline-block;
+  width: 4px;
+  height: 14px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: ${({ $fill }) => $fill};
+  vertical-align: -2px;
+  flex-shrink: 0;
+`
+
+const PartyNameInline = styled.span`
+  display: inline-flex;
+  align-items: center;
+`
+
+/** 도넛 범례 접힘/더보기 버튼 */
+const LegendExpandBtn = styled.button`
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #6366f1;
+  background: transparent;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.35)' : '#c7d2fe'};
+  border-radius: 6px;
+  cursor: pointer;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
+    border-style: solid;
+  }
+`
+
+/** 선거 목록 상단 필터 바 */
+const ElectionListFilterBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  margin-bottom: 8px;
+`
+
+const ElectionListFilterRow = styled.div`
+  display: flex;
+  gap: 6px;
+  align-items: center;
+`
+
+const ElectionListFilterInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  outline: none;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus-visible {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+`
+
+const ElectionListFilterSelect = styled.select`
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  outline: none;
+  &:focus-visible {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+`
+
+const ElectionListFilterMeta = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  padding-left: 2px;
+`
+
+const ElectionListFilterToggleBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ $active, theme }) =>
+    $active ? '#6366f1' : theme.colors.text.secondary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.16)'
+        : '#eef2ff'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : '#ffffff'};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.4)'
+          : '#c7d2fe'
+        : theme.colors.border.default};
+  border-radius: 8px;
+  cursor: pointer;
+  &:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+`
+
+const FilterBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #6366f1;
+  border-radius: 999px;
+`
+
+/** 시계열 비교 섹션 */
+const ElectionTimelineBlock = styled.section`
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fafbfc'};
+`
+
+const ElectionTimelineHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ElectionTimelineLegendWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ElectionTimelineLegendItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const ElectionTimelineLegendDot = styled.span<{ $fill: string }>`
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: ${({ $fill }) => $fill};
+  display: inline-block;
+`
+
+const ElectionTimelineRow = styled.div<{ $current?: boolean }>`
+  display: grid;
+  grid-template-columns: 160px 1fr 96px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: ${({ $current, theme }) =>
+    $current
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.14)'
+        : '#eef2ff'
+      : 'transparent'};
+  & + & {
+    margin-top: 4px;
+  }
+`
+
+const ElectionTimelineRowLabel = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  & small {
+    display: block;
+    margin-top: 2px;
+    font-size: 10.5px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const ElectionTimelineBarTrack = styled.div`
+  height: 18px;
+  display: flex;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#e5e7eb'};
+  border-radius: 4px;
+  overflow: hidden;
+`
+
+const ElectionTimelineBarSegment = styled.div<{
+  $fill: string
+  $pct: number
+}>`
+  height: 100%;
+  width: ${({ $pct }) => $pct}%;
+  background: ${({ $fill }) => $fill};
+  flex-shrink: 0;
+`
+
+const ElectionTimelineRowMeta = styled.div`
+  text-align: right;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+`
+
 export interface CountryElectionsSectionProps {
   /** 현대 국가 상세에서 전달 */
   countryId?: string
@@ -951,7 +1440,22 @@ export function CountryElectionsSection({
 
   const queryClient = useQueryClient()
   const { data: persons = [] } = usePersons()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedId = searchParams.get('electionId') || null
+  const setSelectedId = useCallback(
+    (next: string | null) => {
+      setSearchParams(
+        (prev) => {
+          const copy = new URLSearchParams(prev)
+          if (next) copy.set('electionId', next)
+          else copy.delete('electionId')
+          return copy
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
   const scopeKey = useMemo(
     () => electionScopeKey({ countryId, historicalCountryId }),
     [countryId, historicalCountryId],
@@ -1011,6 +1515,13 @@ export function CountryElectionsSection({
     | { mode: 'edit'; electionId: string; row: ElectionPartyResultDto }
     | null
   >(null)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    confirmLabel?: string
+    danger?: boolean
+    onConfirm: () => void
+  } | null>(null)
 
   const { data: list = [], isLoading: listLoading } = useQuery({
     queryKey: qk.list(scopeKey),
@@ -1236,14 +1747,46 @@ export function CountryElectionsSection({
     onError: (e: Error) => toast.error(e.message),
   })
 
-  const sortedList = useMemo(
-    () =>
-      [...list].sort(
-        (a, b) =>
-          new Date(b.pollDate).getTime() - new Date(a.pollDate).getTime(),
-      ),
-    [list],
+  /** 목록 필터 — 탭 전환에도 유지 (컴포넌트 마운트 유지 중) */
+  const [listSearch, setListSearch] = useState('')
+  const [listTypeFilter, setListTypeFilter] = useState<string>('')
+  const [listStatusFilter, setListStatusFilter] = useState<string>('')
+  const [listSortKey, setListSortKey] = useState<'pollDate' | 'ordinal'>(
+    'pollDate',
   )
+  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('desc')
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
+
+  const filteredList = useMemo(() => {
+    const query = listSearch.trim().toLowerCase()
+    return list.filter((row) => {
+      if (query) {
+        const hay = `${row.name} ${row.shortName ?? ''}`.toLowerCase()
+        if (!hay.includes(query)) return false
+      }
+      if (listTypeFilter && row.electionType !== listTypeFilter) return false
+      if (listStatusFilter && row.status !== listStatusFilter) return false
+      return true
+    })
+  }, [list, listSearch, listTypeFilter, listStatusFilter])
+
+  const sortedList = useMemo(() => {
+    const mult = listSortDir === 'asc' ? 1 : -1
+    const arr = [...filteredList]
+    arr.sort((rowA, rowB) => {
+      if (listSortKey === 'ordinal') {
+        const ordA = rowA.convocationOrdinal ?? -Infinity
+        const ordB = rowB.convocationOrdinal ?? -Infinity
+        if (ordA !== ordB) return (ordA - ordB) * mult
+      }
+      return (
+        (new Date(rowA.pollDate).getTime() -
+          new Date(rowB.pollDate).getTime()) *
+        mult
+      )
+    })
+    return arr
+  }, [filteredList, listSortKey, listSortDir])
 
   /** 선거 전환 직후 이전 쿼리 데이터가 잠깐 남는 경우를 막아 상세가 뒤섞이지 않게 함 */
   const detailMatchesSelection = Boolean(
@@ -1310,11 +1853,138 @@ export function CountryElectionsSection({
           <ElectionsPoliticsTabSubsection aria-label="선거 목록·상세">
             <SplitMainRow>
               <ListColumn>
+                {!listLoading && list.length > 0 ? (
+                  <ElectionListFilterBar>
+                    <ElectionListFilterRow>
+                      <ElectionListFilterInput
+                        type="search"
+                        value={listSearch}
+                        onChange={(e) => setListSearch(e.target.value)}
+                        placeholder="선거 이름 검색…"
+                        aria-label="선거 이름 검색"
+                      />
+                      <ElectionListFilterToggleBtn
+                        type="button"
+                        $active={
+                          filtersExpanded ||
+                          !!listTypeFilter ||
+                          !!listStatusFilter ||
+                          listSortKey !== 'pollDate' ||
+                          listSortDir !== 'desc'
+                        }
+                        onClick={() => setFiltersExpanded((v) => !v)}
+                        aria-expanded={filtersExpanded}
+                        aria-label="필터·정렬 열기"
+                        title="필터·정렬"
+                      >
+                        <FiSliders size={14} strokeWidth={2.25} aria-hidden />
+                        {(listTypeFilter ? 1 : 0) +
+                          (listStatusFilter ? 1 : 0) +
+                          (listSortKey !== 'pollDate' ||
+                          listSortDir !== 'desc'
+                            ? 1
+                            : 0) >
+                        0 ? (
+                          <FilterBadge>
+                            {(listTypeFilter ? 1 : 0) +
+                              (listStatusFilter ? 1 : 0) +
+                              (listSortKey !== 'pollDate' ||
+                              listSortDir !== 'desc'
+                                ? 1
+                                : 0)}
+                          </FilterBadge>
+                        ) : null}
+                      </ElectionListFilterToggleBtn>
+                    </ElectionListFilterRow>
+                    {filtersExpanded ? (
+                      <>
+                        <ElectionListFilterRow>
+                          <ElectionListFilterSelect
+                            value={listTypeFilter}
+                            onChange={(e) => setListTypeFilter(e.target.value)}
+                            aria-label="선거 유형 필터"
+                          >
+                            <option value="">전체 유형</option>
+                            {ELECTION_TYPE_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </ElectionListFilterSelect>
+                          <ElectionListFilterSelect
+                            value={listStatusFilter}
+                            onChange={(e) =>
+                              setListStatusFilter(e.target.value)
+                            }
+                            aria-label="선거 상태 필터"
+                          >
+                            <option value="">전체 상태</option>
+                            {ELECTION_STATUS_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </ElectionListFilterSelect>
+                        </ElectionListFilterRow>
+                        <ElectionListFilterRow>
+                          <ElectionListFilterSelect
+                            value={`${listSortKey}:${listSortDir}`}
+                            onChange={(e) => {
+                              const [key, dir] = e.target.value.split(':') as [
+                                'pollDate' | 'ordinal',
+                                'asc' | 'desc',
+                              ]
+                              setListSortKey(key)
+                              setListSortDir(dir)
+                            }}
+                            aria-label="목록 정렬"
+                          >
+                            <option value="pollDate:desc">
+                              최신 투표일 순
+                            </option>
+                            <option value="pollDate:asc">
+                              오래된 투표일 순
+                            </option>
+                            <option value="ordinal:desc">회차 큰 순</option>
+                            <option value="ordinal:asc">회차 작은 순</option>
+                          </ElectionListFilterSelect>
+                        </ElectionListFilterRow>
+                      </>
+                    ) : null}
+                    <ElectionListFilterMeta>
+                      전체 {list.length}건 · 표시 {sortedList.length}건
+                      {listSearch || listTypeFilter || listStatusFilter ? (
+                        <>
+                          {' · '}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setListSearch('')
+                              setListTypeFilter('')
+                              setListStatusFilter('')
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: 0,
+                              color: '#6366f1',
+                              cursor: 'pointer',
+                              font: 'inherit',
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            필터 초기화
+                          </button>
+                        </>
+                      ) : null}
+                    </ElectionListFilterMeta>
+                  </ElectionListFilterBar>
+                ) : null}
                 {listLoading ? (
                   <ElectionListScrollArea>
                     <EmptyHint>목록 불러오는 중…</EmptyHint>
                   </ElectionListScrollArea>
-                ) : sortedList.length === 0 ? (
+                ) : list.length === 0 ? (
                   <ElectionListColumnFill>
                     <EmptyStateFill>
                       <EmptyStateFeatureCard
@@ -1339,6 +2009,12 @@ export function CountryElectionsSection({
                       />
                     </EmptyStateFill>
                   </ElectionListColumnFill>
+                ) : sortedList.length === 0 ? (
+                  <ElectionListScrollArea>
+                    <EmptyHint>
+                      조건에 맞는 선거가 없습니다. 필터를 초기화해 보세요.
+                    </EmptyHint>
+                  </ElectionListScrollArea>
                 ) : (
                   <ElectionListScrollArea>
                     <ElectionListStack>
@@ -1397,6 +2073,9 @@ export function CountryElectionsSection({
                         countryId ?? detail.countryId ?? undefined
                       }
                       parties={parties}
+                      sameTypeElections={list.filter(
+                        (e) => e.electionType === detail.electionType,
+                      )}
                       candidacyLabel={candidacyLabel}
                       onAddPartyResult={() =>
                         setPartyResultModal({
@@ -1412,15 +2091,23 @@ export function CountryElectionsSection({
                         })
                       }
                       onDeletePartyResult={(row) => {
-                        if (
-                          window.confirm(
-                            `「${row.party?.shortName || row.party?.name || '정당'}」집계를 삭제할까요?`,
-                          )
-                        )
-                          partyResultDelMut.mutate({
-                            electionId: detail.id,
-                            partyId: row.partyId,
-                          })
+                        const label =
+                          row.party?.shortName ||
+                          row.party?.name ||
+                          '정당'
+                        setConfirmDialog({
+                          title: '정당 집계 삭제',
+                          message: `「${label}」집계를 삭제할까요? 되돌릴 수 없습니다.`,
+                          confirmLabel: '삭제',
+                          danger: true,
+                          onConfirm: () => {
+                            partyResultDelMut.mutate({
+                              electionId: detail.id,
+                              partyId: row.partyId,
+                            })
+                            setConfirmDialog(null)
+                          },
+                        })
                       }}
                       onEditElection={() =>
                         setElectionModal({ mode: 'edit', election: detail })
@@ -1450,12 +2137,16 @@ export function CountryElectionsSection({
                         saveElectionLinkedEventDescriptionMut.isPending
                       }
                       onDeleteElection={() => {
-                        if (
-                          window.confirm(
-                            `"${detail.name}" 선거를 삭제할까요? 후보·득표 데이터도 함께 삭제됩니다.`,
-                          )
-                        )
-                          delElectionMut.mutate(detail.id)
+                        setConfirmDialog({
+                          title: '선거 삭제',
+                          message: `"${detail.name}" 선거를 삭제할까요? 후보·투표 안·득표 데이터가 모두 함께 삭제됩니다.`,
+                          confirmLabel: '선거 삭제',
+                          danger: true,
+                          onConfirm: () => {
+                            delElectionMut.mutate(detail.id)
+                            setConfirmDialog(null)
+                          },
+                        })
                       }}
                       onAddCandidacy={() =>
                         setCandidacyModal({
@@ -1471,11 +2162,19 @@ export function CountryElectionsSection({
                         })
                       }
                       onDeleteCandidacy={(row) => {
-                        if (window.confirm('이 후보 행을 삭제할까요?'))
-                          delCandidacyMut.mutate({
-                            electionId: detail.id,
-                            candidacyId: row.id,
-                          })
+                        setConfirmDialog({
+                          title: '후보 삭제',
+                          message: '이 후보 행과 관련 득표 데이터를 삭제할까요?',
+                          confirmLabel: '삭제',
+                          danger: true,
+                          onConfirm: () => {
+                            delCandidacyMut.mutate({
+                              electionId: detail.id,
+                              candidacyId: row.id,
+                            })
+                            setConfirmDialog(null)
+                          },
+                        })
                       }}
                       onEditResult={(row) =>
                         setResultModal({
@@ -1499,11 +2198,19 @@ export function CountryElectionsSection({
                         })
                       }}
                       onDeleteBallotOption={(opt) => {
-                        if (window.confirm(`「${opt.label}」안을 삭제할까요?`))
-                          ballotDelMut.mutate({
-                            electionId: detail.id,
-                            optionId: opt.id,
-                          })
+                        setConfirmDialog({
+                          title: '투표 안 삭제',
+                          message: `「${opt.label}」안을 삭제할까요? 해당 안의 집계도 함께 사라집니다.`,
+                          confirmLabel: '삭제',
+                          danger: true,
+                          onConfirm: () => {
+                            ballotDelMut.mutate({
+                              electionId: detail.id,
+                              optionId: opt.id,
+                            })
+                            setConfirmDialog(null)
+                          },
+                        })
                       }}
                       onEditBallotResult={(opt) =>
                         setBallotResultModal({
@@ -1620,6 +2327,17 @@ export function CountryElectionsSection({
           />
         )}
 
+        {confirmDialog && (
+          <ConfirmDialog
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            confirmLabel={confirmDialog.confirmLabel ?? '확인'}
+            danger={confirmDialog.danger}
+            onCancel={() => setConfirmDialog(null)}
+            onConfirm={confirmDialog.onConfirm}
+          />
+        )}
+
         {partyResultModal && (
           <PartyResultFormModal
             key={
@@ -1632,6 +2350,8 @@ export function CountryElectionsSection({
             existingPartyIds={
               detail?.partyResults?.map((row) => row.partyId) ?? []
             }
+            existingResults={detail?.partyResults ?? []}
+            electionTotalSeats={detail?.totalSeats ?? null}
             initialRow={
               partyResultModal.mode === 'edit'
                 ? partyResultModal.row
@@ -1658,6 +2378,7 @@ function ElectionDetailPanel({
   /** 서버 엔티티 검색 한정(정당 등) — 현대 국가 id */
   entityLinkCountryId,
   parties,
+  sameTypeElections,
   candidacyLabel,
   onAddPartyResult,
   onEditPartyResult,
@@ -1678,6 +2399,7 @@ function ElectionDetailPanel({
   detail: ElectionDetailDto
   entityLinkCountryId?: string
   parties: PoliticalPartyRow[]
+  sameTypeElections: ElectionListRow[]
   candidacyLabel: (c: ElectionCandidacyDto) => string
   onAddPartyResult: () => void
   onEditPartyResult: (row: ElectionPartyResultDto) => void
@@ -1761,10 +2483,12 @@ function ElectionDetailPanel({
   const [ballotLabel, setBallotLabel] = useState('')
   const [editingBallotId, setEditingBallotId] = useState<string | null>(null)
   const [editingBallotLabel, setEditingBallotLabel] = useState('')
-  /** 정당 분포 반원 그래프: 득표율 비중 vs 의석 비중 */
+  /** 정당 분포 그래프: 득표율 비중 vs 의석 비중 (도넛·시계열 공통) */
   const [partyDistributionMetric, setPartyDistributionMetric] = useState<
     'voteShare' | 'seats'
   >('voteShare')
+  /** 도넛 범례 — 상위 10개만 기본 표시 */
+  const [legendExpanded, setLegendExpanded] = useState(false)
   const [chartHoverTip, setChartHoverTip] = useState<{
     text: string
     x: number
@@ -1892,6 +2616,177 @@ function ElectionDetailPanel({
     return new Map(rows.map((r) => [r.partyId, r]))
   }, [detail.partyResultComparisonVsPrevious?.rows])
 
+  /** 정당 집계 합계·잔여(기타) */
+  const partyResultsSummary = useMemo(
+    () => computePartyResultsSummary(partyResults, detail.totalSeats),
+    [partyResults, detail.totalSeats],
+  )
+
+  /** 잔여 의석·잔여 득표율 → 가상 "기타" 행 (도넛·표 하단에 렌더) */
+  const otherSyntheticRow = useMemo<ElectionPartyResultDto | null>(() => {
+    const { otherSeats, otherVoteShare } = partyResultsSummary
+    if (otherSeats == null && otherVoteShare == null) return null
+    return {
+      id: '__other__',
+      electionId: detail.id,
+      partyId: '__other__',
+      votes: null,
+      voteSharePercent:
+        otherVoteShare != null ? String(otherVoteShare) : null,
+      seatsWon: otherSeats ?? null,
+      notes: null,
+      party: {
+        id: '__other__',
+        name: '기타 (주요 정당 외)',
+        shortName: '기타',
+        brandColor: null,
+      },
+    }
+  }, [
+    detail.id,
+    partyResultsSummary.otherSeats,
+    partyResultsSummary.otherVoteShare,
+  ])
+
+  /** 시계열 비교: 같은 유형·범위 선거 최근 8회 (현재 포함) */
+  const timelineElectionIds = useMemo(() => {
+    if (!sameTypeElections || sameTypeElections.length < 2) return []
+    const ordered = [...sameTypeElections]
+      .sort(
+        (a, b) =>
+          new Date(a.pollDate).getTime() - new Date(b.pollDate).getTime(),
+      )
+      .slice(-8)
+    return ordered.map((e) => e.id)
+  }, [sameTypeElections])
+
+  const timelineDetailQueries = useQueries({
+    queries: timelineElectionIds.map((id) => ({
+      queryKey: ['elections', 'detail', id] as const,
+      queryFn: () => getElection(id),
+      staleTime: 60_000,
+    })),
+  })
+
+  const timelineRows = useMemo(() => {
+    const loaded = timelineDetailQueries
+      .map((q) => q.data)
+      .filter((d): d is ElectionDetailDto => Boolean(d))
+    if (loaded.length < 2) return []
+    return loaded
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.pollDate).getTime() - new Date(b.pollDate).getTime(),
+      )
+  }, [timelineDetailQueries])
+
+  /** 타임라인에 등장하는 정당별 색상 — 브랜드색 우선 */
+  const timelineLegend = useMemo(() => {
+    if (timelineRows.length === 0) return [] as Array<{
+      partyId: string
+      name: string
+      fill: string
+      totalSeats: number
+    }>
+    const agg = new Map<
+      string,
+      { name: string; fill: string; totalSeats: number }
+    >()
+    for (const el of timelineRows) {
+      for (const r of el.partyResults ?? []) {
+        if (!r.partyId) continue
+        const seats = r.seatsWon ?? 0
+        const existing = agg.get(r.partyId)
+        if (existing) {
+          existing.totalSeats += seats
+        } else {
+          const name = r.party?.shortName || r.party?.name || r.partyId
+          const registryColor = parties.find(
+            (p) => p.id === r.partyId,
+          )?.brandColor
+          const fill = partyResultSliceFill(
+            r,
+            hueFromPartyId(r.partyId),
+            registryColor,
+          )
+          agg.set(r.partyId, { name, fill, totalSeats: seats })
+        }
+      }
+    }
+    return Array.from(agg.entries())
+      .map(([partyId, v]) => ({ partyId, ...v }))
+      .sort((a, b) => b.totalSeats - a.totalSeats)
+  }, [timelineRows, parties])
+
+  /** 각 선거별 정당 의석 비중 바 — 내림차순 정렬 + 잔여 기타 */
+  const timelineBars = useMemo(() => {
+    if (timelineRows.length === 0) return []
+    const legendById = new Map(timelineLegend.map((l) => [l.partyId, l]))
+    return timelineRows.map((el) => {
+      const rawRows = el.partyResults ?? []
+      const weightOf = (row: ElectionPartyResultDto) => {
+        if (partyDistributionMetric === 'seats') return row.seatsWon ?? 0
+        const vs = Number(row.voteSharePercent)
+        return Number.isFinite(vs) && vs >= 0 ? vs : 0
+      }
+      const rows = [...rawRows].sort(
+        (rowA, rowB) => weightOf(rowB) - weightOf(rowA),
+      )
+      const knownSum = rows.reduce((acc, row) => acc + weightOf(row), 0)
+      const total =
+        partyDistributionMetric === 'seats'
+          ? el.totalSeats != null && el.totalSeats > 0
+            ? el.totalSeats
+            : knownSum
+          : 100
+      if (total <= 0 || knownSum <= 0) {
+        return {
+          id: el.id,
+          name: el.name,
+          shortName: el.shortName,
+          convocationOrdinal: el.convocationOrdinal,
+          pollDate: el.pollDate,
+          total: 0,
+          knownSum: 0,
+          segments: [] as Array<{
+            partyId: string
+            name: string
+            fill: string
+            value: number
+          }>,
+          otherValue: 0,
+        }
+      }
+      const segments = rows
+        .filter((row) => weightOf(row) > 0)
+        .map((row) => ({
+          partyId: row.partyId,
+          name:
+            legendById.get(row.partyId)?.name ||
+            row.party?.shortName ||
+            row.party?.name ||
+            row.partyId,
+          fill:
+            legendById.get(row.partyId)?.fill ??
+            partyResultSliceFill(row, hueFromPartyId(row.partyId), null),
+          value: weightOf(row),
+        }))
+      const otherValue = total - knownSum > 0.05 ? total - knownSum : 0
+      return {
+        id: el.id,
+        name: el.name,
+        shortName: el.shortName,
+        convocationOrdinal: el.convocationOrdinal,
+        pollDate: el.pollDate,
+        total,
+        knownSum,
+        segments,
+        otherValue,
+      }
+    })
+  }, [timelineRows, timelineLegend, partyDistributionMetric])
+
   useEffect(() => {
     if (!hasPartyComparison) {
       setPartyResultSort((prev) =>
@@ -1982,8 +2877,12 @@ function ElectionDetailPanel({
         return voteRight - voteLeft
       return 0
     })
-    return { sorted }
-  }, [partyResults, partyDistributionMetric])
+    /** 잔여 "기타"는 항상 마지막 조각으로 고정 */
+    const withOther = otherSyntheticRow
+      ? [...sorted, otherSyntheticRow]
+      : sorted
+    return { sorted: withOther }
+  }, [partyResults, partyDistributionMetric, otherSyntheticRow])
 
   const partyPieSlices = useMemo(() => {
     const sorted = partyShareChart.sorted
@@ -2027,12 +2926,15 @@ function ElectionDetailPanel({
           : []
 
     let acc = 0
+    const otherFill =
+      theme.mode === 'dark' ? 'rgba(148,163,184,0.55)' : '#cbd5e1'
     const segments = sorted.map((row, index) => {
       const frac = fractions[index] ?? 0
-      const startDeg = acc * 180
+      const startDeg = acc * 360
       acc += frac
-      const endDeg = index === sorted.length - 1 ? 180 : acc * 180
-      const hue = hueFromPartyId(row.partyId)
+      const endDeg = index === sorted.length - 1 ? 360 : acc * 360
+      const isOther = row.partyId === '__other__'
+      const hue = isOther ? 220 : hueFromPartyId(row.partyId)
       const registryColor = parties.find(
         (party) => party.id === row.partyId,
       )?.brandColor
@@ -2041,21 +2943,20 @@ function ElectionDetailPanel({
         startDeg,
         endDeg,
         hue,
-        fill: partyResultSliceFill(row, hue, registryColor),
+        fill: isOther ? otherFill : partyResultSliceFill(row, hue, registryColor),
         fraction: frac,
       }
     })
 
-    /** 상단 반원(9시→12시→3시)에만 비중 표시, 하단 180°는 배경색으로 메움 */
-    const bottomFill = theme.colors.background.primary
+    /** 전원(0–360°) conic-gradient — 12시에서 시계방향 */
     const gradient =
       segments.length > 0
-        ? `conic-gradient(from 270deg, ${segments
+        ? `conic-gradient(from 0deg, ${segments
             .map(
               (segment) =>
                 `${segment.fill} ${segment.startDeg}deg ${segment.endDeg}deg`,
             )
-            .join(', ')}, ${bottomFill} 180deg 360deg)`
+            .join(', ')})`
         : 'transparent'
 
     const ariaLabel = segments
@@ -2078,7 +2979,7 @@ function ElectionDetailPanel({
   }, [
     partyShareChart.sorted,
     parties,
-    theme.colors.background.primary,
+    theme.mode,
     partyDistributionMetric,
   ])
 
@@ -2332,8 +3233,8 @@ function ElectionDetailPanel({
                 </PartyMetricSegmentedGroup>
               </PartyMetricToolbarRow>
               <PartyShareDonutLayout>
-                <PartyShareDonutClip>
-                  <PartyShareDonutInner>
+                <FullCircleDonutClip>
+                  <FullCircleDonutInner>
                     {partyPieSlices.segments.length > 0 ? (
                       <PartyShareDonutSliceSvg
                         viewBox="0 0 100 100"
@@ -2341,8 +3242,8 @@ function ElectionDetailPanel({
                         aria-label={
                           partyPieSlices.ariaLabel
                             ? partyDistributionMetric === 'seats'
-                              ? `상단 반원 기준 의석 비중: ${partyPieSlices.ariaLabel}`
-                              : `상단 반원 기준 득표 비율: ${partyPieSlices.ariaLabel}`
+                              ? `의석 비중: ${partyPieSlices.ariaLabel}`
+                              : `득표 비율: ${partyPieSlices.ariaLabel}`
                             : partyDistributionMetric === 'seats'
                               ? '의석 분포'
                               : '득표 분포'
@@ -2353,10 +3254,10 @@ function ElectionDetailPanel({
                         }}
                       >
                         {partyPieSlices.segments.map((s) => {
-                          const d = partyShareSemicircleSectorPathD(
+                          const d = partyCircleSectorPathD(
                             50,
                             50,
-                            50,
+                            48,
                             28,
                             s.startDeg,
                             s.endDeg,
@@ -2374,12 +3275,21 @@ function ElectionDetailPanel({
                               <PartyShareDonutSectorPath
                                 $fill={s.fill}
                                 d={d}
+                                tabIndex={0}
+                                role="img"
+                                aria-label={tip}
                                 onMouseEnter={(e) => {
                                   setHoveredDonutSliceRowId(s.row.id)
                                   showChartTip(tip, e)
                                 }}
                                 onMouseMove={moveChartTip}
-                              />
+                                onFocus={() =>
+                                  setHoveredDonutSliceRowId(s.row.id)
+                                }
+                                onBlur={() => setHoveredDonutSliceRowId(null)}
+                              >
+                                <title>{tip}</title>
+                              </PartyShareDonutSectorPath>
                             </PartyShareDonutSectorGroup>
                           )
                         })}
@@ -2391,8 +3301,8 @@ function ElectionDetailPanel({
                         aria-label={
                           partyPieSlices.ariaLabel
                             ? partyDistributionMetric === 'seats'
-                              ? `상단 반원 기준 의석 비중: ${partyPieSlices.ariaLabel}`
-                              : `상단 반원 기준 득표 비율: ${partyPieSlices.ariaLabel}`
+                              ? `의석 비중: ${partyPieSlices.ariaLabel}`
+                              : `득표 비율: ${partyPieSlices.ariaLabel}`
                             : partyDistributionMetric === 'seats'
                               ? '의석 분포'
                               : '득표 분포'
@@ -2400,90 +3310,72 @@ function ElectionDetailPanel({
                       />
                     )}
                     <PartyShareDonutHole aria-hidden />
-                  </PartyShareDonutInner>
-                </PartyShareDonutClip>
+                  </FullCircleDonutInner>
+                </FullCircleDonutClip>
                 <PartyShareLegend
                   onMouseLeave={() => setHoveredDonutSliceRowId(null)}
                 >
-                  {partyPieSlices.segments.map((s) => {
-                    const label =
-                      s.row.party?.shortName ||
-                      s.row.party?.name ||
-                      s.row.partyId
-                    const pct = formatVoteShareLabel(s.row.voteSharePercent)
-                    const votesFmt = formatVotesForDisplay(s.row.votes)
-                    const votesStr =
-                      votesFmt !== '—' ? `${votesFmt}표` : null
-                    const shareLine =
-                      partyDistributionMetric === 'seats'
-                        ? (() => {
-                            const seats = s.row.seatsWon
-                            if (seats != null && seats >= 0) {
-                              return `${seats}석 · 비중 ${(s.fraction * 100).toFixed(1)}%`
-                            }
-                            return s.fraction > 0
-                              ? `${(s.fraction * 100).toFixed(1)}% (비중)`
-                              : '의석 —'
-                          })()
-                        : (pct ??
-                          (s.fraction > 0
-                            ? `${(s.fraction * 100).toFixed(1)}% (비중)`
-                            : '득표율 —'))
-                    const detail =
-                      partyDistributionMetric === 'seats'
-                        ? [pct ?? null, votesStr]
-                            .filter(Boolean)
-                            .join(' · ')
-                        : [
-                            votesStr,
-                            s.row.seatsWon != null
-                              ? `${s.row.seatsWon}석`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')
-                    const cmpRow = partyCmpByPartyId.get(s.row.partyId)
-                    const deltaHint =
-                      hasPartyComparison &&
-                      cmpRow &&
-                      (cmpRow.voteShareDeltaPpt != null ||
-                        cmpRow.seatsDelta != null)
-                        ? [
-                            cmpRow.voteShareDeltaPpt != null
-                              ? formatVoteShareDeltaPpt(
-                                  cmpRow.voteShareDeltaPpt,
-                                )
-                              : null,
-                            cmpRow.seatsDelta != null
-                              ? formatSeatsDelta(cmpRow.seatsDelta)
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')
-                        : null
+                  {(() => {
+                    const LEGEND_VISIBLE_LIMIT = 10
+                    const visible = legendExpanded
+                      ? partyPieSlices.segments
+                      : partyPieSlices.segments.slice(0, LEGEND_VISIBLE_LIMIT)
+                    const hiddenCount =
+                      partyPieSlices.segments.length - visible.length
                     return (
-                      <PartyShareLegendItem
-                        key={s.row.id}
-                        onMouseEnter={() =>
-                          setHoveredDonutSliceRowId(s.row.id)
-                        }
-                      >
-                        <PartyShareSwatch $fill={s.fill} aria-hidden />
-                        <PartyShareLegendBody>
-                          <PartyShareName>{label}</PartyShareName>
-                          <PartyShareStats>
-                            {shareLine}
-                            {detail ? ` · ${detail}` : ''}
-                          </PartyShareStats>
-                          {deltaHint ? (
-                            <PartyLegendDeltaHint>
-                              전회차 대비: {deltaHint}
-                            </PartyLegendDeltaHint>
-                          ) : null}
-                        </PartyShareLegendBody>
-                      </PartyShareLegendItem>
+                      <>
+                        {visible.map((s) => {
+                          const label =
+                            s.row.party?.shortName ||
+                            s.row.party?.name ||
+                            s.row.partyId
+                          const metricLine =
+                            partyDistributionMetric === 'seats'
+                              ? s.row.seatsWon != null && s.row.seatsWon >= 0
+                                ? `${s.row.seatsWon}석 · ${(
+                                    s.fraction * 100
+                                  ).toFixed(1)}%`
+                                : `${(s.fraction * 100).toFixed(1)}%`
+                              : (formatVoteShareLabel(
+                                  s.row.voteSharePercent,
+                                ) ??
+                                `${(s.fraction * 100).toFixed(1)}%`)
+                          return (
+                            <PartyShareLegendItem
+                              key={s.row.id}
+                              onMouseEnter={() =>
+                                setHoveredDonutSliceRowId(s.row.id)
+                              }
+                            >
+                              <PartyShareSwatch $fill={s.fill} aria-hidden />
+                              <PartyShareLegendBody>
+                                <PartyShareName>{label}</PartyShareName>
+                                <PartyShareStats>{metricLine}</PartyShareStats>
+                              </PartyShareLegendBody>
+                            </PartyShareLegendItem>
+                          )
+                        })}
+                        {hiddenCount > 0 ? (
+                          <LegendExpandBtn
+                            type="button"
+                            onClick={() => setLegendExpanded(true)}
+                          >
+                            외 {hiddenCount}개 더 보기
+                          </LegendExpandBtn>
+                        ) : null}
+                        {legendExpanded &&
+                        partyPieSlices.segments.length >
+                          LEGEND_VISIBLE_LIMIT ? (
+                          <LegendExpandBtn
+                            type="button"
+                            onClick={() => setLegendExpanded(false)}
+                          >
+                            접기
+                          </LegendExpandBtn>
+                        ) : null}
+                      </>
                     )
-                  })}
+                  })()}
                 </PartyShareLegend>
               </PartyShareDonutLayout>
             </PartyShareInfographic>
@@ -2593,12 +3485,23 @@ function ElectionDetailPanel({
                 ) : (
                   sortedPartyTableRows.map((row) => {
                     const cmp = partyCmpByPartyId.get(row.partyId)
+                    const registryColor = parties.find(
+                      (p) => p.id === row.partyId,
+                    )?.brandColor
+                    const dotFill = partyResultSliceFill(
+                      row,
+                      hueFromPartyId(row.partyId),
+                      registryColor,
+                    )
                     return (
                       <DataTr key={row.id}>
                         <DataTd>
-                          {row.party
-                            ? row.party.shortName || row.party.name
-                            : row.partyId}
+                          <PartyNameInline>
+                            <PartyColorDot $fill={dotFill} aria-hidden />
+                            {row.party
+                              ? row.party.shortName || row.party.name
+                              : row.partyId}
+                          </PartyNameInline>
                         </DataTd>
                         <DataTd>{formatVotesForDisplay(row.votes)}</DataTd>
                         <DataTd>
@@ -2646,117 +3549,251 @@ function ElectionDetailPanel({
                     )
                   })
                 )}
+                {partyResults.length > 0 && otherSyntheticRow ? (
+                  <PartyOtherRow>
+                    <DataTd>
+                      <PartyNameInline>
+                        <PartyColorDot
+                          $fill={
+                            theme.mode === 'dark'
+                              ? 'rgba(148,163,184,0.55)'
+                              : '#cbd5e1'
+                          }
+                          aria-hidden
+                        />
+                        기타 (주요 정당 외)
+                      </PartyNameInline>
+                    </DataTd>
+                    <DataTd>—</DataTd>
+                    <DataTd>
+                      {partyResultsSummary.otherVoteShare != null
+                        ? `${partyResultsSummary.otherVoteShare}%`
+                        : '—'}
+                    </DataTd>
+                    {hasPartyComparison ? <DataTd>—</DataTd> : null}
+                    <DataTd>{partyResultsSummary.otherSeats ?? '—'}</DataTd>
+                    {hasPartyComparison ? <DataTd>—</DataTd> : null}
+                    <DataTdRight />
+                  </PartyOtherRow>
+                ) : null}
+                {partyResults.length > 0 ? (
+                  <PartyTotalsRow>
+                    <DataTd>합계</DataTd>
+                    <DataTd>
+                      {partyResultsSummary.votesKnownCount > 0
+                        ? partyResultsSummary.votesSum.toLocaleString('ko-KR')
+                        : '—'}
+                    </DataTd>
+                    <DataTd>
+                      {partyResultsSummary.voteShareKnownCount > 0
+                        ? `${
+                            otherSyntheticRow &&
+                            partyResultsSummary.otherVoteShare != null
+                              ? (
+                                  Math.round(
+                                    (partyResultsSummary.voteShareSum +
+                                      partyResultsSummary.otherVoteShare) *
+                                      100,
+                                  ) / 100
+                                ).toFixed(2)
+                              : (
+                                  Math.round(
+                                    partyResultsSummary.voteShareSum * 100,
+                                  ) / 100
+                                ).toFixed(2)
+                          }%`
+                        : '—'}
+                    </DataTd>
+                    {hasPartyComparison ? <DataTd /> : null}
+                    <DataTd>
+                      {partyResultsSummary.seatsKnownCount > 0
+                        ? `${
+                            partyResultsSummary.seatsSum +
+                            (partyResultsSummary.otherSeats ?? 0)
+                          }${
+                            detail.totalSeats != null
+                              ? ` / ${detail.totalSeats}`
+                              : ''
+                          }`
+                        : '—'}
+                    </DataTd>
+                    {hasPartyComparison ? <DataTd /> : null}
+                    <DataTdRight />
+                  </PartyTotalsRow>
+                ) : null}
               </tbody>
             </DataTable>
           </DataTableCard>
 
-          {detail.partyResultComparisonVsPrevious?.previousElection ? (
-            <ElectionComparisonSectionBlock>
-              <SectionHeaderRowWrapTight>
-                <SubsectionLabel>
-                  <ElectionComparisonLabelIcon>
-                    <FiBarChart2 size={14} aria-hidden />
-                  </ElectionComparisonLabelIcon>
-                  직전 회차 대비 (동일 선거 유형·동일 범위)
-                </SubsectionLabel>
-              </SectionHeaderRowWrapTight>
-              <ElectionComparisonMetaLine>
-                비교 선거:{' '}
-                <strong>
-                  {detail.partyResultComparisonVsPrevious.previousElection.name}
-                </strong>
-                {' · '}
-                {formatPollDate(
-                  detail.partyResultComparisonVsPrevious.previousElection
-                    .pollDate,
-                )}
-                {detail.partyResultComparisonVsPrevious.previousElection
-                  .convocationOrdinal != null
-                  ? ` · 제${detail.partyResultComparisonVsPrevious.previousElection.convocationOrdinal}회`
-                  : ''}
-              </ElectionComparisonMetaLine>
-              <DataTableCard>
-                <DataTable>
-                  <thead>
-                    <tr>
-                      <DataTh>정당</DataTh>
-                      <DataTh>직전 득표율</DataTh>
-                      <DataTh>이번 득표율</DataTh>
-                      <DataTh>득표율 증감</DataTh>
-                      <DataTh>직전 의석</DataTh>
-                      <DataTh>이번 의석</DataTh>
-                      <DataTh>의석 증감</DataTh>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.partyResultComparisonVsPrevious.rows.length ===
-                    0 ? (
-                      <DataTr>
-                        <DataTd colSpan={7}>
-                          <EmptyHint>비교할 정당 집계가 없습니다.</EmptyHint>
-                        </DataTd>
-                      </DataTr>
-                    ) : (
-                      detail.partyResultComparisonVsPrevious.rows.map((r) => {
-                        const label =
-                          r.party?.shortName || r.party?.name || r.partyId
-                        const dPpt = r.voteShareDeltaPpt
-                        const dSeat = r.seatsDelta
-                        return (
-                          <DataTr key={`cmp-${r.partyId}`}>
-                            <DataTd>
-                              <PartyTableCellStrong>
-                                {label}
-                              </PartyTableCellStrong>
-                            </DataTd>
-                            <DataTd>
-                              {formatVoteShareLabel(
-                                r.previousVoteSharePercent,
-                              ) ?? '—'}
-                            </DataTd>
-                            <DataTd>
-                              {formatVoteShareLabel(
-                                r.currentVoteSharePercent,
-                              ) ?? '—'}
-                            </DataTd>
-                            <PartyResultDeltaTd
-                              $tone={deltaToneCss(dPpt ?? undefined)}
-                            >
-                              {formatVoteShareDeltaPpt(dPpt)}
-                            </PartyResultDeltaTd>
-                            <DataTd>
-                              {r.previousSeatsWon != null
-                                ? r.previousSeatsWon
-                                : '—'}
-                            </DataTd>
-                            <DataTd>
-                              {r.currentSeatsWon != null
-                                ? r.currentSeatsWon
-                                : '—'}
-                            </DataTd>
-                            <PartyResultDeltaTd
-                              $tone={deltaToneCss(dSeat ?? undefined)}
-                            >
-                              {formatSeatsDelta(dSeat)}
-                            </PartyResultDeltaTd>
-                          </DataTr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </DataTable>
-              </DataTableCard>
-            </ElectionComparisonSectionBlock>
-          ) : partyResults.length > 0 ? (
-            <ElectionDetailHelpNote role="note">
-              <FiInfo size={14} aria-hidden />
-              <span>
-                직전 선거 비교: 동일 국가·선거 유형·선거 범위가 같고, 직전
-                회차(번호 −1) 선거 또는 더 이른 투표일의 선거가 있을 때 여기에
-                표시됩니다. 제1회만 있거나 회차가 비어 있으면 날짜 순 직전
-                선거와 비교합니다.
-              </span>
-            </ElectionDetailHelpNote>
+          {partyResults.length > 0 ? (
+            (() => {
+              const notes: { tone: 'ok' | 'warn' | 'error'; text: string }[] =
+                []
+              if (partyResultsSummary.seatsMismatch) {
+                const seatsInfo = partyResultsSummary.seatsMismatch
+                if (seatsInfo.kind === 'over') {
+                  notes.push({
+                    tone: 'error',
+                    text: `의석 합계가 총 의석(${detail.totalSeats})보다 ${seatsInfo.diff}석 많습니다. 집계를 확인하세요.`,
+                  })
+                } else {
+                  notes.push({
+                    tone: otherSyntheticRow ? 'ok' : 'warn',
+                    text: otherSyntheticRow
+                      ? `주요 정당 ${partyResultsSummary.seatsSum}석 + 기타 ${seatsInfo.diff}석 = 총 ${detail.totalSeats}석.`
+                      : `의석 합계 ${partyResultsSummary.seatsSum}석 — 총 의석 ${detail.totalSeats}석에 ${seatsInfo.diff}석 미달.`,
+                  })
+                }
+              } else if (
+                detail.totalSeats != null &&
+                partyResultsSummary.seatsKnownCount > 0
+              ) {
+                notes.push({
+                  tone: 'ok',
+                  text: `의석 합계 ${partyResultsSummary.seatsSum}석 — 총 의석과 일치.`,
+                })
+              }
+              if (partyResultsSummary.voteShareMismatch) {
+                const voteShareInfo = partyResultsSummary.voteShareMismatch
+                notes.push({
+                  tone: voteShareInfo.over
+                    ? 'warn'
+                    : otherSyntheticRow
+                      ? 'ok'
+                      : 'warn',
+                  text: voteShareInfo.over
+                    ? `득표율 합이 100% + ${voteShareInfo.diff}%p 초과.`
+                    : otherSyntheticRow
+                      ? `주요 정당 득표율 ${partyResultsSummary.voteShareSum.toFixed(2)}% + 기타 ${partyResultsSummary.otherVoteShare}% ≈ 100%.`
+                      : `득표율 합 ${partyResultsSummary.voteShareSum.toFixed(2)}% — 100%에 ${voteShareInfo.diff}%p 미달.`,
+                })
+              } else if (partyResultsSummary.voteShareKnownCount > 0) {
+                notes.push({
+                  tone: 'ok',
+                  text: `득표율 합 ${partyResultsSummary.voteShareSum.toFixed(2)}% — 정상 범위.`,
+                })
+              }
+              if (notes.length === 0) return null
+              const worst = notes.reduce<'ok' | 'warn' | 'error'>(
+                (acc, note) =>
+                  note.tone === 'error'
+                    ? 'error'
+                    : acc === 'error'
+                      ? 'error'
+                      : note.tone === 'warn'
+                        ? 'warn'
+                        : acc,
+                'ok',
+              )
+              return (
+                <PartyValidationBanner $tone={worst} role="status">
+                  <FiInfo
+                    size={14}
+                    strokeWidth={2.25}
+                    aria-hidden
+                    style={{ flexShrink: 0, marginTop: 2 }}
+                  />
+                  <PartyValidationList>
+                    {notes.map((note, noteIdx) => (
+                      <li key={noteIdx}>{note.text}</li>
+                    ))}
+                  </PartyValidationList>
+                </PartyValidationBanner>
+              )
+            })()
+          ) : null}
+
+          {timelineBars.length >= 2 ? (
+            <ElectionTimelineBlock aria-label="동일 유형 선거 의석 추이">
+              <ElectionTimelineHeader>
+                <FiBarChart2 size={14} aria-hidden />
+                같은 유형 선거{' '}
+                {partyDistributionMetric === 'seats' ? '의석' : '득표율'} 추이
+                (최근 {timelineBars.length}회)
+              </ElectionTimelineHeader>
+              {timelineLegend.length > 0 ? (
+                <ElectionTimelineLegendWrap aria-label="정당 범례">
+                  {timelineLegend.slice(0, 10).map((l) => (
+                    <ElectionTimelineLegendItem key={l.partyId}>
+                      <ElectionTimelineLegendDot
+                        $fill={l.fill}
+                        aria-hidden
+                      />
+                      {l.name}
+                    </ElectionTimelineLegendItem>
+                  ))}
+                  {timelineLegend.length > 10 ? (
+                    <ElectionTimelineLegendItem>
+                      외 {timelineLegend.length - 10}개 정당
+                    </ElectionTimelineLegendItem>
+                  ) : null}
+                </ElectionTimelineLegendWrap>
+              ) : null}
+              {timelineBars.map((row) => {
+                const isCurrent = row.id === detail.id
+                const labelTitle =
+                  row.convocationOrdinal != null
+                    ? `제${row.convocationOrdinal}회 ${row.shortName ?? row.name}`
+                    : (row.shortName ?? row.name)
+                const unit =
+                  partyDistributionMetric === 'seats' ? '석' : '%'
+                const formatValue = (value: number) =>
+                  partyDistributionMetric === 'seats'
+                    ? `${value}${unit}`
+                    : `${(Math.round(value * 100) / 100).toFixed(2)}${unit}`
+                const meta =
+                  row.total > 0
+                    ? partyDistributionMetric === 'seats'
+                      ? `${row.knownSum + row.otherValue}/${row.total}석`
+                      : `합계 ${(
+                          Math.round((row.knownSum + row.otherValue) * 100) /
+                          100
+                        ).toFixed(1)}%`
+                    : partyDistributionMetric === 'seats'
+                      ? '의석 —'
+                      : '득표율 —'
+                return (
+                  <ElectionTimelineRow key={row.id} $current={isCurrent}>
+                    <ElectionTimelineRowLabel title={row.name}>
+                      {labelTitle}
+                      <small>{formatPollDate(row.pollDate)}</small>
+                    </ElectionTimelineRowLabel>
+                    <ElectionTimelineBarTrack
+                      role="img"
+                      aria-label={`${labelTitle}: ${row.segments
+                        .map((seg) => `${seg.name} ${formatValue(seg.value)}`)
+                        .join(', ')}${
+                        row.otherValue > 0
+                          ? `, 기타 ${formatValue(row.otherValue)}`
+                          : ''
+                      }`}
+                    >
+                      {row.total > 0
+                        ? row.segments.map((seg) => {
+                            const pct = (seg.value / row.total) * 100
+                            return (
+                              <ElectionTimelineBarSegment
+                                key={seg.partyId}
+                                $fill={seg.fill}
+                                $pct={pct}
+                                title={`${seg.name} ${formatValue(seg.value)} (${pct.toFixed(1)}%)`}
+                              />
+                            )
+                          })
+                        : null}
+                      {row.otherValue > 0 && row.total > 0 ? (
+                        <ElectionTimelineBarSegment
+                          $fill={'#cbd5e1'}
+                          $pct={(row.otherValue / row.total) * 100}
+                          title={`기타 ${formatValue(row.otherValue)}`}
+                        />
+                      ) : null}
+                    </ElectionTimelineBarTrack>
+                    <ElectionTimelineRowMeta>{meta}</ElectionTimelineRowMeta>
+                  </ElectionTimelineRow>
+                )
+              })}
+            </ElectionTimelineBlock>
           ) : null}
         </div>
 
@@ -2898,7 +3935,14 @@ function ElectionDetailPanel({
                               </RowIconBtn>
                             </BallotOptionEditRow>
                           ) : (
-                            <span>{opt.label}</span>
+                            <div>
+                              <span>{opt.label}</span>
+                              {opt.shortLabel?.trim() ? (
+                                <BallotOptionShortLabel>
+                                  약칭 · {opt.shortLabel.trim()}
+                                </BallotOptionShortLabel>
+                              ) : null}
+                            </div>
                           )}
                         </DataTd>
                         <DataTd>
@@ -2962,93 +4006,116 @@ function ElectionDetailPanel({
               <DataTable>
                 <thead>
                   <tr>
-                    <DataTh>후보·정당</DataTh>
-                    <DataTh>선거구</DataTh>
-                    <DataTh>지명</DataTh>
+                    <DataTh>후보</DataTh>
                     <DataTh>득표</DataTh>
-                    <DataTh>득표율</DataTh>
-                    <DataTh>순위</DataTh>
-                    <DataTh>의석</DataTh>
+                    <DataTh>순위·의석</DataTh>
                     <DataThActions104 />
                   </tr>
                 </thead>
                 <tbody>
                   {detail.candidacies.length === 0 ? (
                     <DataTr>
-                      <DataTd colSpan={8}>
+                      <DataTd colSpan={4}>
                         <EmptyHint>후보가 없습니다.</EmptyHint>
                       </DataTd>
                     </DataTr>
                   ) : (
-                    detail.candidacies.map((c) => (
-                      <DataTr key={c.id}>
-                        <DataTd>
-                          <CandidacyNameStrong>
-                            {candidacyLabel(c)}
-                          </CandidacyNameStrong>
-                          {c.party ? (
-                            <CandidacyPartyMeta>
-                              {c.party.shortName || c.party.name}
-                            </CandidacyPartyMeta>
-                          ) : null}
-                        </DataTd>
-                        <DataTd>
-                          {c.electoralDistrict
-                            ? c.electoralDistrict.code
-                              ? `${c.electoralDistrict.name} (${c.electoralDistrict.code})`
-                              : c.electoralDistrict.name
-                            : '—'}
-                        </DataTd>
-                        <DataTd>{labelNominationType(c.nominationType)}</DataTd>
-                        <DataTd>
-                          {formatVotesForDisplay(c.result?.votes)}
-                          {c.result?.elected ? (
-                            <ElectedBadge>당선</ElectedBadge>
-                          ) : null}
-                        </DataTd>
-                        <DataTd>
-                          {formatVoteShareLabel(c.result?.voteSharePercent) ??
-                            '—'}
-                        </DataTd>
-                        <DataTd>
-                          {c.result?.resultRank != null
-                            ? c.result.resultRank
-                            : '—'}
-                        </DataTd>
-                        <DataTd>
-                          {c.result?.seatsWon != null ? c.result.seatsWon : '—'}
-                        </DataTd>
-                        <DataTdRight>
-                          <RowActions>
-                            <RowIconBtn
-                              type="button"
-                              onClick={() => onEditResult(c)}
-                              aria-label="득표·결과"
-                              title="득표·결과"
-                            >
-                              <FiBarChart2 size={15} strokeWidth={2} />
-                            </RowIconBtn>
-                            <RowIconBtn
-                              type="button"
-                              onClick={() => onEditCandidacy(c)}
-                              aria-label="후보 수정"
-                              title="수정"
-                            >
-                              <FiEdit2 size={15} strokeWidth={2} />
-                            </RowIconBtn>
-                            <RowIconBtn
-                              type="button"
-                              $variant="danger"
-                              onClick={() => onDeleteCandidacy(c)}
-                              aria-label="후보 삭제"
-                              title="삭제"
-                            >
-                              <FiTrash2 size={15} strokeWidth={2} />
-                            </RowIconBtn>
-                          </RowActions>
-                        </DataTdRight>
-                      </DataTr>
-                    ))
+                    detail.candidacies.map((c) => {
+                      const metaBits: string[] = []
+                      if (c.electoralDistrict) {
+                        metaBits.push(
+                          c.electoralDistrict.code
+                            ? `${c.electoralDistrict.name} (${c.electoralDistrict.code})`
+                            : c.electoralDistrict.name,
+                        )
+                      }
+                      metaBits.push(labelNominationType(c.nominationType))
+                      if (c.ballotOrder != null)
+                        metaBits.push(`기표 ${c.ballotOrder}번`)
+                      if (c.listRank != null)
+                        metaBits.push(`비례 ${c.listRank}순`)
+                      const voteShareLabel = formatVoteShareLabel(
+                        c.result?.voteSharePercent,
+                      )
+                      const rankSeatParts: string[] = []
+                      if (c.result?.resultRank != null)
+                        rankSeatParts.push(`${c.result.resultRank}위`)
+                      if (c.result?.seatsWon != null)
+                        rankSeatParts.push(`${c.result.seatsWon}석`)
+                      return (
+                        <DataTr key={c.id}>
+                          <DataTd>
+                            <CandidacyNameStrong>
+                              {candidacyLabel(c)}
+                            </CandidacyNameStrong>
+                            {c.party ? (
+                              <CandidacyPartyMeta>
+                                {c.party.shortName || c.party.name}
+                              </CandidacyPartyMeta>
+                            ) : null}
+                            {metaBits.length > 0 ? (
+                              <CandidacyPartyMeta>
+                                {metaBits.join(' · ')}
+                              </CandidacyPartyMeta>
+                            ) : null}
+                            {c.withdrawnDate ? (
+                              <CandidacyWithdrawnBadge
+                                title={`사퇴 ${formatPollDate(c.withdrawnDate)}`}
+                              >
+                                사퇴 · {formatPollDate(c.withdrawnDate)}
+                              </CandidacyWithdrawnBadge>
+                            ) : null}
+                          </DataTd>
+                          <DataTd>
+                            <span>
+                              {formatVotesForDisplay(c.result?.votes)}
+                              {c.result?.elected ? (
+                                <ElectedBadge>당선</ElectedBadge>
+                              ) : null}
+                            </span>
+                            {voteShareLabel ? (
+                              <CandidacyPartyMeta>
+                                {voteShareLabel}
+                              </CandidacyPartyMeta>
+                            ) : null}
+                          </DataTd>
+                          <DataTd>
+                            {rankSeatParts.length > 0
+                              ? rankSeatParts.join(' · ')
+                              : '—'}
+                          </DataTd>
+                          <DataTdRight>
+                            <RowActions>
+                              <RowIconBtn
+                                type="button"
+                                onClick={() => onEditResult(c)}
+                                aria-label="득표·결과"
+                                title="득표·결과"
+                              >
+                                <FiBarChart2 size={15} strokeWidth={2} />
+                              </RowIconBtn>
+                              <RowIconBtn
+                                type="button"
+                                onClick={() => onEditCandidacy(c)}
+                                aria-label="후보 수정"
+                                title="수정"
+                              >
+                                <FiEdit2 size={15} strokeWidth={2} />
+                              </RowIconBtn>
+                              <RowIconBtn
+                                type="button"
+                                $variant="danger"
+                                onClick={() => onDeleteCandidacy(c)}
+                                aria-label="후보 삭제"
+                                title="삭제"
+                              >
+                                <FiTrash2 size={15} strokeWidth={2} />
+                              </RowIconBtn>
+                            </RowActions>
+                          </DataTdRight>
+                        </DataTr>
+                      )
+                    })
                   )}
                 </tbody>
               </DataTable>
@@ -4732,6 +5799,8 @@ function PartyResultFormModal({
   mode,
   parties,
   existingPartyIds,
+  existingResults,
+  electionTotalSeats,
   initialRow,
   saving,
   onClose,
@@ -4740,6 +5809,8 @@ function PartyResultFormModal({
   mode: 'create' | 'edit'
   parties: { id: string; name: string; shortName?: string | null }[]
   existingPartyIds: string[]
+  existingResults: ElectionPartyResultDto[]
+  electionTotalSeats: number | null
   initialRow?: ElectionPartyResultDto
   saving: boolean
   onClose: () => void
@@ -4765,6 +5836,119 @@ function PartyResultFormModal({
     if (mode === 'edit') return []
     return parties.filter((party) => !existingPartyIds.includes(party.id))
   }, [mode, parties, existingPartyIds])
+
+  /** 다른 정당들의 득표수 합 (bigint). 수정 모드에서는 본인 행을 제외 */
+  const otherVotesSum = useMemo(() => {
+    let sum = 0n
+    const selfPartyId = mode === 'edit' ? initialRow?.partyId : null
+    for (const r of existingResults) {
+      if (selfPartyId && r.partyId === selfPartyId) continue
+      const s =
+        r.votes != null ? String(r.votes).trim().replace(/[\s,]/g, '') : ''
+      if (!s || !/^\d+$/.test(s)) continue
+      try {
+        sum += BigInt(s)
+      } catch {
+        /* ignore */
+      }
+    }
+    return sum
+  }, [existingResults, mode, initialRow?.partyId])
+
+  /** 다른 정당들의 의석 합 */
+  const otherSeatsSum = useMemo(() => {
+    let sum = 0
+    const selfPartyId = mode === 'edit' ? initialRow?.partyId : null
+    for (const r of existingResults) {
+      if (selfPartyId && r.partyId === selfPartyId) continue
+      if (r.seatsWon != null && Number.isFinite(r.seatsWon)) sum += r.seatsWon
+    }
+    return sum
+  }, [existingResults, mode, initialRow?.partyId])
+
+  /** 다른 정당들의 득표율 합 */
+  const otherVoteShareSum = useMemo(() => {
+    let sum = 0
+    const selfPartyId = mode === 'edit' ? initialRow?.partyId : null
+    for (const r of existingResults) {
+      if (selfPartyId && r.partyId === selfPartyId) continue
+      const num = Number(r.voteSharePercent)
+      if (Number.isFinite(num) && num >= 0) sum += num
+    }
+    return sum
+  }, [existingResults, mode, initialRow?.partyId])
+
+  /** 합계 미리보기: 현재 입력값 포함 */
+  const preview = useMemo(() => {
+    const votesRaw = votes.replace(/[\s,]/g, '')
+    let mineVotes: bigint | null = null
+    if (/^\d+$/.test(votesRaw))
+      try {
+        mineVotes = BigInt(votesRaw)
+      } catch {
+        /* ignore */
+      }
+    const pctNum = Number(pct)
+    const minePct =
+      pct.trim() !== '' && Number.isFinite(pctNum) && pctNum >= 0
+        ? pctNum
+        : null
+    const seatsNum = Number(seats)
+    const mineSeats =
+      seats.trim() !== '' &&
+      Number.isFinite(seatsNum) &&
+      Number.isInteger(seatsNum) &&
+      seatsNum >= 0
+        ? seatsNum
+        : null
+    return {
+      totalVotes:
+        mineVotes != null ? otherVotesSum + mineVotes : otherVotesSum,
+      totalVoteShare:
+        minePct != null ? otherVoteShareSum + minePct : otherVoteShareSum,
+      totalSeats: otherSeatsSum + (mineSeats ?? 0),
+      mineVotes,
+      minePct,
+      mineSeats,
+    }
+  }, [votes, pct, seats, otherVotesSum, otherVoteShareSum, otherSeatsSum])
+
+  /** 득표율 자동 계산 — votes / (otherVotes + votes) * 100 */
+  const handleAutoFillPct = useCallback(() => {
+    const sanitized = votes.replace(/[\s,]/g, '')
+    if (!/^\d+$/.test(sanitized) || sanitized === '') {
+      toast.error('득표수를 먼저 입력하세요.')
+      return
+    }
+    let mine: bigint
+    try {
+      mine = BigInt(sanitized)
+    } catch {
+      toast.error('득표수를 숫자로 입력하세요.')
+      return
+    }
+    const total = otherVotesSum + mine
+    if (total <= 0n) {
+      toast.error('다른 정당의 득표 데이터가 없어 계산할 수 없습니다.')
+      return
+    }
+    // BigInt 나눗셈 정밀도 유지: 천 배 곱해 정수 나눗셈 후 소수 자리 복원
+    const ratioThousandths = Number((mine * 100000n) / total) / 1000
+    const rounded = Math.round(ratioThousandths * 10) / 10
+    setPct(String(rounded))
+    toast.success(
+      `자동 계산: 득표 합 ${total.toLocaleString('ko-KR')} 기준 ${rounded}% 적용.`,
+    )
+  }, [votes, otherVotesSum])
+
+  /** 잔여 의석 힌트: totalSeats - otherSeats - mine */
+  const seatsRemainingHint = useMemo(() => {
+    if (electionTotalSeats == null || !Number.isFinite(electionTotalSeats))
+      return null
+    const mine = Number(seats)
+    const mineN = Number.isFinite(mine) && seats.trim() !== '' ? mine : 0
+    return electionTotalSeats - otherSeatsSum - mineN
+  }, [electionTotalSeats, otherSeatsSum, seats])
 
   return (
     <ElectionsModalShell
@@ -4812,6 +5996,66 @@ function PartyResultFormModal({
       }
     >
       <FormRows>
+        <PartyFormPreviewCard aria-label="선거 전체 합계 미리보기">
+          <PartyFormPreviewTitle>전체 합계 미리보기</PartyFormPreviewTitle>
+          <PartyFormPreviewGrid>
+            <PartyFormPreviewItem>
+              <PartyFormPreviewLabel>의석</PartyFormPreviewLabel>
+              <PartyFormPreviewValue
+                $tone={
+                  electionTotalSeats != null
+                    ? preview.totalSeats > electionTotalSeats
+                      ? 'error'
+                      : preview.totalSeats === electionTotalSeats
+                        ? 'ok'
+                        : undefined
+                    : undefined
+                }
+              >
+                {preview.totalSeats}
+                {electionTotalSeats != null ? ` / ${electionTotalSeats}` : ''}
+                석
+              </PartyFormPreviewValue>
+              <PartyFormPreviewDelta>
+                다른 {otherSeatsSum}석 + 이 정당{' '}
+                {preview.mineSeats ?? '—'}
+                {preview.mineSeats != null ? '석' : ''}
+              </PartyFormPreviewDelta>
+            </PartyFormPreviewItem>
+            <PartyFormPreviewItem>
+              <PartyFormPreviewLabel>득표율 합</PartyFormPreviewLabel>
+              <PartyFormPreviewValue
+                $tone={
+                  Math.abs(preview.totalVoteShare - 100) <= 0.5
+                    ? 'ok'
+                    : preview.totalVoteShare > 100
+                      ? 'error'
+                      : preview.totalVoteShare > 0
+                        ? 'warn'
+                        : undefined
+                }
+              >
+                {preview.totalVoteShare.toFixed(2)}%
+              </PartyFormPreviewValue>
+              <PartyFormPreviewDelta>
+                다른 {otherVoteShareSum.toFixed(2)}% + 이 정당{' '}
+                {preview.minePct != null ? `${preview.minePct}%` : '—'}
+              </PartyFormPreviewDelta>
+            </PartyFormPreviewItem>
+            <PartyFormPreviewItem>
+              <PartyFormPreviewLabel>득표수 합</PartyFormPreviewLabel>
+              <PartyFormPreviewValue>
+                {preview.totalVotes.toLocaleString('ko-KR')}표
+              </PartyFormPreviewValue>
+              <PartyFormPreviewDelta>
+                다른 {otherVotesSum.toLocaleString('ko-KR')}표 + 이 정당{' '}
+                {preview.mineVotes != null
+                  ? `${preview.mineVotes.toLocaleString('ko-KR')}표`
+                  : '—'}
+              </PartyFormPreviewDelta>
+            </PartyFormPreviewItem>
+          </PartyFormPreviewGrid>
+        </PartyFormPreviewCard>
         <FieldRow>
           <FieldLabel>
             {mode === 'create' ? (
@@ -4859,31 +6103,67 @@ function PartyResultFormModal({
         </FieldRow>
         <FieldRow>
           <FieldLabel>득표율 (%)</FieldLabel>
-          <ModalFieldNarrow>
-            <Input
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={pct}
-              onChange={(e) => setPct(sanitizePercentInput(e.target.value))}
-              placeholder="0–100 · 소수 첫째 자리"
-            />
-          </ModalFieldNarrow>
+          <FieldControl style={{ maxWidth: '100%' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ maxWidth: 280, flex: 1 }}>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={pct}
+                  onChange={(e) => setPct(sanitizePercentInput(e.target.value))}
+                  placeholder="0–100 · 소수 첫째 자리"
+                />
+              </div>
+              <PartyFormAutoCalcBtn
+                type="button"
+                onClick={handleAutoFillPct}
+                title="다른 정당 득표 합 + 이 정당 득표로 득표율 계산"
+              >
+                자동 계산
+              </PartyFormAutoCalcBtn>
+            </div>
+            {otherVotesSum > 0n ? (
+              <PartyFormHint>
+                다른 정당 득표 합 {otherVotesSum.toLocaleString('ko-KR')}표 ·
+                자동 계산 시 이 합과 이 정당의 득표를 더해 비율을 산출합니다.
+              </PartyFormHint>
+            ) : null}
+          </FieldControl>
         </FieldRow>
         <FieldRow>
           <FieldLabel>의석</FieldLabel>
-          <ModalFieldNarrow>
-            <Input
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              value={seats}
-              onChange={(e) =>
-                setSeats(sanitizeNonNegativeIntInput(e.target.value))
-              }
-              placeholder="0 이상 정수 · 없으면 비움"
-            />
-          </ModalFieldNarrow>
+          <FieldControl style={{ maxWidth: '100%' }}>
+            <div style={{ maxWidth: 280 }}>
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={seats}
+                onChange={(e) =>
+                  setSeats(sanitizeNonNegativeIntInput(e.target.value))
+                }
+                placeholder="0 이상 정수 · 없으면 비움"
+              />
+            </div>
+            {electionTotalSeats != null && seatsRemainingHint != null ? (
+              <PartyFormHint
+                $tone={
+                  seatsRemainingHint < 0
+                    ? 'error'
+                    : seatsRemainingHint === 0
+                      ? 'ok'
+                      : 'info'
+                }
+              >
+                {seatsRemainingHint < 0
+                  ? `총 의석 ${electionTotalSeats}석 초과 ${-seatsRemainingHint}석. 의석 합계를 확인하세요.`
+                  : seatsRemainingHint === 0
+                    ? `총 의석 ${electionTotalSeats}석과 정확히 일치합니다.`
+                    : `총 의석 ${electionTotalSeats}석 · 이 행 포함 시 잔여 ${seatsRemainingHint}석.`}
+              </PartyFormHint>
+            ) : null}
+          </FieldControl>
         </FieldRow>
         <FieldRow>
           <FieldLabel>메모</FieldLabel>
@@ -4897,5 +6177,258 @@ function PartyResultFormModal({
         </FieldRow>
       </FormRows>
     </ElectionsModalShell>
+  )
+}
+
+const PartyFormAutoCalcBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : '#eef2ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.28)' : '#e0e7ff'};
+    border-color: #6366f1;
+  }
+`
+
+const PartyFormHint = styled.p<{ $tone?: 'info' | 'ok' | 'error' }>`
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: ${({ $tone, theme }) =>
+    $tone === 'error'
+      ? 'var(--negative, #dc2626)'
+      : $tone === 'ok'
+        ? 'var(--positive, #16a34a)'
+        : theme.colors.text.secondary};
+`
+
+/** 정당 집계 폼 미리보기 카드 */
+const PartyFormPreviewCard = styled.div`
+  padding: 12px 14px;
+  margin-bottom: 4px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.08)' : '#f5f7ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.22)' : '#e0e7ff'};
+  border-radius: 10px;
+`
+
+const PartyFormPreviewTitle = styled.div`
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-bottom: 8px;
+`
+
+const PartyFormPreviewGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const PartyFormPreviewItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const PartyFormPreviewLabel = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const PartyFormPreviewValue = styled.span<{
+  $tone?: 'ok' | 'warn' | 'error'
+}>`
+  font-size: 15px;
+  font-weight: 700;
+  color: ${({ $tone, theme }) =>
+    $tone === 'error'
+      ? 'var(--negative, #dc2626)'
+      : $tone === 'ok'
+        ? 'var(--positive, #16a34a)'
+        : $tone === 'warn'
+          ? theme.mode === 'dark'
+            ? '#fbbf24'
+            : '#b45309'
+          : theme.colors.text.primary};
+`
+
+const PartyFormPreviewDelta = styled.span`
+  font-size: 10.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 삭제 등 확정 모달 — window.confirm 대체 */
+const ConfirmDialogBox = styled.div`
+  max-width: 440px;
+  width: 92vw;
+  padding: 20px 22px 18px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.22);
+`
+
+const ConfirmDialogTitle = styled.h3`
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ConfirmDialogMessage = styled.p`
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: pre-wrap;
+`
+
+const ConfirmDialogActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+`
+
+const ConfirmDialogActionsPrimary = styled(ConfirmDialogActions)`
+  gap: 10px;
+`
+
+const ConfirmDialogCancelBtn = styled.button`
+  min-width: 72px;
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9'};
+  }
+  &:focus-visible {
+    outline: 2px solid #94a3b8;
+    outline-offset: 2px;
+  }
+`
+
+const ConfirmDialogPrimaryBtn = styled.button<{ $danger?: boolean }>`
+  min-width: 120px;
+  height: 40px;
+  padding: 0 20px;
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: 9px;
+  cursor: pointer;
+  border: none;
+  color: #fff;
+  background: ${({ $danger }) =>
+    $danger ? 'var(--negative, #dc2626)' : '#6366f1'};
+  box-shadow: ${({ $danger }) =>
+    $danger
+      ? '0 4px 14px rgba(220, 38, 38, 0.28)'
+      : '0 4px 14px rgba(99, 102, 241, 0.28)'};
+  transition: filter 0.15s ease;
+  &:hover {
+    filter: brightness(1.05);
+  }
+  &:active {
+    filter: brightness(0.95);
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ $danger }) => ($danger ? '#b91c1c' : '#4338ca')};
+    outline-offset: 2px;
+  }
+`
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger,
+  onCancel,
+  onConfirm,
+}: {
+  title: string
+  message: string
+  confirmLabel: string
+  danger?: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onCancel()
+      } else if (e.key === 'Enter') {
+        e.stopPropagation()
+        onConfirm()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel, onConfirm])
+
+  return createPortal(
+    <PersonRegisterModalOverlay
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onCancel}
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <ConfirmDialogBox
+        role="document"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ConfirmDialogTitle>{title}</ConfirmDialogTitle>
+        <ConfirmDialogMessage>{message}</ConfirmDialogMessage>
+        <ConfirmDialogActionsPrimary>
+          <ConfirmDialogCancelBtn type="button" onClick={onCancel}>
+            취소
+          </ConfirmDialogCancelBtn>
+          <ConfirmDialogPrimaryBtn
+            type="button"
+            autoFocus
+            $danger={danger}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </ConfirmDialogPrimaryBtn>
+        </ConfirmDialogActionsPrimary>
+      </ConfirmDialogBox>
+    </PersonRegisterModalOverlay>,
+    document.body,
   )
 }

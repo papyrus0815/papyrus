@@ -16,6 +16,7 @@ import {
   CreateMedicalCareerDto,
   CreateMilitaryCareerDto,
   CreatePersonAwardDto,
+  CreatePersonLifeEventDto,
   CreateRegnalEraDto,
   CreateReligiousCareerDto,
   CreateSovereignReignDto,
@@ -29,6 +30,7 @@ import {
   PersonResponseDto,
   ReligiousCareerResponseDto,
   UpdateGovernmentPositionDefinitionDto,
+  UpdatePersonLifeEventDto,
   UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
 } from '../presentation/dto'
@@ -342,6 +344,20 @@ export interface IPersonRepository {
   ): Promise<any>
   deleteSovereignReign(id: string): Promise<void>
   findSovereignReignById(id: string): Promise<any | null>
+  /**
+   * 인물 연보(PersonLifeEvent) — 자유 서술형 시간축 기록
+   */
+  addPersonLifeEvent(
+    dto: CreatePersonLifeEventDto,
+    accountId?: string,
+  ): Promise<any>
+  updatePersonLifeEvent(
+    id: string,
+    dto: UpdatePersonLifeEventDto,
+  ): Promise<any>
+  deletePersonLifeEvent(id: string): Promise<void>
+  findPersonLifeEventById(id: string): Promise<any | null>
+  findPersonLifeEventsByPersonId(personId: string): Promise<any[]>
   updateRegnalEra(id: string, dto: UpdateRegnalEraDto): Promise<any>
   deleteRegnalEra(id: string): Promise<void>
   /**

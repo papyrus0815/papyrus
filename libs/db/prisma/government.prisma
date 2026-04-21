@@ -313,6 +313,9 @@ model SovereignReign {
   endReasonDetail   String?            @map("end_reason_detail") @db.Text
   notes             String?            @db.Text
 
+  /// 왕호/재위명 (예: 빅토리아, 루이 14세) — 이전엔 notes "왕명: X" 파싱
+  regnalName String? @map("regnal_name") @db.VarChar(100)
+
   showPositionInfo Boolean @default(false) @map("show_position_info")
   accountId        String? @map("account_id") @db.Char(36)
   account          Account? @relation("AccountSovereignReigns", fields: [accountId], references: [id], onDelete: SetNull)

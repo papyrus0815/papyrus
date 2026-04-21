@@ -38,6 +38,8 @@ import {
   CreateGovernmentPositionDefinitionDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
+  CreatePersonLifeEventDto,
+  UpdatePersonLifeEventDto,
   UpdateRegnalEraDto,
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
@@ -350,6 +352,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       // 정부 직위 재임 기록
       governmentTenures: person.GovernmentTenures ? serializeBigInt(person.GovernmentTenures) : undefined,
       sovereignReigns: person.sovereignReigns ? serializeBigInt(person.sovereignReigns) : undefined,
+      lifeEvents: (person as any).lifeEvents ? serializeBigInt((person as any).lifeEvents) : undefined,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
       accountId: person.accountId ?? undefined,
@@ -1000,7 +1003,14 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         orderBy: { startDate: 'desc' as const },
       },
-    }
+      lifeEvents: {
+        orderBy: [
+          { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+          { sortOrder: Prisma.SortOrder.asc },
+          { createdAt: Prisma.SortOrder.asc },
+        ],
+      },
+    } satisfies Prisma.PersonInclude
     const person = accountId != null
       ? await this.prisma.person.findFirst({ where: { id, accountId }, include: personInclude })
       : await this.prisma.person.findUnique({ where: { id }, include: personInclude })
@@ -1471,6 +1481,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             startDate: true,
             endDate: true,
             notes: true,
+            regnalName: true,
             regnalNumber: true,
             positionDefinition: {
               select: { id: true, title: true },
@@ -1479,6 +1490,13 @@ export class PersonPrismaRepository implements IPersonRepository {
             historicalCountry: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        lifeEvents: {
+          orderBy: [
+            { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+            { sortOrder: Prisma.SortOrder.asc },
+            { createdAt: Prisma.SortOrder.asc },
+          ],
         },
         countryAffiliations: {
           include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
@@ -3834,6 +3852,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         endReason: dto.endReason as any,
         endReasonDetail: dto.endReasonDetail,
         notes: dto.notes,
+        regnalName: dto.regnalName ?? null,
         showPositionInfo: dto.showPositionInfo !== false,
         ...(accountId != null && { accountId }),
       },
@@ -3882,6 +3901,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any
     if (dto.endReasonDetail !== undefined) updateData.endReasonDetail = dto.endReasonDetail
     if (dto.notes !== undefined) updateData.notes = dto.notes
+    if (dto.regnalName !== undefined) updateData.regnalName = dto.regnalName ?? null
     if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
 
     const row = await this.prisma.sovereignReign.update({
@@ -3935,6 +3955,72 @@ export class PersonPrismaRepository implements IPersonRepository {
       return obj
     }
     return serializeBigInt(row)
+  }
+
+  // ==================
+  // PersonLifeEvent — 인물 연보 (자유 서술형 시간축)
+  // ==================
+  async addPersonLifeEvent(
+    dto: CreatePersonLifeEventDto,
+    accountId?: string,
+  ): Promise<any> {
+    return this.prisma.personLifeEvent.create({
+      data: {
+        personId: dto.personId,
+        title: dto.title,
+        description: dto.description ?? null,
+        category: dto.category ?? null,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        startDatePrecision: dto.startDatePrecision ?? null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        endDatePrecision: dto.endDatePrecision ?? null,
+        sortOrder: dto.sortOrder ?? 0,
+        ...(accountId != null && { accountId }),
+      },
+    })
+  }
+
+  async updatePersonLifeEvent(
+    id: string,
+    dto: UpdatePersonLifeEventDto,
+  ): Promise<any> {
+    const data: Prisma.PersonLifeEventUpdateInput = {}
+    if (dto.title !== undefined) data.title = dto.title
+    if (dto.description !== undefined) data.description = dto.description
+    if (dto.category !== undefined) data.category = dto.category
+    if (dto.startDate !== undefined) {
+      data.startDate = dto.startDate ? new Date(dto.startDate) : null
+    }
+    if (dto.startDatePrecision !== undefined) {
+      data.startDatePrecision = dto.startDatePrecision
+    }
+    if (dto.endDate !== undefined) {
+      data.endDate = dto.endDate ? new Date(dto.endDate) : null
+    }
+    if (dto.endDatePrecision !== undefined) {
+      data.endDatePrecision = dto.endDatePrecision
+    }
+    if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder
+    return this.prisma.personLifeEvent.update({ where: { id }, data })
+  }
+
+  async deletePersonLifeEvent(id: string): Promise<void> {
+    await this.prisma.personLifeEvent.delete({ where: { id } })
+  }
+
+  async findPersonLifeEventById(id: string): Promise<any | null> {
+    return this.prisma.personLifeEvent.findUnique({ where: { id } })
+  }
+
+  async findPersonLifeEventsByPersonId(personId: string): Promise<any[]> {
+    return this.prisma.personLifeEvent.findMany({
+      where: { personId },
+      orderBy: [
+        { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+        { sortOrder: Prisma.SortOrder.asc },
+        { createdAt: Prisma.SortOrder.asc },
+      ],
+    })
   }
 
   /**

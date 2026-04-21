@@ -811,6 +811,11 @@ export class CreateSovereignReignDto {
   @IsString()
   notes?: string
 
+  /** 왕호/재위명 (예: 빅토리아, 루이 14세) */
+  @IsOptional()
+  @IsString()
+  regnalName?: string
+
   @IsOptional()
   @IsBoolean()
   showPositionInfo?: boolean

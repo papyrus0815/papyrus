@@ -3,6 +3,7 @@ import { PersonController } from './presentation/person.controller'
 import { PersonByCountryController } from './presentation/person-by-country.controller'
 import { PersonByDynastyController } from './presentation/person-by-dynasty.controller'
 import { GovernmentPositionController } from './presentation/government-position.controller'
+import { PersonLifeEventController } from './presentation/person-life-event.controller'
 import { PersonService } from './application/person.service'
 import { PersonPrismaRepository } from './infrastructure/person.prisma.repository'
 import { NotificationModule } from '../notification/notification.module'
@@ -18,6 +19,7 @@ import { UploadModule } from '../shared/upload/upload.module'
     PersonByCountryController,
     PersonByDynastyController,
     GovernmentPositionController,
+    PersonLifeEventController,
   ],
   providers: [PersonService, PersonPrismaRepository],
   exports: [PersonService],

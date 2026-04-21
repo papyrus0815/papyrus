@@ -46,6 +46,8 @@ model Account {
   /// 이 계정이 등록한 재임/각료(GovernmentPositionTenure)
   governmentTenures GovernmentPositionTenure[] @relation("AccountGovernmentTenures")
   sovereignReigns   SovereignReign[]           @relation("AccountSovereignReigns")
+  /// 이 계정이 등록한 인물 연보(PersonLifeEvent)
+  personLifeEvents  PersonLifeEvent[]          @relation("AccountPersonLifeEvents")
   /// 이 계정이 등록한 조약(Treaty)
   treaties Treaty[] @relation("AccountTreaties")
   /// 이 계정이 등록한 선거(Election)
