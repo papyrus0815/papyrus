@@ -55,15 +55,20 @@ export interface PersonGenealogyInfographicProps {
 }
 
 // ─── 유틸 ──────────────────────────────────────────────────────────
+function yearOf(d?: string | Date | null): number | null {
+  if (!d) return null
+  const dt = typeof d === 'string' ? new Date(d) : d
+  const t = dt.getTime?.()
+  return t && !isNaN(t) ? dt.getFullYear() : null
+}
+
+function birthYearOf(p: NodePerson): number | null {
+  return yearOf(p.birthDate)
+}
+
 function lifeSpan(p: NodePerson): string | null {
-  const y = (d?: string | Date | null): number | null => {
-    if (!d) return null
-    const dt = typeof d === 'string' ? new Date(d) : d
-    const t = dt.getTime?.()
-    return t && !isNaN(t) ? dt.getFullYear() : null
-  }
-  const b = y(p.birthDate)
-  const d = y(p.deathDate)
+  const b = yearOf(p.birthDate)
+  const d = yearOf(p.deathDate)
   if (b == null && d == null) return null
   if (b != null && d == null) return `${b}–`
   if (b == null && d != null) return `?–${d}`
@@ -429,7 +434,14 @@ export function PersonGenealogyInfographic({
   )
 
   const childList = (children ?? []).filter(Boolean)
-  const siblingList = (siblings ?? []).filter(Boolean)
+  const siblingList = (siblings ?? []).filter(Boolean).slice().sort((a, b) => {
+    const ay = birthYearOf(a)
+    const by = birthYearOf(b)
+    if (ay == null && by == null) return 0
+    if (ay == null) return 1
+    if (by == null) return -1
+    return ay - by
+  })
   const spouseList: NodePerson[] =
     spousesProp != null ? (spousesProp.filter(Boolean) as NodePerson[])
     : spouseLegacy ? [spouseLegacy]
