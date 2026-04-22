@@ -143,6 +143,67 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/** GET /political-parties/:id/election-results */
+export type PartyElectionResultRow = {
+  id: string
+  electionId: string
+  partyId: string
+  votes?: string | null
+  voteSharePercent?: string | null
+  seatsWon?: number | null
+  notes?: string | null
+  election?: {
+    id: string
+    name: string
+    shortName?: string | null
+    electionType: string
+    status?: string | null
+    pollDate?: string | null
+    convocationOrdinal?: number | null
+    totalSeats?: number | null
+  } | null
+}
+
+/** GET /political-parties/:id/memberships */
+export type PartyMembershipListRow = {
+  id: string
+  personId: string
+  partyId: string
+  startDate?: string | null
+  endDate?: string | null
+  roleCategory?: string | null
+  leadershipTier?: string | null
+  roleTitle?: string | null
+  notes?: string | null
+  person?: {
+    id: string
+    name: string
+    surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
+    profileImageUrl?: string | null
+    country?: { defaultNameDisplayOrder?: string | null } | null
+  } | null
+}
+
+/** GET /political-parties/:id/cabinet-affiliations */
+export type PartyCabinetAffiliationRow = {
+  id: string
+  cabinetId: string
+  partyId: string
+  role: string
+  provenance?: string | null
+  notes?: string | null
+  cabinet?: {
+    id: string
+    name?: string | null
+    headTenure?: {
+      startDate?: string | null
+      endDate?: string | null
+    } | null
+  } | null
+}
+
 export const politicalPartyApi = {
   getAll: async (params?: { countryId?: string; historicalCountryId?: string }) => {
     return fetchParties(params) as Promise<PoliticalParty[]>
@@ -185,6 +246,27 @@ export const politicalPartyApi = {
   getTopLeaders: async (partyId: string) => {
     return requestJson<PartyTopLeaderTenure[]>(
       `/political-parties/${encodeURIComponent(partyId)}/top-leaders`,
+    )
+  },
+
+  /** 역대 선거 성적 — 이 정당이 등장한 모든 선거 집계 */
+  getElectionResults: async (partyId: string) => {
+    return requestJson<PartyElectionResultRow[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/election-results`,
+    )
+  },
+
+  /** 소속 인물 목록 */
+  getMemberships: async (partyId: string) => {
+    return requestJson<PartyMembershipListRow[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/memberships`,
+    )
+  },
+
+  /** 내각 참여 (연정·단독 집권·야당) */
+  getCabinetAffiliations: async (partyId: string) => {
+    return requestJson<PartyCabinetAffiliationRow[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/cabinet-affiliations`,
     )
   },
 

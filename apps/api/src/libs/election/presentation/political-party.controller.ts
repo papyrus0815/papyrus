@@ -256,6 +256,77 @@ export class PoliticalPartyController {
     return serializeElectionBigInt(merged)
   }
 
+  /** 역대 선거 성적 — 이 정당의 ElectionPartyResult를 선거 메타와 함께 */
+  @Get(':id/election-results')
+  async listElectionResults(@Param('id') id: string): Promise<any> {
+    await this.ensureParty(id)
+    const rows = await this.prisma.electionPartyResult.findMany({
+      where: { partyId: id },
+      include: {
+        election: {
+          select: {
+            id: true,
+            name: true,
+            shortName: true,
+            electionType: true,
+            status: true,
+            pollDate: true,
+            convocationOrdinal: true,
+            totalSeats: true,
+          },
+        },
+      },
+      orderBy: { election: { pollDate: 'desc' } },
+    })
+    return serializeElectionBigInt(rows)
+  }
+
+  /** 소속 인물 — 이 정당의 PoliticalPartyMembership 목록 */
+  @Get(':id/memberships')
+  async listMemberships(@Param('id') id: string): Promise<any> {
+    await this.ensureParty(id)
+    const rows = await this.prisma.politicalPartyMembership.findMany({
+      where: { partyId: id },
+      include: {
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            nameDisplayOrder: true,
+            profileImageUrl: true,
+            country: { select: { defaultNameDisplayOrder: true } },
+          },
+        },
+      },
+      orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+    })
+    return serializeElectionBigInt(rows)
+  }
+
+  /** 내각 참여 — 이 정당의 CabinetPoliticalParty 목록 */
+  @Get(':id/cabinet-affiliations')
+  async listCabinetAffiliations(@Param('id') id: string): Promise<any> {
+    await this.ensureParty(id)
+    const rows = await this.prisma.cabinetPoliticalParty.findMany({
+      where: { partyId: id },
+      include: {
+        cabinet: {
+          select: {
+            id: true,
+            name: true,
+            headTenure: {
+              select: { startDate: true, endDate: true },
+            },
+          },
+        },
+      },
+      orderBy: { cabinet: { headTenure: { startDate: 'desc' } } },
+    })
+    return serializeElectionBigInt(rows)
+  }
+
   @Get(':id/laws')
   async listPartyLaws(@Param('id') id: string): Promise<any> {
     await this.ensureParty(id)

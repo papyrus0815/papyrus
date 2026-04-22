@@ -2,7 +2,7 @@
  * 국가 상세 — 선거·투표 탭 상단: 이 국가 소속 정당(PoliticalParty) 등록·편집
  * 정당 등록/수정은 인물 등록 모달(PersonRegisterViewModal)과 동일한 셸 사용
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -23,6 +23,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { getPartyLaws } from '@/shared/api/election'
 import {
   type CreatePoliticalPartyInput,
   type PartyTopLeaderTenure,
@@ -67,7 +68,6 @@ import {
   Required,
 } from '@/shared/ui/register-form-layout'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
-import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { SidePanel } from '@/shared/ui/side-panel'
 import { PoliticalPartyRegisterViewModal } from '@/widgets/country/country-list/ui/political-party-register-view-modal'
 
@@ -278,35 +278,6 @@ const PartyLogoMeta = styled.div`
   padding-top: 2px;
 `
 
-const PartyLogoActions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
-`
-
-const PartyLogoPickBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
 const PartyLogoRemoveBtn = styled.button`
   padding: 0;
   border: none;
@@ -329,6 +300,294 @@ const PartyLogoHint = styled.p`
   font-size: 11px;
   line-height: 1.45;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const PartyLogoStatusLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+`
+
+const PartyLogoStatusOk = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#86efac' : '#15803d'};
+`
+
+const PartyLogoStatusBusy = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const PartyBrandColorInput = styled(Input)<{ $invalid?: boolean }>`
+  border-color: ${({ $invalid }) =>
+    $invalid ? '#dc2626' : undefined} !important;
+`
+
+const PartyFilterBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
+`
+
+const PartyFilterRow = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+`
+
+const PartyFilterInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  outline: none;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus-visible {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+`
+
+const PartyFilterSelect = styled.select`
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  outline: none;
+  &:focus-visible {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+`
+
+const PartyFilterToggleBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ $active, theme }) =>
+    $active ? '#6366f1' : theme.colors.text.secondary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.16)'
+        : '#eef2ff'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : '#ffffff'};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.4)'
+          : '#c7d2fe'
+        : theme.colors.border.default};
+  border-radius: 8px;
+  cursor: pointer;
+  &:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+`
+
+const PartyFilterBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #6366f1;
+  border-radius: 999px;
+`
+
+const PartyFilterMeta = styled.div`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  padding-left: 2px;
+`
+
+const PartyFilterResetBtn = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  color: #6366f1;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  }
+`
+
+/** 관계 데이터 섹션 공통 테이블 */
+const PartyRelationTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+  font-size: 12.5px;
+`
+
+const PartyRelationTh = styled.th`
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
+`
+
+const PartyRelationTd = styled.td`
+  padding: 10px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  color: ${({ theme }) => theme.colors.text.primary};
+  vertical-align: top;
+  & strong {
+    font-weight: 600;
+  }
+`
+
+const PartyRelationTr = styled.tr<{ onClick?: () => void }>`
+  cursor: ${({ onClick }) => (onClick ? 'pointer' : 'default')};
+  transition: background 0.12s ease;
+  &:hover {
+    background: ${({ onClick, theme }) =>
+      onClick
+        ? theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.03)'
+          : '#f8fafc'
+        : 'transparent'};
+  }
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: -2px;
+    border-radius: 4px;
+  }
+`
+
+const PartyRelationMeta = styled.div`
+  margin-top: 3px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.45;
+`
+
+const PartyRelationShowMoreRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafbfc'};
+  border: 1px dashed ${({ theme }) => theme.colors.border.light};
+  border-radius: 8px;
+`
+
+const PartyRelationShowMoreBtn = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  color: #6366f1;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  }
+`
+
+const PartyLineageEmptyRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafbfc'};
+`
+
+const PartyStatusBadge = styled.span<{ $dissolved?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  vertical-align: middle;
+  color: ${({ $dissolved, theme }) =>
+    $dissolved
+      ? theme.mode === 'dark'
+        ? '#fca5a5'
+        : '#b91c1c'
+      : theme.mode === 'dark'
+        ? '#86efac'
+        : '#15803d'};
+  background: ${({ $dissolved, theme }) =>
+    $dissolved
+      ? theme.mode === 'dark'
+        ? 'rgba(220,38,38,0.16)'
+        : '#fef2f2'
+      : theme.mode === 'dark'
+        ? 'rgba(34,197,94,0.14)'
+        : '#f0fdf4'};
+  border: 1px solid
+    ${({ $dissolved, theme }) =>
+      $dissolved
+        ? theme.mode === 'dark'
+          ? 'rgba(220,38,38,0.32)'
+          : '#fecaca'
+        : theme.mode === 'dark'
+          ? 'rgba(34,197,94,0.32)'
+          : '#bbf7d0'};
 `
 
 const IdeologyTagRow = styled.div`
@@ -480,6 +739,386 @@ function PartyTopLeadersBlock({ partyId }: { partyId: string }) {
   )
 }
 
+const PARTY_RELATION_DEFAULT_LIMIT = 30
+
+function formatVotesLocalized(raw: string | null | undefined): string {
+  if (raw == null) return '—'
+  const t = String(raw).trim()
+  if (!t) return '—'
+  if (/^\d+$/.test(t)) {
+    try {
+      return BigInt(t).toLocaleString('ko-KR')
+    } catch {
+      return t
+    }
+  }
+  return t
+}
+
+function formatVoteShareShort(raw: string | null | undefined): string {
+  if (raw == null) return '—'
+  const num = Number(raw)
+  if (!Number.isFinite(num)) return String(raw)
+  return `${(Math.round(num * 100) / 100).toFixed(2)}%`
+}
+
+function PartyElectionResultsBlock({
+  partyId,
+  routeCountryId,
+}: {
+  partyId: string
+  routeCountryId: string
+}) {
+  const navigate = useNavigate()
+  const [showAll, setShowAll] = useState(false)
+  const { data = [], isLoading, isError } = useQuery({
+    queryKey: ['political-parties', partyId, 'election-results'],
+    queryFn: () => politicalPartyApi.getElectionResults(partyId),
+    enabled: !!partyId,
+  })
+  const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
+  const hiddenCount = Math.max(0, data.length - visible.length)
+  return (
+    <PartyDetailDescSection aria-label="역대 선거 성적">
+      <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
+        <PartyDescSectionLabel>역대 선거 성적</PartyDescSectionLabel>
+      </PartyDescSectionLabelRow>
+      {isLoading ? (
+        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+      ) : isError ? (
+        <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
+      ) : data.length === 0 ? (
+        <PartyDescEmptyHint>
+          연결된 선거 집계가 없습니다. 선거 탭에서 정당 집계를 추가하세요.
+        </PartyDescEmptyHint>
+      ) : (
+        <>
+        <PartyRelationTable>
+          <thead>
+            <tr>
+              <PartyRelationTh>선거</PartyRelationTh>
+              <PartyRelationTh>득표</PartyRelationTh>
+              <PartyRelationTh>득표율</PartyRelationTh>
+              <PartyRelationTh>의석</PartyRelationTh>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => {
+              const el = row.election
+              const title = el
+                ? el.convocationOrdinal != null
+                  ? `${el.convocationOrdinal}대 ${el.shortName ?? el.name}`
+                  : (el.shortName ?? el.name)
+                : row.electionId
+              const goto = () => {
+                if (!el) return
+                navigate(
+                  `${pathKeys.history.countryElections(routeCountryId)}?electionId=${encodeURIComponent(el.id)}`,
+                )
+              }
+              return (
+                <PartyRelationTr
+                  key={row.id}
+                  onClick={el ? goto : undefined}
+                  role={el ? 'button' : undefined}
+                  tabIndex={el ? 0 : -1}
+                  onKeyDown={(e) => {
+                    if (!el) return
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      goto()
+                    }
+                  }}
+                  aria-label={el ? `${title} 선거 상세` : undefined}
+                >
+                  <PartyRelationTd>
+                    <strong>{title}</strong>
+                    <PartyRelationMeta>
+                      {el?.pollDate ? formatDate(el.pollDate) : ''}
+                    </PartyRelationMeta>
+                  </PartyRelationTd>
+                  <PartyRelationTd>
+                    {formatVotesLocalized(row.votes)}
+                  </PartyRelationTd>
+                  <PartyRelationTd>
+                    {formatVoteShareShort(row.voteSharePercent)}
+                  </PartyRelationTd>
+                  <PartyRelationTd>
+                    {row.seatsWon != null
+                      ? `${row.seatsWon}${el?.totalSeats ? ` / ${el.totalSeats}` : ''}석`
+                      : '—'}
+                  </PartyRelationTd>
+                </PartyRelationTr>
+              )
+            })}
+          </tbody>
+        </PartyRelationTable>
+        {hiddenCount > 0 || showAll ? (
+          <PartyRelationShowMoreRow>
+            <span>
+              전체 {data.length}건 · {visible.length}건 표시
+            </span>
+            <PartyRelationShowMoreBtn
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+            >
+              {showAll ? '접기' : `${hiddenCount}건 더 보기`}
+            </PartyRelationShowMoreBtn>
+          </PartyRelationShowMoreRow>
+        ) : null}
+        </>
+      )}
+    </PartyDetailDescSection>
+  )
+}
+
+function PartyMembershipsBlock({ partyId }: { partyId: string }) {
+  const navigate = useNavigate()
+  const [showAll, setShowAll] = useState(false)
+  const { data = [], isLoading, isError } = useQuery({
+    queryKey: ['political-parties', partyId, 'memberships'],
+    queryFn: () => politicalPartyApi.getMemberships(partyId),
+    enabled: !!partyId,
+  })
+  const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
+  const hiddenCount = Math.max(0, data.length - visible.length)
+  return (
+    <PartyDetailDescSection aria-label="소속 인물">
+      <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
+        <PartyDescSectionLabel>소속 인물</PartyDescSectionLabel>
+      </PartyDescSectionLabelRow>
+      {isLoading ? (
+        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+      ) : isError ? (
+        <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
+      ) : data.length === 0 ? (
+        <PartyDescEmptyHint>
+          연결된 당원·소속이 없습니다. 인물 상세의 "정당 소속"에서 연결하세요.
+        </PartyDescEmptyHint>
+      ) : (
+        <>
+        <PartyRelationTable>
+          <thead>
+            <tr>
+              <PartyRelationTh>인물</PartyRelationTh>
+              <PartyRelationTh>역할</PartyRelationTh>
+              <PartyRelationTh>기간</PartyRelationTh>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => {
+              if (!row.person) return null
+              const person = row.person
+              const name = getPersonDisplayName({
+                name: person.name,
+                surname: person.surname,
+                middleName: person.middleName,
+                country: person.country ?? null,
+              })
+              const period =
+                row.startDate || row.endDate
+                  ? `${row.startDate ? formatDate(row.startDate) : '—'} — ${
+                      row.endDate ? formatDate(row.endDate) : '재직 중'
+                    }`
+                  : '—'
+              const roleParts: string[] = []
+              if (row.roleTitle?.trim()) roleParts.push(row.roleTitle.trim())
+              if (row.roleCategory && row.roleCategory !== 'OTHER')
+                roleParts.push(row.roleCategory)
+              if (row.leadershipTier && row.leadershipTier !== 'UNSPECIFIED')
+                roleParts.push(row.leadershipTier)
+              const goto = () =>
+                navigate(pathKeys.persons.detail(person.id))
+              return (
+                <PartyRelationTr
+                  key={row.id}
+                  onClick={goto}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      goto()
+                    }
+                  }}
+                  aria-label={`${name} 인물 상세`}
+                >
+                  <PartyRelationTd>
+                    <strong>{name}</strong>
+                  </PartyRelationTd>
+                  <PartyRelationTd>
+                    {roleParts.length > 0 ? roleParts.join(' · ') : '—'}
+                  </PartyRelationTd>
+                  <PartyRelationTd>{period}</PartyRelationTd>
+                </PartyRelationTr>
+              )
+            })}
+          </tbody>
+        </PartyRelationTable>
+        {hiddenCount > 0 || showAll ? (
+          <PartyRelationShowMoreRow>
+            <span>
+              전체 {data.length}건 · {visible.length}건 표시
+            </span>
+            <PartyRelationShowMoreBtn
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+            >
+              {showAll ? '접기' : `${hiddenCount}건 더 보기`}
+            </PartyRelationShowMoreBtn>
+          </PartyRelationShowMoreRow>
+        ) : null}
+        </>
+      )}
+    </PartyDetailDescSection>
+  )
+}
+
+function PartyCabinetAffiliationsBlock({ partyId }: { partyId: string }) {
+  const [showAll, setShowAll] = useState(false)
+  const { data = [], isLoading, isError } = useQuery({
+    queryKey: ['political-parties', partyId, 'cabinet-affiliations'],
+    queryFn: () => politicalPartyApi.getCabinetAffiliations(partyId),
+    enabled: !!partyId,
+  })
+  const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
+  const hiddenCount = Math.max(0, data.length - visible.length)
+  const labelRole = (r: string) => {
+    if (r === 'LEADING') return '집권(단독)'
+    if (r === 'COALITION_PARTNER') return '연정 파트너'
+    if (r === 'SUPPORTING_MINOR') return '지원·소수'
+    if (r === 'OPPOSITION') return '야당'
+    return r
+  }
+  return (
+    <PartyDetailDescSection aria-label="내각 참여">
+      <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
+        <PartyDescSectionLabel>내각 참여</PartyDescSectionLabel>
+      </PartyDescSectionLabelRow>
+      {isLoading ? (
+        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+      ) : isError ? (
+        <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
+      ) : data.length === 0 ? (
+        <PartyDescEmptyHint>연결된 내각 참여가 없습니다.</PartyDescEmptyHint>
+      ) : (
+        <>
+        <PartyRelationTable>
+          <thead>
+            <tr>
+              <PartyRelationTh>내각</PartyRelationTh>
+              <PartyRelationTh>역할</PartyRelationTh>
+              <PartyRelationTh>기간</PartyRelationTh>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => {
+              const c = row.cabinet
+              const tenure = c?.headTenure
+              const period =
+                tenure?.startDate || tenure?.endDate
+                  ? `${tenure?.startDate ? formatDate(tenure.startDate) : '—'} — ${
+                      tenure?.endDate ? formatDate(tenure.endDate) : '유효'
+                    }`
+                  : '—'
+              return (
+                <PartyRelationTr key={row.id}>
+                  <PartyRelationTd>
+                    <strong>{c?.name?.trim() || row.cabinetId}</strong>
+                    {row.notes?.trim() ? (
+                      <PartyRelationMeta>{row.notes.trim()}</PartyRelationMeta>
+                    ) : null}
+                  </PartyRelationTd>
+                  <PartyRelationTd>{labelRole(row.role)}</PartyRelationTd>
+                  <PartyRelationTd>{period}</PartyRelationTd>
+                </PartyRelationTr>
+              )
+            })}
+          </tbody>
+        </PartyRelationTable>
+        {hiddenCount > 0 || showAll ? (
+          <PartyRelationShowMoreRow>
+            <span>
+              전체 {data.length}건 · {visible.length}건 표시
+            </span>
+            <PartyRelationShowMoreBtn
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+            >
+              {showAll ? '접기' : `${hiddenCount}건 더 보기`}
+            </PartyRelationShowMoreBtn>
+          </PartyRelationShowMoreRow>
+        ) : null}
+        </>
+      )}
+    </PartyDetailDescSection>
+  )
+}
+
+function PartyLawsBlock({ partyId }: { partyId: string }) {
+  const [showAll, setShowAll] = useState(false)
+  const { data = [], isLoading, isError } = useQuery({
+    queryKey: ['political-parties', partyId, 'laws'],
+    queryFn: () => getPartyLaws(partyId),
+    enabled: !!partyId,
+  })
+  const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
+  const hiddenCount = Math.max(0, data.length - visible.length)
+  return (
+    <PartyDetailDescSection aria-label="관련 법률">
+      <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
+        <PartyDescSectionLabel>관련 법률</PartyDescSectionLabel>
+      </PartyDescSectionLabelRow>
+      {isLoading ? (
+        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+      ) : isError ? (
+        <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
+      ) : data.length === 0 ? (
+        <PartyDescEmptyHint>연결된 법률이 없습니다.</PartyDescEmptyHint>
+      ) : (
+        <>
+        <PartyRelationTable>
+          <thead>
+            <tr>
+              <PartyRelationTh>법률</PartyRelationTh>
+              <PartyRelationTh>관련 메모</PartyRelationTh>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => (
+              <PartyRelationTr key={row.id}>
+                <PartyRelationTd>
+                  <strong>{row.law?.name ?? row.lawId}</strong>
+                  {row.law?.summary ? (
+                    <PartyRelationMeta>{row.law.summary}</PartyRelationMeta>
+                  ) : null}
+                </PartyRelationTd>
+                <PartyRelationTd>
+                  {row.relevanceNote?.trim() || '—'}
+                </PartyRelationTd>
+              </PartyRelationTr>
+            ))}
+          </tbody>
+        </PartyRelationTable>
+        {hiddenCount > 0 || showAll ? (
+          <PartyRelationShowMoreRow>
+            <span>
+              전체 {data.length}건 · {visible.length}건 표시
+            </span>
+            <PartyRelationShowMoreBtn
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+            >
+              {showAll ? '접기' : `${hiddenCount}건 더 보기`}
+            </PartyRelationShowMoreBtn>
+          </PartyRelationShowMoreRow>
+        ) : null}
+        </>
+      )}
+    </PartyDetailDescSection>
+  )
+}
+
 const POSITION_SPECTRUM_PCT: Record<PoliticalPosition, number> = {
   FAR_LEFT: 5,
   LEFT: 17,
@@ -621,8 +1260,6 @@ function PartyLineageBlock({
   )
   const [lineageKind, setLineageKind] =
     useState<PoliticalPartyTransitionKind>('SUCCESSION')
-  const [lineagePartyPickOpen, setLineagePartyPickOpen] = useState(false)
-  const [lineageKindPickOpen, setLineageKindPickOpen] = useState(false)
   const [lineageDatePickerOpen, setLineageDatePickerOpen] = useState(false)
   const [lineageEditingId, setLineageEditingId] = useState<string | null>(null)
 
@@ -634,8 +1271,6 @@ function PartyLineageBlock({
     setLineageConfirmNotes('')
     setLineagePartyError(null)
     setLineageKind('SUCCESSION')
-    setLineagePartyPickOpen(false)
-    setLineageKindPickOpen(false)
     setLineageDatePickerOpen(false)
   }
 
@@ -758,6 +1393,7 @@ function PartyLineageBlock({
                       <ToolbarGhostBtnSm
                         type="button"
                         disabled={saveMut.isPending || delMut.isPending}
+                        aria-label="계보 연결 수정"
                         onClick={() => {
                           setLineageEditingId(row.id)
                           setLineageModal('predecessor')
@@ -768,9 +1404,6 @@ function PartyLineageBlock({
                           )
                           setLineageConfirmNotes(row.notes ?? '')
                           setLineagePartyError(null)
-                          setLineagePartyPickOpen(false)
-                          setLineageKindPickOpen(false)
-                          setLineageDatePickerOpen(false)
                         }}
                       >
                         수정
@@ -778,6 +1411,7 @@ function PartyLineageBlock({
                       <ToolbarGhostBtnSm
                         type="button"
                         disabled={saveMut.isPending || delMut.isPending}
+                        aria-label="계보 연결 삭제"
                         onClick={() => {
                           if (window.confirm('이 계보 연결을 삭제할까요?'))
                             delMut.mutate(row.id)
@@ -791,9 +1425,27 @@ function PartyLineageBlock({
               })}
             </PartyDetailLineageList>
           ) : (
-            <EmptyHint style={{ margin: '0 0 16px' }}>
-              등록된 전신이 없습니다.
-            </EmptyHint>
+            <PartyLineageEmptyRow>
+              <EmptyHint style={{ margin: 0 }}>
+                등록된 전신이 없습니다.
+              </EmptyHint>
+              <SubsectionAddBtn
+                type="button"
+                disabled={others.length === 0 || saveMut.isPending}
+                onClick={() => {
+                  setLineageEditingId(null)
+                  setLineageModal('predecessor')
+                  setLineageOtherPartyId(null)
+                  setLineageConfirmEffectiveDate('')
+                  setLineageConfirmNotes('')
+                  setLineagePartyError(null)
+                  setLineageKind('SUCCESSION')
+                }}
+              >
+                <FiPlus size={13} strokeWidth={2.25} />
+                전신 추가
+              </SubsectionAddBtn>
+            </PartyLineageEmptyRow>
           )}
           <PartyDetailLineageGroupTitle>후신</PartyDetailLineageGroupTitle>
           {lineage?.successors?.length ? (
@@ -831,6 +1483,7 @@ function PartyLineageBlock({
                       <ToolbarGhostBtnSm
                         type="button"
                         disabled={saveMut.isPending || delMut.isPending}
+                        aria-label="계보 연결 수정"
                         onClick={() => {
                           setLineageEditingId(row.id)
                           setLineageModal('successor')
@@ -841,9 +1494,6 @@ function PartyLineageBlock({
                           )
                           setLineageConfirmNotes(row.notes ?? '')
                           setLineagePartyError(null)
-                          setLineagePartyPickOpen(false)
-                          setLineageKindPickOpen(false)
-                          setLineageDatePickerOpen(false)
                         }}
                       >
                         수정
@@ -851,6 +1501,7 @@ function PartyLineageBlock({
                       <ToolbarGhostBtnSm
                         type="button"
                         disabled={saveMut.isPending || delMut.isPending}
+                        aria-label="계보 연결 삭제"
                         onClick={() => {
                           if (window.confirm('이 계보 연결을 삭제할까요?'))
                             delMut.mutate(row.id)
@@ -864,16 +1515,34 @@ function PartyLineageBlock({
               })}
             </PartyDetailLineageList>
           ) : (
-            <EmptyHint style={{ margin: '0 0 16px' }}>
-              등록된 후신이 없습니다.
-            </EmptyHint>
+            <PartyLineageEmptyRow>
+              <EmptyHint style={{ margin: 0 }}>
+                등록된 후신이 없습니다.
+              </EmptyHint>
+              <SubsectionAddBtn
+                type="button"
+                disabled={others.length === 0 || saveMut.isPending}
+                onClick={() => {
+                  setLineageEditingId(null)
+                  setLineageModal('successor')
+                  setLineageOtherPartyId(null)
+                  setLineageConfirmEffectiveDate('')
+                  setLineageConfirmNotes('')
+                  setLineagePartyError(null)
+                  setLineageKind('SUCCESSION')
+                }}
+              >
+                <FiPlus size={13} strokeWidth={2.25} />
+                후신 추가
+              </SubsectionAddBtn>
+            </PartyLineageEmptyRow>
           )}
           <PartyDetailLineageAddPanel>
             <PartyDetailLineageHint>
               <strong>전신으로 연결</strong>·<strong>후신으로 연결</strong>을
-              누르면 우측 패널에서 상대 정당·계보 유형(각각 같은 선택
-              모달)·기준일(달력)·메모를 정한 뒤 연결합니다. 같은 맥락에 등록된
-              다른 정당만 선택할 수 있습니다.
+              누르면 우측 패널에서 상대 정당·계보 유형·기준일·메모를 한 화면에서
+              입력해 저장합니다. 같은 맥락에 등록된 다른 정당만 선택할 수
+              있습니다.
             </PartyDetailLineageHint>
             <PartyDetailLineageBtnPair>
               <PartyDetailLineageActionBtn
@@ -1046,41 +1715,45 @@ function PartyLineageBlock({
                   </p>
                   <FormRows>
                     <FieldRow>
-                      <FieldLabel>
+                      <FieldLabel htmlFor="lineage-other-party">
                         연결할 정당
                         {!lineageEditingId ? (
                           <Required aria-label="필수" />
                         ) : null}
                       </FieldLabel>
                       <FieldControl>
-                        <ToolbarGhostBtnSm
-                          type="button"
+                        <FormSelectNative
+                          id="lineage-other-party"
+                          value={lineageOtherPartyId ?? ''}
                           disabled={!!lineageEditingId || saveMut.isPending}
-                          onClick={() => {
-                            if (lineageEditingId) return
-                            playClickSound()
-                            setLineagePartyPickOpen(true)
+                          onChange={(e) => {
+                            setLineageOtherPartyId(e.target.value || null)
+                            setLineagePartyError(null)
                           }}
-                          style={{
-                            width: '100%',
-                            justifyContent: 'center',
-                            minHeight: 44,
-                            borderRadius: 12,
-                            border:
-                              lineagePartyError != null
-                                ? '1px solid #ea4335'
-                                : undefined,
-                          }}
+                          aria-invalid={lineagePartyError != null}
+                          style={
+                            lineagePartyError != null
+                              ? { borderColor: '#dc2626' }
+                              : undefined
+                          }
                         >
-                          {lineageOtherPartyId
-                            ? (others.find((p) => p.id === lineageOtherPartyId)
-                                ?.name ??
-                              (lineageModal === 'predecessor'
-                                ? editingTransitionRow?.fromParty?.name
-                                : editingTransitionRow?.toParty?.name) ??
-                              '정당')
-                            : '정당 선택…'}
-                        </ToolbarGhostBtnSm>
+                          <option value="">
+                            {lineageEditingId
+                              ? others.find(
+                                  (p) => p.id === lineageOtherPartyId,
+                                )?.name ??
+                                (lineageModal === 'predecessor'
+                                  ? editingTransitionRow?.fromParty?.name
+                                  : editingTransitionRow?.toParty?.name) ??
+                                '정당'
+                              : '정당 선택…'}
+                          </option>
+                          {others.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </FormSelectNative>
                         {lineageEditingId ? (
                           <FieldHint style={{ marginTop: 8 }}>
                             편집 중에는 상대 정당을 바꿀 수 없습니다. 방향을
@@ -1093,26 +1766,24 @@ function PartyLineageBlock({
                       </FieldControl>
                     </FieldRow>
                     <FieldRow>
-                      <FieldLabel>계보 유형</FieldLabel>
+                      <FieldLabel htmlFor="lineage-kind">계보 유형</FieldLabel>
                       <FieldControl>
-                        <ToolbarGhostBtnSm
-                          type="button"
+                        <FormSelectNative
+                          id="lineage-kind"
+                          value={lineageKind}
                           disabled={saveMut.isPending}
-                          onClick={() => {
-                            playClickSound()
-                            setLineageKindPickOpen(true)
-                          }}
-                          style={{
-                            width: '100%',
-                            justifyContent: 'center',
-                            minHeight: 44,
-                            borderRadius: 12,
-                          }}
+                          onChange={(e) =>
+                            setLineageKind(
+                              e.target.value as PoliticalPartyTransitionKind,
+                            )
+                          }
                         >
-                          {LINEAGE_KIND_OPTIONS.find(
-                            (o) => o.value === lineageKind,
-                          )?.label ?? '선택…'}
-                        </ToolbarGhostBtnSm>
+                          {LINEAGE_KIND_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </FormSelectNative>
                       </FieldControl>
                     </FieldRow>
                     <FieldRow>
@@ -1172,32 +1843,6 @@ function PartyLineageBlock({
                 </FormSectionInner>
               )}
             </SidePanel>
-            <SelectModal
-              isOpen={lineagePartyPickOpen}
-              onClose={() => setLineagePartyPickOpen(false)}
-              title="연결할 정당"
-              options={others.map((p) => ({ value: p.id, label: p.name }))}
-              selectedValue={lineageOtherPartyId ?? undefined}
-              onSelect={(id) => {
-                setLineageOtherPartyId(id)
-                setLineagePartyError(null)
-                setLineagePartyPickOpen(false)
-              }}
-            />
-            <SelectModal<PoliticalPartyTransitionKind>
-              isOpen={lineageKindPickOpen}
-              onClose={() => setLineageKindPickOpen(false)}
-              title="계보 유형"
-              options={LINEAGE_KIND_OPTIONS.map((o) => ({
-                value: o.value,
-                label: o.label,
-              }))}
-              selectedValue={lineageKind}
-              onSelect={(value) => {
-                setLineageKind(value)
-                setLineageKindPickOpen(false)
-              }}
-            />
             <DatePickerModal
               isOpen={lineageDatePickerOpen}
               onClose={() => setLineageDatePickerOpen(false)}
@@ -1258,6 +1903,16 @@ export function CountryPoliticalPartiesBlock({
   const [editingPartyDescription, setEditingPartyDescription] = useState(false)
   const [partyDescriptionDraft, setPartyDescriptionDraft] = useState('')
 
+  /** 목록 검색·필터·정렬 */
+  const [listSearch, setListSearch] = useState('')
+  const [listPositionFilter, setListPositionFilter] = useState<string>('')
+  const [listStatusFilter, setListStatusFilter] = useState<
+    '' | 'active' | 'dissolved'
+  >('')
+  const [listSortKey, setListSortKey] = useState<'founded' | 'name'>('founded')
+  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('desc')
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
+
   const listParams = partyListParams({ countryId, historicalCountryId })
 
   const { data: parties = [], isLoading } = useQuery({
@@ -1266,7 +1921,58 @@ export function CountryPoliticalPartiesBlock({
     enabled: !!scopeKey,
   })
 
-  /** 스펙트럼 점·연정 띠·범례가 같은 좌표·색을 쓰도록 한 번만 계산 */
+  /** 검색·필터·정렬 적용된 정당 목록 */
+  const filteredParties = useMemo(() => {
+    const query = listSearch.trim().toLowerCase()
+    const rows = parties.filter((party) => {
+      if (query) {
+        const hay =
+          `${party.name} ${party.shortName ?? ''} ${party.localName ?? ''}`.toLowerCase()
+        if (!hay.includes(query)) return false
+      }
+      if (listPositionFilter && party.position !== listPositionFilter)
+        return false
+      if (listStatusFilter === 'active' && party.dissolvedDate) return false
+      if (listStatusFilter === 'dissolved' && !party.dissolvedDate) return false
+      return true
+    })
+    const mult = listSortDir === 'asc' ? 1 : -1
+    rows.sort((partyA, partyB) => {
+      if (listSortKey === 'name') {
+        return partyA.name.localeCompare(partyB.name, 'ko') * mult
+      }
+      const dateA = partyA.foundedDate
+        ? new Date(partyA.foundedDate).getTime()
+        : 0
+      const dateB = partyB.foundedDate
+        ? new Date(partyB.foundedDate).getTime()
+        : 0
+      return (dateA - dateB) * mult
+    })
+    return rows
+  }, [parties, listSearch, listPositionFilter, listStatusFilter, listSortKey, listSortDir])
+
+  /** 기본값에서 벗어난 필터/정렬 개수 — 토글 활성 표시·배지 카운트 공용 */
+  const activeFilterCount = useMemo(() => {
+    return (
+      (listPositionFilter ? 1 : 0) +
+      (listStatusFilter ? 1 : 0) +
+      (listSortKey !== 'founded' || listSortDir !== 'desc' ? 1 : 0)
+    )
+  }, [listPositionFilter, listStatusFilter, listSortKey, listSortDir])
+
+  const resetListFilters = useCallback(() => {
+    setListSearch('')
+    setListPositionFilter('')
+    setListStatusFilter('')
+    setListSortKey('founded')
+    setListSortDir('desc')
+  }, [])
+
+  /**
+   * 스펙트럼 점·연정 띠·범례가 같은 좌표·색을 쓰도록 한 번만 계산.
+   * 필터는 아래 카드 그리드만 좁히고, 스펙트럼·연정 띠는 전체 parties를 유지한다.
+   */
   const partyInfographicRows = useMemo(() => {
     return parties.map((p, i) => {
       const base = ideologySpectrumLeftPct(p.position as PoliticalPosition)
@@ -1509,6 +2215,16 @@ export function CountryPoliticalPartiesBlock({
                   </PartyDetailLogoHero>
                   <PartyDetailHeroTitle>
                     {detailParty.name}
+                    <PartyStatusBadge
+                      $dissolved={Boolean(detailParty.dissolvedDate)}
+                      aria-label={
+                        detailParty.dissolvedDate
+                          ? `해산 · ${formatDate(detailParty.dissolvedDate)}`
+                          : '활동 중'
+                      }
+                    >
+                      {detailParty.dissolvedDate ? '해산' : '활동 중'}
+                    </PartyStatusBadge>
                   </PartyDetailHeroTitle>
                   <PartyDetailChipRowCenter>
                     {detailParty.shortName?.trim() ? (
@@ -1624,6 +2340,13 @@ export function CountryPoliticalPartiesBlock({
                 parties={parties}
               />
               <PartyTopLeadersBlock partyId={detailParty.id} />
+              <PartyElectionResultsBlock
+                partyId={detailParty.id}
+                routeCountryId={routeCountryId}
+              />
+              <PartyMembershipsBlock partyId={detailParty.id} />
+              <PartyCabinetAffiliationsBlock partyId={detailParty.id} />
+              <PartyLawsBlock partyId={detailParty.id} />
               <PartyDetailDescSection aria-label="정당 설명">
                 <PartyDescSectionLabelRow>
                   <PartyDescSectionLabel>설명</PartyDescSectionLabel>
@@ -1745,11 +2468,96 @@ export function CountryPoliticalPartiesBlock({
                 </PartyInfographicKickerTitle>
                 <PartyInfographicKickerDesc>
                   말풍선·막대 위 포인트·아래 띠는 정당 브랜드 색으로 맞춥니다.
-                  막대는 좌·우 성향 축입니다. 가까운 위치의 말풍선은 위로 나눠 겹치지
-                  않게 배치합니다. 아래 카드 그리드는 등록·목록 순서입니다.
+                  가까운 위치의 말풍선은 위로 나눠 겹치지 않게 배치합니다.
                 </PartyInfographicKickerDesc>
               </PartyInfographicKickerLeft>
             </PartyInfographicKicker>
+
+            <PartyFilterBar>
+              <PartyFilterRow>
+                <PartyFilterInput
+                  type="search"
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  placeholder="정당 이름·약칭·현지어 검색…"
+                  aria-label="정당 이름 검색"
+                />
+                <PartyFilterToggleBtn
+                  type="button"
+                  $active={filtersExpanded || activeFilterCount > 0}
+                  onClick={() => setFiltersExpanded((v) => !v)}
+                  aria-expanded={filtersExpanded}
+                  aria-label={filtersExpanded ? '필터·정렬 닫기' : '필터·정렬 열기'}
+                  title="필터·정렬"
+                >
+                  필터
+                  {activeFilterCount > 0 ? (
+                    <PartyFilterBadge>{activeFilterCount}</PartyFilterBadge>
+                  ) : null}
+                </PartyFilterToggleBtn>
+              </PartyFilterRow>
+              {filtersExpanded ? (
+                <>
+                  <PartyFilterRow>
+                    <PartyFilterSelect
+                      value={listPositionFilter}
+                      onChange={(e) => setListPositionFilter(e.target.value)}
+                      aria-label="스펙트럼 필터"
+                    >
+                      <option value="">전체 스펙트럼</option>
+                      {POSITION_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </PartyFilterSelect>
+                    <PartyFilterSelect
+                      value={listStatusFilter}
+                      onChange={(e) =>
+                        setListStatusFilter(
+                          e.target.value as '' | 'active' | 'dissolved',
+                        )
+                      }
+                      aria-label="상태 필터"
+                    >
+                      <option value="">활동 상태 전체</option>
+                      <option value="active">활동 중</option>
+                      <option value="dissolved">해산</option>
+                    </PartyFilterSelect>
+                  </PartyFilterRow>
+                  <PartyFilterRow>
+                    <PartyFilterSelect
+                      value={`${listSortKey}:${listSortDir}`}
+                      onChange={(e) => {
+                        const [key, dir] = e.target.value.split(':') as [
+                          'founded' | 'name',
+                          'asc' | 'desc',
+                        ]
+                        setListSortKey(key)
+                        setListSortDir(dir)
+                      }}
+                      aria-label="정렬"
+                    >
+                      <option value="founded:desc">최근 설립 순</option>
+                      <option value="founded:asc">오래된 설립 순</option>
+                      <option value="name:asc">이름 오름차순</option>
+                      <option value="name:desc">이름 내림차순</option>
+                    </PartyFilterSelect>
+                  </PartyFilterRow>
+                </>
+              ) : null}
+              <PartyFilterMeta>
+                전체 {parties.length}곳 · 표시 {filteredParties.length}곳
+                {listSearch || activeFilterCount > 0 ? (
+                  <>
+                    {' · '}
+                    <PartyFilterResetBtn type="button" onClick={resetListFilters}>
+                      필터 초기화
+                    </PartyFilterResetBtn>
+                  </>
+                ) : null}
+              </PartyFilterMeta>
+            </PartyFilterBar>
 
             <PartyIdeologySpectrumWrap>
               <span
@@ -1781,30 +2589,54 @@ export function CountryPoliticalPartiesBlock({
                 $maxLane={spectrumBubbleLanes.maxLane}
               >
                 {partyInfographicRows.map(
-                  ({ party: p, leftPct, displayName, brandColor }, stack) => (
-                    <PartyIdeologySpectrumBubbleAnchor
-                      key={p.id}
-                      $leftPct={leftPct}
-                      $stack={stack}
-                      $lane={spectrumBubbleLanes.laneByPartyId.get(p.id) ?? 0}
-                      aria-label={`${p.name}${
-                        p.position
-                          ? `, ${labelPoliticalPosition(p.position)}`
-                          : ''
-                      }`}
-                    >
-                      <PartyIdeologySpectrumBubble
-                        $brand={brandColor}
-                        title={p.name}
+                  ({ party: p, leftPct, displayName, brandColor }, stack) => {
+                    const tooltipParts: string[] = [p.name]
+                    if (p.position)
+                      tooltipParts.push(labelPoliticalPosition(p.position))
+                    if (p.foundedDate)
+                      tooltipParts.push(`설립 ${formatDate(p.foundedDate)}`)
+                    if (p.dissolvedDate)
+                      tooltipParts.push(`해산 ${formatDate(p.dissolvedDate)}`)
+                    const tooltip = tooltipParts.join(' · ')
+                    const goToDetail = () =>
+                      navigate(
+                        pathKeys.history.countryElectionPartyDetail(
+                          routeCountryId,
+                          p.id,
+                        ),
+                      )
+                    return (
+                      <PartyIdeologySpectrumBubbleAnchor
+                        key={p.id}
+                        $leftPct={leftPct}
+                        $stack={stack}
+                        $lane={
+                          spectrumBubbleLanes.laneByPartyId.get(p.id) ?? 0
+                        }
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${tooltip} — 상세 보기`}
+                        onClick={goToDetail}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            goToDetail()
+                          }
+                        }}
                       >
-                        {displayName}
-                      </PartyIdeologySpectrumBubble>
-                      <PartyIdeologySpectrumPin
-                        $fill={brandColor}
-                        aria-hidden
-                      />
-                    </PartyIdeologySpectrumBubbleAnchor>
-                  ),
+                        <PartyIdeologySpectrumBubble
+                          $brand={brandColor}
+                          title={tooltip}
+                        >
+                          {displayName}
+                        </PartyIdeologySpectrumBubble>
+                        <PartyIdeologySpectrumPin
+                          $fill={brandColor}
+                          aria-hidden
+                        />
+                      </PartyIdeologySpectrumBubbleAnchor>
+                    )
+                  },
                 )}
                 <PartyIdeologySpectrumTrackBar aria-hidden />
               </PartyIdeologySpectrumStage>
@@ -1825,7 +2657,7 @@ export function CountryPoliticalPartiesBlock({
             </PartyCoalitionStrip>
 
             <PartyInfographicGrid>
-              {parties.map((p) => {
+              {filteredParties.map((p) => {
                 const accent = normalizeBrandColorInput(p.brandColor ?? '')
                 const dissolved = Boolean(p.dissolvedDate)
                 return (
@@ -2055,7 +2887,12 @@ function PartyFormModal({
                   <PartyLogoThumb
                     type="button"
                     disabled={logoUploading}
-                    aria-label="로고 이미지 선택"
+                    aria-label={
+                      logoUrl
+                        ? '로고 이미지 변경 — 클릭해서 새 파일 선택'
+                        : '로고 이미지 업로드'
+                    }
+                    title={logoUrl ? '클릭해서 변경' : '클릭해서 업로드'}
                     onClick={() => {
                       playClickSound()
                       logoFileInputRef.current?.click()
@@ -2071,65 +2908,91 @@ function PartyFormModal({
                     )}
                   </PartyLogoThumb>
                   <PartyLogoMeta>
-                    <PartyLogoActions>
-                      <PartyLogoPickBtn
-                        type="button"
-                        disabled={logoUploading}
-                        onClick={() => {
-                          playClickSound()
-                          logoFileInputRef.current?.click()
-                        }}
-                      >
-                        <FiUpload size={14} strokeWidth={2} />
-                        {logoUploading ? '업로드 중…' : '파일 선택'}
-                      </PartyLogoPickBtn>
-                      {logoUrl ? (
-                        <PartyLogoRemoveBtn
-                          type="button"
-                          disabled={logoUploading}
-                          onClick={() => {
-                            playClickSound()
-                            setLogoUrl('')
-                          }}
-                        >
-                          제거
-                        </PartyLogoRemoveBtn>
-                      ) : null}
-                    </PartyLogoActions>
-                    <PartyLogoHint>
-                      JPG, PNG, WebP 권장 · 업로드 시 URL로 저장됩니다
-                    </PartyLogoHint>
+                    <PartyLogoStatusLine>
+                      {logoUploading ? (
+                        <PartyLogoStatusBusy>업로드 중…</PartyLogoStatusBusy>
+                      ) : logoUrl ? (
+                        <>
+                          <PartyLogoStatusOk>
+                            <FiUpload size={12} strokeWidth={2} /> 로고가
+                            업로드됐습니다
+                          </PartyLogoStatusOk>
+                          <PartyLogoRemoveBtn
+                            type="button"
+                            disabled={logoUploading}
+                            onClick={() => {
+                              playClickSound()
+                              setLogoUrl('')
+                            }}
+                          >
+                            제거
+                          </PartyLogoRemoveBtn>
+                        </>
+                      ) : (
+                        <PartyLogoHint>
+                          썸네일을 클릭해 업로드 · JPG / PNG / WebP 권장
+                        </PartyLogoHint>
+                      )}
+                    </PartyLogoStatusLine>
+                    {logoUrl && !logoUploading ? (
+                      <PartyLogoHint>
+                        썸네일을 다시 클릭하면 다른 파일로 교체합니다.
+                      </PartyLogoHint>
+                    ) : null}
                   </PartyLogoMeta>
                 </PartyLogoRow>
               </FullWidthControl>
             </FieldRow>
             <FieldRow>
               <FieldLabel htmlFor="party-brand-color">브랜드 컬러</FieldLabel>
-              <ModalFieldMedium
-                style={{ display: 'flex', gap: 10, alignItems: 'center' }}
-              >
-                <input
-                  id="party-brand-color-swatch"
-                  type="color"
-                  value={normalizeBrandColorInput(brandColor) ?? '#6366f1'}
-                  onChange={(e) => setBrandColor(e.target.value)}
-                  style={{
-                    width: 44,
-                    height: 36,
-                    padding: 0,
-                    border: '1px solid #e2e8f0',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                  }}
-                  aria-label="색 선택"
-                />
-                <Input
-                  id="party-brand-color"
-                  value={brandColor}
-                  onChange={(e) => setBrandColor(e.target.value)}
-                  placeholder="#RRGGBB (선택)"
-                  autoComplete="off"
-                />
+              <ModalFieldMedium>
+                <div
+                  style={{ display: 'flex', gap: 10, alignItems: 'center' }}
+                >
+                  <input
+                    id="party-brand-color-swatch"
+                    type="color"
+                    value={normalizeBrandColorInput(brandColor) ?? '#6366f1'}
+                    onChange={(e) => setBrandColor(e.target.value)}
+                    style={{
+                      width: 44,
+                      height: 36,
+                      padding: 0,
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                    }}
+                    aria-label="색 선택 — 선택 시 텍스트 값도 자동 갱신"
+                  />
+                  <PartyBrandColorInput
+                    id="party-brand-color"
+                    value={brandColor}
+                    onChange={(e) => setBrandColor(e.target.value)}
+                    placeholder="#RRGGBB (선택)"
+                    autoComplete="off"
+                    $invalid={
+                      brandColor.trim() !== '' &&
+                      normalizeBrandColorInput(brandColor) == null
+                    }
+                  />
+                </div>
+                {brandColor.trim() !== '' &&
+                normalizeBrandColorInput(brandColor) == null ? (
+                  <FieldHint
+                    style={{
+                      color: '#dc2626',
+                      marginTop: 6,
+                      fontSize: 11.5,
+                    }}
+                  >
+                    올바른 #RRGGBB 형식이 아닙니다. 색 선택기로 바꾸면 자동
+                    보정됩니다.
+                  </FieldHint>
+                ) : (
+                  <FieldHint style={{ marginTop: 6, fontSize: 11.5 }}>
+                    선택기와 텍스트는 서로 실시간 반영됩니다 (#RRGGBB 6자리).
+                  </FieldHint>
+                )}
               </ModalFieldMedium>
             </FieldRow>
             <FieldRow>

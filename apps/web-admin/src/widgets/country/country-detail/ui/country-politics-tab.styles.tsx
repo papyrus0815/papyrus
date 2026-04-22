@@ -1314,6 +1314,14 @@ export const PartyIdeologySpectrumBubbleAnchor = styled.div<{
   flex-direction: column;
   align-items: center;
   max-width: min(168px, 44vw);
+  &[role='button'] {
+    cursor: pointer;
+  }
+  &[role='button']:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 4px;
+    border-radius: 14px;
+  }
 `
 
 /** 브랜드 색 테두리·틴트 말풍선 — color-mix 미지원 시 단색 폴백 */

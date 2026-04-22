@@ -83,6 +83,10 @@ import {
   type RichTextDynastyTooltipState,
   type RichTextTermTooltipState,
 } from '@/shared/hooks/use-rich-text-prose-click'
+import {
+  getPartyDisplayName,
+  getPartyShortName,
+} from '@/shared/lib/party-display-name'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
@@ -866,7 +870,7 @@ function formatPartyDonutSliceHoverTitle(
   s: { row: ElectionPartyResultDto; fraction: number },
   metric: 'voteShare' | 'seats',
 ): string {
-  const name = s.row.party?.shortName || s.row.party?.name || s.row.partyId
+  const name = getPartyDisplayName(s.row.party) || s.row.partyId
   const pct = formatVoteShareLabel(s.row.voteSharePercent)
   const votesDisp = formatVotesForDisplay(s.row.votes)
   const votesPart = votesDisp !== '—' ? `득표 ${votesDisp}` : null
@@ -1571,7 +1575,7 @@ export function CountryElectionsSection({
           },
         )
       }
-      if (c.party) return c.party.shortName || c.party.name
+      if (c.party) return getPartyDisplayName(c.party)
       return '(후보 정보 없음)'
     },
     [countryForNames?.defaultNameDisplayOrder],
@@ -2091,10 +2095,7 @@ export function CountryElectionsSection({
                         })
                       }
                       onDeletePartyResult={(row) => {
-                        const label =
-                          row.party?.shortName ||
-                          row.party?.name ||
-                          '정당'
+                        const label = getPartyDisplayName(row.party) || '정당'
                         setConfirmDialog({
                           title: '정당 집계 삭제',
                           message: `「${label}」집계를 삭제할까요? 되돌릴 수 없습니다.`,
@@ -2701,7 +2702,7 @@ function ElectionDetailPanel({
         if (existing) {
           existing.totalSeats += seats
         } else {
-          const name = r.party?.shortName || r.party?.name || r.partyId
+          const name = getPartyShortName(r.party) || r.partyId
           const registryColor = parties.find(
             (p) => p.id === r.partyId,
           )?.brandColor
@@ -2764,8 +2765,7 @@ function ElectionDetailPanel({
           partyId: row.partyId,
           name:
             legendById.get(row.partyId)?.name ||
-            row.party?.shortName ||
-            row.party?.name ||
+            getPartyShortName(row.party) ||
             row.partyId,
           fill:
             legendById.get(row.partyId)?.fill ??
@@ -2835,8 +2835,8 @@ function ElectionDetailPanel({
     rows.sort((a, b) => {
       switch (key) {
         case 'party': {
-          const na = a.party?.shortName || a.party?.name || a.partyId
-          const nb = b.party?.shortName || b.party?.name || b.partyId
+          const na = getPartyDisplayName(a.party) || a.partyId
+          const nb = getPartyDisplayName(b.party) || b.partyId
           return na.localeCompare(nb, 'ko') * mult
         }
         case 'votes':
@@ -2961,8 +2961,7 @@ function ElectionDetailPanel({
 
     const ariaLabel = segments
       .map((segment) => {
-        const name =
-          segment.row.party?.shortName || segment.row.party?.name || '정당'
+        const name = getPartyDisplayName(segment.row.party) || '정당'
         if (partyDistributionMetric === 'seats') {
           const seats = segment.row.seatsWon
           const seatLabel =
@@ -3326,9 +3325,7 @@ function ElectionDetailPanel({
                       <>
                         {visible.map((s) => {
                           const label =
-                            s.row.party?.shortName ||
-                            s.row.party?.name ||
-                            s.row.partyId
+                            getPartyDisplayName(s.row.party) || s.row.partyId
                           const metricLine =
                             partyDistributionMetric === 'seats'
                               ? s.row.seatsWon != null && s.row.seatsWon >= 0
@@ -3499,7 +3496,7 @@ function ElectionDetailPanel({
                           <PartyNameInline>
                             <PartyColorDot $fill={dotFill} aria-hidden />
                             {row.party
-                              ? row.party.shortName || row.party.name
+                              ? getPartyDisplayName(row.party)
                               : row.partyId}
                           </PartyNameInline>
                         </DataTd>
@@ -4050,7 +4047,7 @@ function ElectionDetailPanel({
                             </CandidacyNameStrong>
                             {c.party ? (
                               <CandidacyPartyMeta>
-                                {c.party.shortName || c.party.name}
+                                {getPartyDisplayName(c.party)}
                               </CandidacyPartyMeta>
                             ) : null}
                             {metaBits.length > 0 ? (
@@ -5470,7 +5467,7 @@ function CandidacyFormModal({
               <option value="">(없음)</option>
               {parties.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.shortName || p.name}
+                  {getPartyDisplayName(p)}
                 </option>
               ))}
             </FormSelectNative>
@@ -6076,14 +6073,13 @@ function PartyResultFormModal({
                 <option value="">정당 선택</option>
                 {partyChoices.map((party) => (
                   <option key={party.id} value={party.id}>
-                    {party.shortName || party.name}
+                    {getPartyDisplayName(party)}
                   </option>
                 ))}
               </FormSelectNative>
             ) : (
               <PartyTableCellStrong>
-                {initialRow?.party?.shortName ||
-                  initialRow?.party?.name ||
+                {getPartyDisplayName(initialRow?.party) ||
                   initialRow?.partyId}
               </PartyTableCellStrong>
             )}
