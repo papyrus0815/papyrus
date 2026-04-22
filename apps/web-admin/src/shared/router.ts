@@ -82,7 +82,20 @@ export const pathKeys = {
     /** 연대표/대시보드 — 행정부 다국가 비교 */
     dashboardAdministration: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/${ROUTES.HISTORY.DASHBOARD_ADMINISTRATION}`,
+    /** 연대표/대시보드 — 가문 뷰 */
+    dashboardDynasty: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/dynasty`,
+    /** 연대표/대시보드 — 민족 뷰 */
+    dashboardEthnicity: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/ethnicity`,
+    /** 연대표/대시보드 — 저원(입법) 뷰 */
+    dashboardLegislature: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/legislature`,
+    /** 연대표/대시보드 — 군사 뷰 */
+    dashboardMilitary: () =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/military`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
+    post: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.POST}/`,
   },
 
   // --- Events Routes ---

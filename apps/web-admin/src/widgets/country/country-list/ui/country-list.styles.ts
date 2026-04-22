@@ -47,7 +47,6 @@ export const ListPaneWrapper = styled.div`
 `
 
 export const ListPane = styled.div<{
-  $inHistory?: boolean
   $collapsed?: boolean
 }>`
   display: flex;
@@ -1113,106 +1112,9 @@ export const AddButtonIcon = styled.div`
   font-size: 16px;
 `
 
-// ─── 사이드바 대시보드 메뉴 ───────────────────────────────────────────────────
-
-export const DashboardMenu = styled.nav`
-  padding: 16px 16px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  background: transparent;
-`
-
-export const DashboardMenuTitle = styled.div`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: 0.04em;
-  padding: 8px 10px 10px;
-  text-transform: none;
-`
-
-export const DashboardMenuItem = styled.button<{ $active?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: ${(p) => (p.$active ? 600 : 500)};
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.18s ease;
-
-  ${(p) =>
-    p.theme.mode === 'dark'
-      ? css`
-          background: ${p.$active ? 'rgba(99, 106, 242, 0.15)' : 'transparent'};
-          border: 1px solid
-            ${p.$active ? 'rgba(99, 106, 242, 0.35)' : 'transparent'};
-          color: ${p.$active ? '#ffffff' : p.theme.colors.text.secondary};
-          box-shadow: ${p.$active
-            ? '0 3px 10px rgba(99, 106, 242, 0.25)'
-            : 'none'};
-          backdrop-filter: ${p.$active ? 'blur(8px)' : 'none'};
-          -webkit-backdrop-filter: ${p.$active ? 'blur(8px)' : 'none'};
-        `
-      : css`
-          background: ${p.$active ? 'rgba(99, 102, 241, 0.08)' : 'transparent'};
-          border: 1px solid
-            ${p.$active ? 'rgba(99, 102, 241, 0.2)' : 'transparent'};
-          color: ${p.$active
-            ? p.theme.colors.active
-            : p.theme.colors.text.secondary};
-          box-shadow: ${p.$active
-            ? '0 3px 10px rgba(99, 102, 241, 0.12)'
-            : 'none'};
-        `}
-
-  &:hover {
-    background: ${(p) =>
-      p.theme.mode === 'dark'
-        ? p.$active
-          ? 'rgba(99, 106, 242, 0.2)'
-          : 'rgba(255, 255, 255, 0.05)'
-        : p.$active
-          ? 'rgba(99, 102, 241, 0.12)'
-          : p.theme.colors.background.secondary};
-    color: ${(p) =>
-      p.theme.mode === 'dark'
-        ? '#ffffff'
-        : p.$active
-          ? p.theme.colors.active
-          : p.theme.colors.text.primary};
-    border-color: ${(p) =>
-      p.theme.mode === 'dark'
-        ? p.$active
-          ? 'rgba(99, 106, 242, 0.5)'
-          : 'rgba(255, 255, 255, 0.08)'
-        : p.$active
-          ? 'rgba(99, 102, 241, 0.3)'
-          : p.theme.colors.border.default};
-  }
-
-  svg {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    color: ${(p) =>
-      p.$active
-        ? p.theme.mode === 'dark'
-          ? '#ffffff'
-          : p.theme.colors.primary
-        : p.theme.colors.text.secondary};
-    opacity: ${(p) => (p.$active ? 1 : 0.85)};
-  }
-
-  &:hover svg {
-    color: ${(p) =>
-      p.theme.mode === 'dark' ? '#ffffff' : p.theme.colors.primary};
-  }
-`
+// ─── 사이드바 대시보드 메뉴 (Phase 5에서 제거됨) ──────────────────────────────
+// DashboardMenu·DashboardMenuTitle·DashboardMenuItem 은 country-list에서 더 이상
+// 사용되지 않는다. 대시보드 뷰는 별도 라우트(/history/dashboard/*)로 분리됨.
 
 // ─── 선택 모달 ────────────────────────────────────────────────────────────────
 

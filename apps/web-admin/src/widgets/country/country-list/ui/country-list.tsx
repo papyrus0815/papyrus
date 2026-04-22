@@ -10,127 +10,17 @@ import {
 } from '@/entities/country/model/unified-types'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
+import { IconPeople } from '@/widgets/history-shell/model/dashboard-menu-items'
 
 import { useCountryListState } from '../country-list-state.context'
 import * as S from './country-list.styles'
 import { PersonRegisterViewModal } from './person-register-view-modal'
 
-// 대시보드 메뉴·등록 모달 SVG 아이콘
-const IconGlobe = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-  </svg>
-)
-const IconPeople = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-)
-const IconExecutive = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-)
-const IconLegislature = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M3 21h18M3 7v1a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7M3 7h18M3 7v-.7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v.7" />
-    <path d="M8 12v6M12 12v6M16 12v6" />
-  </svg>
-)
-const IconMilitary = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-)
-const IconAdministration = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="2" y="3" width="20" height="14" rx="2" />
-    <path d="M8 21h8M12 17v4" />
-  </svg>
-)
-const IconDynasty = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <path d="M9 22V12h6v10" />
-  </svg>
-)
-const IconEthnicity = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-    <path d="M12 12v.01M12 6v.01M12 18v.01" />
-  </svg>
-)
-
 export type SortBy = 'name' | 'population' | 'area'
-export type ActiveTab = 'dashboard' | 'list'
 
 interface CountryListProps {
   selectedId: string | null
   onSelect: (id: string) => void
-  activeTab: ActiveTab
-  onTabChange: (tab: ActiveTab) => void
   onAdd: () => void
   /** 역사적 국가 폼 열기. preset이 있으면 막부 등 미리 채움 */
   onAddHistorical?: (preset?: {
@@ -138,78 +28,30 @@ interface CountryListProps {
     entityKind: 'REGIME'
   }) => void
   onEditHistorical?: (country: UnifiedCountry) => void
-  inHistory?: boolean
   showContinentModal: boolean
   setShowContinentModal: (v: boolean) => void
   showSortModal: boolean
   setShowSortModal: (v: boolean) => void
   showCountryTypeModal: boolean
   setShowCountryTypeModal: (v: boolean) => void
-  /** 대시보드 오른쪽 컨텐츠 뷰 (메뉴 선택 시 컨텐츠만 전환) */
-  dashboardContentView?: DashboardContentView
-  onDashboardMenuSelect?: (view: DashboardContentView) => void
   /** 좌측 패널 접기 상태 */
   collapsed?: boolean
   /** 접기/펼치기 토글 핸들러 */
   onToggleCollapse?: () => void
 }
 
-export type DashboardContentView =
-  | 'stats'
-  | 'person'
-  | 'legislature'
-  | 'military'
-  | 'administration'
-  | 'dynasty'
-  | 'ethnicity'
-  | 'events'
-
-const IconEvents = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-)
-
-const DASHBOARD_MENU_ITEMS: {
-  id: DashboardContentView
-  label: string
-  icon: React.ComponentType
-}[] = [
-  { id: 'stats', label: '전 세계 국가 통계', icon: IconGlobe },
-  { id: 'person', label: '인물', icon: IconPeople },
-  { id: 'legislature', label: '저원', icon: IconLegislature },
-  { id: 'military', label: '군사', icon: IconMilitary },
-  { id: 'administration', label: '행정부', icon: IconAdministration },
-  { id: 'dynasty', label: '가문', icon: IconDynasty },
-  { id: 'ethnicity', label: '민족', icon: IconEthnicity },
-  { id: 'events', label: '전체 사건', icon: IconEvents },
-]
-
 function CountryListInner({
   selectedId,
   onSelect,
-  activeTab,
-  onTabChange,
   onAdd,
   onAddHistorical,
   onEditHistorical,
-  inHistory = false,
   showContinentModal,
   setShowContinentModal,
   showSortModal,
   setShowSortModal,
   showCountryTypeModal,
   setShowCountryTypeModal,
-  dashboardContentView = 'stats',
-  onDashboardMenuSelect,
   collapsed = false,
   onToggleCollapse,
 }: CountryListProps) {
@@ -369,40 +211,18 @@ function CountryListInner({
     }
   }
 
-  const handleTabChange = (tab: ActiveTab) => {
-    onTabChange(tab)
-  }
-
   return (
     <>
       <S.ListPaneWrapper>
-        <S.ListPane $inHistory={inHistory} $collapsed={collapsed}>
+        <S.ListPane $collapsed={collapsed}>
           {!collapsed && (
             <>
               <S.ControlsRow>
                 <S.ControlsLeft>
-                  <S.SidebarModeTabNav
-                    role="tablist"
-                    aria-label="국가 영역 보기 전환"
-                  >
-                    <UnderlineTabButton
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === 'dashboard'}
-                      $active={activeTab === 'dashboard'}
-                      onClick={() => handleTabChange('dashboard')}
-                    >
-                      대시보드
-                    </UnderlineTabButton>
-                    <UnderlineTabButton
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTab === 'list'}
-                      $active={activeTab === 'list'}
-                      onClick={() => handleTabChange('list')}
-                    >
+                  <S.SidebarModeTabNav aria-label="국가 목록">
+                    <UnderlineTabButton as="div" $active>
                       국가 목록
-                      <S.SidebarTabCount $active={activeTab === 'list'}>
+                      <S.SidebarTabCount $active>
                         {countries.length}
                       </S.SidebarTabCount>
                     </UnderlineTabButton>
@@ -420,8 +240,7 @@ function CountryListInner({
                 </S.ControlsRight>
               </S.ControlsRow>
 
-              {activeTab === 'list' && (
-                <S.FilterRow>
+              <S.FilterRow>
                   <S.FilterWrapper>
                     <S.SearchWrapper>
                       <S.SearchIcon>
@@ -535,45 +354,10 @@ function CountryListInner({
                     </S.ClearAllFiltersButton>
                   )}
                 </S.FilterRow>
-              )}
 
               <S.SidebarTabBody>
                 <AnimatePresence initial={false} mode="wait">
-                  {activeTab === 'dashboard' ? (
-                    <motion.div
-                      key="dashboard"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15, ease: 'easeOut' }}
-                      style={{
-                        width: '100%',
-                        flex: 1,
-                        minHeight: 0,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'auto',
-                      }}
-                    >
-                      <S.DashboardMenu>
-                        <S.DashboardMenuTitle>메뉴</S.DashboardMenuTitle>
-                        {DASHBOARD_MENU_ITEMS.map(
-                          ({ id, label, icon: Icon }) => (
-                            <S.DashboardMenuItem
-                              key={id}
-                              type="button"
-                              $active={dashboardContentView === id}
-                              onClick={() => onDashboardMenuSelect?.(id)}
-                            >
-                              <Icon />
-                              {label}
-                            </S.DashboardMenuItem>
-                          ),
-                        )}
-                      </S.DashboardMenu>
-                    </motion.div>
-                  ) : (
-                    <motion.div
+                  <motion.div
                       key="list"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -967,7 +751,6 @@ function CountryListInner({
                         </S.ListContainer>
                       </div>
                     </motion.div>
-                  )}
                 </AnimatePresence>
               </S.SidebarTabBody>
             </>

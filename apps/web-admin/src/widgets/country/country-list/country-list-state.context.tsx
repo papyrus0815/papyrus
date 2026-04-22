@@ -1,12 +1,20 @@
 /**
- * 목록 전용 상태 Context
- * - 검색/필터/정렬 상태를 여기서만 보관해, 입력 시 페이지 전체가 리렌더되지 않도록 함
+ * 국가 목록 상태 Context
+ * - 검색/필터/정렬 상태와 함께 핵심 데이터(현대·역사·대륙)를 한 곳에서 제공
+ * - 데이터는 `useHistoryCoreData` 훅을 provider가 내부에서 직접 fetch하여 prop drilling 제거
+ * - 입력 시 페이지 전체 리렌더를 피하려고 Context로 격리
  */
 import React, { useMemo, useState } from 'react'
+
 import type { ContinentOption, Country } from '@/entities/country/api'
-import type { CountryTypeFilter, UnifiedCountry } from '@/entities/country/model/unified-types'
-import type { HistoricalCountry } from '@/entities/historical-country/api'
+import type {
+  CountryTypeFilter,
+  UnifiedCountry,
+} from '@/entities/country/model/unified-types'
 import { historicalToUnified } from '@/entities/country/model/unified-types'
+import type { HistoricalCountry } from '@/entities/historical-country/api'
+import type { CountryResponseDto } from '@/shared/api/countries'
+import { useHistoryCoreData } from '@/widgets/history-shell/model/use-history-core-data.hook'
 
 export type SortBy = 'name' | 'population' | 'area'
 
@@ -22,40 +30,42 @@ export interface CountryListStateContextValue {
   setSortBy: (s: SortBy) => void
   // 계산된 목록
   filtered: UnifiedCountry[]
-  // 원본(배지 등용)
+  // 핵심 데이터 (useHistoryCoreData 제공 값)
   countries: Country[]
+  unifiedCountries: UnifiedCountry[]
   continents: ContinentOption[]
-  // 인물 등록 모달 (PersonDashboardSection 등에서 열기)
+  apiHistoricalCountries: HistoricalCountry[] | undefined
+  apiCountries: CountryResponseDto[] | undefined
+  // 인물 등록 모달 (페이지 전역에서 열기)
   showPersonRegisterModal: boolean
   setShowPersonRegisterModal: (v: boolean) => void
 }
 
-const CountryListStateContext = React.createContext<CountryListStateContextValue | null>(null)
+const CountryListStateContext =
+  React.createContext<CountryListStateContextValue | null>(null)
 
 export function useCountryListState() {
   const ctx = React.useContext(CountryListStateContext)
-  if (!ctx) throw new Error('useCountryListState must be used within CountryListStateProvider')
+  if (!ctx)
+    throw new Error(
+      'useCountryListState must be used within CountryListStateProvider',
+    )
   return ctx
 }
 
 interface ProviderProps {
-  unifiedCountries: UnifiedCountry[]
-  apiHistoricalCountries: HistoricalCountry[] | undefined
-  countries: Country[]
-  continents: ContinentOption[]
   children: React.ReactNode
 }
 
-export function CountryListStateProvider({
-  unifiedCountries,
-  apiHistoricalCountries,
-  countries,
-  continents,
-  children,
-}: ProviderProps) {
+export function CountryListStateProvider({ children }: ProviderProps) {
+  const core = useHistoryCoreData()
+  const { countries, unifiedCountries, continents, apiHistoricalCountries } =
+    core
+
   const [query, setQuery] = useState('')
   const [continentFilter, setContinentFilter] = useState('')
-  const [countryTypeFilter, setCountryTypeFilter] = useState<CountryTypeFilter>('all')
+  const [countryTypeFilter, setCountryTypeFilter] =
+    useState<CountryTypeFilter>('all')
   const [sortBy, setSortBy] = useState<SortBy>('area')
   const [showPersonRegisterModal, setShowPersonRegisterModal] = useState(false)
 
@@ -93,7 +103,8 @@ export function CountryListStateProvider({
         country.name.toLowerCase().includes(searchTextLower) ||
         (country.isoCode || '').toLowerCase().includes(searchTextLower) ||
         (country.capital || '').toLowerCase().includes(searchTextLower)
-      const matchContinent = !continentFilter || country.continentId === continentFilter
+      const matchContinent =
+        !continentFilter || country.continentId === continentFilter
       return matchSearch && matchContinent
     })
 
@@ -137,12 +148,14 @@ export function CountryListStateProvider({
     const result = modernResult
 
     return result.sort((countryA, countryB) => {
-      if (sortBy === 'name') return countryA.name.localeCompare(countryB.name, 'ko')
+      if (sortBy === 'name')
+        return countryA.name.localeCompare(countryB.name, 'ko')
       if (sortBy === 'population')
         return (
           (Number(countryB.population) || 0) - (Number(countryA.population) || 0)
         )
-      if (sortBy === 'area') return (countryB.areaSqKm || 0) - (countryA.areaSqKm || 0)
+      if (sortBy === 'area')
+        return (countryB.areaSqKm || 0) - (countryA.areaSqKm || 0)
       return 0
     })
   }, [
@@ -166,11 +179,26 @@ export function CountryListStateProvider({
       setSortBy,
       filtered,
       countries,
+      unifiedCountries,
       continents,
+      apiHistoricalCountries,
+      apiCountries: core.apiCountries,
       showPersonRegisterModal,
       setShowPersonRegisterModal,
     }),
-    [query, continentFilter, countryTypeFilter, sortBy, filtered, countries, continents, showPersonRegisterModal],
+    [
+      query,
+      continentFilter,
+      countryTypeFilter,
+      sortBy,
+      filtered,
+      countries,
+      unifiedCountries,
+      continents,
+      apiHistoricalCountries,
+      core.apiCountries,
+      showPersonRegisterModal,
+    ],
   )
 
   return (

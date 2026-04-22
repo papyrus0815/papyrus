@@ -5,13 +5,14 @@ import {
   FiBell,
   FiFileText,
   FiGlobe,
-  FiHome,
   FiLayers,
   FiLogOut,
+  FiMap,
   FiMenu,
   FiMoon,
   FiPause,
   FiPlay,
+  FiSearch,
   FiSkipBack,
   FiSkipForward,
   FiSun,
@@ -35,8 +36,11 @@ import {
   setGlobalBgmMutedState,
   useClickSound,
 } from '@/shared/hooks/use-click-sound.hook'
+import { pathKeys } from '@/shared/router'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
+import { useCommandPaletteStore } from '@/widgets/command-palette'
+import { DASHBOARD_MENU_ITEMS } from '@/widgets/history-shell/model/dashboard-menu-items'
 
 import { TopNavBar, type TopNavItemSpec } from './top-nav.ui'
 
@@ -90,6 +94,9 @@ const Header: React.FC = () => {
   const { messages, markAllRead, markOneRead, fetchNotifications } =
     useNotificationStore()
   const { mode, toggleTheme } = useThemeStore()
+  const openCommandPalette = useCommandPaletteStore((s) => s.openPalette)
+  const isMac =
+    typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
 
   const [isBellOpen, setIsBellOpen] = useState(false)
 
@@ -283,17 +290,39 @@ const Header: React.FC = () => {
   useOnClickOutside(userMenuRef, () => setIsUserOpen(false))
   useOnClickOutside(settingsMenuRef, () => setIsSettingsOpen(false))
 
+  // 국가 브라우즈(/history/country)와 국가 상세(/history/country/:id/*)
+  // 모두 "국가" 메뉴를 활성 상태로 표시
+  const isCountryBrowseActive =
+    /^\/history\/country(\/|$)/.test(location.pathname)
+
   const menuItems: TopNavItemSpec[] = [
     {
-      key: 'timeline',
+      key: 'countries',
       label: '국가',
-      icon: <FiHome size={16} />,
+      icon: <FiMap size={16} />,
       onClick: () => {
         playClickSound()
-        navigate('/history/country')
+        navigate(pathKeys.history.country())
       },
-      active: location.pathname.startsWith('/history/country'),
+      active: isCountryBrowseActive,
     },
+    ...DASHBOARD_MENU_ITEMS.map((item) => {
+      const Icon = item.icon
+      return {
+        key: `dashboard-${item.id}`,
+        label: item.label,
+        icon: (
+          <span style={{ width: 16, height: 16, display: 'inline-flex' }}>
+            <Icon />
+          </span>
+        ),
+        onClick: () => {
+          playClickSound()
+          navigate(item.path)
+        },
+        active: item.matchPath(location.pathname),
+      } satisfies TopNavItemSpec
+    }),
     {
       key: 'events',
       label: '사건',
@@ -310,7 +339,7 @@ const Header: React.FC = () => {
       icon: <FiGlobe size={16} />,
       onClick: () => {
         playClickSound()
-        navigate('/history/continents')
+        navigate(pathKeys.history.continents())
       },
       active: location.pathname.startsWith('/history/continents'),
     },
@@ -320,7 +349,7 @@ const Header: React.FC = () => {
       icon: <FiFileText size={16} />,
       onClick: () => {
         playClickSound()
-        navigate('/history/post')
+        navigate(pathKeys.history.post())
       },
       active: location.pathname.startsWith('/history/post'),
     },
@@ -357,6 +386,20 @@ const Header: React.FC = () => {
         </CenterZone>
 
         <RightZone>
+          {/* 국가 검색 팔레트 열기 */}
+          <SearchTrigger
+            type="button"
+            onClick={() => {
+              playClickSound()
+              openCommandPalette()
+            }}
+            aria-label="국가 검색"
+          >
+            <FiSearch size={14} />
+            <SearchTriggerLabel>국가 검색</SearchTriggerLabel>
+            <SearchTriggerKbd>{isMac ? '⌘' : 'Ctrl'}K</SearchTriggerKbd>
+          </SearchTrigger>
+
           {/* 다크모드 토글 버튼 */}
           <ThemeToggleButton
             aria-label={
@@ -891,6 +934,61 @@ const RightZone = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
+`
+
+const SearchTrigger = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px 0 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+
+  @media (max-width: 640px) {
+    padding: 0;
+    width: 34px;
+    justify-content: center;
+  }
+`
+
+const SearchTriggerLabel = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const SearchTriggerKbd = styled.kbd`
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
 `
 
 const SettingsHeader = styled.div`

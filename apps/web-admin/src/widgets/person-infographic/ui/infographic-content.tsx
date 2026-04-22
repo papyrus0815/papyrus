@@ -1,27 +1,23 @@
 /**
- * 인물 인포그래픽 페이지
- * - 설계: Papyrus People.html (NavTree · HeaderStats · 3가지 뷰)
- * - 구현: 기존 앱 디자인 시스템 (styled-components, theme, 기존 위젯)
- * - 인물 클릭 → PersonDetailPanel이 컨텐츠 영역을 대체 (country.page.tsx와 동일 패턴)
+ * 인물 인포그래픽 콘텐츠
+ * - 헤더 + 검색 + 뷰 전환 + 통계 스트립 + 시대 칩 + 뷰 영역(매트릭스/은하계/스토리/왕조)
+ * - 필터·뷰 상태는 zustand store(usePersonInfographicFilterStore)로 공유.
+ * - 좌측 NavRail은 분리(PersonFilterPanel).
  */
 import React, { useCallback, useMemo, useState } from 'react'
 
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { FiPlus, FiSearch, FiX } from 'react-icons/fi'
-import { useNavigate, useParams } from 'react-router-dom'
 import styled, { css, useTheme } from 'styled-components'
 
 import { usePersons } from '@/entities/person/api'
 import type { Person } from '@/entities/person/api'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { pathKeys } from '@/shared/router'
 import {
   glassOrSolidMixin,
   scrollbarThinMixin,
 } from '@/shared/styles/mixins'
 import {
-  PersonInnerPillBtn,
-  PersonInnerPillNav,
   PersonTabSharedDesc,
   PersonTabSharedHeader,
   PersonTabSharedHeaderLeft,
@@ -29,153 +25,18 @@ import {
   PersonTabSharedTitle,
 } from '@/widgets/country/country-detail/ui/country-detail.styles'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
-import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
-
-// ================================================================
-// 시대 · 지역 · 분야 상수
-// ================================================================
-const ERAS = [
-  { key: 'ancient',  lbl: '고대',     from: -800, to: 500,  color: '#f59e0b' },
-  { key: 'medieval', lbl: '중세',     from: 500,  to: 1500, color: '#ef4444' },
-  { key: 'early',    lbl: '근세',     from: 1500, to: 1800, color: '#10b981' },
-  { key: 'modern19', lbl: '근대 19c', from: 1800, to: 1900, color: '#3b82f6' },
-  { key: 'modern20', lbl: '현대 20c', from: 1900, to: 2000, color: '#6366f1' },
-  { key: 'contemp',  lbl: '당대',     from: 2000, to: 2100, color: '#8b5cf6' },
-]
-
-const REGIONS = ['동아시아', '유럽', '미주', '남아시아', '서아시아', '아프리카', '기타']
-const REGION_COLORS = ['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6', '#64748b']
-const FIELDS = ['정치', '군사', '사상', '과학', '예술', '기타']
-
-// ================================================================
-// 데이터 변환 헬퍼
-// ================================================================
-const COUNTRY_REGION: Record<string, string> = {
-  대한민국: '동아시아', 조선: '동아시아', 고려: '동아시아', 신라: '동아시아',
-  백제: '동아시아', 고구려: '동아시아', 북한: '동아시아',
-  중국: '동아시아', 청: '동아시아', 명: '동아시아', 송: '동아시아',
-  일본: '동아시아', 베트남: '동아시아', 몽골: '동아시아',
-  러시아: '유럽', 소련: '유럽', 독일: '유럽', 프로이센: '유럽',
-  프랑스: '유럽', 영국: '유럽', 이탈리아: '유럽', 로마: '유럽',
-  스페인: '유럽', 오스트리아: '유럽', 헝가리: '유럽', 폴란드: '유럽',
-  스웨덴: '유럽', 덴마크: '유럽', 네덜란드: '유럽', 그리스: '유럽',
-  세르비아: '유럽', 유고: '유럽', 불가리아: '유럽', 루마니아: '유럽',
-  미국: '미주', 캐나다: '미주', 멕시코: '미주', 브라질: '미주',
-  아르헨티나: '미주', 쿠바: '미주', 콜롬비아: '미주',
-  인도: '남아시아', 파키스탄: '남아시아', 방글라데시: '남아시아',
-  튀르키예: '서아시아', 이란: '서아시아', 이라크: '서아시아', 오스만: '서아시아',
-  이집트: '아프리카', 남아공: '아프리카', 에티오피아: '아프리카',
-}
-
-function getRegion(name?: string | null) {
-  if (!name) return '기타'
-  if (COUNTRY_REGION[name]) return COUNTRY_REGION[name]
-  for (const [k, v] of Object.entries(COUNTRY_REGION)) {
-    if (name.includes(k) || k.includes(name)) return v
-  }
-  return '기타'
-}
-
-function getField(p: Person): string {
-  const reigns: any[] = (p as any).sovereignReigns ?? []
-  const tenures: any[] = (p as any).governmentTenures ?? []
-  if (reigns.length > 0) return '정치'
-  const types = tenures.map((t) => t.positionType as string)
-  if (types.includes('MILITARY_COMMANDER')) return '군사'
-  if (types.some((t) => ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT', 'CABINET_MINISTER', 'LEGISLATOR', 'JUDICIARY'].includes(t))) return '정치'
-  return '정치'
-}
-
-function toYear(y?: number | null, era?: string | null) {
-  if (!y) return 0
-  return era === 'BC' ? -y : y
-}
-
-function yearOfEra(y: number) {
-  for (const e of ERAS) if (y >= e.from && y < e.to) return e
-  return ERAS[ERAS.length - 1]
-}
-
-interface AdaptedPerson {
-  id: string
-  name: string
-  born: number
-  died: number
-  activityYear: number
-  age: number | null
-  region: string
-  country: string
-  field: string
-  faction: string
-  influence: number
-  profileImageUrl: string | null
-  isMonarch: boolean
-  isHeadOfState: boolean
-  primaryTitle: string | null
-  biography: string | null
-  isAlive: boolean
-}
-
-function adapt(p: Person): AdaptedPerson | null {
-  if (!p.birthYear && !p.deathYear) return null
-  const born = toYear(p.birthYear, p.birthEra)
-  const isAliveFlag = !!p.isAlive
-  const died = isAliveFlag ? new Date().getFullYear() : (toYear(p.deathYear, p.deathEra) || new Date().getFullYear())
-  const countryName = (p as any).country?.name ?? ''
-  const tenures: any[] = (p as any).governmentTenures ?? []
-  const reigns: any[] = (p as any).sovereignReigns ?? []
-  const raw = (p as any).influence
-  const influence = typeof raw === 'number' ? Math.max(0, Math.min(100, raw)) : 0
-  const name = getPersonDisplayName({ name: p.name, surname: (p as any).surname, middleName: (p as any).middleName, country: (p as any).country }) || p.name || '이름 없음'
-
-  // 시대 분류용 활동연도: 재임 시작연도 평균 → 없으면 생몰 중간값
-  const tenureYears = tenures
-    .map((t: any) => (t.startDate ? new Date(t.startDate).getFullYear() : null))
-    .filter((y: number | null): y is number => y !== null && !isNaN(y))
-  const activityYear = tenureYears.length
-    ? tenureYears.reduce((a: number, b: number) => a + b, 0) / tenureYears.length
-    : (born + died) / 2
-
-  const age = p.birthYear && (p.deathYear || isAliveFlag)
-    ? Math.max(0, Math.abs(died - born))
-    : null
-
-  const regnal = (p as any).regnalName as string | null | undefined
-  const firstTenure = tenures[0]
-  const primaryTitle: string | null =
-    (regnal && regnal.trim()) ||
-    firstTenure?.positionDefinition?.title ||
-    firstTenure?.title ||
-    null
-
-  const isMonarch = reigns.length > 0 || !!(regnal && regnal.trim())
-  const isHeadOfState = tenures.some(
-    (t: any) => t.positionType === 'HEAD_OF_STATE' || t.positionDefinition?.positionType === 'HEAD_OF_STATE',
-  )
-
-  const bioRaw = (p as any).biography
-  const biography = typeof bioRaw === 'string' && bioRaw.trim() ? bioRaw.trim() : null
-
-  return {
-    id: p.id,
-    name,
-    born,
-    died,
-    activityYear,
-    age,
-    region: getRegion(countryName),
-    country: countryName || '미상',
-    field: getField(p),
-    faction: (p as any).dynasty?.name ?? '',
-    influence,
-    profileImageUrl: (p as any).profileImageUrl ?? null,
-    isMonarch,
-    isHeadOfState,
-    primaryTitle,
-    biography,
-    isAlive: isAliveFlag,
-  }
-}
+import {
+  ERAS,
+  FIELDS,
+  REGIONS,
+  REGION_COLORS,
+  adapt,
+  hueFrom,
+  yearOfEra,
+  usePersonInfographicFilterStore,
+  type AdaptedPerson,
+  type PersonInfographicView,
+} from '@/widgets/person-infographic'
 
 // 검색 하이라이트
 function highlight(text: string, q: string): React.ReactNode {
@@ -191,170 +52,6 @@ function highlight(text: string, q: string): React.ReactNode {
     </>
   )
 }
-
-// 이름 해시 → hue (썸네일 폴백 그라데이션용)
-function hueFrom(str: string): number {
-  let h = 0
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360
-  return h
-}
-
-// ================================================================
-// 범위 타입
-// ================================================================
-interface Scope { type: 'all' | 'era' | 'region' | 'field' | 'country'; val: string | null }
-
-// ================================================================
-// LEFT NAV — 시대/지역/분야/국가 필터
-// ================================================================
-function NavRail({
-  all,
-  scope,
-  setScope,
-  minInfluence,
-  setMinInfluence,
-  aliveFilter,
-  setAliveFilter,
-}: {
-  all: AdaptedPerson[]
-  scope: Scope
-  setScope: (s: Scope) => void
-  minInfluence: number
-  setMinInfluence: (n: number) => void
-  aliveFilter: 'all' | 'alive' | 'dead'
-  setAliveFilter: (v: 'all' | 'alive' | 'dead') => void
-}) {
-  const counts = useMemo(() => {
-    const era: Record<string, number> = {}, region: Record<string, number> = {}, field: Record<string, number> = {}, country: Record<string, number> = {}
-    all.forEach((p) => {
-      const e = yearOfEra(p.activityYear).key
-      era[e] = (era[e] || 0) + 1
-      region[p.region] = (region[p.region] || 0) + 1
-      field[p.field] = (field[p.field] || 0) + 1
-      country[p.country] = (country[p.country] || 0) + 1
-    })
-    return { era, region, field, country, total: all.length }
-  }, [all])
-
-  const isActive = (type: string, val: string | null) => scope.type === type && scope.val === val
-  const topCountries = Object.entries(counts.country).sort((a, b) => b[1] - a[1]).slice(0, 14)
-
-  const navItem = (type: Scope['type'], val: string | null, label: string, count: number, dot?: string) => (
-    <NavItem key={type + val} $active={isActive(type, val)} onClick={() => setScope({ type, val })}>
-      {dot && <NavDot style={{ background: dot }} />}
-      <NavItemLabel>{label}</NavItemLabel>
-      <NavItemCount>{count}</NavItemCount>
-    </NavItem>
-  )
-
-  return (
-    <NavRailRoot>
-      <NavGroup>
-        <NavGroupLabel>범위</NavGroupLabel>
-        {navItem('all', null, '전체 인물', counts.total)}
-      </NavGroup>
-      <NavGroup>
-        <NavGroupLabel>시대</NavGroupLabel>
-        {ERAS.map((e) => navItem('era', e.key, e.lbl, counts.era[e.key] || 0, e.color))}
-      </NavGroup>
-      <NavGroup>
-        <NavGroupLabel>지역</NavGroupLabel>
-        {REGIONS.filter((r) => counts.region[r]).map((r, i) => navItem('region', r, r, counts.region[r] || 0, REGION_COLORS[i % REGION_COLORS.length]))}
-      </NavGroup>
-      <NavGroup>
-        <NavGroupLabel>분야</NavGroupLabel>
-        {FIELDS.filter((f) => counts.field[f]).map((f) => navItem('field', f, f, counts.field[f] || 0))}
-      </NavGroup>
-      <NavGroup>
-        <NavGroupLabel>국가</NavGroupLabel>
-        <NavCountryScroll>
-          {topCountries.map(([c, n]) => navItem('country', c, c, n))}
-        </NavCountryScroll>
-      </NavGroup>
-      <NavGroup>
-        <NavGroupLabel>영향력 ≥ {minInfluence}</NavGroupLabel>
-        <NavSliderWrap>
-          <NavSlider
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={minInfluence}
-            onChange={(e) => setMinInfluence(Number(e.target.value))}
-          />
-        </NavSliderWrap>
-      </NavGroup>
-      <NavGroup>
-        <NavGroupLabel>생존</NavGroupLabel>
-        <NavToggleRow>
-          {([['all', '전체'], ['alive', '생존'], ['dead', '사망']] as const).map(([k, lbl]) => (
-            <NavToggleBtn key={k} $active={aliveFilter === k} onClick={() => setAliveFilter(k)}>
-              {lbl}
-            </NavToggleBtn>
-          ))}
-        </NavToggleRow>
-      </NavGroup>
-    </NavRailRoot>
-  )
-}
-
-const NavRailRoot = styled.div`
-  padding: 20px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-const NavGroup = styled.div`margin-bottom: 6px;`
-const NavGroupLabel = styled.div`
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  padding: 8px 8px 4px;
-`
-const NavItem = styled.div<{ $active?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.12s, color 0.12s;
-  ${({ $active, theme }) =>
-    $active
-      ? css`
-          background: ${theme.mode === 'dark' ? 'rgba(99,106,242,0.2)' : '#eef2ff'};
-          color: ${theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'};
-          font-weight: 600;
-        `
-      : css`
-          color: ${theme.colors.text.secondary};
-          &:hover { background: ${theme.colors.hover}; color: ${theme.colors.text.primary}; }
-        `}
-`
-const NavDot = styled.span`width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0;`
-const NavItemLabel = styled.span`flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`
-const NavItemCount = styled.span`font-size: 11px; color: ${({ theme }) => theme.colors.text.tertiary}; flex-shrink: 0;`
-const NavCountryScroll = styled.div`max-height: 200px; overflow-y: auto; ${scrollbarThinMixin}`
-const NavSliderWrap = styled.div`padding: 6px 8px 2px;`
-const NavSlider = styled.input`
-  width: 100%;
-  accent-color: #6366f1;
-  cursor: pointer;
-`
-const NavToggleRow = styled.div`
-  display: flex; gap: 4px; padding: 2px 4px;
-`
-const NavToggleBtn = styled.button<{ $active: boolean }>`
-  flex: 1; padding: 5px 0; border: none; border-radius: 6px; cursor: pointer;
-  font-size: 11px; transition: background 0.12s, color 0.12s;
-  ${({ $active, theme }) =>
-    $active
-      ? css`background: ${theme.mode === 'dark' ? 'rgba(99,106,242,0.22)' : '#eef2ff'}; color: ${theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'}; font-weight: 600;`
-      : css`background: transparent; color: ${theme.colors.text.secondary}; &:hover { background: ${theme.colors.hover}; color: ${theme.colors.text.primary}; }`}
-`
 
 // ================================================================
 // HEADER STATS STRIP (4-column)
@@ -1278,40 +975,38 @@ const AddPersonBtn = styled.button`
 `
 
 // ================================================================
-// MAIN PAGE
+// MAIN CONTENT (인포그래픽 중앙 영역)
 // ================================================================
-export default function PersonsInfographicPage() {
-  const navigate = useNavigate()
-  const params = useParams<{ personId?: string }>()
+interface InfographicContentProps {
+  /** 인물 카드/아이템 클릭 시 상세로 이동 */
+  onPersonClick: (id: string) => void
+}
 
+export function InfographicContent({ onPersonClick }: InfographicContentProps) {
   const { data: rawPersons, isLoading } = usePersons()
-  const [scope, setScope] = useState<Scope>({ type: 'all', val: null })
-  const [view, setView] = useState<'matrix' | 'galaxy' | 'story' | 'dynasty'>('story')
-  const [q, setQ] = useState('')
-  const [minInfluence, setMinInfluence] = useState(0)
-  const [aliveFilter, setAliveFilter] = useState<'all' | 'alive' | 'dead'>('all')
-  const [pinned, setPinned] = useState<Set<string>>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? window.localStorage.getItem('history-persons-pinned') : null
-      return new Set(raw ? (JSON.parse(raw) as string[]) : [])
-    } catch {
-      return new Set()
-    }
-  })
-  const togglePin = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setPinned((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      try { window.localStorage.setItem('history-persons-pinned', JSON.stringify([...next])) } catch {}
-      return next
-    })
-  }, [])
-  const [formOpen, setFormOpen] = useState(false)
-  const [editId, setEditId] = useState<string | null>(null)
-  const [editOpen, setEditOpen] = useState(false)
 
-  const personId = params.personId ?? null
+  const scope = usePersonInfographicFilterStore((s) => s.scope)
+  const setScope = usePersonInfographicFilterStore((s) => s.setScope)
+  const view = usePersonInfographicFilterStore((s) => s.view)
+  const q = usePersonInfographicFilterStore((s) => s.query)
+  const setQ = usePersonInfographicFilterStore((s) => s.setQuery)
+  const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
+  const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
+  const pinnedList = usePersonInfographicFilterStore((s) => s.pinned)
+  const storeTogglePin = usePersonInfographicFilterStore((s) => s.togglePin)
+
+  const pinned = useMemo(() => new Set(pinnedList), [pinnedList])
+  const togglePin = React.useCallback(
+    (id: string, e: React.MouseEvent) => {
+      e.stopPropagation()
+      storeTogglePin(id)
+    },
+    [storeTogglePin],
+  )
+
+  const [formOpen, setFormOpen] = React.useState(false)
+  const [editId, setEditId] = React.useState<string | null>(null)
+  const [editOpen, setEditOpen] = React.useState(false)
 
   const allPeople = useMemo<AdaptedPerson[]>(() => {
     if (!rawPersons) return []
@@ -1346,183 +1041,93 @@ export default function PersonsInfographicPage() {
 
   const avgLifespan = filtered.length ? Math.round(filtered.reduce((s, p) => s + Math.abs(p.died - p.born), 0) / filtered.length) : 0
 
-  const onPersonClick = useCallback((id: string) => {
-    navigate(pathKeys.history.dashboardPersonDetail(id))
-  }, [navigate])
-
-  const onCloseDetail = useCallback(() => {
-    navigate(pathKeys.history.dashboardPersons())
-  }, [navigate])
+  // 뷰 스위처에서 'cards' 이외의 뷰만 이 콘텐츠가 다룸. (cards는 PersonListContent가 처리.)
+  const activeView: Exclude<PersonInfographicView, 'cards'> =
+    view === 'cards' ? 'story' : view
 
   return (
-    <Root>
-      {/* ── LEFT RAIL ── */}
-      <LeftRail>
+    <motion.div
+      key="infographic"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <InfographicWrap>
+        {/* 헤더 */}
+        <PersonTabSharedHeader>
+          <PersonTabSharedHeaderLeft>
+            <PersonTabSharedTitle>
+              {scopeLabel}
+              {filtered.length > 0 && (
+                <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 10 }}>
+                  {filtered.length}명 · 평균 수명 {avgLifespan}년
+                </span>
+              )}
+            </PersonTabSharedTitle>
+            <PersonTabSharedDesc>
+              시대·지역·분야·국가별 필터로 인물 현황을 탐색하고, 클릭하면 상세 정보를 볼 수 있습니다.
+            </PersonTabSharedDesc>
+          </PersonTabSharedHeaderLeft>
+          <PersonTabSharedHeaderRight>
+            <AddPersonBtn onClick={() => setFormOpen(true)}>
+              <FiPlus size={14} />
+              새 인물
+            </AddPersonBtn>
+          </PersonTabSharedHeaderRight>
+        </PersonTabSharedHeader>
+
+        {/* 검색 — 뷰 전환은 상위(PersonDashboardSection)의 5뷰 스위처에서 처리 */}
+        <SearchRow>
+          <SearchBox>
+            <SearchIconWrap><FiSearch size={13} /></SearchIconWrap>
+            <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름, 국가, 소속 검색…" />
+            {q && <ClearBtn onClick={() => setQ('')}><FiX size={13} /></ClearBtn>}
+          </SearchBox>
+        </SearchRow>
+
+        {/* 인포그래픽 통계 스트립 */}
+        {!isLoading && filtered.length > 0 && <HeaderStats people={filtered} />}
+
+        {/* 시대 빠른 필터 */}
+        <EraChipRow>
+          <EraChip $active={scope.type === 'all'} $color="#6366f1" onClick={() => setScope({ type: 'all', val: null })}>전체</EraChip>
+          {ERAS.map((e) => (
+            <EraChip key={e.key} $active={scope.type === 'era' && scope.val === e.key} $color={e.color} onClick={() => setScope({ type: 'era', val: e.key })}>
+              {e.lbl}
+            </EraChip>
+          ))}
+        </EraChipRow>
+
+        {/* 로딩 */}
+        {isLoading && <EmptyState>데이터를 불러오는 중…</EmptyState>}
+
+        {/* 메인 뷰 */}
         {!isLoading && (
-          <NavRail
-            all={allPeople}
-            scope={scope}
-            setScope={setScope}
-            minInfluence={minInfluence}
-            setMinInfluence={setMinInfluence}
-            aliveFilter={aliveFilter}
-            setAliveFilter={setAliveFilter}
-          />
+          <ViewArea>
+            {activeView === 'matrix' && <TimelineMatrix people={filtered} onOpen={onPersonClick} />}
+            {activeView === 'galaxy' && <GalaxyView people={filtered} onOpen={onPersonClick} />}
+            {activeView === 'story' && <EraStory people={filtered} onOpen={onPersonClick} q={q} pinned={pinned} togglePin={togglePin} />}
+            {activeView === 'dynasty' && <DynastyView people={filtered} onOpen={onPersonClick} q={q} pinned={pinned} togglePin={togglePin} />}
+          </ViewArea>
         )}
-      </LeftRail>
 
-      {/* ── CONTENT AREA ── */}
-      <ContentArea>
-        <AnimatePresence mode="wait" initial={false}>
-          {personId ? (
-            /* ── 인물 상세 (기존 앱 패턴 그대로) ── */
-            <motion.div
-              key="detail"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              style={{ height: '100%' }}
-            >
-              <PersonDetailWrap>
-                <PersonDetailPanel
-                  key={personId}
-                  personId={personId}
-                  onClose={onCloseDetail}
-                  onEdit={(id) => { setEditId(id); setEditOpen(true) }}
-                  onLinkedPersonClick={(id) => navigate(pathKeys.history.dashboardPersonDetail(id))}
-                  closeLabel="뒤로"
-                />
-              </PersonDetailWrap>
-            </motion.div>
-          ) : (
-            /* ── 인포그래픽 ── */
-            <motion.div
-              key="infographic"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <InfographicWrap>
-                {/* 헤더 (기존 PersonTabSharedHeader 스타일 재사용) */}
-                <PersonTabSharedHeader>
-                  <PersonTabSharedHeaderLeft>
-                    <PersonTabSharedTitle>
-                      {scopeLabel}
-                      {filtered.length > 0 && (
-                        <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 10 }}>
-                          {filtered.length}명 · 평균 수명 {avgLifespan}년
-                        </span>
-                      )}
-                    </PersonTabSharedTitle>
-                    <PersonTabSharedDesc>
-                      시대·지역·분야·국가별 필터로 인물 현황을 탐색하고, 클릭하면 상세 정보를 볼 수 있습니다.
-                    </PersonTabSharedDesc>
-                  </PersonTabSharedHeaderLeft>
-                  <PersonTabSharedHeaderRight>
-                    <AddPersonBtn onClick={() => setFormOpen(true)}>
-                      <FiPlus size={14} />
-                      새 인물
-                    </AddPersonBtn>
-                  </PersonTabSharedHeaderRight>
-                </PersonTabSharedHeader>
-
-                {/* 검색 + 뷰 전환 */}
-                <SearchRow>
-                  <SearchBox>
-                    <SearchIconWrap><FiSearch size={13} /></SearchIconWrap>
-                    <SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름, 국가, 소속 검색…" />
-                    {q && <ClearBtn onClick={() => setQ('')}><FiX size={13} /></ClearBtn>}
-                  </SearchBox>
-                  <PersonInnerPillNav role="tablist" style={{ marginLeft: 'auto' }}>
-                    {([['matrix', '매트릭스'], ['galaxy', '은하계'], ['story', '시대 스토리'], ['dynasty', '왕조']] as const).map(([k, lbl]) => (
-                      <PersonInnerPillBtn key={k} type="button" role="tab" $active={view === k} onClick={() => setView(k)}>
-                        {lbl}
-                      </PersonInnerPillBtn>
-                    ))}
-                  </PersonInnerPillNav>
-                </SearchRow>
-
-                {/* 인포그래픽 통계 스트립 */}
-                {!isLoading && filtered.length > 0 && <HeaderStats people={filtered} />}
-
-                {/* 시대 빠른 필터 */}
-                <EraChipRow>
-                  <EraChip $active={scope.type === 'all'} $color="#6366f1" onClick={() => setScope({ type: 'all', val: null })}>전체</EraChip>
-                  {ERAS.map((e) => (
-                    <EraChip key={e.key} $active={scope.type === 'era' && scope.val === e.key} $color={e.color} onClick={() => setScope({ type: 'era', val: e.key })}>
-                      {e.lbl}
-                    </EraChip>
-                  ))}
-                </EraChipRow>
-
-                {/* 로딩 */}
-                {isLoading && <EmptyState>데이터를 불러오는 중…</EmptyState>}
-
-                {/* 메인 뷰 */}
-                {!isLoading && (
-                  <ViewArea>
-                    {view === 'matrix' && <TimelineMatrix people={filtered} onOpen={onPersonClick} />}
-                    {view === 'galaxy' && <GalaxyView people={filtered} onOpen={onPersonClick} />}
-                    {view === 'story' && <EraStory people={filtered} onOpen={onPersonClick} q={q} pinned={pinned} togglePin={togglePin} />}
-                    {view === 'dynasty' && <DynastyView people={filtered} onOpen={onPersonClick} q={q} pinned={pinned} togglePin={togglePin} />}
-                  </ViewArea>
-                )}
-
-                {/* 푸터 */}
-                {!isLoading && filtered.length > 0 && (
-                  <Footer>
-                    <span>총 {filtered.length}명</span>
-                    <span>· 평균 영향력 {Math.round(filtered.reduce((s, p) => s + p.influence, 0) / filtered.length)}</span>
-                  </Footer>
-                )}
-              </InfographicWrap>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </ContentArea>
+        {/* 푸터 */}
+        {!isLoading && filtered.length > 0 && (
+          <Footer>
+            <span>총 {filtered.length}명</span>
+            <span>· 평균 영향력 {Math.round(filtered.reduce((s, p) => s + p.influence, 0) / filtered.length)}</span>
+          </Footer>
+        )}
+      </InfographicWrap>
 
       {/* 모달 */}
       <PersonRegisterViewModal isOpen={formOpen} onClose={() => setFormOpen(false)} onSuccess={() => setFormOpen(false)} />
       <PersonRegisterViewModal isOpen={editOpen} onClose={() => setEditOpen(false)} editPersonId={editId} onSuccess={() => setEditOpen(false)} />
-    </Root>
+    </motion.div>
   )
 }
 
-// ================================================================
-// PAGE-LEVEL STYLES
-// ================================================================
-const Root = styled.div`
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  min-height: 100%;
-  background: ${({ theme }) => theme.colors.background.primary};
-`
-
-const LeftRail = styled.div`
-  border-right: 1px solid ${({ theme }) => theme.colors.border.default};
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100vh;
-  overflow-y: auto;
-  ${scrollbarThinMixin}
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`background: rgba(255,255,255,0.012);`
-      : css`background: ${theme.colors.background.secondary};`}
-`
-
-const ContentArea = styled.div`
-  min-width: 0;
-  overflow-y: auto;
-`
-
-const PersonDetailWrap = styled.div`
-  padding: 36px 32px 48px;
-  background: ${({ theme }) => theme.colors.background.primary};
-`
 
 const InfographicWrap = styled.div`
   padding: 36px 32px 60px;

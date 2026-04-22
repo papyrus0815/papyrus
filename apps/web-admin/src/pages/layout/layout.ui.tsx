@@ -19,6 +19,10 @@ import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-bounda
 import DashboardSkeleton from '@/shared/ui/skeleton/dashboard-skeleton.ui'
 import HistorySkeleton from '@/shared/ui/skeleton/history-skeleton.ui'
 import LayoutSkeleton from '@/shared/ui/skeleton/layout-skeleton.ui'
+import {
+  CommandPalette,
+  useCommandPaletteShortcut,
+} from '@/widgets/command-palette'
 import Header from '@/widgets/header/header.ui'
 
 // Note: Simple layout only, wrapper removed per request
@@ -44,6 +48,8 @@ export default function Layout() {
 
   const isPanelsRoute = location.pathname.startsWith('/history')
   const isDashboardRoute = location.pathname === '/'
+
+  useCommandPaletteShortcut()
 
   // 대시보드 BGM 플레이리스트 재생 (로그인 페이지를 제외한 모든 페이지)
   // 볼륨을 0.1로 설정하여 클릭 사운드가 잘 들리도록 함
@@ -82,6 +88,8 @@ export default function Layout() {
           <Outlet />
         </Suspense>
       </SmartErrorBoundary>
+
+      {isAuthenticated && <CommandPalette />}
     </>
   )
 }

@@ -18,6 +18,10 @@ import * as CountryDetailStyles from '@/widgets/country/country-detail/ui/countr
 import { PersonStatsSection } from '@/widgets/country/country-detail/ui/person-stats-section.widget'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 import { GlobalHeadsSection } from '@/widgets/country/global-heads-section/ui/global-heads-section'
+import {
+  InfographicContent,
+  usePersonInfographicFilterStore,
+} from '@/widgets/person-infographic'
 
 const Wrapper = styled(motion.div)`
   display: flex;
@@ -618,35 +622,102 @@ export function PersonDashboardSection() {
           />
         )}
         {personInnerTab === 'list' && (
-          <PersonListContent
-            persons={filteredPersonList}
-            dynasties={dynasties.map((d: { id: string; name: string }) => ({
-              id: d.id,
-              name: d.name,
-            }))}
-            invalidateKeys={[...personKeys.all]}
-            title="인물 리스트"
-            emptyMessage="등록된 인물이 없습니다."
-            emptyFilterMessage="검색·필터 조건에 맞는 인물이 없습니다."
-            onViewChange={(view) => setListShowingDetail(view === 'detail')}
-            onPersonClick={(id) => navigate(pathKeys.history.dashboardPersonDetail(id))}
-            hideMainHeader
-            hideCreateButton
-            registerTrigger={registerTrigger}
-            enableCountryFilter={false}
-            renderRegisterModal={(props) => (
-              <PersonRegisterViewModal
-                isOpen={props.isOpen}
-                onClose={props.onClose}
-                initialCountryId={props.initialCountryId}
-                editPersonId={props.editPersonId}
-                onSuccess={props.onSuccess}
-              />
-            )}
-          />
+          <>
+            <ListViewSwitcher />
+            <ListViewBody
+              filteredPersonList={filteredPersonList}
+              dynasties={dynasties}
+              registerTrigger={registerTrigger}
+              onPersonClick={(id) =>
+                navigate(pathKeys.history.dashboardPersonDetail(id))
+              }
+              onViewChange={(view) => setListShowingDetail(view === 'detail')}
+            />
+          </>
         )}
         {personInnerTab === 'heads' && <GlobalHeadsSection embedded />}
       </PersonTabContentWrap>
     </Wrapper>
   )
+}
+
+// ─── 인물 리스트 뷰 스위처 (카드 / 매트릭스 / 은하계 / 스토리 / 왕조) ───
+const LIST_VIEW_OPTIONS = [
+  ['cards', '카드'],
+  ['matrix', '매트릭스'],
+  ['galaxy', '은하계'],
+  ['story', '시대 스토리'],
+  ['dynasty', '왕조'],
+] as const
+
+function ListViewSwitcher() {
+  const view = usePersonInfographicFilterStore((s) => s.view)
+  const setView = usePersonInfographicFilterStore((s) => s.setView)
+  return (
+    <CountryDetailStyles.PersonInnerPillNav
+      role="tablist"
+      aria-label="인물 리스트 뷰"
+    >
+      {LIST_VIEW_OPTIONS.map(([key, label]) => (
+        <CountryDetailStyles.PersonInnerPillBtn
+          key={key}
+          type="button"
+          role="tab"
+          aria-selected={view === key}
+          $active={view === key}
+          onClick={() => setView(key)}
+        >
+          {label}
+        </CountryDetailStyles.PersonInnerPillBtn>
+      ))}
+    </CountryDetailStyles.PersonInnerPillNav>
+  )
+}
+
+interface ListViewBodyProps {
+  filteredPersonList: any[]
+  dynasties: { id: string; name: string }[]
+  registerTrigger: number
+  onPersonClick: (id: string) => void
+  onViewChange: (view: 'list' | 'detail') => void
+}
+
+function ListViewBody({
+  filteredPersonList,
+  dynasties,
+  registerTrigger,
+  onPersonClick,
+  onViewChange,
+}: ListViewBodyProps) {
+  const view = usePersonInfographicFilterStore((s) => s.view)
+
+  if (view === 'cards') {
+    return (
+      <PersonListContent
+        persons={filteredPersonList}
+        dynasties={dynasties.map((d) => ({ id: d.id, name: d.name }))}
+        invalidateKeys={[...personKeys.all]}
+        title="인물 리스트"
+        emptyMessage="등록된 인물이 없습니다."
+        emptyFilterMessage="검색·필터 조건에 맞는 인물이 없습니다."
+        onViewChange={onViewChange}
+        onPersonClick={onPersonClick}
+        hideMainHeader
+        hideCreateButton
+        registerTrigger={registerTrigger}
+        enableCountryFilter={false}
+        renderRegisterModal={(props) => (
+          <PersonRegisterViewModal
+            isOpen={props.isOpen}
+            onClose={props.onClose}
+            initialCountryId={props.initialCountryId}
+            editPersonId={props.editPersonId}
+            onSuccess={props.onSuccess}
+          />
+        )}
+      />
+    )
+  }
+
+  return <InfographicContent onPersonClick={onPersonClick} />
 }

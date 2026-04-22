@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { type Country, type ContinentOption } from '@/entities/country/api'
 import { type UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
-import * as PageS from '@/pages/history/country/country-page.styles'
+import * as PageS from './country-mobile-ui.styles'
 import * as ListS from '@/widgets/country/country-list/ui/country-list.styles'
 
 // 두 스타일 모듈을 합쳐서 S.*로 사용 가능하도록
@@ -19,7 +19,6 @@ interface CountryMobileUIProps {
   onShowContinentModal: () => void
   onShowSortModal: () => void
   onAddCountry: () => void
-  inHistory: boolean
   countries?: Country[]
   filtered?: UnifiedCountry[]
   continents?: ContinentOption[]
@@ -41,7 +40,6 @@ export function CountryMobileUI({
   onShowContinentModal,
   onShowSortModal,
   onAddCountry,
-  inHistory,
 }: CountryMobileUIProps) {
   const listState = useCountryListState()
   const {
@@ -92,7 +90,6 @@ export function CountryMobileUI({
               onClick={() => onMobileListOpenChange(false)}
             />
             <S.MobileListPane
-              as={motion.div}
               initial={{ opacity: 0, y: '100%' }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: '100%' }}
@@ -105,7 +102,6 @@ export function CountryMobileUI({
                   onMobileListOpenChange(false)
                 }
               }}
-              $inHistory={inHistory}
             >
               <S.MobileListHeader>
                 <S.DragHandle />
