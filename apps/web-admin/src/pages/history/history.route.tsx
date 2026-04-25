@@ -1,4 +1,4 @@
-import { RouteObject } from 'react-router'
+import { redirect, RouteObject } from 'react-router'
 
 import { ROUTES } from '../../shared/constants/routes'
 import HistoryLayout from '../../widgets/history-layout/history-layout.ui'
@@ -123,11 +123,10 @@ export const historyPageRoute: RouteObject = {
           path: 'dynasties',
           children: [
             {
+              // 대시보드 가문 화면(/history/dashboard/dynasty)이 가문 목록의 정식 진입점.
+              // 이 인덱스 경로는 검색·북마크 잔존 케이스만 안전하게 흡수.
               index: true,
-              lazy: async () => {
-                const { DynastyPage } = await import('./dynasty/dynasty.page')
-                return { Component: DynastyPage }
-              },
+              loader: () => redirect('/history/dashboard/dynasty'),
             },
             {
               path: ':dynastyId',

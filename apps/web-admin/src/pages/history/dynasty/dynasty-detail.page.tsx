@@ -40,7 +40,7 @@ export const DynastyDetailPage = () => {
       <Container>
         <CenterMessage>
           가문 정보를 찾을 수 없습니다.
-          <BackLink to="/history/dynasties">목록으로 돌아가기</BackLink>
+          <BackLink to="/history/dashboard/dynasty">목록으로 돌아가기</BackLink>
         </CenterMessage>
       </Container>
     )
@@ -52,7 +52,10 @@ export const DynastyDetailPage = () => {
   return (
     <Container>
       <BackBar>
-        <BackBtn type="button" onClick={() => navigate('/history/dynasties')}>
+        <BackBtn
+          type="button"
+          onClick={() => navigate('/history/dashboard/dynasty')}
+        >
           <FiArrowLeft size={16} />
           가문 목록
         </BackBtn>
