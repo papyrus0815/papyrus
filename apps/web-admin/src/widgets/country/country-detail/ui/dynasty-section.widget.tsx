@@ -2,6 +2,7 @@
  * 가문 섹션 — 행정조직 페이지와 동일한 구조·스타일 참조
  */
 import { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   useDynasties,
@@ -21,6 +22,14 @@ import {
 } from '@/shared/ui/tab/tab.styles'
 import { DynastyMembersInfographicModal } from './dynasty-members-infographic-modal'
 
+/** 옵션 메타 필드 — 이전 SDK 타입에는 없을 수 있어 캐스트로 접근 */
+type DynastyExtra = Dynasty & {
+  originPlace?: string | null
+  founderText?: string | null
+  motto?: string | null
+  crestImageUrl?: string | null
+}
+
 const MAIN = '#6366f1'
 
 export function DynastySection() {
@@ -36,6 +45,9 @@ export function DynastySection() {
     description: '',
     startDate: '',
     endDate: '',
+    originPlace: '',
+    founderText: '',
+    motto: '',
   })
   /** 서버에 저장된 `/uploads/...` 경로 (업로드 API 응답 url) */
   const [thumbPath, setThumbPath] = useState('')
@@ -43,26 +55,50 @@ export function DynastySection() {
   const [thumbUploading, setThumbUploading] = useState(false)
   const thumbInitialRef = useRef('')
   const thumbInputRef = useRef<HTMLInputElement>(null)
+  const [crestPath, setCrestPath] = useState('')
+  const [crestRemoved, setCrestRemoved] = useState(false)
+  const [crestUploading, setCrestUploading] = useState(false)
+  const crestInitialRef = useRef('')
+  const crestInputRef = useRef<HTMLInputElement>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [membersModal, setMembersModal] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     if (editing) {
+      const e = editing as DynastyExtra
       setForm({
-        name: editing.name ?? '',
-        description: editing.description ?? '',
-        startDate: editing.startDate ? new Date(editing.startDate).toISOString().split('T')[0] : '',
-        endDate: editing.endDate ? new Date(editing.endDate).toISOString().split('T')[0] : '',
+        name: e.name ?? '',
+        description: e.description ?? '',
+        startDate: e.startDate ? new Date(e.startDate).toISOString().split('T')[0] : '',
+        endDate: e.endDate ? new Date(e.endDate).toISOString().split('T')[0] : '',
+        originPlace: e.originPlace ?? '',
+        founderText: e.founderText ?? '',
+        motto: e.motto ?? '',
       })
-      const t = editing.thumbnailUrl ?? ''
+      const t = e.thumbnailUrl ?? ''
       thumbInitialRef.current = t
       setThumbPath(t)
       setThumbRemoved(false)
+      const c = e.crestImageUrl ?? ''
+      crestInitialRef.current = c
+      setCrestPath(c)
+      setCrestRemoved(false)
     } else {
-      setForm({ name: '', description: '', startDate: '', endDate: '' })
+      setForm({
+        name: '',
+        description: '',
+        startDate: '',
+        endDate: '',
+        originPlace: '',
+        founderText: '',
+        motto: '',
+      })
       thumbInitialRef.current = ''
       setThumbPath('')
       setThumbRemoved(false)
+      crestInitialRef.current = ''
+      setCrestPath('')
+      setCrestRemoved(false)
     }
     setFormError(null)
   }, [editing, view])
@@ -98,17 +134,35 @@ export function DynastySection() {
         if (cur && cur !== initial) thumbPayload.thumbnailUrl = cur
       }
 
-      const payload = {
+      let crestImageUrl: string | null | undefined = undefined
+      if (!editing) {
+        if (crestPath.trim()) crestImageUrl = crestPath.trim()
+      } else if (crestRemoved) {
+        crestImageUrl = null
+      } else {
+        const cur = crestPath.trim()
+        const initial = (crestInitialRef.current ?? '').trim()
+        if (cur && cur !== initial) crestImageUrl = cur
+      }
+
+      const payload: Record<string, unknown> = {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         startDate: form.startDate.trim() || undefined,
         endDate: form.endDate.trim() || undefined,
+        originPlace:
+          form.originPlace.trim() || (editing ? null : undefined),
+        founderText:
+          form.founderText.trim() || (editing ? null : undefined),
+        motto: form.motto.trim() || (editing ? null : undefined),
         ...thumbPayload,
       }
+      if (crestImageUrl !== undefined) payload.crestImageUrl = crestImageUrl
       if (editing) {
         await updateDynasty.mutateAsync({ id: editing.id, data: payload })
       } else {
-        await createDynasty.mutateAsync(payload)
+        // 새 등록은 name 필수 필드 보장됨
+        await createDynasty.mutateAsync(payload as never)
       }
       goToList()
     } catch (err: any) {
@@ -402,6 +456,126 @@ export function DynastySection() {
                   </div>
                 </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>본관 · 발상지</label>
+                  <input
+                    type="text"
+                    value={form.originPlace}
+                    onChange={(e) => setForm((f) => ({ ...f, originPlace: e.target.value }))}
+                    placeholder="예: 김해, Habsburg"
+                    style={{ width: '100%', maxWidth: 380, padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827', background: '#fff', outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>시조</label>
+                  <input
+                    type="text"
+                    value={form.founderText}
+                    onChange={(e) => setForm((f) => ({ ...f, founderText: e.target.value }))}
+                    placeholder="시조 이름 (인물 등록되어 있으면 추후 연결)"
+                    style={{ width: '100%', maxWidth: 380, padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827', background: '#fff', outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>가훈 · 모토</label>
+                  <input
+                    type="text"
+                    value={form.motto}
+                    onChange={(e) => setForm((f) => ({ ...f, motto: e.target.value }))}
+                    placeholder='예: "AEIOU"'
+                    style={{ width: '100%', maxWidth: 440, padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827', background: '#fff', outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>가문 상징(문장)</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <input
+                      ref={crestInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (!file) return
+                        try {
+                          validateImageFile(file)
+                        } catch (err) {
+                          setFormError((err as Error).message)
+                          return
+                        }
+                        setCrestUploading(true)
+                        setFormError(null)
+                        try {
+                          const r = await uploadImage(file, 'dynasties')
+                          setCrestPath(r.url)
+                          setCrestRemoved(false)
+                        } catch (err) {
+                          setFormError((err as Error).message)
+                        } finally {
+                          setCrestUploading(false)
+                        }
+                      }}
+                    />
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        disabled={crestUploading}
+                        onClick={() => crestInputRef.current?.click()}
+                        style={{
+                          padding: '10px 16px',
+                          borderRadius: 12,
+                          border: '1px solid #e5e7eb',
+                          background: '#fff',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: '#374151',
+                          cursor: crestUploading ? 'wait' : 'pointer',
+                        }}
+                      >
+                        {crestUploading ? '업로드 중…' : '문장 이미지 선택'}
+                      </button>
+                      {!crestRemoved && crestPath && (
+                        <button
+                          type="button"
+                          disabled={crestUploading}
+                          onClick={() => {
+                            setCrestPath('')
+                            setCrestRemoved(true)
+                          }}
+                          style={{
+                            padding: '10px 16px',
+                            borderRadius: 12,
+                            border: '1px solid #fecaca',
+                            background: '#fef2f2',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: '#dc2626',
+                            cursor: crestUploading ? 'wait' : 'pointer',
+                          }}
+                        >
+                          문장 제거
+                        </button>
+                      )}
+                    </div>
+                    {!crestRemoved && crestPath ? (
+                      <div style={{ marginTop: 4, width: 120, height: 120, borderRadius: 14, overflow: 'hidden', background: '#fafafa', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb' }}>
+                        <img
+                          src={getUploadImageUrl(crestPath)}
+                          alt=""
+                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                          onError={(ev) => {
+                            ev.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0' }}>
                   <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>설명</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -500,14 +674,21 @@ export function DynastySection() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 24 }}>
                 {list.map((dynasty) => {
-                  const startStr = dynasty.startDate
-                    ? new Date(dynasty.startDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short' })
+                  const ext = dynasty as DynastyExtra
+                  const startYear = dynasty.startDate
+                    ? new Date(dynasty.startDate).getFullYear().toString()
                     : null
-                  const endStr = dynasty.endDate
-                    ? new Date(dynasty.endDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short' })
+                  const endYear = dynasty.endDate
+                    ? new Date(dynasty.endDate).getFullYear().toString()
                     : null
                   const dateRange =
-                    startStr && endStr ? `${startStr} ~ ${endStr}` : startStr ? `${startStr} ~` : endStr ? `~ ${endStr}` : null
+                    startYear && endYear
+                      ? `${startYear} – ${endYear}`
+                      : startYear
+                        ? `${startYear} – 현재`
+                        : endYear
+                          ? `? – ${endYear}`
+                          : null
                   return (
                     <div
                       key={dynasty.id}
@@ -521,30 +702,91 @@ export function DynastySection() {
                         border: '1px solid #e5e7eb',
                       }}
                     >
-                      <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                      <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-                          {dynasty.thumbnailUrl ? (
-                            <img src={getUploadImageUrl(dynasty.thumbnailUrl)} alt="" style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 16 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
-                          ) : (
-                            <div style={{ width: 88, height: 88, borderRadius: 16, background: 'linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 24 }}>—</div>
-                          )}
+                          <div style={{ position: 'relative', flexShrink: 0 }}>
+                            {dynasty.thumbnailUrl ? (
+                              <img src={getUploadImageUrl(dynasty.thumbnailUrl)} alt="" style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 16 }} onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                            ) : (
+                              <div style={{ width: 88, height: 88, borderRadius: 16, background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                                {dynasty.name?.trim().slice(0, 1) || '·'}
+                              </div>
+                            )}
+                            {ext.crestImageUrl && (
+                              <div
+                                title="가문 상징"
+                                style={{
+                                  position: 'absolute',
+                                  right: -6,
+                                  bottom: -6,
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: 8,
+                                  overflow: 'hidden',
+                                  border: '2px solid #fff',
+                                  background: '#f8fafc',
+                                  boxShadow: '0 2px 6px rgba(15,23,42,0.18)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <img
+                                  src={getUploadImageUrl(ext.crestImageUrl)}
+                                  alt=""
+                                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none'
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
                           <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-                            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{dynasty.name}</div>
-                            {dateRange && <div style={{ fontSize: 13, color: '#64748b', marginTop: 6 }}>기간: {dateRange}</div>}
+                            <Link
+                              to={`/history/dynasties/${dynasty.id}`}
+                              style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3, textDecoration: 'none' }}
+                            >
+                              {dynasty.name}
+                            </Link>
+                            {dateRange && (
+                              <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#64748b', marginTop: 6 }}>{dateRange}</div>
+                            )}
+                            {ext.originPlace && (
+                              <div style={{ fontSize: 12.5, color: '#6366f1', marginTop: 6, fontWeight: 500 }}>
+                                본관 · {ext.originPlace}
+                              </div>
+                            )}
+                            {ext.founderText && (
+                              <div style={{ fontSize: 12.5, color: '#475569', marginTop: 4 }}>
+                                시조 · {ext.founderText}
+                              </div>
+                            )}
+                            {ext.motto && (
+                              <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, fontStyle: 'italic' }}>
+                                "{ext.motto}"
+                              </div>
+                            )}
                             {dynasty.description && (
-                              <div style={{ fontSize: 13, color: '#64748b', marginTop: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                              <div style={{ fontSize: 13, color: '#64748b', marginTop: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
                                 {dynasty.description}
                               </div>
                             )}
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 'auto', paddingTop: 4 }}>
+                          <Link
+                            to={`/history/dynasties/${dynasty.id}`}
+                            style={{ padding: '10px 18px', fontSize: 13, cursor: 'pointer', border: '1px solid #c7d2fe', borderRadius: 12, background: '#eef2ff', fontWeight: 600, color: '#4f46e5', textDecoration: 'none' }}
+                          >
+                            상세 보기
+                          </Link>
                           <button
                             type="button"
                             onClick={() => setMembersModal({ id: dynasty.id, name: dynasty.name })}
-                            style={{ padding: '10px 18px', fontSize: 13, cursor: 'pointer', border: '1px solid #c7d2fe', borderRadius: 12, background: '#eef2ff', fontWeight: 600, color: '#4f46e5' }}
+                            style={{ padding: '10px 18px', fontSize: 13, cursor: 'pointer', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', fontWeight: 600, color: '#475569' }}
                           >
-                            인물 인포그래픽
+                            구성원
                           </button>
                           <button
                             type="button"
