@@ -36,6 +36,9 @@ export const useUpdateDynasty = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['dynasties'] })
       queryClient.invalidateQueries({ queryKey: ['dynasty', variables.id] })
+      queryClient.invalidateQueries({
+        queryKey: ['dynasty-detail', variables.id],
+      })
     },
   })
 }

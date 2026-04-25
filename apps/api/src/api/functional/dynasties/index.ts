@@ -14,6 +14,8 @@ import type {
   UpdateDynastyDto,
 } from "../../../libs/dynasty/presentation/dto";
 
+export * as detail from "./detail/index";
+
 /**
  * @controller DynastyController.getAll
  * @path GET /dynasties

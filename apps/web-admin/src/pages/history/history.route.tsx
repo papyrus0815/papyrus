@@ -121,10 +121,24 @@ export const historyPageRoute: RouteObject = {
         },
         {
           path: 'dynasties',
-          lazy: async () => {
-            const { DynastyPage } = await import('./dynasty/dynasty.page')
-            return { Component: DynastyPage }
-          },
+          children: [
+            {
+              index: true,
+              lazy: async () => {
+                const { DynastyPage } = await import('./dynasty/dynasty.page')
+                return { Component: DynastyPage }
+              },
+            },
+            {
+              path: ':dynastyId',
+              lazy: async () => {
+                const { DynastyDetailPage } = await import(
+                  './dynasty/dynasty-detail.page'
+                )
+                return { Component: DynastyDetailPage }
+              },
+            },
+          ],
         },
         {
           path: ROUTES.HISTORY.POST,

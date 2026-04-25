@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 import { motion, AnimatePresence } from 'framer-motion'
+import { FiEdit2, FiSearch, FiTrash2 } from 'react-icons/fi'
 import {
   useDynasties,
   useDeleteDynasty,
@@ -8,14 +10,20 @@ import {
 import { DynastyForm } from './components/dynasty-form'
 import type { Dynasty } from '@/shared/api/dynasty'
 import { getUploadImageUrl } from '@/shared/api/upload'
-import { DynastyMembersInfographicModal } from '@/widgets/country/country-detail/ui/dynasty-members-infographic-modal'
+
+type SortMode = 'name' | 'startYear' | 'recent'
 
 export const DynastyPage = () => {
   const { data: dynasties = [], isLoading } = useDynasties()
   const deleteDynasty = useDeleteDynasty()
   const [selectedDynasty, setSelectedDynasty] = useState<Dynasty | null>(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [membersModal, setMembersModal] = useState<{ id: string; name: string } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortMode, setSortMode] = useState<SortMode>('name')
 
   const handleCreate = () => {
     setSelectedDynasty(null)
@@ -27,16 +35,49 @@ export const DynastyPage = () => {
     setIsFormOpen(true)
   }
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('정말 삭제하시겠습니까?')) {
-      await deleteDynasty.mutateAsync(id)
-    }
+  const handleDelete = (dynasty: Dynasty) => {
+    setConfirmDelete({ id: dynasty.id, name: dynasty.name })
   }
 
   const handleCloseForm = () => {
     setIsFormOpen(false)
     setSelectedDynasty(null)
   }
+
+  const filteredSorted = useMemo(() => {
+    if (!Array.isArray(dynasties)) return [] as Dynasty[]
+    const query = searchQuery.trim().toLowerCase()
+    const list = query
+      ? dynasties.filter((d) => {
+          const name = d.name?.toLowerCase() ?? ''
+          const desc = (d as any).description?.toLowerCase?.() ?? ''
+          const origin = (d as any).originPlace?.toLowerCase?.() ?? ''
+          return (
+            name.includes(query) ||
+            desc.includes(query) ||
+            origin.includes(query)
+          )
+        })
+      : [...dynasties]
+    const yearOf = (iso: string | null | undefined) =>
+      iso ? new Date(iso).getFullYear() : Number.POSITIVE_INFINITY
+    if (sortMode === 'startYear') {
+      list.sort(
+        (a: any, b: any) => yearOf(a.startDate) - yearOf(b.startDate),
+      )
+    } else if (sortMode === 'recent') {
+      list.sort((a: any, b: any) => {
+        const aT = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+        const bT = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+        return bT - aT
+      })
+    } else {
+      list.sort((a: any, b: any) =>
+        (a.name ?? '').localeCompare(b.name ?? '', 'ko'),
+      )
+    }
+    return list
+  }, [dynasties, searchQuery, sortMode])
 
   if (isLoading) {
     return (
@@ -65,29 +106,51 @@ export const DynastyPage = () => {
       </Header>
 
       <Content>
+        <ToolbarRow>
+          <SearchWrap>
+            <FiSearch size={14} aria-hidden />
+            <SearchInput
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="이름·설명·본관 검색"
+            />
+          </SearchWrap>
+          <SortSelect
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            aria-label="정렬"
+          >
+            <option value="name">이름순</option>
+            <option value="startYear">시작 연도순</option>
+            <option value="recent">최근 수정순</option>
+          </SortSelect>
+          <ResultCount>{filteredSorted.length}건</ResultCount>
+        </ToolbarRow>
+
         <DynastyGrid>
           <AnimatePresence>
-            {Array.isArray(dynasties) &&
-              dynasties.map((dynasty) => (
-                <DynastyCard
-                  key={dynasty.id}
-                  as={motion.div}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  whileHover={{ y: -4 }}
-                >
+            {filteredSorted.map((dynasty) => (
+              <DynastyCard
+                key={dynasty.id}
+                as={motion.div}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                whileHover={{ y: -2 }}
+              >
+                <CardLink to={`/history/dynasties/${dynasty.id}`}>
                   <CardHeader>
                     {dynasty.thumbnailUrl ? (
                       <DynastyImage>
-                        <img src={getUploadImageUrl(dynasty.thumbnailUrl)} alt={dynasty.name} />
+                        <img
+                          src={getUploadImageUrl(dynasty.thumbnailUrl)}
+                          alt={dynasty.name}
+                        />
                       </DynastyImage>
                     ) : (
                       <DynastyImagePlaceholder>
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                          <polyline points="9 22 9 12 15 12 15 22" />
-                        </svg>
+                        {firstGlyph(dynasty.name)}
                       </DynastyImagePlaceholder>
                     )}
                     <CardBadge>가문</CardBadge>
@@ -95,60 +158,54 @@ export const DynastyPage = () => {
 
                   <DynastyInfo>
                     <DynastyName>{dynasty.name}</DynastyName>
+                    {(dynasty as any).originPlace && (
+                      <OriginText>{(dynasty as any).originPlace}</OriginText>
+                    )}
                     {dynasty.description && (
-                      <DynastyDescription>{dynasty.description}</DynastyDescription>
+                      <DynastyDescription>
+                        {dynasty.description}
+                      </DynastyDescription>
                     )}
                     {(dynasty.startDate || dynasty.endDate) && (
                       <DynastyMeta>
-                        <MetaItem>
-                          <MetaIcon>📅</MetaIcon>
-                          <MetaText>
-                            {dynasty.startDate
-                              ? new Date(dynasty.startDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })
-                              : '시작일 미정'}
-                            {' ~ '}
-                            {dynasty.endDate
-                              ? new Date(dynasty.endDate).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })
-                              : '현재'}
-                          </MetaText>
-                        </MetaItem>
+                        <MetaText>
+                          {formatYear(dynasty.startDate)} – {formatYear(dynasty.endDate) || '현재'}
+                        </MetaText>
                       </DynastyMeta>
                     )}
                   </DynastyInfo>
+                </CardLink>
 
-                  <DynastyActions>
-                    <InfographicButton
-                      type="button"
-                      onClick={() => setMembersModal({ id: dynasty.id, name: dynasty.name })}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                      인물 인포그래픽
-                    </InfographicButton>
-                    <ActionButton onClick={() => handleEdit(dynasty)}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                      수정
-                    </ActionButton>
-                    <DeleteButton onClick={() => handleDelete(dynasty.id)}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                      삭제
-                    </DeleteButton>
-                  </DynastyActions>
-                </DynastyCard>
-              ))}
+                <DynastyActions>
+                  <ActionIconBtn
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleEdit(dynasty)
+                    }}
+                    aria-label={`${dynasty.name} 수정`}
+                  >
+                    <FiEdit2 size={14} />
+                  </ActionIconBtn>
+                  <ActionIconBtn
+                    type="button"
+                    $danger
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleDelete(dynasty)
+                    }}
+                    aria-label={`${dynasty.name} 삭제`}
+                  >
+                    <FiTrash2 size={14} />
+                  </ActionIconBtn>
+                </DynastyActions>
+              </DynastyCard>
+            ))}
           </AnimatePresence>
 
-          {!dynasties || !Array.isArray(dynasties) || dynasties.length === 0 ? (
+          {filteredSorted.length === 0 ? (
             <EmptyState>
               <EmptyIcon>
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -156,8 +213,16 @@ export const DynastyPage = () => {
                   <polyline points="9 22 9 12 15 12 15 22" />
                 </svg>
               </EmptyIcon>
-              <EmptyTitle>등록된 가문이 없습니다</EmptyTitle>
-              <EmptyDescription>새 가문을 추가하여 시작하세요</EmptyDescription>
+              <EmptyTitle>
+                {searchQuery
+                  ? '검색 결과가 없습니다'
+                  : '등록된 가문이 없습니다'}
+              </EmptyTitle>
+              <EmptyDescription>
+                {searchQuery
+                  ? '다른 키워드로 검색해 보세요'
+                  : '새 가문을 추가하여 시작하세요'}
+              </EmptyDescription>
             </EmptyState>
           ) : null}
         </DynastyGrid>
@@ -169,16 +234,44 @@ export const DynastyPage = () => {
         )}
       </AnimatePresence>
 
-      {membersModal ? (
-        <DynastyMembersInfographicModal
-          dynastyId={membersModal.id}
-          dynastyName={membersModal.name}
-          isOpen
-          onClose={() => setMembersModal(null)}
-        />
-      ) : null}
+      {confirmDelete && (
+        <ConfirmOverlay onClick={() => setConfirmDelete(null)}>
+          <ConfirmDialog onClick={(e) => e.stopPropagation()}>
+            <ConfirmMessage>
+              「{confirmDelete.name}」 가문을 삭제할까요?
+            </ConfirmMessage>
+            <ConfirmActions>
+              <ConfirmCancelBtn
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+              >
+                취소
+              </ConfirmCancelBtn>
+              <ConfirmOkBtn
+                type="button"
+                onClick={async () => {
+                  const id = confirmDelete.id
+                  setConfirmDelete(null)
+                  await deleteDynasty.mutateAsync(id)
+                }}
+              >
+                삭제
+              </ConfirmOkBtn>
+            </ConfirmActions>
+          </ConfirmDialog>
+        </ConfirmOverlay>
+      )}
     </Container>
   )
+}
+
+function firstGlyph(name: string): string {
+  return name?.trim().slice(0, 1) || '·'
+}
+
+function formatYear(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return new Date(iso).getFullYear().toString()
 }
 
 const Container = styled.div`
@@ -243,16 +336,214 @@ const Content = styled.div`
   padding: 32px;
 `
 
+const ToolbarRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+`
+
+const SearchWrap = styled.div`
+  flex: 1;
+  min-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        `
+      : css`
+          background: white;
+          border: 1px solid #e2e8f0;
+        `}
+  > svg {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    flex-shrink: 0;
+  }
+`
+
+const SearchInput = styled.input`
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const SortSelect = styled.select`
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  cursor: pointer;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: ${theme.colors.text.primary};
+        `
+      : css`
+          background: white;
+          border: 1px solid #e2e8f0;
+          color: #1e293b;
+        `}
+`
+
+const ResultCount = styled.div`
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 const DynastyGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+`
+
+const CardLink = styled(Link)`
+  display: block;
+  text-decoration: none;
+  color: inherit;
+`
+
+const OriginText = styled.div`
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #6366f1;
+`
+
+const ActionIconBtn = styled.button<{ $danger?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  background: transparent;
+  color: ${({ $danger, theme }) =>
+    $danger ? '#dc2626' : theme.colors.text.secondary};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+  &:hover {
+    color: ${({ $danger }) => ($danger ? '#b91c1c' : '#4f46e5')};
+    border-color: ${({ $danger }) =>
+      $danger ? 'rgba(220,38,38,0.4)' : 'rgba(99,102,241,0.4)'};
+    background: ${({ $danger, theme }) =>
+      $danger
+        ? 'rgba(220, 38, 38, 0.08)'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.04)'
+          : 'rgba(238, 242, 255, 0.6)'};
+  }
+`
+
+const ConfirmOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+`
+
+const ConfirmDialog = styled.div`
+  width: 100%;
+  max-width: 360px;
+  padding: 24px 22px 20px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(28, 28, 32, 0.98);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+        `
+      : css`
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 20px 48px rgba(0, 0, 0, 0.14);
+        `}
+`
+
+const ConfirmMessage = styled.p`
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ConfirmActions = styled.div`
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+`
+
+const ConfirmCancelBtn = styled.button`
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: ${theme.colors.text.secondary};
+          &:hover { background: rgba(255, 255, 255, 0.12); }
+        `
+      : css`
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #475569;
+          &:hover { background: #e9eef5; }
+        `}
+`
+
+const ConfirmOkBtn = styled.button`
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  background: #dc2626;
+  color: #ffffff;
+  &:hover {
+    background: #b91c1c;
+  }
 `
 
 const DynastyCard = styled.div`
-  border-radius: 20px;
+  border-radius: 14px;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
   ${({ theme }) => theme.mode === 'dark' ? css`
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -277,7 +568,7 @@ const DynastyCard = styled.div`
 const CardHeader = styled.div`
   position: relative;
   width: 100%;
-  height: 200px;
+  height: 160px;
 `
 
 const CardBadge = styled.div`
@@ -320,12 +611,14 @@ const DynastyImage = styled.div`
 const DynastyImagePlaceholder = styled.div`
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  opacity: 0.9;
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 `
 
 const DynastyInfo = styled.div`
@@ -357,20 +650,10 @@ const DynastyMeta = styled.div`
   gap: 8px;
 `
 
-const MetaItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`
-
-const MetaIcon = styled.span`
-  font-size: 16px;
-  flex-shrink: 0;
-`
-
 const MetaText = styled.span`
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
 `
 
@@ -384,77 +667,6 @@ const DynastyActions = styled.div`
   ` : css`
     border-top: 1px solid #f1f5f9;
     background: #fafbfc;
-  `}
-`
-
-const ActionButton = styled.button`
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 11px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255, 255, 255, 0.05);
-    color: #94a3b8;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #e2e8f0;
-      transform: translateY(-1px);
-    }
-  ` : css`
-    background: white;
-    color: #475569;
-    border: 1px solid #e2e8f0;
-    &:hover {
-      background: #f8fafc;
-      border-color: #cbd5e1;
-      transform: translateY(-1px);
-    }
-  `}
-`
-
-const InfographicButton = styled(ActionButton)`
-  flex: 1.15;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    color: #a5b4fc;
-    border-color: rgba(99, 102, 241, 0.35);
-    background: rgba(99, 102, 241, 0.12);
-    &:hover {
-      color: #c7d2fe;
-      background: rgba(99, 102, 241, 0.2);
-      border-color: rgba(99, 102, 241, 0.45);
-    }
-  ` : css`
-    color: #4f46e5;
-    border-color: #c7d2fe;
-    background: #eef2ff;
-    &:hover {
-      background: #e0e7ff;
-      border-color: #a5b4fc;
-    }
-  `}
-`
-
-const DeleteButton = styled(ActionButton)`
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    color: #f87171;
-    &:hover {
-      background: rgba(248, 113, 113, 0.12);
-      border-color: rgba(248, 113, 113, 0.3);
-    }
-  ` : css`
-    color: #dc2626;
-    &:hover {
-      background: #fef2f2;
-      border-color: #fecaca;
-    }
   `}
 `
 

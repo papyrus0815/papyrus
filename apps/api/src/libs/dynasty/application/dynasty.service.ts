@@ -39,8 +39,16 @@ export class DynastyService {
     endDate?: Date
     /** 업로드 API가 반환한 `/uploads/...` 경로 */
     thumbnailUrl?: string | null
+    originPlace?: string | null
+    founderId?: string | null
+    founderText?: string | null
+    crestImageUrl?: string | null
+    motto?: string | null
   }) {
     const { thumbnailUrl, ...fields } = data
+    if (fields.founderId) {
+      await this.assertPersonExists(fields.founderId)
+    }
     const id = await this.prisma.$transaction(async (tx) => {
       const d = await tx.dynasty.create({ data: fields })
       const trimmed = thumbnailUrl?.trim()
@@ -71,10 +79,19 @@ export class DynastyService {
       endDate?: Date
       /** 새 업로드 경로. `null` 또는 빈 문자열이면 썸네일만 제거. 생략 시 썸네일 유지 */
       thumbnailUrl?: string | null
+      originPlace?: string | null
+      founderId?: string | null
+      founderText?: string | null
+      crestImageUrl?: string | null
+      motto?: string | null
     },
   ) {
     await this.findById(id)
     const { thumbnailUrl, ...fields } = data
+
+    if (fields.founderId) {
+      await this.assertPersonExists(fields.founderId)
+    }
 
     if (thumbnailUrl !== undefined) {
       await this.removeDynastyThumbnailFilesAndRows(id)
@@ -101,6 +118,88 @@ export class DynastyService {
     })
 
     return (await this.dynastyRepository.findById(id))!
+  }
+
+  /** 시조 ID 유효성 검증 */
+  private async assertPersonExists(personId: string) {
+    const exists = await this.prisma.person.findUnique({
+      where: { id: personId },
+      select: { id: true },
+    })
+    if (!exists) {
+      throw new BadRequestException('시조로 지정한 인물을 찾을 수 없습니다.')
+    }
+  }
+
+  /**
+   * 가문 상세 — 기본 필드 + 통치 국가(역사·현대) + 구성원 미리보기 포함
+   */
+  async findDetail(id: string) {
+    const base = await this.findById(id)
+
+    const [historicalRules, modernRules, members] = await Promise.all([
+      this.prisma.dynastyRule.findMany({
+        where: { dynastyId: id },
+        include: {
+          historicalCountry: { select: { id: true, name: true } },
+        },
+        orderBy: [{ startYear: 'asc' }, { startMonth: 'asc' }, { startDay: 'asc' }],
+      }),
+      this.prisma.dynastyModernRule.findMany({
+        where: { dynastyId: id },
+        include: {
+          country: { select: { id: true, name: true } },
+        },
+        orderBy: [{ startYear: 'asc' }, { startMonth: 'asc' }, { startDay: 'asc' }],
+      }),
+      this.prisma.person.findMany({
+        where: { dynastyId: id },
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          birthDate: true,
+          deathDate: true,
+          profileImageUrl: true,
+        },
+        orderBy: [{ birthDate: 'asc' }, { name: 'asc' }],
+      }),
+    ])
+
+    return {
+      ...base,
+      historicalRules: historicalRules.map((r) => ({
+        id: r.id,
+        historicalCountryId: r.historicalCountryId,
+        historicalCountryName: r.historicalCountry.name,
+        startEra: r.startEra,
+        startYear: r.startYear,
+        endEra: r.endEra,
+        endYear: r.endYear,
+        endReason: r.endReason,
+        notes: r.notes,
+      })),
+      modernRules: modernRules.map((r) => ({
+        id: r.id,
+        countryId: r.countryId,
+        countryName: r.country.name,
+        startEra: r.startEra,
+        startYear: r.startYear,
+        endEra: r.endEra,
+        endYear: r.endYear,
+        endReason: r.endReason,
+        notes: r.notes,
+      })),
+      memberCount: members.length,
+      members: members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        surname: m.surname,
+        birthDate: m.birthDate?.toISOString() ?? null,
+        deathDate: m.deathDate?.toISOString() ?? null,
+        profileImageUrl: m.profileImageUrl,
+      })),
+    }
   }
 
   async delete(id: string) {

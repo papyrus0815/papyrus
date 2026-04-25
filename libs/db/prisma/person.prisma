@@ -219,6 +219,8 @@ model Person {
   childrenFromFather Person[]              @relation("ParentChildFather")
   childrenFromMother Person[]              @relation("ParentChildMother")
   foundedCompanies   Company[]             @relation("FounderToCompany")
+  /// 시조로 등록된 가문들 (보통 0~1)
+  foundedDynasties   Dynasty[]             @relation("DynastyFounder")
 
   // 배우자 관계 (혼인 시작/종료일 등)
   spouseRelationsAsPerson PersonSpouse[]   @relation("PersonAsPerson")

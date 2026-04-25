@@ -48,6 +48,22 @@ model Dynasty {
   /// 가문 종료일 (멸문 또는 권력 상실)
   endDate DateTime? @map("end_date")
 
+  /// 본관·발상지 (예: "김해", "Habsburg", "藤原")
+  originPlace String? @map("origin_place") @db.VarChar(200)
+
+  /// 시조 인물 (인물 등록되어 있으면 FK로, 미등록이면 founderText에 텍스트)
+  founderId String? @map("founder_id") @db.Char(36)
+  founder   Person? @relation("DynastyFounder", fields: [founderId], references: [id], onDelete: SetNull)
+
+  /// 시조 이름 텍스트 (Person 미등록 케이스)
+  founderText String? @map("founder_text") @db.VarChar(200)
+
+  /// 가문 상징/문장 이미지 URL (썸네일과 별도)
+  crestImageUrl String? @map("crest_image_url") @db.VarChar(500)
+
+  /// 가훈/모토
+  motto String? @db.VarChar(300)
+
   /// 대표 썸네일은 `attachment` 테이블(ownerType=DYNASTY, title=dynasty-thumbnail)에 저장
 
   //--- 관계 필드
@@ -64,6 +80,7 @@ model Dynasty {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([founderId], name: "idx_dynasty_founder")
   @@map("dynasty")
 }
 

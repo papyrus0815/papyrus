@@ -12,10 +12,30 @@ export type DynastyRowWithThumbnail = {
   description: string | null
   startDate: Date | null
   endDate: Date | null
+  originPlace: string | null
+  founderId: string | null
+  founder: {
+    id: string
+    name: string
+    surname: string | null
+    birthDate: Date | null
+    deathDate: Date | null
+  } | null
+  founderText: string | null
+  crestImageUrl: string | null
+  motto: string | null
   createdAt: Date
   updatedAt: Date
   thumbnailUrl: string | null
 }
+
+const FOUNDER_SELECT = {
+  id: true,
+  name: true,
+  surname: true,
+  birthDate: true,
+  deathDate: true,
+} as const
 
 @Injectable()
 export class DynastyRepository {
@@ -28,6 +48,18 @@ export class DynastyRepository {
       description: string | null
       startDate: Date | null
       endDate: Date | null
+      originPlace: string | null
+      founderId: string | null
+      founder: {
+        id: string
+        name: string
+        surname: string | null
+        birthDate: Date | null
+        deathDate: Date | null
+      } | null
+      founderText: string | null
+      crestImageUrl: string | null
+      motto: string | null
       createdAt: Date
       updatedAt: Date
     },
@@ -49,12 +81,18 @@ export class DynastyRepository {
   }
 
   async findAll(): Promise<DynastyRowWithThumbnail[]> {
-    const rows = await this.prisma.dynasty.findMany({ orderBy: { name: 'asc' } })
+    const rows = await this.prisma.dynasty.findMany({
+      orderBy: { name: 'asc' },
+      include: { founder: { select: FOUNDER_SELECT } },
+    })
     return this.attachThumbnails(rows)
   }
 
   async findById(id: string): Promise<DynastyRowWithThumbnail | null> {
-    const row = await this.prisma.dynasty.findUnique({ where: { id } })
+    const row = await this.prisma.dynasty.findUnique({
+      where: { id },
+      include: { founder: { select: FOUNDER_SELECT } },
+    })
     if (!row) return null
     const [withThumb] = await this.attachThumbnails([row])
     return withThumb
@@ -65,6 +103,11 @@ export class DynastyRepository {
     description?: string
     startDate?: Date
     endDate?: Date
+    originPlace?: string | null
+    founderId?: string | null
+    founderText?: string | null
+    crestImageUrl?: string | null
+    motto?: string | null
   }) {
     return this.prisma.dynasty.create({ data })
   }
@@ -76,6 +119,11 @@ export class DynastyRepository {
       description?: string
       startDate?: Date
       endDate?: Date
+      originPlace?: string | null
+      founderId?: string | null
+      founderText?: string | null
+      crestImageUrl?: string | null
+      motto?: string | null
     },
   ) {
     return this.prisma.dynasty.update({ where: { id }, data })

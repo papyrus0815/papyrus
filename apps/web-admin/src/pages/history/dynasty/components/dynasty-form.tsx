@@ -27,30 +27,62 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
     description: '',
     startDate: '',
     endDate: '',
+    originPlace: '',
+    founderText: '',
+    motto: '',
   })
   const [thumbPath, setThumbPath] = useState('')
   const [thumbRemoved, setThumbRemoved] = useState(false)
   const [thumbUploading, setThumbUploading] = useState(false)
   const thumbInitialRef = useRef('')
   const thumbInputRef = useRef<HTMLInputElement>(null)
+  const [crestPath, setCrestPath] = useState('')
+  const [crestRemoved, setCrestRemoved] = useState(false)
+  const [crestUploading, setCrestUploading] = useState(false)
+  const crestInitialRef = useRef('')
+  const crestInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (dynasty) {
+      const d = dynasty as Dynasty & {
+        originPlace?: string | null
+        founderText?: string | null
+        motto?: string | null
+        crestImageUrl?: string | null
+      }
       setFormData({
-        name: dynasty.name || '',
-        description: dynasty.description || '',
-        startDate: dynasty.startDate ? new Date(dynasty.startDate).toISOString().split('T')[0] : '',
-        endDate: dynasty.endDate ? new Date(dynasty.endDate).toISOString().split('T')[0] : '',
+        name: d.name || '',
+        description: d.description || '',
+        startDate: d.startDate ? new Date(d.startDate).toISOString().split('T')[0] : '',
+        endDate: d.endDate ? new Date(d.endDate).toISOString().split('T')[0] : '',
+        originPlace: d.originPlace ?? '',
+        founderText: d.founderText ?? '',
+        motto: d.motto ?? '',
       })
-      const t = dynasty.thumbnailUrl || ''
+      const t = d.thumbnailUrl || ''
       thumbInitialRef.current = t
       setThumbPath(t)
       setThumbRemoved(false)
+      const c = d.crestImageUrl ?? ''
+      crestInitialRef.current = c
+      setCrestPath(c)
+      setCrestRemoved(false)
     } else {
-      setFormData({ name: '', description: '', startDate: '', endDate: '' })
+      setFormData({
+        name: '',
+        description: '',
+        startDate: '',
+        endDate: '',
+        originPlace: '',
+        founderText: '',
+        motto: '',
+      })
       thumbInitialRef.current = ''
       setThumbPath('')
       setThumbRemoved(false)
+      crestInitialRef.current = ''
+      setCrestPath('')
+      setCrestRemoved(false)
     }
   }, [dynasty])
 
@@ -69,13 +101,28 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
       if (cur && cur !== initial) thumbPart.thumbnailUrl = cur
     }
 
-    const data = {
+    let crestImageUrl: string | null | undefined = undefined
+    if (!dynasty) {
+      if (crestPath.trim()) crestImageUrl = crestPath.trim()
+    } else if (crestRemoved) {
+      crestImageUrl = null
+    } else {
+      const cur = crestPath.trim()
+      const initial = (crestInitialRef.current || '').trim()
+      if (cur && cur !== initial) crestImageUrl = cur
+    }
+
+    const data: any = {
       name: formData.name,
       description: formData.description || undefined,
       startDate: formData.startDate || undefined,
       endDate: formData.endDate || undefined,
+      originPlace: formData.originPlace.trim() || (dynasty ? null : undefined),
+      founderText: formData.founderText.trim() || (dynasty ? null : undefined),
+      motto: formData.motto.trim() || (dynasty ? null : undefined),
       ...thumbPart,
     }
+    if (crestImageUrl !== undefined) data.crestImageUrl = crestImageUrl
 
     try {
       if (dynasty) {
@@ -152,6 +199,40 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
             </FormGroup>
           </FormRow>
 
+          <FormRow>
+            <FormGroup>
+              <Label>본관 / 발상지</Label>
+              <Input
+                type="text"
+                name="originPlace"
+                value={formData.originPlace}
+                onChange={handleChange}
+                placeholder="예: 김해, Habsburg"
+              />
+            </FormGroup>
+            <FormGroup>
+              <Label>시조</Label>
+              <Input
+                type="text"
+                name="founderText"
+                value={formData.founderText}
+                onChange={handleChange}
+                placeholder="시조 이름 (인물 등록되어 있으면 추후 연결)"
+              />
+            </FormGroup>
+          </FormRow>
+
+          <FormGroup>
+            <Label>가훈</Label>
+            <Input
+              type="text"
+              name="motto"
+              value={formData.motto}
+              onChange={handleChange}
+              placeholder='예: "AEIOU"'
+            />
+          </FormGroup>
+
           <FormGroup>
             <Label>썸네일</Label>
             <input
@@ -227,6 +308,84 @@ export const DynastyForm = ({ dynasty, onClose }: DynastyFormProps) => {
               <ImagePreview>
                 <img src={getUploadImageUrl(thumbPath)} alt="Preview" />
               </ImagePreview>
+            ) : null}
+          </FormGroup>
+
+          <FormGroup>
+            <Label>가문 상징 (문장)</Label>
+            <input
+              ref={crestInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (!file) return
+                try {
+                  validateImageFile(file)
+                } catch (err) {
+                  setError((err as Error).message)
+                  return
+                }
+                setCrestUploading(true)
+                setError(null)
+                try {
+                  const r = await uploadImage(file, 'dynasties')
+                  setCrestPath(r.url)
+                  setCrestRemoved(false)
+                } catch (err) {
+                  setError((err as Error).message)
+                } finally {
+                  setCrestUploading(false)
+                }
+              }}
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              <button
+                type="button"
+                disabled={crestUploading}
+                onClick={() => crestInputRef.current?.click()}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  border: '1px solid #e2e8f0',
+                  background: 'transparent',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: crestUploading ? 'wait' : 'pointer',
+                  color: 'inherit',
+                }}
+              >
+                {crestUploading ? '업로드 중…' : '문장 이미지 선택'}
+              </button>
+              {!crestRemoved && crestPath && (
+                <button
+                  type="button"
+                  disabled={crestUploading}
+                  onClick={() => {
+                    setCrestPath('')
+                    setCrestRemoved(true)
+                  }}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: 10,
+                    border: '1px solid rgba(220,38,38,0.35)',
+                    background: 'rgba(220,38,38,0.08)',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: crestUploading ? 'wait' : 'pointer',
+                    color: '#f87171',
+                  }}
+                >
+                  문장 제거
+                </button>
+              )}
+            </div>
+            {!crestRemoved && crestPath ? (
+              <CrestPreview>
+                <img src={getUploadImageUrl(crestPath)} alt="가문 상징" />
+              </CrestPreview>
             ) : null}
           </FormGroup>
 
@@ -428,6 +587,28 @@ const ImagePreview = styled.div`
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+`
+
+const CrestPreview = styled.div`
+  margin-top: 12px;
+  width: 120px;
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+
+  img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
   }
 `
 

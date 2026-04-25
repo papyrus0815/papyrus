@@ -11,7 +11,45 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { DynastyService } from '../application/dynasty.service'
-import { CreateDynastyDto, UpdateDynastyDto, DynastyResponseDto } from './dto'
+import {
+  CreateDynastyDto,
+  DynastyDetailResponseDto,
+  DynastyResponseDto,
+  UpdateDynastyDto,
+} from './dto'
+
+type DynastyRow = Awaited<ReturnType<DynastyService['findById']>>
+
+function toResponseDto(d: DynastyRow): DynastyResponseDto {
+  return {
+    id: d.id,
+    name: d.name,
+    description: d.description,
+    startDate: d.startDate ? d.startDate.toISOString() : null,
+    endDate: d.endDate ? d.endDate.toISOString() : null,
+    thumbnailUrl: d.thumbnailUrl,
+    originPlace: d.originPlace,
+    founderId: d.founderId,
+    founder: d.founder
+      ? {
+          id: d.founder.id,
+          name: d.founder.name,
+          surname: d.founder.surname,
+          birthDate: d.founder.birthDate
+            ? d.founder.birthDate.toISOString()
+            : null,
+          deathDate: d.founder.deathDate
+            ? d.founder.deathDate.toISOString()
+            : null,
+        }
+      : null,
+    founderText: d.founderText,
+    crestImageUrl: d.crestImageUrl,
+    motto: d.motto,
+    createdAt: d.createdAt.toISOString(),
+    updatedAt: d.updatedAt.toISOString(),
+  }
+}
 
 @ApiTags('dynasties')
 @Controller('dynasties')
@@ -21,30 +59,25 @@ export class DynastyController {
   @Get()
   async getAll(): Promise<DynastyResponseDto[]> {
     const dynasties = await this.dynastyService.findAll()
-    return dynasties.map((d) => ({
-      id: d.id,
-      name: d.name,
-      description: d.description,
-      startDate: d.startDate ? d.startDate.toISOString() : null,
-      endDate: d.endDate ? d.endDate.toISOString() : null,
-      thumbnailUrl: d.thumbnailUrl,
-      createdAt: d.createdAt.toISOString(),
-      updatedAt: d.updatedAt.toISOString(),
-    }))
+    return dynasties.map(toResponseDto)
   }
 
   @Get(':id')
   async getById(@Param('id') id: string): Promise<DynastyResponseDto> {
     const d = await this.dynastyService.findById(id)
+    return toResponseDto(d)
+  }
+
+  /** 가문 상세: 기본 + 통치 국가 + 구성원 미리보기 */
+  @Get(':id/detail')
+  async getDetail(@Param('id') id: string): Promise<DynastyDetailResponseDto> {
+    const d = await this.dynastyService.findDetail(id)
     return {
-      id: d.id,
-      name: d.name,
-      description: d.description,
-      startDate: d.startDate ? d.startDate.toISOString() : null,
-      endDate: d.endDate ? d.endDate.toISOString() : null,
-      thumbnailUrl: d.thumbnailUrl,
-      createdAt: d.createdAt.toISOString(),
-      updatedAt: d.updatedAt.toISOString(),
+      ...toResponseDto(d),
+      historicalRules: d.historicalRules,
+      modernRules: d.modernRules,
+      memberCount: d.memberCount,
+      members: d.members,
     }
   }
 
@@ -56,17 +89,13 @@ export class DynastyController {
       startDate: dto.startDate ? new Date(dto.startDate) : undefined,
       endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       thumbnailUrl: dto.thumbnailUrl,
+      originPlace: dto.originPlace,
+      founderId: dto.founderId,
+      founderText: dto.founderText,
+      crestImageUrl: dto.crestImageUrl,
+      motto: dto.motto,
     })
-    return {
-      id: d.id,
-      name: d.name,
-      description: d.description,
-      startDate: d.startDate ? d.startDate.toISOString() : null,
-      endDate: d.endDate ? d.endDate.toISOString() : null,
-      thumbnailUrl: d.thumbnailUrl,
-      createdAt: d.createdAt.toISOString(),
-      updatedAt: d.updatedAt.toISOString(),
-    }
+    return toResponseDto(d)
   }
 
   @Put(':id')
@@ -80,17 +109,13 @@ export class DynastyController {
       startDate: dto.startDate ? new Date(dto.startDate) : undefined,
       endDate: dto.endDate ? new Date(dto.endDate) : undefined,
       thumbnailUrl: dto.thumbnailUrl,
+      originPlace: dto.originPlace,
+      founderId: dto.founderId,
+      founderText: dto.founderText,
+      crestImageUrl: dto.crestImageUrl,
+      motto: dto.motto,
     })
-    return {
-      id: d.id,
-      name: d.name,
-      description: d.description,
-      startDate: d.startDate ? d.startDate.toISOString() : null,
-      endDate: d.endDate ? d.endDate.toISOString() : null,
-      thumbnailUrl: d.thumbnailUrl,
-      createdAt: d.createdAt.toISOString(),
-      updatedAt: d.updatedAt.toISOString(),
-    }
+    return toResponseDto(d)
   }
 
   @Delete(':id')
