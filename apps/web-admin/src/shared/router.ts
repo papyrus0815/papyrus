@@ -16,6 +16,8 @@ export const pathKeys = {
   settings: () => `/${ROUTES.SETTINGS}/`,
   services: () => `/${ROUTES.SERVICES}/`,
   page404: () => `/${ROUTES.PAGE_404}/`,
+  /** 가문 풀 페이지 */
+  dynasty: () => `/dynasty`,
 
   // --- History Routes ---
   history: {
@@ -82,9 +84,8 @@ export const pathKeys = {
     /** 연대표/대시보드 — 행정부 다국가 비교 */
     dashboardAdministration: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/${ROUTES.HISTORY.DASHBOARD_ADMINISTRATION}`,
-    /** 연대표/대시보드 — 가문 뷰 */
-    dashboardDynasty: () =>
-      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/dynasty`,
+    /** @deprecated 가문은 풀 페이지(`/dynasty`)로 이전. `pathKeys.dynasty()` 사용. */
+    dashboardDynasty: () => `/dynasty`,
     /** 연대표/대시보드 — 민족 뷰 */
     dashboardEthnicity: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/ethnicity`,

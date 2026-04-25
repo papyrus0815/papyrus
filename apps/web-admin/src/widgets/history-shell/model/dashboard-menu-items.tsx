@@ -176,8 +176,9 @@ export const DASHBOARD_MENU_ITEMS: DashboardMenuItem[] = [
     id: 'dynasty',
     label: '가문',
     icon: IconDynasty,
-    path: pathKeys.history.dashboardDynasty(),
-    matchPath: (p) => /\/history\/dashboard\/dynasty\/?$/.test(p),
+    // 가문은 history 대시보드 밖으로 이동(/dynasty 풀 페이지). 메뉴는 보존.
+    path: pathKeys.dynasty(),
+    matchPath: (p) => /^\/dynasty\/?$/.test(p),
   },
   {
     id: 'ethnicity',

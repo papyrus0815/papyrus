@@ -2,7 +2,6 @@
  * 가문 섹션 — 행정조직 페이지와 동일한 구조·스타일 참조
  */
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   useDynasties,
@@ -743,12 +742,9 @@ export function DynastySection() {
                             )}
                           </div>
                           <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-                            <Link
-                              to={`/history/dynasties/${dynasty.id}`}
-                              style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3, textDecoration: 'none' }}
-                            >
+                            <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3 }}>
                               {dynasty.name}
-                            </Link>
+                            </div>
                             {dateRange && (
                               <div style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: '#64748b', marginTop: 6 }}>{dateRange}</div>
                             )}
@@ -775,18 +771,12 @@ export function DynastySection() {
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 'auto', paddingTop: 4 }}>
-                          <Link
-                            to={`/history/dynasties/${dynasty.id}`}
-                            style={{ padding: '10px 18px', fontSize: 13, cursor: 'pointer', border: '1px solid #c7d2fe', borderRadius: 12, background: '#eef2ff', fontWeight: 600, color: '#4f46e5', textDecoration: 'none' }}
-                          >
-                            상세 보기
-                          </Link>
                           <button
                             type="button"
                             onClick={() => setMembersModal({ id: dynasty.id, name: dynasty.name })}
-                            style={{ padding: '10px 18px', fontSize: 13, cursor: 'pointer', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', fontWeight: 600, color: '#475569' }}
+                            style={{ padding: '10px 18px', fontSize: 13, cursor: 'pointer', border: '1px solid #c7d2fe', borderRadius: 12, background: '#eef2ff', fontWeight: 600, color: '#4f46e5' }}
                           >
-                            구성원
+                            구성원 인포그래픽
                           </button>
                           <button
                             type="button"

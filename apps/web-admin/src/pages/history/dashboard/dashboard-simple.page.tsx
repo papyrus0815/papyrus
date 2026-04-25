@@ -1,8 +1,10 @@
 /**
  * 단순 대시보드 뷰 공통 페이지 — 모두 fullScreen 모드.
  *
- * - dynasty · ethnicity — 전용 위젯을 그대로 렌더
+ * - ethnicity — 전용 위젯을 그대로 렌더
  * - legislature · military — 안내 플레이스홀더 (기능 구현 전)
+ *
+ * 가문(dynasty)은 풀 페이지(`/dynasty`)로 이전됨 — 이 파일에서 처리하지 않음.
  *
  * 뷰 타입은 URL에서 자동 파싱.
  */
@@ -10,7 +12,6 @@ import { motion } from 'framer-motion'
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
-import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-section.widget'
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
 import {
   HistoryShell,
@@ -36,7 +37,6 @@ const PLACEHOLDERS: Partial<
 }
 
 function deriveView(pathname: string): DashboardContentView {
-  if (pathname.includes('/dashboard/dynasty')) return 'dynasty'
   if (pathname.includes('/dashboard/ethnicity')) return 'ethnicity'
   if (pathname.includes('/dashboard/legislature')) return 'legislature'
   if (pathname.includes('/dashboard/military')) return 'military'
@@ -49,7 +49,6 @@ export default function DashboardSimplePage() {
   const view = deriveView(location.pathname)
 
   const renderRight = () => {
-    if (view === 'dynasty') return <DynastySection />
     if (view === 'ethnicity') return <EthnicityDashboardSection />
     const ph = PLACEHOLDERS[view]
     if (!ph) return null

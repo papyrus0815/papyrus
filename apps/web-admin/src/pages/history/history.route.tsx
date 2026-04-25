@@ -37,9 +37,9 @@ const lazyDashboardSimple: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-simple.page')).default,
 })
 
-/** 대시보드 URL 세그먼트 → 라우트 생성 */
+/** 대시보드 URL 세그먼트 → 라우트 생성. 가문은 /dynasty 풀 페이지로 이전. */
 const dashboardSimpleRoutes = (
-  ['dynasty', 'ethnicity', 'legislature', 'military'] as const
+  ['ethnicity', 'legislature', 'military'] as const
 ).map((seg) => ({
   path: `${ROUTES.HISTORY.DASHBOARD}/${seg}`,
   lazy: lazyDashboardSimple,
@@ -119,25 +119,18 @@ export const historyPageRoute: RouteObject = {
             return { loader: continentsLoader, Component }
           },
         },
+        // 가문은 /dynasty 풀 페이지로 이전됨. 잔존 북마크 흡수용 redirect만 유지.
         {
           path: 'dynasties',
-          children: [
-            {
-              // 대시보드 가문 화면(/history/dashboard/dynasty)이 가문 목록의 정식 진입점.
-              // 이 인덱스 경로는 검색·북마크 잔존 케이스만 안전하게 흡수.
-              index: true,
-              loader: () => redirect('/history/dashboard/dynasty'),
-            },
-            {
-              path: ':dynastyId',
-              lazy: async () => {
-                const { DynastyDetailPage } = await import(
-                  './dynasty/dynasty-detail.page'
-                )
-                return { Component: DynastyDetailPage }
-              },
-            },
-          ],
+          loader: () => redirect('/dynasty'),
+        },
+        {
+          path: 'dynasties/:dynastyId',
+          loader: () => redirect('/dynasty'),
+        },
+        {
+          path: 'dashboard/dynasty',
+          loader: () => redirect('/dynasty'),
         },
         {
           path: ROUTES.HISTORY.POST,
