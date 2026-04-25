@@ -55,11 +55,26 @@ enum DeathType {
 }
 
 /// 인물 간 인간관계 유형
-/// - MENTOR: 스승(from) → 제자(to), 친밀도는 그 관계의 가까움
-/// - GENERAL: 일반 관계(친밀도 1~5로만 표현), 저장 시 인물 ID 오름차순으로 정규화
+/// - MENTOR: 스승(from) → 제자(to). 친밀도는 선택(없으면 NULL)
+/// - GENERAL: 일반 관계. 친밀도(-2..+2 양극형)로 표현, 저장 시 인물 ID 오름차순으로 정규화
 enum PersonHumanRelationshipType {
   MENTOR
   GENERAL
+}
+
+/// 인간관계 세분화 태그 (한 관계에 다중 부착 가능)
+enum PersonRelationshipTag {
+  FRIEND       // 친구
+  CLOSE_FRIEND // 절친
+  LOVER        // 연인
+  RIVAL        // 라이벌·경쟁자
+  ENEMY        // 정적·원수
+  ALLY         // 협력자·맹우
+  COLLEAGUE    // 동료
+  PATRON       // 후원자·은인
+  CLIENT       // 후원받은 자
+  RELATIVE     // 친척 (혈연 외 친지)
+  OTHER        // 기타
 }
 
 /// 인물-국가 관계의 유형
@@ -318,6 +333,9 @@ model PersonLifeEvent {
   accountId String?  @map("account_id") @db.Char(36)
   account   Account? @relation("AccountPersonLifeEvents", fields: [accountId], references: [id], onDelete: SetNull)
 
+  /// 이 사건을 근거로 삼는 인간관계들
+  humanRelationshipSources PersonHumanRelationshipSource[] @relation("PersonLifeEventSources")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -354,7 +372,8 @@ model PersonSpouse {
 // PersonHumanRelationship (인물 간 인간관계)
 // ========================
 /// 멘토(MENTOR): fromPersonId = 스승, toPersonId = 제자
-/// 그 외(ALLY, ENEMY 등): 인물 ID 오름차순으로 from/to 정규화해 중복 방지
+/// GENERAL · isMutual=true: 양쪽이 합의된 대칭 관계 (UUID 정규화로 중복 방지)
+/// GENERAL · isMutual=false: from = 시점 인물, to = 상대 인물 (시점별 비대칭 관계)
 model PersonHumanRelationship {
   id String @id @default(uuid()) @db.Char(36)
 
@@ -363,8 +382,11 @@ model PersonHumanRelationship {
 
   relationshipType PersonHumanRelationshipType @map("relationship_type")
 
-  /// 친밀도 1(매우 낮음) ~ 5(매우 높음)
-  affinityLevel Int @map("affinity_level")
+  /// GENERAL 전용 — true면 양쪽 합의된 대칭 관계, false면 from(주체) 시점만 표현
+  isMutual Boolean @default(false) @map("is_mutual")
+
+  /// 친밀도: -2(매우 적대) ~ +2(매우 우호). 미설정(NULL) 허용 — 특히 MENTOR에서 친밀도가 의미 없을 때 NULL.
+  affinityLevel Int? @map("affinity_level")
 
   startDate DateTime? @map("start_date") @db.DateTime(3)
   endDate   DateTime? @map("end_date") @db.DateTime(3)
@@ -376,10 +398,59 @@ model PersonHumanRelationship {
   fromPerson Person @relation("PersonHumanRelFrom", fields: [fromPersonId], references: [id], onDelete: Cascade)
   toPerson   Person @relation("PersonHumanRelTo", fields: [toPersonId], references: [id], onDelete: Cascade)
 
+  /// 세분화 태그(친구·라이벌·후원자 등) — 다중 부착 가능
+  tags PersonHumanRelationshipTagAssignment[] @relation("PersonHumanRelTagAssignments")
+
+  /// 근거 사건(연보) 연결 — 다중 부착 가능
+  sources PersonHumanRelationshipSource[] @relation("PersonHumanRelSources")
+
   @@index([fromPersonId], name: "idx_person_human_rel_from")
   @@index([toPersonId], name: "idx_person_human_rel_to")
   @@unique([fromPersonId, toPersonId, relationshipType], name: "person_human_rel_pair_type_key")
   @@map("person_human_relationship")
+}
+
+// ========================
+// PersonHumanRelationshipSource (관계 근거)
+// ========================
+/// PersonHumanRelationship의 근거가 되는 PersonLifeEvent(연보) 연결.
+/// 한 관계에 여러 사건을 근거로 부착 가능.
+model PersonHumanRelationshipSource {
+  id             String @id @default(uuid()) @db.Char(36)
+  relationshipId String @map("relationship_id") @db.Char(36)
+  lifeEventId    String @map("life_event_id") @db.Char(36)
+
+  /// 짧은 메모 (예: "이 사건에서 처음 만남")
+  note String? @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  relationship PersonHumanRelationship @relation("PersonHumanRelSources", fields: [relationshipId], references: [id], onDelete: Cascade)
+  lifeEvent    PersonLifeEvent         @relation("PersonLifeEventSources", fields: [lifeEventId], references: [id], onDelete: Cascade)
+
+  @@unique([relationshipId, lifeEventId], name: "person_human_rel_source_unique")
+  @@index([relationshipId], name: "idx_person_human_rel_source_relId")
+  @@index([lifeEventId], name: "idx_person_human_rel_source_eventId")
+  @@map("person_human_relationship_source")
+}
+
+// ========================
+// PersonHumanRelationshipTagAssignment
+// ========================
+/// PersonHumanRelationship에 부착되는 태그 (다대다)
+model PersonHumanRelationshipTagAssignment {
+  id             String                  @id @default(uuid()) @db.Char(36)
+  relationshipId String                  @map("relationship_id") @db.Char(36)
+  tag            PersonRelationshipTag
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  relationship PersonHumanRelationship @relation("PersonHumanRelTagAssignments", fields: [relationshipId], references: [id], onDelete: Cascade)
+
+  @@unique([relationshipId, tag], name: "person_human_rel_tag_unique")
+  @@index([relationshipId], name: "idx_person_human_rel_tag_relId")
+  @@index([tag], name: "idx_person_human_rel_tag_tag")
+  @@map("person_human_relationship_tag")
 }
 
 // ========================

@@ -30,6 +30,12 @@ export namespace getDetailById {
     id: string;
     name: string;
     surname: string | null;
+    middleName: string | null;
+    nameDisplayOrder: string | null;
+    originalName: string | null;
+    surnameMeaning: string | null;
+    nameMeaning: string | null;
+    middleNameMeaning: string | null;
     nicknames: Array<{
       id: string;
       nickname: string;
@@ -93,6 +99,7 @@ export namespace getDetailById {
     deathCause: string | null;
     deathNote: string | null;
     isAlive: boolean;
+    influence: number | null;
     createdAt: string;
     updatedAt: string;
   }>;

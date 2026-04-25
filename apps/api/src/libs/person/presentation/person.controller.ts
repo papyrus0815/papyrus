@@ -179,6 +179,18 @@ export class PersonController {
   }
 
   /**
+   * 멘토 계보 — 인물 중심으로 위쪽 스승 체인과 아래쪽 제자 체인을 깊이 우선 수집
+   */
+  @Get(':id/mentor-lineage')
+  async getMentorLineage(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findMentorLineage(id, accountId)
+  }
+
+  /**
    * 전체 가계도 그래프 (BFS, ego 기준 3세대 위·2세대 아래)
    */
   @Get(':id/family-tree')
@@ -195,6 +207,12 @@ export class PersonController {
     id: string
     name: string
     surname: string | null
+    middleName: string | null
+    nameDisplayOrder: string | null
+    originalName: string | null
+    surnameMeaning: string | null
+    nameMeaning: string | null
+    middleNameMeaning: string | null
     nicknames: Array<{ id: string; nickname: string; type: string | null; priority: number | null }>
     birthEra: any
     birthYear: number | null
@@ -253,6 +271,7 @@ export class PersonController {
     deathCause: string | null
     deathNote: string | null
     isAlive: boolean
+    influence: number | null
     createdAt: string
     updatedAt: string
   }> {
@@ -310,6 +329,12 @@ export class PersonController {
       id: person.id,
       name: person.name,
       surname: person.surname,
+      middleName: person.middleName ?? null,
+      nameDisplayOrder: (person.nameDisplayOrder as string | null) ?? null,
+      originalName: person.originalName ?? null,
+      surnameMeaning: person.surnameMeaning ?? null,
+      nameMeaning: person.nameMeaning ?? null,
+      middleNameMeaning: person.middleNameMeaning ?? null,
       nicknames: (person.nicknames || []).map((n: any) => ({
         id: n.id,
         nickname: n.nickname,
@@ -409,6 +434,7 @@ export class PersonController {
       deathCause: (person as any).deathCause ?? null,
       deathNote: (person as any).deathNote ?? null,
       isAlive: person.isAlive ?? false,
+      influence: (person as any).influence ?? null,
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
     }

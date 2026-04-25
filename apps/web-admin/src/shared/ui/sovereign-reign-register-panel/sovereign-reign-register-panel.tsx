@@ -43,7 +43,7 @@ const SidebarFormWrap = styled.div`
     padding-top: 0;
     font-size: 13px;
     font-weight: 600;
-    color: #475569;
+    color: ${({ theme }) => theme.colors.text.secondary};
     letter-spacing: -0.01em;
   }
   ${FieldControl} {
@@ -58,11 +58,15 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   padding: 13px 16px;
-  background: #fafafa;
-  color: ${({ $hasValue }) => ($hasValue ? '#0f172a' : '#94a3b8')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.04)'
+      : '#fafafa'};
+  color: ${({ $hasValue, theme }) =>
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   font-size: 14px;
   line-height: 1.45;
   font-weight: 500;
@@ -80,16 +84,21 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   }
   svg {
     flex-shrink: 0;
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   &:hover {
-    background: #f4f4f5;
-    border-color: #e4e4e7;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f4f4f5'};
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
   &:focus {
-    background: #fff;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    background: ${({ theme }) => theme.colors.background.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.22)'
+          : 'rgba(99, 102, 241, 0.12)'};
   }
   &:disabled {
     opacity: 0.45;
@@ -103,19 +112,26 @@ const DeleteBtn = styled.button`
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: #dc2626;
+  color: ${({ theme }) => theme.colors.error};
   background: transparent;
   border: none;
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.2s;
   &:hover:not(:disabled) {
-    background: #fef2f2;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 69, 58, 0.16)'
+        : 'rgba(239, 68, 68, 0.08)'};
   }
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
+`
+
+const RequiredMark = styled.span`
+  color: ${({ theme }) => theme.colors.error};
 `
 
 export interface SovereignReignRegisterPanelProps {
@@ -359,7 +375,7 @@ export function SovereignReignRegisterPanel({
               {/* 재위 기간 */}
               <FieldRow>
                 <FieldLabel>
-                  재위 기간 <span style={{ color: '#ef4444' }}>*</span>
+                  재위 기간 <RequiredMark>*</RequiredMark>
                 </FieldLabel>
                 <FieldControl>
                   <DateRangeField

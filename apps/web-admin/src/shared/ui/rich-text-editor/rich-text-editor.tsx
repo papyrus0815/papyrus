@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast'
 import {
   FiAlignCenter,
   FiAlignLeft,
+  FiAlignRight,
   FiBold,
   FiChevronDown,
   FiChevronLeft,
@@ -18,11 +19,13 @@ import {
   FiChevronUp,
   FiCode,
   FiDroplet,
+  FiEdit2,
   FiGrid,
   FiImage,
   FiItalic,
   FiLink,
   FiList,
+  FiMaximize2,
   FiMessageSquare,
   FiMinus,
   FiMoreHorizontal,
@@ -30,7 +33,7 @@ import {
   FiType,
   FiX,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import {
   fetchEntityLinkSearch,
@@ -81,10 +84,15 @@ export interface MentionExtensionProps {
 }
 
 /* 행정조직 폼 스타일: 테두리 #e5e7eb, 포커스 인디고 */
-const EditorContainer = styled.div`
+/**
+ * $maxHeight 지정 시 — 에디터 전체가 지정 높이에서 flex-column으로 고정되고
+ * 본문 영역(EditorWrapper)이 내부 스크롤, Toolbar는 Container 하단에 flex 아이템으로 고정.
+ * 모달 등 bounded 컨테이너에서 Toolbar가 부모 스크롤에 밀려 안 보이는 현상 방지.
+ */
+const EditorContainer = styled.div<{ $maxHeight?: string }>`
   position: relative;
   border-radius: 20px;
-  overflow: visible;
+  overflow: ${({ $maxHeight }) => ($maxHeight ? 'hidden' : 'visible')};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
@@ -100,6 +108,13 @@ const EditorContainer = styled.div`
   -webkit-backdrop-filter: ${({ theme }) =>
     theme.mode === 'dark' ? 'blur(12px)' : 'none'};
   width: 100%;
+  ${({ $maxHeight }) =>
+    $maxHeight &&
+    css`
+      display: flex;
+      flex-direction: column;
+      max-height: ${$maxHeight};
+    `}
 
   &:focus-within {
     border-color: #4f46e5;
@@ -107,7 +122,7 @@ const EditorContainer = styled.div`
   }
 `
 
-const Toolbar = styled.div`
+const Toolbar = styled.div<{ $bounded?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -117,9 +132,15 @@ const Toolbar = styled.div`
   border-radius: 0 0 20px 20px;
   overflow: visible;
   width: 100%;
-  position: sticky;
-  bottom: 0;
   z-index: 100;
+  flex-shrink: 0;
+  ${({ $bounded }) =>
+    $bounded
+      ? ''
+      : css`
+          position: sticky;
+          bottom: 0;
+        `}
 `
 
 const ToolbarButton = styled.button.attrs({ type: 'button' })<{
@@ -207,11 +228,20 @@ const ToolbarDivider = styled.div`
   align-self: center;
 `
 
-const EditorWrapper = styled.div`
+const EditorWrapper = styled.div<{ $bounded?: boolean }>`
   background: transparent;
   position: relative;
   border-radius: 20px 20px 0 0;
-  overflow: visible;
+  ${({ $bounded }) =>
+    $bounded
+      ? css`
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+        `
+      : css`
+          overflow: visible;
+        `}
 `
 
 const TitleInput = styled.input`
@@ -424,6 +454,45 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
       margin: 0 auto;
     }
 
+    /* 레거시: figure에 aspect-ratio가 박힌 경우 — 읽기 뷰와 동일하게 무력화.
+       figure는 콘텐츠 폭으로 따라가고, 비율은 img가 직접 책임짐. */
+    &[data-aspect-ratio] {
+      aspect-ratio: auto !important;
+    }
+    &[data-aspect-ratio] img,
+    img[data-aspect-ratio] {
+      height: auto !important;
+    }
+
+    /* 정렬 — 좌/중/우 */
+    &[data-align='left'] {
+      display: block;
+      margin-left: 0;
+      margin-right: auto;
+      text-align: left;
+      img {
+        margin: 0;
+      }
+    }
+    &[data-align='right'] {
+      display: block;
+      margin-left: auto;
+      margin-right: 0;
+      text-align: right;
+      img {
+        margin: 0 0 0 auto;
+      }
+    }
+    &[data-align='center'] {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+      img {
+        margin: 0 auto;
+      }
+    }
+
     figcaption {
       margin-top: 8px;
       font-size: 13px;
@@ -432,7 +501,7 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
       text-align: center;
     }
 
-    /* 리사이즈 핸들 스타일 */
+    /* 리사이즈 핸들 — 4코너 */
     .resize-handle {
       position: absolute;
       width: 12px;
@@ -440,33 +509,51 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
       background: #4f46e5;
       border: 2px solid #fff;
       border-radius: 50%;
-      cursor: nwse-resize;
       z-index: 10;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-      transition: transform 0.2s ease;
+      transition: transform 0.15s ease;
       opacity: 0;
       pointer-events: none;
+      touch-action: none;
 
       &:hover {
         transform: scale(1.2);
         box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
       }
 
-      &.bottom-right {
+      &.tl {
+        top: -6px;
+        left: -6px;
+        cursor: nwse-resize;
+      }
+      &.tr {
+        top: -6px;
+        right: -6px;
+        cursor: nesw-resize;
+      }
+      &.bl {
+        bottom: -6px;
+        left: -6px;
+        cursor: nesw-resize;
+      }
+      &.br {
         bottom: -6px;
         right: -6px;
         cursor: nwse-resize;
       }
     }
 
-    &:hover .resize-handle {
+    &:hover .resize-handle,
+    &.is-selected .resize-handle,
+    &.resizing .resize-handle {
       opacity: 1;
       pointer-events: all;
     }
 
-    &.resizing .resize-handle {
-      opacity: 1;
-      pointer-events: all;
+    &.is-selected {
+      outline: 2px solid #4f46e5;
+      outline-offset: 4px;
+      border-radius: 16px;
     }
   }
 
@@ -944,6 +1031,81 @@ const ContextMenuItem = styled.button.attrs({ type: 'button' })`
   }
 `
 
+/* 이미지 클릭 시 뜨는 부유 툴바 — 이미지 위쪽에 위치 */
+const ImageToolbar = styled.div<{ $top: number; $left: number }>`
+  position: fixed;
+  top: ${({ $top }) => $top}px;
+  left: ${({ $left }) => $left}px;
+  transform: translateX(-50%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(25,25,25,0.95)' : '#fff'};
+  backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  -webkit-backdrop-filter: ${({ theme }) =>
+    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  border-radius: 12px;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 6px;
+  z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY};
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+`
+
+const ImageToolbarButton = styled.button.attrs({ type: 'button' })<{
+  $active?: boolean
+  $danger?: boolean
+}>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 8px;
+  background: ${({ $active }) =>
+    $active ? 'rgba(79, 70, 229, 0.12)' : 'transparent'};
+  color: ${({ theme, $active, $danger }) =>
+    $danger
+      ? '#dc2626'
+      : $active
+        ? '#4f46e5'
+        : theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: ${({ $danger }) =>
+      $danger ? 'rgba(220, 38, 38, 0.08)' : 'rgba(79, 70, 229, 0.08)'};
+    color: ${({ $danger }) => ($danger ? '#dc2626' : '#4f46e5')};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`
+
+const ImageToolbarDivider = styled.span`
+  width: 1px;
+  height: 18px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  margin: 0 2px;
+`
+
 const EntityLinkModal = styled.div`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(25,25,25,0.92)' : '#fff'};
@@ -1414,6 +1576,12 @@ interface RichTextEditorProps {
   showTitle?: boolean
   /** 포스트/사건 편집 시 전달 시 용어 검색·등록 시 전역+문서 전용 지원, "이 문서에만 사용" 옵션 표시 */
   documentScope?: DocumentScope
+  /**
+   * 에디터 전체 높이를 이 값으로 제한하고 본문만 내부 스크롤되게 함.
+   * 모달 등 부모 스크롤 컨테이너에서 Toolbar가 잘리는 현상 방지.
+   * 예: "60vh", "420px"
+   */
+  maxHeight?: string
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
@@ -1431,6 +1599,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   titlePlaceholder = '제목 없음',
   showTitle = false,
   documentScope,
+  maxHeight,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -1501,50 +1670,127 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [pendingImageUrl, setPendingImageUrl] = useState<string | null>(null)
   const imageCaptionInputRef = useRef<HTMLInputElement>(null)
   const savedImageInsertRangeRef = useRef<Range | null>(null)
+  /** 캡션 편집 모드: 새 이미지 삽입이 아니라 기존 figure의 캡션을 수정 */
+  const editingCaptionFigureRef = useRef<HTMLElement | null>(null)
+
+  // 선택된 이미지(figure)와 부유 툴바 위치
+  const [selectedFigure, setSelectedFigure] = useState<HTMLElement | null>(null)
+  const [imageMenuPos, setImageMenuPos] = useState<{
+    top: number
+    left: number
+  } | null>(null)
 
   // 클릭 사운드 훅
   const playClickSound = useClickSound()
 
-  // 에디터 내용 동기화
+  /**
+   * 마지막으로 onChange로 부모에 흘려보낸 값 — value-sync effect가 자기가 만든
+   * 변경에 반응하지 않도록 비교 기준으로 사용. (이게 없으면 한 글자 입력마다
+   * sanitize가 핸들·is-selected 같은 임시 마크업을 떼어 내 부모 value와 DOM
+   * innerHTML이 끝없이 어긋나 매 글자마다 innerHTML 전체가 리셋됨)
+   */
+  const lastEmittedValueRef = useRef<string>('')
+
+  // 에디터 내용 동기화 — 외부에서 value가 바뀐 경우(초기 로드·외부 리셋·복구)에만 DOM 갱신
   useEffect(() => {
-    if (editorRef.current) {
-      const currentContent = editorRef.current.innerHTML
-      const newContent = resolveRichTextImageSrcsForDisplay(
-        sanitizeRichTextHtml(value || ''),
-      )
+    if (!editorRef.current) return
+    const incoming = value ?? ''
+    if (incoming === lastEmittedValueRef.current) return
+    const newContent = resolveRichTextImageSrcsForDisplay(
+      sanitizeRichTextHtml(incoming),
+    )
+    // 다음 user-input 이후 비교 기준으로 쓰기 위해 sanitize한 값을 기록
+    lastEmittedValueRef.current = incoming
 
-      // 값이 실제로 변경되었을 때만 업데이트 (무한 루프 방지)
-      if (currentContent !== newContent) {
-        const selection = window.getSelection()
-        const range =
-          selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-        const cursorPosition = range
-          ? {
-              startContainer: range.startContainer,
-              startOffset: range.startOffset,
-            }
-          : null
-
-        editorRef.current.innerHTML = newContent
-
-        // 커서 위치 복원
-        if (cursorPosition && selection) {
-          try {
-            const newRange = document.createRange()
-            newRange.setStart(
-              cursorPosition.startContainer,
-              cursorPosition.startOffset,
-            )
-            newRange.collapse(true)
-            selection.removeAllRanges()
-            selection.addRange(newRange)
-          } catch {
-            // 커서 복원 실패 시 무시
-          }
+    const selection = window.getSelection()
+    const range =
+      selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+    const cursorPosition = range
+      ? {
+          startContainer: range.startContainer,
+          startOffset: range.startOffset,
         }
+      : null
+
+    editorRef.current.innerHTML = newContent
+
+    if (cursorPosition && selection) {
+      try {
+        const newRange = document.createRange()
+        newRange.setStart(
+          cursorPosition.startContainer,
+          cursorPosition.startOffset,
+        )
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+      } catch {
+        /* 커서 복원 실패 시 무시 */
       }
     }
   }, [value])
+
+  // 선택된 figure에 is-selected 클래스 토글 + 외부 클릭/ESC/스크롤로 해제
+  useEffect(() => {
+    if (!selectedFigure) return
+
+    selectedFigure.classList.add('is-selected')
+
+    const updatePosition = () => {
+      const rect = selectedFigure.getBoundingClientRect()
+      setImageMenuPos({
+        top: Math.max(rect.top - 52, 8),
+        left: rect.left + rect.width / 2,
+      })
+    }
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      const node = e.target as Node
+      if (selectedFigure.contains(node)) return
+      // 부유 툴바 안의 클릭은 제외
+      const toolbar = document.getElementById('rich-text-image-toolbar')
+      if (toolbar && toolbar.contains(node)) return
+      setSelectedFigure(null)
+      setImageMenuPos(null)
+    }
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedFigure(null)
+        setImageMenuPos(null)
+      } else if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        document.activeElement !== editorRef.current?.parentElement &&
+        !(
+          document.activeElement instanceof HTMLInputElement ||
+          document.activeElement instanceof HTMLTextAreaElement
+        )
+      ) {
+        // 선택된 figure를 삭제 (에디터 내부 텍스트 입력에 영향 없도록 활성 요소 검사)
+        e.preventDefault()
+        selectedFigure.remove()
+        setSelectedFigure(null)
+        setImageMenuPos(null)
+        if (editorRef.current) {
+          const ev = new Event('input', { bubbles: true })
+          editorRef.current.dispatchEvent(ev)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('keydown', handleKey)
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+
+    return () => {
+      selectedFigure.classList.remove('is-selected')
+      document.removeEventListener('mousedown', handleOutsideClick)
+      document.removeEventListener('keydown', handleKey)
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [selectedFigure])
 
   // 텍스트 선택 감지
   useEffect(() => {
@@ -1591,152 +1837,245 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [contextMenuVisible])
 
-  // 이미지 드래그 리사이즈 기능 초기화
+  // 이미지 리사이즈 — 4코너 핸들 + PointerEvent(터치/펜 지원) + rAF 스로틀.
+  // 저장 시 width(px)만 인라인으로 박고 height는 figure.aspect-ratio로 산출 →
+  // 좁은 화면에서 max-width:100%로 줄어도 비율이 유지됨.
   useEffect(() => {
-    if (!editorRef.current) return
+    const editor = editorRef.current
+    if (!editor) return
+
+    type Corner = 'tl' | 'tr' | 'bl' | 'br'
+    const HANDLE_CORNERS: Corner[] = ['tl', 'tr', 'bl', 'br']
 
     let isResizing = false
-    let resizeTarget: HTMLImageElement | null = null
+    let resizeFigure: HTMLElement | null = null
+    let resizeImg: HTMLImageElement | null = null
+    let activeCorner: Corner = 'br'
     let startX = 0
     let startY = 0
     let startWidth = 0
-    let startHeight = 0
     let aspectRatio = 1
+    let pendingFrame: number | null = null
+    let pendingW = 0
+    let activePointerId: number | null = null
+    const loadHandlers = new Map<HTMLImageElement, EventListener>()
+    const dragstartHandlers = new Map<HTMLImageElement, EventListener>()
 
-    const createResizeHandle = (img: HTMLImageElement) => {
-      const figure = img.closest('figure')
+    const ensureAspectRatio = (figure: HTMLElement, img: HTMLImageElement) => {
+      const w = img.naturalWidth || img.offsetWidth
+      const h = img.naturalHeight || img.offsetHeight
+      if (w > 0 && h > 0 && !img.dataset.aspectRatio) {
+        // 비율 마커는 img에 — figure에 두면 figure 박스 자체가 비율로 강제돼
+        // 컨테이너 폭이 큰 읽기 뷰에서 빈 공간이 생김.
+        img.dataset.aspectRatio = `${w} / ${h}`
+        img.style.aspectRatio = `${w} / ${h}`
+      }
+      // 레거시 데이터 마이그레이션: figure에 aspect-ratio가 박힌 경우 img로 옮기고 figure는 비움
+      if (figure.dataset.aspectRatio && !img.dataset.aspectRatio) {
+        const ratio = figure.dataset.aspectRatio
+        img.dataset.aspectRatio = ratio
+        img.style.aspectRatio = ratio
+      }
+      if (figure.dataset.aspectRatio) {
+        delete figure.dataset.aspectRatio
+        figure.style.aspectRatio = ''
+      }
+    }
+
+    const ensureHandles = (figure: HTMLElement) => {
+      const existing = figure.querySelectorAll('.resize-handle')
+      if (existing.length === HANDLE_CORNERS.length) return
+      existing.forEach((el) => el.remove())
+      HANDLE_CORNERS.forEach((corner) => {
+        const handle = document.createElement('span')
+        handle.className = `resize-handle ${corner}`
+        handle.setAttribute('contenteditable', 'false')
+        handle.dataset.corner = corner
+        figure.appendChild(handle)
+      })
+    }
+
+    const initImage = (img: HTMLImageElement) => {
+      const figure = img.closest('figure') as HTMLElement | null
       if (!figure) return
 
-      // 이미지 드래그 방지
       img.setAttribute('draggable', 'false')
-      img.addEventListener('dragstart', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        return false
-      })
-
-      // 이미 핸들이 있으면 제거
-      const existingHandle = figure.querySelector('.resize-handle')
-      if (existingHandle) return
-
-      const handle = document.createElement('div')
-      handle.className = 'resize-handle bottom-right'
-      figure.appendChild(handle)
-
-      handle.addEventListener('mousedown', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        isResizing = true
-        resizeTarget = img
-        startX = e.clientX
-        startY = e.clientY
-        startWidth = img.offsetWidth
-        startHeight = img.offsetHeight
-        aspectRatio = startHeight / startWidth
-        figure.classList.add('resizing')
-        document.body.style.cursor = 'nwse-resize'
-        document.body.style.userSelect = 'none'
-      })
+      if (!dragstartHandlers.has(img)) {
+        const onDrag: EventListener = (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+        img.addEventListener('dragstart', onDrag)
+        dragstartHandlers.set(img, onDrag)
+      }
+      ensureAspectRatio(figure, img)
+      ensureHandles(figure)
     }
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing || !resizeTarget) return
-
-      const deltaX = e.clientX - startX
-      const deltaY = e.clientY - startY
-
-      // 대각선 거리 계산 (비율 유지)
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
-      const direction = deltaX > 0 ? 1 : -1
-
-      const newWidth = Math.max(
-        50,
-        Math.min(
-          startWidth + distance * direction,
-          resizeTarget.naturalWidth * 2,
-        ),
-      )
-      const newHeight = newWidth * aspectRatio
-
-      resizeTarget.style.width = `${newWidth}px`
-      resizeTarget.style.height = `${newHeight}px`
-      resizeTarget.style.maxWidth = 'none'
-      resizeTarget.style.maxHeight = 'none'
+    const trackImage = (img: HTMLImageElement) => {
+      if (img.getAttribute('data-resizable') !== 'true') return
+      if (img.complete && img.naturalWidth > 0) {
+        initImage(img)
+        return
+      }
+      if (loadHandlers.has(img)) return
+      const handler: EventListener = () => {
+        const h = loadHandlers.get(img)
+        if (h) {
+          img.removeEventListener('load', h)
+          loadHandlers.delete(img)
+        }
+        if (img.getAttribute('data-resizable') === 'true') initImage(img)
+      }
+      img.addEventListener('load', handler)
+      loadHandlers.set(img, handler)
     }
 
-    const handleMouseUp = () => {
-      if (isResizing && resizeTarget) {
-        const figure = resizeTarget.closest('figure')
-        if (figure) {
-          figure.classList.remove('resizing')
-        }
+    const applyPending = () => {
+      pendingFrame = null
+      if (!resizeImg || !resizeFigure) return
+      const w = Math.round(pendingW)
+      // width만 저장 — height는 aspect-ratio로 산출되므로 인라인 height 제거
+      resizeImg.style.width = `${w}px`
+      resizeImg.style.height = 'auto'
+      resizeImg.style.maxWidth = 'none'
+      resizeImg.style.maxHeight = ''
+      resizeFigure.style.width = `${w}px`
+      resizeFigure.style.height = ''
+    }
 
-        // 내용 변경 이벤트 트리거
-        if (editorRef.current) {
-          const event = new Event('input', { bubbles: true })
-          editorRef.current.dispatchEvent(event)
-        }
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target?.classList.contains('resize-handle')) return
+      const figure = target.closest('figure') as HTMLElement | null
+      const img = figure?.querySelector('img') as HTMLImageElement | null
+      if (!figure || !img) return
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      isResizing = true
+      resizeFigure = figure
+      resizeImg = img
+      activeCorner = (target.dataset.corner as Corner) || 'br'
+      startX = e.clientX
+      startY = e.clientY
+      startWidth = img.offsetWidth
+      const startHeight = img.offsetHeight
+      aspectRatio =
+        startWidth > 0 && startHeight > 0
+          ? startHeight / startWidth
+          : img.naturalWidth > 0 && img.naturalHeight > 0
+            ? img.naturalHeight / img.naturalWidth
+            : 1
+      activePointerId = e.pointerId
+      try {
+        target.setPointerCapture?.(e.pointerId)
+      } catch {
+        /* 무시 — 일부 브라우저에서 capture 실패 가능 */
       }
 
+      figure.classList.add('resizing')
+      document.body.style.cursor = window.getComputedStyle(target).cursor
+      document.body.style.userSelect = 'none'
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isResizing || !resizeImg) return
+      if (activePointerId !== null && e.pointerId !== activePointerId) return
+
+      const dx = e.clientX - startX
+      const dy = e.clientY - startY
+
+      // 코너에 따라 가로/세로 부호가 다름 — 원점이 반대쪽 코너라고 보면 명확
+      const xSign = activeCorner === 'tr' || activeCorner === 'br' ? 1 : -1
+      const ySign = activeCorner === 'bl' || activeCorner === 'br' ? 1 : -1
+
+      // 비율 유지: x축 변화량과 y축 변화량을 width 기준으로 환산해 평균
+      const widthDeltaFromX = dx * xSign
+      const widthDeltaFromY = aspectRatio > 0 ? (dy * ySign) / aspectRatio : 0
+      const widthDelta = (widthDeltaFromX + widthDeltaFromY) / 2
+
+      const naturalMax = (resizeImg.naturalWidth || startWidth) * 2
+      const newWidth = Math.max(
+        40,
+        Math.min(startWidth + widthDelta, naturalMax),
+      )
+
+      pendingW = newWidth
+      if (pendingFrame == null) {
+        pendingFrame = window.requestAnimationFrame(applyPending)
+      }
+    }
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!isResizing) return
+      if (activePointerId !== null && e.pointerId !== activePointerId) return
+
+      if (pendingFrame != null) {
+        window.cancelAnimationFrame(pendingFrame)
+        pendingFrame = null
+        applyPending()
+      }
+      if (resizeFigure) resizeFigure.classList.remove('resizing')
+
+      // input 이벤트로 onChange 트리거
+      const ev = new Event('input', { bubbles: true })
+      editor.dispatchEvent(ev)
+
       isResizing = false
-      resizeTarget = null
+      resizeFigure = null
+      resizeImg = null
+      activePointerId = null
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
 
-    const handleImageLoad = (e: Event) => {
-      const img = e.target as HTMLImageElement
-      if (img.getAttribute('data-resizable') === 'true') {
-        createResizeHandle(img)
-      }
-    }
-
-    // 기존 이미지에 핸들 추가
-    const images = editorRef.current.querySelectorAll(
-      'img[data-resizable="true"]',
-    )
-    images.forEach((img) => {
-      const imgElement = img as HTMLImageElement
-      if (imgElement.complete) {
-        createResizeHandle(imgElement)
-      } else {
-        imgElement.addEventListener('load', handleImageLoad)
-      }
-    })
+    // 기존 이미지 처리
+    editor
+      .querySelectorAll<HTMLImageElement>('img[data-resizable="true"]')
+      .forEach(trackImage)
 
     // 새로 추가되는 이미지 감지
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node as HTMLElement
-            const images =
-              element.querySelectorAll?.('img[data-resizable="true"]') || []
-            images.forEach((img) => {
-              const imgElement = img as HTMLImageElement
-              if (imgElement.complete) {
-                createResizeHandle(imgElement)
-              } else {
-                imgElement.addEventListener('load', handleImageLoad)
-              }
-            })
+          if (node.nodeType !== Node.ELEMENT_NODE) return
+          const element = node as HTMLElement
+          if (element.matches?.('img[data-resizable="true"]')) {
+            trackImage(element as HTMLImageElement)
           }
+          element
+            .querySelectorAll?.('img[data-resizable="true"]')
+            .forEach((img) => trackImage(img as HTMLImageElement))
         })
       })
     })
+    observer.observe(editor, { childList: true, subtree: true })
 
-    observer.observe(editorRef.current, {
-      childList: true,
-      subtree: true,
-    })
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    editor.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('pointermove', onPointerMove)
+    document.addEventListener('pointerup', onPointerUp)
+    document.addEventListener('pointercancel', onPointerUp)
 
     return () => {
+      if (pendingFrame != null) {
+        window.cancelAnimationFrame(pendingFrame)
+        pendingFrame = null
+      }
       observer.disconnect()
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      loadHandlers.forEach((handler, img) => {
+        img.removeEventListener('load', handler)
+      })
+      loadHandlers.clear()
+      dragstartHandlers.forEach((handler, img) => {
+        img.removeEventListener('dragstart', handler)
+      })
+      dragstartHandlers.clear()
+      editor.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('pointermove', onPointerMove)
+      document.removeEventListener('pointerup', onPointerUp)
+      document.removeEventListener('pointercancel', onPointerUp)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
@@ -1955,6 +2294,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!editorRef.current) return
 
     const html = sanitizeRichTextHtml(editorRef.current.innerHTML)
+    // value-sync effect가 자기가 만든 변경에 반응하지 않도록 — 핸들·임시 클래스가
+    // DOM에는 남아 있어도 부모로 흘러간 값과 비교해 같으면 DOM 리셋 안 함.
+    lastEmittedValueRef.current = html
     onChange(html)
     updateFormatState()
     requestAnimationFrame(scrollCursorIntoView)
@@ -2394,28 +2736,109 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [onImageUpload])
 
-  // 이미지 설명 모달에서 확인 버튼 클릭
+  // 이미지 설명 모달에서 확인 버튼 클릭 — 새 삽입 또는 기존 figure 캡션 수정
   const handleImageCaptionConfirm = useCallback(() => {
-    if (!pendingImageUrl || !editorRef.current) return
+    if (!editorRef.current) return
 
     const caption = imageCaptionInput.trim()
-    insertFigureAtCaret(pendingImageUrl, caption, savedImageInsertRangeRef)
+    const editingFigure = editingCaptionFigureRef.current
+
+    if (editingFigure) {
+      // 기존 figure 캡션 편집
+      let figcaption = editingFigure.querySelector(':scope > figcaption')
+      if (caption) {
+        if (!figcaption) {
+          figcaption = document.createElement('figcaption')
+          editingFigure.appendChild(figcaption)
+        }
+        figcaption.textContent = caption
+      } else if (figcaption) {
+        figcaption.remove()
+      }
+      editingCaptionFigureRef.current = null
+      const ev = new Event('input', { bubbles: true })
+      editorRef.current.dispatchEvent(ev)
+    } else if (pendingImageUrl) {
+      insertFigureAtCaret(pendingImageUrl, caption, savedImageInsertRangeRef)
+    }
 
     setImageCaptionModalVisible(false)
     setImageCaptionInput('')
     setPendingImageUrl(null)
-  }, [
-    pendingImageUrl,
-    imageCaptionInput,
-    insertFigureAtCaret,
-  ])
+  }, [pendingImageUrl, imageCaptionInput, insertFigureAtCaret])
 
   // 이미지 설명 모달 닫기
   const handleImageCaptionCancel = useCallback(() => {
     setImageCaptionModalVisible(false)
     setImageCaptionInput('')
     setPendingImageUrl(null)
+    editingCaptionFigureRef.current = null
   }, [])
+
+  // === 이미지 부유 툴바 액션 ===
+
+  /** input 이벤트 트리거 — onChange 흘려보내기 */
+  const dispatchEditorInput = useCallback(() => {
+    if (editorRef.current) {
+      const ev = new Event('input', { bubbles: true })
+      editorRef.current.dispatchEvent(ev)
+    }
+  }, [])
+
+  const handleImageAlign = useCallback(
+    (align: 'left' | 'center' | 'right') => {
+      if (!selectedFigure) return
+      selectedFigure.dataset.align = align
+      dispatchEditorInput()
+    },
+    [selectedFigure, dispatchEditorInput],
+  )
+
+  const handleImageWidthPreset = useCallback(
+    (percent: number) => {
+      if (!selectedFigure) return
+      const img = selectedFigure.querySelector('img') as HTMLImageElement | null
+      if (!img) return
+      // 백분율로 저장 → 반응형
+      selectedFigure.style.width = `${percent}%`
+      selectedFigure.style.height = ''
+      img.style.width = '100%'
+      img.style.height = 'auto'
+      img.style.maxWidth = 'none'
+      img.style.maxHeight = ''
+      dispatchEditorInput()
+    },
+    [selectedFigure, dispatchEditorInput],
+  )
+
+  const handleImageResetSize = useCallback(() => {
+    if (!selectedFigure) return
+    const img = selectedFigure.querySelector('img') as HTMLImageElement | null
+    if (!img) return
+    selectedFigure.style.width = ''
+    selectedFigure.style.height = ''
+    img.style.width = ''
+    img.style.height = ''
+    img.style.maxWidth = ''
+    img.style.maxHeight = ''
+    dispatchEditorInput()
+  }, [selectedFigure, dispatchEditorInput])
+
+  const handleImageEditCaption = useCallback(() => {
+    if (!selectedFigure) return
+    const fig = selectedFigure.querySelector(':scope > figcaption')
+    editingCaptionFigureRef.current = selectedFigure
+    setImageCaptionInput(fig?.textContent ?? '')
+    setImageCaptionModalVisible(true)
+  }, [selectedFigure])
+
+  const handleImageDelete = useCallback(() => {
+    if (!selectedFigure) return
+    selectedFigure.remove()
+    setSelectedFigure(null)
+    setImageMenuPos(null)
+    dispatchEditorInput()
+  }, [selectedFigure, dispatchEditorInput])
 
   const entityLinkUsable = Boolean(mentionEntities) || entityLinkRemote
 
@@ -2758,7 +3181,34 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // 에디터 내 .term 클릭 → 수정 모달
   const handleEditorContentClick = useCallback((e: React.MouseEvent) => {
-    const el = (e.target as HTMLElement).closest('.term')
+    const target = e.target as HTMLElement
+
+    // 1) 이미지(figure>img) 클릭 → figure 선택 + 부유 툴바 표시
+    const figure = target.closest('figure')
+    const isResizeHandle = target.classList.contains('resize-handle')
+    if (figure && !isResizeHandle) {
+      const img = figure.querySelector('img[data-resizable="true"]')
+      if (img) {
+        e.preventDefault()
+        e.stopPropagation()
+        const rect = figure.getBoundingClientRect()
+        setSelectedFigure(figure as HTMLElement)
+        setImageMenuPos({
+          top: Math.max(rect.top - 52, 8),
+          left: rect.left + rect.width / 2,
+        })
+        return
+      }
+    } else {
+      // 이미지 외부 클릭 시 기존 선택 해제
+      if (selectedFigure) {
+        setSelectedFigure(null)
+        setImageMenuPos(null)
+      }
+    }
+
+    // 2) 용어(.term) 클릭 — 기존 동작
+    const el = target.closest('.term')
     if (!el) return
     const id = el.getAttribute('data-term-id')
     if (!id) return
@@ -2779,7 +3229,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         setTermEditModalVisible(false)
       })
       .finally(() => setTermEditLoading(false))
-  }, [])
+  }, [selectedFigure])
 
   const handleCloseTermEditModal = useCallback(() => {
     setTermEditModalVisible(false)
@@ -3050,9 +3500,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     return () => window.removeEventListener('keydown', onKey)
   }, [tablePickerVisible])
 
+  const bounded = Boolean(maxHeight)
   return (
-    <EditorContainer>
-      <EditorWrapper>
+    <EditorContainer $maxHeight={maxHeight}>
+      <EditorWrapper $bounded={bounded}>
         {showTitle && (
           <>
             <TitleInput
@@ -3088,7 +3539,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           $hasTitle={showTitle}
         />
       </EditorWrapper>
-      <Toolbar>
+      <Toolbar $bounded={bounded}>
         <ToolbarButton
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
@@ -3704,6 +4155,92 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           document.body,
         )}
 
+      {/* 이미지 부유 툴바 — 선택된 figure 위에 표시 */}
+      {typeof document !== 'undefined' &&
+        selectedFigure &&
+        imageMenuPos &&
+        createPortal(
+          <ImageToolbar
+            id="rich-text-image-toolbar"
+            $top={imageMenuPos.top}
+            $left={imageMenuPos.left}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            {(() => {
+              const align = selectedFigure.dataset.align ?? 'center'
+              const widthStyle = selectedFigure.style.width || ''
+              const widthPercentMatch = /^(\d+(?:\.\d+)?)%$/.exec(widthStyle)
+              const widthPercent = widthPercentMatch
+                ? Number(widthPercentMatch[1])
+                : null
+              return (
+                <>
+                  <ImageToolbarButton
+                    title="왼쪽 정렬"
+                    aria-label="왼쪽 정렬"
+                    $active={align === 'left'}
+                    onClick={() => handleImageAlign('left')}
+                  >
+                    <FiAlignLeft />
+                  </ImageToolbarButton>
+                  <ImageToolbarButton
+                    title="가운데 정렬"
+                    aria-label="가운데 정렬"
+                    $active={align === 'center'}
+                    onClick={() => handleImageAlign('center')}
+                  >
+                    <FiAlignCenter />
+                  </ImageToolbarButton>
+                  <ImageToolbarButton
+                    title="오른쪽 정렬"
+                    aria-label="오른쪽 정렬"
+                    $active={align === 'right'}
+                    onClick={() => handleImageAlign('right')}
+                  >
+                    <FiAlignRight />
+                  </ImageToolbarButton>
+                  <ImageToolbarDivider />
+                  {[25, 50, 75, 100].map((pct) => (
+                    <ImageToolbarButton
+                      key={pct}
+                      title={`너비 ${pct}%`}
+                      aria-label={`너비 ${pct}%`}
+                      $active={widthPercent === pct}
+                      onClick={() => handleImageWidthPreset(pct)}
+                    >
+                      {pct}%
+                    </ImageToolbarButton>
+                  ))}
+                  <ImageToolbarButton
+                    title="원본 크기로 복원"
+                    aria-label="원본 크기로 복원"
+                    onClick={handleImageResetSize}
+                  >
+                    <FiMaximize2 />
+                  </ImageToolbarButton>
+                  <ImageToolbarDivider />
+                  <ImageToolbarButton
+                    title="설명(캡션) 편집"
+                    aria-label="설명(캡션) 편집"
+                    onClick={handleImageEditCaption}
+                  >
+                    <FiEdit2 />
+                  </ImageToolbarButton>
+                  <ImageToolbarButton
+                    title="이미지 삭제"
+                    aria-label="이미지 삭제"
+                    $danger
+                    onClick={handleImageDelete}
+                  >
+                    <FiTrash2 />
+                  </ImageToolbarButton>
+                </>
+              )
+            })()}
+          </ImageToolbar>,
+          document.body,
+        )}
+
       {/* 이미지 설명 입력 모달 — body 포털 (에디터 글래스 박스가 fixed 뷰포트를 깨뜨리는 것 방지) */}
       {imageCaptionModalVisible &&
         typeof document !== 'undefined' &&
@@ -3712,7 +4249,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             <ImageCaptionModal onClick={(e) => e.stopPropagation()}>
               <ImageCaptionModalHeader>
                 <ImageCaptionModalTitle>
-                  이미지 설명 추가
+                  {editingCaptionFigureRef.current
+                    ? '이미지 설명 편집'
+                    : '이미지 설명 추가'}
                 </ImageCaptionModalTitle>
                 <ImageCaptionModalClose onClick={handleImageCaptionCancel}>
                   <FiX size={20} />

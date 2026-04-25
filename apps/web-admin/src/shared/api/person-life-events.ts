@@ -12,6 +12,12 @@ export const PERSON_LIFE_EVENT_CATEGORIES = [
   'AWARD',
   'PERSONAL',
   'CAREER',
+  'MILITARY',
+  'POLITICAL',
+  'DIPLOMATIC',
+  'RELIGIOUS',
+  'HEALTH',
+  'FAMILY',
   'OTHER',
 ] as const
 
@@ -25,6 +31,12 @@ export const PERSON_LIFE_EVENT_CATEGORY_LABEL: Record<PersonLifeEventCategory, s
   AWARD: '수상·훈장',
   PERSONAL: '개인사',
   CAREER: '경력 변경',
+  MILITARY: '군사·참전',
+  POLITICAL: '정치 활동',
+  DIPLOMATIC: '외교·회담',
+  RELIGIOUS: '종교 활동',
+  HEALTH: '질병·부상',
+  FAMILY: '가족사',
   OTHER: '기타',
 }
 
@@ -40,6 +52,12 @@ export const PERSON_LIFE_EVENT_CATEGORY_COLOR: Record<
   AWARD:     { base: '#f59e0b', soft: 'rgba(245,158,11,0.14)', text: '#b45309' },
   PERSONAL:  { base: '#ec4899', soft: 'rgba(236,72,153,0.14)', text: '#be185d' },
   CAREER:    { base: '#6366f1', soft: 'rgba(99,102,241,0.14)', text: '#4338ca' },
+  MILITARY:  { base: '#dc2626', soft: 'rgba(220,38,38,0.14)', text: '#991b1b' },
+  POLITICAL: { base: '#2563eb', soft: 'rgba(37,99,235,0.14)', text: '#1d4ed8' },
+  DIPLOMATIC:{ base: '#0891b2', soft: 'rgba(8,145,178,0.14)', text: '#0e7490' },
+  RELIGIOUS: { base: '#a855f7', soft: 'rgba(168,85,247,0.14)', text: '#7e22ce' },
+  HEALTH:    { base: '#10b981', soft: 'rgba(16,185,129,0.14)', text: '#047857' },
+  FAMILY:    { base: '#db2777', soft: 'rgba(219,39,119,0.14)', text: '#9d174d' },
   OTHER:     { base: '#94a3b8', soft: 'rgba(148,163,184,0.14)', text: '#475569' },
 }
 

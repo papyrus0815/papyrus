@@ -295,7 +295,34 @@ const Header: React.FC = () => {
   const isCountryBrowseActive =
     /^\/history\/country(\/|$)/.test(location.pathname)
 
+  const dashboardItemToSpec = (
+    item: (typeof DASHBOARD_MENU_ITEMS)[number],
+  ): TopNavItemSpec => {
+    const Icon = item.icon
+    return {
+      key: `dashboard-${item.id}`,
+      label: item.label,
+      icon: (
+        <span style={{ width: 16, height: 16, display: 'inline-flex' }}>
+          <Icon />
+        </span>
+      ),
+      onClick: () => {
+        playClickSound()
+        navigate(item.path)
+      },
+      active: item.matchPath(location.pathname),
+    }
+  }
+
+  const statsItem = DASHBOARD_MENU_ITEMS.find((i) => i.id === 'stats')
+  const personItem = DASHBOARD_MENU_ITEMS.find((i) => i.id === 'person')
+  const restDashboardItems = DASHBOARD_MENU_ITEMS.filter(
+    (i) => i.id !== 'stats' && i.id !== 'person',
+  )
+
   const menuItems: TopNavItemSpec[] = [
+    ...(statsItem ? [dashboardItemToSpec(statsItem)] : []),
     {
       key: 'countries',
       label: '국가',
@@ -306,23 +333,6 @@ const Header: React.FC = () => {
       },
       active: isCountryBrowseActive,
     },
-    ...DASHBOARD_MENU_ITEMS.map((item) => {
-      const Icon = item.icon
-      return {
-        key: `dashboard-${item.id}`,
-        label: item.label,
-        icon: (
-          <span style={{ width: 16, height: 16, display: 'inline-flex' }}>
-            <Icon />
-          </span>
-        ),
-        onClick: () => {
-          playClickSound()
-          navigate(item.path)
-        },
-        active: item.matchPath(location.pathname),
-      } satisfies TopNavItemSpec
-    }),
     {
       key: 'events',
       label: '사건',
@@ -333,6 +343,8 @@ const Header: React.FC = () => {
       },
       active: location.pathname.startsWith('/events'),
     },
+    ...(personItem ? [dashboardItemToSpec(personItem)] : []),
+    ...restDashboardItems.map(dashboardItemToSpec),
     {
       key: 'continents',
       label: '대륙',

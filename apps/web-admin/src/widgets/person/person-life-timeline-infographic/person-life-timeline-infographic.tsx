@@ -5,7 +5,7 @@
  * - 중앙: 타임라인 척추(spine) + 카테고리 색 도트 + 기간 막대
  * - 우측: 카드 (제목·날짜·설명)
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FiCalendar,
   FiCircle,
@@ -15,7 +15,7 @@ import {
   FiUserMinus,
   FiUserPlus,
 } from 'react-icons/fi'
-import styled, { css } from 'styled-components'
+import styled, { css, keyframes } from 'styled-components'
 
 import {
   PERSON_LIFE_EVENT_CATEGORY_COLOR,
@@ -23,6 +23,8 @@ import {
   type PersonLifeEvent,
   type PersonLifeEventCategory,
 } from '@/shared/api/person-life-events'
+import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { CATEGORY_ICON } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 
 // ───── 타입 ─────
@@ -100,6 +102,10 @@ export interface PersonLifeTimelineInfographicProps {
   /** 출생·사망 기원 (BC/AD). null/미지정은 AD */
   birthEra?: string | null
   deathEra?: string | null
+  /** 사망 상세 — 연보 "사망" 카드에 함께 표시 */
+  deathType?: string | null
+  deathCause?: string | null
+  deathNote?: string | null
   isAlive?: boolean | null
   /** 소스 데이터 */
   reigns?: ReignInput[] | null
@@ -119,6 +125,11 @@ export interface PersonLifeTimelineInfographicProps {
   onFamilyPersonClick?: (personId: string) => void
   /** 빈 상태 CTA — "연보 추가하기" 버튼 콜백 */
   onAddLifeEvent?: () => void
+  /**
+   * 저장 직후 하이라이트·스크롤할 lifeEvent.id — 상위에서 0.8-1.6초 후 null로 초기화.
+   * null이면 하이라이트 없음.
+   */
+  highlightedLifeEventId?: string | null
 }
 
 // ───── 유틸 ─────
@@ -165,6 +176,19 @@ function formatRange(
   if (s && !e) return s
   if (!s && e) return `? – ${e}`
   return s === e ? s : `${s} – ${e}`
+}
+
+/** 사망 유형 enum → 한국어 라벨 (카드 서브타이틀) */
+const DEATH_TYPE_LABELS: Record<string, string> = {
+  NATURAL: '자연사',
+  ILLNESS: '병사',
+  ASSASSINATION: '암살',
+  EXECUTION: '처형',
+  BATTLE: '전사',
+  ACCIDENT: '사고사',
+  SUICIDE: '자살',
+  UNKNOWN: '불명',
+  OTHER: '기타',
 }
 
 function ageAt(d: Date | null, birth: Date | null): number | null {
@@ -222,11 +246,45 @@ interface TimelineNode {
   durationDays?: number | null
 }
 
+/** 재위·재임 활성 기간 정보 — 연보/사건 카드의 spine 컨텍스트 색에 사용 */
+interface ActiveRange {
+  start: Date
+  end: Date | null
+  color: string
+}
+
+/** description HTML에서 figure 개수 — collapse 정책에 활용 */
+function countFiguresInHtml(html: string | null | undefined): number {
+  if (!html) return 0
+  const matches = html.match(/<figure\b/gi)
+  return matches ? matches.length : 0
+}
+
+/** 노드의 시작일이 어떤 재위/재임 기간 안에 들어가면 그 색을 반환 (재위 우선) */
+function pickActiveContextColor(
+  date: Date | null,
+  reignRanges: ActiveRange[],
+  tenureRanges: ActiveRange[],
+): string | null {
+  if (!date) return null
+  const ts = date.getTime()
+  const inRange = (r: ActiveRange) =>
+    ts >= r.start.getTime() && (r.end == null || ts <= r.end.getTime())
+  const r = reignRanges.find(inRange)
+  if (r) return r.color
+  const t = tenureRanges.find(inRange)
+  if (t) return t.color
+  return null
+}
+
 export function PersonLifeTimelineInfographic({
   birthDate,
   deathDate,
   birthEra,
   deathEra,
+  deathType,
+  deathCause,
+  deathNote,
   isAlive,
   reigns,
   tenures,
@@ -240,7 +298,21 @@ export function PersonLifeTimelineInfographic({
   onStartEditLife,
   onFamilyPersonClick,
   onAddLifeEvent,
+  highlightedLifeEventId,
 }: PersonLifeTimelineInfographicProps) {
+  /** 하이라이트 요청 시 해당 카드로 스크롤 — MutationObserver 없이 ref 기반 */
+  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  useEffect(() => {
+    if (!highlightedLifeEventId) return
+    // 다음 프레임에 DOM이 새 데이터로 렌더된 뒤 스크롤
+    const timer = window.setTimeout(() => {
+      const el = rowRefs.current.get(highlightedLifeEventId)
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 60)
+    return () => window.clearTimeout(timer)
+  }, [highlightedLifeEventId])
   const birth = useMemo(() => parseDate(birthDate), [birthDate])
   const death = useMemo(() => parseDate(deathDate), [deathDate])
 
@@ -438,6 +510,12 @@ export function PersonLifeTimelineInfographic({
     }
 
     if (death) {
+      const deathTypeLabel = deathType
+        ? DEATH_TYPE_LABELS[deathType] ?? deathType
+        : null
+      const deathDescription =
+        [deathCause, deathNote].filter((s) => !!s && s.trim() !== '').join(' · ') ||
+        null
       result.push({
         key: 'death',
         kind: 'death',
@@ -445,7 +523,9 @@ export function PersonLifeTimelineInfographic({
         end: null,
         sortKey: toTs(death) + 1,
         title: '사망',
+        subtitle: deathTypeLabel,
         dateLabel: formatWithPrecision(death, 'day'),
+        description: deathDescription,
       })
     } else if (isAlive === true && birth) {
       result.push({
@@ -494,6 +574,9 @@ export function PersonLifeTimelineInfographic({
   }, [
     birth,
     death,
+    deathType,
+    deathCause,
+    deathNote,
     isAlive,
     reigns,
     tenures,
@@ -539,6 +622,38 @@ export function PersonLifeTimelineInfographic({
     nodes.length > 0 && nodes.some((n) => n.kind !== 'birth' && n.kind !== 'death')
 
   const renderedNodes = visibleNodes
+
+  /** 재위·재임 활성 기간 리스트 — 연보/사건 노드 spine에 컨텍스트 색 부여 */
+  const reignRanges = useMemo<ActiveRange[]>(
+    () =>
+      (reigns ?? [])
+        .map((r) => {
+          const s = parseDate(r.startDate)
+          if (!s) return null
+          return {
+            start: s,
+            end: parseDate(r.endDate),
+            color: kindColorMap.reign.base,
+          }
+        })
+        .filter((v): v is ActiveRange => v !== null),
+    [reigns],
+  )
+  const tenureRanges = useMemo<ActiveRange[]>(
+    () =>
+      (tenures ?? [])
+        .map((t) => {
+          const s = parseDate(t.startDate)
+          if (!s) return null
+          return {
+            start: s,
+            end: parseDate(t.endDate),
+            color: kindColorMap.tenure.base,
+          }
+        })
+        .filter((v): v is ActiveRange => v !== null),
+    [tenures],
+  )
 
   return (
     <TimelineRoot>
@@ -593,12 +708,37 @@ export function PersonLifeTimelineInfographic({
                   ? ageAt(node.start, birth)
                   : null
             const isFirst = idx === 0
-            const isLast = idx === renderedNodes.length - 1
+            const isLast =
+              idx === renderedNodes.length - 1 && !onAddLifeEvent
 
+            // 직전 노드와 같은 연도면 YearLabel 숨김 (묶음 시각화)
+            const prevNode = idx > 0 ? renderedNodes[idx - 1] : null
+            const prevYear = prevNode ? yearOf(prevNode.start) : null
+            const sameYearAsPrev = year != null && prevYear === year
+
+            // 활성 재위/재임 컨텍스트 색 — 연보·사건 노드의 spine을 옅게 칠함
+            const contextColor =
+              node.kind === 'life' || node.kind === 'event'
+                ? pickActiveContextColor(node.start, reignRanges, tenureRanges)
+                : null
+
+            const highlighted =
+              node.kind === 'life' &&
+              node.lifeEventSource?.id != null &&
+              highlightedLifeEventId === node.lifeEventSource.id
             return (
-              <TimelineRow key={node.key}>
+              <TimelineRow
+                key={node.key}
+                ref={(el) => {
+                  const id = node.lifeEventSource?.id
+                  if (!id) return
+                  if (el) rowRefs.current.set(id, el)
+                  else rowRefs.current.delete(id)
+                }}
+                $highlight={highlighted}
+              >
                 <YearCell>
-                  {year != null ? (
+                  {year != null && !sameYearAsPrev ? (
                     <>
                       <YearLabel>
                         {(node.kind === 'death'
@@ -612,9 +752,9 @@ export function PersonLifeTimelineInfographic({
                       )}
                       {node.kind === 'birth' && <AgeLabel>출생</AgeLabel>}
                     </>
-                  ) : (
+                  ) : year == null ? (
                     <YearLabel $muted>—</YearLabel>
-                  )}
+                  ) : null}
                 </YearCell>
 
                 <SpineCell
@@ -632,6 +772,7 @@ export function PersonLifeTimelineInfographic({
                       ? PERSON_LIFE_EVENT_CATEGORY_COLOR[node.category].base
                       : null
                   }
+                  $contextColor={contextColor}
                 >
                   <NodeDot
                     $kind={node.kind}
@@ -665,6 +806,11 @@ export function PersonLifeTimelineInfographic({
                       : canNavFamily
                         ? () => onFamilyPersonClick!(node.familyPersonId!)
                         : undefined
+                    const cardAriaLabel = node.dateLabel
+                      ? `${node.title} — ${node.dateLabel}`
+                      : node.title
+                    const isEmptyDescriptionLife =
+                      node.kind === 'life' && !node.description?.trim()
                     return (
                       <EventCard
                         $kind={node.kind}
@@ -674,10 +820,18 @@ export function PersonLifeTimelineInfographic({
                                 .base
                             : null
                         }
+                        $soft={
+                          node.category
+                            ? PERSON_LIFE_EVENT_CATEGORY_COLOR[node.category]
+                                .soft
+                            : null
+                        }
                         as={clickable ? 'button' : 'div'}
                         type={clickable ? 'button' : undefined}
                         onClick={handleClick}
                         $clickable={clickable}
+                        aria-label={cardAriaLabel}
+                        title={node.title}
                       >
                       <CardTopRow>
                         <KindBadge $kind={node.kind} $color={
@@ -717,12 +871,20 @@ export function PersonLifeTimelineInfographic({
                           <CardSubtitle>{node.subtitle}</CardSubtitle>
                         )}
                       </CardTopRow>
-                      <CardTitle>{node.title}</CardTitle>
+                      <CardTitle title={node.title}>{node.title}</CardTitle>
                       {node.dateLabel && (
                         <CardDate>{node.dateLabel}</CardDate>
                       )}
                       {node.description && (
-                        <CardDesc>{node.description}</CardDesc>
+                        <CardDescBlock
+                          description={node.description}
+                          isLife={node.kind === 'life'}
+                        />
+                      )}
+                      {isEmptyDescriptionLife && canEditLife && (
+                        <EmptyDescHint>
+                          + 설명 추가
+                        </EmptyDescHint>
                       )}
                       </EventCard>
                     )
@@ -731,6 +893,13 @@ export function PersonLifeTimelineInfographic({
               </TimelineRow>
             )
           })}
+          {/* 본문 끝 인라인 추가 CTA — 항목이 1개 이상일 때만 (빈 상태는 기존 EmptyState가 담당) */}
+          {onAddLifeEvent && (
+            <AddRow type="button" onClick={onAddLifeEvent}>
+              <AddRowSpine />
+              <AddRowText>+ 새 연보 추가</AddRowText>
+            </AddRow>
+          )}
         </TimelineList>
       )}
 
@@ -849,15 +1018,30 @@ const TimelineList = styled.div`
   padding: 4px 0;
 `
 
-const TimelineRow = styled.div`
+const lifeHighlightAnim = keyframes`
+  0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.45); transform: translateY(0); }
+  50%  { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); transform: translateY(0); }
+`
+
+const TimelineRow = styled.div<{ $highlight?: boolean }>`
   display: grid;
   grid-template-columns: 76px 28px 1fr;
-  align-items: stretch;
+  align-items: stretch; /* SpineCell의 ::after(top:42px;bottom:0)가 셀 높이에 의존 */
   min-height: 76px;
+  border-radius: 12px;
+  transition: background 0.4s ease;
+
+  ${({ $highlight }) =>
+    $highlight &&
+    css`
+      background: rgba(99, 102, 241, 0.08);
+      animation: ${lifeHighlightAnim} 1.6s ease-out;
+    `}
 
   @media (max-width: 560px) {
-    grid-template-columns: 60px 24px 1fr;
-    min-height: 70px;
+    grid-template-columns: 52px 18px 1fr;
+    min-height: 68px;
   }
 `
 
@@ -926,6 +1110,8 @@ const SpineCell = styled.div<{
   $hasDuration: boolean
   $kind: TimelineKind
   $color: string | null
+  /** 활성 재위·재임 컨텍스트 — spine을 그 색의 옅은 톤으로 칠해 시기 단서 제공 */
+  $contextColor?: string | null
 }>`
   position: relative;
   &::before,
@@ -935,10 +1121,12 @@ const SpineCell = styled.div<{
     left: 50%;
     width: 1.5px;
     transform: translateX(-50%);
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : 'rgba(15,23,42,0.08)'};
+    background: ${({ $contextColor, theme }) =>
+      $contextColor
+        ? `${$contextColor}33` /* 0x33 = 20% alpha */
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(15,23,42,0.08)'};
     border-radius: 999px;
   }
   &::before {
@@ -1005,6 +1193,8 @@ const ContentCell = styled.div`
 const EventCard = styled.div<{
   $kind: TimelineKind
   $color: string | null
+  /** 카테고리 soft 톤 — 카드 배경에 살짝 입혀 종류별 구분감 강화 */
+  $soft?: string | null
   $clickable: boolean
 }>`
   position: relative;
@@ -1018,15 +1208,25 @@ const EventCard = styled.div<{
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.06)'
         : 'rgba(15,23,42,0.06)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.03)'
-      : '#ffffff'};
+  background: ${({ theme, $soft }) =>
+    $soft
+      ? // soft는 이미 alpha 0.14의 rgba 토큰 — 그대로 한 겹 깔면 살짝 입혀짐
+        theme.mode === 'dark'
+        ? `linear-gradient(${$soft}, ${$soft}), rgba(255,255,255,0.03)`
+        : `linear-gradient(${$soft}, ${$soft}), #ffffff`
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : '#ffffff'};
   text-align: left;
   width: 100%;
   overflow: hidden;
   transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 0.2s, border-color 0.2s;
+
+  @media (max-width: 560px) {
+    padding: 14px 14px;
+    gap: 4px;
+  }
 
   /* 좌측 얇은 색 스트립 (kind 구분 시각 단서) */
   ${({ $kind, $color }) =>
@@ -1145,17 +1345,281 @@ const CardDate = styled.div`
   letter-spacing: 0;
 `
 
-const CardDesc = styled.div`
+/**
+ * 긴 설명이 오면 타임라인 한 행이 5000px+까지 늘어나서 형제 카드가 보이지 않는 문제 방지.
+ * - 기준: 6줄 또는 400자 초과(HTML 태그 제외한 가시 텍스트 기준)면 기본 접힘
+ * - 토글 버튼으로 전체 펼치기 (재접기 가능)
+ */
+const DESC_COLLAPSE_CHAR_THRESHOLD = 400
+
+/** HTML에서 태그를 제거한 가시 텍스트 길이 — 접힘 판정용 */
+function visibleLengthOf(html: string): number {
+  if (!html) return 0
+  if (typeof document === 'undefined') return html.length
+  const tpl = document.createElement('div')
+  tpl.innerHTML = html
+  return (tpl.textContent ?? '').trim().length
+}
+
+function CardDescBlock({
+  description,
+  isLife,
+}: {
+  description: string
+  /** 연보 카드(`kind === 'life'`)만 가로폭 제한을 적용 */
+  isLife: boolean
+}) {
+  const isHtml = isLikelyRichTextHtml(description)
+  const visibleLength = isHtml ? visibleLengthOf(description) : description.length
+  const figureCount = isHtml ? countFiguresInHtml(description) : 0
+  // figure가 2개 이상이거나 텍스트가 길면 접힘 토글 표시.
+  // figure가 1개여도 텍스트가 길면 접힘.
+  const needsCollapse =
+    visibleLength > DESC_COLLAPSE_CHAR_THRESHOLD || figureCount >= 2
+  const [expanded, setExpanded] = useState(false)
+  const collapsed = needsCollapse && !expanded
+  return (
+    <>
+      {isHtml ? (
+        <CardDescRich
+          $collapsed={collapsed}
+          $life={isLife}
+          $hideExtraFigures={collapsed && figureCount >= 2}
+        >
+          <RichTextReadView html={description} hideWhenEmpty={false} />
+        </CardDescRich>
+      ) : (
+        <CardDesc $collapsed={collapsed} $life={isLife}>
+          {description}
+        </CardDesc>
+      )}
+      {needsCollapse && (
+        <CardDescToggle
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setExpanded((v) => !v)
+          }}
+        >
+          {expanded ? '접기' : '더 보기'}
+        </CardDescToggle>
+      )}
+    </>
+  )
+}
+
+const collapsedMixin = css`
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`
+
+const CardDesc = styled.div<{ $collapsed: boolean; $life: boolean }>`
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.6;
   margin-top: 2px;
+  /* 연보(life) 카드만 본문 가로폭 제한 — 길어진 본문이 카드 폭만큼 늘어지지 않도록 */
+  ${({ $life }) =>
+    $life &&
+    css`
+      max-width: 820px;
+    `}
   color: ${({ theme }) =>
     theme.mode === 'dark'
       ? theme.colors.text.secondary
       : '#475569'};
   white-space: pre-wrap;
   word-break: break-word;
+  ${({ $collapsed }) => $collapsed && collapsedMixin}
+`
+
+/**
+ * RichTextReadView HTML용 — CardDesc와 타이포는 맞추되 white-space/pre-wrap은
+ * 불필요(내부 p·div가 줄바꿈 담당). 접힘은 동일한 line-clamp.
+ */
+const CardDescRich = styled.div<{
+  $collapsed: boolean
+  $life: boolean
+  /** collapsed + figure가 2개 이상일 때 첫 figure만 노출, 나머지는 숨김 */
+  $hideExtraFigures: boolean
+}>`
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin-top: 2px;
+  /* 연보(life) 카드만 본문 가로폭 제한 */
+  ${({ $life }) =>
+    $life &&
+    css`
+      max-width: 820px;
+    `}
+
+  /* 접힘 + figure 다수 — 두 번째 이후 figure 숨김 */
+  ${({ $hideExtraFigures }) =>
+    $hideExtraFigures &&
+    css`
+      figure ~ figure {
+        display: none;
+      }
+    `}
+  color: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? theme.colors.text.secondary
+      : '#475569'};
+  word-break: break-word;
+
+  /* RichTextReadView Root의 white-space/font-size를 무력화 — 카드 타이포에 맞춤 */
+  & > * {
+    font: inherit;
+    color: inherit;
+    white-space: normal;
+  }
+  /* 내부 모든 블록도 명시적으로 normal — 옛 데이터에 \\n이 끼어 있어도 무시 */
+  & * {
+    white-space: inherit;
+  }
+
+  /* 단락 간 간격은 카드 폭에 맞춰 좁게(0.5em ≈ 6px) — 1em은 카드에 과함 */
+  & p {
+    margin: 0 0 0.5em;
+  }
+  & p:first-child {
+    margin-top: 0;
+  }
+  & p:last-child {
+    margin-bottom: 0;
+  }
+  /* 빈 블록(<p><br></p>·<p></p>·<div><br></div>·<div></div>)은 시각적 1줄만 차지하도록 마진 제거 */
+  & p:empty,
+  & p:has(> br:only-child),
+  & div:empty,
+  & div:has(> br:only-child) {
+    margin: 0;
+  }
+
+  /* 연속된 빈 줄은 두 번째부터 숨김 — 사용자가 Enter를 여러 번 친 옛 데이터 보정.
+     "단락 사이 1줄 공백"은 유지, 2줄 이상 공백만 압축. */
+  & br + br,
+  & div:has(> br:only-child) + div:has(> br:only-child),
+  & p:has(> br:only-child) + p:has(> br:only-child),
+  & p:empty + p:empty,
+  & div:empty + div:empty {
+    display: none;
+  }
+
+  ${({ $collapsed }) => $collapsed && collapsedMixin}
+`
+
+const CardDescToggle = styled.button`
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  &:hover {
+    background: rgba(99, 102, 241, 0.14);
+    border-color: rgba(99, 102, 241, 0.35);
+  }
+`
+
+/** description이 비어 있는 연보 카드에 노출되는 인라인 CTA — 카드 클릭 = 편집이라
+    별도 핸들러 없이 시각적 단서만 제공 */
+const EmptyDescHint = styled.span`
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.45)' : '#94a3b8'};
+  letter-spacing: -0.01em;
+`
+
+/** 타임라인 끝 인라인 추가 CTA — 점선 박스 1줄 행 */
+const AddRow = styled.button`
+  display: grid;
+  grid-template-columns: 76px 28px 1fr;
+  align-items: center;
+  min-height: 56px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+  text-align: left;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.06)'
+        : 'rgba(99,102,241,0.04)'};
+  }
+
+  @media (max-width: 560px) {
+    grid-template-columns: 52px 18px 1fr;
+    min-height: 52px;
+  }
+`
+
+/** AddRow의 spine 칸 — 위로 연결되는 1줄 + 빈 도트 */
+const AddRowSpine = styled.span`
+  position: relative;
+  align-self: stretch;
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 1.5px;
+    height: 28px;
+    transform: translateX(-50%);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.08)'
+        : 'rgba(15,23,42,0.08)'};
+    border-radius: 999px;
+  }
+  &::after {
+    content: '+';
+    position: absolute;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px dashed
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.45)'
+          : 'rgba(99,102,241,0.45)'};
+    color: #6366f1;
+    font-size: 14px;
+    line-height: 18px;
+    text-align: center;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#0f172a' : '#fff'};
+  }
+`
+
+const AddRowText = styled.span`
+  margin-left: 18px;
+  padding: 10px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6366f1;
+  letter-spacing: -0.01em;
+  border: 1px dashed rgba(99, 102, 241, 0.35);
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.04)'};
 `
 
 const EmptyState = styled.div`

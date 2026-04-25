@@ -1,11 +1,7 @@
 /**
  * /history/dashboard — 통계 대시보드 페이지
  *
- * 이전에는 country.page.tsx가 같은 URL을 담당하면서 dashboardContentView='stats'
- * 분기로 렌더했다. Phase 3 리팩토링에서 독립 페이지로 분리.
- *
- * 좌측: LeftFilterSlot(view='stats') — 통계 필터 안내
- * 우측: CountryDashboard — 등록 현황 피드 + 세계 통계
+ * 통계는 필터가 필요 없으므로 fullScreen 모드. 좌측 패널 없음.
  */
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -15,11 +11,7 @@ import { pathKeys } from '@/shared/router'
 import { CountryDashboard } from '@/widgets/country/country-dashboard/ui/country-dashboard'
 import { CountryFormModal } from '@/widgets/country/country-form/ui/country-form-modal'
 import { useCountryFormModal } from '@/widgets/country/country-form/model/use-country-form-modal.hook'
-import {
-  HistoryShell,
-  LeftFilterSlot,
-  useHistoryCoreData,
-} from '@/widgets/history-shell'
+import { HistoryShell, useHistoryCoreData } from '@/widgets/history-shell'
 
 import { useRegistrationFeed } from '../country/use-registration-feed.hook'
 
@@ -46,13 +38,7 @@ export default function DashboardStatsPage() {
 
   return (
     <HistoryShell
-      left={({ listCollapsed, toggleListCollapsed }) => (
-        <LeftFilterSlot
-          view="stats"
-          collapsed={listCollapsed}
-          onToggleCollapse={toggleListCollapsed}
-        />
-      )}
+      fullScreen
       right={
         <motion.div
           initial={{ opacity: 0 }}

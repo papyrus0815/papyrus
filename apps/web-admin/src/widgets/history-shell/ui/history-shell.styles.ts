@@ -9,13 +9,22 @@ import styled from 'styled-components'
 export const MainGrid = styled.div<{
   $noSidebar?: boolean
   $listCollapsed?: boolean
+  /** 사이드바 우측에 추가 컬럼이 떠 있을 때 (B-4 Finder 자식 컬럼 등) — 그 폭을 더해줌 */
+  $sidebarExtraWidth?: number
 }>`
   width: 100%;
   padding: 0;
   display: grid;
-  grid-template-columns: ${({ $noSidebar, $listCollapsed }) => {
+  grid-template-columns: ${({
+    $noSidebar,
+    $listCollapsed,
+    $sidebarExtraWidth = 0,
+  }) => {
     if ($listCollapsed) return '48px minmax(0, 1fr)'
-    return $noSidebar ? '280px minmax(0, 1fr)' : '15% 30% minmax(0, 1fr)'
+    if ($noSidebar) {
+      return `${360 + $sidebarExtraWidth}px minmax(0, 1fr)`
+    }
+    return '15% 30% minmax(0, 1fr)'
   }};
   column-gap: 0;
   align-items: start;
@@ -23,9 +32,18 @@ export const MainGrid = styled.div<{
   transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   @media (max-width: 1280px) {
-    grid-template-columns: ${({ $noSidebar, $listCollapsed }) => {
+    grid-template-columns: ${({
+      $noSidebar,
+      $listCollapsed,
+      $sidebarExtraWidth = 0,
+    }) => {
       if ($listCollapsed) return '48px minmax(0, 1fr)'
-      return $noSidebar ? '260px minmax(0, 1fr)' : '18% 35% minmax(0, 1fr)'
+      if ($noSidebar) {
+        // 1280px 이하에선 자식 컬럼이 160px (styles 매칭)
+        const extra = $sidebarExtraWidth > 0 ? 160 : 0
+        return `${320 + extra}px minmax(0, 1fr)`
+      }
+      return '18% 35% minmax(0, 1fr)'
     }};
   }
 

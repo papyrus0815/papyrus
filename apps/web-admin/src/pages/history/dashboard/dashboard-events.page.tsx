@@ -16,7 +16,7 @@ import {
 
 import { pathKeys } from '@/shared/router'
 import { EventsTimelineSection } from '@/widgets/country/country-detail/ui/events-timeline-section.widget'
-import { HistoryShell, LeftFilterSlot } from '@/widgets/history-shell'
+import { HistoryShell } from '@/widgets/history-shell'
 
 import { DashboardEventDetailPage } from '../country/dashboard-event-detail.page'
 
@@ -31,13 +31,7 @@ export default function DashboardEventsPage() {
 
   return (
     <HistoryShell
-      left={({ listCollapsed, toggleListCollapsed }) => (
-        <LeftFilterSlot
-          view="events"
-          collapsed={listCollapsed}
-          onToggleCollapse={toggleListCollapsed}
-        />
-      )}
+      fullScreen
       right={
         <motion.div
           initial={{ opacity: 0 }}

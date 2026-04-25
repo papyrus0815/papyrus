@@ -15,6 +15,7 @@ import {
   FiCalendar,
   FiCamera,
   FiEdit2,
+  FiExternalLink,
   FiFlag,
   FiInfo,
   FiPlus,
@@ -23,7 +24,7 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import { personKeys } from '@/entities/person/api'
@@ -47,8 +48,17 @@ import {
   type PersonNameFields,
   getPersonDisplayName,
 } from '@/shared/lib/person-display-name'
+import {
+  INFLUENCE_ANCHORS,
+  getInfluenceTier,
+  getInfluenceTierGradient,
+  getInfluenceTierLabel,
+  type InfluenceTier,
+} from '@/shared/lib/influence-tier'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
@@ -79,6 +89,9 @@ interface PersonDetailData {
   deathMonth?: number | null
   deathDay?: number | null
   deathEra?: string | null
+  deathType?: string | null
+  deathCause?: string | null
+  deathNote?: string | null
   gender?: string | null
   biography?: string | null
   profileImageUrl?: string | null
@@ -184,6 +197,19 @@ function formatIsoDateKo(iso: string | null | undefined): string {
   }
 }
 
+/** 사망 유형 enum → 한국어 라벨 */
+const DEATH_TYPE_LABELS: Record<string, string> = {
+  NATURAL: '자연사',
+  ILLNESS: '병사',
+  ASSASSINATION: '암살',
+  EXECUTION: '처형',
+  BATTLE: '전사',
+  ACCIDENT: '사고사',
+  SUICIDE: '자살',
+  UNKNOWN: '불명',
+  OTHER: '기타',
+}
+
 /**
  * 전기 편집 시 에디터에 넣을 값: 일반 텍스트면 \n → <br> 변환, 이미 HTML이면 그대로.
  * (RichTextEditor는 HTML을 다루므로 평문 개행이 보이지 않음)
@@ -251,6 +277,27 @@ export function PersonDetailPanel({
   const playClickSound = useClickSound()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  /**
+   * 현재 URL 안의 personId 세그먼트를 다른 id로 교체해 목적지 URL 계산.
+   * - 대시보드(/history/dashboard/persons/:id) / 단독(/persons/:id/) 등 어느 컨텍스트에서든
+   *   "사이드바·브레드크럼 그대로 유지하며 인물만 교체"되는 쪽으로 이동.
+   * - 현재 personId 세그먼트가 URL에 없으면 기본(/persons/:id/)로 폴백.
+   */
+  const buildDetailUrlFor = useCallback(
+    (targetId: string) => {
+      const current = location.pathname
+      if (personId && current.includes(personId)) {
+        return (
+          current.replace(personId, encodeURIComponent(targetId)) +
+          location.search
+        )
+      }
+      return `/persons/${encodeURIComponent(targetId)}/`
+    },
+    [location.pathname, location.search, personId],
+  )
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
@@ -258,6 +305,8 @@ export function PersonDetailPanel({
   const [editingReignId, setEditingReignId] = useState<string | null>(null)
   const [lifeEventModalOpen, setLifeEventModalOpen] = useState(false)
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
+  /** 저장 직후 하이라이트·스크롤 대상 id (타임라인 인포그래픽에 전달). 0.8초 뒤 자동 해제 */
+  const [highlightedLifeEventId, setHighlightedLifeEventId] = useState<string | null>(null)
   const [editingBiography, setEditingBiography] = useState(false)
   const [biographyDraft, setBiographyDraft] = useState('')
   const [savingBiography, setSavingBiography] = useState(false)
@@ -296,6 +345,9 @@ export function PersonDetailPanel({
     queryKey: ['person-life-events', personId],
     queryFn: () => listPersonLifeEvents(personId),
     enabled: !!personId,
+    // 탭/서브탭 전환마다 큰 설명 페이로드를 재요청하지 않도록 1분 캐시.
+    // 모달에서 작성·삭제 후 invalidateQueries로 명시적 새로고침.
+    staleTime: 60 * 1000,
   })
 
   // ── 타임라인 인포그래픽용 파생 데이터 (참조 안정) ──
@@ -782,10 +834,12 @@ export function PersonDetailPanel({
               </KpiItem>
             )
           })()}
-          {person.influence != null && (
+          {person.influence != null && person.influence > 0 && (
             <KpiItem>
               <KpiLabel>영향력</KpiLabel>
-              <KpiValue>{person.influence}</KpiValue>
+              <KpiValue>
+                <InfluenceBadge influence={person.influence} />
+              </KpiValue>
             </KpiItem>
           )}
           {person.dynasty && (
@@ -1051,6 +1105,13 @@ export function PersonDetailPanel({
                                   queryKey: personKeys.detailFull(personId),
                                 })
                                 setEditingInfluence(false)
+                                toast.success('영향력이 저장되었습니다.')
+                              } catch (err) {
+                                toast.error(
+                                  err instanceof Error
+                                    ? err.message
+                                    : '영향력 저장에 실패했습니다.',
+                                )
                               } finally {
                                 setSavingInfluence(false)
                               }
@@ -1067,59 +1128,98 @@ export function PersonDetailPanel({
                         </InlineActions>
                       )}
                     </OverviewSectionHeaderRow>
-                    {editingInfluence ? (
-                      <InfluenceBlock>
-                        <InfluenceSliderRow>
-                          <InfluenceSliderInput
-                            type="range"
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={influenceDraft}
-                            onChange={(e) =>
-                              setInfluenceDraft(Number(e.target.value))
-                            }
-                            aria-valuenow={influenceDraft}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label="역사적 영향력"
-                          />
-                          <InfluenceValue>{influenceDraft}</InfluenceValue>
-                        </InfluenceSliderRow>
-                        <InfluenceAnchorRow>
-                          {INFLUENCE_ANCHORS.map((a) => (
-                            <InfluenceAnchor
-                              key={a.value}
-                              $active={influenceDraft >= a.value}
-                            >
-                              <b>{a.value}</b>
-                              <span>{a.label}</span>
-                            </InfluenceAnchor>
-                          ))}
-                        </InfluenceAnchorRow>
-                      </InfluenceBlock>
-                    ) : (
-                      <InfluenceBlock>
-                        <InfluenceSliderRow>
-                          <InfluenceBar>
-                            <InfluenceFill $pct={person.influence ?? 0} />
-                          </InfluenceBar>
-                          <InfluenceValue>{person.influence ?? 0}</InfluenceValue>
-                        </InfluenceSliderRow>
-                        <InfluenceAnchorRow>
-                          {INFLUENCE_ANCHORS.map((a) => (
-                            <InfluenceAnchor
-                              key={a.value}
-                              $active={(person.influence ?? 0) >= a.value}
-                            >
-                              <b>{a.value}</b>
-                              <span>{a.label}</span>
-                            </InfluenceAnchor>
-                          ))}
-                        </InfluenceAnchorRow>
-                      </InfluenceBlock>
-                    )}
+                    {(() => {
+                      const current = editingInfluence
+                        ? influenceDraft
+                        : (person.influence ?? 0)
+                      const currentTier = getInfluenceTier(current)
+                      return (
+                        <InfluenceBlock>
+                          <InfluenceSliderRow>
+                            {editingInfluence ? (
+                              <InfluenceSliderInput
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={5}
+                                value={influenceDraft}
+                                onChange={(e) =>
+                                  setInfluenceDraft(Number(e.target.value))
+                                }
+                                aria-valuenow={influenceDraft}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-label="역사적 영향력"
+                              />
+                            ) : (
+                              <InfluenceBar>
+                                <InfluenceFill
+                                  $pct={current}
+                                  $tier={currentTier}
+                                />
+                              </InfluenceBar>
+                            )}
+                            <InfluenceValueGroup>
+                              <InfluenceValue $tier={currentTier}>
+                                {current}
+                              </InfluenceValue>
+                              {currentTier && (
+                                <InfluenceTierLabel $tier={currentTier}>
+                                  {getInfluenceTierLabel(currentTier)}
+                                </InfluenceTierLabel>
+                              )}
+                            </InfluenceValueGroup>
+                          </InfluenceSliderRow>
+                          <InfluenceAnchorRow>
+                            {INFLUENCE_ANCHORS.map((a) => (
+                              <InfluenceAnchor
+                                key={a.value}
+                                $active={current >= a.value}
+                                $tier={a.tier}
+                                title={
+                                  a.tier
+                                    ? `${a.value} 이상 — ${getInfluenceTierLabel(a.tier)}`
+                                    : '영향력 없음'
+                                }
+                              >
+                                <b>{a.value}</b>
+                                <span>{a.label}</span>
+                              </InfluenceAnchor>
+                            ))}
+                          </InfluenceAnchorRow>
+                        </InfluenceBlock>
+                      )
+                    })()}
                   </section>
+
+                  {/* 2.5. 사망 정보 — 유형·원인·메모 중 하나라도 있으면 표시 */}
+                  {(p.deathType || p.deathCause || p.deathNote) && (
+                    <section aria-label="사망 정보">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiAlertTriangle size={14} strokeWidth={2.2} />
+                          <span>사망 정보</span>
+                        </OverviewSectionHeading>
+                      </OverviewSectionHeaderRow>
+                      <DeathInfoBlock>
+                        {(p.deathType || p.deathCause) && (
+                          <DeathInfoRow>
+                            {p.deathType && (
+                              <DeathTypePill>
+                                {DEATH_TYPE_LABELS[p.deathType] ?? p.deathType}
+                              </DeathTypePill>
+                            )}
+                            {p.deathCause && (
+                              <DeathCauseText>{p.deathCause}</DeathCauseText>
+                            )}
+                          </DeathInfoRow>
+                        )}
+                        {p.deathNote && (
+                          <DeathNoteText>{p.deathNote}</DeathNoteText>
+                        )}
+                      </DeathInfoBlock>
+                    </section>
+                  )}
 
                   {/* 3. 재임·재위 통합 */}
                   <section aria-label="재임·재위">
@@ -1476,6 +1576,9 @@ export function PersonDetailPanel({
                     }
                     birthEra={p.birthEra ?? null}
                     deathEra={p.deathEra ?? null}
+                    deathType={p.deathType ?? null}
+                    deathCause={p.deathCause ?? null}
+                    deathNote={p.deathNote ?? null}
                     isAlive={p.isAlive ?? null}
                     reigns={timelineReigns}
                     tenures={timelineTenures}
@@ -1486,6 +1589,7 @@ export function PersonDetailPanel({
                     children={timelineChildren}
                     spouses={timelineSpouses}
                     siblings={timelineSiblings}
+                    highlightedLifeEventId={highlightedLifeEventId}
                     onStartEditLife={(le) => {
                       setEditingLifeEvent(le)
                       setLifeEventModalOpen(true)
@@ -1515,13 +1619,20 @@ export function PersonDetailPanel({
         open={lifeEventModalOpen}
         personId={person.id}
         lifeEvent={editingLifeEvent}
+        birthDate={person.birthDate ?? null}
+        deathDate={person.deathDate ?? null}
         onClose={() => {
           setLifeEventModalOpen(false)
           setEditingLifeEvent(null)
         }}
-        onSuccess={() => {
-          setLifeEventModalOpen(false)
-          setEditingLifeEvent(null)
+        onSuccess={(savedId) => {
+          // savedId가 있고 모달이 닫히지 않은 경우(저장 후 추가 모드)는 건드리지 않음 — 모달 자체가 onClose 호출 안 함
+          if (savedId) {
+            setHighlightedLifeEventId(savedId)
+            requestAnimationFrame(() => {
+              window.setTimeout(() => setHighlightedLifeEventId(null), 1600)
+            })
+          }
         }}
       />
 
@@ -1613,6 +1724,38 @@ export function PersonDetailPanel({
                 <BioMentionModalTitle title={modalTopPersonName}>
                   {modalTopPersonName || '인물'}
                 </BioMentionModalTitle>
+                {/*
+                  인물 상세 페이지로 이동 — 현재 URL 컨텍스트(대시보드/단독 페이지 등) 유지.
+                  buildDetailUrlFor가 현재 경로의 personId 세그먼트만 교체.
+                  href는 접근성·우클릭 메뉴(새 탭 열기 등)용으로 유지.
+                */}
+                {(() => {
+                  const targetUrl = buildDetailUrlFor(modalTopId)
+                  return (
+                    <BioMentionModalOpenDetail
+                      href={targetUrl}
+                      onClick={(e) => {
+                        // Cmd/Ctrl·Shift·가운데 클릭은 브라우저 기본(새 탭/창) 동작 유지
+                        if (
+                          e.metaKey ||
+                          e.ctrlKey ||
+                          e.shiftKey ||
+                          e.button !== 0
+                        ) {
+                          return
+                        }
+                        e.preventDefault()
+                        setPersonLinkStack([])
+                        navigate(targetUrl)
+                      }}
+                      aria-label="인물 상세 페이지로 이동"
+                      title="인물 상세 페이지로 이동"
+                    >
+                      <FiExternalLink size={15} strokeWidth={2.2} />
+                      <span>상세로 이동</span>
+                    </BioMentionModalOpenDetail>
+                  )
+                })()}
                 <BioMentionModalClose
                   type="button"
                   onClick={() => setPersonLinkStack([])}
@@ -1694,17 +1837,10 @@ const BioMentionModalOverlay = styled(motion.div)`
 `
 
 const BioMentionModalPanel = styled(motion.div)`
+  /* 공용 glassCardMixin — 다른 모달(공용 ModalBox)과 톤 일치 (다크: rgba(20,20,20,0.92)) */
+  ${({ theme }) => glassCardMixin(theme)}
   position: relative;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(30,30,30,0.92)' : '#ffffff'};
-  backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  border: ${({ theme }) =>
-    theme.mode === 'dark' ? '1px solid rgba(255,255,255,0.1)' : 'none'};
   border-radius: 24px;
-  box-shadow: none;
   width: 100%;
   max-width: 740px;
   height: 68vh;
@@ -1760,6 +1896,44 @@ const BioMentionModalTitle = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+`
+
+const BioMentionModalOpenDetail = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99,102,241,0.14)'
+      : 'rgba(99,102,241,0.08)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'};
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#3730a3')};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.22)'
+        : 'rgba(99,102,241,0.14)'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.5)' : 'rgba(99,102,241,0.35)'};
+  }
+  &:active {
+    transform: translateY(1px);
+  }
 `
 
 const BioMentionModalClose = styled.button`
@@ -2754,15 +2928,7 @@ const UnifiedEditBtn = styled.button`
   }
 `
 
-// ─── 영향력 블록 ────────────────────────────────────────────
-const INFLUENCE_ANCHORS: Array<{ value: number; label: string }> = [
-  { value: 0, label: '미미' },
-  { value: 25, label: '지역' },
-  { value: 50, label: '국가' },
-  { value: 75, label: '대륙' },
-  { value: 100, label: '시대' },
-]
-
+// ─── 영향력 블록 — 티어 색상은 @/shared/lib/influence-tier에서 관리 ───
 const InfluenceBlock = styled.div`
   display: flex;
   flex-direction: column;
@@ -2786,25 +2952,62 @@ const InfluenceBar = styled.div`
   height: 8px;
   border-radius: 4px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.1)'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
   overflow: hidden;
 `
 
-const InfluenceFill = styled.div<{ $pct: number }>`
+const InfluenceFill = styled.div<{
+  $pct: number
+  $tier: InfluenceTier | null
+}>`
   height: 100%;
   width: ${({ $pct }) => Math.max(0, Math.min(100, $pct))}%;
-  background: linear-gradient(90deg, #6366f1 0%, #4f46e5 100%);
+  background: ${({ $tier }) =>
+    $tier
+      ? getInfluenceTierGradient($tier)
+      : 'linear-gradient(90deg, #cbd5e1 0%, #94a3b8 100%)'};
   border-radius: 4px;
-  transition: width 0.3s;
+  transition:
+    width 0.3s,
+    background 0.3s;
 `
 
-const InfluenceValue = styled.span`
-  min-width: 30px;
-  text-align: right;
+const InfluenceValueGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 64px;
+`
+
+const InfluenceValue = styled.span<{ $tier: InfluenceTier | null }>`
   font-weight: 700;
   font-size: 15px;
-  color: #6366f1;
   font-variant-numeric: tabular-nums;
+  color: ${({ $tier, theme }) =>
+    $tier === 'top'
+      ? '#b45309'
+      : $tier === 'high'
+        ? '#d97706'
+        : $tier === 'mid'
+          ? '#4f46e5'
+          : $tier === 'low'
+            ? theme.colors.text.secondary
+            : theme.colors.text.tertiary};
+`
+
+const InfluenceTierLabel = styled.span<{ $tier: InfluenceTier }>`
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: ${({ $tier }) =>
+    $tier === 'top'
+      ? '#b45309'
+      : $tier === 'high'
+        ? '#d97706'
+        : $tier === 'mid'
+          ? '#4f46e5'
+          : '#64748b'};
 `
 
 const InfluenceAnchorRow = styled.div`
@@ -2814,7 +3017,10 @@ const InfluenceAnchorRow = styled.div`
   padding: 0 2px;
 `
 
-const InfluenceAnchor = styled.div<{ $active: boolean }>`
+const InfluenceAnchor = styled.div<{
+  $active: boolean
+  $tier: InfluenceTier | null
+}>`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2822,12 +3028,14 @@ const InfluenceAnchor = styled.div<{ $active: boolean }>`
   font-size: 10.5px;
   font-weight: 500;
   line-height: 1.3;
-  color: ${({ theme, $active }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '#a5b4fc'
-        : '#4338ca'
-      : theme.colors.text.tertiary};
+  color: ${({ theme, $active, $tier }) => {
+    if (!$active) return theme.colors.text.tertiary
+    if ($tier === 'top') return '#b45309'
+    if ($tier === 'high') return '#d97706'
+    if ($tier === 'mid')
+      return theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'
+    return theme.colors.text.secondary
+  }};
   b {
     font-size: 11px;
     font-weight: 700;
@@ -3125,6 +3333,52 @@ const BioText = styled.div`
   word-break: break-word;
   max-width: 68ch;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const DeathInfoBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const DeathInfoRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+`
+
+const DeathTypePill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(239, 68, 68, 0.08)'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.32)' : 'rgba(239, 68, 68, 0.22)'};
+`
+
+const DeathCauseText = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const DeathNoteText = styled.p`
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 68ch;
 `
 
 const BioEditorWrap = styled.div`

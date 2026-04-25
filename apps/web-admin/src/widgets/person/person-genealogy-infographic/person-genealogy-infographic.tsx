@@ -882,11 +882,14 @@ const GenerationBlock = styled.div`
  * ParentsRow: 아버지 쪽 FamilyColumn + 어머니 쪽 FamilyColumn을 나란히 배치
  * twoSides일 때 1fr 1fr grid → 각 FamilyColumn 중심이 25% / 75%
  * ForkFromTwoParents viewBox x=100(25%), x=300(75%)와 정확히 일치
+ *
+ * align-items: end — 두 컬럼을 아래로 정렬해서 아버지/어머니 카드가 같은 y 좌표에 놓이게.
+ * (한쪽 컬럼에만 조부모가 있을 때 반대쪽 부모가 조부모 행에 붙어버리는 문제 방지)
  */
 const ParentsRow = styled.div<{ $twoSides: boolean }>`
   width: 100%;
   ${({ $twoSides }) => $twoSides
-    ? css`display: grid; grid-template-columns: 1fr 1fr;`
+    ? css`display: grid; grid-template-columns: 1fr 1fr; align-items: end;`
     : css`display: flex; justify-content: center;`}
 `
 

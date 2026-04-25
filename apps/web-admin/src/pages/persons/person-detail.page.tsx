@@ -36,5 +36,5 @@ export default function PersonDetailPage() {
 
 const Root = styled.div`
   min-height: 100vh;
-  background: #0f0f0f;
+  background: ${({ theme }) => theme.colors.background.primary};
 `

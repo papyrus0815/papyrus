@@ -470,7 +470,7 @@ const CountryHint = styled.p`
 `
 
 interface GlobalHeadsSectionProps {
-  /** PersonDashboardSection 내 행정 수반 탭 등에서 임베드 시 헤더(타이틀·설명) 숨김 */
+  /** 상위 컨테이너에 임베드 시 헤더(타이틀·설명) 숨김 */
   embedded?: boolean
 }
 

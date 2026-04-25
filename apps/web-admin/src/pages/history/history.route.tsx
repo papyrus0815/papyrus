@@ -20,15 +20,6 @@ const lazyCountryDetail: Lazy = async () => {
   return { loader: countryLoader, Component }
 }
 
-/** /history/country 탐색 — loader 공유 */
-const lazyCountryBrowse: Lazy = async () => {
-  const [{ countryLoader }, { default: Component }] = await Promise.all([
-    import('./country/country.loader'),
-    import('./country/country-browse.page'),
-  ])
-  return { loader: countryLoader, Component }
-}
-
 /** 대시보드 페이지들 — Component만 lazy 로드 (loader 불필요) */
 const lazyDashboardStats: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-stats.page')).default,
@@ -81,8 +72,8 @@ export const historyPageRoute: RouteObject = {
         // /history — 통계 대시보드 (인덱스)
         { index: true, lazy: lazyDashboardStats },
 
-        // /history/country — 국가 탐색(풀스크린)
-        { path: ROUTES.HISTORY.COUNTRY, lazy: lazyCountryBrowse },
+        // /history/country — 좌측 리스트 + 우측 empty state (선택 안내)
+        { path: ROUTES.HISTORY.COUNTRY, lazy: lazyCountryDetail },
 
         // /history/dashboard/* — 대시보드 페이지들
         {

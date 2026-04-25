@@ -25,6 +25,45 @@ export const richTextReadonlyMediaAndTablesCss = css`
     max-width: 100%;
   }
 
+  /* 정렬: data-align="left|center|right" — 에디터에서 저장 */
+  figure[data-align='left'] {
+    display: block;
+    margin-left: 0;
+    margin-right: auto;
+    text-align: left;
+  }
+  figure[data-align='left'] img {
+    margin: 0;
+  }
+  figure[data-align='right'] {
+    display: block;
+    margin-left: auto;
+    margin-right: 0;
+    text-align: right;
+  }
+  figure[data-align='right'] img {
+    margin: 0 0 0 auto;
+  }
+  figure[data-align='center'] {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
+
+  /* 레거시 데이터 호환: 과거 figure에 aspect-ratio를 박았는데, 읽기 뷰의 figure는
+     block(기본)이라 컨테이너 폭만큼 늘어나면서 비율로 강제된 height가 이미지보다
+     커져 빈 공간이 생기는 버그가 있었음. figure의 aspect-ratio를 무력화하고
+     img가 자체 인라인 width + height: auto + 자연 비율로 그려지도록 함. */
+  figure[data-aspect-ratio] {
+    aspect-ratio: auto !important;
+  }
+  figure[data-aspect-ratio] img,
+  figure img[data-aspect-ratio],
+  img[data-aspect-ratio] {
+    height: auto !important;
+  }
+
   figure img {
     max-width: 100%;
     height: auto;

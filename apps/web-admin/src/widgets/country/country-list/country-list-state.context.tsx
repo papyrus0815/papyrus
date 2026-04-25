@@ -36,6 +36,7 @@ export interface CountryListStateContextValue {
   continents: ContinentOption[]
   apiHistoricalCountries: HistoricalCountry[] | undefined
   apiCountries: CountryResponseDto[] | undefined
+  isLoading: boolean
   // 인물 등록 모달 (페이지 전역에서 열기)
   showPersonRegisterModal: boolean
   setShowPersonRegisterModal: (v: boolean) => void
@@ -59,8 +60,13 @@ interface ProviderProps {
 
 export function CountryListStateProvider({ children }: ProviderProps) {
   const core = useHistoryCoreData()
-  const { countries, unifiedCountries, continents, apiHistoricalCountries } =
-    core
+  const {
+    countries,
+    unifiedCountries,
+    continents,
+    apiHistoricalCountries,
+    isLoading,
+  } = core
 
   const [query, setQuery] = useState('')
   const [continentFilter, setContinentFilter] = useState('')
@@ -183,6 +189,7 @@ export function CountryListStateProvider({ children }: ProviderProps) {
       continents,
       apiHistoricalCountries,
       apiCountries: core.apiCountries,
+      isLoading,
       showPersonRegisterModal,
       setShowPersonRegisterModal,
     }),
@@ -197,6 +204,7 @@ export function CountryListStateProvider({ children }: ProviderProps) {
       continents,
       apiHistoricalCountries,
       core.apiCountries,
+      isLoading,
       showPersonRegisterModal,
     ],
   )

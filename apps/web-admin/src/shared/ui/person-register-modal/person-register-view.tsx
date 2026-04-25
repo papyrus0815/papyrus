@@ -3,7 +3,7 @@
  * - 역대 수반 기본정보/업적 폼과 동일한 공용 레이아웃 사용 (@/shared/ui/register-form-layout)
  * - 인물 등록 페이지와 동일한 폼 기능 (필드·검증·payload)
  */
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { toast } from 'react-hot-toast'
 import {
@@ -15,7 +15,7 @@ import {
   FiTrash2,
   FiUsers,
 } from 'react-icons/fi'
-import styled, { useTheme } from 'styled-components'
+import styled from 'styled-components'
 
 import { getAllCountries } from '@/shared/api/countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -176,7 +176,7 @@ const InlineFields2 = styled.div`
   }
 `
 
-const SelectBtn = styled.button<{ $hasValue?: boolean }>`
+const SelectBtn = styled.button<{ $hasValue?: boolean; $error?: boolean }>`
   width: 100%;
   max-width: 380px;
   display: flex;
@@ -187,19 +187,31 @@ const SelectBtn = styled.button<{ $hasValue?: boolean }>`
   font-size: 14px;
   color: ${({ $hasValue, theme }) =>
     $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ $error, theme }) =>
+    $error
+      ? theme.mode === 'dark'
+        ? 'rgba(234,67,53,0.15)'
+        : '#fef2f2'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : '#fff'};
+  border: 1px solid
+    ${({ $error, theme }) =>
+      $error ? '#ea4335' : theme.colors.border.default};
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
   outline: none;
-  &:hover {
+  &:hover:not(:disabled) {
     border-color: ${({ theme }) => theme.colors.border.medium};
   }
   &:focus-visible {
     border-color: ${FOCUS_COLOR};
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   span {
     flex: 1;
@@ -249,7 +261,7 @@ const CheckboxRowTwo = styled.div`
   input {
     width: 18px;
     height: 18px;
-    accent-color: #6366f1;
+    accent-color: ${FOCUS_COLOR};
     cursor: pointer;
   }
   label {
@@ -259,11 +271,85 @@ const CheckboxRowTwo = styled.div`
   }
 `
 
+const InlineCheckboxLabel = styled.label<{ $disabled?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: ${({ $disabled }) => ($disabled ? 0.4 : 1)};
+  pointer-events: ${({ $disabled }) => ($disabled ? 'none' : 'auto')};
+`
+
+const ThumbnailRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+`
+
+const ThumbnailHint = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
+  max-width: 220px;
+  line-height: 1.45;
+`
+
+const ThumbnailRemoveBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#b91c1c')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(248,113,113,0.12)' : '#fef2f2'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.35)' : '#fecaca'};
+  border-radius: 8px;
+  cursor: pointer;
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
+
+const SpouseNoteTextarea = styled(Textarea)`
+  max-width: 440px;
+`
+
 const ErrorText = styled.span`
   font-size: 12px;
   color: #dc2626;
   margin-top: 8px;
   display: block;
+`
+
+const FieldError = styled.span`
+  display: block;
+  font-size: 12px;
+  color: #dc2626;
+  margin-top: 6px;
+  line-height: 1.4;
+`
+
+const LoadingOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.6)'};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  backdrop-filter: blur(2px);
+  border-radius: 12px;
+`
+
+const LoadingHost = styled.div`
+  position: relative;
 `
 
 const GENDER_OPTIONS: SelectOption<string>[] = [
@@ -294,6 +380,8 @@ export interface PersonRegisterViewProps {
   editPersonId?: string | null
   /** 제출 중 상태 변경 시 부모에게 알림 (외부 하단 버튼 disabled 처리용) */
   onSubmittingChange?: (v: boolean) => void
+  /** 폼에 미저장 변경이 있는지 부모에게 알림 (닫기 시 경고용) */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 export function PersonRegisterView({
@@ -303,9 +391,8 @@ export function PersonRegisterView({
   embedInCard = true,
   editPersonId,
   onSubmittingChange,
+  onDirtyChange,
 }: PersonRegisterViewProps) {
-  const theme = useTheme()
-  const isDark = theme.mode === 'dark'
   const isEditMode = Boolean(editPersonId)
   // 기본 정보
   const [name, setName] = useState('')
@@ -379,7 +466,24 @@ export function PersonRegisterView({
   /** 제출 중 이미지 업로드 단계(버튼 문구용) */
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  /** 필드별 에러 맵 — 필드 아래에 inline 표시 */
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  /** 편집 모드에서 서버 데이터 로딩 중 여부 */
+  const [isLoadingEdit, setIsLoadingEdit] = useState(false)
+  /** 사용자 입력으로 폼이 변경되었는지 */
+  const [isDirty, setIsDirty] = useState(false)
+  /** 초기 로드/리셋 중일 때는 dirty 추적 억제 */
+  const trackDirtyRef = useRef(false)
+  const uidPrefix = useId()
+  const fid = useCallback((k: string) => `${uidPrefix}-${k}`, [uidPrefix])
+
+  const markDirty = useCallback(() => {
+    if (trackDirtyRef.current) setIsDirty(true)
+  }, [])
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
     [],
@@ -394,6 +498,21 @@ export function PersonRegisterView({
     Array<{ id: string; name: string }>
   >([])
   const [persons, setPersons] = useState<PersonResponseDto[]>([])
+
+  const dynastyOptions = useMemo<SelectOption<string>[]>(
+    () => [
+      { value: '', label: '선택 안 함' },
+      ...dynasties.map((d) => ({ value: d.id, label: d.name })),
+    ],
+    [dynasties],
+  )
+  const religionOptions = useMemo<SelectOption<string>[]>(
+    () => [
+      { value: '', label: '선택 안 함' },
+      ...religions.map((r) => ({ value: r.id, label: r.name })),
+    ],
+    [religions],
+  )
 
   useEffect(() => {
     Promise.all([
@@ -426,6 +545,9 @@ export function PersonRegisterView({
 
   useEffect(() => {
     setActiveTab('basic')
+    trackDirtyRef.current = false
+    setIsDirty(false)
+    setErrors({})
 
     if (!editPersonId) {
       // 등록 모드 전환 시 폼 초기화
@@ -472,11 +594,16 @@ export function PersonRegisterView({
       setPendingThumbnailFile(null)
       setThumbnailObjectUrl(null)
       setThumbnailMarkedForRemoval(false)
-      setError(null)
+      setIsLoadingEdit(false)
+      // 다음 틱부터 dirty 추적 — 현재 setState batch가 dirty로 잡히지 않게
+      requestAnimationFrame(() => {
+        trackDirtyRef.current = true
+      })
       return
     }
 
     let cancelled = false
+    setIsLoadingEdit(true)
     setPendingThumbnailFile(null)
     setThumbnailObjectUrl(null)
     setThumbnailMarkedForRemoval(false)
@@ -594,10 +721,18 @@ export function PersonRegisterView({
         setDeathNote((p as any).deathNote ?? '')
       })
       .catch(() => toast.error('인물 정보를 불러오지 못했습니다.'))
+      .finally(() => {
+        if (cancelled) return
+        setIsLoadingEdit(false)
+        // 로드 완료 후부터 dirty 추적 시작
+        requestAnimationFrame(() => {
+          trackDirtyRef.current = true
+        })
+      })
     return () => {
       cancelled = true
     }
-  }, [editPersonId])
+  }, [editPersonId, initialCountryId])
 
   useEffect(() => {
     if (!countryId || (!modernCountries.length && !historicalCountries.length))
@@ -612,6 +747,8 @@ export function PersonRegisterView({
     setCountryId(c.id)
     setCountryName(c.name)
     setShowCountryModal(false)
+    clearFieldError('countryId')
+    markDirty()
   }
 
   const parseDateString = (date: string) => {
@@ -660,6 +797,8 @@ export function PersonRegisterView({
     setBirthMonth(month.toString())
     setBirthDay(day.toString())
     setShowBirthDateModal(false)
+    clearFieldError('birth')
+    markDirty()
     if (!isDeathDateUnknown) {
       setTimeout(() => setShowDeathDateModal(true), 200)
     }
@@ -672,6 +811,8 @@ export function PersonRegisterView({
     setDeathMonth(month.toString())
     setDeathDay(day.toString())
     setShowDeathDateModal(false)
+    clearFieldError('death')
+    markDirty()
   }
 
   const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -683,6 +824,7 @@ export function PersonRegisterView({
       setThumbnailObjectUrl(URL.createObjectURL(file))
       setPendingThumbnailFile(file)
       setThumbnailMarkedForRemoval(false)
+      markDirty()
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : '이미지를 선택할 수 없습니다.',
@@ -723,27 +865,37 @@ export function PersonRegisterView({
     ? getPersonDisplayName(persons.find((p) => p.id === spouseId)!, true)
     : ''
 
-  // 인물 등록 페이지와 동일 검증: 이름, 성, 성별, 출생 국가 필수 + 사망일 ≥ 출생일
+  /** 유효한 연도: 정수 1~9999 (기원 전/후 공통) */
+  const isValidYear = (y: string): boolean => {
+    if (!y.trim()) return true
+    const n = Number(y)
+    return Number.isInteger(n) && n >= 1 && n <= 9999
+  }
+
+  // 인물 등록 페이지와 동일 검증: 이름, 성, 성별, 출생 국가 필수 + 사망일 ≥ 출생일 + 연도 범위
   const validate = (): boolean => {
-    if (!name.trim()) {
-      setError('이름을 입력해주세요.')
-      return false
-    }
-    if (!surname.trim()) {
-      setError('성을 입력해주세요.')
-      return false
-    }
-    if (!gender) {
-      setError('성별을 선택해주세요.')
-      return false
-    }
-    if (!countryId) {
-      setError('소속(출생) 국가를 선택해주세요.')
-      return false
+    const e: Record<string, string> = {}
+    if (!name.trim()) e.name = '이름을 입력해주세요.'
+    if (!surname.trim()) e.surname = '성을 입력해주세요.'
+    if (!gender) e.gender = '성별을 선택해주세요.'
+    if (!countryId) e.countryId = '소속(출생) 국가를 선택해주세요.'
+    if (!isBirthDateUnknown && birthYear.trim() && !isValidYear(birthYear)) {
+      e.birth = '출생 연도는 1~9999 범위의 정수여야 합니다.'
     }
     if (
+      !isAlive &&
+      !isDeathDateUnknown &&
+      deathYear.trim() &&
+      !isValidYear(deathYear)
+    ) {
+      e.death = '사망 연도는 1~9999 범위의 정수여야 합니다.'
+    }
+    if (
+      !e.birth &&
+      !e.death &&
       !isBirthDateUnknown &&
       !isDeathDateUnknown &&
+      !isAlive &&
       birthYear.trim() &&
       deathYear.trim()
     ) {
@@ -758,13 +910,35 @@ export function PersonRegisterView({
       const birthVal = birthSign * (by * 10000 + bm * 100 + bd)
       const deathVal = deathSign * (dy * 10000 + dm * 100 + dd)
       if (deathVal < birthVal) {
-        setError('사망일은 출생일 이후여야 합니다.')
-        return false
+        e.death = '사망일은 출생일 이후여야 합니다.'
       }
     }
-    setError(null)
+    setErrors(e)
+    if (Object.keys(e).length > 0) {
+      // 에러가 있는 첫 탭으로 이동 — 사용자가 놓치지 않게
+      const basicFields = [
+        'name',
+        'surname',
+        'gender',
+        'birth',
+        'death',
+      ] as const
+      if (basicFields.some((k) => e[k])) setActiveTab('basic')
+      else if (e.countryId) setActiveTab('affiliation')
+      return false
+    }
     return true
   }
+
+  /** 입력 중 해당 필드 에러 해제 — 교정하면 바로 안정감 있게 사라짐 */
+  const clearFieldError = useCallback((key: string) => {
+    setErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }, [])
 
   const buildPayload = (
     uploadedProfileUrl?: string,
@@ -778,40 +952,44 @@ export function PersonRegisterView({
     } else {
       profileImageField = profileImageUrl.trim() || undefined
     }
+    // 값 없음은 일관되게 null — 업데이트 시 "값 비우기" 의미가 유지됨.
+    // 연관 id 필드(countryId, dynastyId 등)는 undefined로 — "선택 안 함"을 null이 아닌 미설정으로 취급.
     const input: CreatePersonInput = {
       name: name.trim(),
-      surname: surname.trim() || undefined,
-      middleName: middleName.trim() || undefined,
+      surname: surname.trim() || null,
+      middleName: middleName.trim() || null,
       nameDisplayOrder: nameFormat,
       originalName: originalName.trim() || null,
       surnameMeaning: surnameMeaning.trim() || null,
       nameMeaning: nameMeaning.trim() || null,
       middleNameMeaning: middleNameMeaning.trim() || null,
       gender: gender || null,
-      biography: biography.trim() || undefined,
+      biography: biography.trim() || null,
       profileImageUrl:
         profileImageField === null
           ? (null as unknown as CreatePersonInput['profileImageUrl'])
-          : profileImageField || undefined,
-      regnalName: regnalName.trim() || undefined,
-      templeName: templeName.trim() || undefined,
-      posthumousName: posthumousName.trim() || undefined,
+          : profileImageField || null,
+      regnalName: regnalName.trim() || null,
+      templeName: templeName.trim() || null,
+      posthumousName: posthumousName.trim() || null,
       countryId: countryId || undefined,
       birthCityId: birthCityId || undefined,
       deathCityId: deathCityId || undefined,
       birthAdminDivisionId: birthPlace?.adminDivisionId || undefined,
       deathAdminDivisionId: deathPlace?.adminDivisionId || undefined,
-      birthPlaceText: birthPlace?.isManual ? birthPlace.shortName : undefined,
-      deathPlaceText: deathPlace?.isManual ? deathPlace.shortName : undefined,
+      birthPlaceText: birthPlace?.isManual ? birthPlace.shortName : null,
+      deathPlaceText: deathPlace?.isManual ? deathPlace.shortName : null,
       dynastyId: dynastyId || undefined,
       religionId: religionId || undefined,
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
-      spouseRelations: spouseId ? [{ spouseId, note: spouseNote.trim() || undefined }] : undefined,
+      spouseRelations: spouseId
+        ? [{ spouseId, note: spouseNote.trim() || null }]
+        : undefined,
       isBirthDateUnknown,
       isDeathDateUnknown,
       isAlive,
-      deathType: deathType || undefined,
+      deathType: deathType || null,
       deathCause: deathCause.trim() || null,
       deathNote: deathNote.trim() || null,
     }
@@ -877,12 +1055,15 @@ export function PersonRegisterView({
       if (isEditMode && editPersonId) {
         await updatePerson(editPersonId, payload)
         toast.success('인물 정보가 수정되었습니다.')
+        // 성공 시 dirty 해제 — 부모가 닫을 때 경고 뜨지 않도록
+        setIsDirty(false)
         onSuccess?.(editPersonId)
         onCancel()
       } else {
         const created = await createPerson(createPayload)
         const personId = (created as any)?.id ?? (created as any)?.data?.id
         toast.success('인물이 등록되었습니다.')
+        setIsDirty(false)
         onSuccess?.(personId)
         onCancel()
       }
@@ -896,7 +1077,7 @@ export function PersonRegisterView({
             ? ' 이미지는 업로드되었습니다. 저장을 다시 시도해 주세요.'
             : ' 이미지는 업로드되었습니다. 등록을 다시 시도해 주세요.'
           : ''
-      setError(base + extra)
+      setErrors((prev) => ({ ...prev, _form: base + extra }))
       toast.error(base + extra)
     } finally {
       setIsSubmitting(false)
@@ -932,8 +1113,19 @@ export function PersonRegisterView({
           </SubmitButton>
         </FormHeader>
       )}
-      <form id="person-register-form" onSubmit={handleSubmit}>
-        <FormSectionInner>
+      <form
+        id="person-register-form"
+        onSubmit={handleSubmit}
+        onChange={markDirty}
+        onInput={markDirty}
+      >
+        <LoadingHost>
+          {isLoadingEdit && (
+            <LoadingOverlay aria-live="polite">
+              인물 정보를 불러오는 중…
+            </LoadingOverlay>
+          )}
+        <FormSectionInner aria-busy={isLoadingEdit}>
           <TabNavigation $hugContent>
             <TabButton
               type="button"
@@ -963,16 +1155,9 @@ export function PersonRegisterView({
           {activeTab === 'basic' && (
             <FormRows>
               <ThumbnailWrap>
-                <FieldLabel>썸네일</FieldLabel>
+                <FieldLabel htmlFor="person-thumbnail-upload">썸네일</FieldLabel>
                 <FieldControl>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      gap: 12,
-                    }}
-                  >
+                  <ThumbnailRow>
                     <ThumbnailPreview
                       htmlFor="person-thumbnail-upload"
                       $hasImage={!!(thumbnailObjectUrl || profileImageUrl)}
@@ -992,48 +1177,28 @@ export function PersonRegisterView({
                         </svg>
                       )}
                     </ThumbnailPreview>
-                    <span
-                      id="person-thumbnail-hint"
-                      style={{
-                        fontSize: 12,
-                        color: isDark ? '#94a3b8' : '#64748b',
-                        maxWidth: 220,
-                        lineHeight: 1.45,
-                      }}
-                    >
+                    <ThumbnailHint id="person-thumbnail-hint">
                       {pendingThumbnailFile
                         ? '저장 시 서버에 업로드됩니다.'
                         : '등록·저장 시 업로드됩니다.'}
-                    </span>
+                    </ThumbnailHint>
                     {(thumbnailObjectUrl || profileImageUrl.trim()) && (
-                      <button
+                      <ThumbnailRemoveBtn
                         type="button"
-                        onClick={handleRemoveThumbnail}
+                        onClick={() => {
+                          handleRemoveThumbnail()
+                          markDirty()
+                        }}
                         disabled={isSubmitting}
                         aria-label={
                           pendingThumbnailFile
                             ? '선택한 이미지 취소'
                             : '썸네일 제거'
                         }
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '6px 10px',
-                          fontSize: 12,
-                          color: isDark ? '#f87171' : '#b91c1c',
-                          background: isDark
-                            ? 'rgba(248,113,113,0.12)'
-                            : '#fef2f2',
-                          border: `1px solid ${isDark ? 'rgba(248,113,113,0.35)' : '#fecaca'}`,
-                          borderRadius: 8,
-                          cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                          opacity: isSubmitting ? 0.6 : 1,
-                        }}
                       >
                         <FiTrash2 size={14} />
                         {pendingThumbnailFile ? '선택 취소' : '썸네일 제거'}
-                      </button>
+                      </ThumbnailRemoveBtn>
                     )}
                     <ThumbnailUploadInput
                       id="person-thumbnail-upload"
@@ -1043,38 +1208,66 @@ export function PersonRegisterView({
                       disabled={isSubmitting}
                       aria-describedby="person-thumbnail-hint"
                     />
-                  </div>
+                  </ThumbnailRow>
                 </FieldControl>
               </ThumbnailWrap>
               <FieldRow>
-                <FieldLabel>
+                <FieldLabel htmlFor={fid('surname')}>
                   성 · 이름 · 중간이름 <Required>*</Required>
                 </FieldLabel>
                 <FieldControl>
                   <InlineFields $cols={3}>
                     <FormInput
+                      id={fid('surname')}
                       value={surname}
-                      onChange={(e) => setSurname(e.target.value)}
+                      onChange={(e) => {
+                        setSurname(e.target.value)
+                        clearFieldError('surname')
+                      }}
                       placeholder="성 (예: 김)"
+                      $error={!!errors.surname}
+                      aria-invalid={!!errors.surname}
+                      aria-describedby={
+                        errors.surname ? fid('surname-err') : undefined
+                      }
                     />
                     <FormInput
+                      id={fid('name')}
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      onChange={(e) => {
+                        setName(e.target.value)
+                        clearFieldError('name')
+                      }}
                       placeholder="이름 (예: 홍길동)"
+                      $error={!!errors.name}
+                      aria-invalid={!!errors.name}
+                      aria-describedby={
+                        errors.name ? fid('name-err') : undefined
+                      }
                     />
                     <FormInput
+                      id={fid('middleName')}
                       value={middleName}
                       onChange={(e) => setMiddleName(e.target.value)}
                       placeholder="중간이름"
                     />
                   </InlineFields>
+                  {(errors.surname || errors.name) && (
+                    <FieldError
+                      id={errors.surname ? fid('surname-err') : fid('name-err')}
+                      role="alert"
+                    >
+                      {errors.surname || errors.name}
+                    </FieldError>
+                  )}
                 </FieldControl>
               </FieldRow>
               <FieldRow>
-                <FieldLabel>이름 원어</FieldLabel>
+                <FieldLabel htmlFor={fid('originalName')}>이름 원어</FieldLabel>
                 <FieldControl>
                   <OriginalNameInputWrap>
                     <FormInput
+                      id={fid('originalName')}
                       value={originalName}
                       onChange={(e) => setOriginalName(e.target.value)}
                       placeholder="예: Franklin D. Roosevelt"
@@ -1083,19 +1276,15 @@ export function PersonRegisterView({
                 </FieldControl>
               </FieldRow>
               <CheckboxRowTwo>
-                <label
-                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                >
+                <InlineCheckboxLabel>
                   <input
                     type="checkbox"
                     checked={isBirthDateUnknown}
                     onChange={(e) => setIsBirthDateUnknown(e.target.checked)}
                   />
                   출생일 미상
-                </label>
-                <label
-                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                >
+                </InlineCheckboxLabel>
+                <InlineCheckboxLabel>
                   <input
                     type="checkbox"
                     checked={isAlive}
@@ -1106,20 +1295,13 @@ export function PersonRegisterView({
                         setDeathYear('')
                         setDeathMonth('')
                         setDeathDay('')
+                        clearFieldError('death')
                       }
                     }}
                   />
                   생존 중
-                </label>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    opacity: isAlive ? 0.4 : 1,
-                    pointerEvents: isAlive ? 'none' : 'auto',
-                  }}
-                >
+                </InlineCheckboxLabel>
+                <InlineCheckboxLabel $disabled={isAlive}>
                   <input
                     type="checkbox"
                     checked={isDeathDateUnknown}
@@ -1127,7 +1309,7 @@ export function PersonRegisterView({
                     disabled={isAlive}
                   />
                   사망일 미상
-                </label>
+                </InlineCheckboxLabel>
               </CheckboxRowTwo>
               <FieldRow>
                 <FieldLabel>출생일 · 사망일</FieldLabel>
@@ -1137,6 +1319,7 @@ export function PersonRegisterView({
                       type="button"
                       $hasValue={!!birthYear.trim()}
                       onClick={() => setShowBirthDateModal(true)}
+                      aria-invalid={!!errors.birth}
                     >
                       <FiCalendar size={18} />
                       <span>
@@ -1154,6 +1337,7 @@ export function PersonRegisterView({
                       $hasValue={!!deathYear.trim()}
                       onClick={() => !isAlive && setShowDeathDateModal(true)}
                       disabled={isAlive}
+                      aria-invalid={!!errors.death}
                       style={
                         isAlive
                           ? { opacity: 0.4, cursor: 'not-allowed' }
@@ -1174,19 +1358,24 @@ export function PersonRegisterView({
                       <FiChevronDown size={16} />
                     </DateFieldBtn>
                   </DateFieldsRow>
+                  {(errors.birth || errors.death) && (
+                    <FieldError role="alert">
+                      {errors.birth || errors.death}
+                    </FieldError>
+                  )}
                 </FieldControl>
               </FieldRow>
               <FieldRow>
-                <FieldLabel>사망 유형 · 원인</FieldLabel>
+                <FieldLabel htmlFor={fid('deathType')}>사망 유형 · 원인</FieldLabel>
                 <FieldControl>
                   <InlineFields $cols={2}>
                     <div>
                       <SelectBtn
+                        id={fid('deathType')}
                         type="button"
                         $hasValue={!!deathType}
                         onClick={() => !isAlive && setShowDeathTypeModal(true)}
                         disabled={isAlive}
-                        style={isAlive ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
                       >
                         <span>
                           {DEATH_TYPE_OPTIONS.find((o) => o.value === deathType)?.label ?? '유형 선택'}
@@ -1201,48 +1390,54 @@ export function PersonRegisterView({
                         onSelect={(v) => {
                           setDeathType(v)
                           setShowDeathTypeModal(false)
+                          markDirty()
                         }}
                         title="사망 유형 선택"
                       />
                     </div>
                     <FormInput
+                      id={fid('deathCause')}
                       value={deathCause}
                       onChange={(e) => setDeathCause(e.target.value)}
                       placeholder="사망 원인 상세 (예: 폐렴 합병증)"
                       disabled={isAlive}
-                      style={isAlive ? { opacity: 0.4 } : undefined}
                     />
                   </InlineFields>
                 </FieldControl>
               </FieldRow>
               <FieldRow>
-                <FieldLabel>사망 메모</FieldLabel>
+                <FieldLabel htmlFor={fid('deathNote')}>사망 메모</FieldLabel>
                 <FieldControl>
                   <Textarea
+                    id={fid('deathNote')}
                     value={deathNote}
                     onChange={(e) => setDeathNote(e.target.value)}
                     placeholder="사망 관련 맥락, 논란, 비고 등"
                     rows={3}
                     disabled={isAlive}
-                    style={isAlive ? { opacity: 0.4 } : undefined}
                   />
                 </FieldControl>
               </FieldRow>
               <FieldRowMulti>
-                <FieldLabel>성의 뜻 / 이름의 뜻 / 중간이름의 뜻</FieldLabel>
+                <FieldLabel htmlFor={fid('surnameMeaning')}>
+                  성의 뜻 / 이름의 뜻 / 중간이름의 뜻
+                </FieldLabel>
                 <FieldControl>
                   <InlineFields $cols={3}>
                     <FormInput
+                      id={fid('surnameMeaning')}
                       value={surnameMeaning}
                       onChange={(e) => setSurnameMeaning(e.target.value)}
                       placeholder="성의 뜻"
                     />
                     <FormInput
+                      id={fid('nameMeaning')}
                       value={nameMeaning}
                       onChange={(e) => setNameMeaning(e.target.value)}
                       placeholder="이름의 뜻"
                     />
                     <FormInput
+                      id={fid('middleNameMeaning')}
                       value={middleNameMeaning}
                       onChange={(e) => setMiddleNameMeaning(e.target.value)}
                       placeholder="중간이름의 뜻"
@@ -1251,13 +1446,19 @@ export function PersonRegisterView({
                 </FieldControl>
               </FieldRowMulti>
               <FieldRow>
-                <FieldLabel>
+                <FieldLabel htmlFor={fid('gender')}>
                   성별 <Required>*</Required>
                 </FieldLabel>
                 <FieldControl>
                   <SelectBtn
+                    id={fid('gender')}
                     type="button"
                     $hasValue={!!gender}
+                    $error={!!errors.gender}
+                    aria-invalid={!!errors.gender}
+                    aria-describedby={
+                      errors.gender ? fid('gender-err') : undefined
+                    }
                     onClick={() => setShowGenderModal(true)}
                   >
                     <span>
@@ -1274,9 +1475,16 @@ export function PersonRegisterView({
                     onSelect={(v) => {
                       setGender(v)
                       setShowGenderModal(false)
+                      clearFieldError('gender')
+                      markDirty()
                     }}
                     title="성별 선택"
                   />
+                  {errors.gender && (
+                    <FieldError id={fid('gender-err')} role="alert">
+                      {errors.gender}
+                    </FieldError>
+                  )}
                 </FieldControl>
               </FieldRow>
             </FormRows>
@@ -1285,18 +1493,29 @@ export function PersonRegisterView({
           {activeTab === 'affiliation' && (
             <FormRows>
               <FieldRow>
-                <FieldLabel>
+                <FieldLabel htmlFor={fid('countryId')}>
                   소속(출생) 국가 <Required>*</Required>
                 </FieldLabel>
                 <FieldControl>
                   <SelectBtn
+                    id={fid('countryId')}
                     type="button"
                     $hasValue={!!countryName}
+                    $error={!!errors.countryId}
+                    aria-invalid={!!errors.countryId}
+                    aria-describedby={
+                      errors.countryId ? fid('countryId-err') : undefined
+                    }
                     onClick={() => setShowCountryModal(true)}
                   >
                     <span>{countryName || '국가 선택'}</span>
                     <FiChevronDown size={18} />
                   </SelectBtn>
+                  {errors.countryId && (
+                    <FieldError id={fid('countryId-err')} role="alert">
+                      {errors.countryId}
+                    </FieldError>
+                  )}
                 </FieldControl>
               </FieldRow>
               <FieldRow>
@@ -1308,6 +1527,7 @@ export function PersonRegisterView({
                       onChange={(place) => {
                         setBirthPlace(place)
                         setBirthCityId(place?.cityId ?? '')
+                        markDirty()
                       }}
                       countryId={countryId || undefined}
                     />
@@ -1323,6 +1543,7 @@ export function PersonRegisterView({
                       onChange={(place) => {
                         setDeathPlace(place)
                         setDeathCityId(place?.cityId ?? '')
+                        markDirty()
                       }}
                       countryId={countryId || undefined}
                     />
@@ -1330,11 +1551,12 @@ export function PersonRegisterView({
                 </FieldControl>
               </FieldRow>
               <FieldRowMulti>
-                <FieldLabel>가문 · 종교</FieldLabel>
+                <FieldLabel htmlFor={fid('dynasty')}>가문 · 종교</FieldLabel>
                 <FieldControl>
                   <InlineFields $cols={2}>
                     <div>
                       <SelectBtn
+                        id={fid('dynasty')}
                         type="button"
                         $hasValue={!!dynastyName}
                         onClick={() => setShowDynastyModal(true)}
@@ -1345,23 +1567,19 @@ export function PersonRegisterView({
                       <SelectModal
                         isOpen={showDynastyModal}
                         onClose={() => setShowDynastyModal(false)}
-                        options={[
-                          { value: '', label: '선택 안 함' },
-                          ...dynasties.map((d) => ({
-                            value: d.id,
-                            label: d.name,
-                          })),
-                        ]}
+                        options={dynastyOptions}
                         selectedValue={dynastyId}
                         onSelect={(v) => {
                           setDynastyId(v)
                           setShowDynastyModal(false)
+                          markDirty()
                         }}
                         title="가문 선택"
                       />
                     </div>
                     <div>
                       <SelectBtn
+                        id={fid('religion')}
                         type="button"
                         $hasValue={!!religionName}
                         onClick={() => setShowReligionModal(true)}
@@ -1372,17 +1590,12 @@ export function PersonRegisterView({
                       <SelectModal
                         isOpen={showReligionModal}
                         onClose={() => setShowReligionModal(false)}
-                        options={[
-                          { value: '', label: '선택 안 함' },
-                          ...religions.map((r) => ({
-                            value: r.id,
-                            label: r.name,
-                          })),
-                        ]}
+                        options={religionOptions}
                         selectedValue={religionId}
                         onSelect={(v) => {
                           setReligionId(v)
                           setShowReligionModal(false)
+                          markDirty()
                         }}
                         title="종교 선택"
                       />
@@ -1395,7 +1608,10 @@ export function PersonRegisterView({
                 <FieldControl>
                   <RichTextEditor
                     value={biography}
-                    onChange={setBiography}
+                    onChange={(v) => {
+                      setBiography(v)
+                      markDirty()
+                    }}
                     showTitle={false}
                     placeholder="인물의 일생을 설명하는 글 (선택). 서식·이미지를 넣을 수 있습니다."
                     onImageUpload={async (file) => {
@@ -1411,9 +1627,10 @@ export function PersonRegisterView({
           {activeTab === 'family' && (
             <FormRows>
               <FieldRow>
-                <FieldLabel>아버지</FieldLabel>
+                <FieldLabel htmlFor={fid('father')}>아버지</FieldLabel>
                 <FieldControl>
                   <SelectBtn
+                    id={fid('father')}
                     type="button"
                     $hasValue={!!fatherName}
                     onClick={() => setShowFatherModal(true)}
@@ -1428,6 +1645,7 @@ export function PersonRegisterView({
                       onSelect={(id) => {
                         setFatherId(id)
                         setShowFatherModal(false)
+                        markDirty()
                       }}
                       onClose={() => setShowFatherModal(false)}
                     />
@@ -1435,9 +1653,10 @@ export function PersonRegisterView({
                 </FieldControl>
               </FieldRow>
               <FieldRow>
-                <FieldLabel>어머니</FieldLabel>
+                <FieldLabel htmlFor={fid('mother')}>어머니</FieldLabel>
                 <FieldControl>
                   <SelectBtn
+                    id={fid('mother')}
                     type="button"
                     $hasValue={!!motherName}
                     onClick={() => setShowMotherModal(true)}
@@ -1452,6 +1671,7 @@ export function PersonRegisterView({
                       onSelect={(id) => {
                         setMotherId(id)
                         setShowMotherModal(false)
+                        markDirty()
                       }}
                       onClose={() => setShowMotherModal(false)}
                     />
@@ -1459,9 +1679,10 @@ export function PersonRegisterView({
                 </FieldControl>
               </FieldRow>
               <FieldRow>
-                <FieldLabel>배우자</FieldLabel>
+                <FieldLabel htmlFor={fid('spouse')}>배우자</FieldLabel>
                 <FieldControl>
                   <SelectBtn
+                    id={fid('spouse')}
                     type="button"
                     $hasValue={!!spouseName}
                     onClick={() => setShowSpouseModal(true)}
@@ -1476,6 +1697,7 @@ export function PersonRegisterView({
                       onSelect={(id) => {
                         setSpouseId(id)
                         setShowSpouseModal(false)
+                        markDirty()
                       }}
                       onClose={() => setShowSpouseModal(false)}
                     />
@@ -1483,23 +1705,24 @@ export function PersonRegisterView({
                 </FieldControl>
               </FieldRow>
               <FieldRow>
-                <FieldLabel>배우자 설명</FieldLabel>
+                <FieldLabel htmlFor={fid('spouseNote')}>배우자 설명</FieldLabel>
                 <FieldControl>
-                  <Textarea
+                  <SpouseNoteTextarea
+                    id={fid('spouseNote')}
                     value={spouseNote}
                     onChange={(e) => setSpouseNote(e.target.value)}
                     placeholder="예: 1대 왕비, 재위 기간 중 사망"
                     disabled={!spouseId}
                     rows={3}
-                    style={{ maxWidth: 440 }}
                   />
                 </FieldControl>
               </FieldRow>
             </FormRows>
           )}
 
-          {error && <ErrorText>{error}</ErrorText>}
+          {errors._form && <ErrorText role="alert">{errors._form}</ErrorText>}
         </FormSectionInner>
+        </LoadingHost>
       </form>
 
       <CountrySelectModal

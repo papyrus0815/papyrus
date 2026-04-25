@@ -1,5 +1,5 @@
 /**
- * 단순 대시보드 뷰 공통 페이지.
+ * 단순 대시보드 뷰 공통 페이지 — 모두 fullScreen 모드.
  *
  * - dynasty · ethnicity — 전용 위젯을 그대로 렌더
  * - legislature · military — 안내 플레이스홀더 (기능 구현 전)
@@ -14,7 +14,6 @@ import { DynastySection } from '@/widgets/country/country-detail/ui/dynasty-sect
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
 import {
   HistoryShell,
-  LeftFilterSlot,
   type DashboardContentView,
 } from '@/widgets/history-shell'
 
@@ -72,13 +71,7 @@ export default function DashboardSimplePage() {
 
   return (
     <HistoryShell
-      left={({ listCollapsed, toggleListCollapsed }) => (
-        <LeftFilterSlot
-          view={view}
-          collapsed={listCollapsed}
-          onToggleCollapse={toggleListCollapsed}
-        />
-      )}
+      fullScreen
       right={
         <motion.div
           key={view}

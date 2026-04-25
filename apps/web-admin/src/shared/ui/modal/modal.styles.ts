@@ -36,7 +36,10 @@ export const ModalOverlay = styled.div`
 
 // ─── 모달 컨테이너 ────────────────────────────────────────────────────────────
 
-/** 기본 모달 박스 (다크: 리퀴드 글래스, 라이트: 솔리드) */
+/**
+ * 기본 모달 박스 (다크: 리퀴드 글래스, 라이트: 솔리드).
+ * flex-column + overflow:hidden 기본 — 헤더·푸터 고정, ModalBody만 스크롤되도록.
+ */
 export const ModalBox = styled.div<{
   $maxWidth?: string
   $maxHeight?: string
@@ -46,9 +49,10 @@ export const ModalBox = styled.div<{
   max-width: ${({ $maxWidth }) => $maxWidth ?? '560px'};
   width: 100%;
   max-height: ${({ $maxHeight }) => $maxHeight ?? '90vh'};
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   z-index: ${Z_INDEX.MODAL_CONTENT};
-  ${scrollbarMixin}
 `
 
 /** 넓은 모달 (멀티 컬럼 등) */
@@ -115,7 +119,14 @@ export const ModalCloseButton = styled.button`
 
 // ─── 바디 / 푸터 ──────────────────────────────────────────────────────────────
 
+/**
+ * ModalBox 안의 스크롤 영역. ModalBox가 flex-column + overflow:hidden이므로
+ * 여기서 flex:1 + overflow:auto를 잡아 본문만 스크롤되게 함.
+ */
 export const ModalBody = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 20px 24px;
   display: flex;
   flex-direction: column;

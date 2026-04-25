@@ -17,8 +17,3 @@ export interface AdaptedPerson {
   biography: string | null
   isAlive: boolean
 }
-
-export interface Scope {
-  type: 'all' | 'era' | 'region' | 'field' | 'country'
-  val: string | null
-}

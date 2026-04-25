@@ -21,6 +21,12 @@ export const PERSON_LIFE_EVENT_CATEGORIES = [
   'AWARD',
   'PERSONAL',
   'CAREER',
+  'MILITARY',
+  'POLITICAL',
+  'DIPLOMATIC',
+  'RELIGIOUS',
+  'HEALTH',
+  'FAMILY',
   'OTHER',
 ] as const
 

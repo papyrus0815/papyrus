@@ -19,7 +19,10 @@ import styled from 'styled-components'
 
 import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
 
-import { useListCollapsed } from '../model/use-list-collapsed.hook'
+import {
+  useListCollapsed,
+  type UseListCollapsedOptions,
+} from '../model/use-list-collapsed.hook'
 import * as S from './history-shell.styles'
 
 export interface HistoryShellRenderContext {
@@ -44,6 +47,16 @@ interface HistoryShellProps {
    * /history/country (browse) 등 좌우 분할이 없는 뷰에서 사용.
    */
   fullScreen?: boolean
+  /**
+   * 좌측 패널 접힘 상태 옵션 — 뷰별로 storageKey/defaultCollapsed 분리.
+   * 인물 인포그래픽처럼 우측이 본질인 뷰에서 defaultCollapsed=true로.
+   */
+  listCollapsedConfig?: UseListCollapsedOptions
+  /**
+   * 사이드바에 보조 컬럼이 떠 있을 때 그 폭을 MainGrid에 더해줌 (B-4 Finder).
+   * e.g. 자식 컬럼 180px 표시 중 → 180. 부모 컬럼 폭은 그대로 유지됨.
+   */
+  sidebarExtraWidth?: number
   /** Shell 외부로 한 번 감싸고 싶은 추가 요소 (모달 등) — provider 안쪽에 렌더됨 */
   children?: ReactNode
 }
@@ -52,9 +65,11 @@ export function HistoryShell({
   left,
   right,
   fullScreen = false,
+  listCollapsedConfig,
+  sidebarExtraWidth,
   children,
 }: HistoryShellProps) {
-  const { collapsed, toggle } = useListCollapsed()
+  const { collapsed, toggle } = useListCollapsed(listCollapsedConfig)
 
   const ctx: HistoryShellRenderContext = {
     listCollapsed: collapsed,
@@ -75,7 +90,11 @@ export function HistoryShell({
         {fullScreen ? (
           resolvedRight
         ) : (
-          <S.MainGrid $noSidebar $listCollapsed={collapsed}>
+          <S.MainGrid
+            $noSidebar
+            $listCollapsed={collapsed}
+            $sidebarExtraWidth={sidebarExtraWidth}
+          >
             {resolvedLeft}
             <S.DetailPane>
               <S.DetailPaneScrollBody>{resolvedRight}</S.DetailPaneScrollBody>

@@ -20,7 +20,10 @@ const Root = styled.div`
   font-size: 15px;
   line-height: 1.7;
   color: ${({ theme }) => theme.colors.text.primary};
-  white-space: pre-wrap;
+  /* 에디터 HTML은 줄바꿈을 <br>·<div>·<p>로 인코딩 — pre-wrap을 켜면 태그 사이의
+     소스 포맷 개행(\\n)까지 공백으로 렌더되어 단락 간 빈 줄이 누적됨.
+     평문 입력은 사용처에서 별도 pre-wrap 컨테이너로 분기 (예: CardDesc). */
+  white-space: normal;
   word-break: break-word;
 
   p {

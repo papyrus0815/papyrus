@@ -49,12 +49,39 @@ export function resolveRichTextImageSrcsForDisplay(html: string): string {
 }
 
 /**
+ * 블록 태그 사이의 소스 포맷용 화이트스페이스(개행 포함)를 제거.
+ *
+ * 배경: 에디터가 저장한 HTML에 `</p>\n<p>` 같은 인덴트 개행이 들어가면
+ * 일부 컨테이너의 `white-space: pre-wrap`이나 본문 가까이 placed된 인라인
+ * 텍스트와 만나 빈 줄이 추가로 보이는 현상이 생김. 표시 직전에 한 번 정리.
+ *
+ * 콘텐츠 안의 텍스트(예: `<p>a   b</p>`)는 건드리지 않고, **닫는 태그와
+ * 다음 여는 태그 사이**의 공백만 제거함.
+ */
+function collapseInterBlockWhitespace(html: string): string {
+  if (!html) return html
+  return html.replace(/>\s+</g, '><')
+}
+
+/**
+ * 같은 위치의 `<br>`이 3개 이상 연속이면 2개로 축소 (단락 사이 1줄 공백 유지).
+ * 과거 plain-text → `<br>` 변환이 누적되어 빈 줄이 무한히 쌓이는 데이터 보정.
+ */
+function collapseExcessiveBreaks(html: string): string {
+  if (!html) return html
+  return html.replace(/(?:<br\s*\/?\s*>\s*){3,}/gi, '<br><br>')
+}
+
+/**
  * RichTextEditor로 저장한 HTML을 읽기 전용으로 표시하기 전 처리:
  * 1. `sanitizeRichTextHtml` — 허용 마크업만 유지(XSS 완화)
  * 2. `stripMentionLeadingAt` — 멘션 @ 표시 제거
- * 3. `resolveRichTextImageSrcsForDisplay` — 업로드 이미지 상대 경로 → 절대 URL
+ * 3. `collapseInterBlockWhitespace` — 블록 태그 사이 소스 개행 제거
+ * 4. `collapseExcessiveBreaks` — `<br>` 3개 이상 연속 → 2개로 축소
+ * 5. `resolveRichTextImageSrcsForDisplay` — 업로드 이미지 상대 경로 → 절대 URL
  */
 export function formatRichTextForReadView(html: string): string {
   const safe = stripMentionLeadingAt(sanitizeRichTextHtml(html ?? ''))
-  return resolveRichTextImageSrcsForDisplay(safe)
+  const compact = collapseExcessiveBreaks(collapseInterBlockWhitespace(safe))
+  return resolveRichTextImageSrcsForDisplay(compact)
 }

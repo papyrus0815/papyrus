@@ -1,25 +1,17 @@
 import React from 'react'
 import styled, { css } from 'styled-components'
+
 import { type PersonResponseDto as Person } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { getPositionColor } from '@/shared/lib/position-color'
+import { InfluenceBadge } from '@/shared/ui/influence-badge'
+import { FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 
 interface PersonCardProps {
   person: Person
   index: number
   onClick: () => void
   dynastyName?: string | null
-}
-
-function getPositionColor(positionType: string | null | undefined): string {
-  switch (positionType) {
-    case 'HEAD_OF_STATE':       return '#d97706'
-    case 'HEAD_OF_GOVERNMENT':  return '#4f46e5'
-    case 'CABINET_MINISTER':    return '#0891b2'
-    case 'LEGISLATOR':          return '#059669'
-    case 'MILITARY_COMMANDER':  return '#dc2626'
-    case 'JUDICIARY':           return '#7c3aed'
-    default:                    return '#64748b'
-  }
 }
 
 export function PersonCard({ person, onClick, dynastyName }: PersonCardProps) {
@@ -46,10 +38,18 @@ export function PersonCard({ person, onClick, dynastyName }: PersonCardProps) {
   const displayImage = person.profileImageUrl
 
   return (
-    <Card onClick={onClick}>
+    <Card
+      type="button"
+      aria-label={`${fullName || '이름 없음'} 상세 보기`}
+      onClick={onClick}
+    >
       <ImageSide>
+        <InfluenceBadge
+          influence={(person as { influence?: number | null }).influence}
+          variant="overlay"
+        />
         {displayImage ? (
-          <Img src={displayImage} alt={fullName} />
+          <Img src={displayImage} alt={fullName} loading="lazy" decoding="async" />
         ) : (
           <ImgPlaceholder $color={accentColor}>
             <svg viewBox="0 0 24 24" fill="currentColor">
@@ -81,7 +81,7 @@ export function PersonCard({ person, onClick, dynastyName }: PersonCardProps) {
               )}
             </>
           ) : (
-            <LifespanYear style={{ opacity: 0.35 }}>생몰년 미상</LifespanYear>
+            <LifespanYearMuted>생몰년 미상</LifespanYearMuted>
           )}
         </LifespanRow>
 
@@ -96,7 +96,7 @@ export function PersonCard({ person, onClick, dynastyName }: PersonCardProps) {
   )
 }
 
-const Card = styled.div`
+const Card = styled.button`
   border-radius: 16px;
   overflow: hidden;
   display: flex;
@@ -104,14 +104,44 @@ const Card = styled.div`
   align-items: stretch;
   cursor: pointer;
   min-height: 112px;
-  transition: box-shadow 0.22s ease, transform 0.22s ease;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  padding: 0;
+  margin: 0;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
 
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.06), 0 12px 28px rgba(0,0,0,0.08);
+  &:focus-visible {
+    outline: 2px solid ${FOCUS_COLOR};
+    outline-offset: 2px;
   }
+
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.05);
+          box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset,
+            0 2px 12px rgba(0, 0, 0, 0.28);
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset,
+              0 10px 32px rgba(0, 0, 0, 0.42);
+          }
+        `
+      : css`
+          background: #ffffff;
+          box-shadow:
+            0 1px 3px rgba(0, 0, 0, 0.06),
+            0 4px 12px rgba(0, 0, 0, 0.04);
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow:
+              0 4px 8px rgba(0, 0, 0, 0.06),
+              0 12px 28px rgba(0, 0, 0, 0.08);
+          }
+        `}
 `
 
 const ImageSide = styled.div`
@@ -119,7 +149,8 @@ const ImageSide = styled.div`
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
-  background: #f3f4f6;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f3f4f6'};
 `
 
 const Img = styled.img`
@@ -127,9 +158,9 @@ const Img = styled.img`
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  transition: transform 0.3s ease;
+  transition: transform 0.25s ease;
   ${Card}:hover & {
-    transform: scale(1.06);
+    transform: scale(1.04);
   }
 `
 
@@ -139,7 +170,8 @@ const ImgPlaceholder = styled.div<{ $color: string }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${({ $color }) => $color}12;
+  background: ${({ $color, theme }) =>
+    theme.mode === 'dark' ? `${$color}18` : `${$color}12`};
   color: ${({ $color }) => $color};
   opacity: 0.55;
   svg {
@@ -151,7 +183,7 @@ const ImgPlaceholder = styled.div<{ $color: string }>`
 const Content = styled.div`
   flex: 1;
   min-width: 0;
-  padding: 14px 15px 14px 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -162,7 +194,7 @@ const Name = styled.h3`
   margin: 0 0 6px 0;
   font-size: 15px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   line-height: 1.25;
   white-space: nowrap;
@@ -180,24 +212,35 @@ const LifespanRow = styled.div`
 const LifespanYear = styled.span`
   font-size: 10px;
   font-weight: 600;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+`
+
+const LifespanYearMuted = styled.span`
+  font-size: 10px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.55;
+  letter-spacing: 0.01em;
 `
 
 const LifespanTrack = styled.div`
   flex: 1;
   height: 3px;
   border-radius: 2px;
-  background: #e9ecef;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e9ecef'};
   position: relative;
   overflow: hidden;
 `
 
 const LifespanFill = styled.div<{ $color: string; $pct: number }>`
   position: absolute;
-  left: 0; top: 0; bottom: 0;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: ${({ $pct }) => $pct}%;
   min-width: 6px;
   background: ${({ $color }) => $color};
@@ -208,7 +251,7 @@ const LifespanFill = styled.div<{ $color: string; $pct: number }>`
 const LifespanAge = styled.span`
   font-size: 10px;
   font-weight: 700;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 `
@@ -224,13 +267,13 @@ const MetaLabel = styled.span`
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #9ca3af;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   flex-shrink: 0;
 `
 
 const MetaValue = styled.span`
   font-size: 11px;
-  color: #6b7280;
+  color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

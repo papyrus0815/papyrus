@@ -16,8 +16,6 @@ interface CountryMobileUIProps {
   onMobileListOpenChange: (open: boolean) => void
   selectedId: string | null
   onSelectCountry: (id: string) => void
-  onShowContinentModal: () => void
-  onShowSortModal: () => void
   onAddCountry: () => void
   countries?: Country[]
   filtered?: UnifiedCountry[]
@@ -37,8 +35,6 @@ export function CountryMobileUI({
   onMobileListOpenChange,
   selectedId,
   onSelectCountry,
-  onShowContinentModal,
-  onShowSortModal,
   onAddCountry,
 }: CountryMobileUIProps) {
   const listState = useCountryListState()
@@ -205,42 +201,34 @@ export function CountryMobileUI({
                       )}
                     </S.MobileSearchWrapper>
                     <S.MobileFilterRow>
-                      <S.MobileFilterButton
-                        onClick={onShowContinentModal}
+                      <ListS.FilterSelect
+                        value={continentFilter}
+                        onChange={(e) =>
+                          onContinentFilterChange(e.target.value)
+                        }
                         $active={!!continentFilter}
+                        aria-label="대륙"
                       >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path d="M12 2l-5.5 9h11z" fill="currentColor" />
-                        </svg>
-                        {continentFilter
-                          ? continents.find(
-                              (continent) => continent.id === continentFilter,
-                            )?.name || '대륙'
-                          : '대륙'}
-                      </S.MobileFilterButton>
-                      <S.MobileFilterButton onClick={onShowSortModal}>
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                        {sortBy === 'name'
-                          ? '이름순'
-                          : sortBy === 'population'
-                            ? '인구순'
-                            : '면적순'}
-                      </S.MobileFilterButton>
+                        <option value="">대륙 전체</option>
+                        {continents.map((continent) => (
+                          <option key={continent.id} value={continent.id}>
+                            {continent.name}
+                          </option>
+                        ))}
+                      </ListS.FilterSelect>
+                      <ListS.FilterSelect
+                        value={sortBy}
+                        onChange={(e) =>
+                          onSortByChange(
+                            e.target.value as 'name' | 'population' | 'area',
+                          )
+                        }
+                        aria-label="정렬"
+                      >
+                        <option value="name">이름순</option>
+                        <option value="population">인구순</option>
+                        <option value="area">면적순</option>
+                      </ListS.FilterSelect>
                       {(query || continentFilter) && (
                         <S.MobileClearButton
                           onClick={() => {

@@ -347,6 +347,37 @@ const FeedPanelTitle = styled.h3`
   letter-spacing: 0.03em;
 `
 
+const FeedPanelTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+  h3 {
+    margin: 0;
+  }
+`
+
+const FeedPanelLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6366f1;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#eef2ff'};
+  }
+`
+
 const FeedList = styled.ul`
   margin: 0;
   padding: 0 8px 0 0;
@@ -1042,7 +1073,20 @@ export function CountryDetailDashboard({
             </SectionTitleRow>
             <FeedAndHistoricalRow>
               <FeedPanel>
-                <FeedPanelTitle>최근 등록 인물</FeedPanelTitle>
+                <FeedPanelTitleRow>
+                  <FeedPanelTitle>최근 등록 인물</FeedPanelTitle>
+                  <FeedPanelLink
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `${pathKeys.history.dashboardPersons()}?country=${encodeURIComponent(country.id)}`,
+                      )
+                    }
+                    aria-label="이 나라 인물 전체 보기"
+                  >
+                    이 나라 인물 전체 보기 →
+                  </FeedPanelLink>
+                </FeedPanelTitleRow>
                 {stats.recentPersons.length === 0 && !stats.isLoading ? (
                   <FeedEmpty>이 국가로 등록된 최근 인물이 없습니다.</FeedEmpty>
                 ) : (

@@ -14,6 +14,8 @@ import { personKeys } from '@/entities/person/api'
 import { useHistoricalCountries } from '@/entities/historical-country/api'
 import { useCountries } from '@/features/country/api'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { getPositionBg, getPositionColor } from '@/shared/lib/position-color'
+import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
@@ -54,6 +56,8 @@ type PersonLike = {
   birthCity?: { id: string; name: string } | null
   birthAdminDivision?: { id: string; name: string } | null
   birthPlaceText?: string | null
+  /** 역사적 영향력 (0-100) — 카드에 뱃지로 표시 */
+  influence?: number | null
   /** 관직 재임 기록 (필터용 positionType, 표시용 직책명) */
   governmentTenures?: Array<{
     id: string
@@ -114,6 +118,11 @@ export interface PersonListContentProps {
     editPersonId?: string | null
     onSuccess: (personId: string) => void
   }) => React.ReactNode
+  /**
+   * 프리셋 진입 모드 (예: 국가 상세 → "인물 전체 보기"로 국가 필터 고정).
+   * 제공 시 상단 PresetBanner 노출 + 해제 콜백 실행 버튼 표시.
+   */
+  onClearPreset?: () => void
 }
 
 function formatLifespan(person: PersonLike): string {
@@ -160,42 +169,6 @@ function getCentury(
 
 const CENTURY_UNKNOWN = 999
 
-// ─── Position type color mapping ─────────────────────────────────────────────
-function getPositionColor(positionType: string | null | undefined): string {
-  switch (positionType) {
-    case 'HEAD_OF_STATE':
-      return '#d97706' // amber – monarchs/presidents
-    case 'HEAD_OF_GOVERNMENT':
-      return '#4f46e5' // indigo – prime ministers/chancellors
-    case 'CABINET_MINISTER':
-      return '#0891b2' // cyan – ministers
-    case 'LEGISLATOR':
-      return '#059669' // emerald – legislators
-    case 'MILITARY_COMMANDER':
-      return '#dc2626' // red – military
-    case 'JUDICIARY':
-      return '#7c3aed' // violet – judiciary
-    default:
-      return '#64748b' // slate – others
-  }
-}
-
-function getPositionBg(
-  positionType: string | null | undefined,
-  dark = false,
-): string {
-  const colorMap: Record<string, [string, string]> = {
-    HEAD_OF_STATE: ['#fef3c7', 'rgba(217,119,6,0.18)'],
-    HEAD_OF_GOVERNMENT: ['#eef2ff', 'rgba(79,70,229,0.18)'],
-    CABINET_MINISTER: ['#ecfeff', 'rgba(8,145,178,0.18)'],
-    LEGISLATOR: ['#d1fae5', 'rgba(5,150,105,0.18)'],
-    MILITARY_COMMANDER: ['#fee2e2', 'rgba(220,38,38,0.18)'],
-    JUDICIARY: ['#ede9fe', 'rgba(124,58,237,0.18)'],
-  }
-  const pair = colorMap[positionType ?? ''] ?? ['#f1f5f9', 'rgba(100,116,139,0.15)']
-  return dark ? pair[1] : pair[0]
-}
-
 // ─── Styled ───────────────────────────────────────────────────────────────────
 const ListHeader = styled.header<{ $compact?: boolean }>`
   display: flex;
@@ -204,8 +177,13 @@ const ListHeader = styled.header<{ $compact?: boolean }>`
   gap: 16px;
   flex-wrap: wrap;
   padding-bottom: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
 `
 
 const ListHeaderLeft = styled.div`
@@ -235,6 +213,13 @@ const ToolbarRow = styled.div`
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+
+  @media (max-width: 480px) {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
 `
 
 const SearchWrap = styled.div`
@@ -242,6 +227,64 @@ const SearchWrap = styled.div`
   min-width: 180px;
   max-width: 240px;
   position: relative;
+
+  @media (max-width: 480px) {
+    max-width: 100%;
+    width: 100%;
+  }
+`
+
+/** 프리셋 진입(카드 리스트 전용 모드)용 상단 배너 — 평면 + 작은 chip */
+const PresetBanner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const PresetBannerLeft = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const PresetBannerPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.active};
+`
+
+const PresetBannerClose = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const SearchIcon = styled.span`
@@ -260,59 +303,35 @@ const SearchInput = styled.input`
   font-size: 13px;
   border-radius: 8px;
   outline: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    background 0.15s;
   box-sizing: border-box;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid transparent;
+  transition: border-color 0.12s, background 0.12s;
 
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          color: ${theme.colors.text.primary};
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          &::placeholder {
-            color: rgba(255, 255, 255, 0.3);
-          }
-          &:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-          }
-          &:focus {
-            border-color: rgba(99, 106, 242, 0.5);
-            background: rgba(255, 255, 255, 0.08);
-            box-shadow: 0 0 0 3px rgba(99, 106, 242, 0.15);
-          }
-        `
-      : css`
-          color: #111827;
-          background: #f8fafc;
-          border: 1px solid ${BORDER_COLOR};
-          &::placeholder {
-            color: #9ca3af;
-          }
-          &:hover {
-            border-color: #d1d5db;
-          }
-          &:focus {
-            border-color: ${FOCUS_COLOR};
-            background: #fff;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.07);
-          }
-        `}
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+  &:focus {
+    border-color: ${({ theme }) => theme.colors.active};
+    background: ${({ theme }) => theme.colors.background.primary};
+  }
 `
 
 const GenderBtnGroup = styled.div`
   display: inline-flex;
   border-radius: 8px;
   overflow: hidden;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`border: 1px solid rgba(255,255,255,0.1);`
-      : css`border: 1px solid ${BORDER_COLOR};`}
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
-const GenderBtn = styled.button<{ $active?: boolean; $gender?: 'all' | 'male' | 'female' }>`
+const GenderBtn = styled.button<{
+  $active?: boolean
+  $gender?: 'all' | 'male' | 'female'
+}>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -320,44 +339,33 @@ const GenderBtn = styled.button<{ $active?: boolean; $gender?: 'all' | 'male' | 
   font-size: 12.5px;
   font-weight: ${({ $active }) => ($active ? '600' : '400')};
   cursor: pointer;
-  transition: background 0.14s, color 0.14s;
   white-space: nowrap;
   border: none;
-  border-right: 1px solid transparent;
-  &:last-child { border-right: none; }
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: background 0.12s, color 0.12s;
 
-  ${({ theme, $active, $gender }) => {
-    if (theme.mode === 'dark') {
-      const activeBg =
-        $gender === 'male'   ? 'rgba(96,165,250,0.18)' :
-        $gender === 'female' ? 'rgba(244,114,182,0.18)' :
-                               'rgba(255,255,255,0.1)'
-      const activeColor =
-        $gender === 'male'   ? '#93c5fd' :
-        $gender === 'female' ? '#f9a8d4' :
-                               theme.colors.text.primary
-      return css`
-        background: ${$active ? activeBg : 'rgba(255,255,255,0.04)'};
-        color: ${$active ? activeColor : theme.colors.text.tertiary};
-        border-right-color: rgba(255,255,255,0.08);
-        &:hover { background: ${$active ? activeBg : 'rgba(255,255,255,0.08)'}; }
-      `
-    }
-    const activeBg =
-      $gender === 'male'   ? '#eff6ff' :
-      $gender === 'female' ? '#fdf2f8' :
-                             '#f1f5f9'
-    const activeColor =
-      $gender === 'male'   ? '#2563eb' :
-      $gender === 'female' ? '#db2777' :
-                             '#374151'
-    return css`
-      background: ${$active ? activeBg : '#f8fafc'};
-      color: ${$active ? activeColor : '#9ca3af'};
-      border-right-color: ${BORDER_COLOR};
-      &:hover { background: ${$active ? activeBg : '#f1f5f9'}; }
-    `
-  }}
+  &:last-child {
+    border-right: none;
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      background: ${theme.colors.activeLight};
+      color: ${theme.colors.active};
+
+      &:hover {
+        background: ${theme.colors.activeLight};
+        color: ${theme.colors.active};
+      }
+    `}
 `
 
 const CountryFilterSection = styled.div`
@@ -374,81 +382,75 @@ const ModernCountryRow = styled.div`
   align-items: center;
 `
 
-const ModernCountryChip = styled.button<{ $active?: boolean; $hasFilter?: boolean }>`
+const ModernCountryChip = styled.button<{
+  $active?: boolean
+  $hasFilter?: boolean
+}>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 5px 12px;
   font-size: 12.5px;
-  font-weight: ${(p) => (p.$active || p.$hasFilter ? '600' : '400')};
-  border-radius: 100px;
+  font-weight: ${(p) => (p.$active || p.$hasFilter ? 600 : 500)};
+  border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.14s;
   position: relative;
-  ${(p) =>
-    p.theme.mode === 'dark'
-      ? css`
-          color: ${p.$active || p.$hasFilter ? '#a5b4fc' : p.theme.colors.text.secondary};
-          background: ${p.$active ? 'rgba(99,102,241,0.2)' : p.$hasFilter ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.06)'};
-          border: 1px solid ${p.$active ? 'rgba(99,102,241,0.5)' : p.$hasFilter ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.1)'};
-          &:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
-        `
-      : css`
-          color: ${p.$active ? '#4f46e5' : p.$hasFilter ? '#4338ca' : '#374151'};
-          background: ${p.$active ? '#eef2ff' : p.$hasFilter ? '#e0e7ff' : '#f1f5f9'};
-          border: 1px solid ${p.$active ? '#c7d2fe' : p.$hasFilter ? '#a5b4fc' : '#e2e8f0'};
-          &:hover { background: ${p.$active ? '#e0e7ff' : '#e9ecef'}; }
-        `}
+  border: 1px solid transparent;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  ${({ $active, $hasFilter, theme }) =>
+    ($active || $hasFilter) &&
+    css`
+      background: ${theme.colors.activeLight};
+      color: ${theme.colors.active};
+
+      &:hover {
+        background: ${theme.colors.activeLight};
+        color: ${theme.colors.active};
+      }
+    `}
 `
 
 const ActiveFilterDot = styled.span`
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #6366f1;
+  background: currentColor;
   flex-shrink: 0;
+  opacity: 0.7;
 `
 
 const ClearFilterBtn = styled.button`
-  padding: 5px 12px;
+  padding: 5px 10px;
   font-size: 12px;
   font-weight: 500;
-  border-radius: 100px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.14s;
-  ${(p) =>
-    p.theme.mode === 'dark'
-      ? css`
-          color: #fca5a5;
-          background: rgba(239,68,68,0.1);
-          border: 1px solid rgba(239,68,68,0.25);
-          &:hover { background: rgba(239,68,68,0.18); }
-        `
-      : css`
-          color: #dc2626;
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          &:hover { background: #fee2e2; }
-        `}
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: background 0.12s, color 0.12s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const HistoricalCountryRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  ${(p) =>
-    p.theme.mode === 'dark'
-      ? css`
-          background: rgba(99,102,241,0.06);
-          border: 1px solid rgba(99,102,241,0.15);
-        `
-      : css`
-          background: #f5f3ff;
-          border: 1px solid #e0e7ff;
-        `}
+  padding: 8px 0;
+  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
 `
 
 const HistoricalCountryChip = styled.button<{ $active?: boolean }>`
@@ -457,23 +459,29 @@ const HistoricalCountryChip = styled.button<{ $active?: boolean }>`
   align-items: flex-start;
   gap: 1px;
   padding: 5px 10px;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.14s;
-  ${(p) =>
-    p.theme.mode === 'dark'
-      ? css`
-          color: ${p.$active ? '#c4b5fd' : p.theme.colors.text.secondary};
-          background: ${p.$active ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.05)'};
-          border: 1px solid ${p.$active ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.1)'};
-          &:hover { background: rgba(255,255,255,0.1); }
-        `
-      : css`
-          color: ${p.$active ? '#5b21b6' : '#374151'};
-          background: ${p.$active ? '#ede9fe' : '#ffffff'};
-          border: 1px solid ${p.$active ? '#a78bfa' : '#e2e8f0'};
-          &:hover { background: ${p.$active ? '#ddd6fe' : '#f1f5f9'}; }
-        `}
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  transition: background 0.12s, color 0.12s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      background: ${theme.colors.activeLight};
+      color: ${theme.colors.active};
+
+      &:hover {
+        background: ${theme.colors.activeLight};
+        color: ${theme.colors.active};
+      }
+    `}
 `
 
 const HistoricalChipName = styled.span`
@@ -499,18 +507,29 @@ const CreateButton = styled.button`
   font-size: 13px;
   font-weight: 600;
   color: #ffffff;
-  background: #6366f1;
+  background: ${FOCUS_COLOR};
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s;
   white-space: nowrap;
   &:hover:not(:disabled) {
-    background: #4f46e5;
+    background: #4338ca;
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:focus-visible {
+    outline: 2px solid ${FOCUS_COLOR};
+    outline-offset: 2px;
   }
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  @media (max-width: 480px) {
+    width: 100%;
   }
 `
 
@@ -557,7 +576,7 @@ const AdaptiveGrid = styled.div`
   }
 `
 
-/** 세기 시대 → 강조 색 */
+/** 세기 시대 → 강조 색. 인포그래픽 ERAS와 매핑 통일. */
 type EraKey = 'ancient' | 'medieval' | 'early-modern' | 'modern' | 'unknown'
 
 function getCenturyEra(century: number): EraKey {
@@ -568,17 +587,17 @@ function getCenturyEra(century: number): EraKey {
   return 'modern'
 }
 
-/** era별 dot 컬러만 유지 (배경·테두리 제거) */
-const ERA_DOT: Record<EraKey, { light: string; dark: string }> = {
-  ancient:       { light: '#7c3aed', dark: '#a78bfa' },
-  medieval:      { light: '#059669', dark: '#34d399' },
-  'early-modern':{ light: '#d97706', dark: '#fbbf24' },
-  modern:        { light: '#4f46e5', dark: '#818cf8' },
-  unknown:       { light: '#94a3b8', dark: '#64748b' },
+/** era별 dot 컬러 — infographic ERAS와 통일 (디자인 일관성) */
+const ERA_DOT: Record<EraKey, string> = {
+  ancient: '#f59e0b', // ERAS.ancient
+  medieval: '#ef4444', // ERAS.medieval
+  'early-modern': '#10b981', // ERAS.early
+  modern: '#6366f1', // ERAS.modern20
+  unknown: '#94a3b8',
 }
 
 const CenturySection = styled.section`
-  margin-bottom: 44px;
+  margin-bottom: 32px;
   &:last-child {
     margin-bottom: 0;
   }
@@ -612,7 +631,13 @@ const CenturyHeadingRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const CenturyHeadingLeft = styled.div`
@@ -622,12 +647,11 @@ const CenturyHeadingLeft = styled.div`
 `
 
 const CenturyEraDot = styled.span<{ $era: EraKey }>`
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: ${({ $era, theme }) =>
-    theme.mode === 'dark' ? ERA_DOT[$era].dark : ERA_DOT[$era].light};
+  background: ${({ $era }) => ERA_DOT[$era]};
 `
 
 const CenturyHeadingLabel = styled.h3`
@@ -647,7 +671,11 @@ const CenturyCountBadge = styled.span`
 
 /* ── Horizontal person card ─────────────────────────────────────────── */
 
-const Card = styled.div`
+/**
+ * 인물 카드 — 키보드 접근성을 위해 `<button>`.
+ * Enter/Space는 native button이 자동 처리, focus-visible 링 추가.
+ */
+const Card = styled.button`
   border-radius: 16px;
   overflow: hidden;
   display: flex;
@@ -655,18 +683,33 @@ const Card = styled.div`
   align-items: stretch;
   cursor: pointer;
   min-height: 116px;
-  transition: box-shadow 0.22s ease, transform 0.22s ease;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  padding: 0;
+  margin: 0;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+
+  &:focus-visible {
+    outline: 2px solid ${FOCUS_COLOR};
+    outline-offset: 2px;
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.05);
-          box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset,
-                      0 2px 12px rgba(0,0,0,0.28);
+          background: rgba(255, 255, 255, 0.08);
+          box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset,
+                      0 2px 12px rgba(0,0,0,0.24);
           &:hover {
             transform: translateY(-2px);
-            box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset,
-                        0 10px 32px rgba(0,0,0,0.42);
+            box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset,
+                        0 8px 24px rgba(0,0,0,0.32);
           }
         `
       : css`
@@ -687,6 +730,31 @@ const CardImageSide = styled.div`
   overflow: hidden;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f3f4f6'};
+
+  /* 이미지 lazy-loading 동안 보이는 쉬머 — <img>가 로드되면 위에 덮임 */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'linear-gradient(90deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 100%)'
+        : 'linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%)'};
+    background-size: 200% 100%;
+    animation: cardImgShimmer 1.4s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+  @keyframes cardImgShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  /* img · placeholder가 있을 때 쉬머 위를 덮음 */
+  > img,
+  > div {
+    position: relative;
+    z-index: 1;
+  }
 `
 
 const NewBadge = styled.span`
@@ -699,7 +767,7 @@ const NewBadge = styled.span`
   font-weight: 800;
   color: #fff;
   background: #ef4444;
-  border-radius: 5px;
+  border-radius: 8px;
   letter-spacing: 0.05em;
   animation: newBadgePulse 2s ease-in-out infinite;
 
@@ -715,9 +783,9 @@ const CardImage = styled.img`
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  transition: transform 0.3s ease;
+  transition: transform 0.25s ease;
   ${Card}:hover & {
-    transform: scale(1.06);
+    transform: scale(1.04);
   }
 `
 
@@ -743,7 +811,7 @@ const CardImagePlaceholder = styled.div<{ $color: string }>`
 const CardContent = styled.div`
   flex: 1;
   min-width: 0;
-  padding: 14px 16px 14px 15px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -754,7 +822,7 @@ const PersonNameRow = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   min-width: 0;
 `
 
@@ -774,7 +842,7 @@ const MonarchNameRow = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 `
 
 const MonarchNameText = styled.span`
@@ -799,7 +867,7 @@ const GenderBadge = styled.span<{ $gender: 'MALE' | 'FEMALE' }>`
   align-items: center;
   gap: 3px;
   padding: 1px 7px;
-  border-radius: 100px;
+  border-radius: 999px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -820,7 +888,7 @@ const LifespanRow = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 `
 
 const LifespanYear = styled.span`
@@ -837,7 +905,7 @@ const LifespanTrack = styled.div`
   height: 3px;
   border-radius: 2px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e9ecef'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e9ecef'};
   position: relative;
   overflow: hidden;
 `
@@ -864,7 +932,7 @@ const LifespanAge = styled.span`
 const CardBadgeRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   margin-bottom: 6px;
 `
 
@@ -874,7 +942,7 @@ const CardHeadsBadge = styled.span<{ $color: string; $bg: string }>`
   padding: 2px 8px;
   font-size: 10px;
   font-weight: 600;
-  border-radius: 100px;
+  border-radius: 999px;
   letter-spacing: 0.01em;
   max-width: 140px;
   overflow: hidden;
@@ -888,8 +956,8 @@ const CardHeadsBadge = styled.span<{ $color: string; $bg: string }>`
 const CardCountryRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-bottom: 4px;
+  gap: 6px;
+  margin-bottom: 6px;
 `
 
 const CardCountryFlag = styled.span`
@@ -912,8 +980,8 @@ const CardCountryName = styled.span`
 const CardMetaRow = styled.div`
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  margin-top: 2px;
+  gap: 6px;
+  margin-top: 4px;
 `
 
 const CardMetaLabel = styled.span`
@@ -936,7 +1004,7 @@ const CardMetaValue = styled.span`
 `
 
 const CardBio = styled.p`
-  margin: 5px 0 0 0;
+  margin: 6px 0 0 0;
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;
@@ -946,8 +1014,13 @@ const CardBio = styled.p`
   overflow: hidden;
 `
 
-/* Not used but keep to avoid refactor scope creep */
-const CardDivider = styled.div``
+const LifespanYearMuted = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.55;
+  letter-spacing: 0.01em;
+`
 
 const EmptyState = styled.div`
   padding: 60px 24px;
@@ -956,8 +1029,75 @@ const EmptyState = styled.div`
   font-weight: 400;
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#fafafa'};
-  border-radius: 10px;
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#fafafa'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e5e7eb'};
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+`
+
+const EmptyStateTitle = styled.div`
+  font-size: 15px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EmptyStateDesc = styled.div`
+  font-size: 13px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 420px;
+`
+
+const EmptyStateActions = styled.div`
+  display: inline-flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+`
+
+const EmptyStateCta = styled.button<{ $primary?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  ${({ $primary, theme }) =>
+    $primary
+      ? css`
+          color: #fff;
+          background: ${FOCUS_COLOR};
+          border: none;
+          &:hover {
+            background: #4338ca;
+          }
+          &:focus-visible {
+            outline: 2px solid ${FOCUS_COLOR};
+            outline-offset: 2px;
+          }
+        `
+      : css`
+          color: ${theme.colors.text.secondary};
+          background: ${theme.mode === 'dark'
+            ? 'rgba(255,255,255,0.06)'
+            : '#ffffff'};
+          border: 1px solid ${theme.colors.border.default};
+          &:hover {
+            background: ${theme.mode === 'dark'
+              ? 'rgba(255,255,255,0.1)'
+              : '#f3f4f6'};
+            color: ${theme.colors.text.primary};
+          }
+        `}
 `
 
 export function PersonListContent({
@@ -975,6 +1115,7 @@ export function PersonListContent({
   registerTrigger,
   enableCountryFilter = true,
   renderRegisterModal,
+  onClearPreset,
 }: PersonListContentProps) {
   const queryClient = useQueryClient()
   const theme = useTheme()
@@ -1005,6 +1146,21 @@ export function PersonListContent({
     () => modernCountries.filter((mc) => (historicalByModern[mc.id]?.length ?? 0) > 0),
     [modernCountries, historicalByModern],
   )
+
+  /** 프리셋 모드에서 표시할 국가 이름·플래그 — 현대/역사 국가 둘 다 검색 */
+  const presetCountryInfo = useMemo(() => {
+    if (!onClearPreset || !initialCountryId) return null
+    const modern = modernCountries.find((c) => c.id === initialCountryId)
+    if (modern) {
+      return {
+        name: modern.name,
+        flag: (modern as { flagEmoji?: string | null }).flagEmoji ?? null,
+      }
+    }
+    const hc = historicalCountries.find((c) => c.id === initialCountryId)
+    if (hc) return { name: (hc as { name: string }).name, flag: null }
+    return null
+  }, [onClearPreset, initialCountryId, modernCountries, historicalCountries])
 
   const filteredPersons = useMemo(() => {
     return persons.filter((person) => {
@@ -1151,17 +1307,39 @@ export function PersonListContent({
           </DetailViewWrap>
         ) : (
           <ListSectionWrap key="list">
+            {presetCountryInfo && onClearPreset && (
+              <PresetBanner role="status" aria-live="polite">
+                <PresetBannerLeft>
+                  <span>필터 고정:</span>
+                  <PresetBannerPill>
+                    {presetCountryInfo.flag && <span>{presetCountryInfo.flag}</span>}
+                    {presetCountryInfo.name}
+                  </PresetBannerPill>
+                </PresetBannerLeft>
+                <PresetBannerClose
+                  type="button"
+                  onClick={onClearPreset}
+                  aria-label="국가 필터 해제"
+                >
+                  ← 전체 인물 보기
+                </PresetBannerClose>
+              </PresetBanner>
+            )}
             <ListHeader $compact={hideMainHeader}>
               <ListHeaderLeft>
                 {!hideMainHeader && (
                   <ListHeaderTitle>
                     {title}
                     <ListHeaderCount>
-                      {filteredPersons.length}명
-                      {(searchQuery.trim() ||
-                        filterGender ||
-                        filterCountryIds.length > 0) &&
-                        ` / ${persons.length}명`}
+                      {(() => {
+                        const isFiltering =
+                          !!searchQuery.trim() ||
+                          !!filterGender ||
+                          filterCountryIds.length > 0
+                        return isFiltering
+                          ? `${filteredPersons.length} / ${persons.length}명`
+                          : `${persons.length}명`
+                      })()}
                     </ListHeaderCount>
                   </ListHeaderTitle>
                 )}
@@ -1176,6 +1354,12 @@ export function PersonListContent({
                     placeholder="이름, 약력, 가문 검색"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.currentTarget.blur()
+                        setSearchQuery('')
+                      }
+                    }}
                     aria-label="인물 검색"
                   />
                 </SearchWrap>
@@ -1298,9 +1482,47 @@ export function PersonListContent({
               </CountryFilterSection>
             )}
             {persons.length === 0 ? (
-              <EmptyState>{emptyMessage}</EmptyState>
+              <EmptyState>
+                <EmptyStateTitle>{emptyMessage}</EmptyStateTitle>
+                <EmptyStateDesc>
+                  새 인물을 등록해 생몰·가문·영향력 등 풍부한 정보를 기록할 수 있습니다.
+                </EmptyStateDesc>
+                {!hideCreateButton && (
+                  <EmptyStateActions>
+                    <EmptyStateCta
+                      $primary
+                      type="button"
+                      onClick={() => {
+                        setEditingPersonId(null)
+                        setShowRegisterForm(true)
+                      }}
+                    >
+                      <FiPlus size={14} />
+                      첫 인물 등록
+                    </EmptyStateCta>
+                  </EmptyStateActions>
+                )}
+              </EmptyState>
             ) : filteredPersons.length === 0 ? (
-              <EmptyState>{emptyFilterMessage}</EmptyState>
+              <EmptyState>
+                <EmptyStateTitle>{emptyFilterMessage}</EmptyStateTitle>
+                <EmptyStateDesc>
+                  검색어·성별·국가 필터를 조정하거나 초기화해 다시 확인해보세요.
+                </EmptyStateDesc>
+                <EmptyStateActions>
+                  <EmptyStateCta
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setFilterGender('')
+                      setFilterCountryIds([])
+                      setExpandedModernId(null)
+                    }}
+                  >
+                    필터 초기화
+                  </EmptyStateCta>
+                </EmptyStateActions>
+              </EmptyState>
             ) : (
               <ListScrollArea>
                 {personsByCentury.map(([century, list]) => {
@@ -1332,7 +1554,7 @@ export function PersonListContent({
                       transition={{ duration: 0.25 }}
                     >
                       {list.map((person) => {
-                        const fullName = getPersonDisplayName(person, true)
+                        const fullName = getPersonDisplayName(person)
                         const bioText = (() => {
                           const raw = person.biography?.trim() || ''
                           if (!raw) return ''
@@ -1410,6 +1632,8 @@ export function PersonListContent({
                         return (
                           <Card
                             key={person.id}
+                            type="button"
+                            aria-label={`${fullName || '이름 없음'} 상세 보기`}
                             onClick={() =>
                               onPersonClick
                                 ? onPersonClick(person.id)
@@ -1419,8 +1643,17 @@ export function PersonListContent({
                             {/* Image — left column */}
                             <CardImageSide>
                               {showNewBadge && <NewBadge>NEW</NewBadge>}
+                              <InfluenceBadge
+                                influence={person.influence}
+                                variant="overlay"
+                              />
                               {displayImage ? (
-                                <CardImage src={displayImage} alt={fullName} />
+                                <CardImage
+                                  src={displayImage}
+                                  alt={fullName}
+                                  loading="lazy"
+                                  decoding="async"
+                                />
                               ) : (
                                 <CardImagePlaceholder $color={accentColor}>
                                   <svg viewBox="0 0 24 24" fill="currentColor">
@@ -1479,9 +1712,7 @@ export function PersonListContent({
                                     )}
                                   </>
                                 ) : (
-                                  <LifespanYear style={{ opacity: 0.35 }}>
-                                    생몰년 미상
-                                  </LifespanYear>
+                                  <LifespanYearMuted>생몰년 미상</LifespanYearMuted>
                                 )}
                               </LifespanRow>
 

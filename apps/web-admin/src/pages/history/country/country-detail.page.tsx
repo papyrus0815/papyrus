@@ -28,7 +28,6 @@ import { CountryDetail } from '@/widgets/country/country-detail/ui/country-detai
 import { EventsTimelineSection } from '@/widgets/country/country-detail/ui/events-timeline-section.widget'
 import { CountryFormModal } from '@/widgets/country/country-form/ui/country-form-modal'
 import { useCountryFormModal } from '@/widgets/country/country-form/model/use-country-form-modal.hook'
-import { CountryListModals } from '@/widgets/country/country-list/country-list-modals'
 import { CountryList } from '@/widgets/country/country-list/ui/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
 import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
@@ -92,6 +91,7 @@ export default function CountryDetailPage() {
     return undefined
   }, [unifiedCountries, selectedId, apiHistoricalCountries])
 
+
   // 국가 폼 모달 (현대 국가 등록·수정·삭제)
   const countryForm = useCountryFormModal()
 
@@ -131,10 +131,6 @@ export default function CountryDetailPage() {
     [selectedCountry, historicalForm, countryForm, navigate],
   )
 
-  // 모달 상태 (드롭다운형 모달들)
-  const [showContinentModal, setShowContinentModal] = useState(false)
-  const [showSortModal, setShowSortModal] = useState(false)
-  const [showCountryTypeModal, setShowCountryTypeModal] = useState(false)
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
 
   // 모바일: 뷰 모드 스위치 이벤트
@@ -161,9 +157,7 @@ export default function CountryDetailPage() {
   const handleDetailTabChange = useCallback(
     (
       tab:
-        | 'person'
         | 'heads'
-        | 'persons-list'
         | 'linked-historical'
         | 'regions'
         | 'government'
@@ -172,12 +166,8 @@ export default function CountryDetailPage() {
         | null,
     ) => {
       if (!selectedId) return
-      if (tab === 'person')
-        navigate(pathKeys.history.countryPersons(selectedId))
-      else if (tab === 'heads' || tab === 'government')
+      if (tab === 'heads' || tab === 'government')
         navigate(pathKeys.history.countryGovernment(selectedId))
-      else if (tab === 'persons-list')
-        navigate(pathKeys.history.countryPersons(selectedId, 'list'))
       else if (tab === 'linked-historical')
         navigate(pathKeys.history.countryHistorical(selectedId))
       else if (tab === 'regions')
@@ -190,31 +180,28 @@ export default function CountryDetailPage() {
     [navigate, selectedId],
   )
 
-  const handlePersonInnerTabChange = useCallback(
-    (tab: 'stats' | 'list') => {
-      if (!selectedId) return
-      navigate(pathKeys.history.countryPersons(selectedId, tab))
-    },
-    [navigate, selectedId],
-  )
-
   const handleDashboardView = useCallback(() => {
     if (selectedId) navigate(pathKeys.history.countryDashboard(selectedId))
   }, [navigate, selectedId])
 
-  // CountryDetail widget의 initialDetailTab prop 계산
+  // 인물 탭 URL(/history/country/:id/persons*)로 진입 시 헤더 인물 페이지로 리다이렉트 (country 프리셋 포함)
+  useEffect(() => {
+    if (!selectedId) return
+    if (hloc.detailTab === 'persons') {
+      navigate(
+        `${pathKeys.history.dashboardPersons()}?country=${encodeURIComponent(selectedId)}`,
+        { replace: true },
+      )
+    }
+  }, [hloc.detailTab, selectedId, navigate])
+
+  // CountryDetail widget의 initialDetailTab prop 계산 (persons 케이스는 위에서 리다이렉트)
   const initialDetailTab = useMemo(() => {
     switch (hloc.detailTab) {
       case 'dashboard':
         return 'dashboard' as const
       case 'heads-of-state':
         return 'heads' as const
-      case 'persons': {
-        const tab = searchParams.get('tab')
-        if (tab === 'list') return 'persons-list' as const
-        if (tab === 'heads') return 'heads' as const
-        return 'person' as const
-      }
       case 'linked-historical':
         return 'linked-historical' as const
       case 'regions':
@@ -228,7 +215,7 @@ export default function CountryDetailPage() {
       default:
         return undefined
     }
-  }, [hloc.detailTab, searchParams])
+  }, [hloc.detailTab])
 
   // 우측 콘텐츠 — events 탭은 EventsTimelineSection, 그 외는 CountryDetail
   const rightContent =
@@ -271,7 +258,6 @@ export default function CountryDetailPage() {
           onDelete={handleDeleteFromDetail}
           initialDetailTab={initialDetailTab}
           onDetailTabChange={handleDetailTabChange}
-          onPersonInnerTabChange={handlePersonInnerTabChange}
           onDashboardView={handleDashboardView}
         />
       </motion.div>
@@ -286,12 +272,6 @@ export default function CountryDetailPage() {
           onAdd={countryForm.openCreate}
           onAddHistorical={historicalForm.openCreate}
           onEditHistorical={handleEditHistoricalFromList}
-          showContinentModal={showContinentModal}
-          setShowContinentModal={setShowContinentModal}
-          showSortModal={showSortModal}
-          setShowSortModal={setShowSortModal}
-          showCountryTypeModal={showCountryTypeModal}
-          setShowCountryTypeModal={setShowCountryTypeModal}
           collapsed={listCollapsed}
           onToggleCollapse={toggleListCollapsed}
         />
@@ -314,18 +294,7 @@ export default function CountryDetailPage() {
         onMobileListOpenChange={setIsMobileListOpen}
         selectedId={selectedId}
         onSelectCountry={handleSelectCountry}
-        onShowContinentModal={() => setShowContinentModal(true)}
-        onShowSortModal={() => setShowSortModal(true)}
         onAddCountry={countryForm.openCreate}
-      />
-
-      <CountryListModals
-        showContinentModal={showContinentModal}
-        setShowContinentModal={setShowContinentModal}
-        showSortModal={showSortModal}
-        setShowSortModal={setShowSortModal}
-        showCountryTypeModal={showCountryTypeModal}
-        setShowCountryTypeModal={setShowCountryTypeModal}
       />
 
       <CountryFormModal

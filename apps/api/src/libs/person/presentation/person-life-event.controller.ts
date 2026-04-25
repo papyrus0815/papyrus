@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common'
@@ -41,13 +42,22 @@ const serializeBigInt = (obj: any): any => {
 export class PersonLifeEventController {
   constructor(private readonly personService: PersonService) {}
 
-  /** 특정 인물의 연보 목록 (시간순) */
+  /**
+   * 특정 인물의 연보 목록 (시간순).
+   * - `limit`: 선택. 반환 개수 상한(기본 미제한, 상한 200). 인물당 연보가 매우 많을 때 페이로드 보호.
+   */
   @Get('by-person/:personId')
   async listByPerson(
     @Param('personId') personId: string,
+    @Query('limit') limit?: string,
   ): Promise<PersonLifeEventResponseDto[]> {
     const rows = await this.personService.findPersonLifeEventsByPersonId(personId)
-    return rows.map(serializeBigInt)
+    const parsed = limit ? Number.parseInt(limit, 10) : NaN
+    const capped = Number.isFinite(parsed) && parsed > 0
+      ? Math.min(parsed, 200)
+      : null
+    const sliced = capped != null ? rows.slice(0, capped) : rows
+    return sliced.map(serializeBigInt)
   }
 
   /** 연보 기록 생성 */

@@ -10,7 +10,6 @@ export type OverviewSubTab =
   | 'map'
   | 'government'
   | 'ethnicity'
-  | 'person'
   | 'elections'
   | 'laws'
   | 'treaty'
@@ -66,15 +65,6 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
             onClick={() => onSubTabChange('ethnicity')}
           >
             민족
-          </UnderlineTabButton>
-          <UnderlineTabButton
-            type="button"
-            role="tab"
-            aria-selected={activeSubTab === 'person'}
-            $active={activeSubTab === 'person'}
-            onClick={() => onSubTabChange('person')}
-          >
-            인물
           </UnderlineTabButton>
           <UnderlineTabButton
             type="button"

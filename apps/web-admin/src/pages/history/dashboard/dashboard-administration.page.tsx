@@ -20,11 +20,7 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import { pathKeys } from '@/shared/router'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { AdministrationCabinetComparison } from '@/widgets/country/administration-cabinet-comparison/administration-cabinet-comparison.widget'
-import {
-  HistoryShell,
-  LeftFilterSlot,
-  useHistoryCoreData,
-} from '@/widgets/history-shell'
+import { HistoryShell, useHistoryCoreData } from '@/widgets/history-shell'
 
 export default function DashboardAdministrationPage() {
   const navigate = useNavigate()
@@ -110,13 +106,7 @@ export default function DashboardAdministrationPage() {
 
   return (
     <HistoryShell
-      left={({ listCollapsed, toggleListCollapsed }) => (
-        <LeftFilterSlot
-          view="administration"
-          collapsed={listCollapsed}
-          onToggleCollapse={toggleListCollapsed}
-        />
-      )}
+      fullScreen
       right={
         <motion.div
           initial={{ opacity: 0 }}

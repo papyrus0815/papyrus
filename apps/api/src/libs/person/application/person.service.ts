@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { AttachmentOwner, EventMethod, PersonHumanRelationshipType } from '@prisma/client'
+import { AttachmentOwner, EventMethod, PersonHumanRelationshipType, PersonRelationshipTag } from '@prisma/client'
 import {
   IPersonRepository,
   CreatePersonData,
@@ -428,6 +428,20 @@ export class PersonService {
     await this.notificationService.notifyTenure(label, EventMethod.DELETE, row?.personId)
   }
 
+  /**
+   * 연보 start/end 날짜 범위 검증 — endDate < startDate 금지.
+   * 두 값이 모두 있을 때만 검사(각각 null 허용).
+   */
+  private assertLifeEventDateRange(
+    startDate?: string | null,
+    endDate?: string | null,
+  ): void {
+    if (!startDate || !endDate) return
+    if (new Date(endDate) < new Date(startDate)) {
+      throw new BadRequestException('종료일은 시작일 이후여야 합니다.')
+    }
+  }
+
   /** 인물 연보(PersonLifeEvent) 생성 — 자유 서술형 시간축 */
   async addPersonLifeEvent(
     dto: CreatePersonLifeEventDto,
@@ -447,6 +461,7 @@ export class PersonService {
     ) {
       throw new ForbiddenException('본인이 등록한 인물에만 연보를 추가할 수 있습니다.')
     }
+    this.assertLifeEventDateRange(dto.startDate, dto.endDate)
     return this.personRepository.addPersonLifeEvent(dto, accountId)
   }
 
@@ -466,6 +481,22 @@ export class PersonService {
     ) {
       throw new ForbiddenException('본인이 등록한 연보만 수정할 수 있습니다.')
     }
+    // update는 dto에 둘 중 하나만 올 수 있음 — 없는 값은 DB 값으로 대체해서 검사
+    const toIsoOrNull = (v: unknown): string | null => {
+      if (v == null) return null
+      if (typeof v === 'string') return v
+      if (v instanceof Date) return v.toISOString()
+      return null
+    }
+    const effectiveStart =
+      dto.startDate !== undefined
+        ? toIsoOrNull(dto.startDate)
+        : toIsoOrNull((existing as { startDate?: unknown }).startDate)
+    const effectiveEnd =
+      dto.endDate !== undefined
+        ? toIsoOrNull(dto.endDate)
+        : toIsoOrNull((existing as { endDate?: unknown }).endDate)
+    this.assertLifeEventDateRange(effectiveStart, effectiveEnd)
     return this.personRepository.updatePersonLifeEvent(id, dto)
   }
 
@@ -798,7 +829,8 @@ export class PersonService {
     rel: {
       id: string
       relationshipType: PersonHumanRelationshipType
-      affinityLevel: number
+      affinityLevel: number | null
+      isMutual: boolean
       startDate: Date | null
       endDate: Date | null
       note: string | null
@@ -806,6 +838,19 @@ export class PersonService {
       toPersonId: string
       fromPerson: { id: string; name: string; surname: string | null; nameDisplayOrder: string | null; birthDate: Date | null; deathDate: Date | null }
       toPerson: { id: string; name: string; surname: string | null; nameDisplayOrder: string | null; birthDate: Date | null; deathDate: Date | null }
+      tags?: { tag: PersonRelationshipTag }[]
+      sources?: {
+        id: string
+        lifeEventId: string
+        note: string | null
+        lifeEvent: {
+          id: string
+          personId: string
+          title: string
+          startDate: Date | null
+          endDate: Date | null
+        }
+      }[]
     },
     subjectPersonId: string,
   ) {
@@ -816,10 +861,23 @@ export class PersonService {
           ? ('MENTOR' as const)
           : ('STUDENT' as const)
         : null
+    /**
+     * 시점:
+     *  - MUTUAL: 양쪽 합의된 대칭 관계 (방향 없음)
+     *  - SUBJECT: from = subjectPersonId — 이 인물 페이지에서 본인이 등록한 시점
+     *  - OTHER: to = subjectPersonId — 상대 인물이 본인 시점에서 등록한 관계
+     */
+    const subjectivePerspective: 'MUTUAL' | 'SUBJECT' | 'OTHER' =
+      rel.relationshipType === PersonHumanRelationshipType.GENERAL && rel.isMutual
+        ? 'MUTUAL'
+        : rel.fromPersonId === subjectPersonId
+          ? 'SUBJECT'
+          : 'OTHER'
     return {
       id: rel.id,
       relationshipType: rel.relationshipType,
       affinityLevel: rel.affinityLevel,
+      isMutual: rel.isMutual,
       startDate: rel.startDate?.toISOString() ?? null,
       endDate: rel.endDate?.toISOString() ?? null,
       note: rel.note,
@@ -827,6 +885,20 @@ export class PersonService {
       toPersonId: rel.toPersonId,
       otherPerson: this.serializePersonBrief(other),
       mentorPerspective,
+      subjectivePerspective,
+      tags: (rel.tags ?? []).map((t) => t.tag),
+      sources: (rel.sources ?? []).map((s) => ({
+        id: s.id,
+        lifeEventId: s.lifeEventId,
+        note: s.note,
+        lifeEvent: {
+          id: s.lifeEvent.id,
+          personId: s.lifeEvent.personId,
+          title: s.lifeEvent.title,
+          startDate: s.lifeEvent.startDate?.toISOString() ?? null,
+          endDate: s.lifeEvent.endDate?.toISOString() ?? null,
+        },
+      })),
     }
   }
 
@@ -848,6 +920,44 @@ export class PersonService {
     }
   }
 
+  /** 관계 조회용 표준 include */
+  private readonly HUMAN_RELATIONSHIP_INCLUDE = {
+    fromPerson: {
+      select: {
+        id: true,
+        name: true,
+        surname: true,
+        nameDisplayOrder: true,
+        birthDate: true,
+        deathDate: true,
+      },
+    },
+    toPerson: {
+      select: {
+        id: true,
+        name: true,
+        surname: true,
+        nameDisplayOrder: true,
+        birthDate: true,
+        deathDate: true,
+      },
+    },
+    tags: { select: { tag: true } },
+    sources: {
+      include: {
+        lifeEvent: {
+          select: {
+            id: true,
+            personId: true,
+            title: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
+      },
+    },
+  } as const
+
   /**
    * 인물이 참여한 인간관계 목록 (from/to 모두 조회)
    */
@@ -857,28 +967,7 @@ export class PersonService {
       where: {
         OR: [{ fromPersonId: personId }, { toPersonId: personId }],
       },
-      include: {
-        fromPerson: {
-          select: {
-            id: true,
-            name: true,
-            surname: true,
-            nameDisplayOrder: true,
-            birthDate: true,
-            deathDate: true,
-          },
-        },
-        toPerson: {
-          select: {
-            id: true,
-            name: true,
-            surname: true,
-            nameDisplayOrder: true,
-            birthDate: true,
-            deathDate: true,
-          },
-        },
-      },
+      include: this.HUMAN_RELATIONSHIP_INCLUDE,
       orderBy: { updatedAt: 'desc' },
     })
     return rows.map((r) => this.mapHumanRelationshipRow(r, personId))
@@ -889,6 +978,7 @@ export class PersonService {
     relatedPersonId: string,
     relationshipType: PersonHumanRelationshipType,
     subjectIsMentor: boolean | undefined,
+    isMutual: boolean,
   ): Promise<{ fromPersonId: string; toPersonId: string }> {
     if (subjectPersonId === relatedPersonId) {
       throw new BadRequestException('같은 인물끼리는 관계를 설정할 수 없습니다.')
@@ -899,12 +989,38 @@ export class PersonService {
         ? { fromPersonId: subjectPersonId, toPersonId: relatedPersonId }
         : { fromPersonId: relatedPersonId, toPersonId: subjectPersonId }
     }
-    // GENERAL: 방향 없음 — UUID 문자열 오름차순으로 정규화
-    const [a, b] =
-      subjectPersonId < relatedPersonId
-        ? [subjectPersonId, relatedPersonId]
-        : [relatedPersonId, subjectPersonId]
-    return { fromPersonId: a, toPersonId: b }
+    if (isMutual) {
+      // GENERAL · 대칭: UUID 오름차순으로 정규화 (중복 방지 + 양쪽 동일 표시)
+      const [a, b] =
+        subjectPersonId < relatedPersonId
+          ? [subjectPersonId, relatedPersonId]
+          : [relatedPersonId, subjectPersonId]
+      return { fromPersonId: a, toPersonId: b }
+    }
+    // GENERAL · 비대칭: 주체 시점 — from=주체, to=상대
+    return { fromPersonId: subjectPersonId, toPersonId: relatedPersonId }
+  }
+
+  /** 근거 사건이 두 당사자(주체/상대) 중 한쪽의 연보에 속하는지 검증 */
+  private async assertSourcesBelongToParties(
+    lifeEventIds: string[],
+    partyIds: string[],
+  ): Promise<void> {
+    if (lifeEventIds.length === 0) return
+    const events = await this.prisma.personLifeEvent.findMany({
+      where: { id: { in: lifeEventIds } },
+      select: { id: true, personId: true },
+    })
+    if (events.length !== lifeEventIds.length) {
+      throw new BadRequestException('존재하지 않는 근거 사건이 포함되어 있습니다.')
+    }
+    const partySet = new Set(partyIds)
+    const stranger = events.find((e) => !partySet.has(e.personId))
+    if (stranger) {
+      throw new BadRequestException(
+        '근거 사건은 두 당사자 중 한 쪽의 연보에 속한 항목만 연결할 수 있습니다.',
+      )
+    }
   }
 
   async createHumanRelationship(
@@ -914,45 +1030,48 @@ export class PersonService {
   ) {
     await this.findById(subjectPersonId, accountId)
     await this.findById(dto.relatedPersonId, accountId)
+    const isMutual =
+      dto.relationshipType === PersonHumanRelationshipType.GENERAL
+        ? dto.isMutual ?? false
+        : false
     const { fromPersonId, toPersonId } = await this.resolveHumanRelationshipEndpoints(
       subjectPersonId,
       dto.relatedPersonId,
       dto.relationshipType,
       dto.subjectIsMentor,
+      isMutual,
     )
+    if (dto.sourceLifeEventIds && dto.sourceLifeEventIds.length > 0) {
+      await this.assertSourcesBelongToParties(dto.sourceLifeEventIds, [
+        subjectPersonId,
+        dto.relatedPersonId,
+      ])
+    }
     try {
       const created = await this.prisma.personHumanRelationship.create({
         data: {
           fromPersonId,
           toPersonId,
           relationshipType: dto.relationshipType,
-          affinityLevel: dto.affinityLevel,
+          isMutual,
+          affinityLevel: dto.affinityLevel ?? null,
           startDate: dto.startDate ? new Date(dto.startDate) : null,
           endDate: dto.endDate ? new Date(dto.endDate) : null,
           note: dto.note ?? null,
+          tags:
+            dto.tags && dto.tags.length > 0
+              ? { create: dto.tags.map((tag) => ({ tag })) }
+              : undefined,
+          sources:
+            dto.sourceLifeEventIds && dto.sourceLifeEventIds.length > 0
+              ? {
+                  create: dto.sourceLifeEventIds.map((lifeEventId) => ({
+                    lifeEventId,
+                  })),
+                }
+              : undefined,
         },
-        include: {
-          fromPerson: {
-            select: {
-              id: true,
-              name: true,
-              surname: true,
-              nameDisplayOrder: true,
-              birthDate: true,
-              deathDate: true,
-            },
-          },
-          toPerson: {
-            select: {
-              id: true,
-              name: true,
-              surname: true,
-              nameDisplayOrder: true,
-              birthDate: true,
-              deathDate: true,
-            },
-          },
-        },
+        include: this.HUMAN_RELATIONSHIP_INCLUDE,
       })
       return this.mapHumanRelationshipRow(created, subjectPersonId)
     } catch (e: unknown) {
@@ -1005,6 +1124,10 @@ export class PersonService {
     const relatedId =
       existing.fromPersonId === subjectPersonId ? existing.toPersonId : existing.fromPersonId
     const nextType = dto.relationshipType ?? existing.relationshipType
+    const nextIsMutual =
+      nextType === PersonHumanRelationshipType.GENERAL
+        ? dto.isMutual ?? existing.isMutual
+        : false
     const { fromPersonId, toPersonId } = await this.resolveHumanRelationshipEndpoints(
       subjectPersonId,
       relatedId,
@@ -1012,42 +1135,64 @@ export class PersonService {
       dto.subjectIsMentor ?? (nextType === PersonHumanRelationshipType.MENTOR
         ? existing.fromPersonId === subjectPersonId
         : undefined),
+      nextIsMutual,
     )
+    if (dto.sourceLifeEventIds !== undefined && dto.sourceLifeEventIds.length > 0) {
+      await this.assertSourcesBelongToParties(dto.sourceLifeEventIds, [
+        subjectPersonId,
+        relatedId,
+      ])
+    }
     try {
-      const updated = await this.prisma.personHumanRelationship.update({
-        where: { id: relationshipId },
-        data: {
-          fromPersonId,
-          toPersonId,
-          relationshipType: dto.relationshipType ?? undefined,
-          affinityLevel: dto.affinityLevel ?? undefined,
-          startDate:
-            dto.startDate === undefined ? undefined : dto.startDate ? new Date(dto.startDate) : null,
-          endDate: dto.endDate === undefined ? undefined : dto.endDate ? new Date(dto.endDate) : null,
-          note: dto.note === undefined ? undefined : dto.note,
-        },
-        include: {
-          fromPerson: {
-            select: {
-              id: true,
-              name: true,
-              surname: true,
-              nameDisplayOrder: true,
-              birthDate: true,
-              deathDate: true,
-            },
+      const updated = await this.prisma.$transaction(async (tx) => {
+        // 1. 기본 필드 업데이트
+        const row = await tx.personHumanRelationship.update({
+          where: { id: relationshipId },
+          data: {
+            fromPersonId,
+            toPersonId,
+            relationshipType: dto.relationshipType ?? undefined,
+            isMutual: nextIsMutual,
+            // affinityLevel은 null로 명시적 초기화 가능 — undefined만 "미변경"
+            affinityLevel: dto.affinityLevel === undefined ? undefined : dto.affinityLevel,
+            startDate:
+              dto.startDate === undefined ? undefined : dto.startDate ? new Date(dto.startDate) : null,
+            endDate: dto.endDate === undefined ? undefined : dto.endDate ? new Date(dto.endDate) : null,
+            note: dto.note === undefined ? undefined : dto.note,
           },
-          toPerson: {
-            select: {
-              id: true,
-              name: true,
-              surname: true,
-              nameDisplayOrder: true,
-              birthDate: true,
-              deathDate: true,
-            },
-          },
-        },
+        })
+
+        // 2. tags가 명시 전달되면 전체 교체
+        if (dto.tags !== undefined) {
+          await tx.personHumanRelationshipTagAssignment.deleteMany({
+            where: { relationshipId },
+          })
+          if (dto.tags.length > 0) {
+            await tx.personHumanRelationshipTagAssignment.createMany({
+              data: dto.tags.map((tag) => ({ relationshipId, tag })),
+            })
+          }
+        }
+
+        // 3. sources가 명시 전달되면 전체 교체
+        if (dto.sourceLifeEventIds !== undefined) {
+          await tx.personHumanRelationshipSource.deleteMany({
+            where: { relationshipId },
+          })
+          if (dto.sourceLifeEventIds.length > 0) {
+            await tx.personHumanRelationshipSource.createMany({
+              data: dto.sourceLifeEventIds.map((lifeEventId) => ({
+                relationshipId,
+                lifeEventId,
+              })),
+            })
+          }
+        }
+
+        return tx.personHumanRelationship.findUniqueOrThrow({
+          where: { id: row.id },
+          include: this.HUMAN_RELATIONSHIP_INCLUDE,
+        })
       })
       return this.mapHumanRelationshipRow(updated, subjectPersonId)
     } catch (e: unknown) {
@@ -1071,5 +1216,111 @@ export class PersonService {
       throw new ForbiddenException('이 인물과 연결된 관계만 삭제할 수 있습니다.')
     }
     await this.prisma.personHumanRelationship.delete({ where: { id: relationshipId } })
+  }
+
+  /**
+   * 인물 중심 멘토 계보 — 위로 스승 체인, 아래로 제자 체인을 깊이 우선으로 수집.
+   * 사이클 방지: 방문한 인물 ID 셋. 깊이 제한 6단계.
+   */
+  async findMentorLineage(personId: string, accountId?: string) {
+    await this.findById(personId, accountId)
+    const MAX_DEPTH = 6
+
+    type LineageNode = {
+      person: ReturnType<PersonService['serializePersonBrief']>
+      direction: 'ANCESTOR' | 'SELF' | 'DESCENDANT'
+      depth: number
+    }
+    type LineageEdge = {
+      mentorId: string
+      studentId: string
+    }
+
+    const personSelect = {
+      id: true,
+      name: true,
+      surname: true,
+      nameDisplayOrder: true,
+      birthDate: true,
+      deathDate: true,
+    } as const
+
+    const rootBrief = await this.prisma.person.findUniqueOrThrow({
+      where: { id: personId },
+      select: personSelect,
+    })
+
+    const visitedNodes = new Set<string>([personId])
+    const nodes: LineageNode[] = [
+      {
+        person: this.serializePersonBrief(rootBrief),
+        direction: 'SELF',
+        depth: 0,
+      },
+    ]
+    const edges: LineageEdge[] = []
+
+    // 위쪽: 스승의 스승 체인
+    const collectAncestors = async (currentIds: string[], depth: number) => {
+      if (depth > MAX_DEPTH || currentIds.length === 0) return
+      const rows = await this.prisma.personHumanRelationship.findMany({
+        where: {
+          relationshipType: PersonHumanRelationshipType.MENTOR,
+          toPersonId: { in: currentIds },
+        },
+        include: { fromPerson: { select: personSelect } },
+      })
+      const nextIds: string[] = []
+      for (const row of rows) {
+        edges.push({ mentorId: row.fromPersonId, studentId: row.toPersonId })
+        if (!visitedNodes.has(row.fromPersonId)) {
+          visitedNodes.add(row.fromPersonId)
+          nodes.push({
+            person: this.serializePersonBrief(row.fromPerson),
+            direction: 'ANCESTOR',
+            depth: -depth,
+          })
+          nextIds.push(row.fromPersonId)
+        }
+      }
+      await collectAncestors(nextIds, depth + 1)
+    }
+
+    // 아래쪽: 제자의 제자 체인
+    const collectDescendants = async (currentIds: string[], depth: number) => {
+      if (depth > MAX_DEPTH || currentIds.length === 0) return
+      const rows = await this.prisma.personHumanRelationship.findMany({
+        where: {
+          relationshipType: PersonHumanRelationshipType.MENTOR,
+          fromPersonId: { in: currentIds },
+        },
+        include: { toPerson: { select: personSelect } },
+      })
+      const nextIds: string[] = []
+      for (const row of rows) {
+        edges.push({ mentorId: row.fromPersonId, studentId: row.toPersonId })
+        if (!visitedNodes.has(row.toPersonId)) {
+          visitedNodes.add(row.toPersonId)
+          nodes.push({
+            person: this.serializePersonBrief(row.toPerson),
+            direction: 'DESCENDANT',
+            depth,
+          })
+          nextIds.push(row.toPersonId)
+        }
+      }
+      await collectDescendants(nextIds, depth + 1)
+    }
+
+    await Promise.all([
+      collectAncestors([personId], 1),
+      collectDescendants([personId], 1),
+    ])
+
+    return {
+      rootPersonId: personId,
+      nodes,
+      edges,
+    }
   }
 }
