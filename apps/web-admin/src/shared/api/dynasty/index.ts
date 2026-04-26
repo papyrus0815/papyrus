@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import * as dynastiesApi from '@api/functional/dynasties'
 import { apiConnection } from '../client'
 
@@ -41,11 +40,4 @@ export const dynastyApi = {
   delete: async (id: string) => {
     await dynastiesApi.$delete(apiConnection, id)
   },
-}
-
-export function useDynasties() {
-  return useQuery({
-    queryKey: ['dynasties'],
-    queryFn: dynastyApi.getAll,
-  })
 }

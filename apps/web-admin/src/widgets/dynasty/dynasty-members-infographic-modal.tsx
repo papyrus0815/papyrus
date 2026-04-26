@@ -37,13 +37,19 @@ function MemberAvatar({ person }: { person: Person }) {
   const src = person.profileImageUrl?.trim()
     ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
     : ''
-  const initial = [...getPersonDisplayName(person, true).trim()][0] ?? '?'
+  const displayName = getPersonDisplayName(person, true).trim()
+  const initial = [...displayName][0] ?? '?'
   return (
     <AvatarWrap $has={Boolean(src)}>
       {src ? (
-        <AvatarImg src={src} alt="" loading="lazy" decoding="async" />
+        <AvatarImg
+          src={src}
+          alt={displayName ? `${displayName} 프로필 사진` : ''}
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
-        <AvatarInitial>{initial}</AvatarInitial>
+        <AvatarInitial aria-hidden>{initial}</AvatarInitial>
       )}
     </AvatarWrap>
   )
@@ -91,7 +97,9 @@ export function DynastyMembersInfographicModal({
           {isLoading && <StatusMsg>인물을 불러오는 중…</StatusMsg>}
           {isError && (
             <StatusMsg $err>
-              {(error as Error)?.message ?? '목록을 불러오지 못했습니다.'}
+              {error instanceof Error && error.message
+                ? error.message
+                : '목록을 불러오지 못했습니다.'}
             </StatusMsg>
           )}
           {!isLoading && !isError && persons.length === 0 && (
@@ -185,9 +193,8 @@ const HeaderIcon = styled.div`
   align-items: center;
   justify-content: center;
   border-radius: 14px;
-  color: #6366f1;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.1)'};
+  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.activeLight};
 `
 
 const PanelTitle = styled.h2`
@@ -235,7 +242,7 @@ const StatusMsg = styled.p<{ $err?: boolean }>`
   text-align: center;
   font-size: 14px;
   color: ${({ theme, $err }) =>
-    $err ? '#f87171' : theme.colors.text.secondary};
+    $err ? theme.colors.error : theme.colors.text.secondary};
 `
 
 const TimelineLegend = styled.p`
@@ -265,7 +272,7 @@ const TimelineLine = styled.div`
 
 const CardGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
   gap: 18px;
 `
 
@@ -276,15 +283,13 @@ const MemberCard = styled.div`
   text-align: center;
   padding: 16px 12px 18px;
   border-radius: 16px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fafafa'};
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.12);
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
   }
 `
 
@@ -292,7 +297,7 @@ const CardYear = styled.div`
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #6366f1;
+  color: ${({ theme }) => theme.colors.primary};
   margin-bottom: 10px;
 `
 
