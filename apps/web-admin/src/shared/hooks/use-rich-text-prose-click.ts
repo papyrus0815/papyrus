@@ -201,7 +201,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         const eventId = eventLinkEl.getAttribute('data-entity-id')
         if (eventId) {
           e.preventDefault()
-          navigate(pathKeys.history.dashboardEventDetail(eventId))
+          navigate(pathKeys.events.detail(eventId))
         }
         return
       }

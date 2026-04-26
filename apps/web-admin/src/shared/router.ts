@@ -69,18 +69,6 @@ export const pathKeys = {
     /** 연대표/대시보드 — 인물 상세 (사이드바 유지) */
     dashboardPersonDetail: (personId: string) =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/persons/${encodeURIComponent(personId)}`,
-    /** 연대표/대시보드 — 연대표(전체 사건) 뷰 */
-    dashboardEvents: () =>
-      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events`,
-    /** 연대표/대시보드 — 사건 상세 (대시보드 전용, /events 로 가지 않음) */
-    dashboardEventDetail: (eventId: string) =>
-      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events/${encodeURIComponent(eventId)}`,
-    /** 연대표/대시보드 — 사건 수정 (대시보드 영역 내 수정 폼) */
-    dashboardEventEdit: (eventId: string) =>
-      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/events/${encodeURIComponent(eventId)}/edit`,
-    /** 연대표/대시보드 — 통계 뷰 (전 세계 국가 통계) */
-    dashboard: () =>
-      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}`,
     /** 연대표/대시보드 — 행정부 다국가 비교 */
     dashboardAdministration: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/${ROUTES.HISTORY.DASHBOARD_ADMINISTRATION}`,
@@ -96,7 +84,6 @@ export const pathKeys = {
     dashboardMilitary: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/military`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
-    post: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.POST}/`,
   },
 
   // --- Events Routes ---

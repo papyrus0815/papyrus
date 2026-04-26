@@ -36,11 +36,15 @@ const PLACEHOLDERS: Partial<
   },
 }
 
-function deriveView(pathname: string): DashboardContentView {
-  if (pathname.includes('/dashboard/ethnicity')) return 'ethnicity'
+type SimpleView = Extract<
+  DashboardContentView,
+  'ethnicity' | 'legislature' | 'military'
+>
+
+function deriveView(pathname: string): SimpleView {
   if (pathname.includes('/dashboard/legislature')) return 'legislature'
   if (pathname.includes('/dashboard/military')) return 'military'
-  return 'stats'
+  return 'ethnicity'
 }
 
 export default function DashboardSimplePage() {

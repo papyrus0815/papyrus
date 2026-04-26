@@ -421,7 +421,7 @@ export function EventsTimelineSection({
                       key={evt.id}
                       type="button"
                       onClick={() =>
-                        navigate(pathKeys.history.dashboardEventDetail(evt.id))
+                        navigate(pathKeys.events.detail(evt.id))
                       }
                       style={{
                         textAlign: 'left',

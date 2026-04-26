@@ -3051,9 +3051,7 @@ function ElectionDetailPanel({
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(
-                      pathKeys.history.dashboardEventDetail(detail.eventId!),
-                    )
+                    navigate(pathKeys.events.detail(detail.eventId!))
                   }
                   style={{
                     background: 'none',

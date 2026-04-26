@@ -3,28 +3,12 @@ import React from 'react'
 import { pathKeys } from '@/shared/router'
 
 export type DashboardContentView =
-  | 'stats'
   | 'person'
   | 'legislature'
   | 'military'
   | 'administration'
   | 'dynasty'
   | 'ethnicity'
-  | 'events'
-
-const IconGlobe = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-  </svg>
-)
 
 export const IconPeople = () => (
   <svg
@@ -112,20 +96,6 @@ const IconEthnicity = () => (
   </svg>
 )
 
-const IconEvents = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
-)
-
 export interface DashboardMenuItem {
   id: DashboardContentView
   label: string
@@ -137,13 +107,6 @@ export interface DashboardMenuItem {
 }
 
 export const DASHBOARD_MENU_ITEMS: DashboardMenuItem[] = [
-  {
-    id: 'stats',
-    label: '통계',
-    icon: IconGlobe,
-    path: pathKeys.history.dashboard(),
-    matchPath: (p) => /\/history\/dashboard\/?$/.test(p),
-  },
   {
     id: 'person',
     label: '인물',
@@ -186,12 +149,5 @@ export const DASHBOARD_MENU_ITEMS: DashboardMenuItem[] = [
     icon: IconEthnicity,
     path: pathKeys.history.dashboardEthnicity(),
     matchPath: (p) => /\/history\/dashboard\/ethnicity\/?$/.test(p),
-  },
-  {
-    id: 'events',
-    label: '전체 사건',
-    icon: IconEvents,
-    path: pathKeys.history.dashboardEvents(),
-    matchPath: (p) => /\/history\/dashboard\/events(\/.*)?$/.test(p),
   },
 ]

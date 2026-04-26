@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiBell,
-  FiFileText,
   FiGlobe,
   FiLayers,
   FiLogOut,
@@ -315,14 +314,12 @@ const Header: React.FC = () => {
     }
   }
 
-  const statsItem = DASHBOARD_MENU_ITEMS.find((i) => i.id === 'stats')
   const personItem = DASHBOARD_MENU_ITEMS.find((i) => i.id === 'person')
   const restDashboardItems = DASHBOARD_MENU_ITEMS.filter(
-    (i) => i.id !== 'stats' && i.id !== 'person',
+    (i) => i.id !== 'person',
   )
 
   const menuItems: TopNavItemSpec[] = [
-    ...(statsItem ? [dashboardItemToSpec(statsItem)] : []),
     {
       key: 'countries',
       label: '국가',
@@ -354,16 +351,6 @@ const Header: React.FC = () => {
         navigate(pathKeys.history.continents())
       },
       active: location.pathname.startsWith('/history/continents'),
-    },
-    {
-      key: 'post',
-      label: '포스트',
-      icon: <FiFileText size={16} />,
-      onClick: () => {
-        playClickSound()
-        navigate(pathKeys.history.post())
-      },
-      active: location.pathname.startsWith('/history/post'),
     },
   ]
 

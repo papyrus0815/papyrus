@@ -133,24 +133,9 @@ export default function CountryDetailPage() {
 
   const [isMobileListOpen, setIsMobileListOpen] = useState(false)
 
-  // 모바일: 뷰 모드 스위치 이벤트
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as 'dashboard' | 'list'
-      if (detail === 'dashboard') navigate(pathKeys.history.dashboard())
-      else setIsMobileListOpen(true)
-    }
-    window.addEventListener('switchViewMode', handler)
-    return () => window.removeEventListener('switchViewMode', handler)
-  }, [navigate])
-
   // 핸들러 — 탭·뷰 변경
   const handleSelectCountry = useCallback(
     (id: string) => navigate(pathKeys.history.countryDetail(id)),
-    [navigate],
-  )
-  const handleClearCountry = useCallback(
-    () => navigate(pathKeys.history.country()),
     [navigate],
   )
 
@@ -283,13 +268,6 @@ export default function CountryDetailPage() {
       }
     >
       <CountryMobileUI
-        activeTab="list"
-        onTabChange={(tab) => {
-          if (tab === 'dashboard') {
-            handleClearCountry()
-            navigate(pathKeys.history.dashboard())
-          }
-        }}
         isMobileListOpen={isMobileListOpen}
         onMobileListOpenChange={setIsMobileListOpen}
         selectedId={selectedId}

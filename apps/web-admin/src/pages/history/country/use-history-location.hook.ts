@@ -44,10 +44,6 @@ interface HistoryLocation {
   dashboardView: DashboardContentView | null
   /** 대시보드 인물 상세 URL의 personId */
   dashboardPersonId: string | null
-  /** 대시보드 사건 상세 URL의 eventId */
-  dashboardEventId: string | null
-  /** 대시보드 사건 수정 URL 여부 (/events/:eventId/edit) */
-  isDashboardEventEdit: boolean
   /** 국가 상세 내부 탭 (country-detail 모드일 때) */
   detailTab: CountryDetailTab
   /** 선거·투표 탭 내 정당 상세 partyId */
@@ -64,13 +60,11 @@ const DASHBOARD_VIEW_PATTERNS: Array<{
   match: RegExp
 }> = [
   { view: 'person', match: /^\/history\/dashboard\/persons(\/[^/]+)?\/?$/ },
-  { view: 'events', match: /^\/history\/dashboard\/events(\/[^/]+)?(\/edit)?\/?$/ },
   { view: 'administration', match: /^\/history\/dashboard\/administration\/?$/ },
   { view: 'dynasty', match: /^\/history\/dashboard\/dynasty\/?$/ },
   { view: 'ethnicity', match: /^\/history\/dashboard\/ethnicity\/?$/ },
   { view: 'legislature', match: /^\/history\/dashboard\/legislature\/?$/ },
   { view: 'military', match: /^\/history\/dashboard\/military\/?$/ },
-  { view: 'stats', match: /^\/history\/dashboard\/?$/ },
 ]
 
 /** 국가 상세 내부 탭 URL 매칭 */
@@ -99,7 +93,6 @@ export function useHistoryLocation(): HistoryLocation {
   const location = useLocation()
   const params = useParams<{
     countryId?: string
-    eventId?: string
     personId?: string
     partyId?: string
   }>()
@@ -120,8 +113,6 @@ export function useHistoryLocation(): HistoryLocation {
         countryId: params.countryId,
         dashboardView: null,
         dashboardPersonId: null,
-        dashboardEventId: null,
-        isDashboardEventEdit: false,
         detailTab,
         detailElectionPartyId: params.partyId ?? null,
         inHistory,
@@ -136,8 +127,6 @@ export function useHistoryLocation(): HistoryLocation {
         countryId: null,
         dashboardView: null,
         dashboardPersonId: null,
-        dashboardEventId: null,
-        isDashboardEventEdit: false,
         detailTab: null,
         detailElectionPartyId: null,
         inHistory,
@@ -151,10 +140,8 @@ export function useHistoryLocation(): HistoryLocation {
       return {
         mode: 'dashboard',
         countryId: null,
-        dashboardView: found?.view ?? 'stats',
+        dashboardView: found?.view ?? null,
         dashboardPersonId: params.personId ?? null,
-        dashboardEventId: params.eventId ?? null,
-        isDashboardEventEdit: pathname.endsWith('/edit'),
         detailTab: null,
         detailElectionPartyId: null,
         inHistory,
@@ -167,8 +154,6 @@ export function useHistoryLocation(): HistoryLocation {
       countryId: null,
       dashboardView: null,
       dashboardPersonId: null,
-      dashboardEventId: null,
-      isDashboardEventEdit: false,
       detailTab: null,
       detailElectionPartyId: null,
       inHistory,
@@ -177,7 +162,6 @@ export function useHistoryLocation(): HistoryLocation {
   }, [
     location.pathname,
     params.countryId,
-    params.eventId,
     params.personId,
     params.partyId,
   ])

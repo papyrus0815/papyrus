@@ -25,7 +25,6 @@ export const ROUTES = {
     PERSONS: 'persons',
     DYNASTIES: 'dynasties',
     JOBS: 'jobs',
-    POST: 'post',
     MILITARY_UNITS: 'military-units',
     /** 연대표/대시보드 공통 세그먼트 (인물·연대표 등) */
     DASHBOARD: 'dashboard',

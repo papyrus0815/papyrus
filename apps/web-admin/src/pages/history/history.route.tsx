@@ -21,14 +21,8 @@ const lazyCountryDetail: Lazy = async () => {
 }
 
 /** 대시보드 페이지들 — Component만 lazy 로드 (loader 불필요) */
-const lazyDashboardStats: Lazy = async () => ({
-  Component: (await import('./dashboard/dashboard-stats.page')).default,
-})
 const lazyDashboardPersons: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-persons.page')).default,
-})
-const lazyDashboardEvents: Lazy = async () => ({
-  Component: (await import('./dashboard/dashboard-events.page')).default,
 })
 const lazyDashboardAdministration: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-administration.page')).default,
@@ -69,9 +63,6 @@ export const historyPageRoute: RouteObject = {
     {
       element: <HistoryLayout />,
       children: [
-        // /history — 통계 대시보드 (인덱스)
-        { index: true, lazy: lazyDashboardStats },
-
         // /history/country — 좌측 리스트 + 우측 empty state (선택 안내)
         { path: ROUTES.HISTORY.COUNTRY, lazy: lazyCountryDetail },
 
@@ -85,23 +76,10 @@ export const historyPageRoute: RouteObject = {
           lazy: lazyDashboardPersons,
         },
         {
-          path: `${ROUTES.HISTORY.DASHBOARD}/events/:eventId/edit`,
-          lazy: lazyDashboardEvents,
-        },
-        {
-          path: `${ROUTES.HISTORY.DASHBOARD}/events/:eventId`,
-          lazy: lazyDashboardEvents,
-        },
-        {
-          path: `${ROUTES.HISTORY.DASHBOARD}/events`,
-          lazy: lazyDashboardEvents,
-        },
-        {
           path: `${ROUTES.HISTORY.DASHBOARD}/${ROUTES.HISTORY.DASHBOARD_ADMINISTRATION}`,
           lazy: lazyDashboardAdministration,
         },
         ...dashboardSimpleRoutes,
-        { path: ROUTES.HISTORY.DASHBOARD, lazy: lazyDashboardStats },
 
         // /history/country/:countryId/* — 국가 상세 (탭별)
         ...countryDetailRoutes,
@@ -131,13 +109,6 @@ export const historyPageRoute: RouteObject = {
         {
           path: 'dashboard/dynasty',
           loader: () => redirect('/dynasty'),
-        },
-        {
-          path: ROUTES.HISTORY.POST,
-          lazy: async () => {
-            const { default: PostPage } = await import('./post/post.page')
-            return { Component: PostPage }
-          },
         },
       ],
     },

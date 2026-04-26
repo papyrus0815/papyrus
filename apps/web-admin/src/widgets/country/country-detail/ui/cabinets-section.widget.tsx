@@ -302,7 +302,7 @@ function RelatedAchievementsBySameEventBlock({
       </ul>
       <button
         type="button"
-        onClick={() => navigate(pathKeys.history.dashboardEventDetail(eventId))}
+        onClick={() => navigate(pathKeys.events.detail(eventId))}
         style={{
           fontSize: 11,
           fontWeight: 600,
