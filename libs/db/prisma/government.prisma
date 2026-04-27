@@ -332,6 +332,11 @@ model SovereignReign {
   @@index([positionDefinitionId], name: "idx_sovereign_reign_posDefId")
   @@index([accountId], name: "idx_sovereign_reign_accountId")
   @@index([startDate], name: "idx_sovereign_reign_startDate")
+  /// 동양식 즉위 서수(n대): 한 국가에 1대는 단 한 명 (예: 표트르 대제 = 러시아 제국 1대)
+  /// regnalNumber 는 country/historicalCountry 별 start_date 순 ordinal
+  /// MySQL NULL-distinct: regnalNumber 가 NULL 이면 unique 검사에서 항상 distinct
+  @@unique([countryId, regnalNumber], name: "uq_sovereign_reign_country_regnal")
+  @@unique([historicalCountryId, regnalNumber], name: "uq_sovereign_reign_histCountry_regnal")
   @@map("sovereign_reign")
 }
 

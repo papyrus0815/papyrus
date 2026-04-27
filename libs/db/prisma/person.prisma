@@ -231,6 +231,11 @@ model Person {
   /// 인물 간 인간관계 (to 쪽)
   personHumanRelationshipsTo   PersonHumanRelationship[] @relation("PersonHumanRelTo")
 
+  /// 사용자별 능력치 평가
+  stats             PersonStats[]            @relation("PersonStatsToPerson")
+  /// 사용자별 성격 태그
+  traitAssignments  PersonTraitAssignment[]  @relation("PersonTraitsToPerson")
+
   // 새로운 국가 관계
   countryAffiliations PersonCountryAffiliation[]
 
@@ -387,8 +392,19 @@ model PersonHumanRelationship {
   /// GENERAL 전용 — true면 양쪽 합의된 대칭 관계, false면 from(주체) 시점만 표현
   isMutual Boolean @default(false) @map("is_mutual")
 
-  /// 친밀도: -2(매우 적대) ~ +2(매우 우호). 미설정(NULL) 허용 — 특히 MENTOR에서 친밀도가 의미 없을 때 NULL.
+  /// 친밀도: -2(매우 적대) ~ +2(매우 우호). NULL = 기록 없음(unknown). 0 = 중립으로 명시.
   affinityLevel Int? @map("affinity_level")
+
+  /// 신뢰도: -2(매우 불신) ~ +2(완전 신뢰). NULL = 기록 없음.
+  /// 친밀도와 분리 — "좋아하지만 신뢰는 안 한다"형 케이스 표현용.
+  trustLevel Int? @map("trust_level")
+
+  /// 권력 비대칭: -2(매우 종속) ~ 0(대등) ~ +2(매우 우위). from 인물 기준.
+  /// MENTOR에서는 보통 +1~+2(스승 우위). NULL = 해당 없음.
+  powerDynamic Int? @map("power_dynamic")
+
+  /// 격식: -2(매우 친밀·격의없음) ~ +2(매우 격식·예의). NULL = 기록 없음.
+  formality Int? @map("formality")
 
   startDate DateTime? @map("start_date") @db.DateTime(3)
   endDate   DateTime? @map("end_date") @db.DateTime(3)
@@ -406,10 +422,49 @@ model PersonHumanRelationship {
   /// 근거 사건(연보) 연결 — 다중 부착 가능
   sources PersonHumanRelationshipSource[] @relation("PersonHumanRelSources")
 
+  /// 시기별 스냅샷 — 한 관계가 시간에 따라 친밀도·차원이 달라지는 변화를 기록.
+  /// 비어 있으면 위 본체의 단일 값(affinityLevel 등)이 전 기간 대표값으로 사용됨.
+  phases PersonHumanRelationshipPhase[] @relation("PersonHumanRelPhases")
+
   @@index([fromPersonId], name: "idx_person_human_rel_from")
   @@index([toPersonId], name: "idx_person_human_rel_to")
   @@unique([fromPersonId, toPersonId, relationshipType], name: "person_human_rel_pair_type_key")
   @@map("person_human_relationship")
+}
+
+// ========================
+// PersonHumanRelationshipPhase (시기별 스냅샷)
+// ========================
+/// 한 관계가 시간이 흐르며 변하는 구간을 표현. 예: 차르토리스키-알렉산드르 1세
+/// "1795~1801 절친 → 1815~1820 협력자 → 1830~ 정치적 결별".
+/// affinity·trust·power·formality·tags·note 모두 phase별로 가질 수 있음.
+model PersonHumanRelationshipPhase {
+  id String @id @default(uuid()) @db.Char(36)
+
+  relationshipId String @map("relationship_id") @db.Char(36)
+
+  /// phase 시작·종료 — startDate가 NULL이면 "관계 시작과 동일", endDate가 NULL이면 "현재까지/관계 종료까지"
+  startDate DateTime? @map("start_date") @db.DateTime(3)
+  endDate   DateTime? @map("end_date") @db.DateTime(3)
+
+  affinityLevel Int? @map("affinity_level")
+  trustLevel    Int? @map("trust_level")
+  powerDynamic  Int? @map("power_dynamic")
+  formality     Int? @map("formality")
+
+  /// 이 phase의 짧은 라벨 (예: "황태자 시절", "외무장관 시기", "결별기")
+  label String? @db.VarChar(120)
+
+  note String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  relationship PersonHumanRelationship @relation("PersonHumanRelPhases", fields: [relationshipId], references: [id], onDelete: Cascade)
+
+  @@index([relationshipId], name: "idx_person_human_rel_phase_relId")
+  @@index([startDate], name: "idx_person_human_rel_phase_start")
+  @@map("person_human_relationship_phase")
 }
 
 // ========================
@@ -1267,4 +1322,102 @@ model PersonAwardImage {
 
   @@index([awardId])
   @@map("person_award_image")
+}
+
+// ========================
+// PersonStats (인물 능력치 — 6축 레이더, 사용자별 평가)
+// ========================
+/// 한 인물에 대해 *사용자(account)별*로 매기는 6축 능력치.
+/// (personId, accountId)가 unique — 한 사용자는 한 인물당 한 세트.
+/// 점수는 각 0~100. 미평가 차원은 NULL.
+model PersonStats {
+  id        String  @id @default(uuid()) @db.Char(36)
+  personId  String  @map("person_id") @db.Char(36)
+  accountId String  @map("account_id") @db.Char(36)
+
+  /// 정치 (정쟁·국내 권력 운용)
+  politics       Int? @db.SmallInt
+  /// 군사 (야전 지휘·전략)
+  military       Int? @db.SmallInt
+  /// 외교 (협상·동맹)
+  diplomacy      Int? @db.SmallInt
+  /// 학식 (학문·저술)
+  intellect      Int? @db.SmallInt
+  /// 카리스마 (대중·부하 장악)
+  charisma       Int? @db.SmallInt
+  /// 행정 (통치·재정·관료 운용)
+  administration Int? @db.SmallInt
+
+  /// 평가 자유 메모 (예: "초기엔 군사 중심, 만년에는 학문")
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  person  Person  @relation("PersonStatsToPerson", fields: [personId], references: [id], onDelete: Cascade)
+  account Account @relation("PersonStatsToAccount", fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, accountId], name: "person_stats_person_account_key")
+  @@index([personId], name: "idx_person_stats_personId")
+  @@index([accountId], name: "idx_person_stats_accountId")
+  @@map("person_stats")
+}
+
+/// 인물 성격 태그 (사료에서 형용사로 묘사되는 결).
+/// 양극 페어(BRUTAL ↔ MERCIFUL 등)도 동시 부착 가능 — 평가자에 따라 갈리는 것이 자연.
+enum PersonTrait {
+  AMBITIOUS    // 야망가
+  CAUTIOUS     // 신중함
+  IMPULSIVE    // 충동적
+  DELIBERATE   // 사려깊음
+  COURAGEOUS   // 용감함
+  COWARDLY     // 비겁함
+  BRUTAL       // 잔혹함
+  MERCIFUL     // 자비로움
+  GENEROUS     // 관대함
+  GREEDY       // 탐욕스러움
+  LOYAL        // 충성스러움
+  TREACHEROUS  // 배신·기만
+  PIOUS        // 독실함
+  SECULAR      // 세속적
+  SCHOLARLY    // 학자적
+  CHARISMATIC  // 카리스마형
+  AUSTERE      // 엄격·금욕
+  LIBERTINE    // 방종
+  JUST         // 정의로움
+  VENGEFUL     // 복수심
+  PATIENT      // 인내·끈기
+  HOT_TEMPERED // 다혈질
+  HUMBLE       // 겸손
+  ARROGANT     // 오만
+  OTHER        // 기타
+}
+
+// ========================
+// PersonTraitAssignment (인물 성격 태그 부착, 사용자별 다중)
+// ========================
+/// 한 사용자가 한 인물에 부착하는 성격 태그.
+/// (personId, accountId, trait)가 unique — 같은 사용자가 같은 태그 중복 부착 방지.
+model PersonTraitAssignment {
+  id        String      @id @default(uuid()) @db.Char(36)
+  personId  String      @map("person_id") @db.Char(36)
+  accountId String      @map("account_id") @db.Char(36)
+  trait     PersonTrait
+
+  /// 강도 1(약함) ~ 3(강함). null이면 미설정.
+  intensity Int? @db.SmallInt
+
+  /// 자유 메모 (왜 이 태그인지)
+  note String? @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  person  Person  @relation("PersonTraitsToPerson", fields: [personId], references: [id], onDelete: Cascade)
+  account Account @relation("PersonTraitsToAccount", fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, accountId, trait], name: "person_trait_assignment_unique")
+  @@index([personId], name: "idx_person_trait_personId")
+  @@index([accountId], name: "idx_person_trait_accountId")
+  @@index([trait], name: "idx_person_trait_trait")
+  @@map("person_trait_assignment")
 }

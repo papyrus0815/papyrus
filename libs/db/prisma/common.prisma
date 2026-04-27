@@ -52,6 +52,10 @@ model Account {
   treaties Treaty[] @relation("AccountTreaties")
   /// 이 계정이 등록한 선거(Election)
   elections Election[] @relation("AccountElections")
+  /// 이 계정이 인물에 매긴 능력치 평가
+  personStats         PersonStats[]           @relation("PersonStatsToAccount")
+  /// 이 계정이 인물에 부착한 성격 태그
+  personTraitAssignments PersonTraitAssignment[] @relation("PersonTraitsToAccount")
 
   @@map("account")
 }

@@ -48,7 +48,7 @@ async function getMigrationName(): Promise<string> {
     // 1. 마이그레이션 생성 및 적용
     console.log('📝 마이그레이션 생성 및 DB 적용 중...')
     execSync(
-      `npx prisma migrate dev --name ${migrationName} --schema=apps/api/prisma/schema.prisma --skip-generate`,
+      `npx prisma migrate dev --name ${migrationName} --schema=apps/api/prisma/schema.prisma`,
       { stdio: 'inherit' },
     )
 
