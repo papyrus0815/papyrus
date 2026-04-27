@@ -34,6 +34,7 @@ import {
   seedSavoyDynasty,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
+  seedFrancoPrussianWar,
 } from './seeds'
 
 const options = {
@@ -150,6 +151,9 @@ async function main() {
 
         // 13. 이벤트 카테고리 시딩
         await seedEventCategories(prisma)
+
+        // 13-1. 보불전쟁(1870–1871) 시딩 — eventCategory + 역사국가들 + 현대국가(프랑스) 의존
+        await seedFrancoPrussianWar(prisma)
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)
